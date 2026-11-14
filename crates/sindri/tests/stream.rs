@@ -86,14 +86,14 @@ fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
         [
             "  open is a code block, never prose.",
             "",
-            "  ▏ rust",
-            "  ▏ fn main() {"
+            "▏ rust",
+            "▏ fn main() {"
         ],
         "the fence and its still-streaming contents are drawn as the block they opened"
     );
     assert_eq!(
         inks(more.last().expect("a row under the fence"))[..2],
-        [Ink::Plain, Ink::Dim],
+        [Ink::Dim, Ink::Accent],
         "and behind the bar a code block is set behind, not as prose"
     );
 }

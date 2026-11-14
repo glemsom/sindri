@@ -3,14 +3,14 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 markdown-quote at 80x24
-00 |  ▏ A heading that keeps the bar                                                | plain:2 dim:2 plain+bold:28 plain:48
-01 |  ▏ ────────────────────────────                                                | plain:2 dim:30 plain:48
+00 |▏ A heading that keeps the bar                                                  | dim:2 plain+bold:28 plain:50
+01 |▏ ────────────────────────────                                                  | dim:30 plain:50
 02 |                                                                                | plain:80
-03 |  ▏ A fence still open while streaming renders as a code block, so a            | plain:2 dim:2 plain:76
-04 |  ▏ half-written diagram never costs a raster pass and never flickers while it  | plain:2 dim:2 plain:76
-05 |  ▏ is being typed.                                                             | plain:2 dim:2 plain:76
-06 |                                                                                | plain:80
-07 |  ▏ • an item's heading, two columns further in                                 | plain:2 dim:2 plain:2 muted+bold:41 plain:33
+03 |▏ A fence still open while streaming renders as a code block, so a half-written | dim:2 plain:78
+04 |▏ diagram never costs a raster pass and never flickers while it is being typed. | dim:2 plain:78
+05 |                                                                                | plain:80
+06 |▏ • an item's heading, two columns further in                                   | dim:2 plain:2 muted+bold:41 plain:35
+07 |                                                                                | plain:80
 08 |                                                                                | plain:80
 09 |                                                                                | plain:80
 10 |                                                                                | plain:80

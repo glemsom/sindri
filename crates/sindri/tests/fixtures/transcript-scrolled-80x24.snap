@@ -11,8 +11,8 @@ transcript-scrolled at 80x24
 05 |  heading   │ in the answer's own gutter                                        | plain:11 dim:3 plain:66
 06 |  code      │ behind a bar, highlighted                                         | plain:11 dim:3 plain:66
 07 |  table     │ columns joined by a bar                                           | plain:11 dim:3 plain:66
-08 |turn 6 ─────────────────────────────────────────────────────────────────────────| dim:80
-09 |✓ exit 0  bash  104 bytes · 31 ms                                               | ok:1 dim:32 plain:47
+08 |─ turn 6 ───────────────────────────────────────────────────────────────────────| dim:80
+09 |✓ exit 0  bash  104 bytes · 31 ms                                               | ok:1 plain:1 dim:31 plain:47
 10 |  check: frame calls ... ok                                                     | plain:80
 11 |  check: frame transcript ... ok                                                | plain:80
 12 |  A row is one line                                                             | plain:2 plain+bold:17 plain:61
@@ -21,7 +21,7 @@ transcript-scrolled at 80x24
 15 |  A row says the exit code and not the command, because the verdict is a fact   | plain:80
 16 |  the record holds and the command is a fact the row above it holds.            | plain:80
 17 |                                                                                | plain:80
-18 |  ▏ rust                                                                        | plain:2 dim:6 plain:72
+18 |▏ rust                                                                          | dim:6 plain:74
 19 |ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · branch spec/1-capability| dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:10 plain:17
 20 |4 rows back · End follows the run                                               | muted:11 dim:3 plain+bold:3 muted:16 plain:47
 21 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80

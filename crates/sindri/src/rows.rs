@@ -20,12 +20,12 @@ use crate::pulse::Head;
 use crate::size::{self, Sized, Sizes};
 use crate::stream::Stream;
 
-/// How far a body sits inside the row that names it, and the blank gutter an answer is
-/// printed from — the columns the newest answer's marker takes the place of.
+/// The gutter every row of every entry opens with, two columns of it: the glyph that says what the
+/// row is and the blank after it, so every entry's words begin in one column.
 pub(crate) const INDENT: &str = "  ";
 
-/// The hairline a thought opens with: two columns, the margin an answer is set from,
-/// so the two kinds of row line up.
+const RULE: &str = "─ ";
+const SIGIL: &str = "› ";
 const THOUGHT: &str = "│ ";
 
 const PENDING: char = '…';
@@ -255,13 +255,17 @@ pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Gr
 }
 
 fn asked(text: &str, cols: u16) -> Vec<Row> {
-    let (gutter, room) = margin(INDENT, cols);
+    let (gutter, room) = margin(SIGIL, cols);
+    let blanks = match gutter.is_empty() {
+        true => "",
+        false => INDENT,
+    };
     let mut rows = vec![divider("prompt ", cols)];
-    rows.extend(
-        wrap(text, room)
-            .into_iter()
-            .map(|line| Row::of([(gutter.to_owned(), Ink::Plain), (line, Ink::Plain)])),
-    );
+    let mut lines = wrap(text, room).into_iter();
+    if let Some(first) = lines.next() {
+        rows.push(words_past(gutter, Ink::Plain, Ink::Plain, first, cols));
+    }
+    rows.extend(lines.map(|line| words_past(blanks, Ink::Plain, Ink::Plain, line, cols)));
     rows
 }
 
@@ -269,7 +273,7 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
     let (gutter, room) = margin(THOUGHT, cols);
     wrap(text, room)
         .into_iter()
-        .map(|line| Row::of([(gutter.to_owned(), Ink::Dim), (line, Ink::Muted)]))
+        .map(|line| words_past(gutter, Ink::Dim, Ink::Muted, line, cols))
         .collect()
 }
 
@@ -278,58 +282,86 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
 /// out beside them.
 pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
-    // The marker's trailing blank column counts against the width; the gutter it stands
-    // in the place of does not.
-    let reserve = match head {
-        Some(head) => head
-            .width()
+    // The marker's own words count against the width; the gutter it stands in the place of does
+    // not, and a marker the band cannot hold beside one word of the answer is given up whole.
+    let reserve = head.map_or(0, |head| {
+        head.width()
             .saturating_add(1)
-            .saturating_sub(pen::cells(gutter)),
-        None => 0,
+            .saturating_sub(pen::cells(gutter))
+    });
+    let (head, reserve) = match reserve < room {
+        true => (head, reserve),
+        false => (None, 0),
     };
-    let mut rows = markdown::rows_on(text, room, reserve, surface).into_iter();
+    let mut rows = markdown::rows_in(text, cols, reserve, gutter, surface).into_iter();
     let mut laid: Vec<Row> = Vec::new();
     if let Some(head) = head
         && let Some(first) = rows.next()
     {
-        let mut spans: Vec<(String, Look)> = head
-            .spans()
-            .iter()
-            .map(|(text, ink)| (text.clone(), Look::plain(*ink)))
-            .collect();
+        // The marker stands in the gutter and the words it says take the reserve, so the
+        // answer's first row begins where every other row of it does.
+        let mut spans: Vec<(String, Look)> = head_row(head, cols).spans().to_vec();
         spans.push((String::from(" "), Look::plain(Ink::Plain)));
-        spans.extend(first.spans().iter().cloned());
-        let shifts = head.width().saturating_add(1);
+        // The markdown row opens with the gutter the marker takes, so its first span goes.
+        spans.extend(first.spans().iter().skip(1).cloned());
         laid.push(Row {
             band: first.band,
             links: first
                 .links()
                 .iter()
-                .map(|link| link.shifted(shifts))
+                .map(|link| link.shifted(reserve))
                 .collect(),
-            sizes: first.sizes.iter().map(|run| run.shifted(shifts)).collect(),
+            sizes: first.sizes.iter().map(|run| run.shifted(reserve)).collect(),
             ..Row::of(spans)
         });
     }
-    laid.extend(rows.map(|row| row.indented(gutter, Ink::Plain)));
+    laid.extend(rows);
     laid
 }
 
-/// The gutter a body opens with at `cols`, and the columns its words have beside it: a
-/// band too narrow to hold both the gutter and one glyph gives up the gutter, never the
-/// invariant that no row is laid out wider than the width it was laid out for.
+/// The row a run's marker heads: the mark stands in the gutter and the words it says begin where
+/// the entry's own do.
+pub(crate) fn head_row(head: &Head, cols: u16) -> Row {
+    let Some(((glyph, ink), words)) = head.spans().split_first() else {
+        return Row::blank();
+    };
+    let words = words
+        .iter()
+        .map(|(text, ink)| (String::from(text.trim_start()), *ink))
+        .collect();
+    marked(glyph, *ink, words, cols)
+}
+
+/// A row whose marker stands in the gutter: the glyph in the gutter's first column, the gutter's
+/// blank after it, and the words fitted to the columns beside them. A band too narrow to hold both
+/// gives up the marker rather than a word.
+fn marked(marker: &str, ink: Ink, words: Vec<(String, Ink)>, cols: u16) -> Row {
+    let (gutter, room) = margin(INDENT, cols);
+    let words = fitted(words, room);
+    match gutter.is_empty() {
+        true => words,
+        false => Row::of([(String::from(marker), ink), (String::from(" "), Ink::Plain)])
+            .followed_by(&words),
+    }
+}
+
+/// The gutter a body opens with at `cols`, and the columns its words have beside it: a band no
+/// wider than the gutter holds none of it, and the marker is given up rather than the words.
 fn margin(gutter: &str, cols: u16) -> (&str, u16) {
     let width = pen::cells(gutter);
-    // Two columns, because that is the widest one glyph is: a margin that left less would
-    // cost a row the whole width it was laid out for.
-    match cols > width.saturating_add(1) {
+    match cols > width {
         true => (gutter, cols - width),
         false => ("", cols),
     }
 }
 
 fn opening(name: &str, arguments: &str, cols: u16, ground: Option<&Ground>) -> Vec<Row> {
-    let mut rows = vec![fitted(vec![(format!("{PENDING} {name}"), Ink::Dim)], cols)];
+    let mut rows = vec![marked(
+        &PENDING.to_string(),
+        Ink::Dim,
+        vec![(String::from(name), Ink::Dim)],
+        cols,
+    )];
     rows.extend(body(arguments, cols, way(name, arguments, ground)));
     rows
 }
@@ -361,14 +393,16 @@ fn settled(
 ) -> Vec<Row> {
     let named = format!("{name}  {bytes} bytes · {elapsed_ms} ms");
     let header = match exit {
-        Some(exit) => fitted(
-            vec![
-                (mark(exit).to_string(), ink_of(exit)),
-                (format!(" {}  {named}", exit.word()), Ink::Dim),
-            ],
+        Some(exit) => marked(
+            &mark(exit).to_string(),
+            ink_of(exit),
+            vec![(format!("{}  {named}", exit.word()), Ink::Dim)],
             cols,
         ),
-        None => fitted(vec![(named, Ink::Dim)], cols),
+        None => {
+            let (gutter, room) = margin(INDENT, cols);
+            fitted(vec![(named, Ink::Dim)], room).indented(gutter, Ink::Plain)
+        }
     };
     let mut rows = vec![header];
     rows.extend(body(text, cols, None));
@@ -425,18 +459,31 @@ fn body(text: &str, cols: u16, way: Option<Way>) -> Vec<Row> {
             .collect(),
         None => wrap(text, room)
             .into_iter()
-            .map(|line| Row::of([(gutter.to_owned(), Ink::Plain), (line, Ink::Plain)]))
+            .map(|line| words_past(gutter, Ink::Plain, Ink::Plain, line, cols))
             .collect(),
     }
 }
 
-/// The row between one turn and the next: the words naming the turn, and the pen's fill out to the
-/// row's edge.
+/// The row between one turn and the next: the hairline it opens with, the words naming the turn,
+/// and the pen's fill out to the band's edge.
 fn divider(lead: &str, cols: u16) -> Row {
-    let lead = clip(lead, cols);
-    let filled = cols.saturating_sub(pen::cells(&lead));
+    let (gutter, room) = margin(RULE, cols);
+    let lead = clip(lead, room);
+    let filled = room.saturating_sub(pen::cells(&lead));
     let line = format!("{lead}{}", pen::filled(filled, HAIRLINE));
-    Row::of([(line, Ink::Dim)])
+    Row::of([(line, Ink::Dim)]).indented(gutter, Ink::Dim)
+}
+
+/// One row of `line` set past `gutter`, the gutter in `mark`'s ink and the words in `words`'': the
+/// gutter is given up when the line holds a glyph wider than the room it left, because a marker is
+/// given up before a word is cut.
+fn words_past(gutter: &str, mark: Ink, words: Ink, line: String, cols: u16) -> Row {
+    let drawn = pen::cells(gutter).saturating_add(pen::cells(&line));
+    let gutter = match drawn > cols {
+        true => "",
+        false => gutter,
+    };
+    Row::of([(String::from(gutter), mark), (line, words)])
 }
 
 pub(crate) fn wrap(text: &str, cols: u16) -> Vec<String> {

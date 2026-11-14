@@ -3,8 +3,8 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 rail at 108x40
-00 |turn 1 ─────────────────────────────────────────────────────────────wire      anthropic                     | dim:78 plain:30
-01 |✓ exit 0  bash  412 bytes · 23 ms                                   model     claude-sonnet-4-5-20250929    | ok:1 dim:32 plain:35 dim:10 plain:30
+00 |─ turn 1 ───────────────────────────────────────────────────────────wire      anthropic                     | dim:78 plain:30
+01 |✓ exit 0  bash  412 bytes · 23 ms                                   model     claude-sonnet-4-5-20250929    | ok:1 plain:1 dim:31 plain:35 dim:10 plain:30
 02 |  src/rows.rs: the glyph a turn opens with                          think     high                          | plain:68 dim:10 plain:30
 03 |  src/rows.rs: a word longer than a row is broken                                                           | plain:108
 04 |  Rendering lives in the front end and not in the core, because an  turns                           6 /  250| plain:68 dim:10 plain:30

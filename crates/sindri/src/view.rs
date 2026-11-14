@@ -2940,7 +2940,7 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert!(
-            drawn_row(&close, 0).starts_with("turn "),
+            drawn_row(&close, 0).starts_with("─ turn "),
             "and the transcript's one row is still drawn in the row above the composer: {:?}",
             drawn_row(&close, 0)
         );
@@ -3052,7 +3052,7 @@ mod tests {
         assert_eq!(view.scroll(), Scroll::Back(4));
         let head = painted(&mut view, 120, 40);
         assert!(
-            drawn_row(&head, 0).starts_with("turn 1 "),
+            drawn_row(&head, 0).starts_with("─ turn 1 "),
             "the transcript's first row stands at the top of the band: {:?}",
             drawn_row(&head, 0)
         );

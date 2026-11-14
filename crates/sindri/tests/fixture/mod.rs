@@ -73,6 +73,7 @@ fn named(name: &str) -> View {
         "boot-face" => door(true),
         "boot-face-small" => door(true),
         "transcript" => running(transcript(), Scroll::Tail),
+        "gutter" => View::of(gutter(), Scroll::Tail),
         "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
         "rail" => running(opening(), Scroll::Tail),
         "face" => faced(true),
@@ -598,6 +599,36 @@ fn transcript() -> Vec<Entry> {
              above it holds.\n\n```rust\nfn main() {\n    let row = Row::of(spans);\n    \
              row.paint(area, buffer);\n}\n```",
         ),
+    ]
+}
+
+/// One of every kind of entry a run writes, one above the other, so a frame says where each of them
+/// begins its words.
+fn gutter() -> Vec<Entry> {
+    vec![
+        Entry::Turn { turn: 1 },
+        Entry::Prompt {
+            text: SecretSet::default().redact("triage the retry test"),
+        },
+        call(1, "bash", r#"{"command": "rg -n 'gutter' src"}"#),
+        result(
+            1,
+            "bash",
+            Exit::Code(0),
+            "src/rows.rs: every entry stands in one gutter",
+            412,
+            23,
+        ),
+        Entry::Reasoning {
+            turn: 2,
+            text: SecretSet::default()
+                .redact("the marker of a row stands in the gutter ahead of its words"),
+        },
+        answer(
+            2,
+            "Every row begins at one column:\n```rust\nfn gutter() {\n    let row = Row::of(spans);\n}\n```\nand the words follow the marker.",
+        ),
+        call(2, "bash", r#"{"command": "make check STAGES=rows"}"#),
     ]
 }
 

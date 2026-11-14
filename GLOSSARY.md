@@ -116,6 +116,12 @@ stands off the tail, the composer's and the footer's — each drawn in the rows 
 past them.
 _Avoid_: Region, pane, panel, viewport
 
+**Gutter**:
+The two columns every row of an entry opens with, ahead of its words: the glyph that says what the
+row is — a turn's rule, a prompt's sigil, a call's or result's mark, a thought's or code block's bar —
+and the blank after it. A band too narrow to hold the gutter gives up the glyph before it cuts a word.
+_Avoid_: Margin, indent, padding
+
 **Card**:
 The frame a screen is drawn on: a rounded border carrying the screen's name in its top row and
 the key that leaves in its bottom, at most seventy-two columns wide and centred, and — under fifty

@@ -3,8 +3,8 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 streaming at 120x40
-00 |turn 5 ─────────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34
-01 |✓ exit 0  bash  128 bytes · 9 ms                                            model     claude-sonnet-4-5-20250929        | ok:1 dim:31 plain:44 dim:10 plain:34
+00 |─ turn 5 ───────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34
+01 |✓ exit 0  bash  128 bytes · 9 ms                                            model     claude-sonnet-4-5-20250929        | ok:1 plain:1 dim:30 plain:44 dim:10 plain:34
 02 |  crates/sindri/src/rows.rs | 412 +++++++++++++                             think     high                              | plain:76 dim:10 plain:34
 03 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | plain:120
 04 |  The transcript's unit is the entry. An entry never carries a formatted    turns                               6 /  250| plain:76 dim:10 plain:34
@@ -16,8 +16,8 @@ streaming at 120x40
 10 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
 11 |  code      │ behind a bar, highlighted                                     skills                                     2| plain:11 dim:3 plain:62 dim:10 plain:34
 12 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
-13 |turn 6 ─────────────────────────────────────────────────────────────────────sandbox   bwrap                             | dim:86 plain:34
-14 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 dim:32 plain:87
+13 |─ turn 6 ───────────────────────────────────────────────────────────────────sandbox   bwrap                             | dim:86 plain:34
+14 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 plain:1 dim:31 plain:87
 15 |  check: frame calls ... ok                                                 session   9f2c7a41                          | plain:76 dim:10 plain:34
 16 |  check: frame transcript ... ok                                            temp      …/sindri/sessions/9f2c7a41/tmp    | plain:76 dim:10 plain:34
 17 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
@@ -26,20 +26,20 @@ streaming at 120x40
 20 |  A row says the exit code and not the command, because the verdict is a                                                | plain:120
 21 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
 22 |                                                                                                                        | plain:120
-23 |  ▏ rust                                                                                                                | plain:2 dim:6 plain:112
-24 |  ▏ fn main() {                                                                                                         | plain:2 dim:2 accent:2 plain:114
-25 |  ▏     let row = Row::of(spans);                                                                                       | plain:2 dim:2 plain:4 accent:3 plain:109
-26 |  ▏     row.paint(area, buffer);                                                                                        | plain:2 dim:2 plain:116
-27 |  ▏ }                                                                                                                   | plain:2 dim:2 plain:116
-28 |turn 6 ─────────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+23 |▏ rust                                                                                                                  | dim:6 plain:114
+24 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
+25 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
+26 |▏     row.paint(area, buffer);                                                                                          | dim:2 plain:118
+27 |▏ }                                                                                                                     | dim:2 plain:118
+28 |─ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
 29 |│ The ticket asks whether the tail survives. A fence still streaming is a                                               | dim:2 muted:71 plain:47
 30 |│ code block, so its words are drawn as code and nothing is swallowed.                                                  | dim:2 muted:68 plain:50
 31 |  It survives: the rule is one boolean over the lines, and #52 keeps it.                                                | plain:120
 32 |                                                                                                                        | plain:120
-33 |  ▏ rust                                                                                                                | plain:2 dim:6 plain:112
-34 |  ▏ fn main() {                                                                                                         | plain:2 dim:2 accent:2 plain:114
-35 |  ▏     let fence = Fence::open();                                                                                      | plain:2 dim:2 plain:4 accent:3 plain:109
-36 |  ▏     let  tail = fence.words();                                                                                      | plain:2 dim:2 plain:4 accent:3 plain:109
+33 |▏ rust                                                                                                                  | dim:6 plain:114
+34 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
+35 |▏     let fence = Fence::open();                                                                                        | dim:2 plain:4 accent:3 plain:111
+36 |▏     let  tail = fence.words();                                                                                        | dim:2 plain:4 accent:3 plain:111
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 38 |› what should the run do?                                                                                               | dim:25 plain:95
 39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:3 muted:15 plain:13

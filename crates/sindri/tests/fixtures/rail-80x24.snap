@@ -3,8 +3,8 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 rail at 80x24
-00 |turn 1 ─────────────────────────────────────────────────────────────────────────| dim:80
-01 |✓ exit 0  bash  412 bytes · 23 ms                                               | ok:1 dim:32 plain:47
+00 |─ turn 1 ───────────────────────────────────────────────────────────────────────| dim:80
+01 |✓ exit 0  bash  412 bytes · 23 ms                                               | ok:1 plain:1 dim:31 plain:47
 02 |  src/rows.rs: the glyph a turn opens with                                      | plain:80
 03 |  src/rows.rs: a word longer than a row is broken                               | plain:80
 04 |  Rendering lives in the front end and not in the core, because an entry is a   | plain:80

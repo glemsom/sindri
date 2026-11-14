@@ -289,7 +289,7 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
         answer(1),
     ];
 
-    for cols in [2, 3, 7, 40, 120] {
+    for cols in [2, 3, 5, 6, 7, 8, 40, 120] {
         for entry in &entries {
             for row in layout(entry, cols) {
                 let drawn = row.width();
@@ -298,6 +298,17 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
                     "a row {drawn} columns wide was laid out for {cols}: {row:?}"
                 );
             }
+        }
+
+        let head = Pulse::live(4_200).head();
+        let mut stream = Stream::new();
+        stream.text("a braille marker at the head of the newest answer, and its words");
+        for row in stream.rows(cols, Some(&head)) {
+            let drawn = row.width();
+            assert!(
+                drawn <= cols,
+                "a row {drawn} columns wide was laid out for the marker's answer at {cols}: {row:?}"
+            );
         }
     }
 }
@@ -313,17 +324,297 @@ fn the_readers_own_words_are_drawn_under_the_row_that_names_them() {
     );
 
     assert!(
-        words(&rows[0]).starts_with("prompt "),
+        words(&rows[0]).starts_with("─ prompt "),
         "the row that names the prompt says whose words these are: {:?}",
         rows[0]
     );
     assert_eq!(rows[0].width(), 40, "and runs to the band's width");
     assert_eq!(
         words(&rows[1]),
-        "  triage this",
-        "the words sit in the margin an answer is set from"
+        "› triage this",
+        "the words open with the prompt's sigil in the gutter an answer is set from"
     );
     assert_eq!(inks(&rows[1]), [Ink::Plain, Ink::Plain]);
+}
+
+/// The column a row's words begin in: the first glyph of it that is a letter, a digit or a bullet,
+/// and nothing for a row that says no word at all.
+fn words_column(row: &Row) -> Option<u16> {
+    row.glyph_columns()
+        .into_iter()
+        .find(|(_, glyph, _)| glyph.is_alphanumeric() || *glyph == '•')
+        .map(|(column, _, _)| column)
+}
+
+fn every_kind(secrets: &SecretSet) -> Vec<Entry> {
+    vec![
+        turn(5),
+        Entry::Prompt {
+            text: secrets.redact("triage the retry test"),
+        },
+        Entry::Call {
+            turn: 1,
+            name: secrets.redact("bash"),
+            arguments: secrets.redact("ls -la"),
+        },
+        result(1, Exit::Code(0)),
+        Entry::Reasoning {
+            turn: 2,
+            text: secrets.redact("the fence is the question"),
+        },
+        Entry::Assistant {
+            turn: 2,
+            text: secrets
+                .redact("Here is the rule:\n```rust\nfn main() {\n}\n```\nand the prose goes on."),
+        },
+    ]
+}
+
+#[test]
+fn every_entrys_words_begin_in_one_column() {
+    let secrets = SecretSet::default();
+    for cols in [120, 80, 40, 20, 8, 3] {
+        for entry in every_kind(&secrets) {
+            let mut said = 0;
+            for row in layout(&entry, cols) {
+                let Some(column) = words_column(&row) else {
+                    continue;
+                };
+                said += 1;
+                assert_eq!(
+                    column, 2,
+                    "a row of {entry:?} at {cols} columns begins its words at {column}: {row:?}"
+                );
+            }
+            assert!(said > 0, "{entry:?} at {cols} columns says no word at all");
+        }
+    }
+}
+
+/// The glyph a row draws at a column of it.
+fn drawn_at(row: &Row, column: u16) -> Option<char> {
+    row.glyph_columns()
+        .into_iter()
+        .find(|(at, _, _)| *at == column)
+        .map(|(_, glyph, _)| glyph)
+}
+
+#[test]
+fn the_marker_that_says_what_a_row_is_stands_in_the_gutter() {
+    let secrets = SecretSet::default();
+    let turn_row = layout(&turn(5), 40);
+    let prompt = layout(
+        &Entry::Prompt {
+            text: secrets.redact("triage this"),
+        },
+        40,
+    );
+    let flight = layout(&call(1), 60);
+    let ok = layout(&result(1, Exit::Code(0)), 60);
+    let failed = layout(&result(1, Exit::Code(1)), 60);
+    let thought = layout(
+        &Entry::Reasoning {
+            turn: 1,
+            text: secrets.redact("a thought"),
+        },
+        60,
+    );
+    let answer = layout(
+        &Entry::Assistant {
+            turn: 2,
+            text: secrets.redact("prose\n```rust\nfn main()\n```\n"),
+        },
+        60,
+    );
+    let block = answer
+        .iter()
+        .find(|row| drawn_at(row, 0) == Some('▏'))
+        .expect("the fence is rows of its own");
+
+    let marked = [
+        (&turn_row[0], '─'),
+        (&prompt[0], '─'),
+        (&prompt[1], '›'),
+        (&flight[0], '…'),
+        (&ok[0], '✓'),
+        (&failed[0], '✗'),
+        (&thought[0], '│'),
+        (&answer[0], ' '),
+        (block, '▏'),
+    ];
+    for (row, marker) in marked {
+        assert_eq!(
+            drawn_at(row, 0),
+            Some(marker),
+            "the marker {marker:?} is not the row's first column: {row:?}"
+        );
+        assert_eq!(
+            drawn_at(row, 1),
+            Some(' '),
+            "the gutter is two cells, one glyph and one blank: {row:?}"
+        );
+        assert_eq!(
+            words_column(row),
+            Some(2),
+            "and the words begin past it: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn a_row_too_narrow_for_a_marker_gives_up_the_marker_before_it_cuts_a_word() {
+    let secrets = SecretSet::default();
+    let thought = Entry::Reasoning {
+        turn: 1,
+        text: secrets.redact("thought"),
+    };
+    for (entry, marker) in [
+        (result(1, Exit::Code(0)), '✓'),
+        (result(1, Exit::Code(1)), '✗'),
+        (call(1), '…'),
+        (thought, '│'),
+        (turn(5), '─'),
+        (
+            Entry::Prompt {
+                text: secrets.redact("prompt"),
+            },
+            '─',
+        ),
+        (
+            Entry::Assistant {
+                turn: 1,
+                text: secrets.redact("```rust\nfn main()\n```"),
+            },
+            '▏',
+        ),
+    ] {
+        for row in layout(&entry, 2) {
+            let Some((column, _, _)) = row.glyph_columns().first().copied() else {
+                continue;
+            };
+            assert_eq!(column, 0, "a band of two columns holds no gutter: {row:?}");
+            assert!(
+                !row.glyphs().contains(marker),
+                "the marker {marker:?} is given up rather than the words: {row:?}"
+            );
+        }
+
+        for row in layout(&entry, 2) {
+            assert!(
+                row.width() <= 2,
+                "a row of two columns holds no word past them: {row:?}"
+            );
+        }
+
+        let narrow = layout(&entry, 3);
+        let head = &narrow[0];
+        assert_eq!(
+            drawn_at(head, 0),
+            Some(marker),
+            "three columns hold the marker: {head:?}"
+        );
+        assert_eq!(drawn_at(head, 1), Some(' '), "and its blank: {head:?}");
+        assert_eq!(
+            head.width(),
+            3,
+            "with one column of words at 2 and no more: {head:?}"
+        );
+        assert_eq!(
+            words_column(head),
+            Some(2),
+            "the words follow the marker: {head:?}"
+        );
+    }
+}
+
+#[test]
+fn a_marker_no_band_holds_beside_a_word_leaves_the_answer_its_columns() {
+    let head = Pulse::live(4_200).head();
+    let mut stream = Stream::new();
+    stream.text("the answer's own words");
+
+    for cols in 6..=7 {
+        let marked: Vec<String> = stream.rows(cols, Some(&head)).iter().map(words).collect();
+        assert_eq!(
+            marked,
+            stream
+                .rows(cols, None)
+                .iter()
+                .map(words)
+                .collect::<Vec<String>>(),
+            "a marker {cols} columns cannot hold beside a word of the answer takes no column of it"
+        );
+    }
+}
+
+#[test]
+fn a_code_block_keeps_its_bar_in_the_gutter() {
+    let rows = layout(
+        &Entry::Assistant {
+            turn: 1,
+            text: SecretSet::default().redact(
+                "The rule is one line:\n```rust\nfn main() {\nlet x = 1;\n}\n```\nand back to prose.",
+            ),
+        },
+        40,
+    );
+
+    assert_eq!(
+        rows.iter().map(words).collect::<Vec<String>>(),
+        [
+            "  The rule is one line:",
+            "",
+            "▏ rust",
+            "▏ fn main() {",
+            "▏ let x = 1;",
+            "▏ }",
+            "",
+            "  and back to prose.",
+        ],
+        "the bar of a block stands in the answer's gutter and never past it"
+    );
+    for row in &rows[2..6] {
+        assert_eq!(drawn_at(row, 0), Some('▏'), "the block's own bar: {row:?}");
+        assert_eq!(drawn_at(row, 1), Some(' '), "and its blank: {row:?}");
+        assert!(
+            drawn_at(row, 2).is_some(),
+            "so the code's words begin where the answer's do: {row:?}"
+        );
+    }
+    assert_eq!(
+        words_column(&rows[7]),
+        Some(2),
+        "and the prose the fence closed under begins there too: {:?}",
+        rows[7]
+    );
+}
+
+#[test]
+fn a_thought_keeps_its_bar_in_the_gutter_and_its_own_ink() {
+    let rows = layout(
+        &Entry::Reasoning {
+            turn: 1,
+            text: SecretSet::default()
+                .redact("the fence is the question: a fence still open is code"),
+        },
+        24,
+    );
+
+    assert!(rows.len() > 1, "a thought wider than the band is rows");
+    for row in &rows {
+        assert_eq!(drawn_at(row, 0), Some('│'), "the bar of a thought: {row:?}");
+        assert_eq!(drawn_at(row, 1), Some(' '), "and its blank: {row:?}");
+        assert_eq!(
+            words_column(row),
+            Some(2),
+            "the thought's words stand behind the bar and not past it: {row:?}"
+        );
+        assert_eq!(
+            inks(row),
+            [Ink::Dim, Ink::Muted],
+            "the bar is dim and the words it holds are muted: {row:?}"
+        );
+    }
 }
 
 #[test]
@@ -423,10 +714,10 @@ fn a_fenced_block_is_guttered_by_its_language_and_the_prose_resumes_after_it() {
         [
             "  The closing fence is what ends a block:",
             "",
-            "  ▏ rust",
-            "  ▏ fn main() {",
-            "  ▏     let  x = 1;",
-            "  ▏ }",
+            "▏ rust",
+            "▏ fn main() {",
+            "▏     let  x = 1;",
+            "▏ }",
             "",
             "  and the prose goes on.",
         ],
@@ -435,17 +726,15 @@ fn a_fenced_block_is_guttered_by_its_language_and_the_prose_resumes_after_it() {
     );
     assert_eq!(
         inks(&rows[2]),
-        [Ink::Plain, Ink::Dim, Ink::Dim],
+        [Ink::Dim, Ink::Dim],
         "the bar and the language tag are facts about what the text is: {:?}",
         rows[2]
     );
     assert_eq!(
-        rows[3].spans()[..2],
-        [
-            (String::from("  "), Look::plain(Ink::Plain)),
-            (String::from("▏ "), Look::plain(Ink::Dim)),
-        ],
-        "every row of the block is set behind the answer's gutter and the block's bar"
+        (drawn_at(&rows[3], 0), words_column(&rows[3])),
+        (Some('▏'), Some(2)),
+        "every row of the block keeps the block's bar in the answer's gutter: {:?}",
+        rows[3]
     );
     assert_eq!(
         inks(&rows[7]),
@@ -472,14 +761,14 @@ fn a_fence_that_is_still_open_draws_the_rest_of_the_answer_as_code() {
         [
             "  Here is the rule:",
             "",
-            "  ▏ a fence still open",
-            "  ▏     is a code block",
+            "▏ a fence still open",
+            "▏     is a code block",
         ],
         "the tail is drawn as code rather than swallowed as prose"
     );
     for row in &rows[2..] {
         assert_eq!(
-            row.spans()[1],
+            row.spans()[0],
             (String::from("▏ "), Look::plain(Ink::Dim)),
             "every row under an open fence is a code row: {row:?}"
         );
@@ -891,7 +1180,7 @@ fn a_call_that_exited_zero_settles_on_a_check_and_its_code() {
     assert_eq!(said(&header), "✓ exit 0  bash  7 bytes · 2 ms");
     assert_eq!(cell_inks(&header)[0], Ink::Ok, "the check is the good ink");
     assert!(
-        cell_inks(&header)[1..].iter().all(|ink| *ink == Ink::Dim),
+        cell_inks(&header)[2..].iter().all(|ink| *ink == Ink::Dim),
         "and the facts beside it are faded: {:?}",
         cell_inks(&header)
     );
