@@ -8,6 +8,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 use ratatui::layout::Rect;
+use sindri::capability::Capabilities;
 use sindri::composer::{Composer, Key, Outcome, State};
 use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger::{Boot, Ctx, Facts};
@@ -72,7 +73,7 @@ fn named(name: &str) -> View {
         "boot-face" => splash(true),
         "boot-face-small" => splash(true),
         "transcript" => running(transcript(), Scroll::Tail),
-        "gutter" => View::of(gutter(), Scroll::Tail),
+        "gutter" => View::of(Capabilities::default(), gutter(), Scroll::Tail),
         "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
         "thumb-head" => thumbing(Scroll::Back(44)),
         "thumb-middle" => thumbing(Scroll::Back(22)),
@@ -86,35 +87,48 @@ fn named(name: &str) -> View {
         "fold" => fold(false),
         "fold-open" => fold(true),
         "fold-answer" => folded_beside_an_answer(),
-        "empty" => View::boot(),
-        "typing" => View::typing(draft(&["why does the retry test fail"])),
-        "wrapped" => View::typing(draft(&[
-            "the draft is set where an answer is set, and a line of it wider than the band wraps \
+        "empty" => View::boot(Capabilities::default()),
+        "typing" => View::typing(
+            Capabilities::default(),
+            draft(&["why does the retry test fail"]),
+        ),
+        "wrapped" => View::typing(
+            Capabilities::default(),
+            draft(&[
+                "the draft is set where an answer is set, and a line of it wider than the band wraps \
              under the gutter — 日本語 keeps both its columns — while a line the reader broke is \
              one row of its own.",
-        ])),
-        "grown" => View::typing(draft(&[
-            "read the transcript, then the failing test,",
-            "then the patch, and say which line of the",
-            "patch the test disagrees with. Keep it to",
-            "one sentence and quote the line you mean,",
-            "the way the report does.",
-        ])),
-        "scrolled" => View::typing(draft(&[
-            "one: the test that fails",
-            "two: the line it fails on",
-            "three: the patch that moved it",
-            "four: the retry that hid it",
-            "five: the budget it spent",
-            "six: the stop reason",
-            "seven: the session it left",
-            "eight: the question to ask",
-        ])),
-        "commands" => View::typing(draft(&["/"])),
-        "commands-narrow" => View::typing(draft(&["/s"])),
-        "commands-none" => View::typing(draft(&[
-            "/usr/local/bin is not on the path the run is handed",
-        ])),
+            ]),
+        ),
+        "grown" => View::typing(
+            Capabilities::default(),
+            draft(&[
+                "read the transcript, then the failing test,",
+                "then the patch, and say which line of the",
+                "patch the test disagrees with. Keep it to",
+                "one sentence and quote the line you mean,",
+                "the way the report does.",
+            ]),
+        ),
+        "scrolled" => View::typing(
+            Capabilities::default(),
+            draft(&[
+                "one: the test that fails",
+                "two: the line it fails on",
+                "three: the patch that moved it",
+                "four: the retry that hid it",
+                "five: the budget it spent",
+                "six: the stop reason",
+                "seven: the session it left",
+                "eight: the question to ask",
+            ]),
+        ),
+        "commands" => View::typing(Capabilities::default(), draft(&["/"])),
+        "commands-narrow" => View::typing(Capabilities::default(), draft(&["/s"])),
+        "commands-none" => View::typing(
+            Capabilities::default(),
+            draft(&["/usr/local/bin is not on the path the run is handed"]),
+        ),
         "markdown-headings" => construct(headings()),
         "markdown-headings-large" => sized(headings()),
         "markdown-lists" => construct(lists()),
@@ -136,7 +150,7 @@ fn named(name: &str) -> View {
         "queue-long" => queue_long(),
         "draft-long" => draft_long(),
         "keys" => {
-            let mut view = View::boot();
+            let mut view = View::boot(Capabilities::default());
             view.key(Key::Char('?'));
             view
         }
@@ -147,18 +161,18 @@ fn named(name: &str) -> View {
         "files-none" => picking("zzz"),
         "models" => model_screen(),
         "settings" => {
-            let mut view = View::boot();
+            let mut view = View::boot(Capabilities::default());
             view.open_settings(&in_force());
             view
         }
         "settings-refused" => refused(),
         "stats" => stats(),
-        "footer" => View::boot(),
+        "footer" => View::boot(Capabilities::default()),
         "footer-live" => asked(),
         "footer-queue" => waiting(asked(), DURING_A_RUN),
         "picture" => pictured(),
         "mark" => {
-            let mut view = View::of(transcript(), Scroll::Tail);
+            let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
             view.drag(mark::Cell::new(20, 0), mark::Cell::new(23, 70));
             view
         }
@@ -176,6 +190,7 @@ fn pictured() -> View {
     let workspace = PathBuf::from(FIXTURES).join("pictures");
 
     let mut view = View::of(
+        crate::caps::pictured(),
         vec![answer(
             1,
             "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n![a tall field]\
@@ -184,7 +199,6 @@ fn pictured() -> View {
         Scroll::Back(70),
     );
     view.set_workspace(workspace);
-    view.drawn_on(crate::caps::kitty());
     view
 }
 
@@ -192,8 +206,8 @@ fn pictured() -> View {
 /// picture over the rail's top rows with the switch on, and the facts from the rail's first row
 /// with it off.
 fn faced(face: bool) -> View {
-    let mut view = running(opening(), Scroll::Tail);
-    view.drawn_on(crate::caps::faced(face));
+    let mut view = View::of(crate::caps::pictured().faced(face), opening(), Scroll::Tail);
+    view.set_facts(facts());
     view
 }
 
@@ -201,7 +215,10 @@ fn faced(face: bool) -> View {
 /// enforcement the policy holds — a session and a temp are a run's own, so the rail draws an em dash
 /// for each. A terminal that places pictures is handed Sindri's face over the wordmark.
 fn splash(draws: bool) -> View {
-    let mut view = View::boot();
+    let mut view = View::boot(match draws {
+        true => crate::caps::pictured(),
+        false => Capabilities::default(),
+    });
     view.splash(Boot {
         wire: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-5")),
@@ -209,9 +226,6 @@ fn splash(draws: bool) -> View {
         branch: Some(String::from("main")),
         enforcement: Enforcement::Bubblewrap,
     });
-    if draws {
-        view.drawn_on(crate::caps::kitty());
-    }
     view
 }
 
@@ -228,7 +242,7 @@ fn model_screen() -> View {
     let listing = Client::over(replay, SecretSet::default())
         .waits(|_| {})
         .served(&at, &Credential::new("sk-ant-recorded"), &at);
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.paste("/model");
     view.key(Key::Enter);
     view.set_served(listing);
@@ -236,15 +250,13 @@ fn model_screen() -> View {
 }
 
 fn construct(text: &str) -> View {
-    View::of(vec![answer(1, text)], Scroll::Tail)
+    View::of(Capabilities::default(), vec![answer(1, text)], Scroll::Tail)
 }
 
 /// The same answer on a terminal that draws text at more than one cell: the two highest headings are
 /// laid out as the cells the sizing leaves and measured by them.
 fn sized(text: &str) -> View {
-    let mut view = construct(text);
-    view.drawn_on(crate::caps::kitty());
-    view
+    View::of(crate::caps::kitty(), vec![answer(1, text)], Scroll::Tail)
 }
 
 fn headings() -> &'static str {
@@ -297,6 +309,7 @@ fn ways() -> View {
         .nth(2)
         .expect("the tree the product is built in");
     let mut view = View::of(
+        Capabilities::default(),
         vec![
             answer(
                 1,
@@ -321,6 +334,7 @@ fn tools() -> View {
         .nth(2)
         .expect("the tree the product is built in");
     let mut view = View::of(
+        Capabilities::default(),
         vec![
             Entry::Turn { turn: 1 },
             call(
@@ -411,7 +425,7 @@ fn picking(query: &str) -> View {
     }
     std::fs::write(root.path().join(".gitignore"), "target/\n*.local.md\n").expect("a gitignore");
 
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.set_workspace(root.path().to_path_buf());
     view.key(Key::Char('@'));
     for glyph in query.chars() {
@@ -436,7 +450,7 @@ fn in_force() -> Config {
 }
 
 fn refused() -> View {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.open_settings(&in_force());
     for _ in 0..Config::KEYS.len() {
         let row = view
@@ -477,7 +491,7 @@ fn stats() -> View {
         .expect("a SKILL.md");
     }
 
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.set_workspace(root.path().to_path_buf());
     view.set_home(None);
     for name in ["bash", "records"] {
@@ -542,11 +556,15 @@ pub fn document() -> SessionDocument {
 /// A transcript of eighty turn dividers, one row each, so the rows of the band the thumb covers are
 /// counted off the frame.
 fn thumbing(scroll: Scroll) -> View {
-    View::of((1..=80).map(|turn| Entry::Turn { turn }), scroll)
+    View::of(
+        Capabilities::default(),
+        (1..=80).map(|turn| Entry::Turn { turn }),
+        scroll,
+    )
 }
 
 fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
-    let mut view = View::of(entries, scroll);
+    let mut view = View::of(Capabilities::default(), entries, scroll);
     view.set_facts(facts());
     view
 }
@@ -877,17 +895,20 @@ fn queue_long() -> View {
 
 /// A draft of nine lines, which is more than the composer's band draws.
 fn draft_long() -> View {
-    View::typing(draft(&[
-        "one: the test that failed",
-        "two: the line it failed on",
-        "three: the patch that moved it",
-        "four: the retry that hid it",
-        "five: the budget it spent",
-        "six: the stop reason",
-        "seven: the session it left",
-        "eight: the question to ask",
-        "nine: the row it keeps back",
-    ]))
+    View::typing(
+        Capabilities::default(),
+        draft(&[
+            "one: the test that failed",
+            "two: the line it failed on",
+            "three: the patch that moved it",
+            "four: the retry that hid it",
+            "five: the budget it spent",
+            "six: the stop reason",
+            "seven: the session it left",
+            "eight: the question to ask",
+            "nine: the row it keeps back",
+        ]),
+    )
 }
 
 fn waiting(mut view: View, prompts: &[&str]) -> View {
@@ -903,7 +924,7 @@ fn waiting(mut view: View, prompts: &[&str]) -> View {
 
 /// The frame a prompt just sent leaves: a run in flight and nothing said yet.
 fn asked() -> View {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.settle();
     view.set_state(State::Running);
     view.set_pulse(Some(Pulse::live(0)));
@@ -1074,7 +1095,7 @@ fn drawn_taking(name: &str, cols: u16, rows: u16, pointer: bool) -> String {
     let mut view = named(name);
     let capabilities = view.capabilities().clone().reporting(pointer);
     view.drawn_on(capabilities);
-    let palette = view.palette();
+    let palette = view.capabilities().palette();
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
     let completed = terminal

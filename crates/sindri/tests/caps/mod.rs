@@ -8,17 +8,21 @@ use sindri::capability::{Answers, Capabilities};
 use sindri::graphics::CellSize;
 use sindri::palette::Palette;
 
-/// A terminal that says nothing but speaks truecolour: the value a probe of one finds.
-pub fn silent() -> Capabilities {
-    probed(&[("COLORTERM", "truecolor")], Answers::silent())
-}
-
 /// A terminal that names Kitty and drew the block at size: it places pictures, draws large text and
 /// reports a pointer.
 pub fn kitty() -> Capabilities {
     probed(
         &[("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")],
         Answers::at(CellSize::NOMINAL).sized(),
+    )
+}
+
+/// A terminal that places pictures at the nominal cell and draws no large text: a Kitty-named one
+/// that answered it read the block as one cell.
+pub fn pictured() -> Capabilities {
+    probed(
+        &[("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")],
+        Answers::at(CellSize::NOMINAL),
     )
 }
 
@@ -42,11 +46,14 @@ pub fn at(cell: CellSize) -> Capabilities {
 /// A terminal drawn in `palette`: the terminal's own slots for one told no colour, and the colours
 /// of a terminal with no twenty-four-bit colour for one that names none.
 pub fn inked(palette: Palette) -> Capabilities {
-    match (palette == Palette::SLOTS, palette == Palette::ANSI) {
-        (true, _) => probed(&[("NO_COLOR", "1")], Answers::silent()),
-        (false, true) => probed(&[("TERM", "xterm-256color")], Answers::silent()),
-        (false, false) => silent(),
-    }
+    probed(
+        match palette {
+            Palette::SLOTS => &[("NO_COLOR", "1")],
+            Palette::ANSI => &[("TERM", "xterm-256color")],
+            _ => &[("COLORTERM", "truecolor")],
+        },
+        Answers::silent(),
+    )
 }
 
 /// A terminal that names Kitty, with the config's face switch as given.

@@ -56,7 +56,6 @@ impl Answers {
         Answers::default()
     }
 
-    /// The terminal reported this cell.
     pub fn at(cell: CellSize) -> Answers {
         Answers {
             cell: Some(cell),
@@ -64,7 +63,6 @@ impl Answers {
         }
     }
 
-    /// The terminal drew the block at size.
     pub fn sized(self) -> Answers {
         Answers {
             sized: true,
@@ -102,6 +100,7 @@ pub struct Capabilities {
 }
 
 impl Default for Capabilities {
+    /// A terminal nobody probed, drawn in the colours the design is drawn in.
     fn default() -> Capabilities {
         Capabilities {
             cell: CellSize::NOMINAL,
@@ -123,9 +122,9 @@ impl Capabilities {
         face: bool,
     ) -> (Capabilities, Vec<u8>) {
         let (term, program, vte) = (
-            spoken(environment, "TERM"),
-            spoken(environment, "TERM_PROGRAM"),
-            spoken(environment, "VTE_VERSION"),
+            environment.var("TERM"),
+            environment.var("TERM_PROGRAM"),
+            environment.var("VTE_VERSION"),
         );
         let (cell, mut typed) = match asked.winsize() {
             Some(cell) => (cell, Vec::new()),
@@ -138,9 +137,9 @@ impl Capabilities {
             },
         };
         let palette = Palette::probed(
-            spoken(environment, "NO_COLOR").as_deref(),
+            environment.var("NO_COLOR").as_deref(),
             term.as_deref(),
-            spoken(environment, "COLORTERM").as_deref(),
+            environment.var("COLORTERM").as_deref(),
         );
         let pictures = match picture::speaks_kitty(term.as_deref(), program.as_deref()) {
             true => Pictures::kitty(cell),
@@ -287,11 +286,6 @@ fn report_at(bytes: &[u8]) -> Option<(usize, (u16, u16))> {
         end + OPENING.len() + 1,
         (row.parse().ok()?, column.parse().ok()?),
     ))
-}
-
-/// An environment variable, with an empty string counting as unsaid.
-fn spoken(environment: &impl Environment, name: &str) -> Option<String> {
-    environment.var(name).filter(|value| !value.is_empty())
 }
 
 #[cfg(test)]
@@ -559,7 +553,6 @@ mod tests {
         );
     }
 
-    /// An answer cut in half is not an answer, and every byte of it is a key a reader typed.
     #[test]
     fn the_cell_is_read_off_the_bytes_the_terminal_sent_and_the_keys_beside_it_kept() {
         let (cell, typed) = cell_reply(b"a\x1b[6;18;9tb");
@@ -578,5 +571,55 @@ mod tests {
             b"\x1b[6;18;9".to_vec(),
             "and every byte of it is a key"
         );
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod caps {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    /// A terminal that names Kitty and read the block as one cell: pictures at the nominal cell and
+    /// no large text.
+    pub(crate) fn pictured() -> Capabilities {
+        probed(
+            &[("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")],
+            Answers::silent(),
+        )
+    }
+
+    pub(crate) fn sized() -> Capabilities {
+        probed(
+            &[("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")],
+            Answers::silent().sized(),
+        )
+    }
+
+    pub(crate) fn pointing() -> Capabilities {
+        probed(
+            &[("VTE_VERSION", "5000"), ("COLORTERM", "truecolor")],
+            Answers::silent(),
+        )
+    }
+
+    /// A terminal drawn in `palette`: the names a terminal gives itself that put a frame in it.
+    pub(crate) fn inked(palette: Palette) -> Capabilities {
+        probed(
+            match palette {
+                Palette::SLOTS => &[("NO_COLOR", "1")],
+                Palette::ANSI => &[("TERM", "xterm-256color")],
+                _ => &[("COLORTERM", "truecolor")],
+            },
+            Answers::silent(),
+        )
+    }
+
+    fn probed(terms: &[(&str, &str)], answers: Answers) -> Capabilities {
+        let terms: BTreeMap<String, String> = terms
+            .iter()
+            .map(|(key, value)| (String::from(*key), String::from(*value)))
+            .collect();
+        Capabilities::probed(&terms, &answers, true).0
     }
 }

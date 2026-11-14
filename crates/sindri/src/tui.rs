@@ -45,13 +45,6 @@ const MODEL: &str = "model";
 /// for a run to write its ending, short enough that a wire which never answers cannot hold a quit.
 const GRACE: Duration = Duration::from_secs(2);
 
-/// The frame a launch opens on, drawn on the terminal it was handed.
-fn opened(capabilities: Capabilities) -> View {
-    let mut view = View::boot();
-    view.drawn_on(capabilities);
-    view
-}
-
 pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Some(reason) = missing_terminal() {
         return crate::refuse(&reason, USAGE);
@@ -88,15 +81,17 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // What the run the prompt will ask for is, read behind the reader's own shell rather than
     // behind a blank frame: the repository is asked for its branch once, before the first paint.
     let boot = crate::launch::boot(cli, config, &workspace);
-    let named = |key: &str| Process.var(key);
     // Asked once, before the screen is taken: the terminal that takes the window's sequences is the
     // one asked to report its focus, and one nobody can vouch for is asked nothing at all.
-    let windowed = window::speaks(named("TERM").as_deref(), named("TERM_PROGRAM").as_deref());
+    let windowed = window::speaks(
+        Process.var("TERM").as_deref(),
+        Process.var("TERM_PROGRAM").as_deref(),
+    );
     // Asked once with the window's sequences, and of the terminal that answers for both.
     let pointer = pointer::speaks(
-        named("TERM").as_deref(),
-        named("TERM_PROGRAM").as_deref(),
-        named("VTE_VERSION").as_deref(),
+        Process.var("TERM").as_deref(),
+        Process.var("TERM_PROGRAM").as_deref(),
+        Process.var("VTE_VERSION").as_deref(),
     );
     let screen = match Screen::take(&terminal, windowed, pointer) {
         Ok(screen) => screen,
@@ -108,7 +103,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // not a question every paint asks again. A key typed while it thought is handed to the loop
     // rather than dropped.
     let (capabilities, typed) = Capabilities::probed(&Process, &terminal, config.draws_face());
-    let mut view = opened(capabilities);
+    let mut view = View::boot(capabilities);
     view.set_workspace(workspace.clone());
     // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run could
     // call come from one catalog.
@@ -173,8 +168,6 @@ struct Loop<'a> {
     terminal: &'a Terminal,
     canvas: Canvas<'a>,
     view: View,
-    /// The terminal the frame is drawn on, re-handed when a settings visit moves the face.
-    capabilities: Capabilities,
     cli: &'a Cli,
     config: Config,
     environment: &'a dyn Environment,
@@ -229,7 +222,6 @@ impl<'a> Loop<'a> {
         Ok(Loop {
             terminal,
             canvas: Self::canvas(terminal, environment)?,
-            capabilities: view.capabilities().clone(),
             view,
             cli,
             config,
@@ -405,9 +397,12 @@ impl<'a> Loop<'a> {
                         // the telling at the next report, and `face` turned off repaints the
                         // frame without one, rather than at the next launch.
                         self.telling.switch(self.config.tells_status())?;
-                        self.capabilities =
-                            self.capabilities.clone().faced(self.config.draws_face());
-                        self.view.drawn_on(self.capabilities.clone());
+                        let capabilities = self
+                            .view
+                            .capabilities()
+                            .clone()
+                            .faced(self.config.draws_face());
+                        self.view.drawn_on(capabilities);
                         self.view.saved();
                     }
                     Err(error) => self.view.refuse(&error.to_string()),

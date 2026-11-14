@@ -283,11 +283,18 @@ struct Laid {
 }
 
 impl View {
-    pub fn boot() -> View {
-        View::default()
+    pub fn boot(capabilities: Capabilities) -> View {
+        View {
+            capabilities,
+            ..View::default()
+        }
     }
 
-    pub fn of(entries: impl IntoIterator<Item = Entry>, scroll: Scroll) -> View {
+    pub fn of(
+        capabilities: Capabilities,
+        entries: impl IntoIterator<Item = Entry>,
+        scroll: Scroll,
+    ) -> View {
         let mut rows = Rows::new();
         for entry in entries {
             rows.push(entry);
@@ -295,13 +302,15 @@ impl View {
         View {
             rows,
             scroll,
+            capabilities,
             ..View::default()
         }
     }
 
-    pub fn typing(composer: Composer) -> View {
+    pub fn typing(capabilities: Capabilities, composer: Composer) -> View {
         View {
             composer,
+            capabilities,
             ..View::default()
         }
     }
@@ -386,24 +395,13 @@ impl View {
         self.home = home;
     }
 
-    pub fn cell_size(&self) -> CellSize {
-        self.capabilities.cell()
-    }
-
-    pub fn palette(&self) -> Palette {
-        self.capabilities.palette()
-    }
-
-    pub fn pictures(&self) -> &Pictures {
-        self.capabilities.pictures()
-    }
-
     pub fn capabilities(&self) -> &Capabilities {
         &self.capabilities
     }
 
-    /// The value the terminal a frame draws on is: a launch hands it once, before the first frame, and
-    /// a settings visit that moved the config's face switch hands it again.
+    /// The one value a frame is handed after it is built: the settings visit that moved the config's
+    /// face switch, and a test that draws one frame again on a terminal whose one fact differs. Not
+    /// the way a frame is built.
     pub fn drawn_on(&mut self, capabilities: Capabilities) {
         self.capabilities = capabilities;
     }
@@ -1654,9 +1652,8 @@ mod tests {
 
     use super::*;
     use crate::composer::{MAX_ROWS, MIN_ROWS, PLACEHOLDER};
-    use std::collections::BTreeMap;
 
-    use crate::capability::{Answers, Capabilities};
+    use crate::capability::caps::{inked, pictured, pointing, sized};
     use crate::ink::{Face, Look};
     use crate::palette::{Band, Edge};
     use crate::pictures::PLACEHOLDER as PLACED;
@@ -1683,63 +1680,6 @@ mod tests {
             temp: Some(PathBuf::from("/srv/sessions/9f2c7a41/tmp")),
             ..Facts::default()
         }
-    }
-
-    /// A frame drawn on a terminal that says nothing at all: what a probe of one finds.
-    fn silent() -> Capabilities {
-        Capabilities::default()
-    }
-
-    /// A frame drawn on a terminal that reports a pointer and nothing else.
-    fn pointing() -> Capabilities {
-        Capabilities::probed(
-            &BTreeMap::from([
-                (String::from("VTE_VERSION"), String::from("5000")),
-                (String::from("COLORTERM"), String::from("truecolor")),
-            ]),
-            &Answers::silent(),
-            true,
-        )
-        .0
-    }
-
-    /// A frame drawn on a terminal that names Kitty: pictures at the nominal cell, and no sizing
-    /// until it says it drew the block.
-    fn pictured() -> Capabilities {
-        Capabilities::probed(
-            &BTreeMap::from([
-                (String::from("TERM"), String::from("xterm-kitty")),
-                (String::from("COLORTERM"), String::from("truecolor")),
-            ]),
-            &Answers::silent(),
-            true,
-        )
-        .0
-    }
-
-    /// A frame drawn on a terminal that draws text at more than one cell.
-    fn sized() -> Capabilities {
-        Capabilities::probed(
-            &BTreeMap::from([
-                (String::from("TERM"), String::from("xterm-kitty")),
-                (String::from("COLORTERM"), String::from("truecolor")),
-            ]),
-            &Answers::silent().sized(),
-            true,
-        )
-        .0
-    }
-
-    /// A frame drawn in `palette`: the colours the names of a terminal give it.
-    fn inked(palette: Palette) -> Capabilities {
-        let terms: BTreeMap<String, String> = match (palette == Palette::SLOTS, palette) {
-            (true, _) => [(String::from("NO_COLOR"), String::from("1"))],
-            (false, Palette::ANSI) => [(String::from("TERM"), String::from("xterm-256color"))],
-            _ => [(String::from("COLORTERM"), String::from("truecolor"))],
-        }
-        .into_iter()
-        .collect();
-        Capabilities::probed(&terms, &Answers::silent(), true).0
     }
 
     /// The look the cell at `x`, `y` of the frame reads back as.
@@ -1793,8 +1733,7 @@ mod tests {
         let draft: Vec<String> = (1..=lines).map(|line| line.to_string()).collect();
         let mut typed = Composer::new();
         typed.paste(&draft.join("\n"));
-        let mut view = View::typing(typed);
-        view.drawn_on(inked(palette));
+        let mut view = View::typing(inked(palette), typed);
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -1937,7 +1876,7 @@ mod tests {
             Mode::Settings,
             Mode::Stats,
         ] {
-            let mut view = View::boot();
+            let mut view = View::boot(Capabilities::default());
             view.paste("the draft behind the card");
             view.screen(mode);
 
@@ -1979,7 +1918,7 @@ mod tests {
     #[test]
     fn the_accent_edge_recedes_while_the_window_is_unfocused_and_returns_when_it_is_focused() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         view.paste("the draft the composer band is drawn from");
         let lit = edge_row(&mut view, &palette);
 
@@ -2006,8 +1945,7 @@ mod tests {
     fn a_frame_with_no_colour_draws_no_accent_edge_on_any_surface() {
         let palette = Palette::SLOTS;
         for open in [None, Some(Mode::Keys)] {
-            let mut view = View::boot();
-            view.drawn_on(inked(palette));
+            let mut view = View::boot(inked(palette));
             view.paste("the draft the composer band is drawn from");
             if let Some(mode) = open {
                 view.screen(mode);
@@ -2033,13 +1971,13 @@ mod tests {
     fn a_frame_with_no_colour_draws_no_band_and_no_elevation() {
         let palette = Palette::SLOTS;
         let mut view = View::of(
+            inked(palette),
             vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("```rust\nfn main() {}\n```\n\nand prose"),
             }],
             Scroll::Tail,
         );
-        view.drawn_on(inked(palette));
         view.set_facts(rail());
         view.paste("the draft");
 
@@ -2116,6 +2054,7 @@ mod tests {
         let palette = Palette::TRUECOLOR;
         for (cols, rows) in [(120, 40), (100, 40)] {
             let mut view = View::of(
+                Capabilities::default(),
                 vec![Entry::Assistant {
                     turn: 1,
                     text: SecretSet::default().redact("the transcript the rail is drawn beside"),
@@ -2182,6 +2121,7 @@ mod tests {
     fn the_rail_and_a_code_well_are_painted_over_their_own_surface() {
         let palette = Palette::TRUECOLOR;
         let mut view = View::of(
+            Capabilities::default(),
             vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact(
@@ -2263,12 +2203,11 @@ mod tests {
     /// terminal that places pictures is handed Sindri's face over the wordmark, and one that places
     /// none is handed the splash screen alone.
     fn splash_frame(cols: u16, rows: u16, draws: bool) -> (Buffer, Rect) {
-        let mut view = View::boot();
-        view.splash(boot());
-        view.drawn_on(match draws {
+        let mut view = View::boot(match draws {
             true => pictured(),
-            false => silent(),
+            false => Capabilities::default(),
         });
+        view.splash(boot());
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -2608,7 +2547,7 @@ mod tests {
         );
 
         let area = screen(80, 24);
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         view.splash(boot());
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -2629,7 +2568,7 @@ mod tests {
 
     #[test]
     fn a_run_sent_from_the_splash_screen_leaves_the_frame_to_the_conversation() {
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         assert!(
             !drawn(&mut view, 120, 40).contains("sindri"),
             "a frame no launch told what the run is draws no splash screen"
@@ -2714,7 +2653,7 @@ mod tests {
     }
 
     fn asking(queued: usize) -> View {
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         view.settle();
         view.set_state(State::Running);
         for text in ["one", "two", "three"].into_iter().take(queued) {
@@ -2732,7 +2671,7 @@ mod tests {
 
     /// The footer row a boot frame draws.
     fn footer(cols: u16, rows: u16) -> String {
-        drawn_footer(&mut View::boot(), cols, rows)
+        drawn_footer(&mut View::boot(Capabilities::default()), cols, rows)
     }
 
     #[test]
@@ -2804,7 +2743,7 @@ mod tests {
 
     #[test]
     fn each_set_is_cut_in_survival_order_at_four_widths() {
-        for mut view in [View::boot(), asking(0), asking(3)] {
+        for mut view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
             let mut cut: Vec<usize> = Vec::new();
             for cols in [120, 72, 52, 40] {
                 let drawn = drawn_footer(&mut view, cols, 24);
@@ -2821,7 +2760,7 @@ mod tests {
 
     #[test]
     fn no_hint_is_cut_mid_word_at_any_width_between_twenty_and_two_hundred() {
-        for mut view in [View::boot(), asking(0), asking(3)] {
+        for mut view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
             let set = whole(&view);
             for cols in 20..=200u16 {
                 let drawn = drawn_footer(&mut view, cols, 24);
@@ -2845,7 +2784,7 @@ mod tests {
 
     #[test]
     fn the_slash_is_named_in_every_frame_at_every_width_that_holds_a_hint_after_it() {
-        for mut view in [View::boot(), asking(0), asking(3)] {
+        for mut view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
             let set = whole(&view);
             let at = set
                 .iter()
@@ -2969,7 +2908,7 @@ mod tests {
     fn the_footer_draws_each_hint_as_a_key_and_the_words_that_say_what_it_does() {
         let palette = Palette::TRUECOLOR;
         for cols in [120, 72] {
-            for mut view in [View::boot(), asking(0), asking(3)] {
+            for mut view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
                 let area = screen(cols, 24);
                 let mut buffer = Buffer::empty(area);
                 view.paint(area, &mut buffer);
@@ -3004,7 +2943,7 @@ mod tests {
     #[test]
     fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_explains_it() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         view.key(Key::Char('?'));
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
@@ -3040,7 +2979,20 @@ mod tests {
     /// A frame whose transcript is `count` rows of turn dividers, each saying which turn it is:
     /// where a row stands in the frame is then a fact of what the row says.
     fn turns(count: u32) -> View {
-        View::of((1..=count).map(|turn| Entry::Turn { turn }), Scroll::Tail)
+        View::of(
+            Capabilities::default(),
+            (1..=count).map(|turn| Entry::Turn { turn }),
+            Scroll::Tail,
+        )
+    }
+
+    /// The same transcript on a terminal that reports a pointer: what a notch moves.
+    fn turns_taken(count: u32) -> View {
+        View::of(
+            pointing(),
+            (1..=count).map(|turn| Entry::Turn { turn }),
+            Scroll::Tail,
+        )
     }
 
     /// A frame whose transcript is one turn and a `cargo test` run of `rows` rows, which is a
@@ -3051,6 +3003,7 @@ mod tests {
             .collect::<Vec<String>>()
             .join("\n");
         View::of(
+            Capabilities::default(),
             vec![
                 Entry::Turn { turn: 1 },
                 Entry::Call {
@@ -3230,8 +3183,7 @@ mod tests {
 
     #[test]
     fn a_notch_of_the_wheel_takes_the_transcript_back_exactly_as_the_page_key_does() {
-        let mut view = turns(100);
-        view.drawn_on(pointing());
+        let mut view = turns_taken(100);
         let (_, told) = painted_and_told(&mut view, 120, 40);
 
         assert_eq!(
@@ -3259,8 +3211,7 @@ mod tests {
 
     #[test]
     fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
-        let mut view = turns(40);
-        view.drawn_on(pointing());
+        let mut view = turns_taken(40);
         let (_, told) = painted_and_told(&mut view, 120, 40);
 
         assert_eq!(
@@ -3280,8 +3231,7 @@ mod tests {
         );
         assert_eq!(view.scroll(), Scroll::Back(3), "the row it stopped on");
 
-        let mut tail = turns(40);
-        tail.drawn_on(pointing());
+        let mut tail = turns_taken(40);
         let (_, told) = painted_and_told(&mut tail, 120, 40);
         assert_eq!(
             tail.pointer(&told, Pointer::Wheel(Notch::Down)),
@@ -3315,8 +3265,7 @@ mod tests {
         for file in ["alpha.rs", "zeta.rs"] {
             std::fs::write(workspace.path().join(file), "").expect("a file");
         }
-        let mut view = View::boot();
-        view.drawn_on(pointing());
+        let mut view = View::boot(pointing());
         view.set_workspace(workspace.path().to_path_buf());
         assert_eq!(
             view.key(Key::Char('@')),
@@ -3385,8 +3334,7 @@ mod tests {
 
     #[test]
     fn a_press_on_a_commands_row_sends_what_enter_sends() {
-        let mut view = View::boot();
-        view.drawn_on(pointing());
+        let mut view = View::boot(pointing());
         view.key(Key::Char('/'));
         let (drawn, told) = painted_and_told(&mut view, 120, 40);
         let row = row_holding(&drawn, "/quit");
@@ -3401,15 +3349,14 @@ mod tests {
 
     #[test]
     fn a_press_on_a_commands_row_sends_what_enter_on_the_typed_line_sends() {
-        let mut clicked = View::boot();
-        clicked.drawn_on(pointing());
+        let mut clicked = View::boot(pointing());
         for glyph in ['/', 'n'] {
             clicked.key(Key::Char(glyph));
         }
         let (drawn, told) = painted_and_told(&mut clicked, 120, 40);
         let row = row_holding(&drawn, "/settings");
 
-        let mut typed = View::boot();
+        let mut typed = View::boot(Capabilities::default());
         for glyph in "/settings".chars() {
             typed.key(Key::Char(glyph));
         }
@@ -3532,7 +3479,11 @@ mod tests {
 
     #[test]
     fn one_row_back_is_said_in_the_singular() {
-        let mut view = View::of((1..=100).map(|turn| Entry::Turn { turn }), Scroll::Back(1));
+        let mut view = View::of(
+            Capabilities::default(),
+            (1..=100).map(|turn| Entry::Turn { turn }),
+            Scroll::Back(1),
+        );
         let buffer = painted(&mut view, 120, 40);
 
         let (drawn, _) = notice_of(&buffer);
@@ -3591,6 +3542,7 @@ mod tests {
     #[test]
     fn a_band_that_lays_the_history_out_again_does_not_move_the_reader_off_their_rows() {
         let mut view = View::of(
+            Capabilities::default(),
             (1..=20).map(|turn| Entry::Assistant {
                 turn,
                 text: SecretSet::default().redact(pen::filled(300, 'w')),
@@ -3854,7 +3806,7 @@ mod tests {
 
     #[test]
     fn the_card_that_lists_the_keys_names_the_two_pages_and_the_tail() {
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         view.key(Key::Char('?'));
         let buffer = painted(&mut view, 120, 40);
         let body = card_body(&buffer)
@@ -3894,7 +3846,7 @@ mod tests {
     #[test]
     fn every_hint_the_table_writes_is_drawn_in_the_frame_that_honours_it() {
         let mut drawn: Vec<&'static str> = Vec::new();
-        for view in [View::boot(), asking(0), asking(3)] {
+        for view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
             let depth = depth(&view);
             for width in 20..=200u16 {
                 for hint in kept(&view.hints(), width, &depth) {
@@ -3921,7 +3873,7 @@ mod tests {
                 .any(|binding| binding.name.split(", ").any(|name| name == hint.key));
             let opens = match hint.key.chars().next() {
                 Some(glyph) if pen::cells(hint.key) == 1 => {
-                    let mut view = View::boot();
+                    let mut view = View::boot(Capabilities::default());
                     view.key(Key::Char(glyph));
                     view.card().is_some() && view.composer().text() == hint.key
                 }
@@ -3943,7 +3895,7 @@ mod tests {
             composer.paste("first line\nsecond line");
             composer
         };
-        let view = View::typing(composer);
+        let view = View::typing(Capabilities::default(), composer);
         let area = screen(40, 12);
 
         assert_eq!(view.composer().rows(), 3);
@@ -3973,6 +3925,7 @@ mod tests {
     #[test]
     fn the_draft_is_set_in_the_column_an_answer_is_set_in_behind_a_sigil() {
         let mut view = View::of(
+            Capabilities::default(),
             vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("an answer opens here"),
@@ -4004,6 +3957,7 @@ mod tests {
     /// tall field the workspace's own svg draws, read from the tail a long way back.
     fn field(rows: u16) -> Buffer {
         let mut view = View::of(
+            pictured(),
             vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact(
@@ -4017,7 +3971,6 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/pictures"
         )));
-        view.drawn_on(pictured());
         painted(&mut view, 120, rows)
     }
 
@@ -4083,7 +4036,11 @@ mod tests {
 
     /// A frame whose transcript is `count` rows of turn dividers, read from `scroll`.
     fn scrolled(count: u32, scroll: Scroll) -> View {
-        View::of((1..=count).map(|turn| Entry::Turn { turn }), scroll)
+        View::of(
+            Capabilities::default(),
+            (1..=count).map(|turn| Entry::Turn { turn }),
+            scroll,
+        )
     }
 
     #[test]
@@ -4177,7 +4134,11 @@ mod tests {
         }];
         entries.extend((1..=79).map(|turn| Entry::Turn { turn }));
         // A window taken further back than the transcript reaches lands on its first row.
-        painted(&mut View::of(entries, Scroll::Back(u32::MAX)), cols, 40)
+        painted(
+            &mut View::of(Capabilities::default(), entries, Scroll::Back(u32::MAX)),
+            cols,
+            40,
+        )
     }
 
     #[test]
@@ -4221,16 +4182,16 @@ mod tests {
         let area = screen(60, 12);
         for (sizes, said) in [(true, "A   g a t e"), (false, "A gate")] {
             let mut view = View::of(
+                match sizes {
+                    true => sized(),
+                    false => Capabilities::default(),
+                },
                 vec![Entry::Assistant {
                     turn: 1,
                     text: SecretSet::default().redact("# A gate"),
                 }],
                 Scroll::Tail,
             );
-            view.drawn_on(match sizes {
-                true => sized(),
-                false => silent(),
-            });
             let mut buffer = Buffer::empty(area);
             view.paint(area, &mut buffer);
 
@@ -4248,13 +4209,13 @@ mod tests {
     fn a_frame_with_a_screen_over_it_draws_its_headings_as_the_words_they_are() {
         let area = screen(100, 30);
         let mut view = View::of(
+            sized(),
             vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("# A gate"),
             }],
             Scroll::Tail,
         );
-        view.drawn_on(sized());
         view.key(Key::Char('?'));
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -4302,8 +4263,7 @@ mod tests {
         cols: u16,
         rows: u16,
     ) -> (Buffer, Rect, Rect) {
-        let mut view = View::boot();
-        view.drawn_on(inked(palette));
+        let mut view = View::boot(inked(palette));
         view.settle();
         view.set_state(State::Running);
         for at in 1..=count {
@@ -4436,7 +4396,7 @@ mod tests {
         let draft: Vec<String> = (1..=9).map(|line| line.to_string()).collect();
         let mut typed = Composer::new();
         typed.paste(&draft.join("\n"));
-        let mut view = View::typing(typed);
+        let mut view = View::typing(Capabilities::default(), typed);
         let area = screen(120, 24);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -4466,7 +4426,7 @@ mod tests {
 
     #[test]
     fn a_draft_wider_than_the_band_wraps_under_the_gutter_and_never_splits_a_wide_glyph() {
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         view.paste(&pen::filled(60, '日'));
 
         let area = screen(60, 24);
@@ -4491,7 +4451,7 @@ mod tests {
     #[test]
     fn an_empty_draft_says_what_the_band_can_do_in_the_dim_ink_until_a_glyph_arrives() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
 
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
@@ -4523,7 +4483,7 @@ mod tests {
     #[test]
     fn a_card_covers_the_composer_and_leaves_it_readable_and_out_of_reach() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         view.paste("a draft of mine");
         view.screen(Mode::Keys);
 
@@ -4552,7 +4512,7 @@ mod tests {
 
     #[test]
     fn a_query_wider_than_the_body_is_cut_at_its_edge_and_not_dropped() {
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         view.set_workspace(std::env::temp_dir());
         view.key(Key::Char('@'));
         for _ in 0..60 {
@@ -4572,7 +4532,7 @@ mod tests {
 
     #[test]
     fn a_screen_has_no_caret_for_the_terminal_to_put_anywhere() {
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         let area = screen(40, 12);
         assert!(
             view.cursor(area).is_some(),
@@ -4591,7 +4551,7 @@ mod tests {
 
     #[test]
     fn a_draft_holding_a_wide_glyph_puts_the_caret_in_the_column_the_glyph_occupies() {
-        let view = View::typing({
+        let view = View::typing(Capabilities::default(), {
             let mut composer = Composer::new();
             composer.paste("日本");
             composer
@@ -4608,7 +4568,7 @@ mod tests {
     /// Where the caret a frame `cols` by `rows` wide puts the terminal's cursor, in a frame the
     /// view has painted: the band's rows are a fact about the width, so nothing is asked before it.
     fn caret_at(composer: Composer, cols: u16, rows: u16) -> Option<(u16, u16)> {
-        let mut view = View::typing(composer);
+        let mut view = View::typing(Capabilities::default(), composer);
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);

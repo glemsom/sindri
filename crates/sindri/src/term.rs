@@ -561,10 +561,9 @@ mod tests {
 
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
-    use rustix::termios::LocalModes;
-    use std::collections::BTreeMap;
+    use rustix::termios::{LocalModes, Winsize};
 
-    use sindri::capability::{Answers, Asked, Capabilities, Question};
+    use sindri::capability::{Asked, Capabilities, Question};
     use sindri::ink::{Ink, Look};
     use sindri::link::{Link, Links};
     use sindri::palette::Palette;
@@ -607,6 +606,39 @@ mod tests {
     }
 
     #[test]
+    fn a_winsize_is_a_cell_only_when_it_carries_pixels_for_every_cell() {
+        let sized = |ws_row: u16, ws_col: u16, ws_xpixel: u16, ws_ypixel: u16| {
+            of_winsize(Winsize {
+                ws_row,
+                ws_col,
+                ws_xpixel,
+                ws_ypixel,
+            })
+        };
+
+        assert_eq!(
+            sized(0, 0, 800, 480),
+            None,
+            "a terminal with no cells has no cell"
+        );
+        assert_eq!(
+            sized(24, 80, 8, 480),
+            None,
+            "fewer pixels across than cells is no answer"
+        );
+        assert_eq!(
+            sized(24, 80, 800, 20),
+            None,
+            "and neither is fewer pixels down"
+        );
+        assert_eq!(
+            sized(24, 80, 800, 480),
+            Some(CellSize::new(10, 20)),
+            "800 by 480 pixels over 80 by 24 cells is a 10 by 20 cell"
+        );
+    }
+
+    #[test]
     fn a_terminal_that_says_nothing_is_asked_its_cell_and_answers_nothing() {
         let pty = Pty::open();
         pty.resize(80, 24, 0, 0);
@@ -641,17 +673,6 @@ mod tests {
             pty.drawn().contains("\x1b]66;s=2; \x1b\\"),
             "the question really was put to it"
         );
-    }
-
-    /// The terminal a frame that draws large text is drawn on: one that names Kitty's sizing and
-    /// answered that it drew the block at size.
-    fn sized() -> Capabilities {
-        Capabilities::probed(
-            &BTreeMap::from([(String::from("TERM"), String::from("xterm-kitty"))]),
-            &Answers::silent().sized(),
-            true,
-        )
-        .0
     }
 
     /// A frame of `width` by `height` cells, the words each of `rows` holds, and the destinations
@@ -865,7 +886,7 @@ mod tests {
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
         let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
-        let mut view = View::boot();
+        let mut view = View::boot(Capabilities::default());
         match launch {
             true => {
                 paint(&mut canvas, &mut view).expect("a painted frame");
@@ -959,13 +980,13 @@ mod tests {
         let area = painted_at();
         let mut canvas = canvas_at(&terminal, area).expect("a canvas over it");
         let mut view = View::of(
+            crate::caps::sized(),
             vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("# A gate rule"),
             }],
             Scroll::Tail,
         );
-        view.drawn_on(sized());
 
         paint(&mut canvas, &mut view).expect("a painted frame");
         drop(canvas);

@@ -405,6 +405,10 @@ fn cell() -> CellSize {
 
 fn frame(workspace: &Path, text: &str, draws: bool) -> View {
     let mut view = View::of(
+        match draws {
+            true => caps::at(cell()),
+            false => Capabilities::default(),
+        },
         vec![Entry::Assistant {
             turn: 1,
             text: SecretSet::default().redact(text),
@@ -412,10 +416,6 @@ fn frame(workspace: &Path, text: &str, draws: bool) -> View {
         Scroll::Tail,
     );
     view.set_workspace(workspace.to_path_buf());
-    view.drawn_on(match draws {
-        true => caps::at(cell()),
-        false => Capabilities::default(),
-    });
     view
 }
 
@@ -499,8 +499,7 @@ fn railed_facts() -> Facts {
 /// The splash screen a launch opens on, with the facts a launch already holds beside it: a session
 /// and a temp are a run's own, so the rail draws an em dash for each.
 fn splash(draws: bool) -> View {
-    let mut view = View::boot();
-    view.drawn_on(match draws {
+    let mut view = View::boot(match draws {
         true => caps::at(cell()),
         false => Capabilities::default(),
     });
@@ -518,11 +517,14 @@ fn splash(draws: bool) -> View {
 /// a face is drawn over. A terminal that places none has no face to turn off, so `face` is no fact of
 /// its frame.
 fn railed(draws: bool, face: bool) -> View {
-    let mut view = View::of(Vec::new(), Scroll::Tail);
-    view.drawn_on(match draws {
-        true => caps::faced(face),
-        false => Capabilities::default(),
-    });
+    let mut view = View::of(
+        match draws {
+            true => caps::faced(face),
+            false => Capabilities::default(),
+        },
+        Vec::new(),
+        Scroll::Tail,
+    );
     view.set_facts(railed_facts());
     view
 }
@@ -621,7 +623,7 @@ fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
          screen: {rows:?}"
     );
     assert_eq!(
-        view.pictures().rasterises("shot.png"),
+        view.capabilities().pictures().rasterises("shot.png"),
         1,
         "the picture is made once for the size it was measured into"
     );
@@ -657,7 +659,7 @@ fn a_picture_painted_a_second_time_carries_no_transmission_header() {
          rows nor its transmission"
     );
     assert_eq!(
-        view.pictures().rasterises("shot.png"),
+        view.capabilities().pictures().rasterises("shot.png"),
         1,
         "nor is it made a second time at a size it was already made at"
     );
@@ -711,6 +713,7 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
                 band has, so that the entry above the newest one is off the screen and the \
                 picture in it is never measured";
     let mut view = View::of(
+        caps::at(cell()),
         vec![
             Entry::Assistant {
                 turn: 1,
@@ -724,16 +727,15 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
         Scroll::Tail,
     );
     view.set_workspace(workspace.clone());
-    view.drawn_on(caps::at(cell()));
 
     painted_at(&mut view, SCREEN);
     assert_eq!(
-        view.pictures().rasterises("shot.png"),
+        view.capabilities().pictures().rasterises("shot.png"),
         1,
         "the picture the band shows is made"
     );
     assert_eq!(
-        view.pictures().rasterises("old.png"),
+        view.capabilities().pictures().rasterises("old.png"),
         0,
         "and the one scrolled above the band is never touched, because no row of it was laid \
          out to draw"
@@ -741,13 +743,13 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
 
     painted_at(&mut view, (60, SCREEN.1));
     assert_eq!(
-        view.pictures().rasterises("shot.png"),
+        view.capabilities().pictures().rasterises("shot.png"),
         2,
         "a narrower band fits the visible picture into fewer columns, so it is made again at \
          the size it is now drawn at"
     );
     assert_eq!(
-        view.pictures().rasterises("old.png"),
+        view.capabilities().pictures().rasterises("old.png"),
         0,
         "and the picture off the screen keeps the raster it never had, because a resize is not \
          what makes a picture: the band showing it is (ADR-0008)"
@@ -766,14 +768,14 @@ fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
         "the picture is sent once at the size the wide band fits it into"
     );
     assert_eq!(
-        view.pictures().rasterises("shot.png"),
+        view.capabilities().pictures().rasterises("shot.png"),
         1,
         "and made once for that size"
     );
 
     let narrow = painted_at(&mut view, (60, SCREEN.1));
     assert_eq!(
-        view.pictures().rasterises("shot.png"),
+        view.capabilities().pictures().rasterises("shot.png"),
         2,
         "the narrower band fits the picture into fewer columns, so it is another picture"
     );
@@ -790,14 +792,14 @@ fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
         "the size the band shows is still held: a repaint of it transmits nothing"
     );
     assert_eq!(
-        view.pictures().rasterises("shot.png"),
+        view.capabilities().pictures().rasterises("shot.png"),
         2,
         "and makes no second raster of it"
     );
 
     let back = painted_at(&mut view, SCREEN);
     assert_eq!(
-        view.pictures().rasterises("shot.png"),
+        view.capabilities().pictures().rasterises("shot.png"),
         3,
         "the size the band has left is held no longer, so going back to it makes the picture \
          again"
@@ -845,7 +847,10 @@ fn a_terminal_that_speaks_no_kitty_is_given_the_words_and_an_uncorrupted_frame()
         false,
     );
 
-    assert!(!view.pictures().draws(), "this frame places no picture");
+    assert!(
+        !view.capabilities().pictures().draws(),
+        "this frame places no picture"
+    );
     let painted = painted_at(&mut view, SCREEN);
     let words: String = (painted.area.y..painted.area.bottom())
         .map(|y| {

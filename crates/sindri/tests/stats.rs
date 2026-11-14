@@ -7,6 +7,7 @@ mod caps; // the terminals these frames are drawn on
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
+use sindri::capability::Capabilities;
 use sindri::commands::{self, Command};
 use sindri::composer::{Key, Outcome};
 use sindri::keys::Mode;
@@ -40,7 +41,7 @@ fn painted(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
 }
 
 fn opened() -> View {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.set_facts(facts());
     view.set_record(&document());
     view.paste("/stats");
@@ -139,7 +140,7 @@ fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
 
 #[test]
 fn a_frame_handed_no_record_and_no_fact_still_opens_the_screen_with_its_title_and_no_row() {
-    let mut view = View::boot();
+    let mut view = View::boot(Capabilities::default());
     view.paste("/stats");
     view.key(Key::Enter);
 
