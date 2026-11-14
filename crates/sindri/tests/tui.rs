@@ -1005,15 +1005,6 @@ fn row_of(drawn: &str, needle: &str) -> Option<u16> {
         .map(|run| run.row)
 }
 
-/// The row opened by the words `needle`, in the run that starts at the left edge: where a band's own
-/// words stand, rather than a footer's copy of them.
-fn band_row_of(drawn: &str, needle: &str) -> Option<u16> {
-    runs(drawn)
-        .into_iter()
-        .find(|run| run.column == 1 && run.glyphs.starts_with(needle))
-        .map(|run| run.row)
-}
-
 /// The frame as the terminal holds it after every frame drawn so far: each row that has a glyph on it,
 /// and the last write to a cell winning over the ones before it.
 fn picture(drawn: &str) -> BTreeMap<u16, String> {
@@ -1914,7 +1905,7 @@ fn queue(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
 }
 
 #[test]
-fn enter_during_a_run_keeps_the_prompt_above_the_composer() {
+fn enter_during_a_run_keeps_the_prompt_in_the_composer_under_the_draft() {
     let ground = Ground::new();
     let wire = Wire::holding();
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
@@ -1929,21 +1920,20 @@ fn enter_during_a_run_keeps_the_prompt_above_the_composer() {
     queue(&mut pty, &drawn, "read the test that failed");
 
     let frame = drawn.text();
-    let count = band_row_of(&frame, "1 queued");
+    let waited = picture(&frame)
+        .into_iter()
+        .find(|(_, row)| row.starts_with("\u{203a} read the test that failed"))
+        .map(|(row, _)| row);
     assert!(
-        count.is_some(),
-        "the frame counts the prompt waiting above the composer: {frame:?}"
+        waited
+            .zip(caret_at(&frame))
+            .is_some_and(|(waited, (caret, _))| waited > caret),
+        "the frame draws the prompt waiting under the row the caret waits on: {frame:?}"
     );
     assert_eq!(
         composer_rows(&frame),
-        Some(2),
-        "and the box under it is still at its two-row floor, so the count is not in it"
-    );
-    assert!(
-        count
-            .zip(caret_at(&frame))
-            .is_some_and(|(count, (caret, _))| count < caret),
-        "the count sits above the composer's own row: {frame:?}"
+        Some(3),
+        "and it is a row of the composer's own band: the draft's and the prompt's, and no row more"
     );
 
     wire.release();

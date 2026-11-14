@@ -133,9 +133,10 @@ stand from the rail's first row. Not the **face** an ink wears.
 _Avoid_: Logo, avatar, mascot, icon
 
 **Band**:
-A strip of rows the frame shares out — the transcript's, the queue's, the row that says the frame
-stands off the tail, the composer's and the footer's — each drawn in the rows it was given and never
-past them.
+A strip of rows the frame shares out — the transcript's, the composer's, the row that says the frame
+stands off the tail, and the footer's — each drawn in the rows it was given and never past them. A
+queued prompt has no band of its own: it stands in the composer's, under the draft, one prompt to a
+row and the newest at the foot.
 _Avoid_: Region, pane, panel, viewport
 
 **Footer**:

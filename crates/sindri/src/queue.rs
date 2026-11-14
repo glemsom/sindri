@@ -1,6 +1,16 @@
 use std::collections::VecDeque;
 
-use crate::composer::Prompt;
+use crate::composer::{self, Prompt};
+
+/// The rows the queue takes of the composer's band at most.
+pub const MAX_ROWS: u16 = composer::MAX_ROWS - composer::MIN_ROWS;
+
+/// What the band draws of the queue in the rows it gives it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Shown {
+    pub kept_back: Option<usize>,
+    pub prompts: Vec<String>,
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Queue {
@@ -37,9 +47,34 @@ impl Queue {
         (!self.waiting.is_empty()).then(|| format!("{} queued", self.waiting.len()))
     }
 
-    pub fn rows(&self) -> u16 {
-        u16::from(!self.waiting.is_empty())
+    pub fn shown(&self, room: u16) -> Shown {
+        let room = usize::from(room);
+        let len = self.waiting.len();
+        let drawn = match len > room {
+            true => room.saturating_sub(1),
+            false => len,
+        };
+        Shown {
+            kept_back: (room > 0 && len > drawn).then(|| len - drawn),
+            prompts: self
+                .waiting
+                .iter()
+                .skip(len - drawn)
+                .map(first_line)
+                .collect(),
+        }
     }
+
+    pub fn rows(&self) -> u16 {
+        u16::try_from(self.waiting.len())
+            .unwrap_or(u16::MAX)
+            .min(MAX_ROWS)
+    }
+}
+
+/// The one row a prompt is drawn as, however many lines it was typed in.
+fn first_line(prompt: &Prompt) -> String {
+    prompt.text().lines().next().unwrap_or_default().to_owned()
 }
 
 #[cfg(test)]
@@ -122,7 +157,11 @@ mod tests {
         queue.push(prompt("one\ntwo\nthree"));
 
         assert_eq!(queue.len(), 1, "three lines are one prompt, not three");
-        assert_eq!(queue.rows(), 1, "so it takes the one row the count is");
+        assert_eq!(
+            queue.rows(),
+            1,
+            "so it takes the one row its own first line is"
+        );
         assert_eq!(
             queue.recall().as_ref().map(Prompt::text),
             Some("one\ntwo\nthree"),
@@ -131,22 +170,109 @@ mod tests {
     }
 
     #[test]
-    fn the_queue_takes_one_row_and_none_while_it_holds_nothing() {
+    fn a_band_holding_the_whole_queue_draws_a_prompt_a_row_as_its_first_line() {
+        let mut queue = Queue::new();
+        for text in ["one\ntwo", "three", "four"] {
+            queue.push(prompt(text));
+        }
+
+        assert_eq!(
+            queue.shown(3),
+            Shown {
+                kept_back: None,
+                prompts: vec![
+                    String::from("one"),
+                    String::from("three"),
+                    String::from("four"),
+                ],
+            },
+            "a prompt is one row whatever lines it holds, the newest at the foot and nothing \
+             counted back"
+        );
+        assert_eq!(
+            queue.shown(MAX_ROWS),
+            queue.shown(3),
+            "and a band with rows to spare draws no blank row of its own"
+        );
+    }
+
+    #[test]
+    fn a_band_shorter_than_the_queue_draws_the_newest_it_holds_and_counts_the_rest() {
+        let mut queue = Queue::new();
+        for text in ["one", "two", "three", "four", "five"] {
+            queue.push(prompt(text));
+        }
+
+        assert_eq!(
+            queue.shown(3),
+            Shown {
+                kept_back: Some(3),
+                prompts: vec![String::from("four"), String::from("five")],
+            },
+            "the band's first row goes to the count of the three older prompts, and the two the \
+             reader typed last stand under it"
+        );
+    }
+
+    #[test]
+    fn a_band_with_no_row_for_the_queue_draws_nothing_of_it() {
+        let mut queue = Queue::new();
+        for text in ["one", "two"] {
+            queue.push(prompt(text));
+        }
+
+        assert_eq!(
+            queue.shown(0),
+            Shown::default(),
+            "a band of no rows has no row to draw a prompt in and none to say a count in, and the \
+             footer keeps the depth beside the key that recalls one"
+        );
+    }
+
+    #[test]
+    fn nothing_waiting_is_no_row_drawn_and_nothing_counted_back() {
+        assert_eq!(Queue::new().shown(MAX_ROWS), Shown::default());
+    }
+
+    #[test]
+    fn every_row_the_queue_draws_is_a_row_of_the_band_it_was_given() {
+        for len in 0..=MAX_ROWS + 4 {
+            let mut queue = Queue::new();
+            for at in 0..len {
+                queue.push(prompt(&at.to_string()));
+            }
+            for room in 0..=MAX_ROWS {
+                let shown = queue.shown(room);
+                assert!(
+                    shown.prompts.len() + usize::from(shown.kept_back.is_some())
+                        <= usize::from(room),
+                    "{len} prompts drawn in {room} rows take more rows than the band gave them"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_band_is_asked_for_a_row_a_prompt_and_none_while_nothing_waits() {
         let mut queue = Queue::new();
         assert_eq!(
             queue.rows(),
             0,
-            "an empty queue is no row above the composer, so the frame is the one it was"
+            "an empty queue asks for no row, so the transcript keeps every row it would have"
         );
 
-        queue.push(prompt("one"));
-        assert_eq!(queue.rows(), 1, "and one row once something waits");
+        for text in ["one", "two", "three"] {
+            queue.push(prompt(text));
+        }
+        assert_eq!(queue.rows(), 3, "three prompts are three rows");
 
-        queue.push(prompt("two"));
+        for text in ["four", "five"] {
+            queue.push(prompt(text));
+        }
         assert_eq!(
             queue.rows(),
-            1,
-            "however many prompts wait, the count is one row"
+            MAX_ROWS,
+            "and however deep the queue, it asks for no more than the band has to give it"
         );
     }
 }

@@ -129,8 +129,18 @@ fn refused_120x40_is_the_entry_a_run_that_could_not_start_leaves_beside_its_draf
 }
 
 #[test]
-fn queue_120x40_counts_the_prompts_typed_during_a_run_above_the_composer() {
+fn queue_120x40_draws_the_prompts_typed_during_a_run_under_the_draft() {
     fixture::assert_frame("queue", 120, 40);
+}
+
+#[test]
+fn queue_long_120x24_is_a_queue_taller_than_its_band_counting_the_rows_it_keeps_back() {
+    fixture::assert_frame("queue-long", 120, 24);
+}
+
+#[test]
+fn draft_long_120x24_is_a_draft_past_the_band_counting_the_rows_it_keeps_back() {
+    fixture::assert_frame("draft-long", 120, 24);
 }
 
 #[test]
@@ -224,7 +234,7 @@ fn grown_120x40_is_a_composer_at_its_six_row_ceiling() {
 }
 
 #[test]
-fn scrolled_120x40_is_a_composer_showing_the_last_five_rows_of_a_taller_draft() {
+fn scrolled_120x40_is_a_composer_showing_the_last_four_rows_of_a_taller_draft() {
     fixture::assert_frame("scrolled", 120, 40);
 }
 

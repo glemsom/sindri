@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+draft-long at 120x24
+00 |                                                                                                                        | plain:120
+01 |                                                                                                                        | plain:120
+02 |                                                                                                                        | plain:120
+03 |                                                                                                                        | plain:120
+04 |                                                                                                                        | plain:120
+05 |                                                                                                                        | plain:120
+06 |                                                                                                                        | plain:120
+07 |                                                                                                                        | plain:120
+08 |                                                                                                                        | plain:120
+09 |                                                                                                                        | plain:120
+10 |                                                                                                                        | plain:120
+11 |                                                                                                                        | plain:120
+12 |                                                                                                                        | plain:120
+13 |                                                                                                                        | plain:120
+14 |                                                                                                                        | plain:120
+15 |                                                                                                                        | plain:120
+16 |                                                                                                                        | plain:120
+17 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
+18 |  six: the stop reason                                                                                                  | dim:2 plain:118
+19 |  seven: the session it left                                                                                            | dim:2 plain:118
+20 |  eight: the question to ask                                                                                            | dim:2 plain:118
+21 |  nine: the row it keeps back                                                                                           | dim:2 plain:118
+22 |  5 rows kept back                                                                                                      | dim:18 plain:102
+23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47

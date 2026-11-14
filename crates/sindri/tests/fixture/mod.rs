@@ -134,6 +134,8 @@ fn named(name: &str) -> View {
         "stop" => stopped_on(wire_refused()),
         "refused" => refused_run(),
         "queue" => queue(),
+        "queue-long" => queue_long(),
+        "draft-long" => draft_long(),
         "keys" => {
             let mut view = View::boot();
             view.key(Key::Char('?'));
@@ -856,6 +858,41 @@ fn queue() -> View {
     let mut view = waiting(view, DURING_A_RUN);
     view.paste("and this one while they wait");
     view
+}
+
+/// Seven prompts waiting behind a one-line draft, which is a queue taller than the band it is
+/// drawn in.
+const SEVEN_QUEUED: &[&str] = &[
+    "run the test that failed and read it",
+    "then the fmt check",
+    "and say why the retry hid it",
+    "then the frame the queue is drawn in",
+    "then the row that counts it",
+    "then the caret that stays inside it",
+    "and then the report",
+];
+
+fn queue_long() -> View {
+    let mut view = running(transcript(), Scroll::Tail);
+    view.set_state(State::Running);
+    let mut view = waiting(view, SEVEN_QUEUED);
+    view.paste("and this one while they wait");
+    view
+}
+
+/// A draft of nine lines, which is more than the composer's band draws.
+fn draft_long() -> View {
+    View::typing(draft(&[
+        "one: the test that failed",
+        "two: the line it failed on",
+        "three: the patch that moved it",
+        "four: the retry that hid it",
+        "five: the budget it spent",
+        "six: the stop reason",
+        "seven: the session it left",
+        "eight: the question to ask",
+        "nine: the row it keeps back",
+    ]))
 }
 
 fn waiting(mut view: View, prompts: &[&str]) -> View {

@@ -126,8 +126,27 @@ impl Composer {
         self.laid().1
     }
 
+    /// The rows of the draft the band draws: the ceiling's window, less the row under it that
+    /// counts the rows kept back while any are.
     pub fn visible_rows(&self) -> u16 {
-        self.rows().saturating_sub(HAIRLINE_ROWS)
+        Composer::window(self.drawn().len())
+    }
+
+    /// The rows of the draft the band does not draw, and `None` while it draws every one of them.
+    pub fn kept_back(&self) -> Option<u16> {
+        let drawn = u16::try_from(self.drawn().len()).unwrap_or(u16::MAX);
+        let window = Composer::window(usize::from(drawn));
+        (drawn > window).then(|| drawn - window)
+    }
+
+    fn window(drawn: usize) -> u16 {
+        let room = u16::try_from(drawn)
+            .unwrap_or(u16::MAX)
+            .min(MAX_ROWS - HAIRLINE_ROWS);
+        match usize::from(room) < drawn {
+            true => room.saturating_sub(1),
+            false => room,
+        }
     }
 
     /// The first row the band draws: the scroll the caret gave the draft, and never past the last
@@ -137,8 +156,8 @@ impl Composer {
     }
 
     pub fn lines(&self) -> Vec<&str> {
-        let (drawn, rows, first) = self.laid();
-        let visible = usize::from(rows.saturating_sub(HAIRLINE_ROWS));
+        let (drawn, _, first) = self.laid();
+        let visible = usize::from(self.visible_rows());
         drawn
             .iter()
             .skip(first)
@@ -170,7 +189,7 @@ impl Composer {
             .unwrap_or(u16::MAX)
             .saturating_add(HAIRLINE_ROWS)
             .clamp(MIN_ROWS, MAX_ROWS);
-        let visible = usize::from(rows.saturating_sub(HAIRLINE_ROWS));
+        let visible = usize::from(Composer::window(drawn.len()));
         let first = self.scroll.min(drawn.len().saturating_sub(visible));
         (drawn, rows, first)
     }
@@ -418,9 +437,9 @@ impl Composer {
     }
 
     fn follow(&mut self) {
-        let (drawn, rows, _) = self.laid();
+        let drawn = self.drawn();
         let row = self.row_at(&drawn, self.cursor);
-        let visible = usize::from(rows.saturating_sub(HAIRLINE_ROWS));
+        let visible = usize::from(Composer::window(drawn.len()));
         if row < self.scroll {
             self.scroll = row;
         } else if row >= self.scroll + visible {
@@ -613,24 +632,44 @@ mod tests {
             );
         }
         assert_eq!(numbered(5).rows(), MAX_ROWS);
-        assert_eq!(numbered(6).rows(), MAX_ROWS, "the sixth line scrolls");
+        assert_eq!(
+            numbered(5).kept_back(),
+            None,
+            "a draft that fills the window exactly keeps no row back"
+        );
+        assert_eq!(
+            numbered(6).rows(),
+            MAX_ROWS,
+            "the sixth line scrolls, and the band keeps its ceiling"
+        );
+        assert_eq!(
+            numbered(6).kept_back(),
+            Some(2),
+            "with the row under it given to the count, so the window is four rows and the caret \
+             inside it"
+        );
         assert_eq!(numbered(9).rows(), MAX_ROWS);
     }
 
     #[test]
-    fn a_draft_past_the_ceiling_scrolls_instead_of_growing() {
+    fn a_draft_past_the_ceiling_scrolls_and_counts_the_rows_it_keeps_back() {
         let composer = numbered(9);
 
         assert_eq!(
             composer.scroll(),
-            4,
-            "nine lines, five rows: the window starts at the fifth"
+            5,
+            "nine lines in a window of four: the window starts at the sixth"
         );
-        assert_eq!(composer.lines(), vec!["5", "6", "7", "8", "9"]);
+        assert_eq!(composer.lines(), vec!["6", "7", "8", "9"]);
+        assert_eq!(
+            composer.kept_back(),
+            Some(5),
+            "and the first five lines are the rows the band counts back"
+        );
         assert_eq!(
             composer.caret(),
-            (4, 1),
-            "the cursor is on the last painted row"
+            (3, 1),
+            "the cursor is on the last row the window draws, inside the band"
         );
     }
 
@@ -829,17 +868,23 @@ mod tests {
         assert_eq!(
             composer.rows(),
             MAX_ROWS,
-            "seven rows of draft are drawn in the five the band has room for"
+            "seven rows of draft are drawn in the band's ceiling"
         );
         assert_eq!(
             composer.scroll(),
-            2,
-            "so the band shows the rows from the third on"
+            3,
+            "and the row under the window counts three back, so the window starts at the fourth"
         );
         assert_eq!(
             composer.lines(),
-            vec!["ijkl", "mnop", "qrst", "uvwx", "yz"],
+            vec!["mnop", "qrst", "uvwx", "yz"],
             "which are the rows the caret's own is the last of"
+        );
+        assert_eq!(composer.kept_back(), Some(3));
+        assert_eq!(
+            composer.caret(),
+            (3, 2),
+            "the caret waits on the window's last row and not under it"
         );
     }
 
