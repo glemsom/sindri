@@ -17,7 +17,7 @@ use sindri::pointer;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
 use sindri::size;
-use sindri::view::View;
+use sindri::view::{Painted, View};
 use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::provider::Deltas;
 use sindri_core::records::Told;
@@ -211,6 +211,7 @@ struct Loop<'a> {
     session: Option<Session>,
     running: Option<Running>,
     asking: Option<Asking>,
+    painted: Painted,
     wake: Arc<Wake>,
 }
 
@@ -263,12 +264,14 @@ impl<'a> Loop<'a> {
             session: None,
             running: None,
             asking: None,
+            painted: Painted::none(),
             wake,
         })
     }
 
     fn paint(&mut self) -> io::Result<()> {
-        paint(&mut self.canvas, &mut self.view)
+        self.painted = paint(&mut self.canvas, &mut self.view)?;
+        Ok(())
     }
 
     fn told(&mut self, told: Told) -> io::Result<()> {
@@ -395,7 +398,7 @@ impl<'a> Loop<'a> {
             // The one seam a pointer's act and a key's act both come through: what the frame
             // makes of each, and what the terminal does about it, is the same.
             Event::Key(key) => self.view.key(key),
-            Event::Pointer(pointer) => self.view.pointer(pointer),
+            Event::Pointer(pointer) => self.view.pointer(&self.painted, pointer),
         };
         match outcome {
             Outcome::Unchanged => Ok(None),

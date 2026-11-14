@@ -9,7 +9,7 @@ use sindri::keys::Mode;
 use sindri::mark::Cell;
 use sindri::models::{CAP, Models};
 use sindri::pointer::Pointer;
-use sindri::view::View;
+use sindri::view::{Painted, View};
 
 use sindri_core::provider::served::{Listing, Where};
 use sindri_core::provider::transport::{Canned, Replay};
@@ -337,30 +337,31 @@ fn body(frame: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// The row of a 120 by 40 frame the screen draws `said` on, painted on the way: a press lands on the
-/// cells a row was drawn in, so the cells are what a test reads.
-fn row_holding(view: &mut View, said: &str) -> u16 {
+/// The row of a 120 by 40 frame the screen draws `said` on, and what that pass told the terminal:
+/// a press lands on the cells a row was drawn in, so the cells are what a test reads.
+fn row_holding(view: &mut View, said: &str) -> (u16, Painted) {
     let area = Rect::new(0, 0, 120, 40);
     let mut buffer = Buffer::empty(area);
-    view.paint(area, &mut buffer);
-    (area.y..area.bottom())
+    let told = view.paint(area, &mut buffer);
+    let row = (area.y..area.bottom())
         .find(|y| {
             (area.x..area.right())
                 .map(|x| buffer.cell((x, *y)).expect("a cell of the row").symbol())
                 .collect::<String>()
                 .contains(said)
         })
-        .unwrap_or_else(|| panic!("the screen draws {said:?} on no row of it"))
+        .unwrap_or_else(|| panic!("the screen draws {said:?} on no row of it"));
+    (row, told)
 }
 
 #[test]
 fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
     let mut view = screen();
     view.set_pointer(true);
-    let row = row_holding(&mut view, SECOND);
+    let (row, told) = row_holding(&mut view, SECOND);
 
     assert_eq!(
-        view.pointer(Pointer::Press(Cell::new(row, 40))),
+        view.pointer(&told, Pointer::Press(Cell::new(row, 40))),
         Outcome::Model(String::from(SECOND)),
         "a press on the second row names the name that row hangs from, as `Enter` on it does"
     );
@@ -375,15 +376,15 @@ fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
 fn a_press_on_no_row_of_the_model_screen_names_nothing() {
     let mut view = screen();
     view.set_pointer(true);
-    let query = row_holding(&mut view, "query:");
-    let name = row_holding(&mut view, SECOND);
+    let (query, _) = row_holding(&mut view, "query:");
+    let (name, told) = row_holding(&mut view, SECOND);
 
     for (at, why) in [
         (Cell::new(query, 40), "the row the query is typed on"),
         (Cell::new(name, 5), "a cell outside the card"),
     ] {
         assert_eq!(
-            view.pointer(Pointer::Press(at)),
+            view.pointer(&told, Pointer::Press(at)),
             Outcome::Unchanged,
             "a press on {why} chooses no row, so no model is named"
         );

@@ -46,7 +46,9 @@ fn painted(view: &mut View) -> String {
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
     let drawn = terminal
-        .draw(|frame| view.paint(frame.area(), frame.buffer_mut()))
+        .draw(|frame| {
+            view.paint(frame.area(), frame.buffer_mut());
+        })
         .expect("the frame is painted")
         .buffer
         .clone();
