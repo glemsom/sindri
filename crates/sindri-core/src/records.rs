@@ -226,18 +226,19 @@ impl Record {
         })
     }
     pub fn stopped(&mut self, state: &State) -> Result<(), RecordError> {
-        if let Some(stop) = state.stop() {
-            let stop = match stop {
-                Stop::Error(message) => Stop::Error(self.secrets.redact(message.to_string())),
-                stop => stop.clone(),
-            };
-            self.append(Entry::Stop { stop })?;
-        }
         self.document.stopped = state.clone();
         if !state.is_running() {
             self.document.end = Some(timestamp(SystemTime::now()));
         }
-        self.write_document()
+        self.write_document()?;
+        let Some(stop) = state.stop() else {
+            return Ok(());
+        };
+        let stop = match stop {
+            Stop::Error(message) => Stop::Error(self.secrets.redact(message.to_string())),
+            stop => stop.clone(),
+        };
+        self.append(Entry::Stop { stop })
     }
     pub fn spent(&mut self, usage: Usage) -> Result<(), RecordError> {
         self.document.usage = usage;

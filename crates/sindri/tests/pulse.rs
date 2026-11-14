@@ -189,18 +189,23 @@ fn a_settled_marker_says_the_stops_own_word_and_only_a_final_answer_goes_without
 }
 
 #[test]
-fn a_cancelled_run_settles_as_cancelled_and_never_as_a_failure() {
+fn a_cancelled_run_settles_as_cancelled_and_is_never_mistaken_for_a_failure() {
     let cancelled = Pulse::settled(&Stop::Cancelled, 5_000);
 
     assert_eq!(
         cancelled.head().text(),
         "✗ cancelled 5.0s",
-        "the user's own word is said, not left to read as a failure"
+        "the reader's own word is said, not left to read as a failure"
+    );
+    assert_eq!(
+        cancelled.head().spans()[0],
+        Pulse::settled(&failed(), 5_000).head().spans()[0],
+        "both wear the cross, so the word beside it is what tells them apart"
     );
     assert_ne!(
         cancelled.head().text(),
         Pulse::settled(&failed(), 5_000).head().text(),
-        "and it is not the mark a failure wears"
+        "and the words are what tell them apart"
     );
 }
 

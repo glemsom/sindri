@@ -18,7 +18,7 @@ use crate::markdown;
 use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
 use crate::picture::{self, Surface};
-use crate::pulse::{Head, stop_mark};
+use crate::pulse::Head;
 use crate::size::{self, Sized, Sizes};
 use crate::spell;
 use crate::stream::Stream;
@@ -574,6 +574,15 @@ fn answered(
     (rows, kept)
 }
 
+/// The check a run that answered settles on and the cross every other stop wears: the marker at the
+/// head of an answer and the stop's own entry read this pair, so no two drawings of one stop disagree.
+pub(crate) fn stop_mark(stop: &Stop) -> (char, Ink) {
+    match stop {
+        Stop::Final => (CHECK, Ink::Ok),
+        Stop::MaxTurns | Stop::Budget(_) | Stop::Cancelled | Stop::Error(_) => (CROSS, Ink::Err),
+    }
+}
+
 fn mark(exit: Exit) -> char {
     if exit.is_ok() { CHECK } else { CROSS }
 }
@@ -782,6 +791,9 @@ pub struct Rows {
     /// places one — because how many rows a picture takes is part of the rows it was laid out as.
     surface: Surface,
     ground: Option<Ground>,
+    /// Whether the stop this cache holds last is the one the turn in flight ended, which stands above
+    /// it, and never the stop a run before it left.
+    ended: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -813,6 +825,13 @@ enum What {
 impl Rows {
     pub fn new() -> Rows {
         Rows::default()
+    }
+
+    /// Holds the stop a run ended on at the transcript's end: the words that run last said are theirs
+    /// to keep above it, so the reason a run stopped is the last word of the run it ended.
+    pub(crate) fn stopped(&mut self, stop: Stop) {
+        self.push(Entry::Stop { stop });
+        self.ended = true;
     }
 
     /// Holds one more entry, unlaid. A result settles the entry the call it answers opened rather
@@ -872,15 +891,11 @@ impl Rows {
                     fold: Fold::Closed,
                     kept: None,
                 };
-                // A stop is the transcript's newest row, so the turn in flight it ended stands
-                // ahead of it and the reason the run stopped is the last word.
-                match self.held.last() {
-                    Some(Held {
-                        what: What::Fact(Entry::Stop { .. }),
-                        ..
-                    }) => self.held.insert(self.held.len() - 1, held),
-                    _ => self.held.push(held),
+                match self.ended {
+                    true => self.held.insert(self.held.len() - 1, held),
+                    false => self.held.push(held),
                 }
+                self.ended = false;
             }
         }
         self.lays += 1;
@@ -898,6 +913,7 @@ impl Rows {
     pub(crate) fn retire(&mut self) {
         self.held
             .retain(|held| !matches!(held.what, What::Live { .. }));
+        self.ended = false;
     }
 
     /// The oldest call of `turn` whose result has not landed, because a wave of calls and

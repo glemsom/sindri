@@ -373,7 +373,7 @@ impl View {
     /// The stop the run ended on, laid in the transcript where the run ended: the entry the record
     /// keeps, wearing the same word as the marker beside it.
     pub fn stopped(&mut self, stop: &Stop) {
-        self.rows.push(Entry::Stop { stop: stop.clone() });
+        self.rows.stopped(stop.clone());
     }
 
     pub fn set_record(&mut self, document: &SessionDocument) {

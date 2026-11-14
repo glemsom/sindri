@@ -2039,7 +2039,7 @@ fn a_band_with_nothing_to_point_at_draws_no_thumb() {
 }
 
 /// The stop a run ends on: the one entry whose word is the reason a reader missed.
-fn stopped(stop: Stop) -> Entry {
+fn stop_entry(stop: Stop) -> Entry {
     Entry::Stop { stop }
 }
 
@@ -2058,7 +2058,7 @@ fn every_stop_is_drawn_under_its_own_word_on_the_mark_it_wears() {
         (failed(), "✗ error", Ink::Err),
     ];
     for (stop, said, ink) in stops {
-        let rows = layout(&stopped(stop.clone()), 40);
+        let rows = layout(&stop_entry(stop.clone()), 40);
 
         assert_eq!(
             words(&rows[0]),
@@ -2076,7 +2076,7 @@ fn every_stop_is_drawn_under_its_own_word_on_the_mark_it_wears() {
 
 #[test]
 fn an_error_stop_carries_one_line_of_its_words_and_no_other_stop_carries_a_line() {
-    let rows = layout(&stopped(failed()), 60);
+    let rows = layout(&stop_entry(failed()), 60);
     let drawn: Vec<String> = rows.iter().map(words).collect();
 
     assert_eq!(
@@ -2092,7 +2092,7 @@ fn an_error_stop_carries_one_line_of_its_words_and_no_other_stop_carries_a_line(
         Stop::Budget(Budget::Clock),
         Stop::Cancelled,
     ] {
-        let rows = layout(&stopped(stop.clone()), 60);
+        let rows = layout(&stop_entry(stop.clone()), 60);
         assert_eq!(
             rows.len(),
             1,
@@ -2104,7 +2104,7 @@ fn an_error_stop_carries_one_line_of_its_words_and_no_other_stop_carries_a_line(
 
 #[test]
 fn a_stop_gives_up_its_mark_before_a_word_in_a_band_too_narrow_for_both() {
-    let entry = stopped(failed());
+    let entry = stop_entry(failed());
 
     for row in layout(&entry, 2) {
         assert!(
@@ -2177,6 +2177,41 @@ fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
                 .to_owned()
         })
         .collect()
+}
+
+#[test]
+fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
+    let mut view = View::boot();
+    view.set_pulse(Some(Pulse::live(0)));
+    view.text("the first run's answer");
+    view.set_pulse(Some(Pulse::settled(&Stop::Final, 1_200)));
+    view.stopped(&Stop::Final);
+    let ended = frame(&mut view, 60, 12);
+
+    assert_eq!(
+        ended[0], "✓ 1.2s the first run's answer",
+        "the marker settles on the answer the run ended on: {ended:?}"
+    );
+    assert_eq!(
+        ended[1], "✓ final",
+        "and the stop it ended on is the transcript's last entry till a run follows it: {ended:?}"
+    );
+
+    view.settle();
+    view.set_pulse(Some(Pulse::live(0)));
+    view.text("the second run is working");
+    let after = frame(&mut view, 60, 12);
+    let at = |said: &str| {
+        after
+            .iter()
+            .position(|row| row == said)
+            .unwrap_or_else(|| panic!("the frame draws {said:?}: {after:?}"))
+    };
+
+    assert!(
+        at("✓ final") < at("⠋ 0.0s the second run is working"),
+        "the run after it says its words under that stop rather than above it: {after:?}"
+    );
 }
 
 #[test]

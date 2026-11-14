@@ -126,7 +126,7 @@ fn named(name: &str) -> View {
         "pulse-live" => with_pulse(Pulse::live(4_200), &PULSE_ANSWER[..3]),
         "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
         "stops" => running(stops(), Scroll::Tail),
-        "stop" => stopped_on(refusal()),
+        "stop" => stopped_on(wire_refused()),
         "queue" => queue(),
         "keys" => {
             let mut view = View::boot();
@@ -743,7 +743,7 @@ fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
 }
 
 /// The failure a run can end on, in the words a wire gives it: the one stop that carries a line.
-fn refusal() -> Stop {
+fn wire_refused() -> Stop {
     Stop::Error(SecretSet::default().redact("the wire refused the request: 401 unauthorized"))
 }
 
@@ -755,7 +755,7 @@ fn stops() -> Vec<Entry> {
         Stop::MaxTurns,
         Stop::Budget(Budget::Clock),
         Stop::Cancelled,
-        refusal(),
+        wire_refused(),
     ]
     .into_iter()
     .map(|stop| Entry::Stop { stop })

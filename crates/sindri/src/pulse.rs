@@ -2,6 +2,7 @@ use sindri_core::run::Stop;
 
 use crate::ink::Ink;
 use crate::pen;
+use crate::rows::stop_mark;
 
 /// Also the wait a live run gives the loop in `tui`.
 pub const STEP_MS: u64 = 80;
@@ -64,7 +65,6 @@ impl Pulse {
         }
     }
 
-    /// The check and the cross are the pair a tool row ends with, in the same two inks.
     fn mark(&self) -> (char, Ink) {
         match self {
             Pulse::Live { elapsed_ms } => (pulse_glyph(*elapsed_ms), Ink::Accent),
@@ -87,14 +87,6 @@ impl Pulse {
                 (format!(" {}", self.words()), self.words_ink()),
             ],
         }
-    }
-}
-
-/// The mark a stop wears, derived once so the marker and the stop's own entry cannot disagree.
-pub(crate) fn stop_mark(stop: &Stop) -> (char, Ink) {
-    match stop {
-        Stop::Final => ('✓', Ink::Ok),
-        Stop::MaxTurns | Stop::Budget(_) | Stop::Cancelled | Stop::Error(_) => ('✗', Ink::Err),
     }
 }
 
