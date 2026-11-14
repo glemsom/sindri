@@ -1,6 +1,6 @@
 //! The launch's own contracts, each driving one key's outcome through a pseudo-terminal of this
-//! process's own: a copy written down the wire, a settings visit whose value is saved, and a run
-//! that cannot start leaving its row and the launch standing.
+//! process's own: a copy written down the wire, a settings visit whose value is saved, a run that
+//! cannot start leaving its row, and the loop answering a key typed before its first frame.
 
 use std::fs::File;
 use std::os::fd::AsFd;
@@ -461,7 +461,7 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
 }
 
 #[test]
-fn the_loop_answers_the_keys_typed_before_its_first_frame_and_ends_on_the_quit() {
+fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
     let (_pty, terminal, telling) = staged();
     let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let cli = Cli::parse_from(["sindri"]);

@@ -183,9 +183,9 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     };
     let keys = live.keys(&signals, &typed);
     let launch = live.launch.take();
+    drop(live);
     // Given back before a word is said about the ending: a refusal is a line for the shell, and
     // not a smear over a frame.
-    drop(live);
     drop(screen);
     // The conversation the session held is over, so its temp goes before the process does.
     if let Some(mut ending) = launch {
@@ -205,8 +205,7 @@ enum Ending {
     Refused(Refusal),
 }
 
-/// The launch's loop: the terminal it reads, the frame it draws on, and what it holds between one
-/// event and the next.
+/// The launch's loop: the state every step of it is handed, held once for the whole launch.
 struct Loop<'a> {
     terminal: &'a Terminal,
     canvas: Canvas<'a>,
@@ -222,8 +221,8 @@ struct Loop<'a> {
 
 impl Loop<'_> {
     /// Reads the terminal until the launch ends, one event at a time, and paints only when an event
-    /// changed the frame: the wait sleeps in `poll` and draws nothing meanwhile. A key, a signal and
-    /// a live run's fragment are all fds in that wait.
+    /// changed the frame: the wait sleeps in `poll` and draws nothing meanwhile, so an idle frame
+    /// is never drawn. A key, a signal and a live run's fragment are all fds in that wait.
     fn keys(&mut self, signals: &Signals, typed: &[u8]) -> io::Result<Ending> {
         let mut decoder = Decoder::new();
         let mut read = [0u8; 4096];
@@ -258,8 +257,8 @@ impl Loop<'_> {
                 PollFd::new(&self.terminal.keys, PollFlags::IN),
                 PollFd::new(&waiting, PollFlags::IN),
             ];
-            // A run in flight is the only clock this loop has: its marker steps once per 80 ms, so the
-            // wait is that long while one is live and forever while none is.
+            // A run in flight is the only clock this loop has: its marker steps once per 80 ms,
+            // so the wait is that long while one is live and forever while none is.
             let step = self
                 .running
                 .is_some()
@@ -272,7 +271,8 @@ impl Loop<'_> {
             let keyed = fds[0].revents().contains(PollFlags::IN);
             let woken = fds[1].revents().contains(PollFlags::IN);
 
-            // The pace has no other clock: a report withheld past its window is said late, never lost.
+            // The pace has no other clock: a report withheld past its window is said late, never
+            // lost.
             self.telling.due()?;
 
             if let Some(flight) = &self.running {
@@ -300,8 +300,8 @@ impl Loop<'_> {
                     &mut self.launch,
                 )? && !interrupted
                 {
-                    // A launch the user's own word ended starts nothing: the queue waits for a reader
-                    // who still wants it.
+                    // A launch the user's own word ended starts nothing: the queue waits for a
+                    // reader who still wants it.
                     resume(
                         &mut self.canvas,
                         &mut self.view,
@@ -315,16 +315,16 @@ impl Loop<'_> {
                 }
             }
 
-            // Given back only with nothing left to stop: leaving while a run is live is a screen over a
-            // run that is not coming back.
+            // Given back only with nothing left to stop: leaving while a run is live is a screen
+            // over a run that is not coming back.
             if interrupted && self.running.is_none() {
                 return Ok(Ending::Cancelled);
             }
 
             if keyed {
                 let count = Read::read(&mut &self.terminal.keys, &mut read)?;
-                // The terminal went away: there is nothing left to quit from, and the guard gives the
-                // screen back all the same.
+                // The terminal went away: there is nothing left to quit from, and the guard gives
+                // the screen back all the same.
                 if count == 0 {
                     return Ok(Ending::Quit);
                 }
@@ -349,8 +349,8 @@ impl Loop<'_> {
                 }
             }
 
-            // Not an idle frame: a live run's marker has stepped, so the frame that drew the last glyph
-            // is now wrong.
+            // Not an idle frame: a live run's marker has stepped, so the frame that drew the last
+            // glyph is now wrong.
             if !keyed && !woken && self.running.is_some() {
                 paint(&mut self.canvas, &mut self.view)?;
             }
