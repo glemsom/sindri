@@ -29,7 +29,6 @@ fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
     let mut pty = Pty::open();
     let terminal =
         Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let view = View::of(
         vec![Entry::Assistant {
             turn: 1,
@@ -51,19 +50,14 @@ fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
         std::path::Path::new("/work/sindri"),
         false,
     );
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view,
-        cli: &cli,
-        config: sindri_core::config::Config::default(),
+    let mut live = live_loop(
+        &terminal,
+        &cli,
+        sindri_core::config::Config::default(),
         environment,
+        view,
         telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    );
 
     let ended = live
         .answer(Event::Key(Key::Copy))
@@ -97,6 +91,30 @@ fn config_home(
     (home, environment)
 }
 
+/// A launch standing on `terminal`, with `view` as the frame it draws and nothing in flight.
+fn live_loop<'a>(
+    terminal: &'a Terminal,
+    cli: &'a Cli,
+    config: Config,
+    environment: &'a dyn Environment,
+    view: View,
+    telling: Window<File>,
+) -> Loop<'a> {
+    Loop {
+        terminal,
+        canvas: canvas_at(terminal, painted_at()).expect("a canvas over it"),
+        view,
+        cli,
+        config,
+        environment,
+        telling,
+        wake: Arc::new(Wake::open().expect("a wake")),
+        launch: None,
+        running: None,
+        asking: None,
+    }
+}
+
 fn walk_to(view: &mut View, key: &str) {
     for _ in 0..sindri_core::config::Config::KEYS.len() {
         let row = view
@@ -121,7 +139,6 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
     let pty = Pty::open();
     let terminal =
         Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let mut view = View::boot();
     view.open_settings(&config);
     let telling = Window::new(
@@ -139,19 +156,7 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
     for glyph in "new-model".chars() {
         view.key(Key::Char(glyph));
     }
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view,
-        cli: &cli,
-        config,
-        environment,
-        telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    let mut live = live_loop(&terminal, &cli, config, environment, view, telling);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -186,7 +191,6 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
     let pty = Pty::open();
     let terminal =
         Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let mut view = View::boot();
     view.open_settings(&config);
     let telling = Window::new(
@@ -201,19 +205,7 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
 
     walk_to(&mut view, "context_window");
     view.key(Key::Char('0'));
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view,
-        cli: &cli,
-        config,
-        environment,
-        telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    let mut live = live_loop(&terminal, &cli, config, environment, view, telling);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -315,7 +307,6 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     let pty = Pty::open();
     let terminal =
         Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let telling = Window::new(
         pty.slave
             .try_clone()
@@ -329,19 +320,7 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     view.open_settings(&config);
     walk_to(&mut view, "face");
     view.key(Key::Char(' '));
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view,
-        cli: &cli,
-        config,
-        environment,
-        telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    let mut live = live_loop(&terminal, &cli, config, environment, view, telling);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -415,7 +394,6 @@ fn prompt_of(text: &str) -> Prompt {
 #[test]
 fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launch() {
     let (mut pty, terminal, telling) = staged();
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let mut view = View::boot();
     view.paste("why does the retry test fail");
     let cli = Cli::parse_from(["sindri"]);
@@ -423,19 +401,14 @@ fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launc
     // wire.
     let environment = std::collections::BTreeMap::new();
     let environment: &dyn Environment = &environment;
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view,
-        cli: &cli,
-        config: Config::default(),
+    let mut live = live_loop(
+        &terminal,
+        &cli,
+        Config::default(),
         environment,
+        view,
         telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    );
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -461,23 +434,17 @@ fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launc
 #[test]
 fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
     let (_pty, terminal, telling) = staged();
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let cli = Cli::parse_from(["sindri"]);
     let environment = std::collections::BTreeMap::new();
     let environment: &dyn Environment = &environment;
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view: View::boot(),
-        cli: &cli,
-        config: Config::default(),
+    let mut live = live_loop(
+        &terminal,
+        &cli,
+        Config::default(),
         environment,
+        View::boot(),
         telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    );
 
     let ended = live
         .take()
@@ -493,15 +460,9 @@ fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
     );
 }
 
-/// Starts one prompt out of the queue through the live loop, on a config no run can start from.
-fn refused_from_the_queue(live: &mut Loop<'_>) {
-    live.resume().expect("the refusal is drawn");
-}
-
 #[test]
 fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() {
     let (mut pty, terminal, telling) = staged();
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let mut view = View::boot();
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
@@ -510,21 +471,16 @@ fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() 
     // wire.
     let environment = std::collections::BTreeMap::new();
     let environment: &dyn Environment = &environment;
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view,
-        cli: &cli,
-        config: Config::default(),
+    let mut live = live_loop(
+        &terminal,
+        &cli,
+        Config::default(),
         environment,
+        view,
         telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    );
 
-    refused_from_the_queue(&mut live);
+    live.resume().expect("the refusal is drawn");
 
     assert_eq!(
         live.view.queue().len(),
@@ -546,7 +502,6 @@ fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() 
 #[test]
 fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_their_own() {
     let (mut pty, terminal, telling) = staged();
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let mut view = View::boot();
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
@@ -556,21 +511,16 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
     // wire.
     let environment = std::collections::BTreeMap::new();
     let environment: &dyn Environment = &environment;
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view,
-        cli: &cli,
-        config: Config::default(),
+    let mut live = live_loop(
+        &terminal,
+        &cli,
+        Config::default(),
         environment,
+        view,
         telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    );
 
-    refused_from_the_queue(&mut live);
+    live.resume().expect("the refusal is drawn");
 
     assert_eq!(
         live.view.composer().text(),
@@ -602,24 +552,18 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
 #[test]
 fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
     let (_pty, terminal, telling) = staged();
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let cli = Cli::parse_from(["sindri"]);
     let environment = std::collections::BTreeMap::new();
     let environment: &dyn Environment = &environment;
     let signals = Signals::install().expect("a signal pipe");
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view: View::boot(),
-        cli: &cli,
-        config: Config::default(),
+    let mut live = live_loop(
+        &terminal,
+        &cli,
+        Config::default(),
         environment,
+        View::boot(),
         telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    );
 
     let ended = live.keys(&signals, b"\x11").expect("the quit is answered");
 
@@ -632,7 +576,6 @@ fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
 #[test]
 fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notification() {
     let (mut pty, terminal, _) = staged();
-    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
     let cli = Cli::parse_from(["sindri"]);
     let environment = std::collections::BTreeMap::new();
     let environment: &dyn Environment = &environment;
@@ -645,19 +588,14 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
         std::path::Path::new("/work/sindri"),
         true,
     );
-    let mut live = Loop {
-        terminal: &terminal,
-        canvas,
-        view: View::boot(),
-        cli: &cli,
-        config: Config::default(),
+    let mut live = live_loop(
+        &terminal,
+        &cli,
+        Config::default(),
         environment,
+        View::boot(),
         telling,
-        wake: Arc::new(Wake::open().expect("a wake")),
-        launch: None,
-        running: None,
-        asking: None,
-    };
+    );
     let palette = Palette::TRUECOLOR;
     live.view.set_palette(palette);
     live.view.paste("the draft the composer band is drawn from");

@@ -1,6 +1,6 @@
 //! The threads a run in flight and a wire listing run on, and the reports they land: a flight
-//! pushes a fragment and raises the pipe a signal uses, and the loop puts it on the frame when it
-//! wakes. Nothing here reads a key.
+//! pushes a fragment and raises the pipe a signal uses, and paints no cell of its own. Nothing
+//! here reads a key.
 
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -90,13 +90,14 @@ impl Running {
         millis(self.started.elapsed())
     }
 
-    /// Everything the run left since the last pass.
-    pub(crate) fn left(&mut self) -> Vec<Report> {
+    /// Everything the run landed since the last pass. The queue is drained, so each report is
+    /// handed out once.
+    pub(crate) fn landed(&self) -> Vec<Report> {
         std::mem::take(&mut *lock(&self.pending))
     }
 
-    /// The launch the run handed back, or nothing if the run's thread panicked.
-    pub(crate) fn joined(self) -> Option<Launch> {
+    /// The launch the run handed back, or nothing if its thread panicked.
+    pub(crate) fn handed_back(self) -> Option<Launch> {
         self.thread.join().ok()
     }
 }
@@ -189,14 +190,14 @@ pub(crate) fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
             wake.raise();
         }
     });
-    // Joined by `served`, not here: nothing blocks, and the frame paints the screen asking
-    // until the answer lands.
+    // The loop joins it when the listing lands: nothing blocks here, and the frame paints the
+    // screen asking until then.
     Some(Asking { landing, thread })
 }
 
 impl Asking {
     /// The listing the wire answered with, once.
-    pub(crate) fn landed(&mut self) -> Option<Listing> {
+    pub(crate) fn landed(&self) -> Option<Listing> {
         lock(&self.landing).take()
     }
 
