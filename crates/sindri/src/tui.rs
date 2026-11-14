@@ -180,6 +180,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         launch: None,
         running: None,
         asking: None,
+        wake: signals.wake(),
     };
     let keys = live.keys(&signals, &typed);
     let launch = live.launch.take();
@@ -217,6 +218,7 @@ struct Loop<'a> {
     launch: Option<Launch>,
     running: Option<Running>,
     asking: Option<Asking>,
+    wake: Arc<Wake>,
 }
 
 impl Loop<'_> {
@@ -227,26 +229,13 @@ impl Loop<'_> {
         let mut decoder = Decoder::new();
         let mut read = [0u8; 4096];
         let mut interrupted = false;
-        let wake = signals.wake();
+        let wake = Arc::clone(&self.wake);
 
         // Read before the first frame was painted: the loop answers these keys here rather than
         // waiting for a second one that may never come.
         decoder.push(typed);
         while let Some(event) = decoder.next_event() {
-            if let Some(ending) = answer(
-                self.terminal,
-                &mut self.canvas,
-                &mut self.view,
-                event,
-                &mut self.running,
-                &mut self.asking,
-                self.cli,
-                &mut self.config,
-                &self.environment,
-                &wake,
-                &mut self.telling,
-                &mut self.launch,
-            )? {
+            if let Some(ending) = self.answer(event)? {
                 return Ok(ending);
             }
         }
@@ -330,20 +319,7 @@ impl Loop<'_> {
                 }
                 decoder.push(&read[..count]);
                 while let Some(event) = decoder.next_event() {
-                    if let Some(ending) = answer(
-                        self.terminal,
-                        &mut self.canvas,
-                        &mut self.view,
-                        event,
-                        &mut self.running,
-                        &mut self.asking,
-                        self.cli,
-                        &mut self.config,
-                        &self.environment,
-                        &wake,
-                        &mut self.telling,
-                        &mut self.launch,
-                    )? {
+                    if let Some(ending) = self.answer(event)? {
                         return Ok(ending);
                     }
                 }
@@ -356,125 +332,117 @@ impl Loop<'_> {
             }
         }
     }
-}
 
-/// Answers one event, and says whether the launch ends there. Which key means what is the mode
-/// stack's decision; what is here is what the terminal does about the outcome it hands back.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the one seam #43, #48, #50 and #56 each hand their value through"
-)]
-fn answer(
-    terminal: &Terminal,
-    canvas: &mut Canvas<'_>,
-    view: &mut View,
-    event: Event,
-    running: &mut Option<Running>,
-    asking: &mut Option<Asking>,
-    cli: &Cli,
-    config: &mut Config,
-    environment: &impl Environment,
-    wake: &Arc<Wake>,
-    telling: &mut Window<File>,
-    launch: &mut Option<Launch>,
-) -> io::Result<Option<Ending>> {
-    let outcome = match event {
-        // A paste is one edit and never a key, so nothing inside one can send: the composer is
-        // handed the whole text with its line breaks in it.
-        Event::Paste(text) => {
-            view.paste(&text);
-            paint(canvas, view)?;
-            return Ok(None);
-        }
-        // The one report a reader never sent: the frame recedes while nobody is reading it, and a
-        // run that ends while it is away is the one that raises a notification.
-        Event::Focus(focused) => {
-            view.set_focused(focused);
-            telling.focused(focused);
-            paint(canvas, view)?;
-            return Ok(None);
-        }
-        // The one seam a pointer's act and a key's act both come through: what the frame makes of
-        // each, and what the terminal does about it, is the same.
-        Event::Key(key) => view.key(key),
-        Event::Pointer(pointer) => view.pointer(pointer),
-    };
-    match outcome {
-        Outcome::Unchanged => Ok(None),
-        Outcome::Edited => {
-            paint(canvas, view)?;
-            Ok(None)
-        }
-        // The flag an outside `SIGINT` sets too: the keyboard and the signal are one path, and the
-        // run cannot tell them apart.
-        Outcome::Cancel => {
-            if let Some(flight) = running {
-                flight.cancel();
+    /// Answers one event, and says whether the launch ends there. Which key means what is the
+    /// mode stack's decision; what is here is what the terminal does about the outcome it hands
+    /// back.
+    fn answer(&mut self, event: Event) -> io::Result<Option<Ending>> {
+        let outcome = match event {
+            // A paste is one edit and never a key, so nothing inside one can send: the composer
+            // is handed the whole text with its line breaks in it.
+            Event::Paste(text) => {
+                self.view.paste(&text);
+                paint(&mut self.canvas, &mut self.view)?;
+                return Ok(None);
             }
-            paint(canvas, view)?;
-            Ok(None)
-        }
-        Outcome::Send(prompt) => {
-            send(
-                prompt, canvas, view, running, launch, cli, config, wake, telling,
-            )?;
-            Ok(None)
-        }
-        // The keys a reader touched go through the core's owner-only atomic save, and the launch's
-        // config is resolved again so the next prompt runs on what the visit left. A value the
-        // schema refuses comes back naming its key, with nothing written at all.
-        Outcome::Save(touched) => {
-            match persist(environment, &touched, cli.flags()) {
-                Ok(fresh) => {
-                    *config = fresh;
-                    // Both switches, as the visit left them: `status` turned off here stops the
-                    // telling at the next report, and `face` turned off repaints the frame without
-                    // one, rather than at the next launch.
-                    telling.switch(config.tells_status())?;
-                    view.set_face(config.draws_face());
-                    view.saved();
+            // The one report a reader never sent: the frame recedes while nobody is reading it,
+            // and a run that ends while it is away is the one that raises a notification.
+            Event::Focus(focused) => {
+                self.view.set_focused(focused);
+                self.telling.focused(focused);
+                paint(&mut self.canvas, &mut self.view)?;
+                return Ok(None);
+            }
+            // The one seam a pointer's act and a key's act both come through: what the frame
+            // makes of each, and what the terminal does about it, is the same.
+            Event::Key(key) => self.view.key(key),
+            Event::Pointer(pointer) => self.view.pointer(pointer),
+        };
+        match outcome {
+            Outcome::Unchanged => Ok(None),
+            Outcome::Edited => {
+                paint(&mut self.canvas, &mut self.view)?;
+                Ok(None)
+            }
+            // The flag an outside `SIGINT` sets too: the keyboard and the signal are one path,
+            // and the run cannot tell them apart.
+            Outcome::Cancel => {
+                if let Some(flight) = &self.running {
+                    flight.cancel();
                 }
-                Err(error) => view.refuse(&error.to_string()),
+                paint(&mut self.canvas, &mut self.view)?;
+                Ok(None)
             }
-            paint(canvas, view)?;
-            Ok(None)
-        }
-        // Written here because this module is the one that owns the tty, and nothing is repainted:
-        // a copy changes no cell of the frame.
-        Outcome::Copy(words) => {
-            tell(&terminal.screen, &crate::osc::copy(&words))?;
-            Ok(None)
-        }
-        // Written through the settings modal's own save — atomic, 0600, patching only the `model`
-        // key — and the config resolved again. A file that will not take it refuses the launch: a
-        // name silently not written is a silence this front end must not keep.
-        Outcome::Model(name) => {
-            let mut touched = Touched::new();
-            touched.set(MODEL, name);
-            match persist(environment, &touched, cli.flags()) {
-                Ok(fresh) => {
-                    *config = fresh;
-                    paint(canvas, view)?;
-                    Ok(None)
+            Outcome::Send(prompt) => {
+                send(
+                    prompt,
+                    &mut self.canvas,
+                    &mut self.view,
+                    &mut self.running,
+                    &mut self.launch,
+                    self.cli,
+                    &self.config,
+                    &self.wake,
+                    &mut self.telling,
+                )?;
+                Ok(None)
+            }
+            // The keys a reader touched go through the core's owner-only atomic save, and the
+            // launch's config is resolved again so the next prompt runs on what the visit left.
+            // A value the schema refuses comes back naming its key, with nothing written at all.
+            Outcome::Save(touched) => {
+                match persist(&self.environment, &touched, self.cli.flags()) {
+                    Ok(fresh) => {
+                        self.config = fresh;
+                        // Both switches, as the visit left them: `status` turned off here stops
+                        // the telling at the next report, and `face` turned off repaints the
+                        // frame without one, rather than at the next launch.
+                        self.telling.switch(self.config.tells_status())?;
+                        self.view.set_face(self.config.draws_face());
+                        self.view.saved();
+                    }
+                    Err(error) => self.view.refuse(&error.to_string()),
                 }
-                Err(error) => Ok(Some(Ending::Refused(Refusal::new(
-                    error.to_string(),
-                    error.exit_code(),
-                )))),
+                paint(&mut self.canvas, &mut self.view)?;
+                Ok(None)
             }
+            // Written here because this module is the one that owns the tty, and nothing is
+            // repainted: a copy changes no cell of the frame.
+            Outcome::Copy(words) => {
+                tell(&self.terminal.screen, &crate::osc::copy(&words))?;
+                Ok(None)
+            }
+            // Written through the settings modal's own save — atomic, 0600, patching only the
+            // `model` key — and the config resolved again. A file that will not take it refuses
+            // the launch: a name silently not written is a silence this front end must not keep.
+            Outcome::Model(name) => {
+                let mut touched = Touched::new();
+                touched.set(MODEL, name);
+                match persist(&self.environment, &touched, self.cli.flags()) {
+                    Ok(fresh) => {
+                        self.config = fresh;
+                        paint(&mut self.canvas, &mut self.view)?;
+                        Ok(None)
+                    }
+                    Err(error) => Ok(Some(Ending::Refused(Refusal::new(
+                        error.to_string(),
+                        error.exit_code(),
+                    )))),
+                }
+            }
+            // The frame holds no config, so the screen is seeded from the one the launch resolved.
+            Outcome::Settings => {
+                self.view.open_settings(&self.config);
+                paint(&mut self.canvas, &mut self.view)?;
+                Ok(None)
+            }
+            Outcome::Served => {
+                self.asking = ask(&self.config, &self.wake);
+                paint(&mut self.canvas, &mut self.view)?;
+                Ok(None)
+            }
+            Outcome::Quit => Ok(Some(Ending::Quit)),
         }
-        // The frame holds no config, so the screen is seeded from the one the launch resolved.
-        Outcome::Settings => {
-            view.open_settings(config);
-            paint(canvas, view)?;
-            Ok(None)
-        }
-        Outcome::Served => {
-            *asking = ask(config, wake);
-            paint(canvas, view)?;
-            Ok(None)
-        }
-        Outcome::Quit => Ok(Some(Ending::Quit)),
     }
 }
 
