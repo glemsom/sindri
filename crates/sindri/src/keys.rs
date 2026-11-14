@@ -89,6 +89,7 @@ pub enum Act {
     Draft,
     Up,
     Copy,
+    Fold,
     ExtendDown,
     ExtendUp,
     Drop,
@@ -117,7 +118,7 @@ pub struct Binding {
     pub act: Act,
 }
 
-const COMPOSER: [Binding; 21] = [
+const COMPOSER: [Binding; 22] = [
     Binding {
         key: Key::Char('?'),
         name: "?",
@@ -225,6 +226,12 @@ const COMPOSER: [Binding; 21] = [
         name: "Ctrl-Y",
         does: "copy the mark, or the last answer",
         act: Act::Copy,
+    },
+    Binding {
+        key: Key::Fold,
+        name: "Ctrl-O",
+        does: "open or fold the newest result",
+        act: Act::Fold,
     },
     Binding {
         key: Key::Backspace,

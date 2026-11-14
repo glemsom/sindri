@@ -83,6 +83,9 @@ fn named(name: &str) -> View {
         "face-off" => faced(false),
         "streaming" => streaming(),
         "calls" => running(calls(), Scroll::Tail),
+        "fold" => fold(false),
+        "fold-open" => fold(true),
+        "fold-answer" => folded_beside_an_answer(),
         "empty" => View::boot(),
         "typing" => View::typing(draft(&["why does the retry test fail"])),
         "wrapped" => View::typing(draft(&[
@@ -705,6 +708,64 @@ fn queue() -> View {
     }
     view.paste("and this one while they wait");
     view
+}
+
+/// A `cargo test` run of twenty rows, which is a result longer than its fold.
+fn output() -> String {
+    (1..=20)
+        .map(|line| format!("test rows::a_row_of_output_{line} ... ok"))
+        .collect::<Vec<String>>()
+        .join("\n")
+}
+
+/// A transcript whose newest result is longer than its fold, with the answer the run wrote above
+/// it: the result is the work and folds, the answer is the reader's and never does.
+fn fold(open: bool) -> View {
+    let mut view = running(folded_run(), Scroll::Tail);
+    if open {
+        assert_eq!(
+            view.key(Key::Fold),
+            Outcome::Edited,
+            "Ctrl-O opens the newest result's fold, and a frame that answered nothing would be a \
+             picture of the fold it already had"
+        );
+    }
+    view
+}
+
+/// The run a fold is drawn on, and the long answer under it that proves a fold is a result's and
+/// never an answer's: one frame holds both kinds of entry beside one another.
+fn folded_run() -> Vec<Entry> {
+    vec![
+        Entry::Turn { turn: 1 },
+        answer(
+            1,
+            "Every row of the run passes: the gutter holds one column for every entry, and a row \
+             of a command's output is set behind it rather than beside the answer.",
+        ),
+        call(
+            1,
+            "bash",
+            r#"{"command": "cargo test -p sindri --test rows"}"#,
+        ),
+        result(1, "bash", Exit::Code(0), &output(), 640, 1_800),
+    ]
+}
+
+fn folded_beside_an_answer() -> View {
+    let mut entries = folded_run();
+    entries.push(Entry::Turn { turn: 2 });
+    entries.push(answer(
+        2,
+        "The run proves the fold and nothing else: every row of a command's output is drawn in the \
+         quieter ink behind the gutter the call opened, and the rows a reader usually needs are the \
+         head of it, the row counting the rows kept back and the last row the command wrote.\n\n\
+         An answer is the answer, so it is drawn whole in the ink it wears today, and a reader \
+         reads it beside a folded result without losing one to the other.\n\n\
+         The fold opens on one key and on a mark grown over a row of it, and a fold a reader \
+         opened stays open through a scroll, a resize and the entry that lands beside it.",
+    ));
+    running(entries, Scroll::Tail)
 }
 
 fn calls() -> Vec<Entry> {

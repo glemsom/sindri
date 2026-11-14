@@ -7,7 +7,7 @@ gutter at 80x24
 01 |─ prompt ───────────────────────────────────────────────────────────────────────| dim:80
 02 |› triage the retry test                                                         | plain:80
 03 |✓ exit 0  bash  412 bytes · 23 ms                                               | ok:1 plain:1 dim:31 plain:47
-04 |  src/rows.rs: every entry stands in one gutter                                 | plain:80
+04 |  src/rows.rs: every entry stands in one gutter                                 | muted:47 plain:33
 05 |│ the marker of a row stands in the gutter ahead of its words                   | dim:2 muted:59 plain:19
 06 |  Every row begins at one column:                                               | plain:80
 07 |                                                                                | plain:80

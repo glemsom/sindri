@@ -5,10 +5,10 @@ expression: drawn
 rail at 40x24
 00 |─ turn 1 ───────────────────────────────| dim:40
 01 |✓ exit 0  bash  412 bytes · 23 ms       | ok:1 plain:1 dim:31 plain:7
-02 |  src/rows.rs: the glyph a turn opens   | plain:40
-03 |  with                                  | plain:40
-04 |  src/rows.rs: a word longer than a row | plain:40
-05 |  is broken                             | plain:40
+02 |  src/rows.rs: the glyph a turn opens   | muted:37 plain:3
+03 |  with                                  | muted:6 plain:34
+04 |  src/rows.rs: a word longer than a row | muted:39 plain:1
+05 |  is broken                             | muted:11 plain:29
 06 |  Rendering lives in the front end and  | plain:40
 07 |  not in the core, because an entry is a| plain:40
 08 |  fact and never a rendering: the TUI   | plain:40

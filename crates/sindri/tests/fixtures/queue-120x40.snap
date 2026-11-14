@@ -3,9 +3,9 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 queue at 120x40
-00 |  check: clippy ... ok                                                      wire      anthropic                         | plain:76 dim:10 plain:34
-01 |  check: test ... ok                                                        model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
-02 |  check: frames ... ok                                                      think     high                              | plain:76 dim:10 plain:34
+00 |  check: clippy ... ok                                                      wire      anthropic                         | muted:22 plain:54 dim:10 plain:34
+01 |  check: test ... ok                                                        model     claude-sonnet-4-5-20250929        | muted:20 plain:56 dim:10 plain:34
+02 |  check: frames ... ok                                                      think     high                              | muted:22 plain:54 dim:10 plain:34
 03 |  What that buys is the plain case and what it costs is the scrolled one: a                                             | plain:120
 04 |  window is a row offset from the tail, so resolving one walks the entries  turns                               6 /  250| plain:76 dim:10 plain:34
 05 |  between the tail and the window and lays out every one of them on the way.ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
@@ -13,8 +13,8 @@ queue at 120x40
 07 |  costs one layout per entry and scrolling it again costs none.                                                         | plain:120
 08 |─ turn 5 ───────────────────────────────────────────────────────────────────workspace …/git/sindri/.worktrees/46-rail   | dim:86 plain:34
 09 |✓ exit 0  bash  128 bytes · 9 ms                                            branch    spec/1-capability                 | ok:1 plain:1 dim:30 plain:44 dim:10 plain:34
-10 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | plain:120
-11 |  crates/sindri/tests/rows.rs | 198 +++++++++                               skills                                     2| plain:76 dim:10 plain:34
+10 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | muted:47 plain:73
+11 |  crates/sindri/tests/rows.rs | 198 +++++++++                               skills                                     2| muted:45 plain:31 dim:10 plain:34
 12 |  The transcript's unit is the entry. An entry never carries a formatted                                                | plain:120
 13 |  line, so the same run is drawn the same way by the TUI, by a reader of thesandbox   bwrap                             | plain:76 dim:10 plain:34
 14 |  transcript and by whatever front end comes next.                                                                      | plain:120
@@ -26,8 +26,8 @@ queue at 120x40
 20 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 21 |─ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
 22 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 plain:1 dim:31 plain:87
-23 |  check: frame calls ... ok                                                                                             | plain:120
-24 |  check: frame transcript ... ok                                                                                        | plain:120
+23 |  check: frame calls ... ok                                                                                             | muted:27 plain:93
+24 |  check: frame transcript ... ok                                                                                        | muted:32 plain:88
 25 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
 26 |  ─────────────────                                                                                                     | plain:2 dim:17 plain:101
 27 |                                                                                                                        | plain:120

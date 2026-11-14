@@ -34,6 +34,21 @@ const PENDING: char = '…';
 const CHECK: char = '✓';
 const CROSS: char = '✗';
 const HAIRLINE: char = '─';
+const KEPT: char = '⋯';
+
+/// The rows of a result's head that a folded result keeps.
+const FOLD_HEAD: usize = 4;
+
+/// The fewest rows a fold is worth keeping back, so a count is always a plural: a result that would
+/// keep back fewer is drawn whole rather than spending a row to hand the reader nothing.
+const FOLD_KEPT: usize = 3;
+
+/// Whether a result is drawn whole, or as the head a reader is handed to begin with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Fold {
+    Closed,
+    Open,
+}
 
 /// One row of the transcript: never wider than the width it was laid out at, bar the
 /// one glyph that is itself wider than that whole width and that no layout can split.
@@ -229,12 +244,27 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
 /// is a way only where that judgement holds it openable, and a frame handed none lays every path as
 /// the words it was written as.
 pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Ground>) -> Vec<Row> {
+    laid(entry, cols, surface, ground, Fold::Closed).0
+}
+
+/// The rows of one entry in the fold it is drawn as, and how many rows of it that fold keeps back:
+/// a result's fold is a fact of its last layout, and a width change re-lays it.
+fn laid(
+    entry: &Entry,
+    cols: u16,
+    surface: &Surface,
+    ground: Option<&Ground>,
+    fold: Fold,
+) -> (Vec<Row>, Option<usize>) {
     let cols = cols.max(1);
     match entry {
-        Entry::Turn { turn } => vec![divider(&format!("turn {turn} "), cols)],
+        Entry::Turn { turn } => (vec![divider(&format!("turn {turn} "), cols)], None),
         Entry::Call {
             name, arguments, ..
-        } => opening(&name.to_string(), &arguments.to_string(), cols, ground),
+        } => (
+            opening(&name.to_string(), &arguments.to_string(), cols, ground),
+            None,
+        ),
         Entry::Result {
             name,
             text,
@@ -242,18 +272,53 @@ pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Gr
             elapsed_ms,
             exit,
             ..
-        } => settled(
-            &name.to_string(),
-            *exit,
-            &text.to_string(),
-            *bytes,
-            *elapsed_ms,
+        } => folded(
+            settled(
+                &name.to_string(),
+                *exit,
+                &text.to_string(),
+                *bytes,
+                *elapsed_ms,
+                cols,
+            ),
             cols,
+            fold,
         ),
-        Entry::Assistant { text, .. } => answer_on(&text.to_string(), cols, None, surface),
-        Entry::Reasoning { text, .. } => thought(&text.to_string(), cols),
-        Entry::Prompt { text } => asked(&text.to_string(), cols),
+        Entry::Assistant { text, .. } => (answer_on(&text.to_string(), cols, None, surface), None),
+        Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
+        Entry::Prompt { text } => (asked(&text.to_string(), cols), None),
     }
+}
+
+/// A result's rows as the reader is handed them: the rows of its head, one row counting the rows
+/// kept back, and its last row — unless the reader opened the fold, or it holds the whole result.
+/// The count comes back beside them for as long as the result has a fold at all.
+fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>) {
+    let Some(kept) = rows
+        .len()
+        .checked_sub(FOLD_HEAD + 1)
+        .filter(|kept| *kept > FOLD_KEPT)
+    else {
+        return (rows, None);
+    };
+    if fold == Fold::Open {
+        return (rows, Some(kept));
+    }
+    let last = rows
+        .pop()
+        .expect("a result whose fold keeps a row back has a last row under its head");
+    rows.truncate(FOLD_HEAD);
+    rows.push(kept_back(kept, cols));
+    rows.push(last);
+    (rows, Some(kept))
+}
+
+/// The row that says how many rows of a result the fold keeps back, drawn as any other row of that
+/// entry: the marker in the gutter and the count in the dim ink of the fold's own words, a rung
+/// quieter than the output it stands among.
+fn kept_back(kept: usize, cols: u16) -> Row {
+    let words = format!("{kept} rows kept back");
+    marked(&KEPT.to_string(), Ink::Dim, vec![(words, Ink::Dim)], cols)
 }
 
 fn asked(text: &str, cols: u16) -> Vec<Row> {
@@ -364,7 +429,12 @@ fn opening(name: &str, arguments: &str, cols: u16, ground: Option<&Ground>) -> V
         vec![(String::from(name), Ink::Dim)],
         cols,
     )];
-    rows.extend(body(arguments, cols, way(name, arguments, ground)));
+    rows.extend(body(
+        arguments,
+        cols,
+        way(name, arguments, ground),
+        Ink::Plain,
+    ));
     rows
 }
 
@@ -407,7 +477,7 @@ fn settled(
         }
     };
     let mut rows = vec![header];
-    rows.extend(body(text, cols, None));
+    rows.extend(body(text, cols, None, Ink::Muted));
     rows
 }
 
@@ -445,10 +515,10 @@ fn clip(text: &str, room: u16) -> String {
     split_at(text, usize::from(room.max(1))).0
 }
 
-/// The words of a tool's arguments or its result, set in the gutter a body is set from. A body
-/// that names a way to a file is laid with that path's own cells a way there, and every other
-/// body is laid as the wrapping lays it.
-fn body(text: &str, cols: u16, way: Option<Way>) -> Vec<Row> {
+/// The words of a tool's arguments or its result, set in the gutter a body is set from and in the
+/// ink that kind of body is drawn in. A body that names a way to a file is laid with that path's
+/// own cells a way there, and every other body is laid as the wrapping lays it.
+fn body(text: &str, cols: u16, way: Option<Way>, ink: Ink) -> Vec<Row> {
     if text.is_empty() {
         return Vec::new();
     }
@@ -457,11 +527,11 @@ fn body(text: &str, cols: u16, way: Option<Way>) -> Vec<Row> {
     match named {
         Some(rows) => rows
             .into_iter()
-            .map(|row| row.indented(gutter, Ink::Plain))
+            .map(|row| row.indented(gutter, ink))
             .collect(),
         None => wrap(text, room)
             .into_iter()
-            .map(|line| words_past(gutter, Ink::Plain, Ink::Plain, line, cols))
+            .map(|line| words_past(gutter, ink, ink, line, cols))
             .collect(),
     }
 }
@@ -628,6 +698,12 @@ struct Held {
     /// layered over the rows, so a width change re-lays the settled row.
     result: Option<Entry>,
     rows: Option<Vec<Row>>,
+    /// The fold the reader left this entry in, which is theirs and survives every re-lay of the
+    /// rows under it.
+    fold: Fold,
+    /// How many rows this entry's closed fold keeps back, and nothing where its whole fold holds
+    /// it: a fact of its last layout, because what a fold holds depends on the width.
+    kept: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -661,6 +737,8 @@ impl Rows {
             what: What::Fact(entry),
             result: None,
             rows: None,
+            fold: Fold::Closed,
+            kept: None,
         });
     }
 
@@ -698,6 +776,8 @@ impl Rows {
                 what: What::Live { revision, head },
                 result: None,
                 rows: Some(rows),
+                fold: Fold::Closed,
+                kept: None,
             }),
         }
         self.lays += 1;
@@ -791,14 +871,62 @@ impl Rows {
             (What::Fact(_), Some(result)) => Some(result),
             (What::Live { .. }, _) => None,
         };
+        let fold = held.fold;
         if held.rows.is_none()
             && let Some(fact) = fact
         {
-            let rows = layout_on(fact, cols, &self.surface, self.ground.as_ref());
+            let (rows, kept) = laid(fact, cols, &self.surface, self.ground.as_ref(), fold);
             self.lays += 1;
             self.held[at].rows = Some(rows);
+            self.held[at].kept = kept;
         }
         self.held[at].rows.as_deref().unwrap_or_default()
+    }
+
+    /// The newest entry whose settled fact is a result, which is the one `Ctrl-O` answers for.
+    fn newest_result(&self) -> Option<usize> {
+        (0..self.held.len())
+            .rev()
+            .find(|at| holds_result(&self.held[*at]))
+    }
+
+    /// The newest result's fold, opened if it is closed and folded if it is open: false where the
+    /// transcript holds no result, or where the newest one's whole fold holds it already.
+    pub fn toggle_newest(&mut self) -> bool {
+        let Some(at) = self.newest_result() else {
+            return false;
+        };
+        let to = match self.held[at].fold {
+            Fold::Closed => Fold::Open,
+            Fold::Open => Fold::Closed,
+        };
+        self.fold(at, to)
+    }
+
+    /// Opens the fold of entry `at`, and answers whether this call is what opened it: an entry
+    /// that is no result, one whose whole fold holds it, and one already open answer nothing.
+    pub fn open(&mut self, at: usize) -> bool {
+        self.fold(at, Fold::Open)
+    }
+
+    /// Entry `at` left in the fold `to`, which is a frame to paint when this call moved it: one
+    /// already in `to` repaints nothing, and a result its whole fold holds is no key's.
+    fn fold(&mut self, at: usize, to: Fold) -> bool {
+        let Some(held) = self.held.get(at) else {
+            return false;
+        };
+        if !holds_result(held) || held.fold == to {
+            return false;
+        }
+        if self.held[at].rows.is_none() {
+            self.rows(at);
+        }
+        if self.held[at].kept.is_none() {
+            return false;
+        }
+        self.held[at].fold = to;
+        self.held[at].rows = None;
+        true
     }
 
     /// A copy of the last answer takes the line breaks the model wrote, not the ones the
@@ -884,6 +1012,15 @@ impl Rows {
         pieces.reverse();
         Window { pieces }
     }
+}
+
+/// Whether this entry is a result: either the fact itself, or the result that settled the call
+/// it holds.
+fn holds_result(held: &Held) -> bool {
+    matches!(
+        (&held.what, held.result.as_ref()),
+        (What::Fact(Entry::Result { .. }), _) | (_, Some(Entry::Result { .. }))
+    )
 }
 
 #[derive(Clone, Debug, Default)]

@@ -271,6 +271,7 @@ fn control(byte: u8) -> Option<Key> {
         // byte instead of sending it.
         0x11 => Some(Key::Quit),
         0x19 => Some(Key::Copy),
+        0x0f => Some(Key::Fold),
         0x7f | 0x08 => Some(Key::Backspace),
         // `Ctrl-J` is the plain newline every terminal sends: it breaks a line rather than sending
         // one, and `Enter` is the carriage return `Ctrl-M` is.
