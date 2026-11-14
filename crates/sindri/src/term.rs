@@ -19,7 +19,7 @@ use sindri::link::Links;
 use sindri::picture;
 use sindri::pictures::Pictures;
 use sindri::size::{Laid, Sizes};
-use sindri::view::View;
+use sindri::view::{Painted, View};
 
 use crate::osc;
 
@@ -308,20 +308,19 @@ pub(crate) fn canvas_at(
 /// Paints the frame the view holds now, and puts the terminal's cursor where the view says. The
 /// buffer is painted first, because the ways a frame names are known only after it is painted and
 /// the backend must hold them before the frame is written.
-pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<()> {
+pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<Painted> {
     canvas.autoresize()?;
     let area = canvas.current_buffer_mut().area;
-    view.paint(area, canvas.current_buffer_mut());
+    let painted = view.paint(area, canvas.current_buffer_mut());
     let cursor = view.cursor(area);
-    canvas.backend_mut().links(view.links());
-    canvas.backend_mut().sizes(view.sizes());
-    canvas
-        .draw(|frame| {
-            if let Some(at) = cursor {
-                frame.set_cursor_position(at);
-            }
-        })
-        .map(|_| ())
+    canvas.backend_mut().links(painted.links());
+    canvas.backend_mut().sizes(painted.sizes());
+    canvas.draw(|frame| {
+        if let Some(at) = cursor {
+            frame.set_cursor_position(at);
+        }
+    })?;
+    Ok(painted)
 }
 
 /// What the terminal is to be given back as: the state raw mode replaced and the two fds it is

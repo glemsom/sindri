@@ -1080,7 +1080,9 @@ fn drawn_taking(name: &str, cols: u16, rows: u16, pointer: bool) -> String {
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
     let completed = terminal
-        .draw(|frame| view.paint(frame.area(), frame.buffer_mut()))
+        .draw(|frame| {
+            view.paint(frame.area(), frame.buffer_mut());
+        })
         .expect("the frame is painted");
     text(name, &palette, completed.buffer)
 }

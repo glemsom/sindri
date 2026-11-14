@@ -152,6 +152,44 @@ const MODELS_EMPTY: &str = "no served name answers";
 /// wear theirs.
 const COMMANDS_CARD: &str = "/ commands";
 
+/// What one paint pass tells the terminal: the destinations the frame names, the runs it draws at
+/// more than one cell, and the rows a press chooses. No cell carries any of them.
+#[derive(Debug)]
+pub struct Painted {
+    links: Links,
+    sizes: Sizes,
+    presses: Vec<Press>,
+}
+
+impl Painted {
+    /// A pass that has told the terminal nothing.
+    pub fn none() -> Painted {
+        Painted {
+            links: Links::none(),
+            sizes: Sizes::none(),
+            presses: Vec::new(),
+        }
+    }
+
+    /// The destinations this frame named, laid on the rows it drew.
+    pub fn links(&self) -> &Links {
+        &self.links
+    }
+
+    /// The runs this frame draws at more than one cell, laid on the rows it drew.
+    pub fn sizes(&self) -> &Sizes {
+        &self.sizes
+    }
+
+    /// The choice the row a press at `at` landed on hangs from, when it landed on one.
+    fn press(&self, at: Cell) -> Option<Choice> {
+        self.presses
+            .iter()
+            .find(|press| press.covers(at))
+            .map(|press| press.choice)
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct View {
     rows: Rows,
@@ -190,19 +228,12 @@ pub struct View {
     pictures: Pictures,
     cell_size: CellSize,
     palette: Palette,
-    /// The destinations this frame names: what travels beside its cells, never in them, because
-    /// no cell carries one.
-    links: Links,
-    /// The runs of this frame a terminal draws at more than one cell, laid on the rows it drew.
-    sizes: Sizes,
     /// Whether this launch's terminal draws text at more than one cell at all: a surface a heading
     /// is measured against, and never a question a paint asks again.
     sizing: bool,
     /// Whether this launch's terminal reports a pointer at all: a frame drawn where it does not is
     /// drawn in the cells it always was.
     pointer: bool,
-    /// The rows of the card this frame drew that a press chooses, laid where their cells were drawn.
-    presses: Vec<Press>,
     focus: Focus,
 }
 
@@ -830,16 +861,6 @@ impl View {
         };
     }
 
-    /// The destinations this frame names, laid on the rows it drew.
-    pub fn links(&self) -> &Links {
-        &self.links
-    }
-
-    /// The runs of this frame a terminal draws at more than one cell, laid on the rows it drew.
-    pub fn sizes(&self) -> &Sizes {
-        &self.sizes
-    }
-
     /// Whether the terminal this frame is drawn on sizes text: asked once at boot, because a
     /// heading is laid out as the cells the sizing leaves and never re-laid on a key.
     pub fn set_sizing(&mut self, sizing: bool) {
@@ -853,24 +874,24 @@ impl View {
 
     /// What the terminal's pointer report is answered with: a notch moves the transcript through the
     /// one key table, and a press chooses the row it landed on.
-    pub fn pointer(&mut self, report: Pointer) -> Outcome {
+    pub fn pointer(&mut self, painted: &Painted, report: Pointer) -> Outcome {
         if !self.pointer {
             return Outcome::Unchanged;
         }
         match report {
             Pointer::Wheel(Notch::Up) => self.key(Key::PageUp),
             Pointer::Wheel(Notch::Down) => self.key(Key::PageDown),
-            Pointer::Press(at) => self.pressed(at),
+            Pointer::Press(at) => self.pressed(painted, at),
         }
     }
 
     /// A press on a row of a card: the row is chosen, and then the key it hangs from is sent, which
     /// is `Enter` for every row a card draws.
-    fn pressed(&mut self, at: Cell) -> Outcome {
-        let Some(press) = self.presses.iter().find(|press| press.covers(at)).copied() else {
+    fn pressed(&mut self, painted: &Painted, at: Cell) -> Outcome {
+        let Some(choice) = painted.press(at) else {
             return Outcome::Unchanged;
         };
-        if !self.chosen(press.choice) {
+        if !self.chosen(choice) {
             return Outcome::Unchanged;
         }
         self.key(Key::Enter)
@@ -897,13 +918,11 @@ impl View {
         self.pulse = pulse;
     }
 
-    /// Paints this frame into `area`. Painting is what tells the row cache how wide the
-    /// transcript is, so a resize invalidates it here and the same pass reflows; the
-    /// composer's rows are measured when the frame is drawn and never cached.
-    pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
-        self.links = Links::none();
-        self.sizes = Sizes::none();
-        self.presses.clear();
+    /// Paints this frame into `area`, and hands back what the pass told the terminal. Painting is
+    /// what tells the row cache how wide the transcript is, so a resize invalidates it here and the
+    /// same pass reflows; the composer's rows are measured when the frame is drawn.
+    pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
+        let mut painted = Painted::none();
         pen::claim(buffer, area, self.palette.ground(None));
         self.composer.set_room(View::room(area.width));
         let bands = bands(
@@ -941,15 +960,20 @@ impl View {
                 self.pictures.place(picture, self.cell_size, cells, buffer);
             }
         }
-        self.transcript(share.transcript, buffer);
+        self.transcript(
+            share.transcript,
+            buffer,
+            &mut painted.links,
+            &mut painted.sizes,
+        );
         if self.splash {
             let surface = self.face_surface();
             splash::paint(
                 share.transcript,
                 buffer,
                 &self.palette,
-                &mut self.links,
-                &mut self.sizes,
+                &mut painted.links,
+                &mut painted.sizes,
                 &mut self.pictures,
                 &surface,
             );
@@ -963,14 +987,15 @@ impl View {
         let Some((name, leaves, body)) = self.over(area, screen) else {
             // A heading is drawn as the cells the sizing leaves once the band it stands in is
             // known: one with no row of that band under it is the words it says.
-            self.sizes.settle(share.transcript, buffer, &self.palette);
+            painted
+                .sizes
+                .settle(share.transcript, buffer, &self.palette);
             self.highlight(share.transcript, buffer);
-            return;
+            return painted;
         };
         // The band under a card takes no key, so the frame under it is no way to anywhere — and no
         // heading of it is drawn large, because the scrim is read as the words it holds.
-        self.links = Links::none();
-        self.sizes = Sizes::none();
+        painted = Painted::none();
         self.highlight(share.transcript, buffer);
         let width = card::body_width(area);
         let held = card::paint(
@@ -982,7 +1007,8 @@ impl View {
             self.edge(),
             &self.palette,
         );
-        self.presses = body.paint(held, buffer, &self.palette);
+        painted.presses = body.paint(held, buffer, &self.palette);
+        painted
     }
 
     /// The card this frame carries over itself: the screen on top of the stack, or — a draft
@@ -1025,7 +1051,13 @@ impl View {
     /// The transcript is drawn in the well, the darkest of the three bands. The turn in flight is
     /// the one entry laid out again on every paint; every other row comes from the window of the
     /// cache this band reaches.
-    fn transcript(&mut self, area: Rect, buffer: &mut Buffer) {
+    fn transcript(
+        &mut self,
+        area: Rect,
+        buffer: &mut Buffer,
+        links: &mut Links,
+        sizes: &mut Sizes,
+    ) {
         pen::claim(buffer, area, self.palette.ground(Some(Band::Well)));
         // A narrower band lays the same history out in more rows, and that is no row landing.
         let reflowed = self.rows.cols() != area.width;
@@ -1075,8 +1107,8 @@ impl View {
                     },
                     buffer,
                     &self.palette,
-                    &mut self.links,
-                    &mut self.sizes,
+                    links,
+                    sizes,
                 );
                 if let Some(thumb) = &thumb {
                     thumb.paint(area, y, buffer, &self.palette);
@@ -3216,14 +3248,22 @@ mod tests {
         buffer
     }
 
+    /// The cells a frame `cols` by `rows` is painted into, and what that pass told the terminal.
+    fn painted_and_told(view: &mut View, cols: u16, rows: u16) -> (Buffer, Painted) {
+        let area = screen(cols, rows);
+        let mut buffer = Buffer::empty(area);
+        let told = view.paint(area, &mut buffer);
+        (buffer, told)
+    }
+
     #[test]
     fn a_notch_of_the_wheel_takes_the_transcript_back_exactly_as_the_page_key_does() {
         let mut view = turns(100);
         view.set_pointer(true);
-        painted(&mut view, 120, 40);
+        let (_, told) = painted_and_told(&mut view, 120, 40);
 
         assert_eq!(
-            view.pointer(Pointer::Wheel(Notch::Up)),
+            view.pointer(&told, Pointer::Wheel(Notch::Up)),
             Outcome::Edited,
             "a notch of the wheel moves the transcript, which is a frame to paint"
         );
@@ -3232,9 +3272,9 @@ mod tests {
             Scroll::Back(37),
             "and it moves it by the band the transcript is drawn in, exactly as `PgUp` does"
         );
-        painted(&mut view, 120, 40);
+        let (_, told) = painted_and_told(&mut view, 120, 40);
         assert_eq!(
-            view.pointer(Pointer::Wheel(Notch::Down)),
+            view.pointer(&told, Pointer::Wheel(Notch::Down)),
             Outcome::Edited,
             "one notch on brings it back"
         );
@@ -3249,10 +3289,10 @@ mod tests {
     fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
         let mut view = turns(40);
         view.set_pointer(true);
-        painted(&mut view, 120, 40);
+        let (_, told) = painted_and_told(&mut view, 120, 40);
 
         assert_eq!(
-            view.pointer(Pointer::Wheel(Notch::Up)),
+            view.pointer(&told, Pointer::Wheel(Notch::Up)),
             Outcome::Edited,
             "a transcript three rows taller than its band is a notch back"
         );
@@ -3262,7 +3302,7 @@ mod tests {
             "but only as far as its first row, which one page reaches"
         );
         assert_eq!(
-            view.pointer(Pointer::Wheel(Notch::Up)),
+            view.pointer(&told, Pointer::Wheel(Notch::Up)),
             Outcome::Unchanged,
             "and a notch up already at the first row moves nothing"
         );
@@ -3270,9 +3310,9 @@ mod tests {
 
         let mut tail = turns(40);
         tail.set_pointer(true);
-        painted(&mut tail, 120, 40);
+        let (_, told) = painted_and_told(&mut tail, 120, 40);
         assert_eq!(
-            tail.pointer(Pointer::Wheel(Notch::Down)),
+            tail.pointer(&told, Pointer::Wheel(Notch::Down)),
             Outcome::Unchanged,
             "a notch down at the tail is a frame that does not move"
         );
@@ -3282,10 +3322,10 @@ mod tests {
     #[test]
     fn a_notch_on_a_frame_whose_terminal_reports_no_pointer_moves_nothing() {
         let mut view = turns(100);
-        painted(&mut view, 120, 40);
+        let (_, told) = painted_and_told(&mut view, 120, 40);
 
         assert_eq!(
-            view.pointer(Pointer::Wheel(Notch::Up)),
+            view.pointer(&told, Pointer::Wheel(Notch::Up)),
             Outcome::Unchanged,
             "a terminal that reports no pointer is handed a frame that takes none"
         );
@@ -3324,11 +3364,11 @@ mod tests {
     #[test]
     fn a_press_on_a_file_row_of_the_picker_chooses_that_file() {
         let (mut view, _workspace) = picking();
-        let drawn = painted(&mut view, 120, 40);
+        let (drawn, told) = painted_and_told(&mut view, 120, 40);
         let row = row_holding(&drawn, "zeta.rs");
 
         assert_eq!(
-            view.pointer(Pointer::Press(Cell::new(row, 40))),
+            view.pointer(&told, Pointer::Press(Cell::new(row, 40))),
             Outcome::Edited,
             "a press on the second row of the picker chooses that file, and a frame is painted"
         );
@@ -3347,7 +3387,7 @@ mod tests {
     #[test]
     fn a_press_on_no_row_of_the_picker_changes_nothing() {
         let (mut view, _workspace) = picking();
-        let drawn = painted(&mut view, 120, 40);
+        let (drawn, told) = painted_and_told(&mut view, 120, 40);
         let file = row_holding(&drawn, "zeta.rs");
         let query = row_holding(&drawn, "query:");
         let counted = row_holding(&drawn, " of 2");
@@ -3358,7 +3398,7 @@ mod tests {
             (Cell::new(file, 5), "a cell outside the card"),
         ] {
             assert_eq!(
-                view.pointer(Pointer::Press(at)),
+                view.pointer(&told, Pointer::Press(at)),
                 Outcome::Unchanged,
                 "a press on {why} chooses no row, so nothing happens"
             );
@@ -3376,11 +3416,11 @@ mod tests {
         let mut view = View::boot();
         view.set_pointer(true);
         view.key(Key::Char('/'));
-        let drawn = painted(&mut view, 120, 40);
+        let (drawn, told) = painted_and_told(&mut view, 120, 40);
         let row = row_holding(&drawn, "/quit");
 
         assert_eq!(
-            view.pointer(Pointer::Press(Cell::new(row, 40))),
+            view.pointer(&told, Pointer::Press(Cell::new(row, 40))),
             Outcome::Quit,
             "the row the press lands on is the one `/quit` hangs from, and it sends what `Enter` \
              on that line sends"
@@ -3394,7 +3434,7 @@ mod tests {
         for glyph in ['/', 'n'] {
             clicked.key(Key::Char(glyph));
         }
-        let drawn = painted(&mut clicked, 120, 40);
+        let (drawn, told) = painted_and_told(&mut clicked, 120, 40);
         let row = row_holding(&drawn, "/settings");
 
         let mut typed = View::boot();
@@ -3403,7 +3443,7 @@ mod tests {
         }
 
         assert_eq!(
-            clicked.pointer(Pointer::Press(Cell::new(row, 40))),
+            clicked.pointer(&told, Pointer::Press(Cell::new(row, 40))),
             typed.key(Key::Enter),
             "a press on a row sends the line that row spells, and sends what `Enter` sends"
         );

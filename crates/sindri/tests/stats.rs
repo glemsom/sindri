@@ -18,7 +18,9 @@ use fixture::{GUID, document, facts};
 fn painted(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
     let mut terminal = Terminal::new(TestBackend::new(cols, rows)).expect("a terminal");
     terminal
-        .draw(|frame| view.paint(frame.area(), frame.buffer_mut()))
+        .draw(|frame| {
+            view.paint(frame.area(), frame.buffer_mut());
+        })
         .expect("a frame");
     let buffer = terminal.backend().buffer();
     (0..rows)
