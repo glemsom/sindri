@@ -53,6 +53,14 @@ impl Pictures {
         }
     }
 
+    /// The cell these pictures are measured at, and `None` where nothing is placed.
+    pub fn cell(&self) -> Option<CellSize> {
+        self.picker.as_ref().map(|picker| {
+            let (width, height) = picker.font_size();
+            CellSize::new(u32::from(width), u32::from(height))
+        })
+    }
+
     /// Whether this terminal places pictures at all, which is what a block was laid out for.
     pub fn draws(&self) -> bool {
         self.picker.is_some()

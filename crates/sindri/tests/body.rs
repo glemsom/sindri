@@ -2,6 +2,8 @@
 //! description names the body its screen builds, and each screen builds it from the rows it keeps —
 //! the line it says in place of rows, its count row and its refusal row among them.
 
+mod caps; // the terminals these frames are drawn on
+
 use sindri::composer::{Key, Outcome};
 use sindri::keys::{Body, Mode};
 use sindri::ledger::Facts;

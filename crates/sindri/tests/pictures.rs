@@ -2,6 +2,8 @@
 //! headless backend hands back, and a transmission count is a reading of that buffer and not a
 //! wire — no byte leaves this process.
 
+mod caps; // the terminals these frames are drawn on
+
 use std::path::{Path, PathBuf};
 
 use image::{Rgba, RgbaImage};
@@ -10,6 +12,7 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 
+use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::face;
 use sindri::graphics::{Ceiling, CellSize};
@@ -409,10 +412,10 @@ fn frame(workspace: &Path, text: &str, draws: bool) -> View {
         Scroll::Tail,
     );
     view.set_workspace(workspace.to_path_buf());
-    view.set_cell_size(cell());
-    if draws {
-        view.set_pictures(Pictures::kitty(cell()));
-    }
+    view.drawn_on(match draws {
+        true => caps::at(cell()),
+        false => Capabilities::default(),
+    });
     view
 }
 
@@ -497,10 +500,10 @@ fn railed_facts() -> Facts {
 /// and a temp are a run's own, so the rail draws an em dash for each.
 fn splash(draws: bool) -> View {
     let mut view = View::boot();
-    view.set_cell_size(cell());
-    if draws {
-        view.set_pictures(Pictures::kitty(cell()));
-    }
+    view.drawn_on(match draws {
+        true => caps::at(cell()),
+        false => Capabilities::default(),
+    });
     view.splash(Boot {
         wire: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-5")),
@@ -512,14 +515,15 @@ fn splash(draws: bool) -> View {
 }
 
 /// A frame whose rail carries the twelve facts, and a transcript of nothing: the rail is the picture
-/// a face is drawn over.
-fn railed(draws: bool) -> View {
+/// a face is drawn over. A terminal that places none has no face to turn off, so `face` is no fact of
+/// its frame.
+fn railed(draws: bool, face: bool) -> View {
     let mut view = View::of(Vec::new(), Scroll::Tail);
-    view.set_cell_size(cell());
+    view.drawn_on(match draws {
+        true => caps::faced(face),
+        false => Capabilities::default(),
+    });
     view.set_facts(railed_facts());
-    if draws {
-        view.set_pictures(Pictures::kitty(cell()));
-    }
     view
 }
 
@@ -720,8 +724,7 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
         Scroll::Tail,
     );
     view.set_workspace(workspace.clone());
-    view.set_cell_size(cell());
-    view.set_pictures(Pictures::kitty(cell()));
+    view.drawn_on(caps::at(cell()));
 
     painted_at(&mut view, SCREEN);
     assert_eq!(
@@ -981,7 +984,7 @@ fn a_diagram_and_an_image_in_one_answer_are_placed_each_over_its_own_block() {
 #[test]
 fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
     for cols in [100, 120] {
-        let mut view = railed(true);
+        let mut view = railed(true, true);
         let painted = painted_at(&mut view, (cols, 40));
         let rail = rail_band(cols, 40);
         let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
@@ -1050,9 +1053,9 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
 fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
     for cols in [100, 120] {
         let rail = rail_band(cols, 40);
-        let mut bare = railed(false);
+        let mut bare = railed(false, true);
         let without = painted_at(&mut bare, (cols, 40));
-        let mut faced = railed(true);
+        let mut faced = railed(true, true);
         let with = painted_at(&mut faced, (cols, 40));
 
         let stated = |buffer: &Buffer, from: u16| -> Vec<String> {
@@ -1083,9 +1086,9 @@ fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
 #[test]
 fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
     for cols in [40, 80, 99] {
-        let mut faced = railed(true);
+        let mut faced = railed(true, true);
         let with = painted_at(&mut faced, (cols, 24));
-        let mut bare = railed(false);
+        let mut bare = railed(false, true);
         let without = painted_at(&mut bare, (cols, 24));
 
         assert!(
@@ -1104,10 +1107,9 @@ fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
 fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_picture_draws() {
     for cols in [100, 120] {
         let rail = rail_band(cols, 40);
-        let mut turned_off = railed(true);
-        turned_off.set_face(false);
+        let mut turned_off = railed(true, false);
         let off = painted_at(&mut turned_off, (cols, 40));
-        let mut placeless = railed(false);
+        let mut placeless = railed(false, true);
         let placeless = painted_at(&mut placeless, (cols, 40));
 
         assert!(
@@ -1126,8 +1128,8 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
              picture draws"
         );
 
-        turned_off.set_face(true);
-        let back_on = painted_at(&mut turned_off, (cols, 40));
+        let mut back_on = railed(true, true);
+        let back_on = painted_at(&mut back_on, (cols, 40));
         let face = face::over_rail(rail.width, &carried(true)).expect("a face the rail holds");
         assert_eq!(
             pictured_rows(&back_on).len(),
@@ -1184,7 +1186,7 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_over_its_wordmark
 #[test]
 fn a_terminal_that_places_no_picture_draws_the_facts_from_the_rails_first_row() {
     for cols in [100, 120] {
-        let mut view = railed(false);
+        let mut view = railed(false, true);
         let painted = painted_at(&mut view, (cols, 40));
         let rail = rail_band(cols, 40);
 
@@ -1242,7 +1244,7 @@ fn the_face_is_capped_at_twelve_rows_and_keeps_its_shape() {
 #[test]
 fn the_placement_covers_the_band_the_ledger_reserved_for_it_and_no_cell_outside_it() {
     for cols in [100, 120] {
-        let mut view = railed(true);
+        let mut view = railed(true, true);
         let painted = painted_at(&mut view, (cols, 40));
         let rail = rail_band(cols, 40);
         let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");

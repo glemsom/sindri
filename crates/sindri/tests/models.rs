@@ -2,6 +2,8 @@
 //! Every listing is read through the real listing code from a recorded catalogue, so no test passes on a name
 //! this tree made up. What happens to a chosen name afterwards is `tests/tui.rs`'s.
 
+mod caps; // the terminals these frames are drawn on
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri::composer::{Key, Outcome};
@@ -357,7 +359,7 @@ fn row_holding(view: &mut View, said: &str) -> (u16, Painted) {
 #[test]
 fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
     let mut view = screen();
-    view.set_pointer(true);
+    view.drawn_on(caps::pointing());
     let (row, told) = row_holding(&mut view, SECOND);
 
     assert_eq!(
@@ -375,7 +377,7 @@ fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
 #[test]
 fn a_press_on_no_row_of_the_model_screen_names_nothing() {
     let mut view = screen();
-    view.set_pointer(true);
+    view.drawn_on(caps::pointing());
     let (query, _) = row_holding(&mut view, "query:");
     let (name, told) = row_holding(&mut view, SECOND);
 

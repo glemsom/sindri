@@ -2,6 +2,8 @@
 //! leaves in its bottom row, the frame behind it painted and dimmed, and the geometry a card takes
 //! at a frame too narrow to hold one.
 
+mod caps; // the terminals these frames are drawn on
+
 use std::collections::HashSet;
 
 use ratatui::Terminal;
@@ -312,7 +314,7 @@ fn every_screen_open_over_the_frame_carries_the_accent_on_the_edge_row_of_its_ca
 fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_edge() {
     let palette = Palette::SLOTS;
     let mut view = on_screen(Mode::Keys);
-    view.set_palette(palette);
+    view.drawn_on(caps::inked(palette));
     let buffer = painted(&mut view, 120, 40);
     let (top, _, left, _) = corners(&buffer).expect("a card drawn with its border");
     let named_at = row(&buffer, top)
@@ -340,7 +342,6 @@ fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_ed
 fn a_card_drawn_in_a_window_nobody_is_reading_keeps_the_dim_edge() {
     let palette = Palette::TRUECOLOR;
     let mut view = on_screen(Mode::Keys);
-    view.set_palette(palette);
     view.set_focused(false);
     let buffer = painted(&mut view, 120, 40);
     let (top, _, left, _) = corners(&buffer).expect("a card drawn with its border");

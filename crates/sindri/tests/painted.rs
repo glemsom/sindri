@@ -2,6 +2,8 @@
 //! one cell, the rows a press chooses, and what it drew of the transcript, read off the value rather
 //! than off the frame.
 
+mod caps; // the terminals these frames are drawn on
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
@@ -81,7 +83,7 @@ fn a_pass_hands_back_the_destination_a_row_named() {
 #[test]
 fn a_pass_hands_back_the_run_it_draws_at_more_than_one_cell() {
     let mut view = View::of(answer("# A gate rule"), Scroll::Tail);
-    view.set_sizing(true);
+    view.drawn_on(caps::kitty());
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let laid = told.sizes().laid();
 
@@ -102,7 +104,7 @@ fn a_pass_hands_back_the_run_it_draws_at_more_than_one_cell() {
 #[test]
 fn a_press_on_a_row_the_pass_laid_chooses_that_row() {
     let mut view = View::boot();
-    view.set_pointer(true);
+    view.drawn_on(caps::pointing());
     view.key(Key::Char('/'));
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let (row, _) = drawn_at(&buffer, "/quit");
@@ -120,8 +122,7 @@ fn a_pass_under_a_card_tells_the_terminal_nothing_of_the_frame_beneath_it() {
         answer("# A gate rule\n\nsee [the gate](https://example.test/gate)"),
         Scroll::Tail,
     );
-    view.set_sizing(true);
-    view.set_pointer(true);
+    view.drawn_on(caps::kitty());
     view.key(Key::Char('/'));
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
 

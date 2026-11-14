@@ -2,6 +2,8 @@
 //! bands it was opened from rather than in place of them. The screen's own rows are the module's to
 //! prove; the frame's half is that a reader can reach the screen and that it draws what it was handed.
 
+mod caps; // the terminals these frames are drawn on
+
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 

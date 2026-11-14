@@ -2,6 +2,8 @@
 //! frame painted from it, the cells the highlight covers read back out of that buffer, and those bytes held
 //! to what `Ctrl-Y` hands out. A snapshot would compare the frame with a copy of itself.
 
+mod caps; // the terminals these frames are drawn on
+
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -213,7 +215,7 @@ fn the_shift_arrows_do_nothing_when_no_mark_has_been_dragged() {
 #[test]
 fn a_heading_drawn_large_is_marked_in_the_mark_ink_and_copied_as_its_words() {
     let mut view = View::of(vec![answer(1, "# A gate rule")], Scroll::Tail);
-    view.set_sizing(true);
+    view.drawn_on(caps::kitty());
     view.drag(Cell::new(0, 0), Cell::new(40, 100));
 
     let frame = painted(&mut view);

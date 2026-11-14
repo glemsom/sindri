@@ -1,6 +1,8 @@
 //! What a screen keeps: the list a cursor movement walks, the query a typed glyph reaches and the row
 //! a press chooses, each answered by the description of the screen rather than by matching on it.
 
+mod caps; // the terminals these frames are drawn on
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
@@ -183,7 +185,7 @@ fn a_glyph_lands_in_the_list_the_screen_keeps() {
 #[test]
 fn a_press_on_a_row_of_the_visit_is_no_act() {
     let (_root, mut view) = screen(Mode::Settings);
-    view.set_pointer(true);
+    view.drawn_on(caps::pointing());
     let area = Rect::new(0, 0, 120, 40);
     let mut buffer = Buffer::empty(area);
     let told = view.paint(area, &mut buffer);

@@ -9,13 +9,12 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 use ratatui::layout::Rect;
 use sindri::composer::{Composer, Key, Outcome, State};
-use sindri::graphics::CellSize;
 use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger::{Boot, Ctx, Facts};
 use sindri::mark;
 use sindri::palette::Palette;
 use sindri::pen::{self, Clip};
-use sindri::pictures::{PLACEHOLDER, Pictures};
+use sindri::pictures::PLACEHOLDER;
 use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
 use sindri::view::View;
@@ -185,8 +184,7 @@ fn pictured() -> View {
         Scroll::Back(70),
     );
     view.set_workspace(workspace);
-    view.set_cell_size(CellSize::new(10, 20));
-    view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
+    view.drawn_on(crate::caps::kitty());
     view
 }
 
@@ -195,9 +193,7 @@ fn pictured() -> View {
 /// with it off.
 fn faced(face: bool) -> View {
     let mut view = running(opening(), Scroll::Tail);
-    view.set_cell_size(CellSize::new(10, 20));
-    view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
-    view.set_face(face);
+    view.drawn_on(crate::caps::faced(face));
     view
 }
 
@@ -214,8 +210,7 @@ fn splash(draws: bool) -> View {
         enforcement: Enforcement::Bubblewrap,
     });
     if draws {
-        view.set_cell_size(CellSize::new(10, 20));
-        view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
+        view.drawn_on(crate::caps::kitty());
     }
     view
 }
@@ -248,7 +243,7 @@ fn construct(text: &str) -> View {
 /// laid out as the cells the sizing leaves and measured by them.
 fn sized(text: &str) -> View {
     let mut view = construct(text);
-    view.set_sizing(true);
+    view.drawn_on(crate::caps::kitty());
     view
 }
 
@@ -1077,7 +1072,8 @@ pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
 
 fn drawn_taking(name: &str, cols: u16, rows: u16, pointer: bool) -> String {
     let mut view = named(name);
-    view.set_pointer(pointer);
+    let capabilities = view.capabilities().clone().reporting(pointer);
+    view.drawn_on(capabilities);
     let palette = view.palette();
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");

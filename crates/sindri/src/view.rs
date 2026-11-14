@@ -17,6 +17,7 @@ use sindri_core::redact::SecretSet;
 use sindri_core::run::{Load, Loaded, Stop, Turn};
 use sindri_core::skills::{Catalog, Skill};
 
+use crate::capability::Capabilities;
 use crate::card;
 use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, PLACEHOLDER, Prompt, State};
@@ -261,16 +262,7 @@ pub struct View {
     /// The draft the reader waved the commands card away for: the card stays closed while the draft
     /// holds those words, and a draft that changes gives it back.
     dismissed: Option<String>,
-    face: Face,
-    pictures: Pictures,
-    cell_size: CellSize,
-    palette: Palette,
-    /// Whether this launch's terminal draws text at more than one cell at all: a surface a heading
-    /// is measured against, and never a question a paint asks again.
-    sizing: bool,
-    /// Whether this launch's terminal reports a pointer at all: a frame drawn where it does not is
-    /// drawn in the cells it always was.
-    pointer: bool,
+    capabilities: Capabilities,
     focus: Focus,
 }
 
@@ -288,14 +280,6 @@ enum Focus {
 struct Laid {
     entry: usize,
     band: Range<u16>,
-}
-
-/// Whether a frame is drawn with Sindri's face over its rail.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum Face {
-    #[default]
-    Drawn,
-    Hidden,
 }
 
 impl View {
@@ -403,50 +387,42 @@ impl View {
     }
 
     pub fn cell_size(&self) -> CellSize {
-        self.cell_size
-    }
-
-    pub fn set_cell_size(&mut self, cell_size: CellSize) {
-        self.cell_size = cell_size;
-    }
-
-    /// The colours this frame is drawn in, resolved once at boot: a frame that read them itself
-    /// would ask the terminal a question its reader has already answered.
-    pub fn set_palette(&mut self, palette: Palette) {
-        self.palette = palette;
+        self.capabilities.cell()
     }
 
     pub fn palette(&self) -> Palette {
-        self.palette
-    }
-
-    pub fn set_face(&mut self, drawn: bool) {
-        self.face = if drawn { Face::Drawn } else { Face::Hidden };
-    }
-
-    pub fn set_pictures(&mut self, pictures: Pictures) {
-        self.pictures = pictures;
+        self.capabilities.palette()
     }
 
     pub fn pictures(&self) -> &Pictures {
-        &self.pictures
+        self.capabilities.pictures()
+    }
+
+    pub fn capabilities(&self) -> &Capabilities {
+        &self.capabilities
+    }
+
+    /// The value the terminal a frame draws on is: a launch hands it once, before the first frame, and
+    /// a settings visit that moved the config's face switch hands it again.
+    pub fn drawn_on(&mut self, capabilities: Capabilities) {
+        self.capabilities = capabilities;
     }
 
     fn surface(&self) -> Surface {
         Surface::of(
             self.workspace.as_deref(),
-            self.cell_size,
-            self.pictures.draws(),
-            self.sizing,
+            self.capabilities.cell(),
+            self.capabilities.pictures().draws(),
+            self.capabilities.sizes_text(),
         )
     }
 
     /// The surface Sindri's face is measured against: a frame the reader turned the face off for is
     /// handed the surface of a terminal that places no picture, so no row is reserved for one.
     fn face_surface(&self) -> Surface {
-        match self.face {
-            Face::Drawn => self.surface(),
-            Face::Hidden => Surface::none(),
+        match self.capabilities.draws_face() {
+            true => self.surface(),
+            false => Surface::none(),
         }
     }
 
@@ -886,21 +862,10 @@ impl View {
         };
     }
 
-    /// Whether the terminal this frame is drawn on sizes text: asked once at boot, because a
-    /// heading is laid out as the cells the sizing leaves and never re-laid on a key.
-    pub fn set_sizing(&mut self, sizing: bool) {
-        self.sizing = sizing;
-    }
-
-    /// Whether this launch's terminal reports a pointer, asked once at boot.
-    pub fn set_pointer(&mut self, pointer: bool) {
-        self.pointer = pointer;
-    }
-
     /// What the terminal's pointer report is answered with: a notch moves the transcript through the
     /// one key table, and a press chooses the row it landed on.
     pub fn pointer(&mut self, painted: &Painted, report: Pointer) -> Outcome {
-        if !self.pointer {
+        if !self.capabilities.reports_pointer() {
             return Outcome::Unchanged;
         }
         match report {
@@ -946,7 +911,7 @@ impl View {
     /// same pass reflows; the composer's rows are measured when the frame is drawn.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let mut painted = Painted::none();
-        pen::claim(buffer, area, self.palette.ground(None));
+        pen::claim(buffer, area, self.capabilities.palette().ground(None));
         self.composer.set_room(View::room(area.width));
         let bands = bands(
             area,
@@ -977,10 +942,13 @@ impl View {
                 band,
                 self.pulse.as_ref(),
                 buffer,
-                &self.palette,
+                &self.capabilities.palette(),
             );
             if let (Some(picture), Some(cells)) = (&picture, band.picture) {
-                self.pictures.place(picture, self.cell_size, cells, buffer);
+                let cell = self.capabilities.cell();
+                self.capabilities
+                    .pictures_mut()
+                    .place(picture, cell, cells, buffer);
             }
         }
         let drawn = self.transcript(
@@ -994,10 +962,10 @@ impl View {
             splash::paint(
                 share.transcript,
                 buffer,
-                &self.palette,
+                &self.capabilities.palette(),
                 &mut painted.links,
                 &mut painted.sizes,
-                &mut self.pictures,
+                self.capabilities.pictures_mut(),
                 &surface,
             );
         }
@@ -1012,7 +980,7 @@ impl View {
             // known: one with no row of that band under it is the words it says.
             painted
                 .sizes
-                .settle(share.transcript, buffer, &self.palette);
+                .settle(share.transcript, buffer, &self.capabilities.palette());
             self.highlight(share.transcript, buffer, drawn.span());
             self.note(&mut painted, drawn);
             return painted;
@@ -1030,9 +998,9 @@ impl View {
             body.held(width),
             buffer,
             self.edge(),
-            &self.palette,
+            &self.capabilities.palette(),
         );
-        painted.presses = body.paint(held, buffer, &self.palette);
+        painted.presses = body.paint(held, buffer, &self.capabilities.palette());
         painted
     }
 
@@ -1090,7 +1058,11 @@ impl View {
         links: &mut Links,
         sizes: &mut Sizes,
     ) -> Drawn {
-        pen::claim(buffer, area, self.palette.ground(Some(Band::Well)));
+        pen::claim(
+            buffer,
+            area,
+            self.capabilities.palette().ground(Some(Band::Well)),
+        );
         // A narrower band lays the same history out in more rows, and that is no row landing.
         let reflowed = self.rows.cols() != area.width;
         self.rows.resize(area.width);
@@ -1136,16 +1108,17 @@ impl View {
                         ..area
                     },
                     buffer,
-                    &self.palette,
+                    &self.capabilities.palette(),
                     links,
                     sizes,
                 );
                 if let Some(thumb) = &thumb {
-                    thumb.paint(area, y, buffer, &self.palette);
+                    thumb.paint(area, y, buffer, &self.capabilities.palette());
                 }
                 // Written after the row's words and the thumb, so a block's first cell is the
                 // picture's: a refused picture places nothing and leaves the thumb that cell.
-                place(&mut self.pictures, self.cell_size, row, area, y, buffer);
+                let cell = self.capabilities.cell();
+                place(self.capabilities.pictures_mut(), cell, row, area, y, buffer);
                 // Gathered only when there is a mark: a mark's cells are counted in the rows this
                 // band draws.
                 if self.mark.is_some() {
@@ -1160,7 +1133,7 @@ impl View {
         }
         // What this band placed is all the cache keeps: a picture scrolled past is a raster
         // nobody is looking at.
-        self.pictures.retain_shown();
+        self.capabilities.pictures_mut().retain_shown();
         let span = match self.mark {
             Some(mark) => Span::of(mark, &lines),
             None => Span::default(),
@@ -1193,7 +1166,7 @@ impl View {
                     width: right.saturating_sub(left),
                     height: 1,
                 },
-                Ink::Mark.style(&self.palette),
+                Ink::Mark.style(&self.capabilities.palette()),
             );
         }
     }
@@ -1226,7 +1199,7 @@ impl View {
         }
         let mut spans: Vec<(&str, Look)> = vec![(count.as_str(), keys::MEANING), (GAP, SEPARATOR)];
         spans.extend(keyed("End", "follows the run"));
-        whole_row(buffer, area, area.y, &spans, &self.palette);
+        whole_row(buffer, area, area.y, &spans, &self.capabilities.palette());
     }
 
     /// The composer is a raised surface and not a flat band: the lit edge along its top row, the
@@ -1241,7 +1214,7 @@ impl View {
                     height: 1,
                     ..band
                 },
-                self.palette.raised(row, band.height),
+                self.capabilities.palette().raised(row, band.height),
             );
         }
         pen::rule(
@@ -1249,7 +1222,7 @@ impl View {
             Rect { height: 1, ..band },
             HAIRLINE,
             self.composer_edge(),
-            &self.palette,
+            &self.capabilities.palette(),
         );
 
         let draft = Rect {
@@ -1278,7 +1251,7 @@ impl View {
                 Rect { y, ..draft },
                 opens,
                 (*line, ink),
-                &self.palette,
+                &self.capabilities.palette(),
             );
             under = y.saturating_add(1);
         }
@@ -1294,7 +1267,7 @@ impl View {
                 Rect { y: under, ..draft },
                 false,
                 (&counted, Ink::Dim),
-                &self.palette,
+                &self.capabilities.palette(),
             );
         }
 
@@ -1310,7 +1283,7 @@ impl View {
                 Rect { y: at, ..queue },
                 false,
                 (&counted, Ink::Dim),
-                &self.palette,
+                &self.capabilities.palette(),
             );
             at = at.saturating_add(1);
         }
@@ -1320,7 +1293,7 @@ impl View {
                 Rect { y: at, ..queue },
                 true,
                 (line, Ink::Dim),
-                &self.palette,
+                &self.capabilities.palette(),
             );
             at = at.saturating_add(1);
         }
@@ -1331,7 +1304,7 @@ impl View {
     fn composer_edge(&self) -> Look {
         match self.stack.modal() {
             None => self.edge(),
-            Some(_) => self.palette.dim_edge(),
+            Some(_) => self.capabilities.palette().dim_edge(),
         }
     }
 
@@ -1339,8 +1312,8 @@ impl View {
     /// terminal has reported about who is reading.
     fn edge(&self) -> Look {
         match self.focus {
-            Focus::Focused => self.palette.accent_edge(),
-            Focus::Away => self.palette.dim_edge(),
+            Focus::Focused => self.capabilities.palette().accent_edge(),
+            Focus::Away => self.capabilities.palette().dim_edge(),
         }
     }
 
@@ -1406,7 +1379,13 @@ impl View {
 
     fn footer(&self, area: Rect, buffer: &mut Buffer) {
         let depth = self.queue.label().unwrap_or_default();
-        hints_row(buffer, area, &self.hints(), &depth, &self.palette);
+        hints_row(
+            buffer,
+            area,
+            &self.hints(),
+            &depth,
+            &self.capabilities.palette(),
+        );
     }
 }
 
@@ -1675,6 +1654,9 @@ mod tests {
 
     use super::*;
     use crate::composer::{MAX_ROWS, MIN_ROWS, PLACEHOLDER};
+    use std::collections::BTreeMap;
+
+    use crate::capability::{Answers, Capabilities};
     use crate::ink::{Face, Look};
     use crate::palette::{Band, Edge};
     use crate::pictures::PLACEHOLDER as PLACED;
@@ -1701,6 +1683,63 @@ mod tests {
             temp: Some(PathBuf::from("/srv/sessions/9f2c7a41/tmp")),
             ..Facts::default()
         }
+    }
+
+    /// A frame drawn on a terminal that says nothing at all: what a probe of one finds.
+    fn silent() -> Capabilities {
+        Capabilities::default()
+    }
+
+    /// A frame drawn on a terminal that reports a pointer and nothing else.
+    fn pointing() -> Capabilities {
+        Capabilities::probed(
+            &BTreeMap::from([
+                (String::from("VTE_VERSION"), String::from("5000")),
+                (String::from("COLORTERM"), String::from("truecolor")),
+            ]),
+            &Answers::silent(),
+            true,
+        )
+        .0
+    }
+
+    /// A frame drawn on a terminal that names Kitty: pictures at the nominal cell, and no sizing
+    /// until it says it drew the block.
+    fn pictured() -> Capabilities {
+        Capabilities::probed(
+            &BTreeMap::from([
+                (String::from("TERM"), String::from("xterm-kitty")),
+                (String::from("COLORTERM"), String::from("truecolor")),
+            ]),
+            &Answers::silent(),
+            true,
+        )
+        .0
+    }
+
+    /// A frame drawn on a terminal that draws text at more than one cell.
+    fn sized() -> Capabilities {
+        Capabilities::probed(
+            &BTreeMap::from([
+                (String::from("TERM"), String::from("xterm-kitty")),
+                (String::from("COLORTERM"), String::from("truecolor")),
+            ]),
+            &Answers::silent().sized(),
+            true,
+        )
+        .0
+    }
+
+    /// A frame drawn in `palette`: the colours the names of a terminal give it.
+    fn inked(palette: Palette) -> Capabilities {
+        let terms: BTreeMap<String, String> = match (palette == Palette::SLOTS, palette) {
+            (true, _) => [(String::from("NO_COLOR"), String::from("1"))],
+            (false, Palette::ANSI) => [(String::from("TERM"), String::from("xterm-256color"))],
+            _ => [(String::from("COLORTERM"), String::from("truecolor"))],
+        }
+        .into_iter()
+        .collect();
+        Capabilities::probed(&terms, &Answers::silent(), true).0
     }
 
     /// The look the cell at `x`, `y` of the frame reads back as.
@@ -1755,7 +1794,7 @@ mod tests {
         let mut typed = Composer::new();
         typed.paste(&draft.join("\n"));
         let mut view = View::typing(typed);
-        view.set_palette(palette);
+        view.drawn_on(inked(palette));
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -1899,7 +1938,6 @@ mod tests {
             Mode::Stats,
         ] {
             let mut view = View::boot();
-            view.set_palette(palette);
             view.paste("the draft behind the card");
             view.screen(mode);
 
@@ -1942,7 +1980,6 @@ mod tests {
     fn the_accent_edge_recedes_while_the_window_is_unfocused_and_returns_when_it_is_focused() {
         let palette = Palette::TRUECOLOR;
         let mut view = View::boot();
-        view.set_palette(palette);
         view.paste("the draft the composer band is drawn from");
         let lit = edge_row(&mut view, &palette);
 
@@ -1970,7 +2007,7 @@ mod tests {
         let palette = Palette::SLOTS;
         for open in [None, Some(Mode::Keys)] {
             let mut view = View::boot();
-            view.set_palette(palette);
+            view.drawn_on(inked(palette));
             view.paste("the draft the composer band is drawn from");
             if let Some(mode) = open {
                 view.screen(mode);
@@ -2002,7 +2039,7 @@ mod tests {
             }],
             Scroll::Tail,
         );
-        view.set_palette(palette);
+        view.drawn_on(inked(palette));
         view.set_facts(rail());
         view.paste("the draft");
 
@@ -2085,7 +2122,6 @@ mod tests {
                 }],
                 Scroll::Tail,
             );
-            view.set_palette(palette);
             view.set_facts(rail());
 
             let area = screen(cols, rows);
@@ -2154,7 +2190,6 @@ mod tests {
             }],
             Scroll::Tail,
         );
-        view.set_palette(palette);
         view.set_facts(rail());
         view.paste("the draft the composer band is drawn from");
 
@@ -2230,10 +2265,10 @@ mod tests {
     fn splash_frame(cols: u16, rows: u16, draws: bool) -> (Buffer, Rect) {
         let mut view = View::boot();
         view.splash(boot());
-        view.set_cell_size(CellSize::new(10, 20));
-        if draws {
-            view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
-        }
+        view.drawn_on(match draws {
+            true => pictured(),
+            false => silent(),
+        });
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -2575,7 +2610,6 @@ mod tests {
         let area = screen(80, 24);
         let mut view = View::boot();
         view.splash(boot());
-        view.set_palette(palette);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
         let on_rail = (area.y..area.bottom())
@@ -3197,7 +3231,7 @@ mod tests {
     #[test]
     fn a_notch_of_the_wheel_takes_the_transcript_back_exactly_as_the_page_key_does() {
         let mut view = turns(100);
-        view.set_pointer(true);
+        view.drawn_on(pointing());
         let (_, told) = painted_and_told(&mut view, 120, 40);
 
         assert_eq!(
@@ -3226,7 +3260,7 @@ mod tests {
     #[test]
     fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
         let mut view = turns(40);
-        view.set_pointer(true);
+        view.drawn_on(pointing());
         let (_, told) = painted_and_told(&mut view, 120, 40);
 
         assert_eq!(
@@ -3247,7 +3281,7 @@ mod tests {
         assert_eq!(view.scroll(), Scroll::Back(3), "the row it stopped on");
 
         let mut tail = turns(40);
-        tail.set_pointer(true);
+        tail.drawn_on(pointing());
         let (_, told) = painted_and_told(&mut tail, 120, 40);
         assert_eq!(
             tail.pointer(&told, Pointer::Wheel(Notch::Down)),
@@ -3282,7 +3316,7 @@ mod tests {
             std::fs::write(workspace.path().join(file), "").expect("a file");
         }
         let mut view = View::boot();
-        view.set_pointer(true);
+        view.drawn_on(pointing());
         view.set_workspace(workspace.path().to_path_buf());
         assert_eq!(
             view.key(Key::Char('@')),
@@ -3352,7 +3386,7 @@ mod tests {
     #[test]
     fn a_press_on_a_commands_row_sends_what_enter_sends() {
         let mut view = View::boot();
-        view.set_pointer(true);
+        view.drawn_on(pointing());
         view.key(Key::Char('/'));
         let (drawn, told) = painted_and_told(&mut view, 120, 40);
         let row = row_holding(&drawn, "/quit");
@@ -3368,7 +3402,7 @@ mod tests {
     #[test]
     fn a_press_on_a_commands_row_sends_what_enter_on_the_typed_line_sends() {
         let mut clicked = View::boot();
-        clicked.set_pointer(true);
+        clicked.drawn_on(pointing());
         for glyph in ['/', 'n'] {
             clicked.key(Key::Char(glyph));
         }
@@ -3462,7 +3496,6 @@ mod tests {
     fn a_frame_off_the_tail_says_how_far_back_it_stands_and_the_key_that_follows_the_run() {
         let palette = Palette::TRUECOLOR;
         let mut view = scrolled_back();
-        view.set_palette(palette);
         let buffer = painted(&mut view, 120, 40);
 
         let (drawn, y) = notice_of(&buffer);
@@ -3939,7 +3972,6 @@ mod tests {
 
     #[test]
     fn the_draft_is_set_in_the_column_an_answer_is_set_in_behind_a_sigil() {
-        let palette = Palette::TRUECOLOR;
         let mut view = View::of(
             vec![Entry::Assistant {
                 turn: 1,
@@ -3947,7 +3979,6 @@ mod tests {
             }],
             Scroll::Tail,
         );
-        view.set_palette(palette);
         view.paste("a draft opens here");
 
         let area = screen(120, 40);
@@ -3986,8 +4017,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/pictures"
         )));
-        view.set_cell_size(CellSize::new(10, 20));
-        view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
+        view.drawn_on(pictured());
         painted(&mut view, 120, rows)
     }
 
@@ -4197,8 +4227,10 @@ mod tests {
                 }],
                 Scroll::Tail,
             );
-            view.set_palette(Palette::TRUECOLOR);
-            view.set_sizing(sizes);
+            view.drawn_on(match sizes {
+                true => sized(),
+                false => silent(),
+            });
             let mut buffer = Buffer::empty(area);
             view.paint(area, &mut buffer);
 
@@ -4222,8 +4254,7 @@ mod tests {
             }],
             Scroll::Tail,
         );
-        view.set_palette(Palette::TRUECOLOR);
-        view.set_sizing(true);
+        view.drawn_on(sized());
         view.key(Key::Char('?'));
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -4272,7 +4303,7 @@ mod tests {
         rows: u16,
     ) -> (Buffer, Rect, Rect) {
         let mut view = View::boot();
-        view.set_palette(palette);
+        view.drawn_on(inked(palette));
         view.settle();
         view.set_state(State::Running);
         for at in 1..=count {
@@ -4365,7 +4396,6 @@ mod tests {
         );
 
         let mut view = turns(100);
-        view.set_palette(palette);
         view.paste("a draft");
         let area = screen(120, 24);
         let mut buffer = Buffer::empty(area);
@@ -4407,7 +4437,6 @@ mod tests {
         let mut typed = Composer::new();
         typed.paste(&draft.join("\n"));
         let mut view = View::typing(typed);
-        view.set_palette(palette);
         let area = screen(120, 24);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -4437,9 +4466,7 @@ mod tests {
 
     #[test]
     fn a_draft_wider_than_the_band_wraps_under_the_gutter_and_never_splits_a_wide_glyph() {
-        let palette = Palette::TRUECOLOR;
         let mut view = View::boot();
-        view.set_palette(palette);
         view.paste(&pen::filled(60, '日'));
 
         let area = screen(60, 24);
@@ -4465,7 +4492,6 @@ mod tests {
     fn an_empty_draft_says_what_the_band_can_do_in_the_dim_ink_until_a_glyph_arrives() {
         let palette = Palette::TRUECOLOR;
         let mut view = View::boot();
-        view.set_palette(palette);
 
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
@@ -4498,7 +4524,6 @@ mod tests {
     fn a_card_covers_the_composer_and_leaves_it_readable_and_out_of_reach() {
         let palette = Palette::TRUECOLOR;
         let mut view = View::boot();
-        view.set_palette(palette);
         view.paste("a draft of mine");
         view.screen(Mode::Keys);
 

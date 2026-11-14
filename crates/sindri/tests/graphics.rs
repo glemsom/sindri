@@ -1,6 +1,8 @@
 //! The picture's own contract, held to SVG strings a fence would produce: measured in cells
 //! before a pixel is spent, and then drawn at the pixels the cell was measured against.
 
+mod caps; // the terminals these frames are drawn on
+
 use sindri::graphics::{Ceiling, CellSize, Footprint, Refusal, Svg};
 use sindri::view::View;
 
@@ -309,7 +311,7 @@ fn a_frame_draws_at_the_cell_size_it_was_handed() {
         "a frame nobody measured draws at the nominal cell"
     );
 
-    view.set_cell_size(CellSize::new(9, 18));
+    view.drawn_on(caps::at(CellSize::new(9, 18)));
 
     assert_eq!(
         view.cell_size(),

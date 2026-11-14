@@ -13,11 +13,12 @@ use ratatui::backend::{Backend as RatatuiBackend, ClearType, CrosstermBackend, W
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
-use rustix::termios::{InputModes, OptionalActions, Termios, tcgetattr, tcsetattr};
+use rustix::termios::{
+    InputModes, OptionalActions, Termios, Winsize, tcgetattr, tcgetwinsize, tcsetattr,
+};
+use sindri::capability::{Asked, Question};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
-use sindri::picture;
-use sindri::pictures::Pictures;
 use sindri::size::{Laid, Sizes};
 use sindri::view::{Painted, View};
 
@@ -442,19 +443,28 @@ pub(crate) fn missing_terminal() -> Option<String> {
     None
 }
 
-/// Hands `view` the pictures its terminal places: a Kitty terminal gets the pictures its frames
-/// draw from and any other gets none, which leaves it the words. `term` and `program` are
-/// arguments rather than reads so a test need not set an environment.
-pub(crate) fn hand_pictures(
-    view: &mut View,
-    cell: CellSize,
-    term: Option<&str>,
-    program: Option<&str>,
-) {
-    view.set_pictures(match picture::speaks_kitty(term, program) {
-        true => Pictures::kitty(cell),
-        false => Pictures::none(),
-    });
+impl Asked for Terminal {
+    fn winsize(&self) -> Option<CellSize> {
+        tcgetwinsize(&self.screen).ok().and_then(of_winsize)
+    }
+
+    fn ask(&self, question: Question) -> Option<Vec<u8>> {
+        reply(self, question.asked())
+    }
+}
+
+/// The cell size a terminal's own `winsize` implies, when it carries pixels. A terminal that
+/// reports no pixels, or fewer pixels than it has cells, has not said, and `None` says so.
+fn of_winsize(size: Winsize) -> Option<CellSize> {
+    let (cols, rows) = (size.ws_col, size.ws_row);
+    let (xpixel, ypixel) = (size.ws_xpixel, size.ws_ypixel);
+    if cols == 0 || rows == 0 || xpixel < cols || ypixel < rows {
+        return None;
+    }
+    Some(CellSize::new(
+        u32::from(xpixel / cols),
+        u32::from(ypixel / rows),
+    ))
 }
 
 /// The area a test's canvas is told it has: the shape the test gave it, never the shape the
@@ -552,6 +562,9 @@ mod tests {
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
     use rustix::termios::LocalModes;
+    use std::collections::BTreeMap;
+
+    use sindri::capability::{Answers, Asked, Capabilities, Question};
     use sindri::ink::{Ink, Look};
     use sindri::link::{Link, Links};
     use sindri::palette::Palette;
@@ -573,28 +586,72 @@ mod tests {
     /// hold this too: two screens at once is one of them given back down the other's terminal.
     static ONE_SCREEN: Mutex<()> = Mutex::new(());
 
-    /// The two facts the terminal gives reach the view, so a terminal that speaks Kitty is handed
-    /// the pictures its frames draw from and one that speaks no protocol is handed none — the frame
-    /// it paints is the words of a picture, whole.
+    /// A terminal that fills its `winsize`'s pixel fields is asked nothing, because the kernel's
+    /// own answer is the whole of what a picture needs.
     #[test]
-    fn a_terminal_that_speaks_kitty_is_handed_pictures_and_one_that_speaks_none_is_handed_none() {
-        let cell = CellSize::new(10, 20);
+    fn a_terminal_that_reports_its_pixels_is_asked_no_question() {
+        let pty = Pty::open();
+        pty.resize(80, 24, 800, 480);
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
 
-        let mut speaks = View::boot();
-        hand_pictures(&mut speaks, cell, Some("xterm-kitty"), None);
-        assert!(
-            speaks.pictures().draws(),
-            "a terminal that names Kitty is handed the pictures its frames draw from"
+        assert_eq!(
+            terminal.winsize(),
+            Some(CellSize::new(10, 20)),
+            "800 by 480 pixels over 80 by 24 cells is a 10 by 20 cell"
         );
+        assert!(
+            pty.silent(),
+            "the terminal was asked nothing at all: no sequence went out"
+        );
+    }
 
-        let mut silent = View::boot();
-        silent.set_pictures(Pictures::kitty(cell));
-        hand_pictures(&mut silent, cell, Some("screen-256color"), Some("tmux"));
-        assert!(
-            !silent.pictures().draws(),
-            "and a terminal that names no protocol is handed none, which is the words of a \
-             picture and no placement"
+    #[test]
+    fn a_terminal_that_says_nothing_is_asked_its_cell_and_answers_nothing() {
+        let pty = Pty::open();
+        pty.resize(80, 24, 0, 0);
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+
+        assert_eq!(terminal.winsize(), None, "no pixels, so no cell is said");
+
+        let answered = terminal.ask(Question::Cell);
+
+        assert_eq!(
+            answered, None,
+            "and a terminal that answers nothing says nothing"
         );
+        assert!(
+            pty.drawn().contains("\u{1b}[16t"),
+            "the question really was put to it"
+        );
+    }
+
+    #[test]
+    fn a_terminal_that_says_nothing_answers_nothing_to_the_sizing_question() {
+        let pty = Pty::open();
+        pty.resize(80, 24, 0, 0);
+        let terminal =
+            Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to ask");
+
+        let answered = terminal.ask(Question::Sizing);
+
+        assert_eq!(answered, None, "a terminal that says nothing says nothing");
+        assert!(
+            pty.drawn().contains("\x1b]66;s=2; \x1b\\"),
+            "the question really was put to it"
+        );
+    }
+
+    /// The terminal a frame that draws large text is drawn on: one that names Kitty's sizing and
+    /// answered that it drew the block at size.
+    fn sized() -> Capabilities {
+        Capabilities::probed(
+            &BTreeMap::from([(String::from("TERM"), String::from("xterm-kitty"))]),
+            &Answers::silent().sized(),
+            true,
+        )
+        .0
     }
 
     /// A frame of `width` by `height` cells, the words each of `rows` holds, and the destinations
@@ -908,7 +965,7 @@ mod tests {
             }],
             Scroll::Tail,
         );
-        view.set_sizing(true);
+        view.drawn_on(sized());
 
         paint(&mut canvas, &mut view).expect("a painted frame");
         drop(canvas);

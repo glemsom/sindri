@@ -213,3 +213,11 @@ is taken, one notch moves the transcript as the page keys do, a press on a card'
 row and sends the key it hangs from, and a press on no row of a card is no act at all. A pointer
 is never drawn into a cell.
 _Avoid_: Mouse, cursor (that one is the terminal's own), hover
+
+**Terminal capabilities**:
+What the terminal a frame draws on can do — the cell it measures a picture against, the colours it
+holds, whether it draws text at more than one cell, whether it reports a **pointer**, whether it
+places pictures, and whether Sindri's **face** is drawn over the rail. Probed once before the first
+frame and handed to the frame whole; a terminal that reports nothing is drawn in the cells one that
+reports everything is, minus the facts it does not have.
+_Avoid_: Terminal features, environment, detection, caps

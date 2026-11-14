@@ -7,11 +7,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::Parser;
+use std::collections::BTreeMap;
+
+use sindri::capability::{Answers, Capabilities};
 use sindri::composer::{Composer, Key, Outcome, Prompt};
 use sindri::graphics::CellSize;
 use sindri::ink::Look;
 use sindri::ledger::Boot;
-use sindri::pictures::{PLACEHOLDER, Pictures};
+use sindri::palette::Palette;
+use sindri::pictures::PLACEHOLDER;
 use sindri::rows::Scroll;
 use sindri_core::first_run::FirstRun;
 use sindri_core::policy::Enforcement;
@@ -271,12 +275,20 @@ fn cell() -> CellSize {
     CellSize::new(10, 20)
 }
 
+/// The terminal a launch that places pictures draws on, at the nominal cell, with the config's face.
+fn pictured(config: &Config) -> Capabilities {
+    Capabilities::probed(
+        &BTreeMap::from([(String::from("TERM"), String::from("xterm-kitty"))]),
+        &Answers::at(cell()),
+        config.draws_face(),
+    )
+    .0
+}
+
 /// The frame a launch opens on, with a rail of facts and a terminal that places pictures: the two
 /// things the face is drawn over and in.
 fn railed(config: &Config) -> View {
-    let mut view = opened(config);
-    view.set_cell_size(cell());
-    view.set_pictures(Pictures::kitty(cell()));
+    let mut view = opened(pictured(config));
     view.splash(Boot {
         wire: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-6")),
@@ -571,7 +583,6 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     let environment = std::collections::BTreeMap::new();
     let palette = Palette::TRUECOLOR;
     let mut view = View::boot();
-    view.set_palette(palette);
     view.paste("the draft the composer band is drawn from");
     // A stream that carries a window: nothing else raises a notification at all.
     let mut live = stage.launch_in_a_window(view, Config::default(), &environment);
