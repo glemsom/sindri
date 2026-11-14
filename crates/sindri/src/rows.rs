@@ -136,10 +136,6 @@ impl Row {
         self
     }
 
-    pub(crate) fn links(&self) -> &[Link] {
-        &self.links
-    }
-
     /// The columns this row is drawn in: its spans measured as they are written, and the cells a
     /// sized run leaves around them, which is what a row of them takes of the band.
     pub fn width(&self) -> u16 {
@@ -160,40 +156,57 @@ impl Row {
         &self.spans
     }
 
-    pub fn indented(&self, gutter: &str, ink: Ink) -> Row {
-        if self.spans.is_empty() {
-            return self.clone();
-        }
-        let mut spans: Vec<(String, Look)> = Vec::with_capacity(self.spans.len() + 1);
-        spans.push((String::from(gutter), Look::plain(ink)));
-        spans.extend(self.spans.iter().cloned());
-        let shifts = pen::cells(gutter);
+    /// This row moved `by` columns right: the ways it names and the cells a terminal draws at more
+    /// than one are measured from its left edge, so they move with the words while the band it
+    /// stands on and the picture placed over it stay where the row does.
+    fn shifted(self, by: u16) -> Row {
         Row {
-            picture: self.picture.clone(),
+            spans: self.spans,
+            links: self.links.iter().map(|link| link.shifted(by)).collect(),
+            sizes: self.sizes.iter().map(|run| run.shifted(by)).collect(),
+            picture: self.picture,
             band: self.band,
-            links: self.links.iter().map(|link| link.shifted(shifts)).collect(),
-            sizes: self.sizes.iter().map(|run| run.shifted(shifts)).collect(),
-            ..Row::of(spans)
         }
+    }
+
+    pub fn indented(self, gutter: &str, ink: Ink) -> Row {
+        if self.spans.is_empty() {
+            return self;
+        }
+        let mut row = self.shifted(pen::cells(gutter));
+        if !gutter.is_empty() {
+            row.spans
+                .insert(0, (String::from(gutter), Look::plain(ink)));
+        }
+        row
     }
 
     /// This row with `other`'s words set after its own, and the ways `other` names moved past the
     /// columns this row covers: two cells of a table are one row, and each keeps its own ways.
     pub(crate) fn followed_by(self, other: &Row) -> Row {
         let shifts = self.width();
-        let mut spans = self.spans;
-        spans.extend(other.spans.iter().cloned());
-        let mut links = self.links;
-        links.extend(other.links.iter().map(|link| link.shifted(shifts)));
-        let mut sizes = self.sizes;
-        sizes.extend(other.sizes.iter().map(|run| run.shifted(shifts)));
-        Row {
-            spans,
-            links,
-            picture: self.picture,
-            band: self.band,
-            sizes,
-        }
+        let mut moved = other.clone().shifted(shifts);
+        let mut row = self;
+        row.spans.append(&mut moved.spans);
+        row.links.append(&mut moved.links);
+        row.sizes.append(&mut moved.sizes);
+        row.picture = row.picture.or(moved.picture);
+        row
+    }
+
+    /// This row with `head`'s words standing in the place of the span it opens with, and a blank
+    /// after them: the columns the head takes beyond that span are the shift the rest of the row
+    /// moves by, so its words and everything measured from them stay together.
+    pub(crate) fn headed_by(self, head: &Row) -> Row {
+        let replaced = self.spans.first().map_or(0, |(text, _)| pen::cells(text));
+        let shift = head.width().saturating_add(1).saturating_sub(replaced);
+        let mut row = self.shifted(shift);
+        let opening = usize::from(!row.spans.is_empty());
+        let mut spans = head.spans.clone();
+        spans.push((String::from(" "), Look::plain(Ink::Plain)));
+        spans.extend(row.spans.drain(opening..));
+        row.spans = spans;
+        row
     }
 
     pub fn glyphs(&self) -> String {
@@ -391,22 +404,7 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
     if let Some(head) = head
         && let Some(first) = rows.next()
     {
-        // The marker stands in the gutter and the words it says take the reserve, so the
-        // answer's first row begins where every other row of it does.
-        let mut spans: Vec<(String, Look)> = head_row(head, cols).spans().to_vec();
-        spans.push((String::from(" "), Look::plain(Ink::Plain)));
-        // The markdown row opens with the gutter the marker takes, so its first span goes.
-        spans.extend(first.spans().iter().skip(1).cloned());
-        laid.push(Row {
-            band: first.band,
-            links: first
-                .links()
-                .iter()
-                .map(|link| link.shifted(reserve))
-                .collect(),
-            sizes: first.sizes.iter().map(|run| run.shifted(reserve)).collect(),
-            ..Row::of(spans)
-        });
+        laid.push(first.headed_by(&head_row(head, cols)));
     }
     laid.extend(rows);
     laid

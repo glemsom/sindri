@@ -1809,6 +1809,103 @@ fn a_fence_that_opens_a_live_answer_keeps_its_well_under_the_marker() {
     );
 }
 
+/// A fence that opens a live answer stands the same picture under the marker's row as the answer
+/// does once it has settled: the marker is a head, never a hole a diagram falls through.
+#[test]
+fn a_fence_that_opens_a_live_answer_keeps_its_picture_under_the_marker() {
+    let text = "```mermaid\nflowchart TD\n  A-->B\n```\nand the prose under it\n";
+    let surface = Surface::of(None, CellSize::new(10, 20), true, false);
+    let mut rows = Rows::new();
+    rows.resize(40);
+    rows.retune(surface.clone());
+    let mut stream = Stream::new();
+    stream.text(text);
+    let head = Pulse::live(4_200).head();
+    rows.live(&stream, Some(&head));
+
+    let laid = rows.rows(0);
+    let picture = laid[0]
+        .picture()
+        .expect("the fence opens the marked answer, so its picture stands under the marker")
+        .rows();
+    assert!(
+        laid.len() >= usize::from(picture),
+        "the rows laid are the picture's block: {picture} rows of picture, {} of answer",
+        laid.len()
+    );
+    let marked = painted(&laid[0], 40);
+    assert!(
+        said(&marked).starts_with(&head.text()),
+        "the marker stands in the row's own gutter, from the first column: {}",
+        said(&marked)
+    );
+
+    let mut settled = Rows::new();
+    settled.resize(40);
+    settled.retune(surface);
+    settled.push(Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact(text),
+    });
+    let drawn = settled.rows(0);
+    assert_eq!(
+        drawn.iter().position(|row| row.picture().is_some()),
+        laid.iter().position(|row| row.picture().is_some()),
+        "the answer settled draws its picture on the same row the marker's answer does"
+    );
+}
+
+/// The marker heads the answer's first row by pushing its words aside, so a way the answer opens
+/// with is named from the cell `the spec` begins on and never from a column the marker stands in.
+#[test]
+fn a_row_set_under_a_marker_moves_the_run_it_names_with_its_words() {
+    let mut rows = Rows::new();
+    rows.resize(40);
+    let mut stream = Stream::new();
+    stream.text("[the spec](https://example.test/spec) and the prose under it\n");
+    let head = Pulse::live(4_200).head();
+    rows.live(&stream, Some(&head));
+
+    let marked = rows.rows(0)[0].clone();
+    let (buffer, links) = laid(&marked, Rect::new(0, 0, 40, 1));
+    let drawn: String = (0..marked.width())
+        .map(|x| {
+            buffer
+                .cell((x, 0))
+                .expect("a cell of the row")
+                .symbol()
+                .to_owned()
+        })
+        .collect();
+    let at = drawn
+        .find("the spec")
+        .expect("the answer's own words stand in the row");
+    let column = u16::try_from(drawn[..at].chars().count()).expect("a column of a row this wide");
+
+    assert_eq!(
+        links.at(0, column),
+        Some("https://example.test/spec"),
+        "the way begins on the first cell of `the spec`: {drawn:?}"
+    );
+    assert_eq!(
+        links.at(0, column + 7),
+        Some("https://example.test/spec"),
+        "and covers its last"
+    );
+    assert_eq!(
+        links.at(0, column + 8),
+        None,
+        "no cell past it is a way there"
+    );
+    for column in 0..=head.width() {
+        assert_eq!(
+            links.at(0, column),
+            None,
+            "column {column} is the marker's own, and names nothing"
+        );
+    }
+}
+
 /// A row is painted at the frame's own row and column, and what it names is laid there beside it.
 fn laid(row: &Row, area: Rect) -> (Buffer, Links) {
     let mut buffer = Buffer::empty(area);
