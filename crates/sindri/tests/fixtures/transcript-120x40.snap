@@ -3,10 +3,10 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 transcript at 120x40
-00 |  check: fmt ... ok                                                         wire      anthropic                         | plain:76 dim:10 plain:34
-01 |  check: clippy ... ok                                                      model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
-02 |  check: test ... ok                                                        think     high                              | plain:76 dim:10 plain:34
-03 |  check: frames ... ok                                                                                                  | plain:120
+00 |  check: fmt ... ok                                                         wire      anthropic                         | muted:19 plain:57 dim:10 plain:34
+01 |  check: clippy ... ok                                                      model     claude-sonnet-4-5-20250929        | muted:22 plain:54 dim:10 plain:34
+02 |  check: test ... ok                                                        think     high                              | muted:20 plain:56 dim:10 plain:34
+03 |  check: frames ... ok                                                                                                  | muted:22 plain:98
 04 |  What that buys is the plain case and what it costs is the scrolled one: a turns                               6 /  250| plain:76 dim:10 plain:34
 05 |  window is a row offset from the tail, so resolving one walks the entries  ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
 06 |  between the tail and the window and lays out every one of them on the way.cache                                    88%| plain:76 dim:10 plain:34
@@ -14,8 +14,8 @@ transcript at 120x40
 08 |  costs one layout per entry and scrolling it again costs none.             workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
 09 |─ turn 5 ───────────────────────────────────────────────────────────────────branch    spec/1-capability                 | dim:86 plain:34
 10 |✓ exit 0  bash  128 bytes · 9 ms                                                                                        | ok:1 plain:1 dim:30 plain:88
-11 |  crates/sindri/src/rows.rs | 412 +++++++++++++                             skills                                     2| plain:76 dim:10 plain:34
-12 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | plain:120
+11 |  crates/sindri/src/rows.rs | 412 +++++++++++++                             skills                                     2| muted:47 plain:29 dim:10 plain:34
+12 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | muted:45 plain:75
 13 |  The transcript's unit is the entry. An entry never carries a formatted    sandbox   bwrap                             | plain:76 dim:10 plain:34
 14 |  line, so the same run is drawn the same way by the TUI, by a reader of the                                            | plain:120
 15 |  transcript and by whatever front end comes next.                          session   9f2c7a41                          | plain:76 dim:10 plain:34
@@ -27,8 +27,8 @@ transcript at 120x40
 21 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 22 |─ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
 23 |✓ exit 0  bash  104 bytes · 31 ms                                                                                       | ok:1 plain:1 dim:31 plain:87
-24 |  check: frame calls ... ok                                                                                             | plain:120
-25 |  check: frame transcript ... ok                                                                                        | plain:120
+24 |  check: frame calls ... ok                                                                                             | muted:27 plain:93
+25 |  check: frame transcript ... ok                                                                                        | muted:32 plain:88
 26 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
 27 |  ─────────────────                                                                                                     | plain:2 dim:17 plain:101
 28 |                                                                                                                        | plain:120

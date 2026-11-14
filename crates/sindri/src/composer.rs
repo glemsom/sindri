@@ -35,6 +35,7 @@ pub enum Key {
     PageUp,
     PageDown,
     Copy,
+    Fold,
     Forward,
     Quit,
     Cancel,
@@ -289,6 +290,7 @@ impl Composer {
             Key::ShiftUp
             | Key::ShiftDown
             | Key::Copy
+            | Key::Fold
             | Key::PageUp
             | Key::PageDown
             | Key::Forward => Outcome::Unchanged,

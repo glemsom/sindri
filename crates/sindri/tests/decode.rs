@@ -281,6 +281,22 @@ fn ctrl_y_arrives_as_the_key_that_copies() {
 }
 
 #[test]
+fn ctrl_o_arrives_as_the_key_that_opens_the_newest_results_fold() {
+    assert_eq!(
+        event(b"\x0f"),
+        key(Key::Fold),
+        "`Ctrl-O` is one control byte and the key the newest result's fold is opened with, \
+         never a glyph of the draft"
+    );
+    assert_eq!(
+        event(b"\x1b[111;5u"),
+        key(Key::Fold),
+        "and a terminal that reports keys names it as the code of the glyph it stands on, \
+         which is the same key the byte was"
+    );
+}
+
+#[test]
 fn a_shifted_arrow_arrives_as_the_key_that_grows_the_mark() {
     assert_eq!(
         event(b"\x1b[1;2A"),

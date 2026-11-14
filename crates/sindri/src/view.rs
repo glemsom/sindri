@@ -2,6 +2,7 @@
 //! the terminal's screen or a test's headless backend, so a golden fixture and the
 //! picture a reader sees are produced by the same code.
 
+use std::ops::Range;
 use std::path::PathBuf;
 
 use ratatui::buffer::Buffer;
@@ -136,6 +137,9 @@ pub struct View {
     /// page moves by, and what the next paint reads a row that has landed against.
     band: u16,
     total: Option<u32>,
+    /// Which entry each band row of the last paint stands on: a mark grown over a row can only
+    /// open the fold of an entry the reader was shown.
+    drawn: Vec<(usize, Range<u16>)>,
     composer: Composer,
     stream: Stream,
     queue: Queue,
@@ -374,6 +378,7 @@ impl View {
             Act::Draft => self.draft(key),
             Act::Up => self.up(),
             Act::Copy => self.copy(),
+            Act::Fold => self.fold(),
             Act::ExtendDown => self.extend(true),
             Act::ExtendUp => self.extend(false),
             Act::Drop => self.drop_newest(),
@@ -415,16 +420,50 @@ impl View {
         }
     }
 
+    /// `Ctrl-O`: the newest result's fold, opened on the press that finds it folded and folded on
+    /// the press that finds it open.
+    fn fold(&mut self) -> Outcome {
+        match self.rows.toggle_newest() {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// The mark grows a row, and every entry the grown mark covers has its fold opened: a row a
+    /// mark reaches is a row the reader asked to read whole.
     fn extend(&mut self, down: bool) -> Outcome {
         let Some(mark) = self.mark else {
             return Outcome::Unchanged;
         };
         let grown = mark.grown(down);
-        if grown == mark {
-            return Outcome::Unchanged;
+        let grew = grown != mark;
+        if grew {
+            self.mark = Some(grown);
         }
-        self.mark = Some(grown);
-        Outcome::Edited
+        let mut opened = false;
+        for at in self.covered() {
+            opened |= self.rows.open(at);
+        }
+        match grew || opened {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// The entries the last paint drew that the mark covers now, in the order it drew them.
+    fn covered(&self) -> Vec<usize> {
+        let Some(mark) = self.mark else {
+            return Vec::new();
+        };
+        let first = mark.anchor().row.min(mark.head().row);
+        let last = mark.anchor().row.max(mark.head().row);
+        let mut covered: Vec<usize> = Vec::new();
+        for (at, band) in &self.drawn {
+            if band.start <= last && first < band.end && !covered.contains(at) {
+                covered.push(*at);
+            }
+        }
+        covered
     }
 
     fn draft(&mut self, key: Key) -> Outcome {
@@ -460,6 +499,7 @@ impl View {
         self.pulse = None;
         self.mark = None;
         self.marked = Span::default();
+        self.drawn.clear();
         self.loaded.clear();
         self.conversation.clear();
         self.superseded = true;
@@ -860,7 +900,9 @@ impl View {
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
         let mut lines = Vec::new();
+        let mut drawn = Vec::new();
         for piece in window.pieces() {
+            let top = y.saturating_sub(area.y);
             let rows = self.rows.rows(piece.entry);
             let first = usize::from(piece.skip);
             for row in &rows[first..first + usize::from(piece.rows)] {
@@ -888,7 +930,9 @@ impl View {
                 }
                 y += 1;
             }
+            drawn.push((piece.entry, top..y.saturating_sub(area.y)));
         }
+        self.drawn = drawn;
         // What this band placed is all the cache keeps: a picture scrolled past is a raster
         // nobody is looking at.
         self.pictures.retain_shown();
@@ -1471,6 +1515,7 @@ mod tests {
 
     use sindri_core::policy::Enforcement;
     use sindri_core::redact::SecretSet;
+    use sindri_core::run::Exit;
 
     use ratatui::style::Color;
 
@@ -2708,6 +2753,166 @@ mod tests {
     /// where a row stands in the frame is then a fact of what the row says.
     fn turns(count: u32) -> View {
         View::of((1..=count).map(|turn| Entry::Turn { turn }), Scroll::Tail)
+    }
+
+    /// A frame whose transcript is one turn and a `cargo test` run of twenty rows, so the newest
+    /// result is a result longer than its fold.
+    fn folded_run() -> View {
+        let output: String = (1..=20)
+            .map(|line| format!("test rows::a_row_of_output_{line} ... ok"))
+            .collect::<Vec<String>>()
+            .join("\n");
+        View::of(
+            vec![
+                Entry::Turn { turn: 1 },
+                Entry::Call {
+                    turn: 1,
+                    name: SecretSet::default().redact("bash"),
+                    arguments: SecretSet::default()
+                        .redact(r#"{"command": "cargo test -p sindri --test rows"}"#),
+                },
+                Entry::Result {
+                    turn: 1,
+                    name: SecretSet::default().redact("bash"),
+                    text: SecretSet::default().redact(&output),
+                    bytes: 640,
+                    elapsed_ms: 1_800,
+                    exit: Some(Exit::Code(0)),
+                },
+            ],
+            Scroll::Tail,
+        )
+    }
+
+    /// Every row the frame draws, top to bottom.
+    fn frame_rows(buffer: &Buffer) -> Vec<String> {
+        let area = buffer.area;
+        (area.y..area.bottom())
+            .map(|y| drawn_row(buffer, y))
+            .collect()
+    }
+
+    #[test]
+    fn one_key_opens_the_newest_results_fold_and_the_same_key_closes_it_again() {
+        let mut view = folded_run();
+        let folded = painted(&mut view, 120, 40);
+
+        assert!(
+            holds(&folded, "16 rows kept back"),
+            "the newest result is longer than its fold, so the band says how many rows it keeps \
+             back: {:?}",
+            frame_rows(&folded)
+        );
+        assert!(
+            !holds(&folded, "a_row_of_output_12"),
+            "and the rows it keeps back are the rows it does not draw: the head stops before \
+             them and only the last row is drawn"
+        );
+
+        assert_eq!(
+            view.key(Key::Fold),
+            Outcome::Edited,
+            "Ctrl-O opens the fold of the newest result, which is a frame to paint"
+        );
+        let open = painted(&mut view, 120, 40);
+        assert!(
+            holds(&open, "a_row_of_output_20"),
+            "the opened fold draws every row of the output, its last one included: {:?}",
+            frame_rows(&open)
+        );
+        assert!(
+            !holds(&open, "rows kept back"),
+            "and an open fold keeps nothing back, so it counts nothing"
+        );
+
+        assert_eq!(
+            view.key(Key::Fold),
+            Outcome::Edited,
+            "and the same key folds the newest result again"
+        );
+        let closed = painted(&mut view, 120, 40);
+        assert_eq!(
+            frame_rows(&closed),
+            frame_rows(&folded),
+            "a fold closed by its own key is the frame the reader was handed before"
+        );
+    }
+
+    #[test]
+    fn a_fold_a_reader_opened_stays_open_through_a_scroll_and_a_resize() {
+        let mut view = folded_run();
+        painted(&mut view, 120, 40);
+        assert_eq!(
+            view.key(Key::Fold),
+            Outcome::Edited,
+            "the fold the reader opens is the newest result's"
+        );
+        let opened = painted(&mut view, 120, 40);
+        assert!(
+            holds(&opened, "a_row_of_output_20"),
+            "the fold is open, so the band draws the last row of the output"
+        );
+
+        view.key(Key::PageUp);
+        let scrolled = painted(&mut view, 120, 40);
+        assert!(
+            holds(&scrolled, "a_row_of_output_4"),
+            "a scroll is no hand on the fold: the rows it opened are still drawn: {:?}",
+            frame_rows(&scrolled)
+        );
+        assert!(
+            !holds(&scrolled, "rows kept back"),
+            "and none of them is counted back by the scroll"
+        );
+
+        let resized = painted(&mut view, 100, 40);
+        assert!(
+            holds(&resized, "a_row_of_output_4") && holds(&resized, "a_row_of_output_20"),
+            "a narrower band re-lays the whole opened result, its head and its last row alike: \
+             {:?}",
+            frame_rows(&resized)
+        );
+        assert!(
+            !holds(&resized, "rows kept back"),
+            "a resize is no hand on the fold either, so nothing is folded again by one"
+        );
+    }
+
+    #[test]
+    fn a_mark_grown_over_a_row_opens_the_fold_it_belongs_to() {
+        let mut view = folded_run();
+        let folded = painted(&mut view, 120, 40);
+        let row = (0..folded.area.bottom())
+            .find(|y| drawn_row(&folded, *y).contains("16 rows kept back"))
+            .expect("the folded result draws the row that counts what it keeps back");
+        assert!(
+            !holds(&folded, "a_row_of_output_12"),
+            "the result begins folded, so the middle of its output is not drawn"
+        );
+
+        view.drag(Cell::new(row, 2), Cell::new(row, 2));
+        let marked = painted(&mut view, 120, 40);
+        assert!(
+            !holds(&marked, "a_row_of_output_12"),
+            "a drag is a mark and no key at all, so the fold it covers is drawn as it was"
+        );
+
+        assert_eq!(
+            view.key(Key::ShiftDown),
+            Outcome::Edited,
+            "the mark grows a row, and a mark that grows is a frame to paint"
+        );
+        let grown = painted(&mut view, 120, 40);
+        assert!(
+            holds(&grown, "a_row_of_output_20"),
+            "the row the mark grew over belongs to the folded result, so its fold opens and the \
+             output is shown whole: {:?}",
+            frame_rows(&grown)
+        );
+        assert!(
+            !holds(&grown, "rows kept back"),
+            "and an opened fold counts nothing back"
+        );
     }
 
     /// The cells a frame `cols` by `rows` is painted into.

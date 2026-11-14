@@ -5,8 +5,8 @@ expression: drawn
 rail at 80x24
 00 |─ turn 1 ───────────────────────────────────────────────────────────────────────| dim:80
 01 |✓ exit 0  bash  412 bytes · 23 ms                                               | ok:1 plain:1 dim:31 plain:47
-02 |  src/rows.rs: the glyph a turn opens with                                      | plain:80
-03 |  src/rows.rs: a word longer than a row is broken                               | plain:80
+02 |  src/rows.rs: the glyph a turn opens with                                      | muted:42 plain:38
+03 |  src/rows.rs: a word longer than a row is broken                               | muted:49 plain:31
 04 |  Rendering lives in the front end and not in the core, because an entry is a   | plain:80
 05 |  fact and never a rendering: the TUI and any reader draw one run from one      | plain:80
 06 |  value, and the core may not name a terminal at all.                           | plain:80

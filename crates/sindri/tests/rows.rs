@@ -923,6 +923,29 @@ fn result(which: u32, exit: Exit) -> Entry {
     }
 }
 
+/// A result of twenty rows of a command's output, the way a test run writes them.
+fn long_result(which: u32) -> Entry {
+    let text: String = (1..=20)
+        .map(|line| format!("test rows::a_row_of_output_{line} ... ok"))
+        .collect::<Vec<String>>()
+        .join("\n");
+    Entry::Result {
+        turn: which,
+        name: SecretSet::default().redact("bash"),
+        text: SecretSet::default().redact(&text),
+        bytes: 640,
+        elapsed_ms: 1_800,
+        exit: Some(Exit::Code(0)),
+    }
+}
+
+/// Every ink of every cell of the rows `laid`, as a terminal draws them.
+fn drawn_inks(laid: &[Row], cols: u16) -> Vec<Ink> {
+    laid.iter()
+        .flat_map(|row| cell_inks(&painted(row, cols)))
+        .collect()
+}
+
 fn named(which: u32, name: &str, arguments: &str) -> Entry {
     Entry::Call {
         turn: which,
@@ -1173,6 +1196,265 @@ fn cell_inks(row: &[(char, Look)]) -> Vec<Ink> {
 }
 
 #[test]
+fn a_result_longer_than_its_fold_draws_its_head_its_last_row_and_the_count_of_rows_kept_back() {
+    let rows = layout(&long_result(1), 80);
+    let drawn: Vec<String> = rows.iter().map(words).collect();
+
+    assert_eq!(
+        rows.len(),
+        6,
+        "a folded result is the four rows of its head, the row counting what is kept back and \
+         its last row: {drawn:?}"
+    );
+    assert_eq!(
+        drawn[0], "✓ exit 0  bash  640 bytes · 1800 ms",
+        "the head opens with the verdict row, which a fold never takes away"
+    );
+    assert_eq!(
+        drawn[1..4],
+        [
+            "  test rows::a_row_of_output_1 ... ok",
+            "  test rows::a_row_of_output_2 ... ok",
+            "  test rows::a_row_of_output_3 ... ok",
+        ],
+        "and the rows of output under it are the first rows the command wrote: {drawn:?}"
+    );
+    assert_eq!(
+        drawn[4], "⋯ 16 rows kept back",
+        "twenty rows of output under a head of four leave sixteen behind, and the fold says how \
+         many rather than leaving the reader to guess: {drawn:?}"
+    );
+    assert_eq!(
+        drawn[5], "  test rows::a_row_of_output_20 ... ok",
+        "the result's own last row is drawn, so a reader sees where the output ended: {drawn:?}"
+    );
+    assert_eq!(
+        inks(&rows[4])[0],
+        Ink::Dim,
+        "the marker the count opens with is the gutter's own faded mark"
+    );
+    assert!(
+        inks(&rows[4])[2..].iter().all(|ink| *ink == Ink::Dim),
+        "and its words are the quieter ink the output above it is drawn in"
+    );
+}
+
+#[test]
+fn a_result_its_whole_fold_holds_is_drawn_whole() {
+    let entry = Entry::Result {
+        turn: 1,
+        name: SecretSet::default().redact("bash"),
+        text: SecretSet::default().redact("a.txt\nb.txt\nc.txt\nd.txt"),
+        bytes: 40,
+        elapsed_ms: 3,
+        exit: Some(Exit::Code(0)),
+    };
+    let rows = layout(&entry, 80);
+    let drawn: Vec<String> = rows.iter().map(words).collect();
+
+    assert_eq!(
+        rows.len(),
+        5,
+        "four rows of a command's output are a body a fold would not hold back, so every one of \
+         them is drawn: {drawn:?}"
+    );
+    assert!(
+        !drawn.iter().any(|row| row.contains("kept back")),
+        "a result with no fold says nothing about rows kept back: {drawn:?}"
+    );
+}
+
+/// The row a fold draws to say how many rows it keeps back, if this entry draws one.
+fn kept_back_row(laid: &[Row]) -> Option<String> {
+    laid.iter().map(words).find(|row| row.contains("kept back"))
+}
+
+#[test]
+fn one_key_opens_the_newest_results_fold_and_the_same_key_closes_it_again() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(turn(1));
+    rows.push(long_result(1));
+
+    let folded: Vec<Row> = rows.rows(1).to_vec();
+    assert_eq!(
+        kept_back_row(&folded).as_deref(),
+        Some("⋯ 16 rows kept back"),
+        "the newest result is the one the key opens, and it begins folded"
+    );
+    let laid = rows.lays();
+
+    assert!(
+        rows.toggle_newest(),
+        "the newest result has a fold, so this key is one for the frame to answer"
+    );
+    assert_eq!(
+        rows.lays(),
+        laid,
+        "opening a fold lays nothing by itself: the next paint lays the one entry it opened"
+    );
+
+    let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        opened.len(),
+        21,
+        "the opened result is its verdict row and the twenty rows of output under it: {opened:?}"
+    );
+    assert_eq!(
+        kept_back_row(rows.rows(1)),
+        None,
+        "a fold that is open keeps nothing back, so it counts nothing"
+    );
+    assert_eq!(
+        rows.lays(),
+        laid + 1,
+        "the entry was laid out once, at the fold it was opened to"
+    );
+
+    assert!(
+        rows.toggle_newest(),
+        "the same key folds it again, because the build it opened is the one it closes"
+    );
+    assert_eq!(
+        rows.rows(1).to_vec(),
+        folded,
+        "and the rows it closes to are the rows the reader was handed before"
+    );
+    assert_eq!(
+        rows.lays(),
+        laid + 2,
+        "closing a fold is one layout of the one entry that closed"
+    );
+
+    let mut short = Rows::new();
+    short.resize(80);
+    short.push(result(1, Exit::Code(0)));
+    assert!(
+        !short.toggle_newest(),
+        "a result its whole fold holds has none to open, so the key answers nothing"
+    );
+}
+
+#[test]
+fn a_fold_a_reader_opened_stays_open_through_a_reflow_and_a_new_entry_beside_it() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(long_result(1));
+    assert!(
+        rows.toggle_newest(),
+        "the result the reader reads has a fold"
+    );
+    let opened: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        opened.len(),
+        21,
+        "the fold is open, so the whole result is drawn: {opened:?}"
+    );
+    let laid = rows.lays();
+
+    rows.resize(30);
+    let reflowed: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        rows.lays(),
+        laid + 1,
+        "the narrower band re-lays the opened entry once"
+    );
+    assert!(
+        reflowed.len() > 21,
+        "the same output takes more rows at thirty columns than at eighty: {}",
+        reflowed.len()
+    );
+    assert_eq!(
+        kept_back_row(rows.rows(0)),
+        None,
+        "a resize is no reader's hand on the fold, so it stays open and counts nothing back"
+    );
+    assert!(
+        reflowed
+            .iter()
+            .any(|row| row.contains("a_row_of_output_20")),
+        "every row of the output is still drawn, its last one included: {reflowed:?}"
+    );
+
+    rows.push(turn(2));
+    let beside: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert!(
+        beside.iter().any(|row| row.starts_with("─ turn 2")),
+        "the entry beside it is the divider a turn is drawn as: {beside:?}"
+    );
+    assert_eq!(
+        rows.lays(),
+        laid + 2,
+        "a new entry beside an opened fold lays itself out and leaves the fold alone"
+    );
+    assert!(
+        rows.rows(0)
+            .iter()
+            .map(words)
+            .any(|row| row.contains("a_row_of_output_20")),
+        "the fold the reader opened is still open with a new entry beside it"
+    );
+}
+
+#[test]
+fn a_session_read_back_into_a_fresh_cache_is_folded_again() {
+    let entries = vec![turn(1), long_result(1)];
+    let mut first = Rows::new();
+    first.resize(80);
+    for entry in entries.clone() {
+        first.push(entry);
+    }
+    let folded: Vec<Row> = first.rows(1).to_vec();
+
+    let mut read_back = Rows::new();
+    read_back.resize(80);
+    for entry in entries {
+        read_back.push(entry);
+    }
+
+    assert_eq!(
+        read_back.rows(1),
+        folded.as_slice(),
+        "a cache built from the same entries draws the same rows: the fold is a fact of the \
+         layout and not a state a cache carries"
+    );
+    assert_eq!(
+        kept_back_row(&folded).as_deref(),
+        Some("⋯ 16 rows kept back"),
+        "and those rows are the fold, so a session read back is folded again"
+    );
+}
+
+#[test]
+fn an_answer_is_never_folded_however_long_it_runs() {
+    let text: String = (1..=40)
+        .map(|line| format!("line {line} of the answer.\n"))
+        .collect();
+    let entry = Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact(&text),
+    };
+    let rows = layout(&entry, 80);
+    let drawn: Vec<String> = rows.iter().map(words).collect();
+
+    assert!(
+        rows.len() > 7,
+        "the answer runs longer than any fold, so it has the rows a fold would cut: {drawn:?}"
+    );
+    assert!(
+        drawn
+            .iter()
+            .any(|row| row.contains("line 40 of the answer")),
+        "an answer is the reader's own, so it is drawn whole however long it runs and its last \
+         words are drawn: {drawn:?}"
+    );
+    assert!(
+        !drawn.iter().any(|row| row.contains("kept back")),
+        "no row of an answer counts what is kept back, because none of it is: {drawn:?}"
+    );
+}
+
+#[test]
 fn a_call_that_exited_zero_settles_on_a_check_and_its_code() {
     let rows = layout(&result(1, Exit::Code(0)), 40);
     let header = painted(&rows[0], 40);
@@ -1193,6 +1475,34 @@ fn a_call_that_failed_settles_on_a_cross_and_the_code_it_exited_with() {
 
     assert_eq!(said(&header), "✗ exit 1  bash  7 bytes · 2 ms");
     assert_eq!(cell_inks(&header)[0], Ink::Err, "the cross is the bad ink");
+}
+
+#[test]
+fn a_result_body_is_drawn_in_the_quieter_ink_that_says_it_is_not_the_answer() {
+    let rows = layout(&result(1, Exit::Code(0)), 40);
+    let body = drawn_inks(&rows[1..], 40);
+
+    assert!(
+        !body.is_empty(),
+        "a result with output has a body under its verdict row to draw"
+    );
+    assert!(
+        body.iter().all(|ink| *ink == Ink::Muted),
+        "every cell of a result's body is drawn in the quieter ink, so a run of output reads \
+         as one quiet run and never as prose the model wrote: {body:?}"
+    );
+
+    let answer = layout(&answer(1), 80);
+    let words = drawn_inks(&answer, 80);
+
+    assert!(
+        !words.is_empty(),
+        "the answer a run wrote is rows of its own to draw"
+    );
+    assert!(
+        words.iter().all(|ink| *ink == Ink::Plain),
+        "an answer's words keep the plain ink they wear today: {words:?}"
+    );
 }
 
 #[test]

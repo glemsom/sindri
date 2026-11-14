@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+fold at 120x40
+00 |─ turn 1 ───────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34
+01 |  Every row of the run passes: the gutter holds one column for every entry, model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
+02 |  and a row of a command's output is set behind it rather than beside the   think     high                              | plain:76 dim:10 plain:34
+03 |  answer.                                                                                                               | plain:120
+04 |✓ exit 0  bash  640 bytes · 1800 ms                                         turns                               6 /  250| ok:1 plain:1 dim:33 plain:41 dim:10 plain:34
+05 |  test rows::a_row_of_output_1 ... ok                                       ctx                      █░░░░░ 48.2k / 200k| muted:37 plain:39 dim:10 plain:16 dim:5 plain:13
+06 |  test rows::a_row_of_output_2 ... ok                                       cache                                    88%| muted:37 plain:39 dim:10 plain:34
+07 |  test rows::a_row_of_output_3 ... ok                                                                                   | muted:37 plain:83
+08 |⋯ 16 rows kept back                                                         workspace …/git/sindri/.worktrees/46-rail   | dim:1 plain:1 dim:17 plain:57 dim:10 plain:34
+09 |  test rows::a_row_of_output_20 ... ok                                      branch    spec/1-capability                 | muted:38 plain:38 dim:10 plain:34
+10 |                                                                                                                        | plain:120
+11 |                                                                            skills                                     2| plain:76 dim:10 plain:34
+12 |                                                                                                                        | plain:120
+13 |                                                                            sandbox   bwrap                             | plain:76 dim:10 plain:34
+14 |                                                                                                                        | plain:120
+15 |                                                                            session   9f2c7a41                          | plain:76 dim:10 plain:34
+16 |                                                                            temp      …/sindri/sessions/9f2c7a41/tmp    | plain:76 dim:10 plain:34
+17 |                                                                                                                        | plain:120
+18 |                                                                                                                        | plain:120
+19 |                                                                                                                        | plain:120
+20 |                                                                                                                        | plain:120
+21 |                                                                                                                        | plain:120
+22 |                                                                                                                        | plain:120
+23 |                                                                                                                        | plain:120
+24 |                                                                                                                        | plain:120
+25 |                                                                                                                        | plain:120
+26 |                                                                                                                        | plain:120
+27 |                                                                                                                        | plain:120
+28 |                                                                                                                        | plain:120
+29 |                                                                                                                        | plain:120
+30 |                                                                                                                        | plain:120
+31 |                                                                                                                        | plain:120
+32 |                                                                                                                        | plain:120
+33 |                                                                                                                        | plain:120
+34 |                                                                                                                        | plain:120
+35 |                                                                                                                        | plain:120
+36 |                                                                                                                        | plain:120
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
+38 |› what should the run do?                                                                                               | dim:25 plain:95
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:3 muted:15 plain:13

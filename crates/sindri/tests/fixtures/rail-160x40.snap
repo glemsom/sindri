@@ -5,8 +5,8 @@ expression: drawn
 rail at 160x40
 00 |─ turn 1 ───────────────────────────────────────────────────────────────────────────────────────────────────────────wire      anthropic                         | dim:126 plain:34
 01 |✓ exit 0  bash  412 bytes · 23 ms                                                                                   model     claude-sonnet-4-5-20250929        | ok:1 plain:1 dim:31 plain:83 dim:10 plain:34
-02 |  src/rows.rs: the glyph a turn opens with                                                                          think     high                              | plain:116 dim:10 plain:34
-03 |  src/rows.rs: a word longer than a row is broken                                                                                                               | plain:160
+02 |  src/rows.rs: the glyph a turn opens with                                                                          think     high                              | muted:42 plain:74 dim:10 plain:34
+03 |  src/rows.rs: a word longer than a row is broken                                                                                                               | muted:49 plain:111
 04 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a rendering: the TUI   turns                               6 /  250| plain:116 dim:10 plain:34
 05 |  and any reader draw one run from one value, and the core may not name a terminal at all.                          ctx                      █░░░░░ 48.2k / 200k| plain:116 dim:10 plain:16 dim:5 plain:13
 06 |                                                                                                                    cache                                    88%| plain:116 dim:10 plain:34

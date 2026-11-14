@@ -74,6 +74,21 @@ fn calls_120x40_is_a_call_settled_four_ways() {
 }
 
 #[test]
+fn fold_120x40_is_a_result_longer_than_the_head_it_is_drawn_as() {
+    fixture::assert_frame("fold", 120, 40);
+}
+
+#[test]
+fn fold_open_120x40_is_that_result_after_the_key_that_opens_it() {
+    fixture::assert_frame("fold-open", 120, 40);
+}
+
+#[test]
+fn fold_answer_120x40_is_an_answer_drawn_whole_beside_a_folded_result() {
+    fixture::assert_frame("fold-answer", 120, 40);
+}
+
+#[test]
 fn mark_120x40_is_a_drag_over_the_transcript_it_covers() {
     fixture::assert_frame("mark", 120, 40);
 }

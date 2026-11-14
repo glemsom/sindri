@@ -122,6 +122,12 @@ row is — a turn's rule, a prompt's sigil, a call's or result's mark, a thought
 and the blank after it. A band too narrow to hold the gutter gives up the glyph before it cuts a word.
 _Avoid_: Margin, indent, padding
 
+**Fold**:
+The head of a result, the row counting the rows kept back and its last row, drawn in the quieter ink
+behind the gutter the call opened: the output is the work and never the reader's answer. One key
+opens and closes the newest one, a mark grown over its row opens it, and an answer has none.
+_Avoid_: Collapse, expander, accordion, truncation
+
 **Thumb**:
 The one cell of the gutter that says where a window stands in a transcript taller than its band:
 its span the band's share of the whole and its row the window's, drawn only off the tail and
