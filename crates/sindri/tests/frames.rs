@@ -49,6 +49,21 @@ fn transcript_scrolled_80x24_cuts_the_top_entry_and_says_how_many_rows_back_it_s
 }
 
 #[test]
+fn thumb_head_120x40_is_the_thumb_opening_a_band_scrolled_to_the_first_row() {
+    fixture::assert_frame("thumb-head", 120, 40);
+}
+
+#[test]
+fn thumb_middle_120x40_is_the_thumb_half_way_down_a_band_scrolled_half_way_back() {
+    fixture::assert_frame("thumb-middle", 120, 40);
+}
+
+#[test]
+fn thumb_tail_120x40_is_the_band_with_no_thumb_because_the_reader_follows_the_run() {
+    fixture::assert_frame("thumb-tail", 120, 40);
+}
+
+#[test]
 fn streaming_120x40_is_a_run_whose_answer_and_thought_are_still_landing() {
     fixture::assert_frame("streaming", 120, 40);
 }

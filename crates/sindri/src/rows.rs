@@ -2,6 +2,8 @@
 //! laid out at: either one changing drops them all, because a row's height is a fact
 //! about that measurement and about nothing else.
 
+use std::ops::Range;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::open::{self, Ground, Opening};
@@ -573,6 +575,37 @@ impl Scroll {
     }
 }
 
+/// The cell a thumb is drawn of.
+pub(crate) const THUMB: char = '█';
+
+/// Where a window stands in a transcript taller than the band it is read in: the rows of the
+/// gutter its thumb covers, counted from the band's first row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Thumb {
+    top: u16,
+    span: u16,
+}
+
+impl Thumb {
+    pub fn span(&self) -> u16 {
+        self.span
+    }
+
+    pub fn rows(&self) -> Range<u16> {
+        self.top..self.top + self.span
+    }
+
+    /// The thumb stands in the gutter's glyph column, where the blank column after it is what keeps
+    /// the words off it.
+    pub(crate) fn paint(&self, area: Rect, y: u16, buffer: &mut Buffer, palette: &Palette) {
+        if let Some(row) = y.checked_sub(area.y)
+            && self.rows().contains(&row)
+        {
+            pen::glyph(buffer, area.x, y, THUMB, Ink::Dim, palette);
+        }
+    }
+}
+
 /// Every entry a transcript holds, each with the rows it was laid out as at one width,
 /// and nothing it was not drawn as.
 #[derive(Clone, Debug, Default)]
@@ -785,6 +818,34 @@ impl Rows {
             height = height.saturating_add(u32::try_from(self.rows(at).len()).unwrap_or(u32::MAX));
         }
         height
+    }
+
+    /// The thumb a window `scroll` rows behind the tail of this transcript draws in a band `band`
+    /// rows tall, and none where there is nothing left out of view or the band holds no gutter.
+    pub fn thumb(&mut self, scroll: Scroll, band: u16) -> Option<Thumb> {
+        let total = self.height();
+        // A band this narrow leaves a wide glyph no room beside the gutter, and the row gives the
+        // gutter up for it: there the thumb would stand on the word instead.
+        if self.cols() <= pen::cells(INDENT) + 1
+            || band < 2
+            || total <= u32::from(band)
+            || scroll.back() == 0
+        {
+            return None;
+        }
+        let deepest = u64::from(total - u32::from(band));
+        let above = deepest.saturating_sub(u64::from(scroll.back()));
+        let band = u64::from(band);
+        let total = u64::from(total);
+        // The band's share of the whole, rounded to the nearest cell and never to none: a thumb the
+        // reader cannot see says nothing about where they stand.
+        let span = ((band * band + total / 2) / total).max(1);
+        let room = band - span;
+        let top = (room * above + deepest / 2) / deepest;
+        Some(Thumb {
+            top: u16::try_from(top.min(room)).unwrap_or(u16::MAX),
+            span: u16::try_from(span).unwrap_or(u16::MAX),
+        })
     }
 
     /// How far back a window of `height` rows may stand so its top is the transcript's first row.

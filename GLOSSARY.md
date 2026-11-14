@@ -122,6 +122,12 @@ row is — a turn's rule, a prompt's sigil, a call's or result's mark, a thought
 and the blank after it. A band too narrow to hold the gutter gives up the glyph before it cuts a word.
 _Avoid_: Margin, indent, padding
 
+**Thumb**:
+The one cell of the gutter that says where a window stands in a transcript taller than its band:
+its span the band's share of the whole and its row the window's, drawn only off the tail and
+given up with the gutter.
+_Avoid_: Scrollbar, handle, scroll indicator
+
 **Card**:
 The frame a screen is drawn on: a rounded border carrying the screen's name in its top row and
 the key that leaves in its bottom, at most seventy-two columns wide and centred, and — under fifty
