@@ -36,14 +36,16 @@ const CROSS: char = '✗';
 const HAIRLINE: char = '─';
 const KEPT: char = '⋯';
 
-/// The rows of a result's head that a folded result keeps: the fewer a result runs, the less a
-/// fold would hold back, and a result its whole fold holds is drawn whole.
+/// The rows of a result's head that a folded result keeps.
 const FOLD_HEAD: usize = 4;
 
+/// The fewest rows a fold is worth keeping back, so a count is always a plural: a result that would
+/// keep back fewer is drawn whole rather than spending a row to hand the reader nothing.
+const FOLD_KEPT: usize = 3;
+
 /// Whether a result is drawn whole, or as the head a reader is handed to begin with.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fold {
-    #[default]
     Closed,
     Open,
 }
@@ -245,23 +247,23 @@ pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Gr
     laid(entry, cols, surface, ground, Fold::Closed).0
 }
 
-/// The rows of one entry in the fold it is drawn as, and whether that entry folds at all: a
-/// result's fold is a fact of its last layout, and a width change re-lays it.
+/// The rows of one entry in the fold it is drawn as, and how many rows of it that fold keeps back:
+/// a result's fold is a fact of its last layout, and a width change re-lays it.
 fn laid(
     entry: &Entry,
     cols: u16,
     surface: &Surface,
     ground: Option<&Ground>,
     fold: Fold,
-) -> (Vec<Row>, bool) {
+) -> (Vec<Row>, Option<usize>) {
     let cols = cols.max(1);
     match entry {
-        Entry::Turn { turn } => (vec![divider(&format!("turn {turn} "), cols)], false),
+        Entry::Turn { turn } => (vec![divider(&format!("turn {turn} "), cols)], None),
         Entry::Call {
             name, arguments, ..
         } => (
             opening(&name.to_string(), &arguments.to_string(), cols, ground),
-            false,
+            None,
         ),
         Entry::Result {
             name,
@@ -282,34 +284,40 @@ fn laid(
             cols,
             fold,
         ),
-        Entry::Assistant { text, .. } => (answer_on(&text.to_string(), cols, None, surface), false),
-        Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), false),
-        Entry::Prompt { text } => (asked(&text.to_string(), cols), false),
+        Entry::Assistant { text, .. } => (answer_on(&text.to_string(), cols, None, surface), None),
+        Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
+        Entry::Prompt { text } => (asked(&text.to_string(), cols), None),
     }
 }
 
 /// A result's rows as the reader is handed them: the rows of its head, one row counting the rows
 /// kept back, and its last row — unless the reader opened the fold, or it holds the whole result.
-fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, bool) {
-    let folds = rows.len() > FOLD_HEAD + 3;
-    if !folds || fold == Fold::Open {
-        return (rows, folds);
+/// The count comes back beside them for as long as the result has a fold at all.
+fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>) {
+    let Some(kept) = rows
+        .len()
+        .checked_sub(FOLD_HEAD + 1)
+        .filter(|kept| *kept > FOLD_KEPT)
+    else {
+        return (rows, None);
+    };
+    if fold == Fold::Open {
+        return (rows, Some(kept));
     }
-    let kept = rows.len() - FOLD_HEAD - 1;
-    let last = rows.pop().expect("a result with a fold has a last row");
+    let last = rows
+        .pop()
+        .expect("a result whose fold keeps a row back has a last row under its head");
     rows.truncate(FOLD_HEAD);
     rows.push(kept_back(kept, cols));
     rows.push(last);
-    (rows, folds)
+    (rows, Some(kept))
 }
 
 /// The row that says how many rows of a result the fold keeps back, drawn as any other row of that
-/// entry: the marker in the gutter and the count in the ink a body's words are set in.
+/// entry: the marker in the gutter and the count in the dim ink of the fold's own words, a rung
+/// quieter than the output it stands among.
 fn kept_back(kept: usize, cols: u16) -> Row {
-    let words = match kept {
-        1 => String::from("1 row kept back"),
-        kept => format!("{kept} rows kept back"),
-    };
+    let words = format!("{kept} rows kept back");
     marked(&KEPT.to_string(), Ink::Dim, vec![(words, Ink::Dim)], cols)
 }
 
@@ -690,12 +698,12 @@ struct Held {
     /// layered over the rows, so a width change re-lays the settled row.
     result: Option<Entry>,
     rows: Option<Vec<Row>>,
-    /// Whether a reader opened this entry's fold, which is the reader's and survives every
-    /// re-lay of the rows under it.
-    open: bool,
-    /// Whether this entry has a fold at all, which is a fact of its last layout: what it holds
-    /// depends on the width it was laid out at.
-    folds: bool,
+    /// The fold the reader left this entry in, which is theirs and survives every re-lay of the
+    /// rows under it.
+    fold: Fold,
+    /// How many rows this entry's closed fold keeps back, and nothing where its whole fold holds
+    /// it: a fact of its last layout, because what a fold holds depends on the width.
+    kept: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -729,8 +737,8 @@ impl Rows {
             what: What::Fact(entry),
             result: None,
             rows: None,
-            open: false,
-            folds: false,
+            fold: Fold::Closed,
+            kept: None,
         });
     }
 
@@ -768,8 +776,8 @@ impl Rows {
                 what: What::Live { revision, head },
                 result: None,
                 rows: Some(rows),
-                open: false,
-                folds: false,
+                fold: Fold::Closed,
+                kept: None,
             }),
         }
         self.lays += 1;
@@ -863,17 +871,14 @@ impl Rows {
             (What::Fact(_), Some(result)) => Some(result),
             (What::Live { .. }, _) => None,
         };
-        let fold = match held.open {
-            true => Fold::Open,
-            false => Fold::Closed,
-        };
+        let fold = held.fold;
         if held.rows.is_none()
             && let Some(fact) = fact
         {
-            let (rows, folds) = laid(fact, cols, &self.surface, self.ground.as_ref(), fold);
+            let (rows, kept) = laid(fact, cols, &self.surface, self.ground.as_ref(), fold);
             self.lays += 1;
             self.held[at].rows = Some(rows);
-            self.held[at].folds = folds;
+            self.held[at].kept = kept;
         }
         self.held[at].rows.as_deref().unwrap_or_default()
     }
@@ -891,30 +896,35 @@ impl Rows {
         let Some(at) = self.newest_result() else {
             return false;
         };
-        if self.held[at].rows.is_none() {
-            self.rows(at);
-        }
-        if !self.held[at].folds {
-            return false;
-        }
-        self.held[at].open = !self.held[at].open;
-        self.held[at].rows = None;
-        true
+        let to = match self.held[at].fold {
+            Fold::Closed => Fold::Open,
+            Fold::Open => Fold::Closed,
+        };
+        self.fold(at, to)
     }
 
     /// Opens the fold of entry `at`, and answers whether this call is what opened it: an entry
-    /// that is no result, one whose whole fold holds it, and one already opened answer nothing.
+    /// that is no result, one whose whole fold holds it, and one already open answer nothing.
     pub fn open(&mut self, at: usize) -> bool {
-        if at >= self.held.len() || !holds_result(&self.held[at]) || self.held[at].open {
+        self.fold(at, Fold::Open)
+    }
+
+    /// Entry `at` left in the fold `to`, which is a frame to paint when this call moved it: one
+    /// already in `to` repaints nothing, and a result its whole fold holds is no key's.
+    fn fold(&mut self, at: usize, to: Fold) -> bool {
+        let Some(held) = self.held.get(at) else {
+            return false;
+        };
+        if !holds_result(held) || held.fold == to {
             return false;
         }
         if self.held[at].rows.is_none() {
             self.rows(at);
         }
-        if !self.held[at].folds {
+        if self.held[at].kept.is_none() {
             return false;
         }
-        self.held[at].open = true;
+        self.held[at].fold = to;
         self.held[at].rows = None;
         true
     }

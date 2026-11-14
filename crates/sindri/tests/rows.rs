@@ -19,7 +19,7 @@ use sindri_core::config::Config;
 use sindri_core::open::Ground;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
-use sindri_core::records::Entry;
+use sindri_core::records::{Entry, read_transcript, transcript_path};
 use sindri_core::redact::SecretSet;
 use sindri_core::run::Exit;
 
@@ -1235,7 +1235,7 @@ fn a_result_longer_than_its_fold_draws_its_head_its_last_row_and_the_count_of_ro
     );
     assert!(
         inks(&rows[4])[2..].iter().all(|ink| *ink == Ink::Dim),
-        "and its words are the quieter ink the output above it is drawn in"
+        "and its words are the dim ink of the fold's own note, a rung under the output it counts"
     );
 }
 
@@ -1397,31 +1397,40 @@ fn a_fold_a_reader_opened_stays_open_through_a_reflow_and_a_new_entry_beside_it(
 }
 
 #[test]
-fn a_session_read_back_into_a_fresh_cache_is_folded_again() {
-    let entries = vec![turn(1), long_result(1)];
-    let mut first = Rows::new();
-    first.resize(80);
-    for entry in entries.clone() {
-        first.push(entry);
-    }
-    let folded: Vec<Row> = first.rows(1).to_vec();
-
-    let mut read_back = Rows::new();
-    read_back.resize(80);
-    for entry in entries {
-        read_back.push(entry);
-    }
-
+fn a_session_read_back_is_folded_again() {
+    let directory = tempfile::tempdir().expect("a session directory");
+    let lines: Vec<String> = [turn(1), long_result(1)]
+        .iter()
+        .map(|entry| serde_json::to_string(entry).expect("an entry is one line of a transcript"))
+        .collect();
+    std::fs::write(
+        transcript_path(directory.path()),
+        format!("{}\n", lines.join("\n")),
+    )
+    .expect("a transcript a run wrote");
+    let read = read_transcript(directory.path()).expect("the transcript reads back");
     assert_eq!(
-        read_back.rows(1),
-        folded.as_slice(),
-        "a cache built from the same entries draws the same rows: the fold is a fact of the \
-         layout and not a state a cache carries"
+        read.entries().len(),
+        2,
+        "the session holds the turn and the result the run recorded"
     );
+
+    let mut rows = Rows::new();
+    rows.resize(80);
+    for entry in read.entries().iter().cloned() {
+        rows.push(entry);
+    }
+    let drawn: Vec<String> = rows.rows(1).iter().map(words).collect();
+
     assert_eq!(
-        kept_back_row(&folded).as_deref(),
+        kept_back_row(rows.rows(1)).as_deref(),
         Some("⋯ 16 rows kept back"),
-        "and those rows are the fold, so a session read back is folded again"
+        "a result read back from a session is a fold again, because a fold is a fact of the \
+         layout and never a state the session carries: {drawn:?}"
+    );
+    assert!(
+        !drawn.iter().any(|row| row.contains("a_row_of_output_12")),
+        "and the rows it keeps back are kept back on the way in: {drawn:?}"
     );
 }
 

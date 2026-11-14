@@ -123,9 +123,10 @@ and the blank after it. A band too narrow to hold the gutter gives up the glyph 
 _Avoid_: Margin, indent, padding
 
 **Fold**:
-The head of a result, the row counting the rows kept back and its last row, drawn in the quieter ink
-behind the gutter the call opened: the output is the work and never the reader's answer. One key
-opens and closes the newest one, a mark grown over its row opens it, and an answer has none.
+What a reader is shown of a result: the rows of its head, a row counting the rows kept back, and its
+last row, drawn in a quieter ink than the answer's behind the **gutter** the call opened. One key
+opens and closes the newest one, the mark grown over a row opens it, an answer has none, and a fold
+belongs to the layout, so a transcript read back is folded again.
 _Avoid_: Collapse, expander, accordion, truncation
 
 **Thumb**:
