@@ -4,7 +4,7 @@ expression: drawn
 ---
 rail at 108x40
 00 |─ turn 1 ───────────────────────────────────────────────────────────wire      anthropic                     | dim:78 plain:30
-01 |… bash                                                              model     claude-sonnet-4-5-20250929    | dim:1 plain:1 dim:4 plain:62 dim:10 plain:30
+01 |✓ bash                                                              model     claude-sonnet-4-5-20250929    | ok:1 plain:1 dim:4 plain:62 dim:10 plain:30
 02 |  rg -n 'fence' src                                                 think     high                          | plain:68 dim:10 plain:30
 03 |✓ exit 0  23 ms · 412 bytes                                                                                 | ok:1 plain:1 dim:25 plain:81
 04 |  src/rows.rs: the glyph a turn opens with                          turns                           6 /  250| muted:42 plain:26 dim:10 plain:30

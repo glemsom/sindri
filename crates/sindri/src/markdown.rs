@@ -64,9 +64,9 @@ pub(crate) fn rows_in(
     room.finish()
 }
 
-/// A body of words laid as the rows it is drawn as, with the way the call names a way to the target
-/// the run judged: a way wider than the row is broken over two rows, each carrying the whole
-/// destination. Nothing is laid when the words do not name the way.
+/// A call's body laid as the rows it is drawn as, with the path it names a way to the file the run
+/// judged: a path wider than the row is broken over two rows, each carrying the whole destination.
+/// Nothing is laid when the words do not name the path.
 pub fn body(text: &str, cols: u16, way: &Way) -> Option<Vec<Row>> {
     if way.written().is_empty() {
         return None;

@@ -6,7 +6,7 @@ gutter at 120x40
 00 |─ turn 1 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 01 |─ prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 02 |› triage the retry test                                                                                                 | plain:120
-03 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+03 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
 04 |  rg -n 'gutter' src                                                                                                    | plain:120
 05 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
 06 |  src/rows.rs: every entry stands in one gutter                                                                         | muted:47 plain:73

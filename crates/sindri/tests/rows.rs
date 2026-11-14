@@ -1061,7 +1061,7 @@ fn a_path_wider_than_the_body_is_one_destination_on_each_row() {
 }
 
 #[test]
-fn the_words_a_way_is_drawn_on_are_the_value_the_run_read_the_path_from() {
+fn every_cell_of_the_path_a_call_names_is_a_way_to_the_file() {
     let tree = tempfile::tempdir().expect("a temp workspace");
     std::fs::write(tree.path().join("notes.html"), "body").expect("the file");
     let entry = named(1, "open", r#"{"note": "notes.html", "path": "notes.html"}"#);
@@ -1172,6 +1172,46 @@ fn unpunctuated(row: &str) -> bool {
 }
 
 #[test]
+fn a_call_wears_the_mark_its_verdict_settled_on_and_no_mark_before_one() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(call(1));
+    let opened = painted(&rows.rows(0)[0], 80);
+    assert_eq!(
+        said(&opened),
+        "… bash",
+        "a call still out wears its ellipsis"
+    );
+    assert_eq!(
+        cell_inks(&opened)[0],
+        Ink::Dim,
+        "and the ink of a row that claims nothing"
+    );
+
+    rows.push(result(1, Exit::Code(1)));
+    let settled = painted(&rows.rows(0)[0], 80);
+    assert_eq!(
+        said(&settled),
+        "✗ bash",
+        "a call a result settled on wears the cross of its verdict and the name it was called by"
+    );
+    assert_eq!(cell_inks(&settled)[0], Ink::Err);
+}
+
+#[test]
+fn a_result_the_cache_reads_on_its_own_still_says_the_tool_it_came_from() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(result(1, Exit::Code(0)));
+
+    assert_eq!(
+        said(&painted(&rows.rows(0)[0], 80)),
+        "✓ exit 0  bash  2 ms · 7 bytes",
+        "a result with no call above it names the tool, because no call row holds that name for it"
+    );
+}
+
+#[test]
 fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_the_call_row_holds()
 {
     let mut rows = Rows::new();
@@ -1183,7 +1223,7 @@ fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_t
     let settled: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         settled[..opened],
-        ["… bash", "  ls"],
+        ["✓ bash", "  ls"],
         "the call keeps the row it opened and the words it was called with: {settled:?}"
     );
     assert_eq!(
@@ -1198,7 +1238,7 @@ fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_t
 }
 
 #[test]
-fn a_result_with_no_verdict_draws_the_duration_and_the_size_alone_in_the_gutter() {
+fn a_result_with_no_verdict_says_the_numbers_and_guesses_no_exit() {
     let entry = Entry::Result {
         turn: 1,
         name: SecretSet::default().redact("bash"),
@@ -1212,9 +1252,9 @@ fn a_result_with_no_verdict_draws_the_duration_and_the_size_alone_in_the_gutter(
 
     assert_eq!(
         said(&painted(&rows[0], 40)),
-        "  2 ms · 7 bytes",
-        "a result with no verdict claims none: the numbers stand in a body's gutter and say \
-         nothing of the tool they came from"
+        "  bash  2 ms · 7 bytes",
+        "a result with no verdict claims none: the name stands in a body's gutter and the numbers \
+         it holds, with no `exit 0` guessed from the text beside them"
     );
 }
 
@@ -1316,7 +1356,7 @@ fn a_result_longer_than_its_fold_draws_its_head_its_last_row_and_the_count_of_ro
          its last row: {drawn:?}"
     );
     assert_eq!(
-        drawn[0], "✓ exit 0  1800 ms · 640 bytes",
+        drawn[0], "✓ exit 0  bash  1800 ms · 640 bytes",
         "the head opens with the verdict row, which a fold never takes away"
     );
     assert_eq!(
@@ -1577,7 +1617,7 @@ fn a_call_that_exited_zero_settles_on_a_check_and_its_code() {
     let rows = layout(&result(1, Exit::Code(0)), 40);
     let header = painted(&rows[0], 40);
 
-    assert_eq!(said(&header), "✓ exit 0  2 ms · 7 bytes");
+    assert_eq!(said(&header), "✓ exit 0  bash  2 ms · 7 bytes");
     assert_eq!(cell_inks(&header)[0], Ink::Ok, "the check is the good ink");
     assert!(
         cell_inks(&header)[2..].iter().all(|ink| *ink == Ink::Dim),
@@ -1591,7 +1631,7 @@ fn a_call_that_failed_settles_on_a_cross_and_the_code_it_exited_with() {
     let rows = layout(&result(1, Exit::Code(1)), 40);
     let header = painted(&rows[0], 40);
 
-    assert_eq!(said(&header), "✗ exit 1  2 ms · 7 bytes");
+    assert_eq!(said(&header), "✗ exit 1  bash  2 ms · 7 bytes");
     assert_eq!(cell_inks(&header)[0], Ink::Err, "the cross is the bad ink");
 }
 
@@ -1627,7 +1667,7 @@ fn a_result_body_is_drawn_in_the_quieter_ink_that_says_it_is_not_the_answer() {
 fn a_call_the_timeout_killed_says_timed_out() {
     let header = painted(&layout(&result(1, Exit::TimedOut), 40)[0], 40);
 
-    assert_eq!(said(&header), "✗ timed out  2 ms · 7 bytes");
+    assert_eq!(said(&header), "✗ timed out  bash  2 ms · 7 bytes");
     assert_eq!(cell_inks(&header)[0], Ink::Err);
 }
 
@@ -1690,7 +1730,7 @@ fn a_settled_call_keeps_its_words_above_the_row_that_says_how_it_ended() {
     let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         drawn[..2],
-        ["… bash", "  ls"],
+        ["✓ bash", "  ls"],
         "the entry is the call's rows first, so what was run stands above what came of it: \
          {drawn:?}"
     );

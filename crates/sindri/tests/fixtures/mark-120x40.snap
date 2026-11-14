@@ -10,7 +10,7 @@ mark at 120x40
 04 |  laid out once and kept, so the whole history scrolled through costs one layout per entry and scrolling it again costs | plain:120
 05 |  none.                                                                                                                 | plain:120
 06 |─ turn 5 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-07 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+07 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
 08 |  git diff --stat                                                                                                       | plain:120
 09 |✓ exit 0  9 ms · 128 bytes                                                                                              | ok:1 plain:1 dim:24 plain:94
 10 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | muted:47 plain:73
@@ -24,7 +24,7 @@ mark at 120x40
 18 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 19 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 20 |─ turn 6 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| mark:71 dim:49
-21 |… bash                                                                                                                  | mark:6 plain:114
+21 |✓ bash                                                                                                                  | mark:6 plain:114
 22 |  make check STAGES=frames                                                                                              | plain:2 mark:24 plain:94
 23 |✓ exit 0  31 ms · 104 bytes                                                                                             | mark:27 plain:93
 24 |  check: frame calls ... ok                                                                                             | muted:27 plain:93

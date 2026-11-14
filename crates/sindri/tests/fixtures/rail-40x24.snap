@@ -4,7 +4,7 @@ expression: drawn
 ---
 rail at 40x24
 00 |─ turn 1 ───────────────────────────────| dim:40
-01 |… bash                                  | dim:1 plain:1 dim:4 plain:34
+01 |✓ bash                                  | ok:1 plain:1 dim:4 plain:34
 02 |  rg -n 'fence' src                     | plain:40
 03 |✓ exit 0  23 ms · 412 bytes             | ok:1 plain:1 dim:25 plain:13
 04 |  src/rows.rs: the glyph a turn opens   | muted:37 plain:3

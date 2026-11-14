@@ -8,7 +8,7 @@ queue at 120x40
 02 |  Each is laid out once and kept, so the whole history scrolled through     think     high                              | plain:76 dim:10 plain:34
 03 |  costs one layout per entry and scrolling it again costs none.                                                         | plain:120
 04 |─ turn 5 ───────────────────────────────────────────────────────────────────turns                               6 /  250| dim:86 plain:34
-05 |… bash                                                                      ctx                      █░░░░░ 48.2k / 200k| dim:1 plain:1 dim:4 plain:70 dim:10 plain:16 dim:5 plain:13
+05 |✓ bash                                                                      ctx                      █░░░░░ 48.2k / 200k| ok:1 plain:1 dim:4 plain:70 dim:10 plain:16 dim:5 plain:13
 06 |  git diff --stat                                                           cache                                    88%| plain:76 dim:10 plain:34
 07 |✓ exit 0  9 ms · 128 bytes                                                                                              | ok:1 plain:1 dim:24 plain:94
 08 |  crates/sindri/src/rows.rs | 412 +++++++++++++                             workspace …/git/sindri/.worktrees/46-rail   | muted:47 plain:29 dim:10 plain:34
@@ -23,7 +23,7 @@ queue at 120x40
 17 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 18 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 19 |─ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
-20 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+20 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
 21 |  make check STAGES=frames                                                                                              | plain:120
 22 |✓ exit 0  31 ms · 104 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
 23 |  check: frame calls ... ok                                                                                             | muted:27 plain:93

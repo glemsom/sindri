@@ -15,7 +15,7 @@ streaming at 120x40
 09 |  code      │ behind a bar, highlighted                                     branch    spec/1-capability                 | plain:11 dim:3 plain:62 dim:10 plain:34
 10 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 11 |─ turn 6 ───────────────────────────────────────────────────────────────────skills                                     2| dim:86 plain:34
-12 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+12 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
 13 |  make check STAGES=frames                                                  sandbox   bwrap                             | plain:76 dim:10 plain:34
 14 |✓ exit 0  31 ms · 104 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
 15 |  check: frame calls ... ok                                                 session   9f2c7a41                          | muted:27 plain:49 dim:10 plain:34

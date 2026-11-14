@@ -10,7 +10,7 @@ transcript-scrolled at 80x24
 04 |  code      │ behind a bar, highlighted                                         | plain:11 dim:3 plain:66
 05 |  table     │ columns joined by a bar                                           | plain:11 dim:3 plain:66
 06 |─ turn 6 ───────────────────────────────────────────────────────────────────────| dim:80
-07 |… bash                                                                          | dim:1 plain:1 dim:4 plain:74
+07 |✓ bash                                                                          | ok:1 plain:1 dim:4 plain:74
 08 |  make check STAGES=frames                                                      | plain:80
 09 |✓ exit 0  31 ms · 104 bytes                                                     | ok:1 plain:1 dim:25 plain:53
 10 |  check: frame calls ... ok                                                     | muted:27 plain:53

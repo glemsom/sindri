@@ -4,7 +4,7 @@ expression: drawn
 ---
 face at 120x40
 00 |─ turn 1 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
-01 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+01 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
 02 |  rg -n 'fence' src                                                                                                     | plain:120
 03 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
 04 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78

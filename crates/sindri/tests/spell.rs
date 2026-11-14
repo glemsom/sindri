@@ -6,7 +6,7 @@ use sindri::spell;
 use sindri_core::tools::{BASH, OPEN, SKILL};
 
 #[test]
-fn a_bash_call_draws_the_command_line_a_reader_would_type() {
+fn a_bash_call_spells_its_command_line() {
     assert_eq!(
         spell::of(BASH, r#"{"command": "rg -n 'fence' src"}"#),
         "rg -n 'fence' src",
@@ -24,7 +24,7 @@ fn a_command_keeps_the_newlines_and_the_indent_it_was_written_with() {
 }
 
 #[test]
-fn a_skill_call_draws_the_skills_own_name() {
+fn a_skill_call_spells_its_name() {
     assert_eq!(
         spell::of(SKILL, r#"{"name": "rust-review"}"#),
         "rust-review"
@@ -32,7 +32,7 @@ fn a_skill_call_draws_the_skills_own_name() {
 }
 
 #[test]
-fn an_open_call_draws_the_path_it_names_and_a_url_when_it_names_no_path() {
+fn an_open_call_spells_its_path_and_a_url_where_it_names_no_path() {
     assert_eq!(
         spell::of(OPEN, r#"{"path": "crates/sindri/src/rows.rs"}"#),
         "crates/sindri/src/rows.rs"
@@ -45,7 +45,7 @@ fn an_open_call_draws_the_path_it_names_and_a_url_when_it_names_no_path() {
 }
 
 #[test]
-fn the_words_a_model_sent_instead_of_arguments_are_drawn_as_they_were_sent() {
+fn the_words_a_model_sent_instead_of_arguments_are_spelled_as_they_were_sent() {
     assert_eq!(spell::of(BASH, "ls -la"), "ls -la");
 }
 
@@ -80,6 +80,15 @@ fn an_argument_no_tool_spells_is_drawn_as_words_and_never_as_punctuation() {
         ),
         "all true depth 3 paths a.rs deep",
         "an array's items and an object's keys are words like any other, and a null says nothing"
+    );
+}
+
+#[test]
+fn an_argument_this_frame_cannot_read_is_spelled_as_the_words_it_holds() {
+    assert_eq!(
+        spell::of(BASH, "{\"command\": \"rg -n 'gutter' src"),
+        "command rg -n 'gutter' src",
+        "a truncated argument is words a reader can read, and never half a picture of the JSON it was"
     );
 }
 

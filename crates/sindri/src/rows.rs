@@ -6,7 +6,7 @@ use std::ops::Range;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use sindri_core::open::{self, Ground, Opening};
+use sindri_core::open::{Ground, Opening};
 use sindri_core::records::Entry;
 use sindri_core::run::Exit;
 use sindri_core::tools::OPEN;
@@ -263,17 +263,31 @@ fn laid(
         Entry::Call {
             name, arguments, ..
         } => (
-            opening(&name.to_string(), &arguments.to_string(), cols, ground),
+            opening(
+                &name.to_string(),
+                &arguments.to_string(),
+                cols,
+                ground,
+                None,
+            ),
             None,
         ),
         Entry::Result {
+            name,
             text,
             bytes,
             elapsed_ms,
             exit,
             ..
         } => folded(
-            settled(*exit, &text.to_string(), *bytes, *elapsed_ms, cols),
+            result_rows(
+                Some(&name.to_string()),
+                *exit,
+                &text.to_string(),
+                *bytes,
+                *elapsed_ms,
+                cols,
+            ),
             cols,
             fold,
         ),
@@ -415,44 +429,73 @@ fn margin(gutter: &str, cols: u16) -> (&str, u16) {
     }
 }
 
-/// The rows of a call still in flight: the marker and the tool's name in the gutter, and under them
-/// the words the call is drawn as, with the path it names a way to the file the run judged.
-fn opening(name: &str, arguments: &str, cols: u16, ground: Option<&Ground>) -> Vec<Row> {
+/// The rows a call opens with: the mark it wears and the tool's name in the gutter, and under them
+/// the words the call is drawn as. The mark is the check or the cross of the verdict that settled
+/// it, and the `…` of a call still out.
+fn opening(
+    name: &str,
+    arguments: &str,
+    cols: u16,
+    ground: Option<&Ground>,
+    exit: Option<Exit>,
+) -> Vec<Row> {
+    let words = spell::of(name, arguments);
+    let (marker, ink) = match exit {
+        Some(exit) => (mark(exit).to_string(), ink_of(exit)),
+        None => (PENDING.to_string(), Ink::Dim),
+    };
     let mut rows = vec![marked(
-        &PENDING.to_string(),
-        Ink::Dim,
+        &marker,
+        ink,
         vec![(String::from(name), Ink::Dim)],
         cols,
     )];
     rows.extend(body(
-        &spell::of(name, arguments),
+        &words,
         cols,
-        way(name, arguments, ground),
+        way(name, arguments, &words, ground),
         Ink::Plain,
     ));
     rows
 }
 
-/// The way a call names, when the run judged it one: the path as its words were written, which is
-/// how the row's cells are found, and the file the judgement resolved them to. A call that names
-/// nothing the run would open is no way at all.
-fn way(name: &str, arguments: &str, ground: Option<&Ground>) -> Option<Way> {
-    if name != OPEN {
+/// The way a call names, when the run judged it one: the words the row says are the path the run
+/// read, which is how its cells are found, and the file the judgement resolved them to. A call that
+/// names nothing the run would open is no way at all.
+fn way(name: &str, arguments: &str, written: &str, ground: Option<&Ground>) -> Option<Way> {
+    if name != OPEN || written.is_empty() {
         return None;
     }
-    let written = open::named_path(arguments)?;
     match ground?.judge(arguments).ok()? {
         Opening::File(path) => Some(Way::of(written, &path)),
         Opening::Url(_) => None,
     }
 }
 
-/// The row a settled call opens with: the verdict, how long the call took and how much it wrote, and
-/// never the name the call row already holds. A result with no verdict says the numbers alone rather
+/// The rows a result is drawn as: the row that says the verdict, the duration and the size, and the
+/// body it wrote under them. `name` is the tool's own where no call row above already says it.
+fn result_rows(
+    name: Option<&str>,
+    exit: Option<Exit>,
+    text: &str,
+    bytes: u64,
+    elapsed_ms: u64,
+    cols: u16,
+) -> Vec<Row> {
+    let mut rows = vec![settled(name, exit, bytes, elapsed_ms, cols)];
+    rows.extend(body(text, cols, None, Ink::Muted));
+    rows
+}
+
+/// The row a result opens with: the verdict, how long the call took and how much it wrote, and the
+/// name of its tool when `name` gives one. A result with no verdict says the numbers alone rather
 /// than guessing `exit 0` from the text beside it.
-fn settled(exit: Option<Exit>, text: &str, bytes: u64, elapsed_ms: u64, cols: u16) -> Vec<Row> {
-    let numbers = format!("{elapsed_ms} ms · {bytes} bytes");
-    let header = match exit {
+fn settled(name: Option<&str>, exit: Option<Exit>, bytes: u64, elapsed_ms: u64, cols: u16) -> Row {
+    let numbers = match name {
+        Some(name) => format!("{name}  {elapsed_ms} ms · {bytes} bytes"),
+        None => format!("{elapsed_ms} ms · {bytes} bytes"),
+    };
+    match exit {
         Some(exit) => marked(
             &mark(exit).to_string(),
             ink_of(exit),
@@ -463,10 +506,53 @@ fn settled(exit: Option<Exit>, text: &str, bytes: u64, elapsed_ms: u64, cols: u1
             let (gutter, room) = margin(INDENT, cols);
             fitted(vec![(numbers, Ink::Dim)], room).indented(gutter, Ink::Plain)
         }
+    }
+}
+
+/// The rows a call and the result that settled it are drawn as: the call's own words first, wearing
+/// the mark its verdict settled on, and the result's rows under them, which say no name the call's
+/// row above already holds. The fold is the result's rows' and never the call's.
+fn answered(
+    call: &Entry,
+    result: &Entry,
+    cols: u16,
+    surface: &Surface,
+    ground: Option<&Ground>,
+    fold: Fold,
+) -> (Vec<Row>, Option<usize>) {
+    let cols = cols.max(1);
+    let (
+        Entry::Call {
+            name, arguments, ..
+        },
+        Entry::Result {
+            text,
+            bytes,
+            elapsed_ms,
+            exit,
+            ..
+        },
+    ) = (call, result)
+    else {
+        let (mut rows, _) = laid(call, cols, surface, ground, fold);
+        let (under, kept) = laid(result, cols, surface, ground, fold);
+        rows.extend(under);
+        return (rows, kept);
     };
-    let mut rows = vec![header];
-    rows.extend(body(text, cols, None, Ink::Muted));
-    rows
+    let mut rows = opening(
+        &name.to_string(),
+        &arguments.to_string(),
+        cols,
+        ground,
+        *exit,
+    );
+    let (under, kept) = folded(
+        result_rows(None, *exit, &text.to_string(), *bytes, *elapsed_ms, cols),
+        cols,
+        fold,
+    );
+    rows.extend(under);
+    (rows, kept)
 }
 
 fn mark(exit: Exit) -> char {
@@ -853,19 +939,14 @@ impl Rows {
     /// called with stay above what came of it. The live entry has no fact behind it: nothing here.
     pub fn rows(&mut self, at: usize) -> &[Row] {
         let cols = self.cols;
+        let surface = &self.surface;
+        let ground = self.ground.as_ref();
         let held = &self.held[at];
-        let fold = held.fold;
         if held.rows.is_none() {
             let laid = match (&held.what, held.result.as_ref()) {
-                (What::Fact(call), None) => {
-                    Some(laid(call, cols, &self.surface, self.ground.as_ref(), fold))
-                }
+                (What::Fact(entry), None) => Some(laid(entry, cols, surface, ground, held.fold)),
                 (What::Fact(call), Some(result)) => {
-                    let (mut rows, _) = laid(call, cols, &self.surface, self.ground.as_ref(), fold);
-                    let (settled, kept) =
-                        laid(result, cols, &self.surface, self.ground.as_ref(), fold);
-                    rows.extend(settled);
-                    Some((rows, kept))
+                    Some(answered(call, result, cols, surface, ground, held.fold))
                 }
                 (What::Live { .. }, _) => None,
             };

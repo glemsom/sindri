@@ -4,14 +4,14 @@ expression: drawn
 ---
 tools at 120x40
 00 |─ turn 1 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-01 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+01 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
 02 |  rg -n 'the gutter' crates/sindri/src                                                                                  | plain:120
 03 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
 04 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
-05 |… open                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+05 |✓ open                                                                                                                  | ok:1 plain:1 dim:4 plain:114
 06 |  GLOSSARY.md                                                                                                           | plain:2 plain~dim:11 plain:107
 07 |✓ exit 0  4 ms · 0 bytes                                                                                                | ok:1 plain:1 dim:22 plain:96
-08 |… skill                                                                                                                 | dim:1 plain:1 dim:5 plain:113
+08 |✓ skill                                                                                                                 | ok:1 plain:1 dim:5 plain:113
 09 |  rust-review                                                                                                           | plain:120
 10 |✓ exit 0  2 ms · 33 bytes                                                                                               | ok:1 plain:1 dim:23 plain:95
 11 |  the rust-review skill is loaded                                                                                       | muted:33 plain:87

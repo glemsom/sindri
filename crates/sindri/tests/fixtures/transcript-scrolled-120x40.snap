@@ -12,7 +12,7 @@ transcript-scrolled at 120x40
 06 |  Each is laid out once and kept, so the whole history scrolled through     cache                                    88%| plain:76 dim:10 plain:34
 07 |  costs one layout per entry and scrolling it again costs none.                                                         | plain:120
 08 |─ turn 5 ───────────────────────────────────────────────────────────────────workspace …/git/sindri/.worktrees/46-rail   | dim:86 plain:34
-09 |… bash                                                                      branch    spec/1-capability                 | dim:1 plain:1 dim:4 plain:70 dim:10 plain:34
+09 |✓ bash                                                                      branch    spec/1-capability                 | ok:1 plain:1 dim:4 plain:70 dim:10 plain:34
 10 |  git diff --stat                                                                                                       | plain:120
 11 |✓ exit 0  9 ms · 128 bytes                                                  skills                                     2| ok:1 plain:1 dim:24 plain:50 dim:10 plain:34
 12 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | muted:47 plain:73
