@@ -490,7 +490,7 @@ fn send(
             match Launch::open(cli, config, FrontEnd::Terminal) {
                 Ok(opened) => opened,
                 Err(refusal) => {
-                    view.refused(refusal.message(), prompt);
+                    view.run_refused(refusal.message(), prompt);
                     paint(canvas, view)?;
                     return Ok(());
                 }
@@ -516,8 +516,8 @@ fn send(
 }
 
 /// Starts the next prompt the queue is holding, once the run before it has stopped: one prompt
-/// per stop, oldest first. A launch that cannot run at all is a row here as it is from a key, and
-/// the prompt already out of the queue with it is the reader's draft again.
+/// per stop, oldest first. A launch that cannot run is the row `send` draws, and the prompt it
+/// takes with it out of the queue is the frame's again.
 #[allow(
     clippy::too_many_arguments,
     reason = "the same seam `send` is, plus the prompt a run that stopped left queued"

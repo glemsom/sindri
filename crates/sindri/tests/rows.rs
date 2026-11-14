@@ -2232,7 +2232,7 @@ fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
     let Outcome::Send(prompt) = view.key(Key::Enter) else {
         panic!("a draft typed and sent is the prompt a run is asked with");
     };
-    view.refused("cannot create the sandbox: bubblewrap is on PATH", prompt);
+    view.run_refused("cannot create the sandbox: bubblewrap is on PATH", prompt);
     let drawn = frame(&mut view, 60, 12);
     let whole = drawn.join("\n");
     let at = |said: &str| {

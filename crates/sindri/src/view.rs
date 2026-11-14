@@ -377,14 +377,15 @@ impl View {
         self.rows.stopped(stop.clone());
     }
 
-    /// A run that could not start is the entry a stop is, in the refusal's own words, and the draft
-    /// it was asked with is the reader's again — unless the reader has typed one since, which is
-    /// theirs and is never overwritten.
-    pub fn refused(&mut self, refusal: &str, draft: Prompt) {
+    /// A run that could not start is the entry a stop is, and the prompt it was asked with is never
+    /// lost: an empty composer takes its words back as the draft, and a draft the reader has typed
+    /// since keeps its place while the prompt waits in the queue again.
+    pub fn run_refused(&mut self, refusal: &str, prompt: Prompt) {
         self.settle();
         self.stopped(&Stop::Error(SecretSet::default().redact(refusal)));
-        if self.composer.text().is_empty() {
-            self.composer.recall(draft);
+        match self.composer.text().is_empty() {
+            true => self.composer.recall(prompt),
+            false => self.enqueue(prompt),
         }
     }
 

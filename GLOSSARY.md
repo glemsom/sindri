@@ -40,9 +40,9 @@ _Avoid_: Exit status, failure, termination, reason
 
 **Refusal**:
 Why no run could start — no credential, a sandbox that will not build, a config the schema refuses. A
-run's refusal is drawn in the transcript as the entry a stop is drawn as, in the refusal's own words,
-and leaves the launch, the draft and the queue where they were; one no frame could survive is a line
-on the reader's shell and the end of the launch.
+run's refusal is drawn in the transcript as the entry a stop is drawn as, in the refusal's own words;
+the prompt it was asked with is the reader's again, and the launch, its conversation and its queue
+stand. One no frame could survive is a line on the reader's shell and the end of the launch.
 _Avoid_: Error, failure, exit, abort
 
 **Context window**:

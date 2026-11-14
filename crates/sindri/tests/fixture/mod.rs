@@ -784,7 +784,7 @@ fn refused_run() -> View {
     let mut view = running(transcript(), Scroll::Tail);
     view.paste("why does the retry test fail");
     match view.key(Key::Enter) {
-        Outcome::Send(prompt) => view.refused(
+        Outcome::Send(prompt) => view.run_refused(
             "cannot create the sandbox: bubblewrap is on PATH\n  fix:   install bubblewrap, or run \
              with --yolo-unsafe to run unconfined on purpose",
             prompt,
