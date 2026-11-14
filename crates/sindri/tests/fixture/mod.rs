@@ -844,7 +844,6 @@ fn refused_run() -> View {
     view
 }
 
-/// The prompts a reader types while a run is in flight.
 const DURING_A_RUN: &[&str] = &[
     "run the test that failed and read it",
     "then the fmt check",
@@ -859,7 +858,6 @@ fn queue() -> View {
     view
 }
 
-/// `view` with `prompts` typed during its run, in the order they were typed.
 fn waiting(mut view: View, prompts: &[&str]) -> View {
     for prompt in prompts {
         view.paste(prompt);
@@ -871,8 +869,7 @@ fn waiting(mut view: View, prompts: &[&str]) -> View {
     view
 }
 
-/// A run just asked and nothing said yet: the frame a launch's second prompt leaves, which is the
-/// one a live footer is drawn on.
+/// The frame a prompt just sent leaves: a run in flight and nothing said yet.
 fn asked() -> View {
     let mut view = View::boot();
     view.settle();

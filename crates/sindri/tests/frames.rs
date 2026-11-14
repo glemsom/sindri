@@ -344,12 +344,12 @@ fn footer_120x24_is_an_idle_draft_s_whole_set_of_six() {
 }
 
 #[test]
-fn footer_72x24_is_that_set_giving_up_the_newline() {
+fn footer_72x24_is_an_idle_frame_giving_up_the_newline() {
     fixture::assert_frame("footer", 72, 24);
 }
 
 #[test]
-fn footer_52x24_is_that_set_giving_up_the_quit_and_the_newline() {
+fn footer_52x24_is_an_idle_frame_giving_up_the_quit_and_the_newline() {
     fixture::assert_frame("footer", 52, 24);
 }
 
@@ -364,12 +364,12 @@ fn footer_live_120x24_is_a_live_run_s_whole_set_of_six() {
 }
 
 #[test]
-fn footer_live_72x24_is_that_set_giving_up_the_newline() {
+fn footer_live_72x24_is_a_live_run_giving_up_the_newline() {
     fixture::assert_frame("footer-live", 72, 24);
 }
 
 #[test]
-fn footer_live_52x24_is_that_set_giving_up_the_quit_and_the_newline() {
+fn footer_live_52x24_is_a_live_run_giving_up_the_quit_and_the_newline() {
     fixture::assert_frame("footer-live", 52, 24);
 }
 
@@ -384,7 +384,7 @@ fn footer_queue_120x24_is_three_waiting_beside_the_key_that_recalls_one() {
 }
 
 #[test]
-fn footer_queue_72x24_is_that_set_giving_up_the_newline() {
+fn footer_queue_72x24_is_a_queued_run_giving_up_the_newline() {
     fixture::assert_frame("footer-queue", 72, 24);
 }
 

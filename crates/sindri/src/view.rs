@@ -43,20 +43,17 @@ use crate::size::Sizes;
 use crate::stats;
 use crate::stream::{Said, Stream};
 
-/// The hints in survival order, most valuable first: the order a narrower footer gives them up
-/// in.
 #[derive(Clone, Copy)]
 struct Hint {
     key: &'static str,
-    says: Says,
+    meaning: Meaning,
     when: When,
 }
 
-/// What a hint's meaning is made of: words the frame always says the same, or the depth of the
-/// queue, which only the frame knows.
 #[derive(Clone, Copy)]
-enum Says {
+enum Meaning {
     Words(&'static str),
+    /// The queue's count, which only the frame knows.
     Depth,
 }
 
@@ -64,17 +61,15 @@ enum Says {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum When {
     Always,
-    /// A draft in this state: `Enter` sends an idle one, and `Ctrl-C` stops a live run.
     Draft(State),
-    /// Prompts waiting behind the draft: `↑` takes the newest back.
     Queue,
 }
 
 impl Hint {
     fn words<'a>(&self, depth: &'a str) -> &'a str {
-        match self.says {
-            Says::Words(words) => words,
-            Says::Depth => depth,
+        match self.meaning {
+            Meaning::Words(words) => words,
+            Meaning::Depth => depth,
         }
     }
 
@@ -83,45 +78,48 @@ impl Hint {
     }
 }
 
+/// The hints a frame can honour, in survival order, most valuable first: the order a narrower footer
+/// gives them up in. `End` is not among them: the row above the composer names it wherever the frame
+/// stands off the tail.
 const HINTS: [Hint; 8] = [
     Hint {
         key: "Enter",
-        says: Says::Words("send"),
+        meaning: Meaning::Words("send"),
         when: When::Draft(State::Idle),
     },
     Hint {
         key: "Ctrl-C",
-        says: Says::Words("cancel"),
+        meaning: Meaning::Words("cancel"),
         when: When::Draft(State::Running),
     },
     Hint {
         key: "↑",
-        says: Says::Depth,
+        meaning: Meaning::Depth,
         when: When::Queue,
     },
     Hint {
         key: "/",
-        says: Says::Words("commands"),
+        meaning: Meaning::Words("commands"),
         when: When::Always,
     },
     Hint {
         key: "@",
-        says: Says::Words("files"),
+        meaning: Meaning::Words("files"),
         when: When::Always,
     },
     Hint {
         key: "?",
-        says: Says::Words("keys"),
+        meaning: Meaning::Words("keys"),
         when: When::Always,
     },
     Hint {
         key: "Ctrl-Q",
-        says: Says::Words("quit"),
+        meaning: Meaning::Words("quit"),
         when: When::Always,
     },
     Hint {
         key: "Ctrl-J",
-        says: Says::Words("newline"),
+        meaning: Meaning::Words("newline"),
         when: When::Always,
     },
 ];
@@ -1368,7 +1366,6 @@ impl View {
         self.rail.clone().recorded(document, self.loaded.names())
     }
 
-    /// The hints this frame can honour, in survival order.
     fn hints(&self) -> Vec<Hint> {
         HINTS
             .into_iter()
@@ -2659,7 +2656,6 @@ mod tests {
             .collect()
     }
 
-    /// How deep the queue behind a frame's draft is, as the hint that recalls it says it.
     fn depth(view: &View) -> String {
         view.queue().label().unwrap_or_default()
     }
@@ -2670,7 +2666,6 @@ mod tests {
         said(&view.hints(), &depth(view))
     }
 
-    /// A prompt holding `text`: a draft pasted into a composer and sent.
     fn prompt(text: &str) -> Prompt {
         let mut composer = Composer::new();
         composer.paste(text);
@@ -2680,7 +2675,6 @@ mod tests {
         }
     }
 
-    /// A frame with its run in flight and `queued` prompts waiting behind the draft.
     fn asking(queued: usize) -> View {
         let mut view = View::boot();
         view.settle();
@@ -2691,7 +2685,6 @@ mod tests {
         view
     }
 
-    /// The footer row `view` draws at `cols` columns.
     fn drawn_footer(view: &mut View, cols: u16, rows: u16) -> String {
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
@@ -2763,35 +2756,28 @@ mod tests {
         }
     }
 
+    /// The hints a footer row reads as: each a key, one blank and the words that say what it does.
+    fn said_row(row: &str) -> Vec<&str> {
+        match row.is_empty() {
+            true => Vec::new(),
+            false => row.split(GAP).collect(),
+        }
+    }
+
     #[test]
     fn each_set_is_cut_in_survival_order_at_four_widths() {
         for mut view in [View::boot(), asking(0), asking(3)] {
-            let set = whole(&view);
-            for cols in [120, 72, 56, 40] {
+            let mut cut: Vec<usize> = Vec::new();
+            for cols in [120, 72, 52, 40] {
                 let drawn = drawn_footer(&mut view, cols, 24);
-                let row = drawn.trim_end();
-                let parts: Vec<&str> = if row.is_empty() {
-                    Vec::new()
-                } else {
-                    row.split(GAP).collect()
-                };
-                let kept: Vec<&str> = set.iter().take(parts.len()).map(String::as_str).collect();
-
-                assert!(
-                    !parts.is_empty(),
-                    "at {cols} columns no hint is drawn at all"
-                );
-                assert_eq!(
-                    parts, kept,
-                    "at {cols} columns the footer reads {row:?}, which is not a run of whole hints \
-                     from the front of {set:?}"
-                );
-                assert!(
-                    pen::cells(row) <= cols,
-                    "at {cols} columns the footer's {row:?} is {} cells wide",
-                    pen::cells(row)
-                );
+                cut.push(said_row(drawn.trim_end()).len());
             }
+
+            assert!(
+                cut.windows(2).all(|pair| pair[0] > pair[1]) && cut[3] > 0,
+                "the four widths a fixture proves cut this frame's set to {cut:?}, which is not \
+                 one hint given up at every narrowing"
+            );
         }
     }
 
@@ -2802,17 +2788,18 @@ mod tests {
             for cols in 20..=200u16 {
                 let drawn = drawn_footer(&mut view, cols, 24);
                 let row = drawn.trim_end();
-                let parts: Vec<&str> = if row.is_empty() {
-                    Vec::new()
-                } else {
-                    row.split(GAP).collect()
-                };
-                let kept: Vec<&str> = set.iter().take(parts.len()).map(String::as_str).collect();
+                let said = said_row(row);
+                let prefix: Vec<&str> = set.iter().take(said.len()).map(String::as_str).collect();
 
                 assert_eq!(
-                    parts, kept,
+                    said, prefix,
                     "at {cols} columns the footer reads {row:?}, which is not a run of whole hints \
                      from the front of {set:?}"
+                );
+                assert!(
+                    pen::cells(row) <= cols,
+                    "at {cols} columns the footer's {row:?} is {} cells wide",
+                    pen::cells(row)
                 );
             }
         }
@@ -2849,12 +2836,12 @@ mod tests {
         let hints = [
             Hint {
                 key: "Enter",
-                says: Says::Words("send"),
+                meaning: Meaning::Words("send"),
                 when: When::Always,
             },
             Hint {
                 key: "日本",
-                says: Says::Words("語"),
+                meaning: Meaning::Words("語"),
                 when: When::Always,
             },
         ];
@@ -3661,28 +3648,21 @@ mod tests {
 
     #[test]
     fn every_hint_the_table_writes_is_drawn_in_the_frame_that_honours_it() {
-        let mut drawn: Vec<(String, String)> = Vec::new();
+        let mut drawn: Vec<&'static str> = Vec::new();
         for view in [View::boot(), asking(0), asking(3)] {
             let depth = depth(&view);
             for width in 20..=200u16 {
                 for hint in kept(&view.hints(), width, &depth) {
-                    let said = (hint.key.to_owned(), hint.words(&depth).to_owned());
-                    if !drawn.contains(&said) {
-                        drawn.push(said);
-                    }
+                    drawn.push(hint.key);
                 }
             }
         }
         for hint in HINTS {
-            let words = hint.words("3 queued");
             assert!(
-                drawn
-                    .iter()
-                    .any(|(key, said)| key == hint.key && said == words),
-                "no frame between twenty and two hundred columns draws {:?} {:?}, so it is a\
-                 key the table writes down and no reader is ever shown",
-                hint.key,
-                words
+                drawn.contains(&hint.key),
+                "no frame between twenty and two hundred columns draws {:?}, so it is a key the \
+                 table writes down and no reader is ever shown",
+                hint.key
             );
         }
     }
