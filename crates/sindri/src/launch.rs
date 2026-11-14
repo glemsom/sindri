@@ -153,7 +153,7 @@ impl Launch {
         let ask = ask(config, wire, model.clone(), &workspace);
         let route = ask.route_of();
         let thinking = ask.thinks();
-        let asking = Asking::new(client, ask);
+        let asking = Asking::new(client, ask, tools.clone());
         let shell = Shell::new(boundary.clone(), session.temp(), catalog);
 
         let record = Record::open(
@@ -250,6 +250,12 @@ impl Launch {
             if let Some(exchange) = run.history().last() {
                 let turn = counted + exchange.turn;
                 note(self.record.turn_started(turn));
+                // Each call is written beside what came of it, in the order both were made: the
+                // rows a screen draws pair a result to the oldest call still waiting for one.
+                for (call, acted) in exchange.calls.iter().zip(&exchange.results) {
+                    note(self.record.called(turn, call));
+                    note(self.record.resulted(turn, call, acted));
+                }
                 note(self.record.answered(turn, &exchange.text));
                 // A turn whose report carries no size leaves the one the turn before stated.
                 if exchange.usage.input.is_some() {

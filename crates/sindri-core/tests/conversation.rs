@@ -11,6 +11,7 @@ fn ended(prompt: &str, text: &str) -> Exchange {
         prompt: String::from(prompt),
         text: String::from(text),
         calls: Vec::new(),
+        results: Vec::new(),
         usage: Usage::default(),
     }
 }

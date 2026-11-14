@@ -42,7 +42,7 @@ impl Responder for Loopy {
         deltas.text("more");
         Ok(Reply::asking(
             "more",
-            [Call::new("bash", r#"{"command":"true"}"#)],
+            [Call::new("toolu_1", "bash", r#"{"command":"true"}"#)],
         ))
     }
 }

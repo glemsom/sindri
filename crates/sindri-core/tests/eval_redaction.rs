@@ -125,7 +125,11 @@ fn planted(field: &str) -> bool {
 fn written(ground: &Ground) -> Vec<String> {
     let session = ground.session();
     let mut record = ground.record(&session);
-    let call = Call::new(SECRET, format!(r#"{{"command": "echo {SECRET}"}}"#));
+    let call = Call::new(
+        "toolu_1",
+        SECRET,
+        format!(r#"{{"command": "echo {SECRET}"}}"#),
+    );
 
     record
         .asked(&format!("the key is {SECRET}, so triage this"))

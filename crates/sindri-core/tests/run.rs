@@ -71,7 +71,7 @@ impl Responder for Scripted {
 }
 
 fn command(line: &str) -> Call {
-    Call::new("bash", format!(r#"{{"command":"{line}"}}"#))
+    Call::new("toolu_1", "bash", format!(r#"{{"command":"{line}"}}"#))
 }
 
 fn loopy() -> Reply {
@@ -260,6 +260,7 @@ fn ended(turn: u32, prompt: &str, text: &str) -> Exchange {
         prompt: String::from(prompt),
         text: String::from(text),
         calls: Vec::new(),
+        results: Vec::new(),
         usage: Usage::default(),
     }
 }
@@ -930,7 +931,7 @@ fn the_bash_executor_counts_the_bytes_its_command_wrote() {
 
     let acted = shell
         .execute(
-            &Call::new("bash", r#"{"command":"printf hi"}"#),
+            &Call::new("toolu_1", "bash", r#"{"command":"printf hi"}"#),
             &mut Loaded::default(),
         )
         .expect("the command runs");
@@ -949,7 +950,7 @@ fn the_bash_executor_says_how_the_call_ended() {
     let mut run = |command: &str| {
         shell
             .execute(
-                &Call::new("bash", format!(r#"{{"command":"{command}"}}"#)),
+                &Call::new("toolu_1", "bash", format!(r#"{{"command":"{command}"}}"#)),
                 &mut loaded,
             )
             .expect("the command runs")
@@ -980,7 +981,10 @@ fn the_bash_executor_says_how_the_call_ended() {
     )
     .expect("the boundary holds");
     let killed = Shell::new(impatient, &workspace, Catalog::default())
-        .execute(&Call::new("bash", r#"{"command":"sleep 30"}"#), &mut loaded)
+        .execute(
+            &Call::new("toolu_1", "bash", r#"{"command":"sleep 30"}"#),
+            &mut loaded,
+        )
         .expect("the command runs");
 
     assert_eq!(killed.exit, Exit::TimedOut, "the timeout says so");
@@ -992,7 +996,7 @@ fn a_bash_call_that_names_no_command_is_an_error() {
     let shell = Shell::new(boundary, &workspace, Catalog::default());
 
     let missing = shell
-        .execute(&Call::new("bash", "{}"), &mut Loaded::default())
+        .execute(&Call::new("toolu_1", "bash", "{}"), &mut Loaded::default())
         .expect_err("no command was written, so nothing can run");
     assert!(
         missing.to_string().contains("command"),
@@ -1000,7 +1004,7 @@ fn a_bash_call_that_names_no_command_is_an_error() {
     );
 
     let unimplemented = shell
-        .execute(&Call::new("open", "{}"), &mut Loaded::default())
+        .execute(&Call::new("toolu_1", "open", "{}"), &mut Loaded::default())
         .expect_err("this executor answers bash and skill and nothing else");
     assert!(
         unimplemented.to_string().contains("open"),
@@ -1056,7 +1060,7 @@ impl SkillGround {
     }
 
     fn load(&self, name: &str) -> Call {
-        Call::new("skill", format!(r#"{{"name":"{name}"}}"#))
+        Call::new("toolu_1", "skill", format!(r#"{{"name":"{name}"}}"#))
     }
 
     fn recorded(&self) -> (Recorded, Arc<Mutex<Vec<String>>>) {
@@ -1181,7 +1185,10 @@ fn a_user_only_skill_is_refused_when_the_model_names_it_anyway() {
     let mut loaded = Loaded::default();
 
     let refused = shell
-        .execute(&Call::new("skill", r#"{"name":"handover"}"#), &mut loaded)
+        .execute(
+            &Call::new("toolu_1", "skill", r#"{"name":"handover"}"#),
+            &mut loaded,
+        )
         .expect_err("the model may not load a skill its frontmatter withholds");
 
     assert!(
@@ -1318,7 +1325,7 @@ fn a_builtin_skill_loads_from_the_binary_and_lists_no_files_beside_it() {
 
     let acted = shell
         .execute(
-            &Call::new("skill", r#"{"name":"commit-message"}"#),
+            &Call::new("toolu_1", "skill", r#"{"name":"commit-message"}"#),
             &mut loaded,
         )
         .expect("the binary carries this skill");
@@ -1372,7 +1379,7 @@ fn a_call_the_users_word_stops_is_a_cancelled_exit() {
     let calling = std::thread::spawn(move || {
         shell
             .execute(
-                &Call::new("bash", format!(r#"{{"command":"{line}"}}"#)),
+                &Call::new("toolu_1", "bash", format!(r#"{{"command":"{line}"}}"#)),
                 &mut Loaded::default(),
             )
             .expect("the command runs")

@@ -1164,3 +1164,70 @@ fn a_copilot_run_with_no_sign_in_names_the_command_that_signs_in() {
         wire.requests()
     );
 }
+
+const TOOL_USE: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_tool_use.sse");
+
+#[test]
+fn a_reply_that_asks_for_the_files_in_the_folder_runs_bash_and_answers_with_what_it_printed() {
+    let ground = Ground::new();
+    std::fs::write(ground.workspace.join("note.txt"), "hello").expect("a file to list");
+    let wire = Wire::answering(vec![Reply::stream(TOOL_USE), Reply::stream(ANTHROPIC)]);
+
+    let output = ground
+        .asking(&wire, "List files in this folder")
+        .output()
+        .expect("the binary should run");
+
+    assert_eq!(output.status.code(), Some(0), "an answer, not a stop");
+    assert_eq!(
+        text(&output.stdout),
+        format!("{ANSWER}\n"),
+        "the answer is the words of the turn that followed the call"
+    );
+
+    let asked = wire.requests();
+    assert_eq!(
+        asked.len(),
+        2,
+        "the run asks again with what the call printed"
+    );
+    assert!(
+        asked[0].contains("\"name\":\"bash\""),
+        "the wire is told the run's `bash` tool: {}",
+        asked[0]
+    );
+
+    let transcript =
+        std::fs::read_to_string(ground.session().join("transcript.jsonl")).expect("the transcript");
+    let kinds: Vec<String> = transcript
+        .lines()
+        .map(|line| {
+            let entry: serde_json::Value = serde_json::from_str(line).expect("an entry");
+            entry["kind"].as_str().expect("a kind").to_owned()
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            "prompt",
+            "turn",
+            "call",
+            "result",
+            "assistant",
+            "turn",
+            "assistant",
+            "stop"
+        ],
+        "the call and what came of it are facts of the turn they ran in: {transcript}"
+    );
+    assert!(
+        transcript.contains("note.txt"),
+        "the file the command printed is what the record keeps: {transcript}"
+    );
+    assert!(
+        asked[1].contains("note.txt") && asked[1].contains("tool_use_id"),
+        "and the wire is told it against the call that asked: {}",
+        asked[1]
+    );
+}

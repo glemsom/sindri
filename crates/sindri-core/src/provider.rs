@@ -13,7 +13,11 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use rig_core::Model;
-use rig_core::completion::message::{AssistantContent, Message};
+use rig_core::completion::ToolDefinition;
+use rig_core::completion::message::{
+    AssistantContent, AssistantMessage, CallId, Message, ToolCall, ToolFunction, ToolName,
+    ToolResult, ToolResultContent,
+};
 use rig_core::completion::{
     CompletionRequest, CompletionResponse, Effort, GenerationOptions, Reasoning,
 };
@@ -28,6 +32,7 @@ use self::retry::{Backoff, Sleep, until_final};
 pub use self::route::Route;
 use self::transport::Http;
 use crate::redact::{MASK, Redacted, SecretSet};
+use crate::tools::Tool;
 use crate::wire::Wire;
 
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -63,6 +68,62 @@ pub struct Earlier {
     pub answer: String,
 }
 
+/// A call the model asked for: the wire's identity for it, the tool's name, and the arguments
+/// as JSON text, so a call that does not parse still reaches the executor that judges it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Call {
+    pub id: String,
+    pub name: String,
+    pub arguments: String,
+}
+
+/// A turn already taken: the words it answered with, and each call it asked for beside the text
+/// that call answered with. The next ask replays these, so the model reads what its calls printed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Turn {
+    pub text: String,
+    pub calls: Vec<(Call, String)>,
+}
+
+impl Turn {
+    /// The messages this turn adds to the conversation: what the model said and asked for, then a
+    /// message of results answering those calls. Anthropic pairs results to calls by the wire's own
+    /// id, so the id is carried rather than minted here.
+    fn messages(&self) -> Vec<Message> {
+        let mut content = Vec::new();
+        if !self.text.trim().is_empty() {
+            content.push(AssistantContent::text(self.text.clone()));
+        }
+        let mut results = Vec::new();
+        for (call, answered) in &self.calls {
+            let Ok(name) = ToolName::new(call.name.clone()) else {
+                continue;
+            };
+            let id = CallId::from_wire(call.id.clone());
+            let arguments =
+                serde_json::from_str(&call.arguments).unwrap_or(serde_json::Value::Null);
+            content.push(AssistantContent::ToolCall(ToolCall::new(
+                id.clone(),
+                ToolFunction::new(name.clone(), arguments),
+            )));
+            results.push(ToolResult {
+                call: id,
+                name,
+                content: vec![ToolResultContent::text(answered.clone())],
+                is_error: false,
+            });
+        }
+        if content.is_empty() {
+            return Vec::new();
+        }
+        let mut messages = vec![Message::Assistant(AssistantMessage::new(content))];
+        if !results.is_empty() {
+            messages.push(Message::tool_results(results));
+        }
+        messages
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ask {
     wire: Wire,
@@ -71,6 +132,8 @@ pub struct Ask {
     credential: Credential,
     preamble: Option<String>,
     earlier: Vec<Earlier>,
+    turns: Vec<Turn>,
+    tools: Vec<ToolDefinition>,
     prompt: String,
     thinking: bool,
     route: Option<Route>,
@@ -85,6 +148,8 @@ impl Ask {
             credential: Credential::none(),
             preamble: None,
             earlier: Vec::new(),
+            turns: Vec::new(),
+            tools: Vec::new(),
             prompt: String::new(),
             thinking: false,
             route: None,
@@ -103,6 +168,26 @@ impl Ask {
 
     pub fn earlier(mut self, earlier: impl IntoIterator<Item = Earlier>) -> Self {
         self.earlier = earlier.into_iter().collect();
+        self
+    }
+
+    /// The tools the model may call, as their names, descriptions and argument schemas. A wire that
+    /// is told none is a wire the model can only answer with words.
+    pub fn tools(mut self, tools: &[Tool]) -> Self {
+        self.tools = tools
+            .iter()
+            .filter_map(|tool| {
+                ToolName::new(tool.name()).ok().map(|name| {
+                    ToolDefinition::new(name, tool.description(), tool.parameters().clone())
+                })
+            })
+            .collect();
+        self
+    }
+
+    /// The turns this run has already taken, each beside what its calls answered.
+    pub fn turns(mut self, turns: impl IntoIterator<Item = Turn>) -> Self {
+        self.turns = turns.into_iter().collect();
         self
     }
 
@@ -164,7 +249,15 @@ impl Ask {
     }
 
     fn request(&self) -> CompletionRequest {
-        let mut request = CompletionRequest::new(self.prompt.clone()).messages(self.replayed());
+        let mut conversation = self.replayed();
+        conversation.push(Message::user(self.prompt.clone()));
+        conversation.extend(self.turns.iter().flat_map(Turn::messages));
+        // A request's last message is what is being asked, and `messages` adds ahead of it: the run's
+        // newest turn ends the conversation, and its prompt when it has taken none.
+        let last = conversation.pop().expect("the prompt was pushed");
+        let mut request = CompletionRequest::new(last)
+            .messages(conversation)
+            .tools(self.tools.iter().cloned());
         if let Some(preamble) = &self.preamble {
             request = request.preamble(preamble.clone());
         }
@@ -199,23 +292,32 @@ pub struct Usage {
 pub struct Answer {
     pub text: String,
     pub reasoning: Option<String>,
+    pub calls: Vec<Call>,
     pub usage: Usage,
 }
 
 impl From<&CompletionResponse> for Answer {
     fn from(response: &CompletionResponse) -> Self {
-        let text: String = response
-            .choice
-            .iter()
-            .filter_map(|content| match content {
-                AssistantContent::Text(text) => Some(text.text.as_str()),
-                _ => None,
-            })
-            .collect();
+        let mut text = String::new();
+        let mut calls = Vec::new();
+        for content in &response.choice {
+            match content {
+                AssistantContent::Text(fragment) => text.push_str(&fragment.text),
+                AssistantContent::ToolCall(call) => calls.push(Call {
+                    id: call.id.wire().into_owned(),
+                    name: call.function.name.to_string(),
+                    arguments: call.function.invalid_arguments.clone().unwrap_or_else(|| {
+                        serde_json::to_string(&call.function.arguments).unwrap_or_default()
+                    }),
+                }),
+                _ => {}
+            }
+        }
         let reasoning = response.reasoning();
         Self {
             text,
             reasoning: (!reasoning.is_empty()).then_some(reasoning),
+            calls,
             usage: Usage {
                 input: response.usage.input_tokens,
                 output: response.usage.output_tokens,

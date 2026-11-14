@@ -373,7 +373,7 @@ fn a_tool_call_and_its_result_are_two_entries_of_their_own_facts() {
     let ground = Ground::new();
     let session = ground.session();
     let mut record = ground.record(&session);
-    let call = Call::new("bash", r#"{"command": "ls"}"#);
+    let call = Call::new("toolu_1", "bash", r#"{"command": "ls"}"#);
 
     record.turn_started(1).expect("a turn start is recorded");
     record.called(1, &call).expect("a call is recorded");
@@ -414,7 +414,7 @@ fn a_result_writes_the_verdict_its_call_settled_with() {
     let ground = Ground::new();
     let session = ground.session();
     let mut record = ground.record(&session);
-    let call = Call::new("bash", r#"{"command": "ls"}"#);
+    let call = Call::new("toolu_1", "bash", r#"{"command": "ls"}"#);
 
     for (turn, exit) in [
         (1, Exit::Code(0)),
@@ -494,7 +494,7 @@ fn the_assistant_entry_lands_when_the_turn_ends() {
     let ground = Ground::new();
     let session = ground.session();
     let mut record = ground.record(&session);
-    let call = Call::new("bash", r#"{"command": "ls"}"#);
+    let call = Call::new("toolu_1", "bash", r#"{"command": "ls"}"#);
 
     record.turn_started(1).expect("a turn start is recorded");
     record.called(1, &call).expect("a call is recorded");
@@ -577,7 +577,7 @@ fn no_line_of_the_record_carries_a_secret() {
     let ground = Ground::new().holding("hunter2");
     let session = ground.session();
     let mut record = ground.record(&session);
-    let call = Call::new("bash", r#"{"command": "echo hunter2"}"#);
+    let call = Call::new("toolu_1", "bash", r#"{"command": "echo hunter2"}"#);
 
     record
         .asked("the key is hunter2, so triage this")
@@ -1190,7 +1190,7 @@ fn child_writes_entries_until_it_is_killed() {
         },
     )
     .expect("a record");
-    let call = Call::new("bash", r#"{"command": "echo hello"}"#);
+    let call = Call::new("toolu_1", "bash", r#"{"command": "echo hello"}"#);
     let acted = Acted {
         text: String::from("exit 0\nhello\n"),
         bytes: 12,

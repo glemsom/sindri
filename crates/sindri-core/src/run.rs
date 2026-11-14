@@ -257,13 +257,20 @@ impl Spent {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Call {
+    /// The wire's own identity for this call, which its result is answered against.
+    pub id: String,
     pub name: String,
     pub arguments: String,
 }
 
 impl Call {
-    pub fn new(name: impl Into<String>, arguments: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        arguments: impl Into<String>,
+    ) -> Self {
         Call {
+            id: id.into(),
             name: name.into(),
             arguments: arguments.into(),
         }
@@ -351,6 +358,7 @@ pub struct Exchange {
     pub prompt: String,
     pub text: String,
     pub calls: Vec<Call>,
+    pub results: Vec<Acted>,
     pub usage: Usage,
 }
 
@@ -524,6 +532,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             prompt: self.prompt.clone(),
             text: last.map(|ended| ended.text.clone()).unwrap_or_default(),
             calls: last.map(|ended| ended.calls.clone()).unwrap_or_default(),
+            results: last.map(|ended| ended.results.clone()).unwrap_or_default(),
             usage: last.map(|ended| ended.usage).unwrap_or_default(),
         }
     }
@@ -575,14 +584,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
                 return self.state();
             }
         };
-        self.history.push(Exchange {
-            turn: self.turns,
-            prompt: self.prompt.clone(),
-            text: reply.text.clone(),
-            calls: reply.calls.clone(),
-            usage: reply.usage,
-        });
-
+        let mut results = Vec::with_capacity(reply.calls.len());
         for call in &reply.calls {
             let acted = match self.executor.execute(call, &mut self.skills) {
                 Ok(acted) => acted,
@@ -592,6 +594,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
                 }
             };
             self.spent.charge(acted.elapsed, acted.bytes);
+            results.push(acted);
             if self.cancel.is_set() {
                 self.settle(Stop::Cancelled);
                 break;
@@ -601,6 +604,17 @@ impl<R: Responder, A: Executor> Run<R, A> {
                 break;
             }
         }
+
+        // The turn is kept once its calls have run, so the exchange a later ask replays carries
+        // what each call answered rather than a call the model would read as never having run.
+        self.history.push(Exchange {
+            turn: self.turns,
+            prompt: self.prompt.clone(),
+            text: reply.text.clone(),
+            calls: reply.calls.clone(),
+            results,
+            usage: reply.usage,
+        });
 
         if self.state.is_running() && reply.calls.is_empty() {
             self.answer = Some(reply.text);

@@ -1,3 +1,5 @@
+use serde_json::{Value, json};
+
 use crate::open;
 use crate::policy::Boundary;
 use crate::skills::Catalog;
@@ -18,6 +20,7 @@ pub enum FrontEnd {
 pub struct Tool {
     name: &'static str,
     description: String,
+    parameters: Value,
 }
 
 impl Tool {
@@ -28,6 +31,21 @@ impl Tool {
     pub fn description(&self) -> &str {
         &self.description
     }
+
+    /// The schema a call's arguments must match, so a wire knows the shape of what it asks for.
+    pub fn parameters(&self) -> &Value {
+        &self.parameters
+    }
+}
+
+/// One string argument, named and required: every tool here takes exactly one.
+fn argument(name: &str, described: &str) -> Value {
+    json!({
+        "type": "object",
+        "properties": {name: {"type": "string", "description": described}},
+        "required": [name],
+        "additionalProperties": false
+    })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,17 +58,27 @@ impl ToolSet {
         let mut tools = vec![Tool {
             name: BASH,
             description: boundary.description(),
+            parameters: argument("command", "The command line to run with `bash`."),
         }];
         if let Some(description) = catalog.tool_description() {
             tools.push(Tool {
                 name: SKILL,
                 description,
+                parameters: argument("name", "The skill to load, as the description names it."),
             });
         }
         if front_end == FrontEnd::Terminal {
             tools.push(Tool {
                 name: OPEN,
                 description: open::description(boundary),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "A web page to open."},
+                        "path": {"type": "string", "description": "A file to open."}
+                    },
+                    "additionalProperties": false
+                }),
             });
         }
         ToolSet { tools }

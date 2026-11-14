@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl-tool","object":"chat.completion.chunk","created":1760000001,"model":"gpt-4o-2024-11-20","choices":[{"index":0,"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_01","type":"function","function":{"name":"bash","arguments":""}}]},"logprobs":null,"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool","object":"chat.completion.chunk","created":1760000001,"model":"gpt-4o-2024-11-20","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"command\": "}}]},"logprobs":null,"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool","object":"chat.completion.chunk","created":1760000001,"model":"gpt-4o-2024-11-20","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"ls\"}"}}]},"logprobs":null,"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool","object":"chat.completion.chunk","created":1760000001,"model":"gpt-4o-2024-11-20","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls"}],"usage":null}
+
+data: [DONE]
+

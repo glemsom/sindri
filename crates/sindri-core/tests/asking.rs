@@ -4,10 +4,14 @@
 
 use serde_json::{Value, json};
 use sindri_core::asking::Asking;
+use sindri_core::config::Config;
+use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Deltas, Usage};
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{Acted, Call, Exchange, Executor, Loaded, Run, State, Stop};
+use sindri_core::skills::Catalog;
+use sindri_core::tools::{FrontEnd, ToolSet};
 use sindri_core::wire::Wire;
 
 const ANTHROPIC: &str = include_str!("fixtures/providers/anthropic_stream.sse");
@@ -16,6 +20,17 @@ const BAD_REQUEST: &str = r#"{"error":{"message":"unknown model","type":"invalid
 
 fn client_over(replay: &Replay) -> Client {
     Client::over(replay.clone(), SecretSet::default()).waits(|_| {})
+}
+
+fn tools() -> ToolSet {
+    let workspace = tempfile::tempdir().expect("a temp dir");
+    let boundary = Boundary::from_config(
+        &Config::default(),
+        workspace.path(),
+        Enforcement::Bubblewrap,
+    )
+    .expect("the boundary holds");
+    ToolSet::new(&boundary, &Catalog::default(), FrontEnd::Batch)
 }
 
 fn ask() -> Ask {
@@ -54,6 +69,7 @@ fn turned(turn: u32, prompt: &str, answer: &str) -> Exchange {
         prompt: String::from(prompt),
         text: String::from(answer),
         calls: Vec::new(),
+        results: Vec::new(),
         usage: Usage::default(),
     }
 }
@@ -76,7 +92,7 @@ fn body_for(asking: Asking, replay: &Replay) -> String {
 fn a_turns_own_words_and_the_preamble_are_what_the_wire_is_asked() {
     let replay = Replay::new([Canned::stream(ANTHROPIC)]);
 
-    let body = body_for(Asking::new(client_over(&replay), ask()), &replay);
+    let body = body_for(Asking::new(client_over(&replay), ask(), tools()), &replay);
 
     assert!(
         body.contains("triage this"),
@@ -102,7 +118,7 @@ fn the_answers_text_is_what_the_run_answers_with() {
     let replay = Replay::new([Canned::stream(ANTHROPIC)]);
     let mut run = Run::new(
         "triage this",
-        Asking::new(client_over(&replay), ask()),
+        Asking::new(client_over(&replay), ask(), tools()),
         Unreached,
     );
     let mut transcript = Transcript::default();
@@ -125,7 +141,7 @@ fn the_answers_text_is_what_the_run_answers_with() {
 #[test]
 fn a_reply_carries_what_its_ask_spent_and_the_total_stays_the_runs() {
     let replay = Replay::new([Canned::stream(ANTHROPIC), Canned::stream(ANTHROPIC)]);
-    let asking = Asking::new(client_over(&replay), ask());
+    let asking = Asking::new(client_over(&replay), ask(), tools());
     let mut first = Run::new("triage this", asking.clone(), Unreached);
     let mut second = Run::new("triage this", asking.clone(), Unreached);
 
@@ -154,7 +170,7 @@ fn a_refused_ask_stops_the_run_in_the_one_line_safe_to_print() {
     let replay = Replay::new([Canned::reply(400, BAD_REQUEST)]);
     let mut run = Run::new(
         "triage this",
-        Asking::new(client_over(&replay), ask()),
+        Asking::new(client_over(&replay), ask(), tools()),
         Unreached,
     );
     let mut transcript = Transcript::default();
@@ -175,11 +191,11 @@ fn a_refused_ask_stops_the_run_in_the_one_line_safe_to_print() {
 #[test]
 fn thinking_is_asked_for_when_the_run_asked_for_it_and_never_otherwise() {
     let asking = Replay::new([Canned::stream(ANTHROPIC)]);
-    let quiet = body_for(Asking::new(client_over(&asking), ask()), &asking);
+    let quiet = body_for(Asking::new(client_over(&asking), ask(), tools()), &asking);
 
     let thinking = Replay::new([Canned::stream(ANTHROPIC)]);
     let thought = body_for(
-        Asking::new(client_over(&thinking), ask().thinking(true)),
+        Asking::new(client_over(&thinking), ask().thinking(true), tools()),
         &thinking,
     );
 
@@ -198,7 +214,7 @@ fn the_turns_that_ended_before_a_run_are_asked_ahead_of_its_prompt() {
     let replay = Replay::new([Canned::stream(ANTHROPIC)]);
     let mut run = Run::new(
         "what is my name?",
-        Asking::new(client_over(&replay), ask()),
+        Asking::new(client_over(&replay), ask(), tools()),
         Unreached,
     )
     .earlier(vec![
@@ -237,7 +253,7 @@ fn a_turn_that_ended_with_no_answer_is_not_sent_as_an_empty_message() {
     let replay = Replay::new([Canned::stream(ANTHROPIC)]);
     let mut run = Run::new(
         "what is my name?",
-        Asking::new(client_over(&replay), ask()),
+        Asking::new(client_over(&replay), ask(), tools()),
         Unreached,
     )
     .earlier(vec![
@@ -272,7 +288,7 @@ fn a_turn_that_ended_with_no_answer_is_not_sent_as_an_empty_message() {
 fn a_run_handed_nothing_asks_exactly_what_it_asked_before() {
     let replay = Replay::new([Canned::stream(ANTHROPIC)]);
 
-    let body = body_for(Asking::new(client_over(&replay), ask()), &replay);
+    let body = body_for(Asking::new(client_over(&replay), ask(), tools()), &replay);
 
     assert_eq!(
         asked(&replay)["messages"],
