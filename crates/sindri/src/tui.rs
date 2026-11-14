@@ -206,35 +206,34 @@ struct Loop<'a> {
     wake: Arc<Wake>,
 }
 
-/// The canvas a launch draws on: the area its terminal reports, placing the hyperlink it says it
-/// speaks, asked once here and never again on a key.
-#[cfg(not(test))]
-fn canvas_for<'t>(terminal: &'t Terminal, environment: &dyn Environment) -> io::Result<Canvas<'t>> {
-    let (term, program, vte) = (
-        environment.var("TERM"),
-        environment.var("TERM_PROGRAM"),
-        environment.var("VTE_VERSION"),
-    );
-    crate::term::canvas(
-        terminal,
-        sindri::link::speaks(term.as_deref(), program.as_deref(), vte.as_deref()),
-    )
-}
-
-/// The same canvas over the area a test named and placing no hyperlink: asking the operating system
-/// for a size is a `fork` the threads of a suite can have been refused.
-#[cfg(test)]
-fn canvas_for<'t>(
-    terminal: &'t Terminal,
-    _environment: &dyn Environment,
-) -> io::Result<Canvas<'t>> {
-    crate::term::canvas_at(terminal, crate::term::painted_at())
-}
-
 impl<'a> Loop<'a> {
-    /// The launch's loop: `terminal` read and drawn on, `view` as the frame it draws, `config` as the
-    /// run a prompt will ask for, `wake` as the pipe a signal and a run's own reports both land in.
-    /// Nothing is in flight yet.
+    /// The canvas a launch draws on: the area its terminal reports, placing the hyperlink it says it
+    /// speaks, asked once here and never again on a key.
+    #[cfg(not(test))]
+    fn canvas<'t>(terminal: &'t Terminal, environment: &dyn Environment) -> io::Result<Canvas<'t>> {
+        let (term, program, vte) = (
+            environment.var("TERM"),
+            environment.var("TERM_PROGRAM"),
+            environment.var("VTE_VERSION"),
+        );
+        crate::term::canvas(
+            terminal,
+            sindri::link::speaks(term.as_deref(), program.as_deref(), vte.as_deref()),
+        )
+    }
+
+    /// The same canvas over the area a test named, placing no hyperlink.
+    #[cfg(test)]
+    fn canvas<'t>(
+        terminal: &'t Terminal,
+        _environment: &dyn Environment,
+    ) -> io::Result<Canvas<'t>> {
+        crate::term::canvas_at(terminal, crate::term::painted_at())
+    }
+
+    /// The launch's loop, holding a canvas of its own and nothing in flight. `wake` is shared with
+    /// the signal handler and with every run the loop starts, so a report and a `SIGINT` break the
+    /// one wait.
     fn new(
         terminal: &'a Terminal,
         cli: &'a Cli,
@@ -246,7 +245,7 @@ impl<'a> Loop<'a> {
     ) -> io::Result<Loop<'a>> {
         Ok(Loop {
             terminal,
-            canvas: canvas_for(terminal, environment)?,
+            canvas: Self::canvas(terminal, environment)?,
             view,
             cli,
             config,
@@ -259,12 +258,10 @@ impl<'a> Loop<'a> {
         })
     }
 
-    /// Paints the frame the view holds now.
     fn paint(&mut self) -> io::Result<()> {
         paint(&mut self.canvas, &mut self.view)
     }
 
-    /// Hands one status to the terminal, which is the only thing here that owns a tty.
     fn told(&mut self, told: Told) -> io::Result<()> {
         self.telling.say(told)
     }

@@ -38,7 +38,7 @@ fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
     // No mark, so `Ctrl-Y` copies the last answer: the words go down the wire the frame does,
     // which is what makes a copy work over SSH.
     let environment = std::collections::BTreeMap::new();
-    let mut live = stage.launch(view, Config::default(), &environment, false);
+    let mut live = stage.launch(view, Config::default(), &environment);
 
     let ended = live
         .answer(Event::Key(Key::Copy))
@@ -97,9 +97,34 @@ impl Stage {
         Config::resolve(environment, self.cli.flags()).expect("a config")
     }
 
-    /// The launch this terminal draws: `view` as its frame, `config` as the run a prompt will ask
-    /// for, and `carries` saying whether the terminal reports which window is being read.
+    /// The launch this terminal draws, with `view` as the frame it draws and `config` as the run a
+    /// prompt will ask for.
     fn launch<'a>(
+        &'a self,
+        view: View,
+        config: Config,
+        environment: &'a dyn Environment,
+    ) -> Loop<'a> {
+        self.told_in(view, config, environment, false)
+    }
+
+    /// The same launch where the stream carries a window, which is the only thing that reports the
+    /// reader's focus and raises a notification.
+    fn launch_in_a_window<'a>(
+        &'a self,
+        view: View,
+        config: Config,
+        environment: &'a dyn Environment,
+    ) -> Loop<'a> {
+        self.told_in(view, config, environment, true)
+    }
+
+    /// Every byte this terminal has been handed, and nothing it says next.
+    fn drawn(&self) -> String {
+        self.pty.drawn()
+    }
+
+    fn told_in<'a>(
         &'a self,
         view: View,
         config: Config,
@@ -125,11 +150,6 @@ impl Stage {
             Arc::new(Wake::open().expect("a wake")),
         )
         .expect("a launch")
-    }
-
-    /// Every byte this terminal has been handed, and nothing it says next.
-    fn drawn(&self) -> String {
-        self.pty.drawn()
     }
 }
 
@@ -162,7 +182,7 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
     for glyph in "new-model".chars() {
         view.key(Key::Char(glyph));
     }
-    let mut live = stage.launch(view, config, &environment, false);
+    let mut live = stage.launch(view, config, &environment);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -199,7 +219,7 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
 
     walk_to(&mut view, "context_window");
     view.key(Key::Char('0'));
-    let mut live = stage.launch(view, config, &environment, false);
+    let mut live = stage.launch(view, config, &environment);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -300,7 +320,7 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     view.open_settings(&config);
     walk_to(&mut view, "face");
     view.key(Key::Char(' '));
-    let mut live = stage.launch(view, config, &environment, false);
+    let mut live = stage.launch(view, config, &environment);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -396,7 +416,7 @@ fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launc
     let mut view = View::boot();
     view.paste("why does the retry test fail");
     let environment = std::collections::BTreeMap::new();
-    let mut live = stage.launch(view, Config::default(), &environment, false);
+    let mut live = stage.launch(view, Config::default(), &environment);
 
     let ended = live
         .answer(Event::Key(Key::Enter))
@@ -423,7 +443,7 @@ fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launc
 fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
-    let mut live = stage.launch(View::boot(), Config::default(), &environment, false);
+    let mut live = stage.launch(View::boot(), Config::default(), &environment);
 
     let ended = live
         .take()
@@ -444,7 +464,7 @@ fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() 
     // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
     // wire.
     let environment = std::collections::BTreeMap::new();
-    let mut live = stage.launch(view, Config::default(), &environment, false);
+    let mut live = stage.launch(view, Config::default(), &environment);
 
     live.resume().expect("the refusal is drawn");
 
@@ -475,7 +495,7 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
     // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
     // wire.
     let environment = std::collections::BTreeMap::new();
-    let mut live = stage.launch(view, Config::default(), &environment, false);
+    let mut live = stage.launch(view, Config::default(), &environment);
 
     live.resume().expect("the refusal is drawn");
 
@@ -511,7 +531,7 @@ fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
     let signals = Signals::install().expect("a signal pipe");
-    let mut live = stage.launch(View::boot(), Config::default(), &environment, false);
+    let mut live = stage.launch(View::boot(), Config::default(), &environment);
 
     let ended = live.keys(&signals, b"\x11").expect("the quit is answered");
 
@@ -530,7 +550,7 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     view.set_palette(palette);
     view.paste("the draft the composer band is drawn from");
     // A stream that carries a window: nothing else raises a notification at all.
-    let mut live = stage.launch(view, Config::default(), &environment, true);
+    let mut live = stage.launch_in_a_window(view, Config::default(), &environment);
     let lit = live.cells(&palette, palette.accent_edge());
     assert!(
         !lit.is_empty(),
