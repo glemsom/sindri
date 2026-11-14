@@ -1,8 +1,16 @@
 use sindri_core::provider::served::Listing;
 
 use crate::composer::Key;
+use crate::ink::Ink;
+use crate::list::{self, Beside, Choice, ScreenRow};
 
 pub const CAP: usize = 8;
+
+/// The one line the screen says in place of its rows while the wire has yet to answer.
+const ASKING: &str = "asking the wire what it serves";
+
+/// The one line it says when the wire answered serving nothing.
+const NO_NAME: &str = "no served name answers";
 
 pub type Row<'a> = (&'a str, &'a str);
 
@@ -54,6 +62,28 @@ impl Models {
 
     pub fn selected(&self) -> usize {
         self.selected
+    }
+
+    /// The rows the screen's card holds: the query at the head, one row per served name with the row
+    /// the reader is on marked, or the line it says in place of them. A wire that could not answer
+    /// offers its hint rather than a refusal, because a model named by hand still runs.
+    pub fn body(&self) -> Vec<ScreenRow> {
+        let names = self.rows();
+        let said = match self.hint() {
+            _ if self.waiting() => Some(ASKING),
+            Some(hint) => Some(hint),
+            None if names.is_empty() => Some(NO_NAME),
+            None => None,
+        };
+        list::List {
+            query: Some(self.query()),
+            said,
+            items: list::columned(names.into_iter(), Ink::Plain, Beside::Own(Ink::Dim)),
+            selected: self.selected(),
+            marker: list::MARK,
+            choice: Some(Choice::Model),
+        }
+        .rows()
     }
 
     pub fn key(&mut self, key: Key) -> bool {

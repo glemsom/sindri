@@ -12,6 +12,10 @@ const GAP: u16 = 2;
 /// The words a list's query is typed after.
 const QUERY: &str = "query: ";
 
+/// The glyph before the row a reader is on, in every list a card draws: one mark, because every
+/// screen that lists says the same thing with it.
+pub const MARK: &str = "\u{203a} ";
+
 /// What a row of a card chooses when a press lands on it: a file the picker offers, a name the wire
 /// served, or a command the draft's word leaves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
