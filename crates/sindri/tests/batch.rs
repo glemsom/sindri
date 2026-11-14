@@ -359,6 +359,19 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// The words a script pipes in, written to a child that may have refused them already: both callers
+/// feed a launch that quits before it reads, so a closed pipe is the refusal and not a failure.
+fn pipe_words(child: &mut Child, words: &[u8]) {
+    let mut taken = child.stdin.take().expect("a piped stdin");
+    if let Err(error) = taken.write_all(words) {
+        assert_eq!(
+            error.kind(),
+            std::io::ErrorKind::BrokenPipe,
+            "the pipe takes the words: {error}"
+        );
+    }
+}
+
 fn lines(output: &str) -> Vec<&str> {
     output.lines().filter(|line| !line.is_empty()).collect()
 }
@@ -695,12 +708,7 @@ fn a_pipe_is_words_to_ask_and_never_a_credential() {
         .stderr(Stdio::piped())
         .spawn()
         .expect("the binary should start");
-    child
-        .stdin
-        .take()
-        .expect("a piped stdin")
-        .write_all(b"sk-ant-a-prompt-that-looks-like-a-key\n")
-        .expect("the piped words");
+    pipe_words(&mut child, b"sk-ant-a-prompt-that-looks-like-a-key\n");
     let output = child.wait_with_output().expect("the binary should finish");
 
     let err = text(&output.stderr);
@@ -733,12 +741,7 @@ fn a_pipe_without_a_batch_flag_is_refused() {
         .stderr(Stdio::piped())
         .spawn()
         .expect("the binary should start");
-    child
-        .stdin
-        .take()
-        .expect("a piped stdin")
-        .write_all(b"triage this\n")
-        .expect("the piped words");
+    pipe_words(&mut child, b"triage this\n");
     let output = child.wait_with_output().expect("the binary should finish");
 
     assert_eq!(output.status.code(), Some(2), "§3: a pipe needs -b");
