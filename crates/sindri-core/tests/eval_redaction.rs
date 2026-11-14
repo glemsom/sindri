@@ -120,7 +120,6 @@ fn walk(entry: &Entry) -> Vec<(&'static str, String)> {
     }
 }
 
-/// What an identity the walk reads is written as, and nothing where the entry names no call.
 fn masked(id: &Option<Redacted>) -> String {
     id.as_ref().map(ToString::to_string).unwrap_or_default()
 }

@@ -498,7 +498,7 @@ fn a_result_line_written_before_the_verdict_existed_still_reads() {
 }
 
 #[test]
-fn an_entry_that_names_no_call_is_written_without_an_identity() {
+fn an_identity_an_entry_holds_none_of_is_written_as_nothing_at_all() {
     let secrets = SecretSet::default();
     let entries = [
         Entry::Call {
@@ -528,7 +528,7 @@ fn an_entry_that_names_no_call_is_written_without_an_identity() {
 }
 
 #[test]
-fn a_transcript_written_before_calls_held_an_identity_still_reads_with_none() {
+fn a_line_written_before_calls_held_an_identity_still_reads_as_an_entry() {
     let ground = Ground::new();
     let session = ground.session();
     let older = [
@@ -620,6 +620,68 @@ fn a_call_and_the_entry_its_result_is_written_as_carry_the_identity_the_wire_gav
     assert_eq!(
         answered, called,
         "and so does the entry its result is written as, so the two name one call: {entries:?}"
+    );
+}
+
+#[test]
+fn a_turn_of_two_calls_writes_each_result_beside_the_call_it_answers() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    let first = Call::new("toolu_1", "bash", r#"{"command": "ls a"}"#);
+    let second = Call::new("toolu_2", "bash", r#"{"command": "ls b"}"#);
+
+    record.turn_started(1).expect("a turn start is recorded");
+    for (call, text) in [(&first, "a.txt\n"), (&second, "b.txt\n")] {
+        record.called(1, call).expect("a call is recorded");
+        record
+            .resulted(
+                1,
+                call,
+                &Acted {
+                    text: String::from(text),
+                    bytes: 6,
+                    elapsed: Duration::from_millis(2),
+                    exit: Exit::Code(0),
+                },
+            )
+            .expect("a result is recorded");
+    }
+
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    let entries = transcript.entries();
+    let (
+        Entry::Call { id: called, .. },
+        Entry::Result {
+            id: answered, text, ..
+        },
+        Entry::Call { id: afterwards, .. },
+        Entry::Result {
+            id: answered_after,
+            text: text_after,
+            ..
+        },
+    ) = (&entries[1], &entries[2], &entries[3], &entries[4])
+    else {
+        panic!("a turn of two calls writes each call and its result in the order both were made");
+    };
+
+    assert_eq!(
+        answered, called,
+        "the entry the first result is written as names the call it answers"
+    );
+    assert_eq!(
+        answered_after, afterwards,
+        "and so does the second, though the two calls name one tool"
+    );
+    assert_ne!(
+        called, afterwards,
+        "two calls of one turn hold two identities, so no result has to be guessed at"
+    );
+    assert_eq!(
+        (text.to_string(), text_after.to_string()),
+        (String::from("a.txt\n"), String::from("b.txt\n")),
+        "and the output written beside each call is that call's own, never the one next to it"
     );
 }
 

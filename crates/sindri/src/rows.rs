@@ -830,7 +830,6 @@ impl Rows {
         self.ended = true;
     }
 
-    /// Holds one more entry, unlaid — or settles the row of the call a result names.
     pub fn push(&mut self, entry: Entry) {
         if let Entry::Result { turn, id, .. } = &entry
             && let Some(at) = self.pending(*turn, id.as_ref())
