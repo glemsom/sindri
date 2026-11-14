@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+files-narrow at 120x40
+00 |                                                                                                                        | dim:120
+01 |                                                                                                                        | dim:120
+02 |                                                                                                                        | dim:120
+03 |                                                                                                                        | dim:120
+04 |                                                                                                                        | dim:120
+05 |                                                                                                                        | dim:120
+06 |                                                                                                                        | dim:120
+07 |                                                                                                                        | dim:120
+08 |                                                                                                                        | dim:120
+09 |                                                                                                                        | dim:120
+10 |                                                                                                                        | dim:120
+11 |                                                                                                                        | dim:120
+12 |                                                                                                                        | dim:120
+13 |                                                                                                                        | dim:120
+14 |                        ╭─ @ files ────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+15 |                        │ query: rs                                                            │                        | dim:25 plain:1 dim:7 muted:2 plain:60 dim:25
+16 |                        │ › policy.rs  crates/sindri-core/src                                  │                        | dim:25 plain:1 accent:11 dim:24 plain:34 dim:25
+17 |                        │   records.rs  crates/sindri-core/src                                 │                        | dim:25 plain:13 dim:24 plain:33 dim:25
+18 |                        │   run.rs  crates/sindri-core/src                                     │                        | dim:25 plain:9 dim:24 plain:37 dim:25
+19 |                        │   card.rs  crates/sindri/src                                         │                        | dim:25 plain:10 dim:19 plain:41 dim:25
+20 |                        │   keys.rs  crates/sindri/src                                         │                        | dim:25 plain:10 dim:19 plain:41 dim:25
+21 |                        │   pen.rs  crates/sindri/src                                          │                        | dim:25 plain:9 dim:19 plain:42 dim:25
+22 |                        │   rail.rs  crates/sindri/src                                         │                        | dim:25 plain:10 dim:19 plain:41 dim:25
+23 |                        │   rows.rs  crates/sindri/src                                         │                        | dim:25 plain:10 dim:19 plain:41 dim:25
+24 |                        │ 1–8 of 10                                                            │                        | dim:25 plain:1 dim:9 plain:60 dim:25
+25 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
+26 |                                                                                                                        | dim:120
+27 |                                                                                                                        | dim:120
+28 |                                                                                                                        | dim:120
+29 |                                                                                                                        | dim:120
+30 |                                                                                                                        | dim:120
+31 |                                                                                                                        | dim:120
+32 |                                                                                                                        | dim:120
+33 |                                                                                                                        | dim:120
+34 |                                                                                                                        | dim:120
+35 |                                                                                                                        | dim:120
+36 |                                                                                                                        | dim:120
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+38 |› what should the run do?                                                                                               | dim:120
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run             | dim:120

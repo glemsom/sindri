@@ -8,6 +8,18 @@ use crate::composer::Key;
 
 pub const CAP: usize = 8;
 
+/// A row of the picker: the file's name, and the directory it sits in.
+pub type Row<'a> = (&'a str, &'a str);
+
+/// How a query sits in a path, strongest first: the order of the variants is the order the rows
+/// come in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Rank {
+    NameStarts,
+    NameHolds,
+    PathHolds,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Picker {
     files: Vec<String>,
@@ -33,11 +45,6 @@ impl Picker {
             }
             files.push(relative.to_owned());
         }
-        files.sort_by(|one, other| {
-            nearness(one)
-                .cmp(&nearness(other))
-                .then_with(|| one.cmp(other))
-        });
         Picker {
             files,
             query: String::new(),
@@ -49,36 +56,56 @@ impl Picker {
         &self.query
     }
 
-    pub fn rows(&self) -> Vec<&str> {
-        let query = self.query.to_lowercase();
-        self.files
+    /// The first `CAP` matching paths, each split into the file's name and its directory.
+    pub fn rows(&self) -> Vec<Row<'_>> {
+        self.ranked().into_iter().take(CAP).map(split).collect()
+    }
+
+    /// Every path the query leaves, in one total order: rank, then nearness, then the path itself.
+    fn ranked(&self) -> Vec<&str> {
+        let mut ranked: Vec<(Rank, usize, &str)> = self
+            .files
             .iter()
-            .filter(|file| holds(file, &query))
-            .take(CAP)
-            .map(String::as_str)
-            .collect()
+            .filter_map(|path| {
+                let rank = rank(path, &self.query)?;
+                Some((rank, nearness(path), path.as_str()))
+            })
+            .collect();
+        ranked.sort_unstable();
+        ranked.into_iter().map(|(_, _, path)| path).collect()
     }
 
     pub fn selected(&self) -> usize {
         self.selected
     }
 
+    /// How many files the query leaves, whether or not the card has a row for them.
+    pub fn matches(&self) -> usize {
+        self.ranked().len()
+    }
+
     pub fn key(&mut self, key: Key) -> bool {
         match key {
             Key::Char(glyph) if !glyph.is_control() => {
                 self.query.push(glyph);
-                self.selected = 0;
+                self.reselect();
                 true
             }
             Key::Backspace => {
                 let erased = self.query.pop().is_some();
                 if erased {
-                    self.selected = 0;
+                    self.reselect();
                 }
                 erased
             }
             _ => false,
         }
+    }
+
+    /// The row the selection stands on may be one the edit took away, so an edit puts it back on
+    /// the nearest row: where a reader who narrowed the list is looking.
+    fn reselect(&mut self) {
+        self.selected = 0;
     }
 
     pub fn up(&mut self) -> bool {
@@ -96,8 +123,7 @@ impl Picker {
     }
 
     pub fn word(&self) -> Option<String> {
-        let rows = self.rows();
-        let path = *rows.get(self.selected)?;
+        let path = *self.ranked().get(self.selected)?;
         Some(format!("{} ", shell_word(path)))
     }
 }
@@ -136,8 +162,32 @@ fn nearness(path: &str) -> usize {
     path.matches('/').count()
 }
 
-fn holds(path: &str, query: &str) -> bool {
-    query.is_empty() || path.to_lowercase().contains(query)
+/// How `query` sits in `path`, or none when it does not sit in it at all: an empty query is a
+/// query every name starts.
+fn rank(path: &str, query: &str) -> Option<Rank> {
+    let (name, _) = split(path);
+    if query.is_empty() {
+        return Some(Rank::NameStarts);
+    }
+    let query = query.to_lowercase();
+    let name = name.to_lowercase();
+    if name.starts_with(&query) {
+        return Some(Rank::NameStarts);
+    }
+    if name.contains(&query) {
+        return Some(Rank::NameHolds);
+    }
+    path.to_lowercase()
+        .contains(&query)
+        .then_some(Rank::PathHolds)
+}
+
+/// The file's name and the directory it sits in, which spell the path back with a `/` between them.
+fn split(path: &str) -> (&str, &str) {
+    match path.rsplit_once('/') {
+        Some((directory, name)) => (name, directory),
+        None => (path, ""),
+    }
 }
 
 #[cfg(test)]
@@ -157,7 +207,14 @@ mod tests {
     }
 
     fn offered(picker: &Picker) -> Vec<String> {
-        picker.rows().into_iter().map(str::to_owned).collect()
+        picker
+            .rows()
+            .into_iter()
+            .map(|(name, directory)| match directory {
+                "" => name.to_owned(),
+                directory => format!("{directory}/{name}"),
+            })
+            .collect()
     }
 
     fn narrowed(root: &Path, query: &str) -> Picker {
@@ -234,6 +291,54 @@ mod tests {
     }
 
     #[test]
+    fn a_name_the_query_starts_outranks_a_name_it_holds_and_a_path_it_holds_comes_last() {
+        let root = workspace(&["x/y/z/late.rs", "src/a/deep.rs", "app.rs"]);
+
+        assert_eq!(
+            offered(&narrowed(root.path(), "a")),
+            vec![
+                String::from("app.rs"),
+                String::from("x/y/z/late.rs"),
+                String::from("src/a/deep.rs"),
+            ],
+            "a name the query starts is a name a reader is typing, so it comes first; a name \
+             that holds the query comes next; and a path that holds it only in its \
+             directories comes last, however near the file sits"
+        );
+    }
+
+    #[test]
+    fn two_matches_of_one_rank_come_in_one_order_every_time() {
+        let root = workspace(&["zebra.rs", "alpha.rs"]);
+
+        assert_eq!(
+            offered(&Picker::walk(root.path())),
+            vec![String::from("alpha.rs"), String::from("zebra.rs")],
+            "the walk hands back siblings in whatever order the filesystem keeps them, so two \
+             names of one rank are ordered here: the path is the last word on it, and \
+             `alpha.rs` sorts before `zebra.rs`"
+        );
+        assert_eq!(
+            offered(&Picker::walk(root.path())),
+            offered(&Picker::walk(root.path())),
+            "and a second walk of the same workspace offers the same list in the same order, \
+             because nothing about the order is left to the filesystem"
+        );
+    }
+
+    #[test]
+    fn a_row_is_the_files_name_and_the_directory_it_sits_in() {
+        let root = workspace(&["docs/adr/note.md", "rows.rs"]);
+
+        assert_eq!(
+            Picker::walk(root.path()).rows(),
+            vec![("rows.rs", ""), ("note.md", "docs/adr")],
+            "a row a reader reads is the name they are looking for with the directory it sits \
+             in beside it, and a file at the top of the workspace has no directory to name"
+        );
+    }
+
+    #[test]
     fn a_query_narrows_the_rows_as_it_is_typed() {
         let root = workspace(&["rows.rs", "rail.rs", "view.rs"]);
 
@@ -284,6 +389,67 @@ mod tests {
             "the cap ends the list and never the workspace: a file past the eighth row is \
              reached by the query"
         );
+    }
+
+    #[test]
+    fn a_query_counts_every_file_it_leaves_and_draws_only_the_first_eight() {
+        let files: Vec<String> = (0..17).map(|at| format!("file{at:02}.rs")).collect();
+        let files: Vec<&str> = files.iter().map(String::as_str).collect();
+        let root = workspace(&files);
+        let picker = narrowed(root.path(), "file");
+
+        assert_eq!(
+            picker.rows().len(),
+            CAP,
+            "the card has room for eight rows and draws eight"
+        );
+        assert_eq!(
+            picker.matches(),
+            17,
+            "and the count says what the draw cannot: seventeen files hold the query, eight \
+             of them are on the screen"
+        );
+    }
+
+    #[test]
+    fn a_query_that_matches_nothing_draws_no_row_and_counts_none() {
+        let root = workspace(&["rows.rs", "rail.rs"]);
+        let picker = narrowed(root.path(), "zzz");
+
+        assert!(
+            picker.rows().is_empty(),
+            "no file holds `zzz`, so no row is drawn"
+        );
+        assert_eq!(picker.matches(), 0, "and none is counted");
+        assert_eq!(
+            picker.word(),
+            None,
+            "nor is there a path for Enter to spell"
+        );
+    }
+
+    #[test]
+    fn the_selection_stays_on_a_drawn_row_as_the_query_narrows_widens_and_empties() {
+        let root = workspace(&["rows.rs", "rail.rs", "view.rs"]);
+        let mut picker = narrowed(root.path(), "r");
+        picker.down();
+        picker.down();
+        assert_eq!(picker.selected(), 2, "the third of three rows is selected");
+
+        for (query, drawn) in [("ro", 1), ("r", 3), ("", 3)] {
+            while !picker.query().is_empty() {
+                picker.key(Key::Backspace);
+            }
+            for glyph in query.chars() {
+                picker.key(Key::Char(glyph));
+            }
+            assert_eq!(picker.rows().len(), drawn, "`{query}` leaves {drawn} rows");
+            assert!(
+                picker.selected() < picker.rows().len(),
+                "the query `{query}` leaves {drawn} rows, and the selection stands on one of \
+                 them rather than on a row the query took away"
+            );
+        }
     }
 
     #[test]
