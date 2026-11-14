@@ -849,6 +849,7 @@ mod tests {
         let call = sindri::rows::layout_on(
             &Entry::Call {
                 turn: 1,
+                id: None,
                 name: SecretSet::default().redact("open"),
                 arguments: SecretSet::default().redact(r#"{"path": "GLOSSARY.md"}"#),
             },

@@ -159,6 +159,7 @@ fn entry_lines(entry: &Entry) -> Vec<String> {
         Entry::Turn { turn } => vec![format!("  turn {turn}")],
         Entry::Call {
             turn,
+            id: _,
             name,
             arguments,
         } => under(
@@ -167,6 +168,7 @@ fn entry_lines(entry: &Entry) -> Vec<String> {
         ),
         Entry::Result {
             turn,
+            id: _,
             name,
             text,
             bytes,

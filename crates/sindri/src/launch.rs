@@ -250,8 +250,6 @@ impl Launch {
             if let Some(exchange) = run.history().last() {
                 let turn = counted + exchange.turn;
                 note(self.record.turn_started(turn));
-                // Each call is written beside what came of it, in the order both were made: the
-                // rows a screen draws pair a result to the oldest call still waiting for one.
                 for (call, acted) in exchange.calls.iter().zip(&exchange.results) {
                     note(self.record.called(turn, call));
                     note(self.record.resulted(turn, call, acted));

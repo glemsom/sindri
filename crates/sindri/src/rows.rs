@@ -8,6 +8,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::open::{Ground, Opening};
 use sindri_core::records::Entry;
+use sindri_core::redact::Redacted;
 use sindri_core::run::{Exit, Stop};
 use sindri_core::tools::OPEN;
 
@@ -829,12 +830,9 @@ impl Rows {
         self.ended = true;
     }
 
-    /// Holds one more entry, unlaid. A result settles the entry the call it answers opened rather
-    /// than opening one under it, and that entry is drawn as the call's rows and the result's under
-    /// them — unless this cache never held that call, an older transcript's entry read on its own.
     pub fn push(&mut self, entry: Entry) {
-        if let Entry::Result { turn, .. } = &entry
-            && let Some(at) = self.pending(*turn)
+        if let Entry::Result { turn, id, .. } = &entry
+            && let Some(at) = self.pending(*turn, id.as_ref())
         {
             self.settle(at, entry);
             return;
@@ -911,13 +909,28 @@ impl Rows {
         self.ended = false;
     }
 
-    /// The oldest call of `turn` whose result has not landed, because a wave of calls and
-    /// the wave of results that answers it have to pair up in the order both were written.
-    fn pending(&self, turn: u32) -> Option<usize> {
-        self.held.iter().position(|held| {
-            held.result.is_none()
-                && matches!(&held.what, What::Fact(Entry::Call { turn: at, .. }) if *at == turn)
-        })
+    /// The call a result of `turn` settles: the one whose identity it names, and a result that names
+    /// none — one a transcript written before calls had identities holds — the oldest call of that
+    /// turn still waiting, so a wave of calls and the wave answering it pair in written order.
+    fn pending(&self, turn: u32, id: Option<&Redacted>) -> Option<usize> {
+        let mut waiting = self
+            .held
+            .iter()
+            .enumerate()
+            .filter_map(|(at, held)| match &held.what {
+                What::Fact(Entry::Call {
+                    turn: of,
+                    id: named,
+                    ..
+                }) if held.result.is_none() && *of == turn => Some((at, named.as_ref())),
+                _ => None,
+            });
+        match id {
+            Some(id) => waiting
+                .find(|(_, named)| *named == Some(id))
+                .map(|(at, _)| at),
+            None => waiting.next().map(|(at, _)| at),
+        }
     }
 
     pub fn settle(&mut self, at: usize, result: Entry) {
