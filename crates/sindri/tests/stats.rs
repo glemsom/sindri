@@ -92,14 +92,14 @@ fn the_screen_draws_the_facts_no_rail_column_holds_whole() {
 }
 
 #[test]
-fn a_band_too_short_for_the_rows_counts_the_ones_it_cannot_hold() {
+fn a_frame_too_short_for_the_card_counts_the_rows_it_cannot_hold() {
     let mut view = opened();
     let rows = painted(&mut view, 80, 24);
 
     assert!(
-        rows.iter().any(|row| row.contains("more")),
-        "a band that cannot hold every row counts them in the rail's own words instead of \
-         drawing one in part: {rows:#?}"
+        rows.iter().any(|row| row.contains("rows kept back")),
+        "a card the frame cannot hold keeps the rows it has no room for back and counts them in \
+         its own row, rather than drawing one in part: {rows:#?}"
     );
     for asked in ["session", "temp"] {
         assert!(
@@ -128,9 +128,8 @@ fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
         rows[last - 2]
     );
     assert!(
-        rows[0].contains("/stats"),
-        "the card is what the eye lands on: {:?}",
-        rows[0]
+        rows.iter().any(|row| row.contains("╭─ /stats")),
+        "and the card is what the eye lands on, named in the top border of its own row: {rows:#?}"
     );
 }
 
@@ -147,17 +146,25 @@ fn a_frame_handed_no_record_and_no_fact_still_opens_the_screen_with_its_title_an
         Mode::Stats,
         "a frame that knows nothing still has a screen to open"
     );
+    let top = rows
+        .iter()
+        .position(|row| row.contains('╭'))
+        .expect("the card's top border");
+    let bottom = rows
+        .iter()
+        .rposition(|row| row.contains('╰'))
+        .expect("the card's bottom border");
     assert!(
-        rows.first().is_some_and(|row| row.contains("/stats")),
+        rows[top].contains("/stats"),
         "the screen is named in the top border of the card it is drawn on: {rows:#?}"
     );
-    let sides = |row: &str| row.matches('│').count();
-    assert!(
-        rows[1..rows.len() - 1].iter().all(|row| sides(row) == 2),
+    assert_eq!(
+        bottom,
+        top + 1,
         "and a frame handed nothing has no row to draw between the card's two sides: {rows:#?}"
     );
     assert!(
-        rows.last().is_some_and(|row| row.contains("Esc")),
+        rows[bottom].contains("Esc"),
         "the card's bottom border names the key that leaves, a frame of no row and all: {rows:#?}"
     );
 }

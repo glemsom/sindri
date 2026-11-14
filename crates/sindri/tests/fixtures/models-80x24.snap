@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+models at 80x24
+00 |                                                                                | dim:80
+01 |                                                                                | dim:80
+02 |                                                                                | dim:80
+03 |                                                                                | dim:80
+04 |                                                                                | dim:80
+05 |                                                                                | dim:80
+06 |                                                                                | dim:80
+07 |                                                                                | dim:80
+08 |                                                                                | dim:80
+09 |    ╭─ /model ─────────────────────────────────────────────────────────────╮    | dim:4 accent+faint:72 dim:4
+10 |    │ query:                                                               │    | dim:5 plain:1 dim:7 plain:62 dim:5
+11 |    │ › claude-sonnet-4-6  Claude Sonnet 4.6                               │    | dim:5 plain:1 accent:21 dim:17 plain:31 dim:5
+12 |    │   claude-haiku-4-5   Claude Haiku 4.5                                │    | dim:5 plain:22 dim:16 plain:32 dim:5
+13 |    ╰──────────────────────────────────────────────────────────────── Esc ─╯    | dim:70 plain+bold:3 dim:7
+14 |                                                                                | dim:80
+15 |                                                                                | dim:80
+16 |                                                                                | dim:80
+17 |                                                                                | dim:80
+18 |                                                                                | dim:80
+19 |                                                                                | dim:80
+20 |                                                                                | dim:80
+21 |────────────────────────────────────────────────────────────────────────────────| dim:80
+22 |› what should the run do?                                                       | dim:80
+23 |Enter send · ? keys                                                             | dim:80

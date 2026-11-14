@@ -3,43 +3,43 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 models at 120x40
-00 |                        ╭─ /model ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-01 |                        │ query:                                                               │                        | dim:25 plain:1 dim:7 plain:62 dim:25
-02 |                        │ › claude-sonnet-4-6  Claude Sonnet 4.6                               │                        | dim:25 plain:1 accent:21 dim:17 plain:31 dim:25
-03 |                        │   claude-haiku-4-5   Claude Haiku 4.5                                │                        | dim:25 plain:22 dim:16 plain:32 dim:25
-04 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-05 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-06 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-07 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-08 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-09 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-10 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-11 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-12 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-13 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-14 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-15 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-16 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-17 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-18 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-19 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-20 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-21 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-22 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-23 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-24 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-25 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-26 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-27 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-28 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-29 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-30 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-31 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-32 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-33 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-34 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-35 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-36 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-37 |────────────────────────│                                                                      │────────────────────────| dim:25 plain:70 dim:25
-38 |› what should the run do│                                                                      │                        | dim:25 plain:70 dim:25
-39 |Enter send · ? keys · Ct╰──────────────────────────────────────────────────────────────── Esc ─╯low the run             | dim:90 plain+bold:3 dim:27
+00 |                                                                                                                        | dim:120
+01 |                                                                                                                        | dim:120
+02 |                                                                                                                        | dim:120
+03 |                                                                                                                        | dim:120
+04 |                                                                                                                        | dim:120
+05 |                                                                                                                        | dim:120
+06 |                                                                                                                        | dim:120
+07 |                                                                                                                        | dim:120
+08 |                                                                                                                        | dim:120
+09 |                                                                                                                        | dim:120
+10 |                                                                                                                        | dim:120
+11 |                                                                                                                        | dim:120
+12 |                                                                                                                        | dim:120
+13 |                                                                                                                        | dim:120
+14 |                                                                                                                        | dim:120
+15 |                                                                                                                        | dim:120
+16 |                                                                                                                        | dim:120
+17 |                        ╭─ /model ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+18 |                        │ query:                                                               │                        | dim:25 plain:1 dim:7 plain:62 dim:25
+19 |                        │ › claude-sonnet-4-6  Claude Sonnet 4.6                               │                        | dim:25 plain:1 accent:21 dim:17 plain:31 dim:25
+20 |                        │   claude-haiku-4-5   Claude Haiku 4.5                                │                        | dim:25 plain:22 dim:16 plain:32 dim:25
+21 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
+22 |                                                                                                                        | dim:120
+23 |                                                                                                                        | dim:120
+24 |                                                                                                                        | dim:120
+25 |                                                                                                                        | dim:120
+26 |                                                                                                                        | dim:120
+27 |                                                                                                                        | dim:120
+28 |                                                                                                                        | dim:120
+29 |                                                                                                                        | dim:120
+30 |                                                                                                                        | dim:120
+31 |                                                                                                                        | dim:120
+32 |                                                                                                                        | dim:120
+33 |                                                                                                                        | dim:120
+34 |                                                                                                                        | dim:120
+35 |                                                                                                                        | dim:120
+36 |                                                                                                                        | dim:120
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+38 |› what should the run do?                                                                                               | dim:120
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run             | dim:120
