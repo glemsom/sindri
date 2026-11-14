@@ -27,27 +27,27 @@ impl Mode {
         Mode::Stats,
     ];
 
-    pub fn entry(self) -> &'static Entry {
-        SCREENS
+    pub fn description(self) -> &'static Description {
+        DESCRIPTIONS
             .iter()
-            .find(|entry| entry.mode == self)
-            .expect("a mode with no entry has no name, no table and no card to wear")
+            .find(|described| described.mode == self)
+            .expect("a mode with no description has no name, no table and no card to wear")
     }
 
     pub fn name(self) -> &'static str {
-        self.entry().name
+        self.description().name
     }
 
     /// The two labels a screen wears on its card: its name, and the key its own table binds to
     /// leaving it. A draft has neither, because it is no screen.
     pub fn labels(self) -> Option<(&'static str, &'static str)> {
-        Some((self.entry().title?, self.leaves()?))
+        Some((self.title()?, self.leaves()?))
     }
 
     /// The key this mode's table binds to leaving it, and `None` when it binds none.
     pub fn leaves(self) -> Option<&'static str> {
         Some(
-            self.entry()
+            self.description()
                 .table
                 .iter()
                 .find(|binding| binding.act == Act::Close)?
@@ -58,17 +58,17 @@ impl Mode {
     /// The name a screen wears in its card's top border, and `None` for the draft, which is no
     /// screen and takes no card.
     pub fn title(self) -> Option<&'static str> {
-        self.entry().title
+        self.description().title
     }
 
     pub fn table(self) -> &'static [Binding] {
-        self.entry().table
+        self.description().table
     }
 
     /// A screen has none — nothing is typed into a screen — where a draft, a query and a
     /// settings value fall to that text box's own map.
     fn fallback(self) -> Option<Act> {
-        self.entry().fallback
+        self.description().fallback
     }
 }
 
@@ -392,8 +392,10 @@ const STATS: [Binding; 1] = [Binding {
     act: Act::Close,
 }];
 
+/// What a mode is called, what its card wears, the keys it answers and what a printable key falls
+/// back to. The draft states no title, which is how a mode is handed no card.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Entry {
+pub struct Description {
     pub mode: Mode,
     pub name: &'static str,
     pub title: Option<&'static str>,
@@ -401,43 +403,43 @@ pub struct Entry {
     pub fallback: Option<Act>,
 }
 
-pub const SCREENS: [Entry; 6] = [
-    Entry {
+pub const DESCRIPTIONS: [Description; 6] = [
+    Description {
         mode: Mode::Composer,
         name: "composer",
         title: None,
         table: &COMPOSER,
         fallback: Some(Act::Draft),
     },
-    Entry {
+    Description {
         mode: Mode::Keys,
         name: "keys",
         title: Some("? keys"),
         table: &KEYS,
         fallback: None,
     },
-    Entry {
+    Description {
         mode: Mode::Files,
         name: "files",
         title: Some("@ files"),
         table: &FILES,
         fallback: Some(Act::Query),
     },
-    Entry {
+    Description {
         mode: Mode::Models,
         name: "model",
         title: Some("/model"),
         table: &MODELS,
         fallback: Some(Act::Query),
     },
-    Entry {
+    Description {
         mode: Mode::Settings,
         name: "settings",
         title: Some("/settings"),
         table: &SETTINGS,
         fallback: Some(Act::Value),
     },
-    Entry {
+    Description {
         mode: Mode::Stats,
         name: "stats",
         title: Some("/stats"),

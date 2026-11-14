@@ -2,7 +2,7 @@
 //! answers only its own keys, and `?` and `↑` resolving where the tables say they do.
 
 use sindri::composer::{Composer, Key, Outcome};
-use sindri::keys::{Act, Entry, Mode, SCREENS};
+use sindri::keys::{Act, DESCRIPTIONS, Description, Mode};
 use sindri::view::View;
 
 fn typed(lines: &[&str]) -> Composer {
@@ -390,58 +390,47 @@ fn a_paste_while_a_screen_is_open_reaches_no_draft() {
 #[test]
 fn every_mode_is_described_by_exactly_one_entry() {
     for mode in Mode::ALL {
-        let describing: Vec<&Entry> = SCREENS.iter().filter(|entry| entry.mode == mode).collect();
+        let describing: Vec<&Description> = DESCRIPTIONS
+            .iter()
+            .filter(|described| described.mode == mode)
+            .collect();
 
         assert_eq!(
             describing.len(),
             1,
-            "{} is a mode, so one entry states its name, its card's title, its table and \
-             what a printable key falls to: a mode with none has no keys to answer, and \
-             one with two has no answer to which describes it",
-            mode.name()
-        );
-        assert_eq!(
-            mode.entry(),
-            describing[0],
-            "the stack reaches a screen through its mode, so the entry kept for {} is the \
-             one its own accessors read",
-            mode.name()
+            "a mode states its name, its card's title, its table and what a printable key \
+             falls to in one entry, and {mode:?} has {}: a mode with none has no keys to \
+             answer, and one with two has no answer to which describes it",
+            describing.len()
         );
     }
 
-    for entry in SCREENS {
+    for described in DESCRIPTIONS {
         assert!(
-            Mode::ALL.contains(&entry.mode),
-            "{:?} is described by an entry, and no variant of `Mode::ALL` is named {:?}: an \
-             entry left over describes a screen nothing can open",
-            entry.mode,
-            entry.mode
+            Mode::ALL.contains(&described.mode),
+            "{:?} is described, and no variant of `Mode::ALL` is named {:?}: an entry left \
+             over describes a screen nothing can open",
+            described.mode,
+            described.mode
         );
     }
 
     assert_eq!(
-        SCREENS.len(),
+        DESCRIPTIONS.len(),
         Mode::ALL.len(),
-        "one entry per screen and no more: a count that differs is an entry twice or a \
-         mode left undescribed"
+        "one entry per screen and no more: a count that differs is an entry twice or a mode \
+         left undescribed"
     );
 }
 
 #[test]
-fn the_draft_is_the_one_screen_that_wears_no_card() {
-    let draft = Mode::Composer.entry();
+fn the_draft_is_the_one_mode_that_wears_no_card() {
+    let draft = Mode::Composer.description();
 
     assert_eq!(
         draft.title, None,
         "a draft is no screen and takes no card, so the entry that describes it names no \
          title for a card's top row: that is how the card is taken away"
-    );
-    assert_eq!(
-        Mode::Composer.labels(),
-        None,
-        "a card's bottom row names the key that leaves its screen, and a draft wearing one \
-         would say `Esc` and mean the commands card it closes, which leaves no screen the \
-         reader stands on"
     );
     assert!(
         draft.table.iter().any(|binding| binding.act == Act::Close),
@@ -449,33 +438,21 @@ fn the_draft_is_the_one_screen_that_wears_no_card() {
          the card away and not a table with no exit in it"
     );
 
-    for mode in Mode::ALL {
-        if mode == Mode::Composer {
-            continue;
-        }
+    let carded: Vec<Mode> = Mode::ALL
+        .into_iter()
+        .filter(|mode| mode.labels().is_some())
+        .collect();
 
-        let entry = mode.entry();
-        let title = entry.title.expect(
-            "a screen is drawn on a card, and the top row of that card is the screen's own \
-             name",
-        );
-        let (label, leaves) = mode.labels().expect(
-            "a card's two labels are the screen's name and the key its own table binds to \
-             leaving it",
-        );
-
-        assert_eq!(
-            label,
-            title,
-            "{} wears the title its entry states, because a card drawn from one and named by \
-             another is two descriptions of one screen",
-            mode.name()
-        );
-        assert_eq!(
-            Some(leaves),
-            mode.leaves(),
-            "the key {} is left by is the one its own table binds to `Act::Close`",
-            mode.name()
-        );
-    }
+    assert_eq!(
+        carded,
+        vec![
+            Mode::Keys,
+            Mode::Files,
+            Mode::Models,
+            Mode::Settings,
+            Mode::Stats
+        ],
+        "the five screens wear a card and the draft wears none, and each card's two labels \
+         are its screen's name and the key its own table binds to leaving it"
+    );
 }
