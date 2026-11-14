@@ -63,10 +63,6 @@ impl Deltas for Transcript {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
-fn turned(turn: u32, prompt: &str, answer: &str) -> Turn {
-    Turn::answered(turn, prompt, answer)
-}
-
 fn asked(replay: &Replay) -> Value {
     let requests = replay.requests();
     serde_json::from_str(&requests[0].body).expect("a wire's body is JSON")
@@ -211,8 +207,8 @@ fn the_turns_that_ended_before_a_run_are_asked_ahead_of_its_prompt() {
         Unreached,
     )
     .earlier(vec![
-        turned(1, "hi my name is Glenn", "nice to meet you, Glenn"),
-        turned(2, "is it raining?", "it is raining"),
+        Turn::answered(1, "hi my name is Glenn", "nice to meet you, Glenn"),
+        Turn::answered(2, "is it raining?", "it is raining"),
     ]);
 
     run.drive(&mut Transcript::default());
@@ -250,8 +246,8 @@ fn a_turn_that_ended_with_no_answer_is_not_sent_as_an_empty_message() {
         Unreached,
     )
     .earlier(vec![
-        turned(1, "hi my name is Glenn", "nice to meet you, Glenn"),
-        turned(2, "what is the weather?", ""),
+        Turn::answered(1, "hi my name is Glenn", "nice to meet you, Glenn"),
+        Turn::answered(2, "what is the weather?", ""),
     ]);
 
     run.drive(&mut Transcript::default());

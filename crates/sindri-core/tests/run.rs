@@ -254,17 +254,13 @@ fn an_ask_that_reported_no_input_leaves_the_size_unknown_rather_than_zero() {
     );
 }
 
-fn ended(turn: u32, prompt: &str, text: &str) -> Turn {
-    Turn::answered(turn, prompt, text)
-}
-
 #[test]
 fn a_run_handed_the_turns_that_came_before_it_hands_them_to_every_request() {
     let model = Scripted::answering([Reply::answer("Glenn")]);
     let log = model.log();
     let mut run = Run::new("what is my name?", model, Tools::cheap()).earlier(vec![
-        ended(1, "hi my name is Glenn", "nice to meet you, Glenn"),
-        ended(2, "is it raining?", "it is raining"),
+        Turn::answered(1, "hi my name is Glenn", "nice to meet you, Glenn"),
+        Turn::answered(2, "is it raining?", "it is raining"),
     ]);
 
     run.drive(&mut Transcript::default());
@@ -780,7 +776,7 @@ fn clearing_the_history_forgets_the_loaded_skills() {
 fn clearing_the_history_forgets_the_turns_the_run_was_handed_but_not_the_prompt() {
     let model = Scripted::answering([Reply::answer("hello")]);
     let log = model.log();
-    let mut run = Run::new("say hi", model, Tools::cheap()).earlier(vec![ended(
+    let mut run = Run::new("say hi", model, Tools::cheap()).earlier(vec![Turn::answered(
         1,
         "hi my name is Glenn",
         "nice to meet you",

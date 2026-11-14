@@ -370,12 +370,12 @@ impl Facts {
     /// The size one ask's report measured, and the part of its input the provider served from cache.
     /// The document cannot hand these in: the `usage` it keeps is every ask summed, and a sum of the
     /// inputs grows with each turn while the conversation's size is what the newest request carried.
-    pub fn measured(mut self, ask: &Usage, window: Option<u64>) -> Facts {
-        let Some(size) = ask.input else {
+    pub fn measured(mut self, usage: &Usage, window: Option<u64>) -> Facts {
+        let Some(size) = usage.input else {
             return self;
         };
         self.ctx = Some(Ctx { size, window });
-        self.cache = ask.cached_input.and_then(|cached| share(cached, size));
+        self.cache = usage.cached_input.and_then(|cached| share(cached, size));
         self
     }
 }

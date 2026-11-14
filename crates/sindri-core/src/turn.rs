@@ -1,11 +1,11 @@
-//! One turn taken: the wire replays it and the run keeps it, so it lives below both.
+//! One turn taken: the wire replays it and the run keeps it.
 
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-/// A turn already taken: the prompt it was asked with, the words it answered, each call it asked
-/// for beside what that call answered, and the usage it spent.
+/// A turn already taken: what it answered, and each call it asked for beside what that call
+/// answered. The next ask replays these, so the model reads what its calls printed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Turn {
     pub turn: u32,
@@ -86,8 +86,7 @@ pub struct Acted {
     pub exit: Exit,
 }
 
-/// What one ask reported spending, and the running total a record keeps: the same five counts,
-/// summed, so one turn's spend and a session's are one type.
+/// What one ask reported spending, and the running total a record keeps.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Usage {

@@ -258,21 +258,6 @@ impl Spent {
     }
 }
 
-impl Exit {
-    pub fn of(outcome: &Outcome) -> Exit {
-        if outcome.cancelled {
-            return Exit::Cancelled;
-        }
-        if outcome.timed_out {
-            return Exit::TimedOut;
-        }
-        match outcome.code {
-            Some(code) => Exit::Code(code),
-            None => Exit::Signalled,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Reply {
     pub text: String,
@@ -630,7 +615,7 @@ impl Shell {
             text: rendered(&outcome),
             bytes: u64::try_from(outcome.stdout.len() + outcome.stderr.len()).unwrap_or(u64::MAX),
             elapsed: started.elapsed(),
-            exit: Exit::of(&outcome),
+            exit: exit_of(&outcome),
         })
     }
 
@@ -711,4 +696,17 @@ fn rendered(outcome: &Outcome) -> String {
     let mut text = outcome.stdout.clone();
     text.push_str(&outcome.stderr);
     text
+}
+
+fn exit_of(outcome: &Outcome) -> Exit {
+    if outcome.cancelled {
+        return Exit::Cancelled;
+    }
+    if outcome.timed_out {
+        return Exit::TimedOut;
+    }
+    match outcome.code {
+        Some(code) => Exit::Code(code),
+        None => Exit::Signalled,
+    }
 }
