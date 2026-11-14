@@ -1,5 +1,6 @@
 //! What one paint pass hands back: the destinations the frame names, the runs it draws at more than
-//! one cell, and the rows a press chooses, read off the value rather than off the frame.
+//! one cell, the rows a press chooses, and what it drew of the transcript, read off the value rather
+//! than off the frame.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -11,6 +12,10 @@ use sindri::rows::Scroll;
 use sindri::view::{Painted, View};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
+
+fn turns(count: u32) -> Vec<Entry> {
+    (1..=count).map(|turn| Entry::Turn { turn }).collect()
+}
 
 fn answer(text: &str) -> Vec<Entry> {
     vec![Entry::Assistant {
@@ -133,5 +138,113 @@ fn a_pass_under_a_card_tells_the_terminal_nothing_of_the_frame_beneath_it() {
         view.pointer(&told, Pointer::Press(Cell::new(row, 40))),
         Outcome::Quit,
         "where the rows the card itself laid are still the rows a press chooses"
+    );
+}
+
+#[test]
+fn a_pass_hands_back_the_height_the_whole_transcript_held() {
+    let mut view = View::of(answer("- gate\n- rule\n- mark"), Scroll::Tail);
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+
+    assert_eq!(
+        told.drawn().total(),
+        Some(3),
+        "an answer of three short lines is a transcript three rows tall"
+    );
+}
+
+#[test]
+fn a_pass_hands_back_the_band_a_page_moves_by() {
+    let mut view = View::of(turns(200), Scroll::Tail);
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    let band = u32::from(told.drawn().band());
+
+    assert_eq!(
+        view.key(Key::PageUp),
+        Outcome::Edited,
+        "a transcript deeper than its band is a page back"
+    );
+    assert_eq!(
+        view.scroll(),
+        Scroll::Back(band),
+        "one page is the band the pass recorded"
+    );
+
+    painted_and_told(&mut view, 120, 40);
+    assert_eq!(view.key(Key::PageUp), Outcome::Edited, "a second page");
+    assert_eq!(
+        view.scroll(),
+        Scroll::Back(2 * band),
+        "the row the second pass gives the notice is counted, so two pages are two bands"
+    );
+}
+
+#[test]
+fn a_pass_hands_back_the_entry_it_laid_on_a_row() {
+    let mut view = View::of(
+        [turns(1), answer("- gate\n- rule\n- mark")].concat(),
+        Scroll::Tail,
+    );
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let (row, _) = drawn_at(&buffer, "gate");
+
+    assert_eq!(
+        told.drawn().entry(row),
+        Some(1),
+        "the row the answer's words are drawn on is the second entry's"
+    );
+    assert_eq!(
+        told.drawn().entry(row.saturating_sub(1)),
+        Some(0),
+        "and the row above it is the one the entry before was laid in"
+    );
+    assert_eq!(
+        told.drawn().entry(told.drawn().band().saturating_sub(1)),
+        None,
+        "a row of the band the pass laid nothing on answers no entry"
+    );
+}
+
+#[test]
+fn a_pass_hands_back_the_span_a_copy_takes() {
+    let mut view = View::of(answer("- gate\n- rule\n- mark"), Scroll::Tail);
+    let (buffer, _) = painted_and_told(&mut view, 120, 40);
+    let (row, column) = drawn_at(&buffer, "rule");
+
+    view.drag(Cell::new(row, column), Cell::new(row, column + 3));
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+
+    assert_eq!(
+        told.drawn().span().text(),
+        "rule",
+        "the cells the drag covers are the words `Ctrl-Y` hands out, read off the pass"
+    );
+}
+
+#[test]
+fn an_act_that_replaces_the_transcript_empties_what_the_pass_drew() {
+    let mut view = View::of(answer("- gate\n- rule\n- mark"), Scroll::Tail);
+    let (buffer, _) = painted_and_told(&mut view, 120, 40);
+    let (row, column) = drawn_at(&buffer, "rule");
+    view.drag(Cell::new(row, column), Cell::new(row, column + 3));
+    painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        view.key(Key::Copy),
+        Outcome::Copy(String::from("rule")),
+        "the mark the last pass drew is the words a copy takes"
+    );
+
+    for glyph in ['/', 'n', 'e', 'w'] {
+        view.key(Key::Char(glyph));
+    }
+    assert_eq!(
+        view.key(Key::Enter),
+        Outcome::Edited,
+        "`/new` starts the conversation again"
+    );
+    assert_eq!(
+        view.key(Key::Copy),
+        Outcome::Unchanged,
+        "a copy of a transcript that is gone hands out nothing, with no repaint in between"
     );
 }

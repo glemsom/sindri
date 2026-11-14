@@ -152,13 +152,58 @@ const MODELS_EMPTY: &str = "no served name answers";
 /// wear theirs.
 const COMMANDS_CARD: &str = "/ commands";
 
-/// What one paint pass tells the terminal: the destinations the frame names, the runs it draws at
-/// more than one cell, and the rows a press chooses. No cell carries any of them.
+/// What one paint pass drew of the transcript, kept so the keys that follow are answered from the
+/// frame the reader was shown rather than from a second laying out of it.
+#[derive(Clone, Debug, Default)]
+pub struct Drawn {
+    band: u16,
+    total: Option<u32>,
+    laid: Vec<Laid>,
+    span: Span,
+}
+
+impl Drawn {
+    /// The record of a pass that drew no transcript: what an act replacing the transcript leaves.
+    pub fn none() -> Drawn {
+        Drawn::default()
+    }
+
+    /// The rows of transcript the pass drew in: what a page moves by, and how far back the deepest
+    /// row may be taken.
+    pub fn band(&self) -> u16 {
+        self.band
+    }
+
+    /// The height the whole transcript held when the pass laid it out, and `None` where no pass has
+    /// laid one out: what a row landing since the last one is given back against.
+    pub fn total(&self) -> Option<u32> {
+        self.total
+    }
+
+    /// The cells the mark covered, read off the rows the pass drew and never off the transcript.
+    pub fn span(&self) -> &Span {
+        &self.span
+    }
+
+    /// The entry laid on the band's row `row`, which is the only entry a mark grown over that row
+    /// can open the fold of.
+    pub fn entry(&self, row: u16) -> Option<usize> {
+        self.laid
+            .iter()
+            .find(|laid| laid.band.contains(&row))
+            .map(|laid| laid.entry)
+    }
+}
+
+/// What one paint pass tells the terminal and what it drew: the destinations the frame names, the
+/// runs it draws at more than one cell, the rows a press chooses, and the transcript's own record.
+/// No cell carries any of it.
 #[derive(Debug)]
 pub struct Painted {
     links: Links,
     sizes: Sizes,
     presses: Vec<Press>,
+    drawn: Drawn,
 }
 
 impl Painted {
@@ -168,6 +213,7 @@ impl Painted {
             links: Links::none(),
             sizes: Sizes::none(),
             presses: Vec::new(),
+            drawn: Drawn::none(),
         }
     }
 
@@ -179,6 +225,11 @@ impl Painted {
     /// The runs this frame draws at more than one cell, laid on the rows it drew.
     pub fn sizes(&self) -> &Sizes {
         &self.sizes
+    }
+
+    /// What this pass drew of the transcript, which is what the frame's own keys are answered from.
+    pub fn drawn(&self) -> &Drawn {
+        &self.drawn
     }
 
     /// The choice the row a press at `at` landed on hangs from, when it landed on one.
@@ -194,13 +245,9 @@ impl Painted {
 pub struct View {
     rows: Rows,
     scroll: Scroll,
-    /// The rows of transcript the last paint drew, and the whole transcript's height at it: what a
-    /// page moves by, and what the next paint reads a row that has landed against.
-    band: u16,
-    total: Option<u32>,
-    /// The entries the last paint drew, each with the band rows it was drawn in: a mark grown over
-    /// a row can only open the fold of an entry the reader was shown.
-    drawn: Vec<Laid>,
+    /// What the last paint pass drew: what a page, a copy and a fold read rather than laying the
+    /// transcript out a second time.
+    drawn: Drawn,
     composer: Composer,
     stream: Stream,
     queue: Queue,
@@ -213,7 +260,6 @@ pub struct View {
     splash: bool,
     record: Option<SessionDocument>,
     mark: Option<Mark>,
-    marked: Span,
     workspace: Option<PathBuf>,
     ground: Option<Ground>,
     picker: Picker,
@@ -499,8 +545,9 @@ impl View {
     /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does when
     /// nothing is marked. What leaves is the span the last paint drew, not a second reading.
     fn copy(&self) -> Outcome {
-        if !self.marked.is_empty() {
-            return Outcome::Copy(self.marked.text());
+        let span = self.drawn.span();
+        if !span.is_empty() {
+            return Outcome::Copy(span.text());
         }
         match self.rows.last_answer() {
             Some(answer) => Outcome::Copy(answer),
@@ -536,12 +583,7 @@ impl View {
     /// The fold of the entry the band row `row` was drawn from, opened if it was folded: a row the
     /// last paint drew nothing on, and a row of an entry with no fold, open nothing.
     fn unfold(&mut self, row: u16) -> bool {
-        let Some(entry) = self
-            .drawn
-            .iter()
-            .find(|laid| laid.band.contains(&row))
-            .map(|laid| laid.entry)
-        else {
+        let Some(entry) = self.drawn.entry(row) else {
             return false;
         };
         self.rows.open(entry)
@@ -610,8 +652,7 @@ impl View {
         self.stream = Stream::new();
         self.pulse = None;
         self.mark = None;
-        self.marked = Span::default();
-        self.drawn.clear();
+        self.drawn = Drawn::none();
         self.loaded.clear();
         self.conversation.clear();
         self.superseded = true;
@@ -788,7 +829,7 @@ impl View {
                 .scroll
                 .back()
                 .saturating_add(rows)
-                .min(self.rows.deepest(self.band)),
+                .min(self.rows.deepest(self.drawn.band())),
             Page::Forward => self.scroll.back().saturating_sub(rows),
         };
         if at == self.scroll.back() {
@@ -802,7 +843,7 @@ impl View {
     /// than while the row saying it is not is drawn over the band — so a page back and the page on
     /// beside it are one band of rows.
     fn page_rows(&self) -> u32 {
-        u32::from(self.band.saturating_add(self.notice_rows()))
+        u32::from(self.drawn.band().saturating_add(self.notice_rows()))
     }
 
     fn up(&mut self) -> Outcome {
@@ -960,7 +1001,7 @@ impl View {
                 self.pictures.place(picture, self.cell_size, cells, buffer);
             }
         }
-        self.transcript(
+        let drawn = self.transcript(
             share.transcript,
             buffer,
             &mut painted.links,
@@ -990,13 +1031,15 @@ impl View {
             painted
                 .sizes
                 .settle(share.transcript, buffer, &self.palette);
-            self.highlight(share.transcript, buffer);
+            self.highlight(share.transcript, buffer, drawn.span());
+            self.note(&mut painted, drawn);
             return painted;
         };
         // The band under a card takes no key, so the frame under it is no way to anywhere — and no
         // heading of it is drawn large, because the scrim is read as the words it holds.
         painted = Painted::none();
-        self.highlight(share.transcript, buffer);
+        self.highlight(share.transcript, buffer, drawn.span());
+        self.note(&mut painted, drawn);
         let width = card::body_width(area);
         let held = card::paint(
             area,
@@ -1009,6 +1052,13 @@ impl View {
         );
         painted.presses = body.paint(held, buffer, &self.palette);
         painted
+    }
+
+    /// Keeps what the pass drew for the keys it answers, and hands the same record back with what
+    /// the pass told the terminal.
+    fn note(&mut self, painted: &mut Painted, drawn: Drawn) {
+        self.drawn = drawn.clone();
+        painted.drawn = drawn;
     }
 
     /// The card this frame carries over itself: the screen on top of the stack, or — a draft
@@ -1057,7 +1107,7 @@ impl View {
         buffer: &mut Buffer,
         links: &mut Links,
         sizes: &mut Sizes,
-    ) {
+    ) -> Drawn {
         pen::claim(buffer, area, self.palette.ground(Some(Band::Well)));
         // A narrower band lays the same history out in more rows, and that is no row landing.
         let reflowed = self.rows.cols() != area.width;
@@ -1074,7 +1124,7 @@ impl View {
         // A window measured from the tail follows a run that grows; one the reader took back keeps
         // the rows it holds, so a row that lands is given back to the count rather than rolled
         // under them.
-        let grown = match self.total {
+        let grown = match self.drawn.total() {
             Some(seen) if !reflowed => total.saturating_sub(seen),
             _ => 0,
         };
@@ -1087,8 +1137,6 @@ impl View {
                 .min(self.rows.deepest(area.height)),
         };
         self.scroll = Scroll::of(back);
-        self.band = area.height;
-        self.total = Some(total);
         let thumb = self.rows.thumb(self.scroll, area.height);
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
@@ -1128,20 +1176,25 @@ impl View {
                 band: top..y.saturating_sub(area.y),
             });
         }
-        self.drawn = drawn;
         // What this band placed is all the cache keeps: a picture scrolled past is a raster
         // nobody is looking at.
         self.pictures.retain_shown();
-        self.marked = match self.mark {
+        let span = match self.mark {
             Some(mark) => Span::of(mark, &lines),
             None => Span::default(),
         };
+        Drawn {
+            band: area.height,
+            total: Some(total),
+            laid: drawn,
+            span,
+        }
     }
 
     /// Paints the mark over the rows it covers, from the span `Ctrl-Y` hands out: what is
     /// marked and what leaves are one value.
-    fn highlight(&self, area: Rect, buffer: &mut Buffer) {
-        for marked in self.marked.rows() {
+    fn highlight(&self, area: Rect, buffer: &mut Buffer, span: &Span) {
+        for marked in span.rows() {
             let Some(y) = area.y.checked_add(marked.row()) else {
                 continue;
             };
