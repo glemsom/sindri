@@ -27,7 +27,7 @@ use crate::ink::{Ink, Look};
 use crate::keys::{self, Act, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::link::Links;
-use crate::list::{self, Choice, Item, ScreenRow};
+use crate::list::{self, Beside, Choice, Item, ScreenRow};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -145,9 +145,6 @@ const PICKER_EMPTY: &str = "no file answers";
 /// The glyph before the row a reader is on, in every list a card draws: one mark, because every
 /// screen that lists says the same thing with it.
 const ROW_MARK: &str = "\u{203a} ";
-const ROW_GAP: &str = "  ";
-
-const SETTINGS_GAP: u16 = 2;
 
 const MODELS_ASKING: &str = "asking the wire what it serves";
 
@@ -1394,7 +1391,7 @@ impl View {
         list::List {
             query: Some(self.models.query()),
             said,
-            items: list::columned(names.into_iter()),
+            items: list::columned(names.into_iter(), Ink::Plain, Beside::Own(Ink::Dim)),
             selected: self.models.selected(),
             marker: ROW_MARK,
             choice: Some(Choice::Model),
@@ -1405,31 +1402,20 @@ impl View {
     /// A value too wide for the frame is cut at its right edge rather than dropped, as the
     /// picker's paths are, and a refusal under the list names the key to change.
     fn settings_rows(&self, width: u16) -> Vec<ScreenRow> {
-        let key_width = Config::KEYS
-            .iter()
-            .map(|key| pen::cells(key) + SETTINGS_GAP)
-            .max()
-            .unwrap_or(0);
-        let mut rows = Vec::new();
-        for (at, (key, text)) in self.settings.rows().enumerate() {
-            let (marker, name_ink, value_ink) = match at == self.settings.current() {
-                true => (ROW_MARK, Ink::Accent, Ink::Accent),
-                false => (ROW_GAP, Ink::Muted, Ink::Plain),
-            };
-            rows.push(ScreenRow::cut(vec![
-                (marker.to_owned(), Look::plain(name_ink)),
-                (pen::pad(key, key_width), Look::plain(name_ink)),
-                (text.to_owned(), Look::plain(value_ink)),
-            ]));
+        // A key is the schema's own and a value borrows the visit, so the column holds the pair for
+        // the shorter of the two lifetimes.
+        let keys: Vec<(&str, &str)> = self.settings.rows().collect();
+        let mut rows = list::List {
+            query: None,
+            said: None,
+            items: list::columned(keys.into_iter(), Ink::Muted, Beside::Row),
+            selected: self.settings.current(),
+            marker: ROW_MARK,
+            choice: None,
         }
-        let Some(refusal) = self.settings.refusal() else {
-            return rows;
-        };
-        // A blank row under the list, so the refusal reads as a verdict on the visit and not as the
-        // last key's value.
-        rows.push(ScreenRow::whole(Vec::new()));
-        for line in wrap(refusal, width) {
-            rows.push(ScreenRow::cut(vec![(line, Ink::Err.into())]));
+        .rows();
+        if let Some(reason) = self.settings.refusal() {
+            rows.extend(list::refusal(reason, width));
         }
         rows
     }
@@ -1648,7 +1634,11 @@ fn command_rows(card: &commands::Card) -> Vec<ScreenRow> {
     list::List {
         query: None,
         said: None,
-        items: list::columned(card.rows().iter().map(|said| (said.name, said.says))),
+        items: list::columned(
+            card.rows().iter().map(|said| (said.name, said.says)),
+            Ink::Plain,
+            Beside::Own(Ink::Dim),
+        ),
         selected: 0,
         marker: ROW_MARK,
         choice: Some(Choice::Command),
