@@ -42,4 +42,4 @@ files at 120x40
 36 |                                                                                                                        | dim:120
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 38 |› what should the run do?                                                                                               | dim:120
-39 |Enter send · / commands · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run| dim:120
+39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | dim:120

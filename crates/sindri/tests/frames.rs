@@ -339,33 +339,63 @@ fn rail_40x24_is_the_strip_down_to_the_size_and_the_state() {
 }
 
 #[test]
-fn footer_130x24_is_the_nine_hints_with_columns_to_spare() {
-    fixture::assert_frame("footer", 130, 24);
-}
-
-#[test]
-fn footer_120x24_is_the_narrowest_frame_that_holds_every_hint_the_table_names() {
+fn footer_120x24_is_an_idle_draft_s_whole_set_of_six() {
     fixture::assert_frame("footer", 120, 24);
 }
 
 #[test]
-fn footer_119x24_is_the_step_under_it_that_keeps_five() {
-    fixture::assert_frame("footer", 119, 24);
+fn footer_72x24_is_that_set_giving_up_the_newline() {
+    fixture::assert_frame("footer", 72, 24);
 }
 
 #[test]
-fn footer_100x24_is_the_narrowest_frame_that_holds_five_hints() {
-    fixture::assert_frame("footer", 100, 24);
+fn footer_52x24_is_that_set_giving_up_the_quit_and_the_newline() {
+    fixture::assert_frame("footer", 52, 24);
 }
 
 #[test]
-fn footer_99x24_is_the_first_width_down_to_the_two_that_never_go() {
-    fixture::assert_frame("footer", 99, 24);
+fn footer_40x24_is_the_three_hints_a_narrow_frame_keeps() {
+    fixture::assert_frame("footer", 40, 24);
 }
 
 #[test]
-fn footer_60x24_is_the_floor_the_hints_never_fall_below() {
-    fixture::assert_frame("footer", 60, 24);
+fn footer_live_120x24_is_a_live_run_s_whole_set_of_six() {
+    fixture::assert_frame("footer-live", 120, 24);
+}
+
+#[test]
+fn footer_live_72x24_is_that_set_giving_up_the_newline() {
+    fixture::assert_frame("footer-live", 72, 24);
+}
+
+#[test]
+fn footer_live_52x24_is_that_set_giving_up_the_quit_and_the_newline() {
+    fixture::assert_frame("footer-live", 52, 24);
+}
+
+#[test]
+fn footer_live_40x24_is_cancelling_the_commands_and_the_files() {
+    fixture::assert_frame("footer-live", 40, 24);
+}
+
+#[test]
+fn footer_queue_120x24_is_three_waiting_beside_the_key_that_recalls_one() {
+    fixture::assert_frame("footer-queue", 120, 24);
+}
+
+#[test]
+fn footer_queue_72x24_is_that_set_giving_up_the_newline() {
+    fixture::assert_frame("footer-queue", 72, 24);
+}
+
+#[test]
+fn footer_queue_52x24_is_the_count_beside_cancelling_the_commands_and_the_files() {
+    fixture::assert_frame("footer-queue", 52, 24);
+}
+
+#[test]
+fn footer_queue_40x24_is_the_count_and_the_commands_alone() {
+    fixture::assert_frame("footer-queue", 40, 24);
 }
 
 #[test]

@@ -1005,6 +1005,15 @@ fn row_of(drawn: &str, needle: &str) -> Option<u16> {
         .map(|run| run.row)
 }
 
+/// The row opened by the words `needle`, in the run that starts at the left edge: where a band's own
+/// words stand, rather than a footer's copy of them.
+fn band_row_of(drawn: &str, needle: &str) -> Option<u16> {
+    runs(drawn)
+        .into_iter()
+        .find(|run| run.column == 1 && run.glyphs.starts_with(needle))
+        .map(|run| run.row)
+}
+
 /// The frame as the terminal holds it after every frame drawn so far: each row that has a glyph on it,
 /// and the last write to a cell winning over the ones before it.
 fn picture(drawn: &str) -> BTreeMap<u16, String> {
@@ -1920,7 +1929,7 @@ fn enter_during_a_run_keeps_the_prompt_above_the_composer() {
     queue(&mut pty, &drawn, "read the test that failed");
 
     let frame = drawn.text();
-    let count = row_of(&frame, "1 queued");
+    let count = band_row_of(&frame, "1 queued");
     assert!(
         count.is_some(),
         "the frame counts the prompt waiting above the composer: {frame:?}"
