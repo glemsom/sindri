@@ -38,6 +38,13 @@ have. The marker at the head of the newest answer settles on the same word, so n
 stop disagree.
 _Avoid_: Exit status, failure, termination, reason
 
+**Refusal**:
+Why no run could start — no credential, a sandbox that will not build, a config the schema refuses. A
+run's refusal is drawn in the transcript as the entry a stop is drawn as, in the refusal's own words,
+and leaves the launch, the draft and the queue where they were; one no frame could survive is a line
+on the reader's shell and the end of the launch.
+_Avoid_: Error, failure, exit, abort
+
 **Context window**:
 How many tokens the model's window holds, when a reader names it in the config. No wire reports
 one and nothing here guesses, so a run with none named has a size and no share of it.

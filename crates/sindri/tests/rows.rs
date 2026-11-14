@@ -2,11 +2,15 @@
 //! how often layout happens, and a test that read the shape of the code instead would still
 //! pass on the day the cost came back.
 
+use std::path::PathBuf;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use sindri::composer::{Key, Outcome};
 use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
+use sindri::ledger::Boot;
 use sindri::link::Links;
 use sindri::palette::{Band, Palette};
 use sindri::pen;
@@ -2211,6 +2215,47 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
     assert!(
         at("✓ final") < at("⠋ 0.0s the second run is working"),
         "the run after it says its words under that stop rather than above it: {after:?}"
+    );
+}
+
+#[test]
+fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
+    let mut view = View::boot();
+    view.door(Boot {
+        wire: None,
+        model: None,
+        workspace: PathBuf::from("/work/agent"),
+        branch: None,
+        enforcement: Enforcement::Bubblewrap,
+    });
+    view.paste("why does the retry test fail");
+    let Outcome::Send(prompt) = view.key(Key::Enter) else {
+        panic!("a draft typed and sent is the prompt a run is asked with");
+    };
+    view.refused("cannot create the sandbox: bubblewrap is on PATH", prompt);
+    let drawn = frame(&mut view, 60, 12);
+    let whole = drawn.join("\n");
+    let at = |said: &str| {
+        drawn
+            .iter()
+            .position(|row| row == said)
+            .unwrap_or_else(|| panic!("the frame draws {said:?}: {whole}"))
+    };
+    let entry = at("✗ error");
+    let draft = at("› why does the retry test fail");
+
+    assert_eq!(
+        drawn[entry + 1],
+        "  cannot create the sandbox: bubblewrap is on PATH",
+        "a refusal is drawn as the entry a stop is, in the refusal's own words: {whole}"
+    );
+    assert!(
+        entry < draft,
+        "and the draft that asked for it is the reader's again, below it in the composer: {whole}"
+    );
+    assert!(
+        !drawn.iter().any(|row| row.trim() == "sindri"),
+        "the door a launch opened on gives way to the row the refusal leaves: {whole}"
     );
 }
 

@@ -1,11 +1,12 @@
-//! The launch's own two contracts, each driving one key's outcome through a pseudo-terminal of
-//! this process's own: a copy written down the wire, and a settings visit whose value is saved.
+//! The launch's own contracts, each driving one key's outcome through a pseudo-terminal of this
+//! process's own: a copy written down the wire, a settings visit whose value is saved, and a run
+//! that cannot start leaving its row and the launch standing.
 
 use std::os::fd::AsFd;
 use std::path::PathBuf;
 
 use clap::Parser;
-use sindri::composer::Key;
+use sindri::composer::{Composer, Key, Outcome, Prompt};
 use sindri::graphics::CellSize;
 use sindri::ledger::Boot;
 use sindri::pictures::{PLACEHOLDER, Pictures};
@@ -295,5 +296,125 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     assert!(
         !draws_the_face(&mut view),
         "the frame the visit leaves reserves no band for a face it will not draw"
+    );
+}
+
+#[test]
+fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launch() {
+    let mut pty = Pty::open();
+    let terminal =
+        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+    let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
+    let mut view = View::boot();
+    view.paste("why does the retry test fail");
+    let cli = Cli::parse_from(["sindri"]);
+    // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
+    // wire.
+    let mut config = Config::default();
+    let environment = std::collections::BTreeMap::new();
+    let wake = Arc::new(Wake::open().expect("a wake"));
+    let mut telling = Window::new(
+        pty.slave
+            .try_clone()
+            .expect("a second handle on the terminal"),
+        true,
+        std::path::Path::new("/work/sindri"),
+        false,
+    );
+    let mut running = None;
+    let mut asking = None;
+    let mut held = None;
+    let ended = answer(
+        &terminal,
+        &mut canvas,
+        &mut view,
+        Event::Key(Key::Enter),
+        &mut running,
+        &mut asking,
+        &cli,
+        &mut config,
+        &environment,
+        &wake,
+        &mut telling,
+        &mut held,
+    )
+    .expect("the refusal is drawn");
+
+    assert!(
+        ended.is_none(),
+        "a run that could not start is a row in the frame, and not the end of the launch"
+    );
+    let drawn = pty.drawn();
+    let refusal = drawn
+        .find("a run needs a provider and a model")
+        .unwrap_or_else(|| panic!("the frame carries the refusal's own words: {drawn:?}"));
+    let recalled = drawn
+        .rfind("why does the retry test fail")
+        .unwrap_or_else(|| panic!("the draft that asked is the reader's again: {drawn:?}"));
+    assert!(
+        refusal < recalled,
+        "the draft stands below the refusal it asked with, in the composer it came from: {drawn:?}"
+    );
+}
+
+/// A prompt as the composer hands one back: typed, then sent.
+fn prompt_of(text: &str) -> Prompt {
+    let mut composer = Composer::new();
+    composer.paste(text);
+    match composer.key(Key::Enter) {
+        Outcome::Send(prompt) => prompt,
+        other => panic!("a draft should have been sent, and {other:?} came instead"),
+    }
+}
+
+#[test]
+fn a_refused_prompt_out_of_the_queue_leaves_the_queue_and_the_launch_standing() {
+    let mut pty = Pty::open();
+    let terminal =
+        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+    let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
+    let mut view = View::boot();
+    view.enqueue(prompt_of("run the test that failed and read it"));
+    view.enqueue(prompt_of("then the fmt check"));
+    let cli = Cli::parse_from(["sindri"]);
+    let mut config = Config::default();
+    let wake = Arc::new(Wake::open().expect("a wake"));
+    let mut telling = Window::new(
+        pty.slave
+            .try_clone()
+            .expect("a second handle on the terminal"),
+        true,
+        std::path::Path::new("/work/sindri"),
+        false,
+    );
+    let mut running = None;
+    let mut launch = None;
+
+    resume(
+        &mut canvas,
+        &mut view,
+        &mut running,
+        &mut launch,
+        &cli,
+        &mut config,
+        &wake,
+        &mut telling,
+    )
+    .expect("the refusal is drawn");
+
+    assert_eq!(
+        view.queue().len(),
+        1,
+        "the prompt that could not run is out of the queue, and the one behind it waits there still"
+    );
+    assert_eq!(
+        view.composer().text(),
+        "run the test that failed and read it",
+        "and the words it was asked with are the reader's draft again, to send or to change"
+    );
+    let drawn = pty.drawn();
+    assert!(
+        drawn.contains("a run needs a provider and a model"),
+        "the frame carries the refusal's own words: {drawn:?}"
     );
 }
