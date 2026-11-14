@@ -121,15 +121,14 @@ pub fn columned<'a>(
         .collect()
 }
 
-/// The columns the widest of `names` takes beside the gap after it: the one column a table of names
-/// keeps, whether it is read as items of a list or drawn beside the lines that explain them.
+/// The columns the widest of `names` takes beside the gap after it: the one column a list of names
+/// keeps, whether it is read as items or drawn beside the lines that explain them.
 fn widest<'a>(names: impl Iterator<Item = &'a str>) -> u16 {
     names.map(|name| pen::cells(name) + GAP).max().unwrap_or(0)
 }
 
-/// The column a table of names keeps, and the band the words beside them are wrapped to: the
+/// The column the names of a list keep, and the band the words beside them are wrapped to: the
 /// columns a name is padded to, the width a line is wrapped to, and the two looks each is read in.
-#[derive(Clone, Copy, Debug)]
 pub struct Column {
     columns: u16,
     width: u16,
@@ -138,7 +137,7 @@ pub struct Column {
 }
 
 impl Column {
-    /// The column a table of `names` keeps: the widest of them and the gap after it, in a band
+    /// The column the `names` of a list keep: the widest of them and the gap after it, in a band
     /// `width` columns wide, the names read in `name` and the words beside them in `said`.
     pub fn of<'a>(
         names: impl Iterator<Item = &'a str>,
@@ -154,12 +153,15 @@ impl Column {
         }
     }
 
-    /// The rows one name and the line that explains it make: the name in the column's own
-    /// columns, its line wrapped under that column, and every row after the first hanging at it,
-    /// so a description wider than the band loses no word.
+    /// The rows one name and the line that explains it make: the name in the column's own columns,
+    /// its line wrapped under that column, and every row after the first hanging at it.
     pub fn hung(&self, name: &str, said: &str) -> Vec<ScreenRow> {
         let hang = pen::blank(self.columns);
-        wrap(said, self.width.saturating_sub(self.columns))
+        let mut lines = wrap(said, self.width.saturating_sub(self.columns));
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        lines
             .into_iter()
             .enumerate()
             .map(|(at, line)| {
@@ -173,9 +175,9 @@ impl Column {
     }
 }
 
-/// The row a group's name stands on at the head of the rows it names: whole, or not drawn at all.
-pub fn head(words: &str, ink: Ink) -> ScreenRow {
-    ScreenRow::whole(vec![(words.to_owned(), Look::plain(ink))])
+/// One row of a list that is words alone, in one look: whole, or not drawn at all.
+pub fn whole(words: &str, look: Look) -> ScreenRow {
+    ScreenRow::whole(vec![(words.to_owned(), look)])
 }
 
 /// The rows a refusal is read in under a list: a blank row, then its words wrapped to the band, each
@@ -211,10 +213,7 @@ impl List<'_> {
             ]));
         }
         if let Some(words) = self.said {
-            rows.push(ScreenRow::whole(vec![(
-                words.to_owned(),
-                Look::plain(Ink::Dim),
-            )]));
+            rows.push(whole(words, Look::plain(Ink::Dim)));
             return rows;
         }
         for (at, item) in self.items.iter().enumerate() {
@@ -512,56 +511,64 @@ mod tests {
     }
 
     #[test]
-    fn a_group_heading_is_whole_and_says_its_words_in_the_ink_it_was_given() {
-        let row = head("composer", Ink::Dim);
+    fn a_name_with_no_words_beside_it_stands_alone_rather_than_going_missing() {
+        let column = Column::of(
+            ["Esc"].into_iter(),
+            20,
+            Look::plain(Ink::Plain),
+            Look::plain(Ink::Dim),
+        );
+
+        let rows = column.hung("Esc", "");
+        let padded = pen::pad("Esc", pen::cells("Esc") + GAP);
 
         assert_eq!(
-            spans(&row),
-            vec![("composer", Ink::Dim)],
-            "the row a group's name stands on is the name alone, read in the ink the group was \
-             given"
+            spans(&rows[0]),
+            vec![(padded.as_str(), Ink::Plain), ("", Ink::Dim)],
+            "a name a list has no line for is still a row of it: a reader shown no words beside a \
+             name is not shown the name either, and that is a row lost"
         );
         assert_eq!(
-            row.clip,
-            Clip::Whole,
-            "and a heading is whole: half a group's name says nothing of the rows under it"
+            rows.len(),
+            1,
+            "and no row is wrapped out of no words: {:?}",
+            rows.iter().map(spans).collect::<Vec<_>>()
         );
     }
 
     #[test]
-    fn a_table_of_no_names_keeps_no_column_so_its_words_wrap_to_the_whole_band() {
-        let column = Column::of(
+    fn a_column_of_no_names_keeps_no_column_so_its_words_wrap_to_the_whole_band() {
+        let said = "the files of the workspace, while it starts a word";
+        let rows = Column::of(
             std::iter::empty(),
             12,
             Look::plain(Ink::Plain),
             Look::plain(Ink::Dim),
-        );
-        let rows = column.hung("Esc", "the files of the workspace, while it starts a word");
+        )
+        .hung("Esc", said);
 
         assert_eq!(
             rows[0].spans[0].0, "Esc",
-            "a table of no names keeps no column, so the name it is handed is padded out to \
+            "a column of no names keeps no column, so the name it is handed is padded out to \
              nothing"
         );
         for row in &rows[1..] {
             assert!(
                 row.spans[0].0.is_empty(),
-                "and no column is held blank where a table with names in it hangs: {:?}",
-                row.spans[0].0
+                "and no column is held blank under a name where a list with names in it hangs: \
+                 {:?}",
+                rows.iter().map(spans).collect::<Vec<_>>()
             );
         }
-        let lines: Vec<&str> = rows.iter().map(|row| row.spans[1].0.as_str()).collect();
-        assert!(
-            lines.iter().any(|line| pen::cells(line) > 7),
-            "the words beside a name wrap to the whole band rather than to the band less a column \
-             nothing keeps: {lines:?}"
+        let wrapped: String = rows
+            .iter()
+            .flat_map(|row| row.spans[1].0.split_whitespace())
+            .collect::<Vec<&str>>()
+            .join(" ");
+        assert_eq!(
+            wrapped, said,
+            "no word of the line is lost when no column holds the names: {wrapped:?}"
         );
-        for line in &lines {
-            assert!(
-                pen::cells(line) <= 12,
-                "and no line of them is wider than the band it was wrapped to: {line:?}"
-            );
-        }
     }
 
     #[test]

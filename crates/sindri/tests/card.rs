@@ -476,34 +476,52 @@ fn a_description_wider_than_the_card_wraps_under_its_own_column_and_hangs_under_
         .find(|binding| binding.name == "@")
         .expect("the empty draft binds `@` to the files of the workspace")
         .does;
-    let opens: Vec<&str> = does.split_whitespace().take(4).collect();
-    let first = body
+    let first_words: Vec<&str> = does.split_whitespace().take(3).collect();
+    let begins = body
         .iter()
-        .position(|row| row.contains(&opens.join(" ")))
+        .position(|row| row.contains(&first_words.join(" ")))
         .unwrap_or_else(|| {
             panic!(
                 "no row of the keys screen says `{}`: {body:#?}",
-                opens.join(" ")
+                first_words.join(" ")
             )
         });
-    let start = body[first]
-        .find(&opens.join(" "))
+    let column = body[begins]
+        .find(&first_words.join(" "))
         .expect("the row the line begins on says its first words");
-    let column = body[first][..start].chars().count();
-    let under = &body[first + 1];
-    let hung: Vec<&str> = under.split_whitespace().collect();
-    let words: Vec<&str> = does.split_whitespace().collect();
+    let mut under = begins + 1;
+    while under < body.len() && body[under].len() >= column {
+        let lead: String = body[under].chars().take(column).collect();
+        if !lead.trim().is_empty() || body[under].trim().is_empty() {
+            break;
+        }
+        under += 1;
+    }
     assert!(
-        !hung.is_empty() && words.ends_with(&hung),
-        "the line this test is about is wider than the columns the card has left for it, and the \
-         row under it says the words it had no room for: {:?} then {under:?}",
-        body[first]
+        under > begins + 1,
+        "the line `{}` is wider than the columns the card has left for it, so it takes more than \
+         one row: {body:#?}",
+        does
     );
-    assert!(
-        under.chars().take(column).all(|glyph| glyph == ' '),
-        "and that row is blank up to the column the description begins in, so a wrapped line \
-         hangs under the line above it rather than standing as a name of its own: {under:?}"
+    let wrapped: String = body[begins..under]
+        .iter()
+        .map(|row| row.chars().skip(column).collect::<String>())
+        .collect::<Vec<String>>()
+        .join(" ");
+    assert_eq!(
+        wrapped.split_whitespace().collect::<Vec<&str>>().join(" "),
+        does,
+        "and the rows under the first say the words it had no room for, in order and without \
+         losing one: {body:#?}"
     );
+    for row in &body[begins + 1..under] {
+        assert!(
+            row.chars().take(column).all(|glyph| glyph == ' '),
+            "every row a description wraps onto is blank up to the column it begins in, so a \
+             wrapped line hangs under the line above it rather than standing as a name of its own: \
+             {row:?}"
+        );
+    }
 }
 
 #[test]

@@ -1312,10 +1312,9 @@ impl View {
         width.saturating_sub(pen::cells(INDENT))
     }
 
-    /// Every mode's name as a heading over the keys it binds, each key in one column and what it
-    /// does beside it: a description wider than the card wraps under its own column rather than
-    /// losing its tail, because a key without the line that explains it is a key a reader has to
-    /// try.
+    /// Every mode's name as a heading over the keys it binds, each key in one column and what it does
+    /// beside it: a description wider than the card wraps under its own column rather than losing
+    /// its tail, because a key without the line that explains it is a key a reader has to try.
     fn keys_rows(&self, width: u16) -> Vec<ScreenRow> {
         let modes: Vec<Mode> = self.stack.modes().collect();
         let column = list::Column::of(
@@ -1329,7 +1328,7 @@ impl View {
         );
         let mut rows = Vec::new();
         for mode in modes {
-            rows.push(list::head(mode.name(), Ink::Dim));
+            rows.push(list::whole(mode.name(), Look::plain(Ink::Dim)));
             for binding in mode.table() {
                 rows.extend(column.hung(binding.name, binding.does));
             }
@@ -1358,10 +1357,8 @@ impl View {
         }
         .rows();
         if !files.is_empty() {
-            rows.push(ScreenRow::whole(vec![(
-                format!("1\u{2013}{} of {}", files.len(), self.picker.matches()),
-                Ink::Dim.into(),
-            )]));
+            let counted = format!("1\u{2013}{} of {}", files.len(), self.picker.matches());
+            rows.push(list::whole(&counted, Look::plain(Ink::Dim)));
         }
         rows
     }
