@@ -3,33 +3,33 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 transcript-scrolled at 120x40
-00 |  what it shows and no more.                                                wire      anthropic                         | plain:76 dim:10 plain:34
-01 |─ turn 4 ───────────────────────────────────────────────────────────────────model     claude-sonnet-4-5-20250929        | dim:86 plain:34
-02 |✓ exit 0  bash  96 bytes · 118 ms                                           think     high                              | ok:1 plain:1 dim:31 plain:43 dim:10 plain:34
-03 |  check: fmt ... ok                                                                                                     | muted:19 plain:101
-04 |  check: clippy ... ok                                                      turns                               6 /  250| muted:22 plain:54 dim:10 plain:34
-05 |  check: test ... ok                                                        ctx                      █░░░░░ 48.2k / 200k| muted:20 plain:56 dim:10 plain:16 dim:5 plain:13
-06 |  check: frames ... ok                                                      cache                                    88%| muted:22 plain:54 dim:10 plain:34
-07 |  What that buys is the plain case and what it costs is the scrolled one: a                                             | plain:120
-08 |  window is a row offset from the tail, so resolving one walks the entries  workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
-09 |  between the tail and the window and lays out every one of them on the way.branch    spec/1-capability                 | plain:76 dim:10 plain:34
-10 |  Each is laid out once and kept, so the whole history scrolled through                                                 | plain:120
-11 |  costs one layout per entry and scrolling it again costs none.             skills                                     2| plain:76 dim:10 plain:34
-12 |─ turn 5 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
-13 |█ exit 0  bash  128 bytes · 9 ms                                            sandbox   bwrap                             | dim:1 plain:1 dim:30 plain:44 dim:10 plain:34
-14 |█ crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | dim:1 muted:46 plain:73
-15 |█ crates/sindri/tests/rows.rs | 198 +++++++++                               session   9f2c7a41                          | dim:1 muted:44 plain:31 dim:10 plain:34
-16 |█ The transcript's unit is the entry. An entry never carries a formatted    temp      …/sindri/sessions/9f2c7a41/tmp    | dim:1 plain:75 dim:10 plain:34
-17 |█ line, so the same run is drawn the same way by the TUI, by a reader of the                                            | dim:1 plain:119
-18 |█ transcript and by whatever front end comes next.                                                                      | dim:1 plain:119
-19 |█                                                                                                                       | dim:1 plain:119
-20 |█ construct │ where it stands                                                                                           | dim:1 plain:1 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
-21 |█ ──────────┼───────────────────────────                                                                                | dim:1 plain:1 dim:38 plain:80
-22 |█ heading   │ in the answer's own gutter                                                                                | dim:1 plain:10 dim:3 plain:106
-23 |█ code      │ behind a bar, highlighted                                                                                 | dim:1 plain:10 dim:3 plain:106
-24 |█ table     │ columns joined by a bar                                                                                   | dim:1 plain:10 dim:3 plain:106
-25 |█ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
-26 |█ exit 0  bash  104 bytes · 31 ms                                                                                       | dim:1 plain:1 dim:31 plain:87
+00 |  check: clippy ... ok                                                      wire      anthropic                         | muted:22 plain:54 dim:10 plain:34
+01 |  check: test ... ok                                                        model     claude-sonnet-4-5-20250929        | muted:20 plain:56 dim:10 plain:34
+02 |  check: frames ... ok                                                      think     high                              | muted:22 plain:54 dim:10 plain:34
+03 |  What that buys is the plain case and what it costs is the scrolled one: a                                             | plain:120
+04 |  window is a row offset from the tail, so resolving one walks the entries  turns                               6 /  250| plain:76 dim:10 plain:34
+05 |  between the tail and the window and lays out every one of them on the way.ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+06 |  Each is laid out once and kept, so the whole history scrolled through     cache                                    88%| plain:76 dim:10 plain:34
+07 |  costs one layout per entry and scrolling it again costs none.                                                         | plain:120
+08 |─ turn 5 ───────────────────────────────────────────────────────────────────workspace …/git/sindri/.worktrees/46-rail   | dim:86 plain:34
+09 |… bash                                                                      branch    spec/1-capability                 | dim:1 plain:1 dim:4 plain:70 dim:10 plain:34
+10 |  git diff --stat                                                                                                       | plain:120
+11 |✓ exit 0  9 ms · 128 bytes                                                  skills                                     2| ok:1 plain:1 dim:24 plain:50 dim:10 plain:34
+12 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | muted:47 plain:73
+13 |  crates/sindri/tests/rows.rs | 198 +++++++++                               sandbox   bwrap                             | muted:45 plain:31 dim:10 plain:34
+14 |  The transcript's unit is the entry. An entry never carries a formatted                                                | plain:120
+15 |  line, so the same run is drawn the same way by the TUI, by a reader of thesession   9f2c7a41                          | plain:76 dim:10 plain:34
+16 |█ transcript and by whatever front end comes next.                          temp      …/sindri/sessions/9f2c7a41/tmp    | dim:1 plain:75 dim:10 plain:34
+17 |█                                                                                                                       | dim:1 plain:119
+18 |█ construct │ where it stands                                                                                           | dim:1 plain:1 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
+19 |█ ──────────┼───────────────────────────                                                                                | dim:1 plain:1 dim:38 plain:80
+20 |█ heading   │ in the answer's own gutter                                                                                | dim:1 plain:10 dim:3 plain:106
+21 |█ code      │ behind a bar, highlighted                                                                                 | dim:1 plain:10 dim:3 plain:106
+22 |█ table     │ columns joined by a bar                                                                                   | dim:1 plain:10 dim:3 plain:106
+23 |█ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+24 |█ bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+25 |█ make check STAGES=frames                                                                                              | dim:1 plain:119
+26 |█ exit 0  31 ms · 104 bytes                                                                                             | dim:1 plain:1 dim:25 plain:93
 27 |█ check: frame calls ... ok                                                                                             | dim:1 muted:26 plain:93
 28 |█ check: frame transcript ... ok                                                                                        | dim:1 muted:31 plain:88
 29 |█ A row is one line                                                                                                     | dim:1 plain:1 plain+bold:17 plain:101

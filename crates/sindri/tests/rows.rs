@@ -976,11 +976,11 @@ fn a_path_a_call_names_is_a_way_to_the_file_the_run_judged_it_openable_as() {
 
     assert_eq!(
         said(&painted(&rows[1], 40)),
-        r#"  {"path":"notes.html"}"#,
-        "the call's arguments are laid as they were written, set in a body's gutter"
+        "  notes.html",
+        "the call's arguments spell the path, so the row says the path and nothing around it"
     );
     assert!(
-        painted(&rows[1], 40)[11..21]
+        painted(&rows[1], 40)[2..12]
             .iter()
             .all(|(_, look)| *look == way()),
         "the path's own cells wear the line a way wears: {:?}",
@@ -991,24 +991,24 @@ fn a_path_a_call_names_is_a_way_to_the_file_the_run_judged_it_openable_as() {
     let destination = format!("file://{}", resolved.display());
     let (_, links) = laid(&rows[1], Rect::new(0, 0, 40, 1));
     assert_eq!(
-        links.at(0, 11),
+        links.at(0, 2),
         Some(destination.as_str()),
         "the path's first cell opens the file the judgement resolved it to"
     );
     assert_eq!(
-        links.at(0, 20),
+        links.at(0, 11),
         Some(destination.as_str()),
         "and so does its last"
     );
     assert_eq!(
-        links.at(0, 21),
+        links.at(0, 12),
         None,
         "and no cell past the path is a way to the file"
     );
     assert_eq!(
-        links.at(0, 10),
+        links.at(0, 1),
         None,
-        "nor the quote the path was written after"
+        "nor the blank the gutter sets before it"
     );
 }
 
@@ -1068,23 +1068,26 @@ fn the_words_a_way_is_drawn_on_are_the_value_the_run_read_the_path_from() {
 
     let rows = layout_on(&entry, 50, &Surface::none(), Some(&ground(tree.path())));
 
+    assert_eq!(
+        said(&painted(&rows[1], 50)),
+        "  notes.html",
+        "the arguments spell the path once, so the row says it once"
+    );
+
     let resolved = std::fs::canonicalize(tree.path().join("notes.html")).expect("the file");
     let destination = format!("file://{}", resolved.display());
     let (_, links) = laid(&rows[1], Rect::new(0, 0, 50, 1));
+    for column in 2..12 {
+        assert_eq!(
+            links.at(0, column),
+            Some(destination.as_str()),
+            "column {column} is the path the run read, and every cell of it is a way there"
+        );
+    }
     assert_eq!(
         links.at(0, 12),
         None,
-        "a value that spells the path is no way to it: only the path the run read is"
-    );
-    assert_eq!(
-        links.at(0, 34),
-        Some(destination.as_str()),
-        "and the path's own value is the way there"
-    );
-    assert_eq!(
-        links.at(0, 43),
-        Some(destination.as_str()),
-        "to its last cell"
+        "and no cell past the path is a way anywhere"
     );
 }
 
@@ -1097,6 +1100,11 @@ fn a_path_a_call_names_that_the_run_would_have_refused_is_drawn_as_it_is_today()
     let plain = layout(&entry, 40);
 
     assert_eq!(
+        said(&painted(&judged[1], 40)),
+        "  outside.html",
+        "the refused call still says the path it named, and nothing around it"
+    );
+    assert_eq!(
         painted(&judged[1], 40),
         painted(&plain[1], 40),
         "a file the run would have refused is drawn exactly as the frame draws it with no \
@@ -1106,6 +1114,107 @@ fn a_path_a_call_names_that_the_run_would_have_refused_is_drawn_as_it_is_today()
     assert!(
         links.is_empty(),
         "and no cell of the row is a way to anywhere"
+    );
+}
+
+#[test]
+fn a_bash_call_is_drawn_as_the_command_line_a_reader_would_type() {
+    let rows = layout(&named(1, "bash", r#"{"command": "rg -n 'fence' src"}"#), 60);
+    let drawn: Vec<String> = rows.iter().map(words).collect();
+
+    assert_eq!(
+        drawn,
+        ["… bash", "  rg -n 'fence' src"],
+        "the call names the tool in the gutter and the command line a reader would type under it: \
+         {drawn:?}"
+    );
+    assert!(
+        drawn.iter().all(|row| unpunctuated(row)),
+        "no cell of a call's row is punctuation the model wrote around its arguments: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_skill_call_is_drawn_as_the_skills_own_name() {
+    let rows = layout(&named(1, "skill", r#"{"name": "rust-review"}"#), 60);
+    let drawn: Vec<String> = rows.iter().map(words).collect();
+
+    assert_eq!(
+        drawn,
+        ["… skill", "  rust-review"],
+        "the row says the skill a reader would ask for by that name: {drawn:?}"
+    );
+}
+
+#[test]
+fn an_argument_no_tool_spells_is_drawn_as_words_and_never_as_punctuation() {
+    let rows = layout(
+        &named(1, "grep", r#"{"glob": "*.rs", "pattern": "fn main"}"#),
+        60,
+    );
+
+    assert_eq!(
+        words(&rows[1]),
+        "  glob *.rs pattern fn main",
+        "a call this product has no tool for says each key and the value under it"
+    );
+    assert!(
+        unpunctuated(&words(&rows[1])),
+        "and it says them as words: no brace, bracket, quote, comma or colon survives: {:?}",
+        words(&rows[1])
+    );
+}
+
+/// Whether a row says no punctuation a model writes around the arguments it sent.
+fn unpunctuated(row: &str) -> bool {
+    !row.chars()
+        .any(|glyph| matches!(glyph, '{' | '}' | '[' | ']' | '"' | ':' | ','))
+}
+
+#[test]
+fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_the_call_row_holds()
+{
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(call(1));
+    let opened = rows.rows(0).len();
+
+    rows.push(result(1, Exit::Code(0)));
+    let settled: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        settled[..opened],
+        ["… bash", "  ls"],
+        "the call keeps the row it opened and the words it was called with: {settled:?}"
+    );
+    assert_eq!(
+        settled[opened], "✓ exit 0  2 ms · 7 bytes",
+        "and under them the result says the verdict, how long the call took and how much it \
+         wrote: {settled:?}"
+    );
+    assert!(
+        settled[opened..].iter().all(|row| !row.contains("bash")),
+        "repeating no name the call row already held: {settled:?}"
+    );
+}
+
+#[test]
+fn a_result_with_no_verdict_draws_the_duration_and_the_size_alone_in_the_gutter() {
+    let entry = Entry::Result {
+        turn: 1,
+        name: SecretSet::default().redact("bash"),
+        text: SecretSet::default().redact("a.txt"),
+        bytes: 7,
+        elapsed_ms: 2,
+        exit: None,
+    };
+
+    let rows = layout(&entry, 40);
+
+    assert_eq!(
+        said(&painted(&rows[0], 40)),
+        "  2 ms · 7 bytes",
+        "a result with no verdict claims none: the numbers stand in a body's gutter and say \
+         nothing of the tool they came from"
     );
 }
 
@@ -1207,7 +1316,7 @@ fn a_result_longer_than_its_fold_draws_its_head_its_last_row_and_the_count_of_ro
          its last row: {drawn:?}"
     );
     assert_eq!(
-        drawn[0], "✓ exit 0  bash  640 bytes · 1800 ms",
+        drawn[0], "✓ exit 0  1800 ms · 640 bytes",
         "the head opens with the verdict row, which a fold never takes away"
     );
     assert_eq!(
@@ -1468,7 +1577,7 @@ fn a_call_that_exited_zero_settles_on_a_check_and_its_code() {
     let rows = layout(&result(1, Exit::Code(0)), 40);
     let header = painted(&rows[0], 40);
 
-    assert_eq!(said(&header), "✓ exit 0  bash  7 bytes · 2 ms");
+    assert_eq!(said(&header), "✓ exit 0  2 ms · 7 bytes");
     assert_eq!(cell_inks(&header)[0], Ink::Ok, "the check is the good ink");
     assert!(
         cell_inks(&header)[2..].iter().all(|ink| *ink == Ink::Dim),
@@ -1482,7 +1591,7 @@ fn a_call_that_failed_settles_on_a_cross_and_the_code_it_exited_with() {
     let rows = layout(&result(1, Exit::Code(1)), 40);
     let header = painted(&rows[0], 40);
 
-    assert_eq!(said(&header), "✗ exit 1  bash  7 bytes · 2 ms");
+    assert_eq!(said(&header), "✗ exit 1  2 ms · 7 bytes");
     assert_eq!(cell_inks(&header)[0], Ink::Err, "the cross is the bad ink");
 }
 
@@ -1518,7 +1627,7 @@ fn a_result_body_is_drawn_in_the_quieter_ink_that_says_it_is_not_the_answer() {
 fn a_call_the_timeout_killed_says_timed_out() {
     let header = painted(&layout(&result(1, Exit::TimedOut), 40)[0], 40);
 
-    assert_eq!(said(&header), "✗ timed out  bash  7 bytes · 2 ms");
+    assert_eq!(said(&header), "✗ timed out  2 ms · 7 bytes");
     assert_eq!(cell_inks(&header)[0], Ink::Err);
 }
 
@@ -1534,12 +1643,12 @@ fn a_cancelled_call_is_a_row_and_not_a_dangling_spinner() {
     );
 
     rows.push(result(1, Exit::Cancelled));
-    let settled = painted(&rows.rows(0)[0], 80);
+    let settled = painted(&rows.rows(0)[2], 80);
 
     assert_eq!(
         said(&settled),
-        "✗ cancelled  bash  7 bytes · 2 ms",
-        "the row a cancelled call opened says what stopped it"
+        "✗ cancelled  2 ms · 7 bytes",
+        "the row the cancelled call settles on says what stopped it"
     );
     assert_eq!(cell_inks(&settled)[0], Ink::Err);
 }
@@ -1555,19 +1664,19 @@ fn a_wave_of_calls_settles_its_rows_in_the_order_the_run_wrote_them() {
 
     assert_eq!(rows.len(), 2, "two calls, two rows");
     assert_eq!(
-        said(&painted(&rows.rows(0)[0], 80)),
-        "✓ exit 0  bash  7 bytes · 2 ms",
+        said(&painted(&rows.rows(0)[2], 80)),
+        "✓ exit 0  2 ms · 7 bytes",
         "the first result settles the first call"
     );
     assert_eq!(
-        said(&painted(&rows.rows(1)[0], 80)),
-        "✗ exit 1  bash  7 bytes · 2 ms",
+        said(&painted(&rows.rows(1)[2], 80)),
+        "✗ exit 1  2 ms · 7 bytes",
         "and the second settles the second"
     );
 }
 
 #[test]
-fn a_call_and_its_result_are_one_row() {
+fn a_settled_call_keeps_its_words_above_the_row_that_says_how_it_ended() {
     let mut rows = Rows::new();
     rows.resize(80);
     rows.push(call(1));
@@ -1578,9 +1687,16 @@ fn a_call_and_its_result_are_one_row() {
         1,
         "the result settled the call instead of joining it"
     );
+    let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
-        said(&painted(&rows.rows(0)[0], 80)),
-        "✓ exit 0  bash  7 bytes · 2 ms"
+        drawn[..2],
+        ["… bash", "  ls"],
+        "the entry is the call's rows first, so what was run stands above what came of it: \
+         {drawn:?}"
+    );
+    assert_eq!(
+        drawn[2], "✓ exit 0  2 ms · 7 bytes",
+        "and the result's row under them: {drawn:?}"
     );
 }
 
@@ -1620,9 +1736,9 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
         );
     }
     assert_eq!(
-        said(&painted(&rows.rows(settled_at)[0], 80)),
-        "✗ exit 1  bash  7 bytes · 2 ms",
-        "and the row the call opened is the one that was laid again"
+        said(&painted(&rows.rows(settled_at)[2], 80)),
+        "✗ exit 1  2 ms · 7 bytes",
+        "and the entry the call opened is the one that was laid again"
     );
     assert_eq!(
         rows.lays(),

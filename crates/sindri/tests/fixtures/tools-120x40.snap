@@ -1,0 +1,45 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+tools at 120x40
+00 |─ turn 1 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+01 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+02 |  rg -n 'the gutter' crates/sindri/src                                                                                  | plain:120
+03 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
+04 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
+05 |… open                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+06 |  GLOSSARY.md                                                                                                           | plain:2 plain~dim:11 plain:107
+07 |✓ exit 0  4 ms · 0 bytes                                                                                                | ok:1 plain:1 dim:22 plain:96
+08 |… skill                                                                                                                 | dim:1 plain:1 dim:5 plain:113
+09 |  rust-review                                                                                                           | plain:120
+10 |✓ exit 0  2 ms · 33 bytes                                                                                               | ok:1 plain:1 dim:23 plain:95
+11 |  the rust-review skill is loaded                                                                                       | muted:33 plain:87
+12 |─ turn 2 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+13 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+14 |  cargo test --workspace                                                                                                | plain:120
+15 |… open                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+16 |  docs/agents/domain.md                                                                                                 | plain:2 plain~dim:21 plain:97
+17 |… skill                                                                                                                 | dim:1 plain:1 dim:5 plain:113
+18 |  code-review                                                                                                           | plain:120
+19 |                                                                                                                        | plain:120
+20 |                                                                                                                        | plain:120
+21 |                                                                                                                        | plain:120
+22 |                                                                                                                        | plain:120
+23 |                                                                                                                        | plain:120
+24 |                                                                                                                        | plain:120
+25 |                                                                                                                        | plain:120
+26 |                                                                                                                        | plain:120
+27 |                                                                                                                        | plain:120
+28 |                                                                                                                        | plain:120
+29 |                                                                                                                        | plain:120
+30 |                                                                                                                        | plain:120
+31 |                                                                                                                        | plain:120
+32 |                                                                                                                        | plain:120
+33 |                                                                                                                        | plain:120
+34 |                                                                                                                        | plain:120
+35 |                                                                                                                        | plain:120
+36 |                                                                                                                        | plain:120
+37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
+38 |› what should the run do?                                                                                               | dim:25 plain:95
+39 |Enter send · ? keys · Ctrl-C cancel · Ctrl-Q quit · Ctrl-J newline · @ files · ↑ queue · End follow the run             | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:7 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:3 muted:15 plain:13

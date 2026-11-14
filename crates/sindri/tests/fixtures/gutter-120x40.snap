@@ -6,21 +6,21 @@ gutter at 120x40
 00 |─ turn 1 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 01 |─ prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
 02 |› triage the retry test                                                                                                 | plain:120
-03 |✓ exit 0  bash  412 bytes · 23 ms                                                                                       | ok:1 plain:1 dim:31 plain:87
-04 |  src/rows.rs: every entry stands in one gutter                                                                         | muted:47 plain:73
-05 |│ the marker of a row stands in the gutter ahead of its words                                                           | dim:2 muted:59 plain:59
-06 |  Every row begins at one column:                                                                                       | plain:120
-07 |                                                                                                                        | plain:120
-08 |▏ rust                                                                                                                  | dim:6 plain:114
-09 |▏ fn gutter() {                                                                                                         | dim:2 accent:2 plain:116
-10 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
-11 |▏ }                                                                                                                     | dim:2 plain:118
-12 |                                                                                                                        | plain:120
-13 |  and the words follow the marker.                                                                                      | plain:120
-14 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
-15 |  {"command": "make check STAGES=rows"}                                                                                 | plain:120
-16 |                                                                                                                        | plain:120
-17 |                                                                                                                        | plain:120
+03 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+04 |  rg -n 'gutter' src                                                                                                    | plain:120
+05 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
+06 |  src/rows.rs: every entry stands in one gutter                                                                         | muted:47 plain:73
+07 |│ the marker of a row stands in the gutter ahead of its words                                                           | dim:2 muted:59 plain:59
+08 |  Every row begins at one column:                                                                                       | plain:120
+09 |                                                                                                                        | plain:120
+10 |▏ rust                                                                                                                  | dim:6 plain:114
+11 |▏ fn gutter() {                                                                                                         | dim:2 accent:2 plain:116
+12 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
+13 |▏ }                                                                                                                     | dim:2 plain:118
+14 |                                                                                                                        | plain:120
+15 |  and the words follow the marker.                                                                                      | plain:120
+16 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+17 |  make check STAGES=rows                                                                                                | plain:120
 18 |                                                                                                                        | plain:120
 19 |                                                                                                                        | plain:120
 20 |                                                                                                                        | plain:120

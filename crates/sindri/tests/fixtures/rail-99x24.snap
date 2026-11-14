@@ -4,14 +4,14 @@ expression: drawn
 ---
 rail at 99x24
 00 |─ turn 1 ──────────────────────────────────────────────────────────────────────────────────────────| dim:99
-01 |✓ exit 0  bash  412 bytes · 23 ms                                                                  | ok:1 plain:1 dim:31 plain:66
-02 |  src/rows.rs: the glyph a turn opens with                                                         | muted:42 plain:57
-03 |  src/rows.rs: a word longer than a row is broken                                                  | muted:49 plain:50
-04 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a     | plain:99
-05 |  rendering: the TUI and any reader draw one run from one value, and the core may not name a       | plain:99
-06 |  terminal at all.                                                                                 | plain:99
-07 |                                                                                                   | plain:99
-08 |                                                                                                   | plain:99
+01 |… bash                                                                                             | dim:1 plain:1 dim:4 plain:93
+02 |  rg -n 'fence' src                                                                                | plain:99
+03 |✓ exit 0  23 ms · 412 bytes                                                                        | ok:1 plain:1 dim:25 plain:72
+04 |  src/rows.rs: the glyph a turn opens with                                                         | muted:42 plain:57
+05 |  src/rows.rs: a word longer than a row is broken                                                  | muted:49 plain:50
+06 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a     | plain:99
+07 |  rendering: the TUI and any reader draw one run from one value, and the core may not name a       | plain:99
+08 |  terminal at all.                                                                                 | plain:99
 09 |                                                                                                   | plain:99
 10 |                                                                                                   | plain:99
 11 |                                                                                                   | plain:99

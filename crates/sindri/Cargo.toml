@@ -28,6 +28,8 @@ pulldown-cmark = { version = "0.12", default-features = false }
 # a reader's screen are one picture.
 ratatui = "0.29"
 rustix = { version = "1.1.6", features = ["event", "fs", "termios"] }
+# A call's arguments arrive as JSON, and the frame reads the fact out of them to draw it.
+serde_json = "1.0"
 sindri-core = { path = "../sindri-core" }
 # A glyph can be two cells wide, so a row's columns are measured and never counted.
 unicode-width = "0.2"

@@ -74,6 +74,11 @@ fn calls_120x40_is_a_call_settled_four_ways() {
 }
 
 #[test]
+fn tools_120x40_is_one_call_of_each_tool_settled_and_in_flight() {
+    fixture::assert_frame("tools", 120, 40);
+}
+
+#[test]
 fn fold_120x40_is_a_result_longer_than_the_head_it_is_drawn_as() {
     fixture::assert_frame("fold", 120, 40);
 }

@@ -26,6 +26,7 @@ mod readback; // what a painted buffer holds, read back: the inks of a row and t
 pub mod rows; // the transcript's rows: one entry of the core's records laid out as the rows it is
 pub mod settings; // the config file's keys as one list, the value each of them holds
 pub mod size; // the runs of a row a terminal draws at twice the cell, measured by the cells they leave
+pub mod spell; // a call's arguments as the thing the tool's own fact is: the words a reader would type
 pub mod stats; // the ledger's second adapter: the band a screen is handed, the rows the ledger lays
 pub mod stream; // the turn in flight: the answer and the thought of the run's newest turn, fed a
 pub mod view; // what one frame holds and where each part of it goes
