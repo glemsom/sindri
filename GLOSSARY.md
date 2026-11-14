@@ -218,6 +218,14 @@ given up on the way out, and the one fact the frame draws from it — the accent
 nobody is reading and returns when they are. A terminal that reports nothing is being read.
 _Avoid_: Active, selected, current window
 
+**Pointer**:
+The wheel's notch and the cell a press landed on. A launch asks whether its terminal reports one when
+it takes the screen, and a terminal nobody can vouch for is handed a frame that takes none. Where it
+is taken, one notch moves the transcript as the page keys do, a press on a card's row chooses that
+row and sends the key it hangs from, and a press on no row of a card is no act at all. A pointer
+is never drawn into a cell.
+_Avoid_: Mouse, cursor (that one is the terminal's own), hover
+
 **Artefact**:
 The one file the product ships, static and `x86_64-unknown-linux-musl`, built and held by the
 release stage. What the evals hold to a golden is a fixture, not this.

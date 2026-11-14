@@ -3,6 +3,8 @@
 
 use sindri::composer::Key;
 use sindri::decode::{Decoder, Event};
+use sindri::mark::Cell;
+use sindri::pointer::{Notch, Pointer};
 
 fn events(chunks: &[&[u8]]) -> Vec<Event> {
     let mut decoder = Decoder::new();
@@ -328,5 +330,58 @@ fn a_terminal_that_reports_focus_is_heard_as_the_window_being_read_and_left() {
         event(b"\x1b[O"),
         Event::Focus(false),
         "and `CSI O` is the report that nobody is looking"
+    );
+}
+
+#[test]
+fn a_notch_of_the_wheel_is_the_pointer_moving_the_transcript() {
+    assert_eq!(
+        event(b"\x1b[<64;5;3M"),
+        Event::Pointer(Pointer::Wheel(Notch::Up)),
+        "`CSI < 64 ; x ; y M` is one notch of the wheel up, and never a key"
+    );
+    assert_eq!(
+        event(b"\x1b[<65;5;3M"),
+        Event::Pointer(Pointer::Wheel(Notch::Down))
+    );
+}
+
+#[test]
+fn a_press_names_the_cell_it_landed_on() {
+    assert_eq!(
+        event(b"\x1b[<0;10;5M"),
+        Event::Pointer(Pointer::Press(Cell::new(4, 9))),
+        "a report counts from one and a frame's cells from nothing, so the tenth column of \
+         the fifth row is the cell nine across and four down"
+    );
+}
+
+#[test]
+fn a_report_naming_no_act_of_the_frames_is_no_event() {
+    for (bytes, why) in [
+        (
+            &b"\x1b[<0;10;5m"[..],
+            "a release is nothing a frame answers",
+        ),
+        (&b"\x1b[<32;10;5M"[..], "a move is no press"),
+        (
+            &b"\x1b[<2;10;5M"[..],
+            "a right button is a press nothing hangs from",
+        ),
+    ] {
+        assert!(
+            events(&[bytes]).is_empty(),
+            "{why}: {:?}",
+            String::from_utf8_lossy(bytes)
+        );
+    }
+}
+
+#[test]
+fn a_pointer_report_in_two_reads_is_one_event() {
+    assert_eq!(
+        events(&[&b"\x1b[<0;1"[..], &b"0;5M"[..]]),
+        vec![Event::Pointer(Pointer::Press(Cell::new(4, 9)))],
+        "a report arrives a read at a time as any sequence does, and its reads are one press"
     );
 }

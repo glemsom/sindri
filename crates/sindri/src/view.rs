@@ -34,6 +34,7 @@ use crate::pen::{self, Clip};
 use crate::picker::Picker;
 use crate::picture::Surface;
 use crate::pictures::Pictures;
+use crate::pointer::{Notch, Pointer};
 use crate::pulse::Pulse;
 use crate::queue::Queue;
 use crate::rail;
@@ -209,6 +210,11 @@ pub struct View {
     /// Whether this launch's terminal draws text at more than one cell at all: a surface a heading
     /// is measured against, and never a question a paint asks again.
     sizing: bool,
+    /// Whether this launch's terminal reports a pointer at all: a frame drawn where it does not is
+    /// drawn in the cells it always was.
+    pointer: bool,
+    /// The rows of the card this frame drew that a press chooses, laid where their cells were drawn.
+    clicks: Vec<Click>,
     focus: Focus,
 }
 
@@ -852,6 +858,52 @@ impl View {
         self.sizing = sizing;
     }
 
+    /// Whether this launch's terminal reports a pointer, asked once at boot: a frame drawn where it
+    /// does not is drawn in the cells it always was.
+    pub fn set_pointer(&mut self, taken: bool) {
+        self.pointer = taken;
+    }
+
+    /// What the pointer did, as the frame's answer: a notch moves the transcript through the one key
+    /// table, and a press chooses the row it landed on.
+    pub fn pointer(&mut self, pointer: Pointer) -> Outcome {
+        if !self.pointer {
+            return Outcome::Unchanged;
+        }
+        match pointer {
+            Pointer::Wheel(Notch::Up) => self.key(Key::PageUp),
+            Pointer::Wheel(Notch::Down) => self.key(Key::PageDown),
+            Pointer::Press(at) => self.pressed(at),
+        }
+    }
+
+    /// A press on a row of a card: the row is chosen, and then the key it hangs from is sent, which
+    /// is `Enter` for every row a card draws.
+    fn pressed(&mut self, at: Cell) -> Outcome {
+        let Some(click) = self.clicks.iter().find(|click| click.covers(at)).copied() else {
+            return Outcome::Unchanged;
+        };
+        if !self.chosen(click.choice) {
+            return Outcome::Unchanged;
+        }
+        self.key(Key::Enter)
+    }
+
+    /// The row a press landed on, chosen: `true` when it is a row the frame still holds.
+    fn chosen(&mut self, choice: Choice) -> bool {
+        match choice {
+            Choice::File(at) => self.picker.select(at),
+            Choice::Model(at) => self.models.select(at),
+            Choice::Command(at) => {
+                let Some(line) = self.card().and_then(|card| card.spelling_of(at)) else {
+                    return false;
+                };
+                self.composer.rewrite(&line);
+                true
+            }
+        }
+    }
+
     /// Hands the frame its newest answer's marker. The elapsed time is the caller's, because a
     /// frame holds no clock, and a settled marker keeps the number the run stopped at.
     pub fn set_pulse(&mut self, pulse: Option<Pulse>) {
@@ -864,6 +916,7 @@ impl View {
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) {
         self.links = Links::none();
         self.sizes = Sizes::none();
+        self.clicks.clear();
         pen::claim(buffer, area, self.palette.ground(None));
         self.composer.set_room(View::room(area.width));
         let bands = bands(
@@ -931,6 +984,7 @@ impl View {
         // heading of it is drawn large, because the scrim is read as the words it holds.
         self.links = Links::none();
         self.sizes = Sizes::none();
+        self.clicks.clear();
         self.highlight(share.transcript, buffer);
         let width = card::body_width(area);
         let held = card::paint(
@@ -942,7 +996,7 @@ impl View {
             self.edge(),
             &self.palette,
         );
-        body.paint(held, buffer, &self.palette);
+        self.clicks = body.paint(held, buffer, &self.palette);
     }
 
     /// The card this frame carries over itself: the screen on top of the stack, or — a draft
@@ -1328,7 +1382,7 @@ impl View {
                 spans.push((PICKER_GAP.to_owned(), Ink::Dim.into()));
                 spans.push((file.directory.to_owned(), Ink::Dim.into()));
             }
-            rows.push(cut_row(spans));
+            rows.push(choosable(cut_row(spans), Choice::File(at)));
         }
         rows.push(screen_row(vec![(
             format!("1\u{2013}{} of {}", files.len(), self.picker.matches()),
@@ -1355,7 +1409,7 @@ impl View {
             rows.push(screen_row(vec![(said.to_owned(), Ink::Dim.into())]));
             return rows;
         }
-        rows.extend(listed(&names, self.models.selected()));
+        rows.extend(listed(&names, self.models.selected(), Choice::Model));
         rows
     }
 
@@ -1536,10 +1590,12 @@ impl ScreenBody {
         }
     }
 
-    /// Draws the screen in `body`, and never in a row the card did not give it.
-    fn paint(&self, body: Rect, buffer: &mut Buffer, palette: &Palette) {
+    /// Draws the screen in `body`, and never in a row the card did not give it, with the rows a press
+    /// chooses laid where they were written.
+    fn paint(&self, body: Rect, buffer: &mut Buffer, palette: &Palette) -> Vec<Click> {
         match self {
             ScreenBody::Rows(rows) => {
+                let mut clicks = Vec::new();
                 for (row, y) in rows.iter().zip(body.y..body.bottom()) {
                     let area = Rect {
                         y,
@@ -1547,10 +1603,40 @@ impl ScreenBody {
                         ..body
                     };
                     pen::write(buffer, area, &row.spans, row.clip, palette);
+                    if let Some(choice) = row.choice {
+                        clicks.push(Click { area, choice });
+                    }
                 }
+                clicks
             }
-            ScreenBody::Ledger(facts) => stats::paint(facts, body, buffer, palette),
+            ScreenBody::Ledger(facts) => {
+                stats::paint(facts, body, buffer, palette);
+                Vec::new()
+            }
         }
+    }
+}
+
+/// What a row of a card chooses when a press lands on it: a file the picker offers, a name the wire
+/// served, or a command the draft's word leaves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Choice {
+    File(usize),
+    Model(usize),
+    Command(usize),
+}
+
+/// One row of a card a press chooses, and the cells it was written into.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Click {
+    area: Rect,
+    choice: Choice,
+}
+
+impl Click {
+    /// Whether a press at `at` landed on this row: the row it is drawn on, and a column of it.
+    fn covers(&self, at: Cell) -> bool {
+        at.row == self.area.y && (self.area.x..self.area.right()).contains(&at.column)
     }
 }
 
@@ -1559,6 +1645,8 @@ impl ScreenBody {
 struct ScreenRow {
     spans: Vec<(String, Look)>,
     clip: Clip,
+    /// What a press on this row chooses, or nothing where no key hangs from it.
+    choice: Option<Choice>,
 }
 
 /// A row whole or not there at all: a hint or a fact is never read in part.
@@ -1566,6 +1654,7 @@ fn screen_row(spans: Vec<(String, Look)>) -> ScreenRow {
     ScreenRow {
         spans,
         clip: Clip::Whole,
+        choice: None,
     }
 }
 
@@ -1593,7 +1682,7 @@ fn whole_row<S: AsRef<str>, D: Copy + Into<Look>>(
 
 /// One row per name of a list: the marker the row the reader is on wears, the name padded to the
 /// widest of them, and the line that says what it is set quieter beside it.
-fn listed(rows: &[(&str, &str)], selected: usize) -> Vec<ScreenRow> {
+fn listed(rows: &[(&str, &str)], selected: usize, choice: fn(usize) -> Choice) -> Vec<ScreenRow> {
     let widest = rows
         .iter()
         .map(|(name, _)| pen::cells(name) + NAMES_GAP)
@@ -1607,11 +1696,14 @@ fn listed(rows: &[(&str, &str)], selected: usize) -> Vec<ScreenRow> {
                 false => (ROW_GAP, Ink::Plain),
             };
             let ink = Look::plain(ink);
-            cut_row(vec![
-                (marker.to_owned(), ink),
-                (pen::pad(name, widest), ink),
-                ((*says).to_owned(), Ink::Dim.into()),
-            ])
+            choosable(
+                cut_row(vec![
+                    (marker.to_owned(), ink),
+                    (pen::pad(name, widest), ink),
+                    ((*says).to_owned(), Ink::Dim.into()),
+                ]),
+                choice(at),
+            )
         })
         .collect()
 }
@@ -1624,7 +1716,7 @@ fn command_rows(card: &commands::Card) -> Vec<ScreenRow> {
         .iter()
         .map(|said| (said.name, said.says))
         .collect();
-    listed(&named, 0)
+    listed(&named, 0, Choice::Command)
 }
 
 /// A row cut at its right edge: a value that runs on is cut rather than dropped.
@@ -1632,6 +1724,15 @@ fn cut_row(spans: Vec<(String, Look)>) -> ScreenRow {
     ScreenRow {
         spans,
         clip: Clip::Edge,
+        choice: None,
+    }
+}
+
+/// The same row, marked as one a press chooses: a card's rows are the ones a click has an act for.
+fn choosable(row: ScreenRow, choice: Choice) -> ScreenRow {
+    ScreenRow {
+        choice: Some(choice),
+        ..row
     }
 }
 
@@ -3214,6 +3315,204 @@ mod tests {
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
         buffer
+    }
+
+    #[test]
+    fn a_notch_of_the_wheel_takes_the_transcript_back_exactly_as_the_page_key_does() {
+        let mut view = turns(100);
+        view.set_pointer(true);
+        painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.pointer(Pointer::Wheel(Notch::Up)),
+            Outcome::Edited,
+            "a notch of the wheel moves the transcript, which is a frame to paint"
+        );
+        assert_eq!(
+            view.scroll(),
+            Scroll::Back(37),
+            "and it moves it by the band the transcript is drawn in, exactly as `PgUp` does"
+        );
+        painted(&mut view, 120, 40);
+        assert_eq!(
+            view.pointer(Pointer::Wheel(Notch::Down)),
+            Outcome::Edited,
+            "one notch on brings it back"
+        );
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "which is the tail it started at"
+        );
+    }
+
+    #[test]
+    fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
+        let mut view = turns(40);
+        view.set_pointer(true);
+        painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.pointer(Pointer::Wheel(Notch::Up)),
+            Outcome::Edited,
+            "a transcript three rows taller than its band is a notch back"
+        );
+        assert_eq!(
+            view.scroll(),
+            Scroll::Back(3),
+            "but only as far as its first row, which one page reaches"
+        );
+        assert_eq!(
+            view.pointer(Pointer::Wheel(Notch::Up)),
+            Outcome::Unchanged,
+            "and a notch up already at the first row moves nothing"
+        );
+        assert_eq!(view.scroll(), Scroll::Back(3), "the row it stopped on");
+
+        let mut tail = turns(40);
+        tail.set_pointer(true);
+        painted(&mut tail, 120, 40);
+        assert_eq!(
+            tail.pointer(Pointer::Wheel(Notch::Down)),
+            Outcome::Unchanged,
+            "a notch down at the tail is a frame that does not move"
+        );
+        assert_eq!(tail.scroll(), Scroll::Tail);
+    }
+
+    #[test]
+    fn a_notch_on_a_frame_whose_terminal_reports_no_pointer_moves_nothing() {
+        let mut view = turns(100);
+        painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.pointer(Pointer::Wheel(Notch::Up)),
+            Outcome::Unchanged,
+            "a terminal that reports no pointer is handed a frame that takes none"
+        );
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "which is at the tail it was drawn at"
+        );
+    }
+
+    /// A frame with the `@` picker open over a workspace of two files, painted at 120 by 40 with
+    /// the pointer taken: what a press on one of its rows is read against.
+    fn picking() -> (View, tempfile::TempDir) {
+        let workspace = tempfile::tempdir().expect("a temp workspace");
+        for file in ["alpha.rs", "zeta.rs"] {
+            std::fs::write(workspace.path().join(file), "").expect("a file");
+        }
+        let mut view = View::boot();
+        view.set_pointer(true);
+        view.set_workspace(workspace.path().to_path_buf());
+        assert_eq!(
+            view.key(Key::Char('@')),
+            Outcome::Edited,
+            "`@` at the start of the draft opens the picker"
+        );
+        (view, workspace)
+    }
+
+    /// The row a frame draws `said` on, so a press can land where the words are.
+    fn row_holding(buffer: &Buffer, said: &str) -> u16 {
+        (buffer.area.y..buffer.area.bottom())
+            .find(|y| drawn_row(buffer, *y).contains(said))
+            .unwrap_or_else(|| panic!("the frame draws {said:?} on no row of it"))
+    }
+
+    #[test]
+    fn a_press_on_a_file_row_of_the_picker_chooses_that_file() {
+        let (mut view, _workspace) = picking();
+        let drawn = painted(&mut view, 120, 40);
+        let row = row_holding(&drawn, "zeta.rs");
+
+        assert_eq!(
+            view.pointer(Pointer::Press(Cell::new(row, 40))),
+            Outcome::Edited,
+            "a press on the second row of the picker chooses that file, and a frame is painted"
+        );
+        assert_eq!(
+            view.composer().text(),
+            "zeta.rs ",
+            "the draft holds that file's word, which is what `Enter` on the row inserts"
+        );
+        assert_ne!(
+            view.mode(),
+            Mode::Files,
+            "and choosing a file closes the card it was chosen from"
+        );
+    }
+
+    #[test]
+    fn a_press_on_no_row_of_the_picker_changes_nothing() {
+        let (mut view, _workspace) = picking();
+        let drawn = painted(&mut view, 120, 40);
+        let file = row_holding(&drawn, "zeta.rs");
+        let query = row_holding(&drawn, "query:");
+        let counted = row_holding(&drawn, " of 2");
+
+        for (at, why) in [
+            (Cell::new(query, 40), "the row the query is typed on"),
+            (Cell::new(counted, 40), "the row that counts the matches"),
+            (Cell::new(file, 5), "a cell outside the card"),
+        ] {
+            assert_eq!(
+                view.pointer(Pointer::Press(at)),
+                Outcome::Unchanged,
+                "a press on {why} chooses no row, so nothing happens"
+            );
+            assert_eq!(
+                view.composer().text(),
+                "",
+                "and the draft is the one it was"
+            );
+            assert_eq!(view.mode(), Mode::Files, "with the card still open");
+        }
+    }
+
+    #[test]
+    fn a_press_on_a_commands_row_sends_what_enter_sends() {
+        let mut view = View::boot();
+        view.set_pointer(true);
+        view.key(Key::Char('/'));
+        let drawn = painted(&mut view, 120, 40);
+        let row = row_holding(&drawn, "/quit");
+
+        assert_eq!(
+            view.pointer(Pointer::Press(Cell::new(row, 40))),
+            Outcome::Quit,
+            "the row the press lands on is the one `/quit` hangs from, and it sends what `Enter` \
+             on that line sends"
+        );
+    }
+
+    #[test]
+    fn a_press_on_a_commands_row_sends_what_enter_on_the_typed_line_sends() {
+        let mut clicked = View::boot();
+        clicked.set_pointer(true);
+        for glyph in ['/', 'n'] {
+            clicked.key(Key::Char(glyph));
+        }
+        let drawn = painted(&mut clicked, 120, 40);
+        let row = row_holding(&drawn, "/settings");
+
+        let mut typed = View::boot();
+        for glyph in "/settings".chars() {
+            typed.key(Key::Char(glyph));
+        }
+
+        assert_eq!(
+            clicked.pointer(Pointer::Press(Cell::new(row, 40))),
+            typed.key(Key::Enter),
+            "a press on a row sends the line that row spells, and sends what `Enter` sends"
+        );
+        assert_eq!(
+            clicked.composer().text(),
+            typed.composer().text(),
+            "which leaves the frame exactly as the typed line left it"
+        );
     }
 
     #[test]

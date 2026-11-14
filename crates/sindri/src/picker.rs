@@ -116,6 +116,16 @@ impl Picker {
         }
     }
 
+    /// The row a press landed on: the selection moves to it, and a press on no row of the list moves
+    /// nothing.
+    pub fn select(&mut self, at: usize) -> bool {
+        if at >= self.rows().len() {
+            return false;
+        }
+        self.selected = at;
+        true
+    }
+
     pub fn up(&mut self) -> bool {
         let moved = self.selected > 0;
         self.selected = self.selected.saturating_sub(1);
@@ -232,6 +242,32 @@ mod tests {
             picker.key(Key::Char(glyph));
         }
         picker
+    }
+
+    #[test]
+    fn a_row_the_list_holds_is_chosen_by_a_press_on_it_and_one_it_does_not_holds_nothing() {
+        let root = workspace(&["alpha.rs", "zeta.rs"]);
+        let mut picker = Picker::walk(root.path());
+        let rows = picker.rows().len();
+
+        assert!(
+            picker.select(1),
+            "the second row of the list is a press the picker takes"
+        );
+        assert_eq!(
+            picker.selected(),
+            1,
+            "and the selection moves to the row the press landed on"
+        );
+        assert!(
+            !picker.select(rows + 7),
+            "a press past the last row is a row no list holds"
+        );
+        assert_eq!(
+            picker.selected(),
+            1,
+            "so the selection stays on the row it was"
+        );
     }
 
     #[test]

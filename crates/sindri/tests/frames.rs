@@ -417,3 +417,13 @@ fn face_120x40_is_the_face_over_the_rails_top_rows() {
 fn face_off_120x40_is_the_facts_from_the_rails_first_row_and_no_band() {
     fixture::assert_frame("face-off", 120, 40);
 }
+
+#[test]
+fn files_120x40_is_the_same_cells_where_the_pointer_is_taken_and_where_it_is_not() {
+    fixture::assert_pointer_draws_the_same_cells("files", 120, 40);
+}
+
+#[test]
+fn commands_120x40_is_the_same_cells_where_the_pointer_is_taken_and_where_it_is_not() {
+    fixture::assert_pointer_draws_the_same_cells("commands", 120, 40);
+}

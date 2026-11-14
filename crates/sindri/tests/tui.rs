@@ -87,6 +87,12 @@ const ASK_FOCUS: &[u8] = b"\x1b[?1004h";
 
 const GIVE_UP_FOCUS: &[u8] = b"\x1b[?1004l";
 
+/// `CSI ? 1000 h` and `CSI ? 1006 h`: the press and the wheel are reported, and a press names the
+/// cell it landed on.
+const TAKE_POINTER: &[u8] = b"\x1b[?1000h\x1b[?1006h";
+
+const GIVE_UP_POINTER: &[u8] = b"\x1b[?1000l\x1b[?1006l";
+
 const SERVED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
@@ -644,6 +650,60 @@ fn a_terminal_that_names_itself_wears_the_title_is_asked_for_its_focus_and_gives
         drawn.wait_for(GIVE_UP_FOCUS),
         "and gives the report up on the way out: {:?}",
         drawn.text()
+    );
+}
+
+#[test]
+fn a_terminal_that_names_itself_takes_the_pointer_and_gives_it_up_on_the_way_out() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    let bytes = drawn.bytes();
+    let (screen, taken, frame) = (
+        at(&bytes, b"\x1b[?1049h"),
+        at(&bytes, TAKE_POINTER),
+        at(&bytes, FIRST_KEY),
+    );
+    assert!(
+        matches!((screen, taken, frame), (Some(screen), Some(taken), Some(frame)) if screen < taken && taken < frame),
+        "the pointer is taken when the screen is taken and before the first frame is drawn, and \
+         these came at {screen:?}, {taken:?} and {frame:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+    assert!(
+        drawn.wait_for(GIVE_UP_POINTER),
+        "and it is given up on the way out: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn a_terminal_nobody_can_vouch_for_is_handed_no_pointer_at_all() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-256color");
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+
+    let bytes = drawn.bytes();
+    assert!(
+        !contains(&bytes, TAKE_POINTER) && !contains(&bytes, GIVE_UP_POINTER),
+        "a terminal nobody can vouch for is handed no pointer sequence, and given none back: {:?}",
+        text(&bytes)
     );
 }
 

@@ -119,6 +119,32 @@ fn a_query_that_starts_a_later_name_puts_it_first() {
 }
 
 #[test]
+fn a_row_the_list_holds_is_chosen_by_a_press_on_it_and_one_it_does_not_holds_nothing() {
+    let mut models = Models::new();
+    models.served(listed());
+    let rows = models.rows().len();
+
+    assert!(
+        models.select(1),
+        "the second row of the list is a press the screen takes"
+    );
+    assert_eq!(
+        models.chosen(),
+        Some(SECOND),
+        "and the selection moves to the row the press landed on"
+    );
+    assert!(
+        !models.select(rows + 7),
+        "a press past the last row is a row no list holds"
+    );
+    assert_eq!(
+        models.selected(),
+        1,
+        "so the selection stays on the row it was"
+    );
+}
+
+#[test]
 fn the_selection_walks_the_rows_and_stops_at_the_ends() {
     let mut models = Models::new();
     models.served(listed());

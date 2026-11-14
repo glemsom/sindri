@@ -18,6 +18,7 @@ pub mod pen; // the one place a glyph run is written into a frame, and the one p
 pub mod picker; // the files of the workspace, walked with `ignore`
 pub mod picture; // a picture an answer points at, resolved to a file inside the workspace and measured
 pub mod pictures; // the pictures a frame has placed: every source the terminal was told about
+pub mod pointer; // the pointer a frame takes: the wheel's notch and the cell a press landed on
 pub mod pulse; // the marker at the head of the newest answer: the braille glyph a live run turns
 pub mod queue; // the prompts typed while a run is live, waiting under the draft in the order
 pub mod rail; // the ledger's adapter: the rows it lays, drawn on the band it is handed
