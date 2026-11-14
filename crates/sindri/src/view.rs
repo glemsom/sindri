@@ -20,7 +20,6 @@ use sindri_core::skills::{Catalog, Skill};
 use crate::card;
 use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, PLACEHOLDER, Prompt, State};
-use crate::door;
 use crate::face;
 use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
@@ -42,6 +41,7 @@ use crate::rail;
 use crate::rows::{INDENT, Row, Rows, Scroll};
 use crate::settings::Settings;
 use crate::size::Sizes;
+use crate::splash;
 use crate::stats;
 use crate::stream::{Said, Stream};
 
@@ -171,8 +171,8 @@ pub struct View {
     stack: Stack,
     pulse: Option<Pulse>,
     rail: Facts,
-    /// Whether this frame is still the door a launch opened on.
-    door: bool,
+    /// Whether this frame is still the splash screen a launch opened on.
+    splash: bool,
     record: Option<SessionDocument>,
     mark: Option<Mark>,
     marked: Span,
@@ -293,14 +293,14 @@ impl View {
         }
     }
 
-    /// The turn in flight is over: what it said is written down as entries, so the live entry
-    /// it was drawn as goes, and the door with it. A run starting now is asked under the
+    /// The turn in flight is over: what it said is written down as entries, so the live entry it
+    /// was drawn as goes, and the splash screen with it. A run starting now is asked under the
     /// conversation that stands, so whatever `/new` superseded is behind it.
     pub fn settle(&mut self) {
         self.rows.retire();
         self.stream = Stream::new();
         self.scroll = Scroll::Tail;
-        self.door = false;
+        self.splash = false;
         self.superseded = false;
     }
 
@@ -805,12 +805,12 @@ impl View {
         self.rail = facts;
     }
 
-    /// The frame a launch opens on: the facts the launch already holds, and the door drawn from
-    /// them. A frame no launch told what the run is draws nothing, so the door is a front end's to
-    /// open and never a guess at what a run would have been.
-    pub fn door(&mut self, boot: Boot) {
+    /// The frame a launch opens on: the facts the launch already holds, and the splash screen
+    /// drawn from them. A frame no launch told what the run is draws nothing, so the splash
+    /// screen is a front end's to open and never a guess at what a run would have been.
+    pub fn splash(&mut self, boot: Boot) {
         self.rail = Facts::boot(boot);
-        self.door = true;
+        self.splash = true;
     }
 
     pub fn set_state(&mut self, state: State) {
@@ -917,10 +917,10 @@ impl View {
         let share = self.split(bands.transcript);
         if let Some((shape, band)) = share.rail {
             // A strip is one row of facts and no band, a terminal that places no picture is handed
-            // no cells, and a door draws the face over its wordmark: the rail beside it keeps every
-            // fact.
+            // no cells, and a splash screen draws the face over its wordmark: the rail beside it
+            // keeps every fact.
             let picture = match shape {
-                Rail::Ledger if !self.door => {
+                Rail::Ledger if !self.splash => {
                     face::over_rail(band.area.width, &self.face_surface())
                 }
                 Rail::Ledger | Rail::Strip => None,
@@ -942,9 +942,9 @@ impl View {
             }
         }
         self.transcript(share.transcript, buffer);
-        if self.door {
+        if self.splash {
             let surface = self.face_surface();
-            door::paint(
+            splash::paint(
                 share.transcript,
                 buffer,
                 &self.palette,
@@ -1009,10 +1009,11 @@ impl View {
         }
     }
 
-    /// The band the transcript and the rail share. A door is drawn with a ledger beside it or with
-    /// no rail at all: a strip is a live run's one row, and no run is live at the door.
+    /// The band the transcript and the rail share. A splash screen is drawn with a ledger beside
+    /// it or with no rail at all: a strip is a live run's one row, and no run is live at the
+    /// splash screen.
     fn split(&self, band: Rect) -> Share {
-        if self.door && Rail::of(band.width) != Rail::Ledger {
+        if self.splash && Rail::of(band.width) != Rail::Ledger {
             return Share {
                 transcript: band,
                 rail: None,
@@ -2249,18 +2250,18 @@ mod tests {
     }
 
     /// The rows of the transcript band a boot frame draws, from its left edge and cut where the
-    /// rail's columns begin: the rail has rows of its own, and they are not the door's.
-    fn door(cols: u16, rows: u16) -> Vec<String> {
-        let (buffer, band) = door_frame(cols, rows, false);
+    /// rail's columns begin: the rail has rows of its own, and they are not the splash screen's.
+    fn splash(cols: u16, rows: u16) -> Vec<String> {
+        let (buffer, band) = splash_frame(cols, rows, false);
         band_of(&buffer, band)
     }
 
-    /// The cells a door frame `cols` by `rows` is painted into, and what it draws: a terminal that
-    /// places pictures is handed Sindri's face over the wordmark, and one that places none is handed
-    /// the door alone.
-    fn door_frame(cols: u16, rows: u16, draws: bool) -> (Buffer, Rect) {
+    /// The cells a splash screen frame `cols` by `rows` is painted into, and what it draws: a
+    /// terminal that places pictures is handed Sindri's face over the wordmark, and one that places
+    /// none is handed the splash screen alone.
+    fn splash_frame(cols: u16, rows: u16, draws: bool) -> (Buffer, Rect) {
         let mut view = View::boot();
-        view.door(boot());
+        view.splash(boot());
         view.set_cell_size(CellSize::new(10, 20));
         if draws {
             view.set_pictures(Pictures::kitty(CellSize::new(10, 20)));
@@ -2272,15 +2273,15 @@ mod tests {
         (buffer, view.split(band).transcript)
     }
 
-    /// Whether this cell is no glyph of the door's: one a picture is placed over, or the bytes that
-    /// place it.
+    /// Whether this cell is no glyph of the splash screen's: one a picture is placed over, or the
+    /// bytes that place it.
     fn placed(cell: &ratatui::buffer::Cell) -> bool {
         cell.skip || cell.symbol().contains(PLACED) || cell.symbol().contains('\u{1b}')
     }
 
-    /// The rows of `band` in `buffer` a door frame drew, its left edge first and cut where the
-    /// rail's columns begin. A cell a picture is placed over reads as a blank: it is no glyph of
-    /// the door's, and the bytes that place it are no word either.
+    /// The rows of `band` in `buffer` a splash screen frame drew, its left edge first and cut where
+    /// the rail's columns begin. A cell a picture is placed over reads as a blank: it is no glyph
+    /// of the splash screen's, and the bytes that place it are no word either.
     fn band_of(buffer: &Buffer, band: Rect) -> Vec<String> {
         (band.y..band.bottom())
             .map(|y| {
@@ -2299,8 +2300,8 @@ mod tests {
             .collect()
     }
 
-    /// The door's block as `band_of` draws it: the rows from the first it fills to the last, with
-    /// the margin the band gives it on every side trimmed away.
+    /// The splash screen's block as `band_of` draws it: the rows from the first it fills to the
+    /// last, with the margin the band gives it on every side trimmed away.
     fn block(drawn: &[String]) -> Vec<String> {
         let mut rows: Vec<String> = drawn
             .iter()
@@ -2321,8 +2322,8 @@ mod tests {
             .collect()
     }
 
-    /// The columns of `row` in `buffer` that hold a glyph, which is where the door's block begins
-    /// and where it ends.
+    /// The columns of `row` in `buffer` that hold a glyph, which is where the splash screen's block
+    /// begins and where it ends.
     fn filled_columns(buffer: &Buffer, band: Rect, y: u16) -> (u16, u16) {
         let filled: Vec<u16> = (band.x..band.right())
             .filter(|x| {
@@ -2334,7 +2335,7 @@ mod tests {
         match (filled.first(), filled.last()) {
             (Some(left), Some(right)) => (*left, *right),
             _ => panic!(
-                "row {y} of the door holds no glyph: {:?}",
+                "row {y} of the splash screen holds no glyph: {:?}",
                 drawn_row(buffer, y)
             ),
         }
@@ -2354,8 +2355,8 @@ mod tests {
         }
     }
 
-    /// The first and last columns of `buffer` inside `band` that a door frame's block holds a glyph
-    /// in: the widest row of it, which is where the block begins and where it ends.
+    /// The first and last columns of `buffer` inside `band` that a splash screen frame's block
+    /// holds a glyph in: the widest row of it, which is where the block begins and where it ends.
     fn block_columns(buffer: &Buffer, band: Rect, drawn: &[String]) -> (u16, u16) {
         let (first, last) = filled_rows(drawn, band);
         let mut left = band.right();
@@ -2371,8 +2372,8 @@ mod tests {
         (left, right)
     }
 
-    /// The rows of `band` a door frame fills, the first and the last: the block's own rows, with the
-    /// blank rows the band gives it above and under left out.
+    /// The rows of `band` a splash screen frame fills, the first and the last: the block's own
+    /// rows, with the blank rows the band gives it above and under left out.
     fn filled_rows(drawn: &[String], band: Rect) -> (u16, u16) {
         let filled: Vec<u16> = drawn
             .iter()
@@ -2382,14 +2383,14 @@ mod tests {
             .collect();
         match (filled.first(), filled.last()) {
             (Some(first), Some(last)) => (*first, *last),
-            _ => panic!("the door fills no row of the band: {drawn:?}"),
+            _ => panic!("the splash screen fills no row of the band: {drawn:?}"),
         }
     }
 
     #[test]
     fn the_frame_a_launch_opens_on_is_a_wordmark_a_line_and_three_commands() {
         assert_eq!(
-            block(&door(120, 40)),
+            block(&splash(120, 40)),
             [
                 "sindri",
                 "",
@@ -2399,29 +2400,29 @@ mod tests {
                 "/settings  the keys the config holds, and the value each is set to",
                 "/stats     the facts the rail is too narrow to hold",
             ],
-            "the door is a wordmark, one line saying what the product is, and three commands \
-             with the one line each that explains them, set as one block"
+            "the splash screen is a wordmark, one line saying what the product is, and three \
+             commands with the one line each that explains them, set as one block"
         );
     }
 
     #[test]
-    fn the_door_stands_centred_in_the_band_and_no_row_of_it_is_cut_by_the_edge() {
+    fn the_splash_screen_stands_centred_in_the_band_and_no_row_of_it_is_cut_by_the_edge() {
         for (cols, rows) in [(120, 40), (80, 24), (40, 24), (120, 30)] {
-            let (buffer, band) = door_frame(cols, rows, false);
+            let (buffer, band) = splash_frame(cols, rows, false);
             let drawn = band_of(&buffer, band);
             let (first, last) = filled_rows(&drawn, band);
 
             assert!(
                 last < band.bottom(),
                 "at {cols} by {rows} the block ends on row {last} of a band that ends on {}: no \
-                 row of the door is cut by the band's edge",
+                 row of the splash screen is cut by the band's edge",
                 band.bottom()
             );
             let (above, under) = (first - band.y, band.bottom() - 1 - last);
             assert!(
                 above.abs_diff(under) <= 1,
                 "at {cols} by {rows} the band gives the block {above} rows above it and {under} \
-                 under it, and a door set in a corner is not a door composed"
+                 under it, and a splash screen set in a corner is not a splash screen composed"
             );
 
             let (left, right) = block_columns(&buffer, band, &drawn);
@@ -2435,13 +2436,13 @@ mod tests {
     }
 
     #[test]
-    fn the_ink_of_the_door_is_the_one_of_a_name_and_of_the_commands_under_it() {
+    fn the_ink_of_the_splash_screen_is_the_one_of_a_name_and_of_the_commands_under_it() {
         let palette = Palette::TRUECOLOR;
-        let (buffer, band) = door_frame(120, 40, false);
+        let (buffer, band) = splash_frame(120, 40, false);
 
         let wordmark = (band.y..band.bottom())
             .find(|y| drawn_row(&buffer, *y).contains("sindri"))
-            .expect("the door draws the wordmark");
+            .expect("the splash screen draws the wordmark");
         let look =
             |x: u16, y: u16| Look::of(buffer.cell((x, y)).expect("a cell of the band"), &palette);
         let (left, _) = filled_columns(&buffer, band, wordmark);
@@ -2465,11 +2466,11 @@ mod tests {
 
     #[test]
     fn the_face_stands_over_the_wordmark_and_the_block_stands_under_it() {
-        let (buffer, band) = door_frame(120, 40, true);
+        let (buffer, band) = splash_frame(120, 40, true);
         let over = pictured_rows(&buffer, band);
         let wordmark = (band.y..band.bottom())
             .find(|y| drawn_row(&buffer, *y).contains("sindri"))
-            .expect("the door draws the wordmark");
+            .expect("the splash screen draws the wordmark");
 
         assert_eq!(
             over.len(),
@@ -2499,9 +2500,9 @@ mod tests {
     #[test]
     fn a_frame_too_small_for_the_block_holds_its_head_and_cuts_no_row_across_it() {
         for (cols, rows, whole) in [(80, 9, (80, 24)), (40, 10, (40, 24)), (24, 12, (24, 24))] {
-            let (buffer, band) = door_frame(cols, rows, false);
+            let (buffer, band) = splash_frame(cols, rows, false);
             let drawn = band_of(&buffer, band);
-            let (taller, taller_band) = door_frame(whole.0, whole.1, false);
+            let (taller, taller_band) = splash_frame(whole.0, whole.1, false);
             let all = block(&band_of(&taller, taller_band));
 
             let held = block(&drawn);
@@ -2515,8 +2516,8 @@ mod tests {
             assert_eq!(
                 held,
                 all[..held.len()],
-                "at {cols} by {rows} the door holds the head of its block: the rows a band cannot \
-                 hold go whole, and no row of it is cut across by the band's edge"
+                "at {cols} by {rows} the splash screen holds the head of its block: the rows a \
+                 band cannot hold go whole, and no row of it is cut across by the band's edge"
             );
             for row in &drawn {
                 assert!(
@@ -2528,10 +2529,10 @@ mod tests {
     }
 
     #[test]
-    fn a_frame_too_short_or_too_narrow_for_the_face_is_handed_the_door_without_it() {
+    fn a_frame_too_short_or_too_narrow_for_the_face_is_handed_the_splash_screen_without_it() {
         for (cols, rows) in [(120, 14), (30, 24)] {
-            let (pictured, band) = door_frame(cols, rows, true);
-            let (placeless, _) = door_frame(cols, rows, false);
+            let (pictured, band) = splash_frame(cols, rows, true);
+            let (placeless, _) = splash_frame(cols, rows, false);
 
             assert!(
                 pictured_rows(&pictured, band).is_empty(),
@@ -2547,9 +2548,10 @@ mod tests {
     }
 
     #[test]
-    fn a_terminal_that_places_no_picture_is_handed_the_door_without_the_face_or_its_rows() {
-        let (placeless, placeless_band) = door_frame(120, 40, false);
-        let (pictured, pictured_band) = door_frame(120, 40, true);
+    fn a_terminal_that_places_no_picture_is_handed_the_splash_screen_without_the_face_or_its_rows()
+    {
+        let (placeless, placeless_band) = splash_frame(120, 40, false);
+        let (pictured, pictured_band) = splash_frame(120, 40, true);
 
         assert!(
             pictured_rows(&placeless, placeless_band).is_empty(),
@@ -2571,9 +2573,9 @@ mod tests {
     }
 
     #[test]
-    fn a_door_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
+    fn a_splash_screen_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
         for cols in [12, 16, 20, 30, 40, 60] {
-            let wrapped = door(cols, 40).join(" ");
+            let wrapped = splash(cols, 40).join(" ");
             let words = wrapped.split_whitespace().collect::<Vec<&str>>().join(" ");
 
             for line in [
@@ -2584,25 +2586,27 @@ mod tests {
             ] {
                 assert!(
                     words.contains(line),
-                    "at {cols} columns the door reads {words:?}, which holds no whole {line:?}"
+                    "at {cols} columns the splash screen reads {words:?}, which holds no whole \
+                     {line:?}"
                 );
             }
         }
     }
 
     #[test]
-    fn eighty_columns_draw_the_door_whole_and_no_rail_beside_it() {
+    fn eighty_columns_draw_the_splash_screen_whole_and_no_rail_beside_it() {
         let palette = Palette::TRUECOLOR;
-        let wide = block(&door(120, 24));
-        let narrow = block(&door(80, 24));
+        let wide = block(&splash(120, 24));
+        let narrow = block(&splash(80, 24));
         assert_eq!(
             narrow, wide,
-            "a frame too narrow for a rail draws the same door, and nothing of it is clipped"
+            "a frame too narrow for a rail draws the same splash screen, and nothing of it is \
+             clipped"
         );
 
         let area = screen(80, 24);
         let mut view = View::boot();
-        view.door(boot());
+        view.splash(boot());
         view.set_palette(palette);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -2616,26 +2620,26 @@ mod tests {
             .count();
         assert_eq!(
             on_rail, 0,
-            "the boot screen is a door and no rail: a strip is a live run's one row, and no run \
-             is live at the door"
+            "the boot screen is a splash screen and no rail: a strip is a live run's one row, and \
+             no run is live at the splash screen"
         );
     }
 
     #[test]
-    fn a_run_sent_from_the_door_leaves_the_frame_to_the_conversation() {
+    fn a_run_sent_from_the_splash_screen_leaves_the_frame_to_the_conversation() {
         let mut view = View::boot();
         assert!(
             !drawn(&mut view, 120, 40).contains("sindri"),
-            "a frame no launch told what the run is draws no door"
+            "a frame no launch told what the run is draws no splash screen"
         );
 
-        view.door(boot());
+        view.splash(boot());
         view.settle();
 
         assert!(
             !drawn(&mut view, 120, 40).contains("sindri"),
-            "the door is the first paint pass: a run sent from it replaces it, and it is never \
-             drawn again"
+            "the splash screen is the first paint pass: a run sent from it replaces it, and it is \
+             never drawn again"
         );
     }
 

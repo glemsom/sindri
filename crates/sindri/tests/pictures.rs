@@ -119,7 +119,7 @@ fn a_band_too_short_or_too_narrow_for_the_face_over_the_wordmark_is_given_none()
     assert!(
         face::over_wordmark(76, 7, &carried(true)).is_none(),
         "seven rows over the block are six under the face's own shape, which is a smudge and not \
-         the picture the door opens on"
+         the picture the splash screen opens on"
     );
     assert!(
         face::over_wordmark(11, 40, &carried(true)).is_none(),
@@ -127,7 +127,8 @@ fn a_band_too_short_or_too_narrow_for_the_face_over_the_wordmark_is_given_none()
     );
     assert!(
         face::over_wordmark(76, 40, &carried(false)).is_none(),
-        "a terminal that places no picture is given no face, so the door reserves no row for one"
+        "a terminal that places no picture is given no face, so the splash screen reserves no row \
+         for one"
     );
 }
 
@@ -490,15 +491,15 @@ fn railed_facts() -> Facts {
     }
 }
 
-/// The door a launch opens on, with the facts a launch already holds beside it: a session and a
-/// temp are a run's own, so the rail draws an em dash for each.
-fn door(draws: bool) -> View {
+/// The splash screen a launch opens on, with the facts a launch already holds beside it: a session
+/// and a temp are a run's own, so the rail draws an em dash for each.
+fn splash(draws: bool) -> View {
     let mut view = View::boot();
     view.set_cell_size(cell());
     if draws {
         view.set_pictures(Pictures::kitty(cell()));
     }
-    view.door(Boot {
+    view.splash(Boot {
         wire: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-5")),
         workspace: PathBuf::from("/home/glemsom/Documents/git/sindri"),
@@ -1136,10 +1137,10 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
 }
 
 #[test]
-fn the_rail_beside_the_door_loses_no_fact_to_the_face_over_its_wordmark() {
-    let mut pictured = door(true);
+fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_over_its_wordmark() {
+    let mut pictured = splash(true);
     let with = painted_at(&mut pictured, (120, 40));
-    let mut placeless = door(false);
+    let mut placeless = splash(false);
     let without = painted_at(&mut placeless, (120, 40));
     let rail = rail_band(120, 40);
 
@@ -1152,8 +1153,8 @@ fn the_rail_beside_the_door_loses_no_fact_to_the_face_over_its_wordmark() {
     assert_eq!(
         stated(&with),
         stated(&without),
-        "the door's rail draws the facts a terminal that places no picture draws, so the face over \
-         the wordmark takes no row of one"
+        "the splash screen's rail draws the facts a terminal that places no picture draws, so the \
+         face over the wordmark takes no row of one"
     );
     assert_eq!(
         stated(&with).first().map(String::as_str),
@@ -1162,7 +1163,7 @@ fn the_rail_beside_the_door_loses_no_fact_to_the_face_over_its_wordmark() {
     );
     assert!(
         !pictured_rows(&with).is_empty(),
-        "the door draws the face over the band an answer goes in"
+        "the splash screen draws the face over the band an answer goes in"
     );
     let taken = (rail.y..rail.bottom())
         .flat_map(|y| (rail.x..rail.right()).map(move |x| (x, y)))
@@ -1173,8 +1174,8 @@ fn the_rail_beside_the_door_loses_no_fact_to_the_face_over_its_wordmark() {
         .count();
     assert_eq!(
         taken, 0,
-        "and no cell of the rail's columns is a placement: the face is the door's own, over its \
-         wordmark"
+        "and no cell of the rail's columns is a placement: the face is the splash screen's own, \
+         over its wordmark"
     );
 }
 

@@ -19,7 +19,7 @@ pub struct Row {
     pub says: &'static str,
 }
 
-/// The commands a launch holds: the three the front door names first, and then the rest.
+/// The commands a launch holds: the three the splash screen names first, and then the rest.
 pub const TABLE: [Row; 7] = [
     Row {
         name: MODEL,
@@ -51,8 +51,8 @@ pub const TABLE: [Row; 7] = [
     },
 ];
 
-/// The first `DOOR` of the table are the commands the front door names.
-pub const DOOR: usize = 3;
+/// The first `SPLASH` of the table are the commands the splash screen names.
+pub const SPLASH: usize = 3;
 
 /// The commands card: the draft read as a word after a slash, and the rows that word leaves, ranked
 /// the way a picker ranks — a name the word starts before a name it holds, and one order for ties.

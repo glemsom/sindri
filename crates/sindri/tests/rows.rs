@@ -2347,7 +2347,7 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
 #[test]
 fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
     let mut view = View::boot();
-    view.door(Boot {
+    view.splash(Boot {
         wire: None,
         model: None,
         workspace: PathBuf::from("/work/agent"),
@@ -2381,7 +2381,7 @@ fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
     );
     assert!(
         !drawn.iter().any(|row| row.trim() == "sindri"),
-        "the door a launch opened on gives way to the row the refusal leaves: {whole}"
+        "the splash screen a launch opened on gives way to the row the refusal leaves: {whole}"
     );
 }
 

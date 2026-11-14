@@ -69,9 +69,9 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
 
 fn named(name: &str) -> View {
     match name {
-        "boot" => door(false),
-        "boot-face" => door(true),
-        "boot-face-small" => door(true),
+        "boot" => splash(false),
+        "boot-face" => splash(true),
+        "boot-face-small" => splash(true),
         "transcript" => running(transcript(), Scroll::Tail),
         "gutter" => View::of(gutter(), Scroll::Tail),
         "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
@@ -204,9 +204,9 @@ fn faced(face: bool) -> View {
 /// The frame a launch opens on: the config's wire and model, the workspace and its branch, and the
 /// enforcement the policy holds — a session and a temp are a run's own, so the rail draws an em dash
 /// for each. A terminal that places pictures is handed Sindri's face over the wordmark.
-fn door(draws: bool) -> View {
+fn splash(draws: bool) -> View {
     let mut view = View::boot();
-    view.door(Boot {
+    view.splash(Boot {
         wire: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-5")),
         workspace: PathBuf::from("/srv/workspace"),
