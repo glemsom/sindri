@@ -309,6 +309,19 @@ fn waited_for(path: &Path) -> bool {
     false
 }
 
+/// Waits until nothing is left of `pid`: a killed process stays listed in `/proc` until it is
+/// reaped, and the parent that would reap this one was killed with it.
+fn gone(pid: &str) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if !Path::new(&format!("/proc/{pid}")).exists() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    false
+}
+
 #[test]
 fn a_cancel_kills_the_command_in_flight_and_the_child_it_started() {
     let ground = Ground::new();
@@ -356,7 +369,7 @@ fn a_cancel_kills_the_command_in_flight_and_the_child_it_started() {
         .trim()
         .to_owned();
     assert!(
-        !Path::new(&format!("/proc/{pid}")).exists(),
+        gone(&pid),
         "the sleep the command started is gone, and not only the command: pid {pid}"
     );
 }
