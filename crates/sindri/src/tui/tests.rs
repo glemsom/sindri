@@ -459,3 +459,32 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
         "the frame carries the refusal's own words: {drawn:?}"
     );
 }
+
+#[test]
+fn the_loop_answers_the_keys_typed_before_its_first_frame_and_ends_on_the_quit() {
+    let (_pty, terminal, telling) = staged();
+    let canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
+    let cli = Cli::parse_from(["sindri"]);
+    let environment = std::collections::BTreeMap::new();
+    let environment: &dyn Environment = &environment;
+    let signals = Signals::install().expect("a signal pipe");
+    let mut live = Loop {
+        terminal: &terminal,
+        canvas,
+        view: View::boot(),
+        cli: &cli,
+        config: Config::default(),
+        environment,
+        telling,
+        launch: None,
+        running: None,
+        asking: None,
+    };
+
+    let ended = live.keys(&signals, b"\x11").expect("the quit is answered");
+
+    assert!(
+        matches!(ended, Ending::Quit),
+        "a quit typed before the first frame is the ending the loop hands back"
+    );
+}

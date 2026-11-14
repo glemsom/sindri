@@ -165,27 +165,30 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     }
     // Replaced by a visit to the settings modal: the file is written once and resolved again,
     // so the prompt after the visit runs on what it holds.
-    let mut config = config.clone();
+    let config = config.clone();
+    let environment: &dyn Environment = &Process;
     // The session is the launch's and not a run's: the first prompt opens it, every prompt after runs
     // in it, and it ends with the launch.
-    let mut launch: Option<Launch> = None;
-    let keys = keys(
-        &terminal,
-        &mut canvas,
-        &mut view,
+    let mut live = Loop {
+        terminal: &terminal,
+        canvas,
+        view,
         cli,
-        &mut config,
-        &Process,
-        &signals,
-        &typed,
-        &mut telling,
-        &mut launch,
-    );
+        config,
+        environment,
+        telling,
+        launch: None,
+        running: None,
+        asking: None,
+    };
+    let keys = live.keys(&signals, &typed);
+    let launch = live.launch.take();
     // Given back before a word is said about the ending: a refusal is a line for the shell, and
     // not a smear over a frame.
+    drop(live);
     drop(screen);
     // The conversation the session held is over, so its temp goes before the process does.
-    if let Some(mut ending) = launch.take() {
+    if let Some(mut ending) = launch {
         ending.close();
     }
     match keys {
@@ -202,147 +205,155 @@ enum Ending {
     Refused(Refusal),
 }
 
-/// Reads the terminal until the launch ends, one event at a time, and paints only when an
-/// event changed the frame: the wait sleeps in `poll` and draws nothing meanwhile, so an idle
-/// frame is never drawn. A key, a signal and a live run's fragment are all fds in that wait.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the one seam every mode's key is handed through, the telling a run is announced to, and the launch the session lasts on"
-)]
-fn keys(
-    terminal: &Terminal,
-    canvas: &mut Canvas<'_>,
-    view: &mut View,
-    cli: &Cli,
-    config: &mut Config,
-    environment: &impl Environment,
-    signals: &Signals,
-    typed: &[u8],
-    telling: &mut Window<File>,
-    launch: &mut Option<Launch>,
-) -> io::Result<Ending> {
-    let mut decoder = Decoder::new();
-    let mut read = [0u8; 4096];
-    let mut running: Option<Running> = None;
-    let mut asking: Option<Asking> = None;
-    let mut interrupted = false;
-    let wake = signals.wake();
+/// The launch's loop: the terminal it reads, the frame it draws on, and what it holds between one
+/// event and the next.
+struct Loop<'a> {
+    terminal: &'a Terminal,
+    canvas: Canvas<'a>,
+    view: View,
+    cli: &'a Cli,
+    config: Config,
+    environment: &'a dyn Environment,
+    telling: Window<File>,
+    launch: Option<Launch>,
+    running: Option<Running>,
+    asking: Option<Asking>,
+}
 
-    // Read before the first frame was painted: the loop answers these keys here rather than
-    // waiting for a second one that may never come.
-    decoder.push(typed);
-    while let Some(event) = decoder.next_event() {
-        if let Some(ending) = answer(
-            terminal,
-            canvas,
-            view,
-            event,
-            &mut running,
-            &mut asking,
-            cli,
-            config,
-            environment,
-            &wake,
-            telling,
-            launch,
-        )? {
-            return Ok(ending);
-        }
-    }
+impl Loop<'_> {
+    /// Reads the terminal until the launch ends, one event at a time, and paints only when an event
+    /// changed the frame: the wait sleeps in `poll` and draws nothing meanwhile. A key, a signal and
+    /// a live run's fragment are all fds in that wait.
+    fn keys(&mut self, signals: &Signals, typed: &[u8]) -> io::Result<Ending> {
+        let mut decoder = Decoder::new();
+        let mut read = [0u8; 4096];
+        let mut interrupted = false;
+        let wake = signals.wake();
 
-    loop {
-        let waiting = wake.reader();
-        let mut fds = [
-            PollFd::new(&terminal.keys, PollFlags::IN),
-            PollFd::new(&waiting, PollFlags::IN),
-        ];
-        // A run in flight is the only clock this loop has: its marker steps once per 80 ms, so the
-        // wait is that long while one is live and forever while none is.
-        let step = running
-            .is_some()
-            .then(|| Timespec::try_from(Duration::from_millis(pulse::STEP_MS)).ok())
-            .flatten();
-        match poll(&mut fds, step.as_ref()) {
-            Ok(_) | Err(rustix::io::Errno::INTR) => {}
-            Err(error) => return Err(std::io::Error::from(error)),
-        }
-        let keyed = fds[0].revents().contains(PollFlags::IN);
-        let woken = fds[1].revents().contains(PollFlags::IN);
-
-        // The pace has no other clock: a report withheld past its window is said late, never lost.
-        telling.due()?;
-
-        if let Some(flight) = &running {
-            view.set_pulse(Some(Pulse::live(flight.elapsed_ms())));
-        }
-
-        // Read every pass and not only the pass the pipe woke: the word is a flag that is never
-        // cleared and the byte is only what wakes the loop, so a `SIGINT` that landed while the
-        // loop was awake for something else raised a byte a drain may have taken.
-        if signals.arrived() && !interrupted {
-            interrupted = true;
-            if let Some(flight) = &running {
-                flight.cancel();
+        // Read before the first frame was painted: the loop answers these keys here rather than
+        // waiting for a second one that may never come.
+        decoder.push(typed);
+        while let Some(event) = decoder.next_event() {
+            if let Some(ending) = answer(
+                self.terminal,
+                &mut self.canvas,
+                &mut self.view,
+                event,
+                &mut self.running,
+                &mut self.asking,
+                self.cli,
+                &mut self.config,
+                &self.environment,
+                &wake,
+                &mut self.telling,
+                &mut self.launch,
+            )? {
+                return Ok(ending);
             }
         }
 
-        if woken {
-            wake.drain();
-            served(canvas, view, &mut asking)?;
-            if take(canvas, view, &mut running, telling, launch)? && !interrupted {
-                // A launch the user's own word ended starts nothing: the queue waits for a reader
-                // who still wants it.
-                resume(
-                    canvas,
-                    view,
-                    &mut running,
-                    launch,
-                    cli,
-                    config,
-                    &wake,
-                    telling,
-                )?;
+        loop {
+            let waiting = wake.reader();
+            let mut fds = [
+                PollFd::new(&self.terminal.keys, PollFlags::IN),
+                PollFd::new(&waiting, PollFlags::IN),
+            ];
+            // A run in flight is the only clock this loop has: its marker steps once per 80 ms, so the
+            // wait is that long while one is live and forever while none is.
+            let step = self
+                .running
+                .is_some()
+                .then(|| Timespec::try_from(Duration::from_millis(pulse::STEP_MS)).ok())
+                .flatten();
+            match poll(&mut fds, step.as_ref()) {
+                Ok(_) | Err(rustix::io::Errno::INTR) => {}
+                Err(error) => return Err(std::io::Error::from(error)),
             }
-        }
+            let keyed = fds[0].revents().contains(PollFlags::IN);
+            let woken = fds[1].revents().contains(PollFlags::IN);
 
-        // Given back only with nothing left to stop: leaving while a run is live is a screen over a
-        // run that is not coming back.
-        if interrupted && running.is_none() {
-            return Ok(Ending::Cancelled);
-        }
+            // The pace has no other clock: a report withheld past its window is said late, never lost.
+            self.telling.due()?;
 
-        if keyed {
-            let count = Read::read(&mut &terminal.keys, &mut read)?;
-            // The terminal went away: there is nothing left to quit from, and the guard gives the
-            // screen back all the same.
-            if count == 0 {
-                return Ok(Ending::Quit);
+            if let Some(flight) = &self.running {
+                self.view.set_pulse(Some(Pulse::live(flight.elapsed_ms())));
             }
-            decoder.push(&read[..count]);
-            while let Some(event) = decoder.next_event() {
-                if let Some(ending) = answer(
-                    terminal,
-                    canvas,
-                    view,
-                    event,
-                    &mut running,
-                    &mut asking,
-                    cli,
-                    config,
-                    environment,
-                    &wake,
-                    telling,
-                    launch,
-                )? {
-                    return Ok(ending);
+
+            // Read every pass and not only the pass the pipe woke: the word is a flag that is never
+            // cleared and the byte is only what wakes the loop, so a `SIGINT` that landed while the
+            // loop was awake for something else raised a byte a drain may have taken.
+            if signals.arrived() && !interrupted {
+                interrupted = true;
+                if let Some(flight) = &self.running {
+                    flight.cancel();
                 }
             }
-        }
 
-        // Not an idle frame: a live run's marker has stepped, so the frame that drew the last glyph
-        // is now wrong.
-        if !keyed && !woken && running.is_some() {
-            paint(canvas, view)?;
+            if woken {
+                wake.drain();
+                served(&mut self.canvas, &mut self.view, &mut self.asking)?;
+                if take(
+                    &mut self.canvas,
+                    &mut self.view,
+                    &mut self.running,
+                    &mut self.telling,
+                    &mut self.launch,
+                )? && !interrupted
+                {
+                    // A launch the user's own word ended starts nothing: the queue waits for a reader
+                    // who still wants it.
+                    resume(
+                        &mut self.canvas,
+                        &mut self.view,
+                        &mut self.running,
+                        &mut self.launch,
+                        self.cli,
+                        &mut self.config,
+                        &wake,
+                        &mut self.telling,
+                    )?;
+                }
+            }
+
+            // Given back only with nothing left to stop: leaving while a run is live is a screen over a
+            // run that is not coming back.
+            if interrupted && self.running.is_none() {
+                return Ok(Ending::Cancelled);
+            }
+
+            if keyed {
+                let count = Read::read(&mut &self.terminal.keys, &mut read)?;
+                // The terminal went away: there is nothing left to quit from, and the guard gives the
+                // screen back all the same.
+                if count == 0 {
+                    return Ok(Ending::Quit);
+                }
+                decoder.push(&read[..count]);
+                while let Some(event) = decoder.next_event() {
+                    if let Some(ending) = answer(
+                        self.terminal,
+                        &mut self.canvas,
+                        &mut self.view,
+                        event,
+                        &mut self.running,
+                        &mut self.asking,
+                        self.cli,
+                        &mut self.config,
+                        &self.environment,
+                        &wake,
+                        &mut self.telling,
+                        &mut self.launch,
+                    )? {
+                        return Ok(ending);
+                    }
+                }
+            }
+
+            // Not an idle frame: a live run's marker has stepped, so the frame that drew the last glyph
+            // is now wrong.
+            if !keyed && !woken && self.running.is_some() {
+                paint(&mut self.canvas, &mut self.view)?;
+            }
         }
     }
 }
