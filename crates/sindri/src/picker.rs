@@ -5,8 +5,13 @@
 use std::path::Path;
 
 use crate::composer::Key;
+use crate::ink::{Ink, Look};
+use crate::list::{self, Choice, Item, ScreenRow};
 
 pub const CAP: usize = 8;
+
+/// The one line the picker says in place of its rows when no file answers.
+const NO_FILE: &str = "no file answers";
 
 /// A row of the picker: the file's name, and the directory it sits in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,6 +119,33 @@ impl Picker {
         if self.selected >= self.rows().len() {
             self.selected = 0;
         }
+    }
+
+    /// The rows the picker's card holds: the query at the head, one row per file with the row the
+    /// reader is on marked, and under them the count of the matches it shows.
+    pub fn body(&self) -> Vec<ScreenRow> {
+        let files = self.rows();
+        let items = files
+            .iter()
+            .map(|file| match file.directory.is_empty() {
+                true => Item::new(file.name),
+                false => Item::beside(file.name, file.directory),
+            })
+            .collect();
+        let mut rows = list::List {
+            query: Some(self.query()),
+            said: files.is_empty().then_some(NO_FILE),
+            items,
+            selected: self.selected(),
+            marker: list::MARK,
+            choice: Some(Choice::File),
+        }
+        .rows();
+        if !files.is_empty() {
+            let counted = format!("1\u{2013}{} of {}", files.len(), self.matches());
+            rows.push(list::whole(&counted, Look::plain(Ink::Dim)));
+        }
+        rows
     }
 
     /// The row a press landed on: the selection moves to it, and a press on no row of the list moves

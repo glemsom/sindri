@@ -23,10 +23,10 @@ use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, PLACEHOLDER, Prompt
 use crate::face;
 use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
-use crate::keys::{self, Act, Mode, Stack};
+use crate::keys::{self, Act, Body, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::link::Links;
-use crate::list::{self, Beside, Choice, Item, ScreenRow};
+use crate::list::{self, Beside, Choice, ScreenRow};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -137,16 +137,6 @@ const HAIRLINE: char = '─';
 /// The sigil that opens the draft, standing in the gutter an answer is set from — `rows::INDENT`
 /// columns wide, so the reader's own words begin where the run's do.
 const SIGIL: &str = "\u{203a} ";
-
-const PICKER_EMPTY: &str = "no file answers";
-
-/// The glyph before the row a reader is on, in every list a card draws: one mark, because every
-/// screen that lists says the same thing with it.
-const ROW_MARK: &str = "\u{203a} ";
-
-const MODELS_ASKING: &str = "asking the wire what it serves";
-
-const MODELS_EMPTY: &str = "no served name answers";
 
 /// The name the commands card carries in its top border, in the shape `? keys` and `@ files`
 /// wear theirs.
@@ -1066,23 +1056,23 @@ impl View {
     fn over(&self, area: Rect, screen: Mode) -> Option<(&'static str, &'static str, ScreenBody)> {
         if let Some((name, leaves)) = screen.labels() {
             let width = card::body_width(area);
-            return Some((name, leaves, self.screen_body(screen, width)));
+            return Some((name, leaves, self.body(screen, width)?));
         }
         let card = self.card()?;
         let leaves = Mode::Composer.leaves()?;
         Some((COMMANDS_CARD, leaves, ScreenBody::Rows(command_rows(&card))))
     }
 
-    /// What a screen holds, laid at the width the card gives it: the card is as tall as this, and
-    /// its own count row says which rows the frame had no room for.
-    fn screen_body(&self, screen: Mode, width: u16) -> ScreenBody {
-        match screen {
-            Mode::Files => ScreenBody::Rows(self.files_rows()),
-            Mode::Models => ScreenBody::Rows(self.models_rows()),
-            Mode::Settings => ScreenBody::Rows(self.settings_rows(width)),
-            Mode::Composer | Mode::Keys => ScreenBody::Rows(self.keys_rows(width)),
-            Mode::Stats => ScreenBody::Ledger(Box::new(self.stats())),
-        }
+    /// The body the screen's description says it holds, built by the screen that keeps its rows: the
+    /// card is as tall as this, and its own count row says which rows the frame had no room for.
+    pub fn body(&self, screen: Mode, width: u16) -> Option<ScreenBody> {
+        Some(match screen.body()? {
+            Body::Keys => ScreenBody::Rows(self.stack.body(width)),
+            Body::Files => ScreenBody::Rows(self.picker.body()),
+            Body::Models => ScreenBody::Rows(self.models.body()),
+            Body::Settings => ScreenBody::Rows(self.settings.body(width)),
+            Body::Ledger => ScreenBody::Ledger(Box::new(self.stats())),
+        })
     }
 
     /// The band the transcript and the rail share. A splash screen is drawn with a ledger beside
@@ -1398,99 +1388,6 @@ impl View {
         width.saturating_sub(pen::cells(INDENT))
     }
 
-    /// Every mode's name as a heading over the keys it binds, each key in one column and what it does
-    /// beside it: a description wider than the card wraps under its own column rather than losing
-    /// its tail, because a key without the line that explains it is a key a reader has to try.
-    fn keys_rows(&self, width: u16) -> Vec<ScreenRow> {
-        let modes: Vec<Mode> = self.stack.modes().collect();
-        let column = list::Column::of(
-            modes
-                .iter()
-                .flat_map(|mode| mode.table())
-                .map(|binding| binding.name),
-            width,
-            keys::KEY,
-            keys::MEANING,
-        );
-        let mut rows = Vec::new();
-        for mode in modes {
-            rows.push(list::whole(mode.name(), Look::plain(Ink::Dim)));
-            for binding in mode.table() {
-                rows.extend(column.hung(binding.name, binding.does));
-            }
-        }
-        rows
-    }
-
-    /// The `@` picker: the files the workspace walks, the query they answer with the row a reader
-    /// is on marked, and under them the count of which matches it shows and how many the query left.
-    fn files_rows(&self) -> Vec<ScreenRow> {
-        let files = self.picker.rows();
-        let items = files
-            .iter()
-            .map(|file| match file.directory.is_empty() {
-                true => Item::new(file.name),
-                false => Item::beside(file.name, file.directory),
-            })
-            .collect();
-        let mut rows = list::List {
-            query: Some(self.picker.query()),
-            said: files.is_empty().then_some(PICKER_EMPTY),
-            items,
-            selected: self.picker.selected(),
-            marker: ROW_MARK,
-            choice: Some(Choice::File),
-        }
-        .rows();
-        if !files.is_empty() {
-            let counted = format!("1\u{2013}{} of {}", files.len(), self.picker.matches());
-            rows.push(list::whole(&counted, Look::plain(Ink::Dim)));
-        }
-        rows
-    }
-
-    /// A wire that has not answered is one line saying it was asked, and one that could not
-    /// answer is a hint rather than a refusal: a model named by hand still runs.
-    fn models_rows(&self) -> Vec<ScreenRow> {
-        let names = self.models.rows();
-        let said = match self.models.hint() {
-            _ if self.models.waiting() => Some(MODELS_ASKING),
-            Some(hint) => Some(hint),
-            None if names.is_empty() => Some(MODELS_EMPTY),
-            None => None,
-        };
-        list::List {
-            query: Some(self.models.query()),
-            said,
-            items: list::columned(names.into_iter(), Ink::Plain, Beside::Own(Ink::Dim)),
-            selected: self.models.selected(),
-            marker: ROW_MARK,
-            choice: Some(Choice::Model),
-        }
-        .rows()
-    }
-
-    /// A value too wide for the frame is cut at its right edge rather than dropped, as the
-    /// picker's paths are, and a refusal under the list names the key to change.
-    fn settings_rows(&self, width: u16) -> Vec<ScreenRow> {
-        // A key is the schema's own and a value borrows the visit, so the column holds the pair for
-        // the shorter of the two lifetimes.
-        let keys: Vec<(&str, &str)> = self.settings.rows().collect();
-        let mut rows = list::List {
-            query: None,
-            said: None,
-            items: list::columned(keys.into_iter(), Ink::Muted, Beside::Row),
-            selected: self.settings.current(),
-            marker: ROW_MARK,
-            choice: None,
-        }
-        .rows();
-        if let Some(reason) = self.settings.refusal() {
-            rows.extend(list::refusal(reason, width));
-        }
-        rows
-    }
-
     /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
     /// frame with no record has no screen, because what a run spent is the record's to say.
     fn stats(&self) -> Facts {
@@ -1622,7 +1519,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> B
 
 /// What a screen holds: the rows a card is as tall as, or the ledger's own layout, which is laid
 /// whole and capped only by the rows the card gives it.
-enum ScreenBody {
+pub enum ScreenBody {
     Rows(Vec<ScreenRow>),
     Ledger(Box<Facts>),
 }
@@ -1711,7 +1608,7 @@ fn command_rows(card: &commands::Card) -> Vec<ScreenRow> {
             Beside::Own(Ink::Dim),
         ),
         selected: 0,
-        marker: ROW_MARK,
+        marker: list::MARK,
         choice: Some(Choice::Command),
     }
     .rows()

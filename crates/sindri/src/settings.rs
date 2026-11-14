@@ -3,6 +3,8 @@ use sindri_core::first_run;
 use sindri_core::redact::MASK;
 
 use crate::composer::Key;
+use crate::ink::Ink;
+use crate::list::{self, Beside, ScreenRow};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Settings {
@@ -44,6 +46,26 @@ impl Settings {
 
     pub fn refusal(&self) -> Option<&str> {
         self.refusal.as_deref()
+    }
+
+    /// The rows the screen's card holds: the config's keys with the values the visit carries, the row
+    /// the reader is on marked, and under them the refusal that turned the visit back. A value too
+    /// wide for the frame is cut at its right edge rather than dropped, as the picker's paths are.
+    pub fn body(&self, width: u16) -> Vec<ScreenRow> {
+        let keys: Vec<(&str, &str)> = self.rows().collect();
+        let mut rows = list::List {
+            query: None,
+            said: None,
+            items: list::columned(keys.into_iter(), Ink::Muted, Beside::Row),
+            selected: self.current(),
+            marker: list::MARK,
+            choice: None,
+        }
+        .rows();
+        if let Some(reason) = self.refusal() {
+            rows.extend(list::refusal(reason, width));
+        }
+        rows
     }
 
     pub fn touched(&self) -> Touched {

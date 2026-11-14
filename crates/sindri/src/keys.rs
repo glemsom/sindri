@@ -1,5 +1,6 @@
 use crate::composer::Key;
 use crate::ink::{Faces, Ink, Look};
+use crate::list::{self, Column, ScreenRow};
 
 /// The look a key is drawn in wherever a key is named.
 pub const KEY: Look = Look::plain(Ink::Plain).wearing(Faces::BOLD);
@@ -63,6 +64,11 @@ impl Mode {
 
     pub fn table(self) -> &'static [Binding] {
         self.description().table
+    }
+
+    /// The body this screen's description names, and `None` for the draft, which is no screen.
+    pub fn body(self) -> Option<Body> {
+        self.description().body
     }
 
     /// A screen has none — nothing is typed into a screen — where a draft, a query and a
@@ -392,8 +398,21 @@ const STATS: [Binding; 1] = [Binding {
     act: Act::Close,
 }];
 
-/// What a mode is called, what its card wears, the keys it answers and what a printable key falls
-/// back to. The draft states no title, which is how a mode is handed no card.
+/// What a screen's body holds: the rows the screen keeping them builds, and — the one body that is
+/// not rows — the facts a ledger lays out whole.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Body {
+    Keys,
+    Files,
+    Models,
+    Settings,
+    /// The facts a run holds, laid out whole as the record wrote them rather than set in rows.
+    Ledger,
+}
+
+/// What a mode is called, what its card wears, the keys it answers, what a printable key falls back
+/// to and the body its screen builds. The draft states no title and no body, which is how a mode is
+/// handed no card.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Description {
     pub mode: Mode,
@@ -401,6 +420,7 @@ pub struct Description {
     pub title: Option<&'static str>,
     pub table: &'static [Binding],
     pub fallback: Option<Act>,
+    pub body: Option<Body>,
 }
 
 pub const DESCRIPTIONS: [Description; 6] = [
@@ -410,6 +430,7 @@ pub const DESCRIPTIONS: [Description; 6] = [
         title: None,
         table: &COMPOSER,
         fallback: Some(Act::Draft),
+        body: None,
     },
     Description {
         mode: Mode::Keys,
@@ -417,6 +438,7 @@ pub const DESCRIPTIONS: [Description; 6] = [
         title: Some("? keys"),
         table: &KEYS,
         fallback: None,
+        body: Some(Body::Keys),
     },
     Description {
         mode: Mode::Files,
@@ -424,6 +446,7 @@ pub const DESCRIPTIONS: [Description; 6] = [
         title: Some("@ files"),
         table: &FILES,
         fallback: Some(Act::Query),
+        body: Some(Body::Files),
     },
     Description {
         mode: Mode::Models,
@@ -431,6 +454,7 @@ pub const DESCRIPTIONS: [Description; 6] = [
         title: Some("/model"),
         table: &MODELS,
         fallback: Some(Act::Query),
+        body: Some(Body::Models),
     },
     Description {
         mode: Mode::Settings,
@@ -438,6 +462,7 @@ pub const DESCRIPTIONS: [Description; 6] = [
         title: Some("/settings"),
         table: &SETTINGS,
         fallback: Some(Act::Value),
+        body: Some(Body::Settings),
     },
     Description {
         mode: Mode::Stats,
@@ -445,6 +470,7 @@ pub const DESCRIPTIONS: [Description; 6] = [
         title: Some("/stats"),
         table: &STATS,
         fallback: None,
+        body: Some(Body::Ledger),
     },
 ];
 
@@ -482,6 +508,30 @@ impl Stack {
         if self.modes.len() > 1 {
             self.modes.pop();
         }
+    }
+
+    /// Every mode's name as a heading over the keys it binds, each key in one column and what it does
+    /// beside it: a description wider than the card wraps under its own column rather than losing its
+    /// tail, because a key without the line that explains it is a key a reader has to try.
+    pub fn body(&self, width: u16) -> Vec<ScreenRow> {
+        let modes: Vec<Mode> = self.modes().collect();
+        let column = Column::of(
+            modes
+                .iter()
+                .flat_map(|mode| mode.table())
+                .map(|binding| binding.name),
+            width,
+            KEY,
+            MEANING,
+        );
+        let mut rows = Vec::new();
+        for mode in modes {
+            rows.push(list::whole(mode.name(), Look::plain(Ink::Dim)));
+            for binding in mode.table() {
+                rows.extend(column.hung(binding.name, binding.does));
+            }
+        }
+        rows
     }
 
     pub fn act(&self, key: Key) -> Option<Act> {
