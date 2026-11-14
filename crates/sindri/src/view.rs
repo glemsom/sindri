@@ -27,6 +27,7 @@ use crate::ink::{Ink, Look};
 use crate::keys::{self, Act, Mode, Stack};
 use crate::ledger::{Boot, Facts, Rail, Share};
 use crate::link::Links;
+use crate::list::{self, Choice, Item, ScreenRow};
 use crate::mark::{Cell, Mark, Span};
 use crate::models::Models;
 use crate::palette::{Band, Palette};
@@ -139,26 +140,18 @@ const SIGIL: &str = "\u{203a} ";
 
 const KEYS_GAP: u16 = 2;
 
-const PICKER_QUERY: &str = "query: ";
-
 const PICKER_EMPTY: &str = "no file answers";
 
-const PICKER_GAP: &str = "  ";
-
-/// The glyph before the row a key acts on, in the picker and in the settings modal both:
-/// one mark, because both screens say the same thing with it.
+/// The glyph before the row a reader is on, in every list a card draws: one mark, because every
+/// screen that lists says the same thing with it.
 const ROW_MARK: &str = "\u{203a} ";
 const ROW_GAP: &str = "  ";
 
 const SETTINGS_GAP: u16 = 2;
 
-const MODELS_QUERY: &str = "query: ";
-
 const MODELS_ASKING: &str = "asking the wire what it serves";
 
 const MODELS_EMPTY: &str = "no served name answers";
-
-const NAMES_GAP: u16 = 2;
 
 /// The name the commands card carries in its top border, in the shape `? keys` and `@ files`
 /// wear theirs.
@@ -1339,14 +1332,17 @@ impl View {
         let room = width.saturating_sub(name_width);
         let mut rows = Vec::new();
         for mode in modes {
-            rows.push(screen_row(vec![(mode.name().to_owned(), Ink::Dim.into())]));
+            rows.push(ScreenRow::whole(vec![(
+                mode.name().to_owned(),
+                Ink::Dim.into(),
+            )]));
             for binding in mode.table() {
                 for (at, line) in wrap(binding.does, room).iter().enumerate() {
                     let name = match at {
                         0 => pen::pad(binding.name, name_width),
                         _ => hang.clone(),
                     };
-                    rows.push(screen_row(vec![
+                    rows.push(ScreenRow::whole(vec![
                         (name, keys::KEY),
                         (line.clone(), keys::MEANING),
                     ]));
@@ -1356,46 +1352,38 @@ impl View {
         rows
     }
 
-    /// The `@` picker: the query, then the rows it leaves, the selection marked. A query or a path
-    /// wider than the frame is cut at its right edge rather than dropped: whole-or-nothing is a
-    /// rule about hints and facts, and a reader wants the value they are pointing at.
+    /// The `@` picker: the files the workspace walks, the query they answer with the row a reader
+    /// is on marked, and under them the count of which matches it shows and how many the query left.
     fn files_rows(&self) -> Vec<ScreenRow> {
-        let mut rows = vec![cut_row(vec![
-            (PICKER_QUERY.to_owned(), Ink::Dim.into()),
-            (self.picker.query().to_owned(), Ink::Muted.into()),
-        ])];
         let files = self.picker.rows();
-        if files.is_empty() {
-            rows.push(screen_row(vec![(PICKER_EMPTY.to_owned(), Ink::Dim.into())]));
-            return rows;
+        let items = files
+            .iter()
+            .map(|file| match file.directory.is_empty() {
+                true => Item::new(file.name),
+                false => Item::beside(file.name, file.directory),
+            })
+            .collect();
+        let mut rows = list::List {
+            query: Some(self.picker.query()),
+            said: files.is_empty().then_some(PICKER_EMPTY),
+            items,
+            selected: self.picker.selected(),
+            marker: ROW_MARK,
+            choice: Some(Choice::File),
         }
-        for (at, file) in files.iter().enumerate() {
-            let (marker, ink) = match at == self.picker.selected() {
-                true => (ROW_MARK, Ink::Accent),
-                false => (ROW_GAP, Ink::Plain),
-            };
-            let ink = Look::plain(ink);
-            let mut spans = vec![(marker.to_owned(), ink), (file.name.to_owned(), ink)];
-            if !file.directory.is_empty() {
-                spans.push((PICKER_GAP.to_owned(), Ink::Dim.into()));
-                spans.push((file.directory.to_owned(), Ink::Dim.into()));
-            }
-            rows.push(choosable(cut_row(spans), Choice::File(at)));
+        .rows();
+        if !files.is_empty() {
+            rows.push(ScreenRow::whole(vec![(
+                format!("1\u{2013}{} of {}", files.len(), self.picker.matches()),
+                Ink::Dim.into(),
+            )]));
         }
-        rows.push(screen_row(vec![(
-            format!("1\u{2013}{} of {}", files.len(), self.picker.matches()),
-            Ink::Dim.into(),
-        )]));
         rows
     }
 
     /// A wire that has not answered is one line saying it was asked, and one that could not
     /// answer is a hint rather than a refusal: a model named by hand still runs.
     fn models_rows(&self) -> Vec<ScreenRow> {
-        let mut rows = vec![cut_row(vec![
-            (MODELS_QUERY.to_owned(), Ink::Dim.into()),
-            (self.models.query().to_owned(), Ink::Muted.into()),
-        ])];
         let names = self.models.rows();
         let said = match self.models.hint() {
             _ if self.models.waiting() => Some(MODELS_ASKING),
@@ -1403,12 +1391,15 @@ impl View {
             None if names.is_empty() => Some(MODELS_EMPTY),
             None => None,
         };
-        if let Some(said) = said {
-            rows.push(screen_row(vec![(said.to_owned(), Ink::Dim.into())]));
-            return rows;
+        list::List {
+            query: Some(self.models.query()),
+            said,
+            items: list::columned(names.into_iter()),
+            selected: self.models.selected(),
+            marker: ROW_MARK,
+            choice: Some(Choice::Model),
         }
-        rows.extend(listed(&names, self.models.selected(), Choice::Model));
-        rows
+        .rows()
     }
 
     /// A value too wide for the frame is cut at its right edge rather than dropped, as the
@@ -1425,7 +1416,7 @@ impl View {
                 true => (ROW_MARK, Ink::Accent, Ink::Accent),
                 false => (ROW_GAP, Ink::Muted, Ink::Plain),
             };
-            rows.push(cut_row(vec![
+            rows.push(ScreenRow::cut(vec![
                 (marker.to_owned(), Look::plain(name_ink)),
                 (pen::pad(key, key_width), Look::plain(name_ink)),
                 (text.to_owned(), Look::plain(value_ink)),
@@ -1436,9 +1427,9 @@ impl View {
         };
         // A blank row under the list, so the refusal reads as a verdict on the visit and not as the
         // last key's value.
-        rows.push(screen_row(Vec::new()));
+        rows.push(ScreenRow::whole(Vec::new()));
         for line in wrap(refusal, width) {
-            rows.push(cut_row(vec![(line, Ink::Err.into())]));
+            rows.push(ScreenRow::cut(vec![(line, Ink::Err.into())]));
         }
         rows
     }
@@ -1615,15 +1606,6 @@ impl ScreenBody {
     }
 }
 
-/// What a row of a card chooses when a press lands on it: a file the picker offers, a name the wire
-/// served, or a command the draft's word leaves.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Choice {
-    File(usize),
-    Model(usize),
-    Command(usize),
-}
-
 /// One row of a card a press chooses, and the cells it was written into.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Press {
@@ -1635,24 +1617,6 @@ impl Press {
     /// Whether a press at `at` landed on this row: the row it is drawn on, and a column of it.
     fn covers(&self, at: Cell) -> bool {
         at.row == self.area.y && (self.area.x..self.area.right()).contains(&at.column)
-    }
-}
-
-/// One row of a screen as data: the spans it draws, each in its own look, and the rule that decides
-/// what happens to a row the card has no room for.
-struct ScreenRow {
-    spans: Vec<(String, Look)>,
-    clip: Clip,
-    /// What a press on this row chooses, or nothing where no key hangs from it.
-    choice: Option<Choice>,
-}
-
-/// A row whole or not there at all: a hint or a fact is never read in part.
-fn screen_row(spans: Vec<(String, Look)>) -> ScreenRow {
-    ScreenRow {
-        spans,
-        clip: Clip::Whole,
-        choice: None,
     }
 }
 
@@ -1678,60 +1642,18 @@ fn whole_row<S: AsRef<str>, D: Copy + Into<Look>>(
     );
 }
 
-/// One row per name of a list: the marker the row the reader is on wears, the name padded to the
-/// widest of them, and the line that says what it is set quieter beside it.
-fn listed(rows: &[(&str, &str)], selected: usize, choice: fn(usize) -> Choice) -> Vec<ScreenRow> {
-    let widest = rows
-        .iter()
-        .map(|(name, _)| pen::cells(name) + NAMES_GAP)
-        .max()
-        .unwrap_or(0);
-    rows.iter()
-        .enumerate()
-        .map(|(at, (name, says))| {
-            let (marker, ink) = match at == selected {
-                true => (ROW_MARK, Ink::Accent),
-                false => (ROW_GAP, Ink::Plain),
-            };
-            let ink = Look::plain(ink);
-            choosable(
-                cut_row(vec![
-                    (marker.to_owned(), ink),
-                    (pen::pad(name, widest), ink),
-                    ((*says).to_owned(), Ink::Dim.into()),
-                ]),
-                choice(at),
-            )
-        })
-        .collect()
-}
-
 /// The commands card's own rows: each command the word after the slash leaves with the one line
 /// that says what it does, and the row the draft names marked because `Enter` takes it.
 fn command_rows(card: &commands::Card) -> Vec<ScreenRow> {
-    let named: Vec<(&str, &str)> = card
-        .rows()
-        .iter()
-        .map(|said| (said.name, said.says))
-        .collect();
-    listed(&named, 0, Choice::Command)
-}
-
-/// A row cut at its right edge: a value that runs on is cut rather than dropped.
-fn cut_row(spans: Vec<(String, Look)>) -> ScreenRow {
-    ScreenRow {
-        spans,
-        clip: Clip::Edge,
-        choice: None,
+    list::List {
+        query: None,
+        said: None,
+        items: list::columned(card.rows().iter().map(|said| (said.name, said.says))),
+        selected: 0,
+        marker: ROW_MARK,
+        choice: Some(Choice::Command),
     }
-}
-
-/// The same row, marked as one a press chooses: a card's rows are the ones a click has an act for.
-fn choosable(row: ScreenRow, choice: Choice) -> ScreenRow {
-    ScreenRow {
-        choice: Some(choice),
-        ..row
-    }
+    .rows()
 }
 
 /// Writes one row of the composer's band. The sigil opens the row a prompt's words begin on and

@@ -452,3 +452,72 @@ fn a_query_that_matches_nothing_draws_one_line_saying_so() {
          no row of a file and no count of files there are none of"
     );
 }
+
+#[test]
+fn a_band_too_short_for_the_picker_draws_the_rows_that_fit_and_keeps_the_rest_back() {
+    let many: Vec<String> = (0..17).map(|at| format!("file{at:02}.rs")).collect();
+    let many: Vec<&str> = many.iter().map(String::as_str).collect();
+    let root = workspace(&many);
+    let mut view = standing(root.path());
+    view.key(Key::Char('@'));
+
+    let held = body_rows(&painted(&mut view, 120, 40));
+    let short = painted(&mut view, 120, 11);
+    let rows = frame_rows(&short);
+    let top = rows
+        .iter()
+        .position(|row| row.contains('╭'))
+        .expect("a card drawn with its top border");
+    let bottom = rows
+        .iter()
+        .rposition(|row| row.contains('╰'))
+        .expect("a card drawn with its bottom border");
+    let border: Vec<char> = rows[top].chars().collect();
+    let corner = |glyph: char| {
+        border
+            .iter()
+            .position(|said| *said == glyph)
+            .unwrap_or_else(|| panic!("the card's top border carries both its corners: {border:?}"))
+    };
+    let (left, right) = (corner('╭'), corner('╮'));
+    for said in &rows[top + 1..bottom] {
+        let held: Vec<char> = said.chars().collect();
+        assert!(
+            held[left] == '│' && held[right] == '│',
+            "a row of the body is held between the card's own two sides, so no row of the picker \
+             crosses the frame's edge: {said:?} in {rows:?}"
+        );
+    }
+
+    let drawn = body_rows(&short);
+    let (kept, count) = drawn.split_at(drawn.len().saturating_sub(1));
+    assert!(
+        kept.len() < held.len(),
+        "a frame of eleven rows cannot hold the ten rows a frame of forty draws, and the card \
+         takes one of the rows it has for the row that counts them: {kept:?} against {held:?}"
+    );
+    assert_eq!(
+        kept,
+        &held[..kept.len()],
+        "the card too short for the picker draws the first rows of it in the same order and with \
+         the same words, so a reader who can only see the head of the list sees the head of it: \
+         {drawn:?}"
+    );
+    let told: usize = count
+        .first()
+        .and_then(|said| said.strip_prefix("\u{22ef} "))
+        .and_then(|said| said.strip_suffix(" rows kept back"))
+        .and_then(|told| told.parse().ok())
+        .unwrap_or_else(|| {
+            panic!(
+                "the row above the bottom border is the card's own count of the rows it keeps \
+                 back: {count:?}, {drawn:?}"
+            )
+        });
+    assert_eq!(
+        told,
+        held.len() - kept.len(),
+        "and the rows it kept back are the difference between the rows the list holds and the rows \
+         the card draws: {count:?}"
+    );
+}

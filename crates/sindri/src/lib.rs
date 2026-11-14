@@ -9,6 +9,7 @@ pub mod ink; // the look a cell is drawn in, asked for by name: its ink, its fac
 pub mod keys; // the mode stack and one key table per mode
 pub mod ledger; // the run's facts, the one way each value is spelled, and the rows they are laid out in
 pub mod link; // the destination a run of cells names, written by the backend that draws the frame
+pub mod list; // the list a card draws: its query, the line it says when it has nothing, one row per item
 pub mod mark; // the cells a reader has marked, and the words they hold
 pub mod markdown; // markdown becomes the rows a transcript entry is drawn as
 pub mod mermaid; // a mermaid fence becomes a picture, or is refused with a reason the caption can print

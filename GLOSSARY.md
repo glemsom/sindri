@@ -173,6 +173,13 @@ holds, centred — a body taller than the frame is capped, and the card counts t
 and under fifty columns the whole frame with its title row and no border.
 _Avoid_: Modal, dialog, popup, overlay, sheet
 
+**List**:
+The shape a card's rows share: the query they answer at the head, the one line they say in place of
+their rows, and one row per item with the row a reader is on marked — filled down the band the card
+hands it and cut at its frame's edge. A screen that shows one names its own rows, its own mark and
+its own line, so the list knows neither files nor served names.
+_Avoid_: Table, menu, picker (that one is the files' own screen)
+
 **Path picker**:
 The screen `@` opens: the workspace's files as `git` reads them, ranked by how the query sits in one —
 a name it starts, a name it holds, a path it holds — and nearest first within a rank. The card draws
