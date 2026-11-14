@@ -159,6 +159,42 @@ const OPENAI_TOOL_USE: &str = include_str!("fixtures/providers/openai_chat_tool_
 
 const OPENAI_PLAIN: &str = include_str!("fixtures/providers/copilot_chat_stream.sse");
 
+struct Case {
+    wire: Wire,
+    route: Option<Route>,
+    model: &'static str,
+    key: &'static str,
+    call: &'static str,
+    fixtures: [&'static str; 2],
+}
+
+const CASES: [Case; 3] = [
+    Case {
+        wire: Wire::Anthropic,
+        route: None,
+        model: "claude-sonnet-4-6",
+        key: "sk-ant-recorded",
+        call: "toolu_01",
+        fixtures: [TOOL_USE, PLAIN],
+    },
+    Case {
+        wire: Wire::Openai,
+        route: Some(Route::Chat),
+        model: "gpt-4o-2024-11-20",
+        key: "sk-recorded",
+        call: "call_01",
+        fixtures: [OPENAI_TOOL_USE, OPENAI_PLAIN],
+    },
+    Case {
+        wire: Wire::Copilot,
+        route: Some(Route::Chat),
+        model: "gpt-4o-2024-11-20",
+        key: "sk-recorded",
+        call: "call_01",
+        fixtures: [OPENAI_TOOL_USE, OPENAI_PLAIN],
+    },
+];
+
 #[test]
 fn an_openai_shaped_wire_is_told_the_tools_and_answers_with_a_call_too() {
     let replay = Replay::new([
@@ -190,4 +226,61 @@ fn an_openai_shaped_wire_is_told_the_tools_and_answers_with_a_call_too() {
     );
     assert_eq!(ran.names(), ["bash"], "and its call reaches the executor");
     assert_eq!(run.answer(), Some("Hello from Copilot"));
+}
+
+#[test]
+fn every_wire_the_tree_declares_replays_one_turn_with_each_call_beside_what_it_answered() {
+    let declared: Vec<&str> = CASES.iter().map(|case| case.wire.word()).collect();
+    assert_eq!(
+        declared,
+        Wire::WORDS,
+        "a wire cannot be declared without being proven here"
+    );
+
+    for case in &CASES {
+        let replay = Replay::new([
+            Canned::stream(case.fixtures[0]),
+            Canned::stream(case.fixtures[1]),
+        ]);
+        let tools = tools();
+        let ask = Ask::new(case.wire, case.model).key(case.key);
+        let ask = match case.route {
+            Some(route) => ask.route(route),
+            None => ask,
+        };
+        let mut run = Run::new(
+            "List files in this folder",
+            Asking::new(client_over(&replay), ask, tools.clone()),
+            Ran::default(),
+        )
+        .tools(&tools);
+
+        let state = run.drive(&mut ());
+
+        assert_eq!(
+            state,
+            State::Stopped(Stop::Final),
+            "{} answers the turn it replayed",
+            case.wire
+        );
+        let requests = replay.requests();
+        assert_eq!(
+            requests.len(),
+            2,
+            "{} asks again with what the call answered",
+            case.wire
+        );
+        let second = &requests[1].body;
+        assert_eq!(
+            second.matches(case.call).count(),
+            2,
+            "{} carries the call's identity once as the call and once as the answer to it: {second}",
+            case.wire
+        );
+        assert!(
+            second.contains("Cargo.toml"),
+            "{} carries the text the call answered with: {second}",
+            case.wire
+        );
+    }
 }

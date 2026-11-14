@@ -301,6 +301,66 @@ fn a_run_handed_nothing_asks_with_nothing_from_before_it() {
 }
 
 #[test]
+fn a_responder_is_handed_the_runs_own_turns_and_its_reply_is_the_turn_the_run_keeps() {
+    let earlier = vec![Turn::answered(
+        1,
+        "hi my name is Glenn",
+        "nice to meet you, Glenn",
+    )];
+    let model = Scripted::answering([
+        Reply::asking("running it", [command("true")]).spent(spent(Some(1_200), Some(20))),
+        Reply::answer("it was the retry"),
+    ]);
+    let log = model.log();
+    let mut run =
+        Run::new("why does the retry test fail?", model, Tools::cheap()).earlier(earlier.clone());
+
+    run.drive(&mut Transcript::default());
+
+    let asked = Turn {
+        turn: 1,
+        prompt: String::from("why does the retry test fail?"),
+        text: String::from("running it"),
+        calls: vec![Call::new("toolu_1", "bash", r#"{"command":"true"}"#)],
+        results: vec![Acted {
+            text: String::from("exit 0\n"),
+            bytes: 0,
+            elapsed: Duration::ZERO,
+            exit: Exit::Code(0),
+        }],
+        usage: Usage {
+            input: Some(1_200),
+            output: Some(20),
+            ..Usage::default()
+        },
+    };
+    let answered = Turn::answered(2, "why does the retry test fail?", "it was the retry");
+
+    let seen = requests(&log);
+    assert_eq!(seen.len(), 2, "the run asked the responder twice");
+    assert_eq!(
+        seen[1].history(),
+        std::slice::from_ref(&asked),
+        "the second request carries the first turn exactly as the run kept it"
+    );
+    assert_eq!(
+        seen[1].earlier(),
+        earlier,
+        "beside the turns Run::earlier was handed, and no others"
+    );
+    assert_eq!(
+        run.history(),
+        [asked, answered.clone()],
+        "the run kept its own prompt beside each reply"
+    );
+    assert_eq!(
+        run.kept(),
+        answered,
+        "and the turn it keeps for the second ask is that prompt beside what the reply said"
+    );
+}
+
+#[test]
 fn a_run_keeps_its_prompt_beside_the_answer_it_got() {
     let model = Scripted::answering([
         Reply::asking("let me read the test", [command("true")]),
@@ -318,6 +378,67 @@ fn a_run_keeps_its_prompt_beside_the_answer_it_got() {
     assert_eq!(
         kept.text, "it was the retry",
         "beside the turn it ended on, and never the words of a turn before it"
+    );
+}
+
+#[test]
+fn a_run_keeps_the_very_turn_it_took_and_its_prompt_alone_when_it_took_none() {
+    let asked = Turn {
+        turn: 1,
+        prompt: String::from("count the files"),
+        text: String::from("let me list them"),
+        calls: vec![Call::new("toolu_1", "bash", r#"{"command":"true"}"#)],
+        results: vec![Acted {
+            text: String::from("exit 0\n"),
+            bytes: 0,
+            elapsed: Duration::ZERO,
+            exit: Exit::Code(0),
+        }],
+        usage: Usage {
+            input: Some(1_200),
+            output: Some(20),
+            ..Usage::default()
+        },
+    };
+    let mut run = Run::new(
+        "count the files",
+        Scripted::answering([Reply::asking("let me list them", [command("true")])
+            .spent(spent(Some(1_200), Some(20)))]),
+        Tools::cheap(),
+    );
+
+    run.turn(&mut Transcript::default());
+
+    assert_eq!(
+        run.history().last(),
+        Some(&asked),
+        "the run kept the one turn it took"
+    );
+    assert_eq!(
+        run.kept(),
+        asked,
+        "and what it keeps is that very turn, results and spend included"
+    );
+
+    let mut unasked = Run::new(
+        "count the files",
+        Scripted::answering([Reply::answer("twelve")]),
+        Tools::cheap(),
+    );
+    unasked.canceller().now();
+    unasked.drive(&mut Transcript::default());
+
+    assert_eq!(
+        unasked.kept(),
+        Turn {
+            turn: 0,
+            prompt: String::from("count the files"),
+            text: String::new(),
+            calls: Vec::new(),
+            results: Vec::new(),
+            usage: Usage::default(),
+        },
+        "a run that ended before its first turn keeps its prompt alone"
     );
 }
 
