@@ -328,6 +328,7 @@ fn a_responder_is_handed_the_very_turn_the_run_keeps() {
             elapsed: Duration::ZERO,
             exit: Exit::Code(0),
         }],
+        reasoning: None,
         usage: Usage {
             input: Some(1_200),
             output: Some(20),
@@ -395,6 +396,7 @@ fn a_run_keeps_the_very_turn_it_took() {
             elapsed: Duration::ZERO,
             exit: Exit::Code(0),
         }],
+        reasoning: None,
         usage: Usage {
             input: Some(1_200),
             output: Some(20),

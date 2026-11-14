@@ -8,7 +8,7 @@ use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::records::{Entry, Facts, Record, read_transcript};
 use sindri_core::redact::{Redacted, SecretSet};
-use sindri_core::run::{Acted, Call, Exit, Limits};
+use sindri_core::run::{Acted, Call, Exit, Limits, Turn};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 
@@ -142,26 +142,23 @@ fn written(ground: &Ground) -> Vec<String> {
     record
         .asked(&format!("the key is {SECRET}, so triage this"))
         .expect("a prompt is recorded");
-    record.turn_started(1).expect("a turn start is recorded");
-    record.called(1, &call).expect("a call is recorded");
     record
-        .resulted(
-            1,
-            &call,
-            &Acted {
+        .wrote(&Turn {
+            calls: vec![call],
+            results: vec![Acted {
                 text: format!("{SECRET}\n"),
                 bytes: 7,
                 elapsed: Duration::from_millis(3),
                 exit: Exit::Code(0),
-            },
-        )
-        .expect("a result is recorded");
-    record
-        .reasoned(1, &format!("the key is {SECRET}, so read the file"))
-        .expect("a thought is recorded");
-    record
-        .answered(1, &format!("the key is {SECRET}"))
-        .expect("an answer is recorded");
+            }],
+            reasoning: Some(format!("the key is {SECRET}, so read the file")),
+            ..Turn::answered(
+                1,
+                format!("the key is {SECRET}, so triage this"),
+                format!("the key is {SECRET}"),
+            )
+        })
+        .expect("a turn is written whole");
 
     assert_eq!(
         read_transcript(session.directory())

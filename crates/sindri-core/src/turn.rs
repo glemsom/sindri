@@ -13,6 +13,7 @@ pub struct Turn {
     pub text: String,
     pub calls: Vec<Call>,
     pub results: Vec<Acted>,
+    pub reasoning: Option<String>,
     pub usage: Usage,
 }
 
@@ -25,6 +26,7 @@ impl Turn {
             text: text.into(),
             calls: Vec::new(),
             results: Vec::new(),
+            reasoning: None,
             usage: Usage::default(),
         }
     }

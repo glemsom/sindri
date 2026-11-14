@@ -241,20 +241,11 @@ impl Launch {
         // Ahead of the turn loop, so the transcript opens with the words it answers.
         note(self.record.asked(prompt));
         note(self.record.began());
-        // The turns the session counted before this prompt, which this run's own are numbered after.
-        let counted = self.record.document().turns;
         hand(turns, self);
         while run.state().is_running() {
             run.turn(deltas);
-            // A turn is written whole as it ends: the loop hands a front end no hook per entry.
             if let Some(ended) = run.history().last() {
-                let turn = counted + ended.turn;
-                note(self.record.turn_started(turn));
-                for (call, acted) in ended.calls.iter().zip(&ended.results) {
-                    note(self.record.called(turn, call));
-                    note(self.record.resulted(turn, call, acted));
-                }
-                note(self.record.answered(turn, &ended.text));
+                note(self.record.wrote(ended));
                 // A turn whose report carries no size leaves the one the turn before stated.
                 if ended.usage.input.is_some() {
                     self.measured = ended.usage;

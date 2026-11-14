@@ -51,6 +51,11 @@ impl Responder for Asking {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .charge(&answer.usage);
-        Ok(Reply::asking(answer.text, answer.calls).spent(answer.usage))
+        Ok(Reply {
+            text: answer.text,
+            reasoning: answer.reasoning,
+            calls: answer.calls,
+            usage: answer.usage,
+        })
     }
 }
