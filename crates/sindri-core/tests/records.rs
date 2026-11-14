@@ -12,8 +12,9 @@ use serde_json::{Value, json};
 use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Route;
-use sindri_core::provider::Usage as Ask;
-use sindri_core::records::{self, Entry, Facts, Record, Status, Told, read_transcript, timestamp};
+use sindri_core::records::{
+    self, Entry, Facts, Record, Status, Told, Usage, read_transcript, timestamp,
+};
 use sindri_core::redact::{MASK, SecretSet};
 use sindri_core::run::{Acted, Budget, Call, Exit, Limits, State, Stop};
 use sindri_core::session::Session;
@@ -1057,21 +1058,21 @@ fn the_usage_of_every_ask_is_summed_and_what_nobody_reported_is_left_out() {
     let mut record = ground.record(&session);
 
     for ask in [
-        Ask {
+        Usage {
             input: Some(10),
             output: Some(5),
             total: Some(15),
             cached_input: None,
             reasoning: None,
         },
-        Ask {
+        Usage {
             input: Some(1),
             output: Some(2),
             total: Some(3),
             cached_input: Some(7),
             reasoning: None,
         },
-        Ask::default(),
+        Usage::default(),
     ] {
         record.charged(&ask).expect("an ask is charged");
     }
@@ -1406,7 +1407,7 @@ fn child_writes_entries_until_it_is_killed() {
             .answered(turn, "hello.")
             .expect("an answer is recorded");
         record
-            .charged(&Ask {
+            .charged(&Usage {
                 input: Some(11),
                 output: Some(4),
                 total: Some(15),

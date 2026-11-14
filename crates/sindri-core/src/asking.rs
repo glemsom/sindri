@@ -3,10 +3,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::provider::{Ask, Call, Client, Deltas, Earlier, Failure, Turn};
-use crate::records::Usage;
-use crate::run::{Exchange, Reply, Request, Responder};
+use crate::provider::{Ask, Client, Deltas, Failure};
+use crate::run::{Reply, Request, Responder};
 use crate::tools::ToolSet;
+use crate::turn::Usage;
 
 #[derive(Clone, Debug)]
 pub struct Asking {
@@ -36,36 +36,10 @@ impl Asking {
     fn ask(&self, request: &Request) -> Ask {
         self.ask
             .clone()
-            .earlier(request.earlier().iter().map(|ended| Earlier {
-                prompt: ended.prompt.clone(),
-                answer: ended.text.clone(),
-            }))
-            .turns(request.history().iter().map(turn_of))
+            .earlier(request.earlier().iter().cloned())
+            .turns(request.history().iter().cloned())
             .tools(self.tools.tools())
             .prompt(request.prompt())
-    }
-}
-
-/// A turn of this run as the wire is asked it: call and answer paired, so a result never arrives
-/// against a call the model did not make.
-fn turn_of(ended: &Exchange) -> Turn {
-    Turn {
-        text: ended.text.clone(),
-        calls: ended
-            .calls
-            .iter()
-            .zip(&ended.results)
-            .map(|(call, acted)| {
-                (
-                    Call {
-                        id: call.id.clone(),
-                        name: call.name.clone(),
-                        arguments: call.arguments.clone(),
-                    },
-                    acted.text.clone(),
-                )
-            })
-            .collect(),
     }
 }
 
@@ -77,10 +51,6 @@ impl Responder for Asking {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .charge(&answer.usage);
-        let calls = answer
-            .calls
-            .into_iter()
-            .map(|call| crate::run::Call::new(call.id, call.name, call.arguments));
-        Ok(Reply::asking(answer.text, calls).spent(answer.usage))
+        Ok(Reply::asking(answer.text, answer.calls).spent(answer.usage))
     }
 }

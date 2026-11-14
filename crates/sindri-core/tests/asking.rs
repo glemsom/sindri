@@ -7,9 +7,9 @@ use sindri_core::asking::Asking;
 use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::transport::{Canned, Replay};
-use sindri_core::provider::{Ask, Client, Deltas, Usage};
+use sindri_core::provider::{Ask, Client, Deltas};
 use sindri_core::redact::{Redacted, SecretSet};
-use sindri_core::run::{Acted, Call, Exchange, Executor, Loaded, Run, State, Stop};
+use sindri_core::run::{Acted, Call, Executor, Loaded, Run, State, Stop, Turn};
 use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
 use sindri_core::wire::Wire;
@@ -61,17 +61,6 @@ impl Deltas for Transcript {
     }
 
     fn reasoning(&mut self, _fragment: &str) {}
-}
-
-fn turned(turn: u32, prompt: &str, answer: &str) -> Exchange {
-    Exchange {
-        turn,
-        prompt: String::from(prompt),
-        text: String::from(answer),
-        calls: Vec::new(),
-        results: Vec::new(),
-        usage: Usage::default(),
-    }
 }
 
 fn asked(replay: &Replay) -> Value {
@@ -151,7 +140,7 @@ fn a_reply_carries_what_its_ask_spent_and_the_total_stays_the_runs() {
     assert_eq!(
         first.history()[0].usage.input,
         Some(11),
-        "the turn's exchange says what that turn's ask was handed"
+        "the turn says what that turn's ask was handed"
     );
     assert_eq!(
         second.history()[0].usage.input,
@@ -218,8 +207,8 @@ fn the_turns_that_ended_before_a_run_are_asked_ahead_of_its_prompt() {
         Unreached,
     )
     .earlier(vec![
-        turned(1, "hi my name is Glenn", "nice to meet you, Glenn"),
-        turned(2, "is it raining?", "it is raining"),
+        Turn::answered(1, "hi my name is Glenn", "nice to meet you, Glenn"),
+        Turn::answered(2, "is it raining?", "it is raining"),
     ]);
 
     run.drive(&mut Transcript::default());
@@ -257,8 +246,8 @@ fn a_turn_that_ended_with_no_answer_is_not_sent_as_an_empty_message() {
         Unreached,
     )
     .earlier(vec![
-        turned(1, "hi my name is Glenn", "nice to meet you, Glenn"),
-        turned(2, "what is the weather?", ""),
+        Turn::answered(1, "hi my name is Glenn", "nice to meet you, Glenn"),
+        Turn::answered(2, "what is the weather?", ""),
     ]);
 
     run.drive(&mut Transcript::default());

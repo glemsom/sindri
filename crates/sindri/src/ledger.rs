@@ -8,7 +8,6 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::policy::Enforcement;
 use sindri_core::provider::Route;
-use sindri_core::provider::Usage as Report;
 use sindri_core::records::{SessionDocument, Usage};
 use sindri_core::run::State;
 use sindri_core::session::Session;
@@ -371,12 +370,12 @@ impl Facts {
     /// The size one ask's report measured, and the part of its input the provider served from cache.
     /// The document cannot hand these in: the `usage` it keeps is every ask summed, and a sum of the
     /// inputs grows with each turn while the conversation's size is what the newest request carried.
-    pub fn measured(mut self, ask: &Report, window: Option<u64>) -> Facts {
-        let Some(size) = ask.input else {
+    pub fn measured(mut self, usage: &Usage, window: Option<u64>) -> Facts {
+        let Some(size) = usage.input else {
             return self;
         };
         self.ctx = Some(Ctx { size, window });
-        self.cache = ask.cached_input.and_then(|cached| share(cached, size));
+        self.cache = usage.cached_input.and_then(|cached| share(cached, size));
         self
     }
 }
@@ -1541,7 +1540,6 @@ mod tests {
 
     use sindri_core::policy::{Enforcement, PolicyRecord};
     use sindri_core::provider::Route;
-    use sindri_core::provider::Usage as Report;
     use sindri_core::records::{Dials, SessionDocument, Usage};
     use sindri_core::redact::SecretSet;
     use sindri_core::run::{Budget, State as RunState, Stop};
@@ -1721,14 +1719,14 @@ mod tests {
         let root = tempfile::tempdir().expect("a temp state home");
         let session = Session::create(root.path()).expect("a session");
         let document = document(session.guid());
-        let asked = Report {
+        let asked = Usage {
             input: Some(48_200),
             cached_input: Some(12_050),
-            ..Report::default()
+            ..Usage::default()
         };
-        let uncached = Report {
+        let uncached = Usage {
             input: Some(48_200),
-            ..Report::default()
+            ..Usage::default()
         };
 
         let facts = Facts::of(&session, &document).measured(&asked, None);
@@ -1761,10 +1759,10 @@ mod tests {
         let root = tempfile::tempdir().expect("a temp state home");
         let session = Session::create(root.path()).expect("a session");
         let document = document(session.guid());
-        let reported = Report {
+        let reported = Usage {
             input: Some(48_200),
             cached_input: Some(4_820),
-            ..Report::default()
+            ..Usage::default()
         };
 
         assert_eq!(
@@ -1781,10 +1779,10 @@ mod tests {
         assert_eq!(
             (
                 Facts::of(&session, &document)
-                    .measured(&Report::default(), Some(200_000))
+                    .measured(&Usage::default(), Some(200_000))
                     .ctx,
                 Facts::of(&session, &document)
-                    .measured(&Report::default(), None)
+                    .measured(&Usage::default(), None)
                     .cache
             ),
             (None, None),

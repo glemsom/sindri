@@ -2,23 +2,11 @@
 //! order they ended, and nothing at all once the reader starts over.
 
 use sindri_core::conversation::Conversation;
-use sindri_core::provider::Usage;
-use sindri_core::run::Exchange;
-
-fn ended(prompt: &str, text: &str) -> Exchange {
-    Exchange {
-        turn: 1,
-        prompt: String::from(prompt),
-        text: String::from(text),
-        calls: Vec::new(),
-        results: Vec::new(),
-        usage: Usage::default(),
-    }
-}
+use sindri_core::run::Turn;
 
 fn replayed(conversation: &Conversation) -> Vec<(&str, &str)> {
     conversation
-        .exchanges()
+        .turns()
         .iter()
         .map(|kept| (kept.prompt.as_str(), kept.text.as_str()))
         .collect()
@@ -39,18 +27,18 @@ fn a_conversation_that_has_held_no_prompt_hands_the_run_that_joins_it_nothing() 
 fn a_prompt_joins_beside_the_answer_it_got() {
     let mut conversation = Conversation::new();
 
-    conversation.join(ended("hi my name is Glenn", "nice to meet you, Glenn"));
+    conversation.join(Turn::answered(
+        1,
+        "hi my name is Glenn",
+        "nice to meet you, Glenn",
+    ));
 
     assert_eq!(
         replayed(&conversation),
         [("hi my name is Glenn", "nice to meet you, Glenn")],
         "the words asked and the words they got, whole"
     );
-    assert_eq!(
-        conversation.exchanges().len(),
-        1,
-        "one prompt is one exchange"
-    );
+    assert_eq!(conversation.turns().len(), 1, "one prompt is one turn");
 }
 
 #[test]
@@ -61,7 +49,7 @@ fn the_prompts_join_in_the_order_they_ended() {
         ("is it raining?", "it is raining"),
         ("what is my name?", "Glenn"),
     ] {
-        conversation.join(ended(prompt, answer));
+        conversation.join(Turn::answered(1, prompt, answer));
     }
 
     assert_eq!(
@@ -79,7 +67,7 @@ fn the_prompts_join_in_the_order_they_ended() {
 fn a_prompt_that_got_no_answer_joins_whole_as_the_words_it_was_asked_with() {
     let mut conversation = Conversation::new();
 
-    conversation.join(ended("read the failing test", ""));
+    conversation.join(Turn::answered(1, "read the failing test", ""));
 
     assert_eq!(
         replayed(&conversation),
@@ -92,12 +80,16 @@ fn a_prompt_that_got_no_answer_joins_whole_as_the_words_it_was_asked_with() {
 #[test]
 fn starting_over_empties_what_the_run_that_joins_next_is_asked_with() {
     let mut conversation = Conversation::new();
-    conversation.join(ended("hi my name is Glenn", "nice to meet you, Glenn"));
+    conversation.join(Turn::answered(
+        1,
+        "hi my name is Glenn",
+        "nice to meet you, Glenn",
+    ));
 
     conversation.clear();
 
     assert!(
-        conversation.exchanges().is_empty(),
+        conversation.turns().is_empty(),
         "`/new` starts the conversation again"
     );
     assert_eq!(

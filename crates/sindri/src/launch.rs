@@ -12,7 +12,7 @@ use sindri_core::provider::copilot::Store;
 use sindri_core::provider::served::{Listing, Where};
 use sindri_core::provider::{Ask, Client, Credential, Deltas, Route, Usage};
 use sindri_core::records::{Facts, Record, SessionDocument};
-use sindri_core::run::{Cancel, Exchange, Limits, Run, Shell};
+use sindri_core::run::{Cancel, Limits, Run, Shell, Turn};
 use sindri_core::sandbox::{self, Proof};
 use sindri_core::session::{self, Session};
 use sindri_core::skills::Catalog;
@@ -53,11 +53,11 @@ impl Refusal {
 }
 
 pub trait Turns {
-    fn turn(&mut self, ended: &Exchange);
+    fn turn(&mut self, ended: &Turn);
 
     /// Handed once, when the run stops: the prompt it was asked with beside the answer it got, which
     /// is what a conversation keeps for the prompt after it.
-    fn kept(&mut self, _kept: &Exchange) {}
+    fn kept(&mut self, _kept: &Turn) {}
 
     /// Handed when the run opens, as each turn ends, and once more when it stops.
     fn facts(&mut self, _facts: ledger::Facts) {}
@@ -67,7 +67,7 @@ pub trait Turns {
 }
 
 impl Turns for () {
-    fn turn(&mut self, _ended: &Exchange) {}
+    fn turn(&mut self, _ended: &Turn) {}
 }
 
 /// The run a prompt will ask for, as a launch knows it before a session exists: the wire and the
@@ -227,7 +227,7 @@ impl Launch {
     pub fn drive(
         &mut self,
         prompt: &str,
-        earlier: &[Exchange],
+        earlier: &[Turn],
         deltas: &mut dyn Deltas,
         turns: &mut dyn Turns,
         cancel: Cancel,
@@ -247,19 +247,19 @@ impl Launch {
         while run.state().is_running() {
             run.turn(deltas);
             // A turn is written whole as it ends: the loop hands a front end no hook per entry.
-            if let Some(exchange) = run.history().last() {
-                let turn = counted + exchange.turn;
+            if let Some(ended) = run.history().last() {
+                let turn = counted + ended.turn;
                 note(self.record.turn_started(turn));
-                for (call, acted) in exchange.calls.iter().zip(&exchange.results) {
+                for (call, acted) in ended.calls.iter().zip(&ended.results) {
                     note(self.record.called(turn, call));
                     note(self.record.resulted(turn, call, acted));
                 }
-                note(self.record.answered(turn, &exchange.text));
+                note(self.record.answered(turn, &ended.text));
                 // A turn whose report carries no size leaves the one the turn before stated.
-                if exchange.usage.input.is_some() {
-                    self.measured = exchange.usage;
+                if ended.usage.input.is_some() {
+                    self.measured = ended.usage;
                 }
-                turns.turn(exchange);
+                turns.turn(ended);
                 hand(turns, self);
             }
         }
