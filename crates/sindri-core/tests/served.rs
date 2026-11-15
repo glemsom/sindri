@@ -386,13 +386,14 @@ fn a_listing_is_read_from_the_endpoint_a_run_asks() {
         "the route the config names is the one the run is sent on"
     );
     let requested: Vec<String> = replay.requests().into_iter().map(|seen| seen.url).collect();
+    assert_eq!(requested.len(), 2, "one job listed and one job asked");
     assert_eq!(
-        requested,
-        [
-            "https://gateway.example/v1/models",
-            "https://gateway.example/v1/responses"
-        ],
-        "the listing and the run are read at the one endpoint the config names"
+        requested[0], "https://gateway.example/v1/models",
+        "the names are read at the endpoint the config names"
+    );
+    assert_eq!(
+        requested[1], "https://gateway.example/v1/responses",
+        "and the run asks that same endpoint, on the route the config named"
     );
 }
 
