@@ -13,7 +13,7 @@ gutter at 120x40
 07 |│ the marker of a row stands in the gutter ahead of its words                                                           | dim:2 muted:59 plain:59
 08 |  Every row begins at one column:                                                                                       | plain:120
 09 |                                                                                                                        | plain:120
-10 |▏ rust                                                                                                                  | dim:6 plain:114
+10 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
 11 |▏ fn gutter() {                                                                                                         | dim:2 accent:2 plain:116
 12 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
 13 |▏ }                                                                                                                     | dim:2 plain:118

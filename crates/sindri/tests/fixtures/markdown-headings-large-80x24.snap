@@ -4,15 +4,15 @@ expression: drawn
 ---
 markdown-headings-large at 80x24
 00 |                                                                                | plain:80
-01 |  M a r k d o w n   r e n d e r i n g                                           | plain:2 plain+bold:36 plain:42
+01 |  M a r k d o w n   r e n d e r i n g                                           | plain:2 accent+bold:36 plain:42
 02 |                                                                                | plain:80
-03 |  ════════════════════════════════════                                          | plain:2 dim:36 plain:42
+03 |  ════════════════════════════════════                                          | plain:2 accent+faint:36 plain:42
 04 |                                                                                | plain:80
 05 |  T h e   s c a l e   o f   h e a d i n g s ,   t w o   r u l e d   a n d       | plain:2 plain+bold:72 plain:6
 06 |                                                                                | plain:80
 07 |  f o u r   n o t                                                               | plain:2 plain+bold:16 plain:62
 08 |                                                                                | plain:80
-09 |  ────────────────────────────────────────────────────────────────────────      | plain:2 dim:72 plain:6
+09 |  ────────────────────────────────────────────────────────────────────────      | plain:2 accent+faint:72 plain:6
 10 |                                                                                | plain:80
 11 |  A third level, muted and bold                                                 | plain:2 muted+bold:29 plain:49
 12 |                                                                                | plain:80

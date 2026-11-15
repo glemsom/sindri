@@ -16,12 +16,12 @@ transcript-scrolled at 80x24
 10 |  check: frame calls ... ok                                                     | muted:27 plain:53
 11 |  check: frame transcript ... ok                                                | muted:32 plain:48
 12 |  A row is one line                                                             | plain:2 plain+bold:17 plain:61
-13 |█ ─────────────────                                                             | dim:1 plain:1 dim:17 plain:61
+13 |█ ─────────────────                                                             | dim:1 plain:1 accent+faint:17 plain:61
 14 |█                                                                               | dim:1 plain:79
 15 |█ A row says the exit code and not the command, because the verdict is a fact   | dim:1 plain:79
 16 |█ the record holds and the command is a fact the row above it holds.            | dim:1 plain:79
 17 |█                                                                               | dim:1 plain:79
-18 |▏ rust                                                                          | dim:6 plain:74
+18 |▏ rust                                                                          | dim:2 accent+faint:4 plain:74
 19 |ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · branch spec/1-capability| dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:10 plain:17
 20 |4 rows back · End follows the run                                               | muted:11 dim:3 plain+bold:3 muted:16 plain:47
 21 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80

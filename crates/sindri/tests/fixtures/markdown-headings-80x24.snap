@@ -4,11 +4,11 @@ expression: drawn
 ---
 markdown-headings at 80x24
 00 |                                                                                | plain:80
-01 |  Markdown rendering                                                            | plain:2 plain+bold:18 plain:60
-02 |  ══════════════════                                                            | plain:2 dim:18 plain:60
+01 |  Markdown rendering                                                            | plain:2 accent+bold:18 plain:60
+02 |  ══════════════════                                                            | plain:2 accent+faint:18 plain:60
 03 |                                                                                | plain:80
 04 |  The scale of headings, two ruled and four not                                 | plain:2 plain+bold:45 plain:33
-05 |  ─────────────────────────────────────────────                                 | plain:2 dim:45 plain:33
+05 |  ─────────────────────────────────────────────                                 | plain:2 accent+faint:45 plain:33
 06 |                                                                                | plain:80
 07 |  A third level, muted and bold                                                 | plain:2 muted+bold:29 plain:49
 08 |                                                                                | plain:80

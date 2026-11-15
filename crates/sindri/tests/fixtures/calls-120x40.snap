@@ -26,10 +26,10 @@ calls at 120x40
 20 |  make check STAGES=frames                                                                                              | plain:120
 21 |✗ cancelled  3400 ms · 0 bytes                                                                                          | err:1 plain:1 dim:28 plain:90
 22 |  What a verdict says                                                                                                   | plain:2 plain+bold:19 plain:99
-23 |  ───────────────────                                                                                                   | plain:2 dim:19 plain:99
+23 |  ───────────────────                                                                                                   | plain:2 accent+faint:19 plain:99
 24 |                                                                                                                        | plain:120
-25 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so                                            | plain:38 muted+reversed:6 plain:76
-26 |  the row says ✗ cancelled rather than leaving a spinner turning for a                                                  | plain:15 muted+reversed:11 plain:94
+25 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so                                            | plain:38 accent+reversed:6 plain:76
+26 |  the row says ✗ cancelled rather than leaving a spinner turning for a                                                  | plain:15 accent+reversed:11 plain:94
 27 |  result that will never come.                                                                                          | plain:120
 28 |─ turn 5 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
 29 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114

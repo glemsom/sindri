@@ -33,12 +33,12 @@ transcript-scrolled at 120x40
 27 |█ check: frame calls ... ok                                                                                             | dim:1 muted:26 plain:93
 28 |█ check: frame transcript ... ok                                                                                        | dim:1 muted:31 plain:88
 29 |█ A row is one line                                                                                                     | dim:1 plain:1 plain+bold:17 plain:101
-30 |█ ─────────────────                                                                                                     | dim:1 plain:1 dim:17 plain:101
+30 |█ ─────────────────                                                                                                     | dim:1 plain:1 accent+faint:17 plain:101
 31 |█                                                                                                                       | dim:1 plain:119
 32 |█ A row says the exit code and not the command, because the verdict is a                                                | dim:1 plain:119
 33 |█ fact the record holds and the command is a fact the row above it holds.                                               | dim:1 plain:119
 34 |                                                                                                                        | plain:120
-35 |▏ rust                                                                                                                  | dim:6 plain:114
+35 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
 36 |4 rows back · End follows the run                                                                                       | muted:11 dim:3 plain+bold:3 muted:16 plain:87
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 38 |› what should the run do?                                                                                               | dim:25 plain:95
