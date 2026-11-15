@@ -1167,16 +1167,16 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let rail = rail_band(120, 40);
     let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
 
-    // The splash screen's words carry a face of their own beside the rail, so a row of the frame
-    // is the rail's only where a placement covers the rail's own columns.
-    let taken = |y: u16| -> Vec<u16> {
+    // A splash screen carries a face of the block's own beside the rail, so the rail's rows are the
+    // ones a placement covers in the rail's own columns.
+    let pictured_in_rail = |y: u16| -> Vec<u16> {
         pictured_cols(&with, y)
             .into_iter()
             .filter(|x| (rail.x..rail.right()).contains(x))
             .collect()
     };
     let rows: Vec<u16> = (rail.y..rail.bottom())
-        .filter(|y| !taken(*y).is_empty())
+        .filter(|y| !pictured_in_rail(*y).is_empty())
         .collect();
     assert_eq!(
         rows,
@@ -1186,7 +1186,7 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
         face.rows()
     );
     for y in rail.y..rail.y + face.rows() {
-        let columns = taken(y);
+        let columns = pictured_in_rail(y);
         assert_eq!(
             (columns.first().copied(), columns.len()),
             (
@@ -1198,15 +1198,15 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
         );
     }
 
-    let rule = rail.y + face.rows();
+    let hairline = rail.y + face.rows();
     assert_eq!(
-        rail_row(&with, rail, rule).trim_end(),
+        rail_row(&with, rail, hairline).trim_end(),
         "─".repeat(usize::from(rail.width)),
         "the face the rail carries is closed by the one rule the rail draws in its body"
     );
-    let under = rule + 1;
+    let first = hairline + 1;
     assert_eq!(
-        rail_row(&with, rail, under).trim_end(),
+        rail_row(&with, rail, first).trim_end(),
         "wire      anthropic",
         "and the first fact stands on the row under that rule, whole"
     );
@@ -1218,25 +1218,24 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
             .collect()
     };
     assert_eq!(
-        stated(&with, under),
+        stated(&with, first),
         stated(&without, rail.y),
         "the splash screen's rail draws the facts a terminal that places no picture draws from \
          its first row, so the face it carries takes no fact of one"
     );
     assert!(
-        !stated(&with, under).iter().any(|row| row.contains("more")),
+        !stated(&with, first).iter().any(|row| row.contains("more")),
         "and none is counted as gone, so the rail grows no row saying one went: {:?}",
-        stated(&with, under)
+        stated(&with, first)
     );
 }
 
 #[test]
-fn a_terminal_that_places_no_picture_or_a_face_turned_off_draws_the_splash_screens_rail_from_its_first_row()
- {
+fn a_splash_screen_the_face_is_turned_off_for_is_the_one_a_placeless_terminal_draws() {
     let rail = rail_band(120, 40);
     let mut turned_off = View::of(caps::faced(false), boot_facts(), Transcript::none());
     let off = painted_at(&mut turned_off, (120, 40));
-    let mut placeless = View::of(Capabilities::default(), boot_facts(), Transcript::none());
+    let mut placeless = splash(false);
     let without = painted_at(&mut placeless, (120, 40));
 
     assert!(
@@ -1246,42 +1245,39 @@ fn a_terminal_that_places_no_picture_or_a_face_turned_off_draws_the_splash_scree
     assert_eq!(
         rail_row(&off, rail, rail.y).trim_end(),
         "wire      anthropic",
-        "the facts stand from the rail's first row, and the row under them is the second fact: no \
-         band is reserved for a face that is not drawn, and no rule closes one"
-    );
-    assert_eq!(
-        rail_row(&without, rail, rail.y).trim_end(),
-        "wire      anthropic",
-        "and a terminal that places no picture is handed the same first row"
+        "the facts stand from the rail's first row: no band is reserved for a face that is not \
+         drawn, and no rule closes one"
     );
     assert_eq!(
         off, without,
         "and every cell of the 120-column splash frame is the one a terminal that places no \
          picture draws"
     );
+}
 
-    // A splash frame narrower than a ledger is handed no rail at all, so the picture it holds is
-    // the splash screen's own, over its wordmark.
-    let band = shared_band(80, 24);
-    let mut narrow = splash(true);
-    let drawn = painted_at(&mut narrow, (80, 24));
+#[test]
+fn an_eighty_column_splash_screen_draws_no_face_of_a_rail_as_a_runs_frame_draws_none() {
+    let strip = shared_band(80, 24).bottom() - 1;
+    let mut launching = splash(true);
+    let splash = painted_at(&mut launching, (80, 24));
+    let mut live = railed(true, true);
+    let run = painted_at(&mut live, (80, 24));
+
     assert!(
-        !(band.y..band.bottom()).any(|y| rail_row(&drawn, band, y).contains("anthropic")),
-        "an 80-column splash frame is handed no rail, so it draws no fact of one"
-    );
-    let wordmark = (band.y..band.bottom())
-        .find(|y| rail_row(&drawn, band, *y).contains("sindri"))
-        .expect("the wordmark of the splash screen's block");
-    let rows = pictured_rows(&drawn);
-    assert!(
-        !rows.is_empty(),
-        "and the one picture it holds is the face over that wordmark, drawn as it was before the \
-         rail carried one"
+        !pictured_rows(&splash).is_empty(),
+        "the 80-column splash screen is a pictured frame all the same: the face it holds is the \
+         block's own"
     );
     assert!(
-        rows.iter().all(|y| *y < wordmark),
-        "every row of it stands over the wordmark at row {wordmark} and none beside it: the frame \
-         reserves no row for a face a rail draws, because it draws no rail: {rows:?}"
+        pictured_cols(&splash, strip).is_empty(),
+        "and it is handed no rail, so the row a strip would stand on holds no cell of a face: {:?}",
+        pictured_cols(&splash, strip)
+    );
+    assert!(
+        pictured_rows(&run).is_empty(),
+        "and a conversation's 80-column frame is the strip it was drawn as, with no face on it \
+         either: {:?}",
+        pictured_rows(&run)
     );
 }
 

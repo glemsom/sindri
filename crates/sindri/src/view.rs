@@ -2182,8 +2182,8 @@ mod tests {
     }
 
     /// The cells a splash screen frame `cols` by `rows` is painted into, and what it draws: a
-    /// terminal that places pictures is handed Sindri's face over the wordmark, and one that places
-    /// none is handed the splash screen alone.
+    /// terminal that places pictures is handed Sindri's face, in the band the words stand in and
+    /// over the rail's top rows, and one that places none is handed the splash screen alone.
     fn splash_frame(cols: u16, rows: u16, draws: bool) -> (Buffer, Rect) {
         let mut view = View::of(
             match draws {
@@ -2530,8 +2530,7 @@ mod tests {
     }
 
     #[test]
-    fn a_band_too_short_or_too_narrow_for_the_face_over_the_wordmark_is_the_band_a_placeless_terminal_is_handed()
-     {
+    fn a_band_too_short_or_too_narrow_for_the_face_over_the_wordmark_is_a_placeless_band() {
         for (cols, rows) in [(120, 14), (30, 24)] {
             let (pictured, band) = splash_frame(cols, rows, true);
             let (placeless, bare) = splash_frame(cols, rows, false);
@@ -2548,9 +2547,13 @@ mod tests {
                 "and the band is the one a terminal that places no picture is handed, row for row"
             );
         }
+    }
 
+    #[test]
+    fn a_frame_too_narrow_for_a_rail_is_every_cell_a_terminal_that_places_no_picture_draws() {
         let (pictured, _) = splash_frame(30, 24, true);
         let (placeless, _) = splash_frame(30, 24, false);
+
         assert_eq!(
             pictured, placeless,
             "at 30 by 24 the frame is the splash screen and no rail beside it, so every cell of it \
