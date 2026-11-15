@@ -21,12 +21,12 @@ streaming at 120x40
 15 |  check: frame calls ... ok                                                 session   9f2c7a41                          | muted:27 plain:49 dim:10 plain:34
 16 |  check: frame transcript ... ok                                            temp      …/sindri/sessions/9f2c7a41/tmp    | muted:32 plain:44 dim:10 plain:34
 17 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
-18 |  ─────────────────                                                                                                     | plain:2 dim:17 plain:101
+18 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
 19 |                                                                                                                        | plain:120
 20 |  A row says the exit code and not the command, because the verdict is a                                                | plain:120
 21 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
 22 |                                                                                                                        | plain:120
-23 |▏ rust                                                                                                                  | dim:6 plain:114
+23 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
 24 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
 25 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
 26 |▏     row.paint(area, buffer);                                                                                          | dim:2 plain:118
@@ -36,7 +36,7 @@ streaming at 120x40
 30 |│ code block, so its words are drawn as code and nothing is swallowed.                                                  | dim:2 muted:68 plain:50
 31 |  It survives: the rule is one boolean over the lines, and #52 keeps it.                                                | plain:120
 32 |                                                                                                                        | plain:120
-33 |▏ rust                                                                                                                  | dim:6 plain:114
+33 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
 34 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
 35 |▏     let fence = Fence::open();                                                                                        | dim:2 plain:4 accent:3 plain:111
 36 |▏     let  tail = fence.words();                                                                                        | dim:2 plain:4 accent:3 plain:111

@@ -110,6 +110,18 @@ fn the_scale_of_headings_runs_from_bold_prose_to_dim_bold() {
 }
 
 #[test]
+fn the_highest_heading_is_the_accent_worn_bold() {
+    let (look, _) = heading_block(1);
+
+    assert_eq!(
+        look,
+        Look::new(Ink::Accent, Face::Bold),
+        "the words of an h1 wear the accent in bold, so the highest level is the one the eye \
+         lands on"
+    );
+}
+
+#[test]
 fn an_h1_stands_under_one_blank_row_of_its_own() {
     let rows = markdown::rows("prose first\n\n# One", 40);
 
@@ -194,6 +206,28 @@ fn a_heading_in_a_quote_keeps_the_bar_and_carries_its_rule_behind_it() {
 }
 
 #[test]
+fn the_rule_under_the_two_highest_levels_is_the_accent_drawn_faint() {
+    let faint = Look::new(Ink::Accent, Face::Faint);
+
+    for level in 1..=2 {
+        let rows = markdown::rows(&format!("{} L{level}", "#".repeat(level)), 40);
+        let rule = rows
+            .iter()
+            .find(|row| {
+                !words(row).is_empty()
+                    && words(row).chars().all(|glyph| glyph == '═' || glyph == '─')
+            })
+            .unwrap_or_else(|| panic!("the rule under an h{level}: {}", drawn(&rows).join("|")));
+        assert_eq!(
+            looks(rule),
+            [faint],
+            "the rule an h{level} carries is the accent drawn faint, which is the look the \
+             accent edge already has: {rule:?}"
+        );
+    }
+}
+
+#[test]
 fn a_heading_that_opens_an_item_hangs_its_rule_under_the_items_gutter() {
     let rows = markdown::rows("- ## an item's heading", 40);
 
@@ -205,7 +239,7 @@ fn a_heading_that_opens_an_item_hangs_its_rule_under_the_items_gutter() {
 }
 
 #[test]
-fn inline_code_is_reversed_over_muted() {
+fn inline_code_is_reversed_over_the_accent() {
     let rows = markdown::rows("run `make check` first", 80);
 
     assert_eq!(drawn(&rows), ["run make check first"]);
@@ -213,17 +247,18 @@ fn inline_code_is_reversed_over_muted() {
         wears(
             &rows[0],
             "make check",
-            Look::new(Ink::Muted, Face::Reversed)
+            Look::new(Ink::Accent, Face::Reversed)
         ),
-        "a run of inline code is reversed over `muted`, so that it is not the mark's \
+        "a run of inline code is reversed over the accent, so that it is not the mark's \
          own look: {:?}",
         rows[0].spans()
     );
 }
 
-/// The line a way's words are drawn under.
-fn way() -> Look {
-    Look::plain(Ink::Plain).underlined(Ink::Dim)
+/// The look a way's words are drawn in where the block around them is prose: a way inside a heading
+/// wears the heading's own weight as well, which is a look of its own in the test below.
+fn way_in_prose() -> Look {
+    Look::plain(Ink::Accent).underlined(Ink::Dim)
 }
 
 /// The ways `rows` name, painted one to a frame row from its first.
@@ -253,7 +288,7 @@ fn a_link_is_drawn_as_its_words_marked_and_its_destination_travels_beside_the_ro
         "the link is the words it was written as, and the URL is not said beside them"
     );
     assert!(
-        wears(&rows[0], "the gate", way()),
+        wears(&rows[0], "the gate", way_in_prose()),
         "the words are marked with the line a way wears, so the row reads as a way to \
          somewhere: {:?}",
         rows[0].spans()
@@ -334,6 +369,65 @@ fn a_link_whose_words_wrap_is_one_destination_on_each_row() {
 }
 
 #[test]
+fn an_h1_that_is_a_way_is_the_accent_worn_bold_under_the_lines_ink() {
+    let rows = markdown::rows("# [the gate](https://example.test/gate)", 40);
+    let row = rows
+        .iter()
+        .find(|row| words(row).contains("gate"))
+        .unwrap_or_else(|| panic!("the heading's own row: {}", drawn(&rows).join("|")));
+
+    assert!(
+        wears(
+            row,
+            "the gate",
+            Look::new(Ink::Accent, Face::Bold).underlined(Ink::Dim)
+        ),
+        "a way's words take the accent and keep the weight the heading gave them, under the \
+         line a way wears: {:?}",
+        row.spans()
+    );
+}
+
+#[test]
+fn a_mark_inside_a_way_in_an_h1_adds_its_face_and_never_an_ink_of_its_own() {
+    let rows = markdown::rows(
+        "# [a **bold** and *slanted* word](https://example.test/gate)",
+        60,
+    );
+    let row = rows
+        .iter()
+        .find(|row| words(row).contains("slanted"))
+        .unwrap_or_else(|| panic!("the heading's own row: {}", drawn(&rows).join("|")));
+
+    let bold = Faces::BOLD;
+    let both = bold.and(Faces::ITALIC);
+    let said = |faces| Look::new(Ink::Accent, faces).underlined(Ink::Dim);
+    assert_eq!(
+        row.spans(),
+        [
+            (String::from("a bold and"), said(bold)),
+            (String::from(" slanted"), said(both)),
+            (String::from(" word"), said(bold)),
+        ],
+        "every word of the way is the accent, wearing the weight the heading gave it and one \
+         face more where a mark was written"
+    );
+}
+
+#[test]
+fn the_space_between_a_ways_words_wears_the_ways_own_look() {
+    let rows = markdown::rows("see [**the** gate](https://example.test/gate) now", 60);
+
+    assert_eq!(
+        rows[0].spans()[2],
+        (String::from(" gate"), way_in_prose()),
+        "the space inside a way is drawn as the word beside it, so the reader's cells are one \
+         run and never two: {:?}",
+        rows[0].spans()
+    );
+}
+
+#[test]
 fn a_link_inside_a_quote_carries_its_destination_past_the_quotes_bar() {
     let rows = markdown::rows("> see [the gate](https://example.test/gate)", 40);
 
@@ -365,7 +459,7 @@ fn a_link_a_table_holds_is_a_way_to_its_destination_as_its_words() {
          alone: {rows:?}"
     );
     assert!(
-        wears(rows.last().expect("a row"), "the gate", way()),
+        wears(rows.last().expect("a row"), "the gate", way_in_prose()),
         "and the words wear the line a way wears: {:?}",
         rows.last().map(Row::spans)
     );
@@ -412,7 +506,7 @@ fn a_code_span_inside_a_link_is_a_way_to_the_destination_in_its_own_look() {
         wears(
             &rows[0],
             "gate",
-            Look::new(Ink::Muted, Face::Reversed).underlined(Ink::Dim)
+            Look::new(Ink::Accent, Face::Reversed).underlined(Ink::Dim)
         ),
         "a code span keeps its own look and wears the line a way wears: {:?}",
         rows[0].spans()
@@ -459,7 +553,7 @@ fn a_link_whose_words_spell_its_destination_says_it_once() {
         "a link written over its own URL says the destination once, as its words"
     );
     assert!(
-        wears(&rows[0], "https://example.test/spec", way()),
+        wears(&rows[0], "https://example.test/spec", way_in_prose()),
         "and the words are the way there: {:?}",
         rows[0].spans()
     );
@@ -477,7 +571,7 @@ fn inline_code_keeps_the_spacing_it_was_written_with() {
     assert!(
         rows[0]
             .spans()
-            .contains(&(String::from("a  b"), Look::new(Ink::Muted, Face::Reversed))),
+            .contains(&(String::from("a  b"), Look::new(Ink::Accent, Face::Reversed))),
         "the code's two spaces are still two: {:?}",
         rows[0].spans()
     );
@@ -525,7 +619,7 @@ fn a_strong_run_is_bold_and_an_emphasis_run_is_italic_in_prose_and_in_a_list() {
 fn emphasis_inside_a_heading_wears_the_headings_weight_and_keeps_its_level() {
     let both = Faces::BOLD.and(Faces::ITALIC);
     let wanted = [
-        Look::new(Ink::Plain, both),
+        Look::new(Ink::Accent, both),
         Look::new(Ink::Plain, both),
         Look::new(Ink::Muted, both),
         Look::new(Ink::Muted, Faces::ITALIC),
@@ -591,7 +685,11 @@ fn a_fences_words_are_drawn_as_the_fence_drew_them_and_a_mark_inside_one_stays_a
         rows[0].spans()
     );
     assert!(
-        wears(&rows[2], "a **b** c", Look::new(Ink::Muted, Face::Reversed)),
+        wears(
+            &rows[2],
+            "a **b** c",
+            Look::new(Ink::Accent, Face::Reversed)
+        ),
         "a span keeps the look code is read in, mark and all: {:?}",
         rows[2].spans()
     );
@@ -619,19 +717,45 @@ fn an_emphasis_that_opens_and_never_closes_leaves_the_rows_after_it_unemphasised
 #[test]
 fn a_bullet_marks_each_item_and_two_spaces_mark_each_depth() {
     let rows = markdown::rows("- one\n- two\n  - inner\n- three", 40);
+    let mark = Look::plain(Ink::Accent);
+    let word = Look::plain(Ink::Plain);
+
     assert_eq!(
         drawn(&rows),
         ["• one", "• two", "  • inner", "• three"],
         "one row per item, a nested item two columns inside the one it belongs to"
     );
-    for row in &rows {
-        assert!(
-            looks(row)
-                .iter()
-                .all(|look| *look == Look::plain(Ink::Plain)),
-            "a list's words are drawn in the frame's own ink: {row:?}"
-        );
-    }
+    let said: Vec<Vec<(String, Look)>> = rows.iter().map(|row| row.spans().to_vec()).collect();
+    assert_eq!(
+        said,
+        [
+            vec![(String::from("• "), mark), (String::from("one"), word)],
+            vec![(String::from("• "), mark), (String::from("two"), word)],
+            vec![
+                (String::from("  "), word),
+                (String::from("• "), mark),
+                (String::from("inner"), word)
+            ],
+            vec![(String::from("• "), mark), (String::from("three"), word)],
+        ],
+        "a marker is the accent and the words beside it the frame's own ink"
+    );
+}
+
+#[test]
+fn a_deeper_items_indentation_is_drawn_plain_under_an_accent_marker() {
+    let rows = markdown::rows("- an outer item\n  - ## an inner heading", 40);
+    let rule = rows
+        .iter()
+        .find(|row| words(row).contains('─'))
+        .unwrap_or_else(|| panic!("the rule of the inner heading: {}", drawn(&rows).join("|")));
+
+    assert_eq!(
+        rule.spans()[0],
+        (String::from("  "), Look::plain(Ink::Plain)),
+        "the columns a deeper item is indented by are the frame's own ink, so an indent is never \
+         spent on the marker's accent: {rule:?}"
+    );
 }
 
 #[test]
@@ -717,6 +841,22 @@ fn a_language_no_syntax_definition_names_is_drawn_plain_and_says_nothing() {
             .all(|(_, look)| *look == Look::plain(Ink::Plain)),
         "not one word of it is highlighted, the bar aside: {:?}",
         rows[1].spans()
+    );
+}
+
+#[test]
+fn a_fences_tag_is_the_accent_drawn_faint_behind_a_dim_bar() {
+    let rows = markdown::rows("```rust\nfn main() {}\n```", 40);
+
+    assert_eq!(
+        rows[0].spans(),
+        [
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+            (String::from("rust"), Look::new(Ink::Accent, Face::Faint)),
+        ],
+        "the bar a fence stands behind is the dim ink of a fact and the tag over its code is \
+         the accent drawn faint: {:?}",
+        rows[0].spans()
     );
 }
 

@@ -27,12 +27,12 @@ queue at 120x40
 21 |  check: frame calls ... ok                                                                                             | muted:27 plain:93
 22 |  check: frame transcript ... ok                                                                                        | muted:32 plain:88
 23 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
-24 |  ─────────────────                                                                                                     | plain:2 dim:17 plain:101
+24 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
 25 |                                                                                                                        | plain:120
 26 |  A row says the exit code and not the command, because the verdict is a                                                | plain:120
 27 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
 28 |                                                                                                                        | plain:120
-29 |▏ rust                                                                                                                  | dim:6 plain:114
+29 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
 30 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
 31 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
 32 |▏     row.paint(area, buffer);                                                                                          | dim:2 plain:118

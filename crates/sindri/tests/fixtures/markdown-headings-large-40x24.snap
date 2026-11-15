@@ -4,9 +4,9 @@ expression: drawn
 ---
 markdown-headings-large at 40x24
 00 |                                        | plain:40
-01 |  M a r k d o w n   r e n d e r i n g   | plain:2 plain+bold:36 plain:2
+01 |  M a r k d o w n   r e n d e r i n g   | plain:2 accent+bold:36 plain:2
 02 |                                        | plain:40
-03 |  ════════════════════════════════════  | plain:2 dim:36 plain:2
+03 |  ════════════════════════════════════  | plain:2 accent+faint:36 plain:2
 04 |                                        | plain:40
 05 |  T h e   s c a l e   o f               | plain:2 plain+bold:24 plain:14
 06 |                                        | plain:40
@@ -14,7 +14,7 @@ markdown-headings-large at 40x24
 08 |                                        | plain:40
 09 |  a n d   f o u r   n o t               | plain:2 plain+bold:24 plain:14
 10 |                                        | plain:40
-11 |  ──────────────────────────────────────| plain:2 dim:38
+11 |  ──────────────────────────────────────| plain:2 accent+faint:38
 12 |                                        | plain:40
 13 |  A third level, muted and bold         | plain:2 muted+bold:29 plain:9
 14 |                                        | plain:40

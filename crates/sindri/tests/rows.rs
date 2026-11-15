@@ -740,8 +740,8 @@ fn a_fenced_block_is_guttered_by_its_language_and_the_prose_resumes_after_it() {
     );
     assert_eq!(
         inks(&rows[2]),
-        [Ink::Dim, Ink::Dim],
-        "the bar and the language tag are facts about what the text is: {:?}",
+        [Ink::Dim, Ink::Accent],
+        "the bar is the dim ink of a fact and the language tag the accent drawn faint: {:?}",
         rows[2]
     );
     assert_eq!(

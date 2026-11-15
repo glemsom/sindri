@@ -21,9 +21,13 @@ use crate::size::{self, Sized};
 /// is enabled, so a footnote, a strikethrough and a task list parse as plain prose.
 const OPTIONS: Options = Options::ENABLE_TABLES;
 
-/// The line under a way's words, in the ink a fact beside the prose is read in: an ink of its own
-/// and never a face, so the words keep the colour the block gave them.
+/// The line under a way's words: an ink of its own and never a face, so the words keep the
+/// weight the block and its marks gave them.
 const UNDERLINE: Ink = Ink::Dim;
+
+/// The accent at half its weight: the look the composer's edge is drawn in, so a heading's rule and
+/// a fence's tag read as the accent of the frame they sit in.
+const FAINT_ACCENT: Look = Look::plain(Ink::Accent).wearing(Faces::FAINT);
 
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
@@ -128,7 +132,7 @@ fn large(level: HeadingLevel) -> bool {
 /// apart by its ink and its weight alone.
 fn heading(level: HeadingLevel) -> (Look, Option<char>) {
     match level {
-        HeadingLevel::H1 => (Look::new(Ink::Plain, Face::Bold), Some('═')),
+        HeadingLevel::H1 => (Look::new(Ink::Accent, Face::Bold), Some('═')),
         HeadingLevel::H2 => (Look::new(Ink::Plain, Face::Bold), Some('─')),
         HeadingLevel::H3 => (Look::new(Ink::Muted, Face::Bold), None),
         HeadingLevel::H4 => (Look::plain(Ink::Muted), None),
@@ -326,31 +330,27 @@ impl Room {
                     }
                 }
                 None => {
-                    let worn = self.block.wearing(self.worn());
-                    let linked = match self.destination.is_some() {
-                        true => worn.underlined(UNDERLINE),
-                        false => worn,
-                    };
+                    let look = self.prose_look();
                     let way = self.destination.clone();
                     match &mut self.table {
                         // A cell is measured only once the whole table has been read.
-                        Some(table) => table.text(&text, linked, way.as_deref()),
+                        Some(table) => table.text(&text, look, way.as_deref()),
                         // A picture's words are kept aside for the row it is spoken of on:
                         // they are the block's, not the paragraph's.
                         None => match &mut self.image {
                             Some((_, alt)) => alt.push_str(&text),
-                            None => self.prose(&text, linked),
+                            None => self.prose(&text, look),
                         },
                     }
                 }
             },
-            // Inline code keeps the spacing it was written with. It is reversed over
-            // `muted` rather than over no colour, because `mark` is reverse over no colour
+            // Inline code keeps the spacing it was written with. It is reversed over the
+            // accent rather than over no colour, because `mark` is reverse over no colour
             // and the two would otherwise be one look.
             Event::Code(text) => {
                 let reversed = match self.destination.is_some() {
-                    true => Look::new(Ink::Muted, Face::Reversed).underlined(UNDERLINE),
-                    false => Look::new(Ink::Muted, Face::Reversed),
+                    true => Look::new(Ink::Accent, Face::Reversed).underlined(UNDERLINE),
+                    false => Look::new(Ink::Accent, Face::Reversed),
                 };
                 let way = self.destination.clone();
                 match &mut self.table {
@@ -372,14 +372,10 @@ impl Room {
             // A soft break is the line the source was wrapped on, not one the writer drew:
             // the paragraph is reflowed to the room.
             Event::SoftBreak => {
-                let worn = self.block.wearing(self.worn());
-                let linked = match self.destination.is_some() {
-                    true => worn.underlined(UNDERLINE),
-                    false => worn,
-                };
+                let look = self.prose_look();
                 let way = self.destination.clone();
                 match &mut self.table {
-                    Some(table) => table.text(" ", linked, way.as_deref()),
+                    Some(table) => table.text(" ", look, way.as_deref()),
                     None => match &mut self.image {
                         Some((_, alt)) => alt.push(' '),
                         None => self.spaced = true,
@@ -415,7 +411,7 @@ impl Room {
         let run = rule.map_or_else(String::new, |rule| rule.run(self.room_cells()));
         if !run.is_empty() {
             let mut spans = self.gutter();
-            spans.push((run, Look::plain(Ink::Dim)));
+            spans.push((run, FAINT_ACCENT));
             self.push(Row::of(spans));
         }
     }
@@ -447,6 +443,21 @@ impl Room {
         self.faces
             .iter()
             .fold(Faces::PLAIN, |worn, face| worn.and(Faces::wearing(*face)))
+    }
+
+    /// The look a way's words are drawn in: the accent, wearing the faces the block and its marks
+    /// gave them, under the line a way wears.
+    fn way(&self) -> Look {
+        Look::new(Ink::Accent, self.block.wearing(self.worn()).faces()).underlined(UNDERLINE)
+    }
+
+    /// The look the block's own words are drawn in: a way's while a link is being said, and the
+    /// block's wearing the marks opened inside it otherwise.
+    fn prose_look(&self) -> Look {
+        match self.destination.is_some() {
+            true => self.way(),
+            false => self.block.wearing(self.worn()),
+        }
     }
 
     /// One run of glyphs placed at the end of the row in hand, carried to the next row when it
@@ -481,12 +492,12 @@ impl Room {
         }
     }
 
-    /// The space between two words: the block's own, and between two words of one way the block's
-    /// with the line a way wears, so a link's line and the cells a reader opens are one.
+    /// The space between two words: the block's own, and between two words of one way the way's,
+    /// so a link's line and the cells a reader opens are one.
     fn between(&mut self) {
         match self.reaches() {
             true => {
-                let at = self.block.underlined(UNDERLINE);
+                let at = self.way();
                 self.extend(" ", at);
                 if let Some(run) = self.laid.last_mut() {
                     run.width = run.width.saturating_add(1);
@@ -614,7 +625,7 @@ impl Room {
         };
         self.code = Some(Code::of(&tag));
         if !tag.is_empty() {
-            self.place(&tag, Look::plain(Ink::Dim), false);
+            self.place(&tag, FAINT_ACCENT, false);
             self.flush();
         }
         // A mermaid fence is a picture and not code: its source is kept so the drawing can be
@@ -882,11 +893,11 @@ impl Room {
         let mut spans = self.bars().to_vec();
         for (at, mark) in self.marks.iter().enumerate() {
             let innermost = at + 1 == self.marks.len();
-            let text = match innermost && self.first {
-                true => mark.clone(),
-                false => pen::blank(pen::cells(mark)),
+            let (text, ink) = match innermost && self.first {
+                true => (mark.clone(), Ink::Accent),
+                false => (pen::blank(pen::cells(mark)), Ink::Plain),
             };
-            spans.push((text, Look::plain(Ink::Plain)));
+            spans.push((text, Look::plain(ink)));
         }
         spans
     }
