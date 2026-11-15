@@ -25,6 +25,10 @@ const OPTIONS: Options = Options::ENABLE_TABLES;
 /// weight the block and its marks gave them.
 const UNDERLINE: Ink = Ink::Dim;
 
+/// The accent at half its weight: the look the composer's edge is drawn in, so a heading's rule and
+/// a fence's tag read as the accent of the frame they sit in.
+const FAINT_ACCENT: Look = Look::plain(Ink::Accent).wearing(Faces::FAINT);
+
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
 }
@@ -326,19 +330,16 @@ impl Room {
                     }
                 }
                 None => {
-                    let linked = match self.destination.is_some() {
-                        true => self.way(),
-                        false => self.block.wearing(self.worn()),
-                    };
+                    let look = self.prose_look();
                     let way = self.destination.clone();
                     match &mut self.table {
                         // A cell is measured only once the whole table has been read.
-                        Some(table) => table.text(&text, linked, way.as_deref()),
+                        Some(table) => table.text(&text, look, way.as_deref()),
                         // A picture's words are kept aside for the row it is spoken of on:
                         // they are the block's, not the paragraph's.
                         None => match &mut self.image {
                             Some((_, alt)) => alt.push_str(&text),
-                            None => self.prose(&text, linked),
+                            None => self.prose(&text, look),
                         },
                     }
                 }
@@ -371,13 +372,10 @@ impl Room {
             // A soft break is the line the source was wrapped on, not one the writer drew:
             // the paragraph is reflowed to the room.
             Event::SoftBreak => {
-                let linked = match self.destination.is_some() {
-                    true => self.way(),
-                    false => self.block.wearing(self.worn()),
-                };
+                let look = self.prose_look();
                 let way = self.destination.clone();
                 match &mut self.table {
-                    Some(table) => table.text(" ", linked, way.as_deref()),
+                    Some(table) => table.text(" ", look, way.as_deref()),
                     None => match &mut self.image {
                         Some((_, alt)) => alt.push(' '),
                         None => self.spaced = true,
@@ -413,7 +411,7 @@ impl Room {
         let run = rule.map_or_else(String::new, |rule| rule.run(self.room_cells()));
         if !run.is_empty() {
             let mut spans = self.gutter();
-            spans.push((run, Look::new(Ink::Accent, Face::Faint)));
+            spans.push((run, FAINT_ACCENT));
             self.push(Row::of(spans));
         }
     }
@@ -451,6 +449,15 @@ impl Room {
     /// gave them, under the line a way wears.
     fn way(&self) -> Look {
         Look::new(Ink::Accent, self.block.wearing(self.worn()).faces()).underlined(UNDERLINE)
+    }
+
+    /// The look the block's own words are drawn in: a way's while a link is being said, and the
+    /// block's wearing the marks opened inside it otherwise.
+    fn prose_look(&self) -> Look {
+        match self.destination.is_some() {
+            true => self.way(),
+            false => self.block.wearing(self.worn()),
+        }
     }
 
     /// One run of glyphs placed at the end of the row in hand, carried to the next row when it
@@ -618,7 +625,7 @@ impl Room {
         };
         self.code = Some(Code::of(&tag));
         if !tag.is_empty() {
-            self.place(&tag, Look::new(Ink::Accent, Face::Faint), false);
+            self.place(&tag, FAINT_ACCENT, false);
             self.flush();
         }
         // A mermaid fence is a picture and not code: its source is kept so the drawing can be

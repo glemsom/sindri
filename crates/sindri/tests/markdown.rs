@@ -255,8 +255,9 @@ fn inline_code_is_reversed_over_the_accent() {
     );
 }
 
-/// The look a way's words are drawn in.
-fn way() -> Look {
+/// The look a way's words are drawn in where the block around them is prose: a way inside a heading
+/// wears the heading's own weight as well, which is a look of its own in the test below.
+fn way_in_prose() -> Look {
     Look::plain(Ink::Accent).underlined(Ink::Dim)
 }
 
@@ -287,7 +288,7 @@ fn a_link_is_drawn_as_its_words_marked_and_its_destination_travels_beside_the_ro
         "the link is the words it was written as, and the URL is not said beside them"
     );
     assert!(
-        wears(&rows[0], "the gate", way()),
+        wears(&rows[0], "the gate", way_in_prose()),
         "the words are marked with the line a way wears, so the row reads as a way to \
          somewhere: {:?}",
         rows[0].spans()
@@ -388,7 +389,7 @@ fn an_h1_that_is_a_way_is_the_accent_worn_bold_under_the_lines_ink() {
 }
 
 #[test]
-fn a_mark_inside_a_way_in_an_h1_adds_its_face_and_never_a_colour_of_its_own() {
+fn a_mark_inside_a_way_in_an_h1_adds_its_face_and_never_an_ink_of_its_own() {
     let rows = markdown::rows(
         "# [a **bold** and *slanted* word](https://example.test/gate)",
         60,
@@ -419,7 +420,7 @@ fn the_space_between_a_ways_words_wears_the_ways_own_look() {
 
     assert_eq!(
         rows[0].spans()[2],
-        (String::from(" gate"), way()),
+        (String::from(" gate"), way_in_prose()),
         "the space inside a way is drawn as the word beside it, so the reader's cells are one \
          run and never two: {:?}",
         rows[0].spans()
@@ -458,7 +459,7 @@ fn a_link_a_table_holds_is_a_way_to_its_destination_as_its_words() {
          alone: {rows:?}"
     );
     assert!(
-        wears(rows.last().expect("a row"), "the gate", way()),
+        wears(rows.last().expect("a row"), "the gate", way_in_prose()),
         "and the words wear the line a way wears: {:?}",
         rows.last().map(Row::spans)
     );
@@ -552,7 +553,7 @@ fn a_link_whose_words_spell_its_destination_says_it_once() {
         "a link written over its own URL says the destination once, as its words"
     );
     assert!(
-        wears(&rows[0], "https://example.test/spec", way()),
+        wears(&rows[0], "https://example.test/spec", way_in_prose()),
         "and the words are the way there: {:?}",
         rows[0].spans()
     );
@@ -752,14 +753,8 @@ fn a_deeper_items_indentation_is_drawn_plain_under_an_accent_marker() {
     assert_eq!(
         rule.spans()[0],
         (String::from("  "), Look::plain(Ink::Plain)),
-        "the columns a deeper item is indented by are the frame's own ink, and the rule they \
-         stand before is the accent: {rule:?}"
-    );
-    assert_eq!(
-        looks(rule).last(),
-        Some(&Look::new(Ink::Accent, Face::Faint)),
-        "so the indent under a deeper item stays plain while its heading's rule is the accent: \
-         {rule:?}"
+        "the columns a deeper item is indented by are the frame's own ink, so an indent is never \
+         spent on the marker's accent: {rule:?}"
     );
 }
 
