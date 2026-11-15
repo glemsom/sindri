@@ -2,13 +2,14 @@
 //! wire, the record and the launch say, and what the rail and the screen draw of it, cut to the room
 //! each row leaves.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use sindri_core::config::Config;
 use sindri_core::policy::Enforcement;
 use sindri_core::provider::Route;
-use sindri_core::records::{SessionDocument, Usage};
+use sindri_core::records::{SessionDocument, Usage, branch};
 use sindri_core::run::State;
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
@@ -280,6 +281,19 @@ pub struct Boot {
     pub workspace: PathBuf,
     pub branch: Option<String>,
     pub enforcement: Enforcement,
+}
+
+impl Boot {
+    /// The run a prompt will ask for, as a launch knows it before a session exists.
+    pub fn of(config: &Config, enforcement: Enforcement, workspace: &Path) -> Boot {
+        Boot {
+            wire: config.provider,
+            model: config.model.clone(),
+            workspace: workspace.to_path_buf(),
+            branch: branch(workspace),
+            enforcement,
+        }
+    }
 }
 
 /// The facts a run holds, as the core keeps them. A fact nobody can state is `None` and is not
@@ -1712,6 +1726,71 @@ mod tests {
             branch: Some(String::from("main")),
             enforcement: Enforcement::Bubblewrap,
         }
+    }
+
+    fn git(workspace: &Path, args: &[&str]) {
+        let ran = std::process::Command::new("git")
+            .arg("-C")
+            .arg(workspace)
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "sindri")
+            .env("GIT_AUTHOR_EMAIL", "sindri@example.invalid")
+            .env("GIT_COMMITTER_NAME", "sindri")
+            .env("GIT_COMMITTER_EMAIL", "sindri@example.invalid")
+            .status()
+            .expect("git should run");
+        assert!(ran.success(), "git {args:?} failed");
+    }
+
+    #[test]
+    fn the_boot_facts_of_a_config_are_the_run_a_prompt_will_ask_for() {
+        let root = tempfile::tempdir().expect("a temp workspace");
+        git(root.path(), &["init", "--quiet", "-b", "the-branch"]);
+        std::fs::write(root.path().join("a.txt"), "one file\n").expect("a file");
+        git(root.path(), &["add", "a.txt"]);
+        git(root.path(), &["commit", "--quiet", "-m", "one commit"]);
+        let config = Config {
+            provider: Some(Wire::Anthropic),
+            model: Some(String::from("claude-sonnet-4-5")),
+            ..Config::default()
+        };
+
+        let boot = Boot::of(&config, Enforcement::Bubblewrap, root.path());
+
+        assert_eq!(
+            boot.wire,
+            Some(Wire::Anthropic),
+            "the dialect the config names"
+        );
+        assert_eq!(boot.model.as_deref(), Some("claude-sonnet-4-5"));
+        assert_eq!(boot.workspace, root.path());
+        assert_eq!(
+            boot.branch.as_deref(),
+            Some("the-branch"),
+            "read off the repository, which a boot frame asks before any session exists"
+        );
+        assert_eq!(boot.enforcement, Enforcement::Bubblewrap);
+    }
+
+    #[test]
+    fn a_config_that_names_no_run_and_a_workspace_that_is_no_checkout_give_no_fact_at_all() {
+        let root = tempfile::tempdir().expect("a temp workspace");
+        let config = Config {
+            provider: None,
+            model: None,
+            ..Config::default()
+        };
+
+        let boot = Boot::of(&config, Enforcement::Bubblewrap, root.path());
+
+        assert_eq!(
+            (boot.wire, boot.model, boot.branch),
+            (None, None, None),
+            "the splash screen names nothing it cannot know, and a directory that is no checkout \
+             has no branch to name"
+        );
     }
 
     #[test]

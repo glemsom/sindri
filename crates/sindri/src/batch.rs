@@ -3,6 +3,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use sindri_core::config::Config;
+use sindri_core::launch::{Launch, Machine, Turns};
 use sindri_core::outcome::Outcome;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Told;
@@ -10,7 +11,6 @@ use sindri_core::run::{Cancel, Stop, Turn};
 use sindri_core::tools::FrontEnd;
 
 use crate::cli::{Cli, Format};
-use crate::launch::{Launch, Turns};
 use crate::window::Window;
 
 /// The exit code for a run that had nothing to run *with*, or an answer it could not write.
@@ -77,7 +77,8 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
         Ok(prompt) => prompt,
         Err(usage) => return refuse(&usage, USAGE),
     };
-    let mut launch = match Launch::open(cli, config, FrontEnd::Batch) {
+    let opened = Launch::open(&Machine::this(), config, cli.enforcement(), FrontEnd::Batch);
+    let mut launch = match opened {
         Ok(launch) => launch,
         Err(refusal) => return refuse(refusal.message(), refusal.code()),
     };

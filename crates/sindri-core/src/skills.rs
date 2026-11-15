@@ -3,6 +3,14 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::config::Environment;
+
+/// The home a skills catalog is read from, so the catalog a run holds and the one a frame lists are
+/// read through one environment.
+pub fn home(environment: &impl Environment) -> Option<PathBuf> {
+    environment.var("HOME").map(PathBuf::from)
+}
+
 /// The declaration order is the precedence order, so a comparison of two scopes says
 /// which one wins.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
