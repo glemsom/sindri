@@ -3,7 +3,6 @@ use std::fmt;
 use rig_core::providers::openai::wire::OpenAiWire;
 
 use super::Ask;
-use crate::wire::Wire;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -31,7 +30,7 @@ impl Route {
     }
 
     /// Read off the very wire the request is encoded by, never predicted from a table here.
-    fn of(wire: &OpenAiWire) -> Route {
+    pub(super) fn of(wire: &OpenAiWire) -> Route {
         match wire {
             OpenAiWire::Chat(_) => Route::Chat,
             OpenAiWire::Responses(_) => Route::Responses,
@@ -66,15 +65,8 @@ impl<'de> serde::Deserialize<'de> for Route {
 
 impl Ask {
     /// The route this ask is sent on — rig's choice for the dialect and the served name, or
-    /// the one the override names — and `None` for a dialect that serves one endpoint. The
-    /// wire is built with no credential: routing reads the name, never the key.
+    /// the one the override names — and `None` for a dialect that serves one endpoint.
     pub fn route_of(&self) -> Option<Route> {
-        match self.wire {
-            Wire::Anthropic => None,
-            Wire::Openai | Wire::Copilot => Some(Route::of(&OpenAiWire::new(
-                self.endpoint(""),
-                self.model.clone(),
-            ))),
-        }
+        self.endpoint.route_of(&self.model)
     }
 }

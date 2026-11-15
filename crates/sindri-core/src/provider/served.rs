@@ -1,63 +1,20 @@
-use std::fmt;
-
 use rig_core::model::ModelList;
-use rig_core::providers::anthropic::AnthropicConfig;
-use rig_core::providers::openai::OpenAIConfig;
 
+use super::endpoint::Endpoint;
 use super::{Client, Credential, Failure, Verdict, credential_source};
-use crate::wire::Wire;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Where {
-    wire: Wire,
-    base_url: Option<String>,
-}
-
-impl Where {
-    pub fn own(wire: Wire) -> Self {
-        Self {
-            wire,
-            base_url: None,
-        }
-    }
-
-    pub fn at(wire: Wire, base_url: impl Into<String>) -> Self {
-        Self {
-            wire,
-            base_url: Some(base_url.into()),
-        }
-    }
-
-    pub fn wire(&self) -> Wire {
-        self.wire
-    }
-
-    pub fn base_url(&self) -> Option<&str> {
-        self.base_url.as_deref()
-    }
-}
-
-impl fmt::Display for Where {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.base_url {
-            Some(base_url) => write!(formatter, "{} at {base_url}", self.wire.word()),
-            None => formatter.write_str(self.wire.word()),
-        }
-    }
-}
 
 pub trait Current {
-    fn pair(&self) -> Where;
+    fn pair(&self) -> Endpoint;
 }
 
-impl Current for Where {
-    fn pair(&self) -> Where {
+impl Current for Endpoint {
+    fn pair(&self) -> Endpoint {
         self.clone()
     }
 }
 
-impl<F: Fn() -> Where> Current for F {
-    fn pair(&self) -> Where {
+impl<F: Fn() -> Endpoint> Current for F {
+    fn pair(&self) -> Endpoint {
         self()
     }
 }
@@ -70,7 +27,7 @@ pub struct Served {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Listing {
-    at: Where,
+    at: Endpoint,
     outcome: Outcome,
 }
 
@@ -90,7 +47,7 @@ impl Listing {
         }
     }
 
-    pub fn at(&self) -> &Where {
+    pub fn at(&self) -> &Endpoint {
         &self.at
     }
 
@@ -103,20 +60,23 @@ impl Listing {
 }
 
 impl Client {
-    /// The answer is kept beside the pair it was asked of, and dropped when `current`
-    /// names another pair by the time it lands: names read from one endpoint are not
+    /// The answer is kept beside the endpoint it was asked of, and dropped when `current`
+    /// names another endpoint by the time it lands: names read from one endpoint are not
     /// evidence about another.
-    pub fn served(&self, at: &Where, credential: &Credential, current: &dyn Current) -> Listing {
-        let read = match credential.expose() {
-            Some(key) => self.catalogue(at, key),
-            None => Err(Failure::unconfigured(at.wire())),
-        };
+    pub fn served(&self, at: &Endpoint, credential: &Credential, current: &dyn Current) -> Listing {
+        let mut secrets = self.secrets.clone();
+        let read = self
+            .credential(at.wire(), credential, &mut secrets)
+            .map_err(|failure| failure.message.to_string())
+            .and_then(|key| match key {
+                Some(key) => self.catalogue(at, &key).map_err(|failure| reason(at, &failure)),
+                None => Err(credential_source(at.wire())),
+            });
         let outcome = if current.pair() == *at {
             match read {
                 Ok(names) => Outcome::Listed(names),
-                Err(failure) => Outcome::Silent(format!(
-                    "{at} has no model list: {}; name a model and the run goes on",
-                    reason(at, &failure)
+                Err(reason) => Outcome::Silent(format!(
+                    "{at} has no model list: {reason}; name a model and the run goes on"
                 )),
             }
         } else {
@@ -130,39 +90,15 @@ impl Client {
         }
     }
 
-    fn catalogue(&self, at: &Where, key: &str) -> Result<Vec<Served>, Failure> {
-        let asked = match at.wire() {
-            Wire::Anthropic => {
-                let mut endpoint = AnthropicConfig::new(key);
-                if let Some(base_url) = at.base_url() {
-                    endpoint = endpoint.with_base_url(base_url);
-                }
-                futures::executor::block_on(endpoint.connect(self.transport.clone()).list_models())
-            }
-            Wire::Openai => {
-                let mut endpoint = OpenAIConfig::new(key);
-                if let Some(base_url) = at.base_url() {
-                    endpoint = endpoint.with_base_url(base_url);
-                }
-                futures::executor::block_on(endpoint.connect(self.transport.clone()).list_models())
-            }
-            Wire::Copilot => {
-                let mut endpoint =
-                    OpenAIConfig::with_key(&rig_core::providers::copilot::DIALECT, key);
-                if let Some(base_url) = at.base_url() {
-                    endpoint = endpoint.with_base_url(base_url);
-                }
-                futures::executor::block_on(endpoint.connect(self.transport.clone()).list_models())
-            }
-        };
-        asked
+    fn catalogue(&self, at: &Endpoint, key: &str) -> Result<Vec<Served>, Failure> {
+        futures::executor::block_on(at.serving(key).catalogue(self.transport.clone()))
             .map(names_of)
             .map_err(|error| Failure::from_wire(error, false, &self.secrets))
     }
 }
 
 /// The wire's own reply is never repeated here: a hint is one line, not a body.
-fn reason(at: &Where, failure: &Failure) -> String {
+fn reason(at: &Endpoint, failure: &Failure) -> String {
     match failure.verdict {
         Verdict::Unconfigured => credential_source(at.wire()),
         verdict => verdict.phrase().to_owned(),

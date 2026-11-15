@@ -19,7 +19,8 @@ use sindri::keys::{Act, Mode};
 use sindri::palette::Palette;
 use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
-use sindri_core::provider::served::{Listing, Where};
+use sindri_core::provider::endpoint::Endpoint;
+use sindri_core::provider::served::Listing;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential};
 use sindri_core::records::Entry;
@@ -90,7 +91,7 @@ const ANTHROPIC_MODELS: &str =
 /// The names a recorded Anthropic listing serves, read through the listing code the screen reads.
 fn served() -> Listing {
     let replay = Replay::new([Canned::reply(200, ANTHROPIC_MODELS)]);
-    let at = Where::own(Wire::Anthropic);
+    let at = Endpoint::own(Wire::Anthropic);
     Client::over(replay, SecretSet::default())
         .waits(|_| {})
         .served(&at, &Credential::new("sk-ant-recorded"), &at)

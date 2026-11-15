@@ -12,7 +12,8 @@ use sindri::list::ScreenRow;
 use sindri::view::{ScreenBody, Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::provider::Route;
-use sindri_core::provider::served::{Listing, Where};
+use sindri_core::provider::endpoint::Endpoint;
+use sindri_core::provider::served::Listing;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential};
 use sindri_core::redact::SecretSet;
@@ -143,7 +144,7 @@ fn the_path_picker_body_holds_the_query_row_first_and_the_count_of_matches_last(
 }
 
 fn served(payload: &'static str) -> Listing {
-    let at = Where::own(Wire::Anthropic);
+    let at = Endpoint::own(Wire::Anthropic);
     Client::over(
         Replay::new([Canned::reply(200, payload)]),
         SecretSet::default(),

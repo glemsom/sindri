@@ -8,9 +8,9 @@ use sindri_core::open::Ground;
 use sindri_core::outcome::{Facts as Reported, Outcome};
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::preamble::Preamble;
-use sindri_core::provider::copilot::Store;
-use sindri_core::provider::served::{Listing, Where};
-use sindri_core::provider::{Ask, Client, Credential, Deltas, Route, Usage};
+use sindri_core::provider::endpoint::Endpoint;
+use sindri_core::provider::served::Listing;
+use sindri_core::provider::{Ask, Client, Deltas, Route, Usage};
 use sindri_core::records::{Facts, Record, SessionDocument};
 use sindri_core::run::{Cancel, Limits, Run, Shell, Turn};
 use sindri_core::sandbox::{self, Proof};
@@ -112,12 +112,13 @@ pub struct Launch {
 
 impl Launch {
     pub fn open(cli: &Cli, config: &Config, front_end: FrontEnd) -> Result<Launch, Refusal> {
-        let (Some(wire), Some(model)) = (config.provider, config.model.clone()) else {
+        let (Some(endpoint), Some(model)) = (config.endpoint(), config.model.clone()) else {
             return Err(Refusal::new(
                 "a run needs a provider and a model: set them in the config or in the environment",
                 USAGE,
             ));
         };
+        let wire = endpoint.wire();
         let workspace = std::env::current_dir().map_err(|error| {
             Refusal::new(format!("cannot read the working directory: {error}"), SETUP)
         })?;
@@ -133,24 +134,17 @@ impl Launch {
         let limits = Limits::from_config(config, &boundary);
         let catalog = Catalog::discover(&workspace, home().as_deref());
         let tools = ToolSet::new(&boundary, &catalog, front_end);
+        let client = Client::for_endpoint(
+            &endpoint,
+            headers(config),
+            session.guid(),
+            config.secrets(),
+            &Process,
+        );
         // The store's own literals join the run's secrets, so nothing it holds can reach a
         // record, the JSON or a line of chatter.
-        let store = match wire {
-            Wire::Copilot => Some(
-                Store::resolve(&Process)
-                    .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?,
-            ),
-            Wire::Anthropic | Wire::Openai => None,
-        };
-        let mut secrets = config.secrets();
-        if let Some(store) = &store {
-            secrets = secrets.union(store.secrets());
-        }
-        let mut client = Client::http(headers(config), session.guid(), secrets.clone());
-        if let Some(store) = store {
-            client = client.store(store);
-        }
-        let ask = ask(config, wire, model.clone(), &workspace);
+        let secrets = client.secrets().clone();
+        let ask = ask(config, endpoint, model.clone(), &workspace);
         let route = ask.route_of();
         let thinking = ask.thinks();
         let asking = Asking::new(client, ask, tools.clone());
@@ -300,40 +294,23 @@ fn hand(turns: &mut dyn Turns, launch: &Launch) {
 }
 
 pub fn served(config: &Config) -> Option<Listing> {
-    let wire = config.provider?;
-    let at = match &config.base_url {
-        Some(base_url) => Where::at(wire, base_url.clone()),
-        None => Where::own(wire),
-    };
-    let credential = match &config.api_key {
-        Some(key) => Credential::new(key.clone()),
-        None => Credential::none(),
-    };
+    let endpoint = config.endpoint()?;
     // Not a run: with no session to expand `{session}` to, the empty one is what is left.
-    let mut client = Client::http(headers(config), String::new(), config.secrets());
-    if wire == Wire::Copilot {
-        // Signed in to rather than handed a key: a store that will not open is left out, and
-        // the listing's hint says to sign in.
-        if let Ok(store) = Store::resolve(&Process) {
-            client = client.store(store);
-        }
-    }
-    Some(client.served(&at, &credential, &at))
+    let client = Client::for_endpoint(
+        &endpoint,
+        headers(config),
+        String::new(),
+        config.secrets(),
+        &Process,
+    );
+    Some(client.served(&endpoint, &config.credential(), &endpoint))
 }
 
-fn ask(config: &Config, wire: Wire, model: String, workspace: &std::path::Path) -> Ask {
-    let mut ask = Ask::new(wire, model).preamble(Preamble::for_workspace(workspace).render());
-    if let Some(base_url) = &config.base_url {
-        ask = ask.base_url(base_url);
-    }
-    if let Some(route) = config.route {
-        ask = ask.route(route);
-    }
-    ask = match &config.api_key {
-        Some(key) => ask.credential(Credential::new(key)),
-        None => ask.credential(Credential::none()),
-    };
-    ask.thinking(config.thinking.unwrap_or(false))
+fn ask(config: &Config, endpoint: Endpoint, model: String, workspace: &std::path::Path) -> Ask {
+    Ask::of(endpoint, model)
+        .preamble(Preamble::for_workspace(workspace).render())
+        .credential(config.credential())
+        .thinking(config.thinking.unwrap_or(false))
 }
 
 /// A line with no colon is dropped rather than sent as a header with an empty value.
