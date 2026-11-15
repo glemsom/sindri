@@ -60,34 +60,6 @@ fn boundary(config: &Config, workspace: &Path, enforcement: Enforcement) -> Boun
 }
 
 #[test]
-fn doctor_prints_the_bytes_the_model_was_given() {
-    let ground = Ground::new();
-    let data = ground.directory("data");
-    let home = config_home(&format!(
-        "extra_writable_paths = [\"{}\"]\n",
-        data.display()
-    ));
-    let workspace = ground.workspace();
-    let boundary = boundary(
-        &resolved(home.path(), &[], Flags::default()),
-        &workspace,
-        Enforcement::Bubblewrap,
-    );
-
-    let given = boundary.description();
-    assert!(
-        given.contains(&data.display().to_string()) && given.contains("120s"),
-        "the description is the boundary, not an empty string: {given}"
-    );
-
-    assert_eq!(
-        boundary.doctor_description().as_bytes(),
-        given.as_bytes(),
-        "doctor prints the description the model sees, byte for byte"
-    );
-}
-
-#[test]
 fn the_description_names_every_writable_path_the_timeout_and_the_budgets() {
     let ground = Ground::new();
     let data = ground.directory("data");

@@ -31,7 +31,20 @@ impl Ground {
         for path in [&ground.workspace, &ground.config, &ground.state] {
             std::fs::create_dir_all(path).expect("a directory");
         }
+        ground.naming_a_run();
         ground
+    }
+
+    /// A config naming a wire and a model, which is the least a launch asks for: doctor reports
+    /// nothing to a ground that names no run.
+    fn naming_a_run(&self) {
+        let directory = self.config.join("sindri");
+        std::fs::create_dir_all(&directory).expect("the config directory");
+        std::fs::write(
+            directory.join("config.toml"),
+            "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\n",
+        )
+        .expect("a config naming a run");
     }
 
     /// The workspace as the child's `getcwd` spells it: the boundary the description is rendered from is built

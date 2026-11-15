@@ -29,7 +29,20 @@ impl Ground {
         for path in [&ground.workspace, &ground.config, &ground.state] {
             std::fs::create_dir_all(path).expect("a directory");
         }
+        ground.naming_a_run();
         ground
+    }
+
+    /// A config naming a wire and a model, which is the least a launch asks for: a report no test
+    /// asked to be refused is a report of a run.
+    fn naming_a_run(&self) {
+        let directory = self.config.join("sindri");
+        std::fs::create_dir_all(&directory).expect("the config directory");
+        std::fs::write(
+            directory.join("config.toml"),
+            "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\n",
+        )
+        .expect("a config naming a run");
     }
 
     fn skill(&self, scope: &Path, name: &str, description: &str) {
@@ -104,6 +117,12 @@ const RESTRICTED: &str = "if [ \"${1:-}\" = --version ]; then\n  \
                           echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
                           echo 'bwrap: setting up uid map: Permission denied' >&2\nexit 1";
 
+/// A stand-in bwrap that answers the version and builds every sandbox it is asked for: a proof
+/// this machine's kernel has no say in.
+const PROVES: &str = "if [ \"${1:-}\" = --version ]; then\n  \
+                      echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
+                      exit 0";
+
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
@@ -136,13 +155,6 @@ const WIRE_KEY: &str = "sk-ant-a-key-no-report-may-draw";
 #[test]
 fn a_key_in_the_wires_own_variable_is_a_run_the_doctor_describes() {
     let ground = Ground::new();
-    let directory = ground.config.join("sindri");
-    std::fs::create_dir_all(&directory).expect("the config directory");
-    std::fs::write(
-        directory.join("config.toml"),
-        "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\n",
-    )
-    .expect("the config file");
     let path = std::env::var("PATH").expect("this machine has a PATH");
 
     let output = run(ground
@@ -160,6 +172,34 @@ fn a_key_in_the_wires_own_variable_is_a_run_the_doctor_describes() {
     assert!(
         !out.contains(WIRE_KEY) && !err.contains(WIRE_KEY),
         "a report describes a run and never the credential it holds: stdout:\n{out}\nstderr:\n{err}"
+    );
+}
+
+#[test]
+fn a_config_that_names_no_run_is_refused_in_the_runs_own_words() {
+    let ground = Ground::new();
+    std::fs::write(ground.config.join("sindri").join("config.toml"), "")
+        .expect("a config that names no run");
+    let path = std::env::var("PATH").expect("this machine has a PATH");
+
+    let output = run(ground.command(&path).args(["doctor"]));
+
+    let out = text(&output.stdout);
+    let err = text(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a config that holds no run is the usage refusal a run exits with: stdout:\n{out}\nstderr:\n{err}"
+    );
+    assert!(
+        err.contains("a run needs a provider and a model"),
+        "the refusal is the words a run refuses in, not a card of its own: {err}"
+    );
+    assert!(out.is_empty(), "a refusal is no report: {out}");
+    assert!(
+        kept_sessions(&ground).is_empty(),
+        "a doctor refused before it held a launch leaves no session behind: {:?}",
+        kept_sessions(&ground)
     );
 }
 
@@ -280,7 +320,7 @@ fn a_shadowed_name_reports_both_sides_and_the_nearer_scope_wins() {
 }
 
 #[test]
-fn a_sandbox_check_that_fails_is_named_in_a_card_and_exits_three() {
+fn a_sandbox_that_will_not_build_is_refused_as_a_run_is_and_exits_three() {
     let ground = Ground::new();
     let path = ground.machine(RESTRICTED);
 
@@ -291,27 +331,29 @@ fn a_sandbox_check_that_fails_is_named_in_a_card_and_exits_three() {
     assert_eq!(
         output.status.code(),
         Some(3),
-        "§15's sandbox/setup failure, which is §3's exit 3: stdout:\n{out}\nstderr:\n{err}"
+        "a sandbox that will not build is the setup refusal a run exits with: stdout:\n{out}\nstderr:\n{err}"
     );
     assert!(
-        out.contains("cannot create the sandbox: bubblewrap creates an unprivileged sandbox"),
-        "the report names the check that failed, in the check's own words:\n{out}"
+        err.contains(
+            "sindri: cannot create the sandbox: bubblewrap creates an unprivileged sandbox"
+        ),
+        "the refusal names the check that failed, in the check's own words: {err}"
     );
     assert!(
-        out.contains("setting up uid map: Permission denied"),
-        "and carries what the check said:\n{out}"
+        err.contains("setting up uid map: Permission denied"),
+        "and carries what the check said: {err}"
     );
     assert!(
-        out.contains("run with --yolo-unsafe"),
-        "and the one thing a person can do about it:\n{out}"
+        err.contains("run with --yolo-unsafe"),
+        "and the one thing a person can do about it: {err}"
     );
     assert!(
-        err.is_empty(),
-        "the card is the answer doctor was asked for, so it is on stdout: {err}"
+        out.is_empty(),
+        "a run's refusal goes to stderr, and a report was never asked for: {out}"
     );
     assert!(
         kept_sessions(&ground).is_empty(),
-        "a diagnostic that proved nothing still leaves no session behind: {:?}",
+        "a launch refused before it held a run leaves no session behind: {:?}",
         kept_sessions(&ground)
     );
 }
@@ -368,6 +410,28 @@ fn the_proof_is_a_real_bubblewrap_invocation_rather_than_a_version_probe() {
     assert!(
         kept_sessions(&ground).is_empty(),
         "the temp the proof borrowed went with the session it borrowed it from: {:?}",
+        kept_sessions(&ground)
+    );
+}
+
+#[test]
+fn a_report_that_was_made_leaves_no_session_behind() {
+    let ground = Ground::new();
+    let path = ground.machine(PROVES);
+
+    let output = run(ground.command(&path).args(["doctor"]));
+
+    let out = text(&output.stdout);
+    let err = text(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "the report is whole over a sandbox this machine proved: stdout:\n{out}\nstderr:\n{err}"
+    );
+    assert!(out.contains("sindri doctor"), "a report was made:\n{out}");
+    assert!(
+        kept_sessions(&ground).is_empty(),
+        "a diagnostic records no run, so no session is left for a reader: {:?}",
         kept_sessions(&ground)
     );
 }

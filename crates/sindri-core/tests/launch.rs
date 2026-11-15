@@ -10,11 +10,11 @@ use std::path::{Path, PathBuf};
 
 use sindri_core::config::Config;
 use sindri_core::launch::{Handed, Launch, Machine, Turns};
-use sindri_core::policy::Enforcement;
+use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
 use sindri_core::records::{Entry, SessionDocument, read_transcript};
 use sindri_core::run::{Cancel, Stop, Turn};
-use sindri_core::tools::FrontEnd;
+use sindri_core::tools::{BASH, FrontEnd};
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
@@ -63,6 +63,19 @@ impl Homes {
         std::fs::set_permissions(&bwrap, Permissions::from_mode(0o755))
             .expect("the stand-in is executable");
         Machine::new(&self.environment, bwrap)
+    }
+
+    /// A skill under the homes' own home, which is the scope the launch reads before the
+    /// workspace's.
+    fn user_skill(&self, name: &str, description: &str) -> PathBuf {
+        let directory = self.at("home").join(".agents").join("skills").join(name);
+        std::fs::create_dir_all(&directory).expect("a skill directory");
+        std::fs::write(
+            directory.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: {description}\n---\n\nBody of {name}.\n"),
+        )
+        .expect("a SKILL.md");
+        directory
     }
 
     fn state_home(&self) -> &Path {
@@ -326,5 +339,107 @@ fn a_launch_outlives_the_runs_it_drives() {
             .count(),
         0,
         "the conversation is over: the temp goes and the record stays"
+    );
+}
+
+#[test]
+fn a_launch_hands_the_words_and_skills_its_tools_were_built_from() {
+    let homes = Homes::new();
+    homes.user_skill("triage", "sort the tickets before you read them");
+    let config = naming_wire(closed_wire());
+
+    let launch = Launch::open(
+        &homes.machine(),
+        &config,
+        Enforcement::Unsafe,
+        FrontEnd::Batch,
+    )
+    .ok()
+    .expect("a config naming a wire, a model and a key names a run");
+
+    let workspace = std::env::current_dir().expect("this process has a working directory");
+    let described = Boundary::from_config(&config, &workspace, Enforcement::Unsafe)
+        .expect("the boundary the launch was opened with holds")
+        .description();
+    assert_eq!(
+        launch.describes(BASH),
+        Some(described.as_str()),
+        "the words a run hands the model for `bash` are the boundary it was opened with, not a \
+         rendering beside it"
+    );
+
+    let listed: Vec<String> = launch
+        .catalog()
+        .listing()
+        .into_iter()
+        .map(|entry| entry.name)
+        .collect();
+    assert!(
+        listed.contains(&String::from("triage")),
+        "the catalog the launch reads is the one its tools were built from: {listed:?}"
+    );
+}
+
+#[test]
+fn a_launch_nobody_drove_leaves_no_session_behind() {
+    let homes = Homes::new();
+    let launch = Launch::open(
+        &homes.machine(),
+        &naming_wire(closed_wire()),
+        Enforcement::Unsafe,
+        FrontEnd::Batch,
+    )
+    .ok()
+    .expect("a config naming a wire, a model and a key names a run");
+    let session = launch.figure().session;
+    assert!(
+        session.is_dir(),
+        "the launch holds a session before it is discarded: {}",
+        session.display()
+    );
+
+    launch.discard();
+
+    assert!(
+        !session.exists(),
+        "a diagnostic records no run, so the session nobody wrote goes whole: {}",
+        session.display()
+    );
+    let root = homes.state_home().join("sindri").join("sessions");
+    assert_eq!(
+        std::fs::read_dir(&root).expect("the sessions root").count(),
+        0,
+        "no reader finds a session nobody wrote in {}",
+        root.display()
+    );
+}
+
+#[test]
+fn a_launch_the_sandbox_refuses_leaves_no_session_behind() {
+    let homes = Homes::new();
+
+    let Err(refusal) = Launch::open(
+        &homes.machine_that_refuses(),
+        &naming_wire(closed_wire()),
+        Enforcement::Bubblewrap,
+        FrontEnd::Batch,
+    ) else {
+        panic!("this machine cannot make the sandbox");
+    };
+
+    assert_eq!(
+        refusal.code(),
+        3,
+        "the sandbox refusal is the setup refusal: {}",
+        refusal.message()
+    );
+    let root = homes.state_home().join("sindri").join("sessions");
+    let kept: Vec<PathBuf> = std::fs::read_dir(&root)
+        .expect("the sessions root the launch made")
+        .map(|entry| entry.expect("an entry").path())
+        .collect();
+    assert!(
+        kept.is_empty(),
+        "the session is made before the proof, so a refusal takes it away again: {kept:?}"
     );
 }

@@ -21,7 +21,7 @@ use crate::run::{Cancel, Limits, Run, Shell, Turn};
 use crate::sandbox::{self, Proof};
 use crate::session::{self, Session};
 use crate::skills::{Catalog, home};
-use crate::tools::{FrontEnd, ToolSet};
+use crate::tools::{FrontEnd, Tool, ToolSet};
 use crate::wire::Wire;
 
 /// The exit code for a launch that had nothing to run *with*.
@@ -96,6 +96,7 @@ pub struct Launch {
     asking: Asking,
     shell: Shell,
     tools: ToolSet,
+    catalog: Catalog,
     model: String,
     wire: Wire,
     route: Option<Route>,
@@ -118,15 +119,39 @@ impl Launch {
                 USAGE,
             ));
         };
+        let state_home = session::state_home(&machine.environment)
+            .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
+        let session = Session::create(&state_home)
+            .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
+        let directory = session.directory().to_path_buf();
+        Launch::assemble(
+            machine,
+            config,
+            enforcement,
+            front_end,
+            endpoint,
+            model,
+            session,
+        )
+        .inspect_err(|_| {
+            let _ = std::fs::remove_dir_all(&directory);
+        })
+    }
+
+    fn assemble(
+        machine: &Machine<'_>,
+        config: &Config,
+        enforcement: Enforcement,
+        front_end: FrontEnd,
+        endpoint: Endpoint,
+        model: String,
+        session: Session,
+    ) -> Result<Launch, Refusal> {
         let wire = endpoint.wire();
         let workspace = std::env::current_dir().map_err(|error| {
             Refusal::new(format!("cannot read the working directory: {error}"), SETUP)
         })?;
         let environment = machine.environment;
-        let state_home = session::state_home(&environment)
-            .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
-        let session = Session::create(&state_home)
-            .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
         let boundary = Boundary::from_config(config, &workspace, enforcement)
             .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
         // Before a turn or a record: the alternative is a run that proceeds unconfined.
@@ -165,7 +190,7 @@ impl Launch {
         )
         .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
         let asking = Asking::new(client, ask, tools.clone());
-        let shell = Shell::new(boundary.clone(), session.temp(), catalog);
+        let shell = Shell::new(boundary.clone(), session.temp(), catalog.clone());
 
         Ok(Launch {
             session,
@@ -175,6 +200,7 @@ impl Launch {
             asking,
             shell,
             tools,
+            catalog,
             model,
             wire,
             route,
@@ -206,6 +232,24 @@ impl Launch {
             &self.record.document().workspace,
         )
         .ok()
+    }
+
+    /// The words a run on this launch hands the model for one registered tool: nothing for a name
+    /// no run registers.
+    pub fn describes(&self, tool: &str) -> Option<&str> {
+        self.tools.get(tool).map(Tool::description)
+    }
+
+    /// A launch nobody drove recorded no run, so the session it made goes whole: no reader finds
+    /// one nobody wrote.
+    pub fn discard(self) {
+        let _ = std::fs::remove_dir_all(self.session.directory());
+    }
+
+    /// The skills a run on this launch would be offered by name: the catalog its tools were built
+    /// from.
+    pub fn catalog(&self) -> &Catalog {
+        &self.catalog
     }
 
     pub fn max_turns(&self) -> u32 {

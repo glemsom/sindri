@@ -1,20 +1,19 @@
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use sindri_core::config::{Config, Process};
-use sindri_core::policy::Boundary;
-use sindri_core::sandbox::{self, Card, Proof};
-use sindri_core::session::{self, Session};
-use sindri_core::skills::{Catalog, Diagnostic, Listing};
-use sindri_core::tools::{BASH, FrontEnd, ToolSet};
+use sindri_core::launch::{Launch, Machine};
+use sindri_core::policy::Enforcement;
+use sindri_core::skills::{Diagnostic, Listing};
+use sindri_core::tools::{BASH, FrontEnd};
 
 use sindri::pen;
 
 use crate::cli::Cli;
 use crate::refuse;
 
-/// The exit code a failed check is reported by.
+/// The exit code a report that could not be written is reported by.
 const SETUP: u8 = 3;
 
 const LABEL: u16 = 14;
@@ -27,54 +26,22 @@ pub fn run(cli: &Cli) -> ExitCode {
         Ok(config) => config,
         Err(error) => return refuse(&error.to_string(), error.exit_code()),
     };
-    let workspace = match std::env::current_dir() {
-        Ok(workspace) => workspace,
-        Err(error) => {
-            return refuse(
-                &format!("cannot read the working directory: {error}"),
-                SETUP,
-            );
-        }
+    let launch = match Launch::open(
+        &Machine::this(),
+        &config,
+        cli.enforcement(),
+        FrontEnd::Batch,
+    ) {
+        Ok(launch) => launch,
+        Err(refusal) => return refuse(refusal.message(), refusal.code()),
     };
-    let boundary = match Boundary::from_config(&config, &workspace, cli.enforcement()) {
-        Ok(boundary) => boundary,
-        Err(error) => return refuse(&error.to_string(), SETUP),
-    };
-    let catalog = Catalog::discover(&workspace, home().as_deref());
-    let tools = ToolSet::new(&boundary, &catalog, FrontEnd::Batch);
-    let described = tools
-        .get(BASH)
-        .expect("`bash` is the one tool every run registers")
-        .description();
 
-    let state_home = match session::state_home(&Process) {
-        Ok(state_home) => state_home,
-        Err(error) => return refuse(&error.to_string(), error.exit_code()),
-    };
-    let scratch = match Scratch::new(&state_home) {
-        Ok(scratch) => scratch,
-        Err(error) => return refuse(&error.to_string(), SETUP),
-    };
-    let proved = sandbox::prove(&boundary, scratch.temp());
-
-    let report = Report {
-        boundary: &boundary,
-        workspace: &workspace,
-        described,
-        catalog: &catalog,
-        proved,
-    };
+    let report = Report::of(&launch);
+    launch.discard();
     if let Err(error) = write(&report.render()) {
         return refuse(&format!("cannot write the report: {error}"), SETUP);
     }
-    match &report.proved {
-        Ok(_) => ExitCode::SUCCESS,
-        Err(card) => ExitCode::from(card.exit_code()),
-    }
-}
-
-fn home() -> Option<PathBuf> {
-    std::env::var("HOME").ok().map(PathBuf::from)
+    ExitCode::SUCCESS
 }
 
 fn write(report: &str) -> io::Result<()> {
@@ -83,38 +50,49 @@ fn write(report: &str) -> io::Result<()> {
     stdout.flush()
 }
 
-struct Report<'a> {
-    boundary: &'a Boundary,
-    workspace: &'a Path,
-    described: &'a str,
-    catalog: &'a Catalog,
-    proved: Result<Proof, Card>,
+/// Every fact is read off the launch the run would be made from, so a report and a run cannot
+/// disagree about the wire, the boundary, the enforcement or the tools.
+struct Report {
+    enforcement: Enforcement,
+    workspace: PathBuf,
+    proof: String,
+    described: String,
+    listing: Vec<Listing>,
+    diagnostics: Vec<Diagnostic>,
 }
 
-impl Report<'_> {
+impl Report {
+    fn of(launch: &Launch) -> Report {
+        let figure = launch.figure();
+        Report {
+            enforcement: figure.enforcement,
+            workspace: figure.workspace,
+            proof: figure.proof,
+            described: launch
+                .describes(BASH)
+                .expect("`bash` is the one tool every run registers")
+                .to_owned(),
+            listing: launch.catalog().listing(),
+            diagnostics: launch.catalog().diagnostics().to_vec(),
+        }
+    }
+
     fn render(&self) -> String {
         let mut lines: Vec<String> = vec![String::from("sindri doctor")];
-        lines.push(fact("enforcement", self.boundary.enforcement().word()));
+        lines.push(fact("enforcement", self.enforcement.word()));
         lines.push(fact("workspace", &self.workspace.display().to_string()));
-        match &self.proved {
-            Ok(proof) => lines.push(fact("sandbox", &proof.to_string())),
-            Err(card) => {
-                lines.push(fact("sandbox", "failed"));
-                lines.push(String::new());
-                lines.push(card.to_string());
-            }
-        }
+        lines.push(fact("sandbox", &self.proof));
 
         lines.push(String::new());
         lines.push(format!("the description the model is given for `{BASH}`"));
         lines.push(String::new());
-        lines.push(self.described.to_owned());
+        lines.push(self.described.clone());
 
         lines.push(String::new());
-        lines.extend(skills(&self.catalog.listing()));
-        if !self.catalog.diagnostics().is_empty() {
+        lines.extend(skills(&self.listing));
+        if !self.diagnostics.is_empty() {
             lines.push(String::new());
-            lines.extend(diagnostics(self.catalog.diagnostics()));
+            lines.extend(diagnostics(&self.diagnostics));
         }
 
         lines.join("\n") + "\n"
@@ -188,28 +166,4 @@ fn where_it_lies(diagnostic: &Diagnostic) -> String {
 
 fn fact(label: &str, value: &str) -> String {
     format!("{}{value}", pen::pad(label, LABEL))
-}
-
-/// A run's scratch is a session's temp, so doctor borrows exactly that and keeps nothing: a
-/// diagnostic records no run, and a session nobody wrote is one no reader should find.
-struct Scratch {
-    session: Session,
-}
-
-impl Scratch {
-    fn new(state_home: &Path) -> Result<Scratch, String> {
-        Session::create(state_home)
-            .map(|session| Scratch { session })
-            .map_err(|error| error.to_string())
-    }
-
-    fn temp(&self) -> &Path {
-        self.session.temp()
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(self.session.directory());
-    }
 }
