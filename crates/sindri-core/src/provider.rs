@@ -96,10 +96,6 @@ impl Ask {
         }
     }
 
-    pub fn endpoint(&self) -> &Endpoint {
-        &self.endpoint
-    }
-
     pub fn prompt(mut self, prompt: impl Into<String>) -> Self {
         self.prompt = prompt.into();
         self
@@ -427,8 +423,7 @@ impl Client {
         &self.secrets
     }
 
-    /// The sign-in this client asks its wire with, kept even when it could not be read, so a front
-    /// end can refuse on it in the words the wire's own listing would give.
+    /// The sign-in this client asks its wire with, kept even when it could not be read.
     pub fn sign_in(&self) -> Option<&copilot::Signing> {
         self.signing.as_ref()
     }

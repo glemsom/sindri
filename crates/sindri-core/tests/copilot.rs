@@ -10,13 +10,16 @@ use std::time::{Duration, Instant};
 
 use sindri_core::config::config_path;
 use sindri_core::provider::copilot::{self, DeviceCode, SignIn, Signing, Store, store_dir};
+use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::transport::{Canned, Replay};
-use sindri_core::provider::{Ask, Client, Verdict};
+use sindri_core::provider::{Ask, Client, Credential, Verdict};
 use sindri_core::redact::{MASK, SecretSet};
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
 const RESPONSES: &str = include_str!("fixtures/providers/openai_responses_stream.sse");
+
+const OPENAI_MODELS: &str = include_str!("fixtures/providers/openai_models.json");
 
 const DEVICE_CODE: &str = r#"{"device_code":"3584cd8a","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","interval":1,"expires_in":900}"#;
 
@@ -68,6 +71,43 @@ fn polls(replay: &Replay) -> usize {
         .iter()
         .filter(|seen| seen.url.ends_with("/login/oauth/access_token"))
         .count()
+}
+
+#[test]
+fn a_copilot_listing_asks_the_store_a_run_would_sign_in_with() {
+    let home = tempfile::tempdir().expect("a temp config home");
+    let replay = Replay::new(
+        sign_in_replies(LIVE)
+            .into_iter()
+            .chain([Canned::reply(200, OPENAI_MODELS)])
+            .collect::<Vec<_>>(),
+    );
+    let signed_in = store(&home, &replay);
+    signed_in.login(|_| {}).expect("the sign-in finishes");
+    let client =
+        Client::over(replay.clone(), SecretSet::default()).signing(Some(Signing::Store(signed_in)));
+    let endpoint = Endpoint::own(Wire::Copilot);
+
+    let listing = client.served(&endpoint, &Credential::none(), &endpoint);
+
+    assert_eq!(
+        listing.names().map(|names| names.len()),
+        Some(3),
+        "the dialect answered with the catalogue it serves"
+    );
+    let asked = replay
+        .requests()
+        .into_iter()
+        .find(|seen| seen.url.ends_with("/models"))
+        .expect("the catalogue was asked for");
+    assert!(
+        asked.headers.contains(&(
+            String::from("authorization"),
+            format!("Bearer {LIVE_SESSION}")
+        )),
+        "the listing is asked with the session a run signs in for: {:?}",
+        asked.headers
+    );
 }
 
 #[test]

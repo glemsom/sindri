@@ -68,9 +68,10 @@ impl Client {
         let mut secrets = self.secrets.clone();
         let read = match self.credential(credential, &mut secrets) {
             Ok(Some(key)) => self
-                .names(at, &key, &secrets)
+                .read_names(at, &key, &secrets)
                 .map_err(|failure| reason(at, &failure)),
             Ok(None) => Err(credential_source(at.wire())),
+            // A sign-in that would not read says its own words, which no verdict phrase could.
             Err(failure) => Err(failure.message.to_string()),
         };
         let outcome = if current.pair() == *at {
@@ -91,7 +92,12 @@ impl Client {
         }
     }
 
-    fn names(&self, at: &Endpoint, key: &str, secrets: &SecretSet) -> Result<Vec<Served>, Failure> {
+    fn read_names(
+        &self,
+        at: &Endpoint,
+        key: &str,
+        secrets: &SecretSet,
+    ) -> Result<Vec<Served>, Failure> {
         futures::executor::block_on(at.serving(key).names(self.transport.clone()))
             .map(names_of)
             .map_err(|error| Failure::from_wire(error, false, secrets))

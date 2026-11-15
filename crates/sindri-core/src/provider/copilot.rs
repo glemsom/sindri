@@ -69,8 +69,8 @@ impl fmt::Display for SignIn {
 }
 
 /// A copilot wire's sign-in: the store its session is read from, or its own words for why there is
-/// none. Every job that asks the wire reads this one value, so a run and a listing cannot disagree
-/// about whether there is a sign-in at all.
+/// none. One value, asked by both a run and a listing, so neither can hold a sign-in the other
+/// cannot see.
 #[derive(Clone, Debug)]
 pub enum Signing {
     Store(Store),
@@ -168,8 +168,7 @@ impl fmt::Debug for Store {
 /// The sign-in a wire is asked with: the store when it can be read, and the words it failed with
 /// when it cannot, because a config home that will not open is a fact both jobs have to state.
 pub fn signing(wire: Wire, environment: &impl Environment) -> Option<Signing> {
-    let signed_in_to = wire.credential_variable().is_none();
-    signed_in_to.then(|| match Store::resolve(environment) {
+    (wire == Wire::Copilot).then(|| match Store::resolve(environment) {
         Ok(store) => Signing::Store(store),
         Err(error) => Signing::Unreadable(SignIn::Unavailable(
             SecretSet::default().redact(format!("the copilot sign-in cannot be read: {error}")),
