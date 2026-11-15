@@ -251,34 +251,31 @@ struct Cards {
 
 impl Cards {
     /// The card the words `draft` hold, read again where the card the frame keeps was read from other
-    /// words.
-    fn of(&mut self, draft: &str) -> Option<&mut commands::Card> {
-        if self.card.as_ref().map(commands::Card::words) != Some(draft) {
-            self.card = match self.dismissed.as_deref() == Some(draft) {
+    /// words: a card stands only for its own words, so the row a press put the mark on stands with them.
+    fn follow(&mut self, draft: &str) -> Option<&mut commands::Card> {
+        let words = match draft.starts_with('/') {
+            true => draft.trim(),
+            false => "",
+        };
+        if self.card.as_ref().map(commands::Card::words) != Some(words) {
+            self.card = match self.dismissed.as_deref() == Some(words) {
                 true => None,
-                false => commands::Card::of(draft),
+                false => commands::Card::of(words),
             };
         }
         self.card.as_mut()
     }
 
-    /// A glyph into the card where it stands, and the card of a word that leaves no row is no card at
-    /// all.
-    fn typed(&mut self, key: Key) -> bool {
-        let Some(card) = self.card.as_mut() else {
-            return false;
-        };
-        let changed = card.typed(key);
-        if card.rows().is_empty() {
-            self.card = None;
-        }
-        changed
+    /// A movement of the card's mark `way`, and whether it moved: a card with no row that way gives the
+    /// key back to the draft it stands over.
+    fn walk(&mut self, draft: &str, way: Move) -> bool {
+        self.follow(draft).is_some_and(|card| card.walked(way))
     }
 
     /// The card the reader waved away: it stays closed while the draft holds those words.
     fn dismiss(&mut self, draft: &str) {
         self.card = None;
-        self.dismissed = Some(draft.to_owned());
+        self.dismissed = Some(draft.trim().to_owned());
     }
 }
 
@@ -436,7 +433,7 @@ impl View {
 
     /// The commands card the draft opens, unless the reader waved it away for this very draft.
     pub fn card(&mut self) -> Option<&commands::Card> {
-        let card = self.cards.of(self.composer.text())?;
+        let card = self.cards.follow(self.composer.text())?;
         Some(card)
     }
 
@@ -600,28 +597,25 @@ impl View {
         self.rows.open(entry)
     }
 
+    /// A draft: `↓` walks the card the words open, where the mark has a row below it, and every other key
+    /// falls to the box the words are typed in.
     fn draft(&mut self, key: Key) -> Outcome {
-        if key == Key::Down
-            && let Some(card) = self.cards.of(self.composer.text())
-        {
-            return View::stepped(card.walked(Move::Next));
+        if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
+            return Outcome::Edited;
         }
         match self.composer.key(key) {
             Outcome::Send(prompt) => self.sent(prompt),
-            outcome => match self.cards.typed(key) {
-                true => Outcome::Edited,
-                false => outcome,
-            },
+            outcome => outcome,
         }
     }
 
     /// A draft sent: a line that names a command is answered, and one that only begins a word the
-    /// commands card holds is the first row's line instead.
+    /// commands card holds is the marked row's line instead.
     fn sent(&mut self, prompt: Prompt) -> Outcome {
         if let Some(command) = commands::read(prompt.text()) {
             return self.answer(command);
         }
-        let Some(line) = self.cards.of(prompt.text()).map(|card| card.spelling()) else {
+        let Some(line) = self.cards.follow(prompt.text()).map(|card| card.spelling()) else {
             return Outcome::Send(prompt);
         };
         match commands::read(&line) {
@@ -729,7 +723,7 @@ impl View {
     /// and the ledger's are laid whole.
     fn kept_list(&mut self) -> Option<&mut dyn Kept> {
         match self.stack.top().body() {
-            None => Some(self.cards.of(self.composer.text())?),
+            None => Some(self.cards.follow(self.composer.text())?),
             Some(Body::Files) => Some(&mut self.picker),
             Some(Body::Models) => Some(&mut self.models),
             Some(Body::Settings) => Some(&mut self.settings),
@@ -790,7 +784,7 @@ impl View {
     }
 
     fn close(&mut self) -> Outcome {
-        if self.stack.modal().is_none() && self.cards.of(self.composer.text()).is_some() {
+        if self.stack.modal().is_none() && self.cards.follow(self.composer.text()).is_some() {
             self.cards.dismiss(self.composer.text());
             return Outcome::Edited;
         }
@@ -846,9 +840,11 @@ impl View {
         u32::from(self.drawn.band().saturating_add(self.notice_rows()))
     }
 
+    /// `↑`: the row above in the card the draft opens, where the mark has one — and, where it has none,
+    /// the line above the caret, or the newest queued prompt.
     fn up(&mut self) -> Outcome {
-        if let Some(card) = self.cards.of(self.composer.text()) {
-            return View::stepped(card.walked(Move::Previous));
+        if self.cards.walk(self.composer.text(), Move::Previous) {
+            return Outcome::Edited;
         }
         if !self.composer.on_first_line() {
             return self.composer.key(Key::Up);
@@ -1038,7 +1034,7 @@ impl View {
             let width = card::body_width(area);
             return Some((name, leaves, self.body(screen, width)?));
         }
-        let body = self.cards.of(self.composer.text())?.body();
+        let body = self.cards.follow(self.composer.text())?.body();
         let leaves = Mode::Composer.leaves()?;
         Some((COMMANDS_CARD, leaves, ScreenBody::Rows(body)))
     }

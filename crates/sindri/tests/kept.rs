@@ -338,6 +338,37 @@ fn a_press_marks_the_row_of_the_card_it_landed_on() {
 }
 
 #[test]
+fn a_card_with_no_row_above_gives_the_up_arrow_back_to_the_draft() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("queued");
+    let Outcome::Send(prompt) = view.key(Key::Enter) else {
+        panic!("a draft is a prompt once it is sent");
+    };
+    view.enqueue(prompt);
+    view.paste("/s");
+
+    assert_eq!(
+        view.card().map(commands::Card::selected),
+        Some(0),
+        "the card opens on its first row, so it has no row above that one"
+    );
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "`↑` is the draft's own where the card has nothing above the mark, so a queued prompt is \
+         what answers it"
+    );
+    assert!(
+        view.queue().is_empty(),
+        "the prompt the queue held is the draft's again"
+    );
+}
+
+#[test]
 fn the_arrow_keys_walk_the_commands_card_over_the_draft() {
     let mut view = View::of(
         Capabilities::default(),

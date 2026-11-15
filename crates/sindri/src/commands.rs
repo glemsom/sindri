@@ -59,11 +59,12 @@ pub const TABLE: [Row; 7] = [
 /// The first `SPLASH` of the table are the commands the splash screen names.
 pub const SPLASH: usize = 3;
 
-/// The commands card: the draft read as a word after a slash, and the rows that word leaves, ranked
-/// the way a picker ranks — a name the word starts before a name it holds, and one order for ties.
+/// The commands card: the words a draft holds, the rows they leave ranked the way a picker ranks — a name
+/// the word starts before a name it holds, and one order for ties — and the row the mark stands on.
 #[derive(Clone, Debug)]
 pub struct Card {
-    /// The draft the card was read from, exactly as it was typed.
+    /// The words the card was read from, which are the draft's own: the card stands while the reader's
+    /// words do, and a row's line is spelled from them.
     words: String,
     word: String,
     tail: String,
@@ -73,46 +74,50 @@ pub struct Card {
 }
 
 impl Card {
-    /// The card a draft opens, and `None` unless its first glyph is a slash and a name holds the
-    /// word after it.
+    /// The card a draft opens, and `None` unless its first glyph is a slash and a name holds the word
+    /// after it.
     pub fn of(draft: &str) -> Option<Card> {
-        let mut card = Card {
-            words: draft.to_owned(),
-            word: String::new(),
-            tail: String::new(),
-            rows: Vec::new(),
-            selected: 0,
+        let words = match draft.starts_with('/') {
+            true => draft.trim(),
+            false => return None,
         };
-        card.read();
+        let card = Card::read(words.to_owned(), None);
         match card.rows.is_empty() {
             true => None,
             false => Some(card),
         }
     }
 
-    /// Reads the words again: the word after the slash, what follows it, the rows that word leaves
-    /// and the mark on the row those words name. Words that open with no slash open no row.
-    fn read(&mut self) {
-        self.word.clear();
-        self.tail.clear();
-        self.rows.clear();
-        self.selected = 0;
-        if !self.words.starts_with('/') {
-            return;
+    /// The card the `words` open, the mark on the row it stood on where those words still leave that row
+    /// and on the row they name where they do not. Words that open with no slash open no row.
+    fn read(words: String, marked: Option<&'static str>) -> Card {
+        let mut card = Card {
+            words,
+            word: String::new(),
+            tail: String::new(),
+            rows: Vec::new(),
+            selected: 0,
+        };
+        if !card.words.starts_with('/') {
+            return card;
         }
-        let draft = self.words.trim();
+        let draft = card.words.trim();
         let word = draft.split_whitespace().next().unwrap_or_default();
-        self.tail = match word.find(':') {
+        card.tail = match word.find(':') {
             Some(at) => word[at..].to_owned(),
             None => draft[word.len()..].to_owned(),
         };
-        self.word = word.to_owned();
-        self.rows = ranked(word);
-        self.selected = self.named();
+        card.word = word.to_owned();
+        card.rows = ranked(word);
+        card.selected = match card.rows.iter().position(|row| Some(row.name) == marked) {
+            Some(at) => at,
+            None => card.named(),
+        };
+        card
     }
 
-    /// The row whose name the word starts, which is the row those words name, and the first row where
-    /// the word starts no name.
+    /// The row whose name the word already spells, which is the row whose line is the draft itself, and
+    /// the first row where the word spells no name at all.
     fn named(&self) -> usize {
         self.rows
             .iter()
@@ -125,7 +130,7 @@ impl Card {
         &self.rows
     }
 
-    /// The draft the card was read from, exactly as it was typed.
+    /// The words the card was read from, which are the draft's own.
     pub fn words(&self) -> &str {
         &self.words
     }
@@ -135,8 +140,8 @@ impl Card {
         self.selected
     }
 
-    /// The rows the card hands its frame: every row the word leaves with the one line that says what
-    /// it does, and the row the mark stands on drawn in the accent.
+    /// The rows the card hands its frame: every row the word leaves with the one line that says what it
+    /// does, and the row the mark stands on drawn in the accent.
     pub fn body(&self) -> Vec<ScreenRow> {
         list::List {
             query: None,
@@ -153,18 +158,18 @@ impl Card {
         .rows()
     }
 
-    /// What choosing the marked row sends: the draft itself where its word already starts the name,
-    /// and the name followed by what the word left otherwise.
+    /// What choosing the marked row sends: the draft itself where its word already spells the name, and
+    /// the name followed by what the word left otherwise.
     pub fn spelling(&self) -> String {
         self.spelling_of(self.selected)
-            .unwrap_or_else(|| self.words.trim().to_owned())
+            .unwrap_or_else(|| self.words.clone())
     }
 
     /// The draft as the row at `at` spells it: the row's name followed by what the word left.
     pub fn spelling_of(&self, at: usize) -> Option<String> {
         let chosen = self.rows.get(at)?;
         Some(match self.word.starts_with(chosen.name) {
-            true => self.words.trim().to_owned(),
+            true => self.words.clone(),
             false => format!("{}{}", chosen.name, self.tail),
         })
     }
@@ -189,15 +194,20 @@ impl Kept for Card {
     }
 
     fn typed(&mut self, key: Key) -> bool {
+        let mut words = self.words.clone();
         match key {
-            Key::Char(glyph) if !glyph.is_control() => self.words.push(glyph),
-            Key::Backspace if self.words.pop().is_none() => return false,
-            Key::Backspace => {}
+            Key::Char(glyph) if !glyph.is_control() => words.push(glyph),
+            Key::Backspace => {
+                if words.pop().is_none() {
+                    return false;
+                }
+            }
             _ => return false,
         }
-        let before = (self.rows.clone(), self.selected);
-        self.read();
-        before != (self.rows.clone(), self.selected)
+        let marked = self.rows.get(self.selected).map(|row| row.name);
+        let before = std::mem::take(&mut self.rows);
+        *self = Card::read(words, marked);
+        before != self.rows
     }
 
     fn pressed(&mut self, at: usize) -> bool {
