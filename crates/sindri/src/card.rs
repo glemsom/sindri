@@ -39,6 +39,15 @@ pub fn body_width(area: Rect) -> u16 {
     area.width.min(WIDTH).saturating_sub(INSET * 2)
 }
 
+/// The columns a card's two borders stand at, given the body it hands the screen: the border and
+/// the column of inset it spends before that body begins, on either side of it.
+pub fn border_columns(body: Rect) -> (u16, u16) {
+    (
+        body.x.saturating_sub(INSET),
+        body.right().saturating_add(INSET - 1),
+    )
+}
+
 /// Paints a card named `name`, whose key that leaves is `leaves`, into `area`, and returns the rows
 /// the screen inside it draws in: the card's columns less its border and inset, and as many of the
 /// body's `rows` as the frame has room for.
