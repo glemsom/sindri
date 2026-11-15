@@ -15,7 +15,7 @@ fn boot_80x24_is_every_line_of_the_splash_screen_and_no_rail_beside_it() {
 }
 
 #[test]
-fn boot_face_120x40_is_the_face_over_the_wordmark_and_the_one_over_the_rails_top_rows() {
+fn boot_face_120x40_is_the_splash_screen_under_the_rails_one_face() {
     fixture::assert_frame("boot-face", 120, 40);
 }
 

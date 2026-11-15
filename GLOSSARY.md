@@ -136,9 +136,9 @@ _Avoid_: UI, client, interface
 The picture of Sindri that the `sindri` binary carries beside the bundled font, measured from its
 own header into a **footprint** and drawn over those cells — decoration, so a terminal that places
 no picture is given no cells and no words for it. It stands over the top rows of the **rail**'s
-column where the frame has room for one, and over the wordmark of the **splash screen**. A reader
-turns it off in the config, and a frame with it off reserves no row: the facts stand from the rail's
-first row. Not the **face** an ink wears.
+column where the frame has room for one, and nowhere else. A reader turns it off in the config, and a
+frame with it off reserves no row: the facts stand from the rail's first row. Not the **face** an ink
+wears.
 _Avoid_: Logo, avatar, mascot, icon
 
 **Band**:
@@ -188,11 +188,10 @@ _Avoid_: Palette, slash menu, command list, autocomplete
 **Splash screen**:
 The frame a launch opens on: the wordmark, one line saying what the product is, and three commands
 with the line that explains each, set as one block and centred in the band an answer is drawn in,
-with Sindri's face over it, beside the **rail** of the facts the launch already holds — the wire, the
-model, the workspace, its branch and the enforcement, and an em dash for the session and the temp a
-run has yet to fill. In a frame too narrow for a rail's column it is drawn with no rail, and in one
-too short or too narrow for the face it is drawn without it and reserves no row. One paint pass, and
-never again.
+with the **rail** of the facts the launch already holds beside it — the wire, the model, the
+workspace, its branch and the enforcement, and an em dash for the session and the temp a run has yet
+to fill — and nothing over it. In a frame too narrow for a rail's column it is drawn with no rail.
+One paint pass, and never again.
 _Avoid_: Front door, welcome screen, landing page, boot animation
 
 **Key protocol**:
