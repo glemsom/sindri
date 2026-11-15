@@ -1001,20 +1001,16 @@ impl View {
         Some((COMMANDS_CARD, leaves, ScreenBody::Rows(command_rows(&card))))
     }
 
-    /// The body the screen's description says it holds, built by the screen that keeps its rows: the
-    /// card is as tall as this, and its own count row says which rows the frame had no room for.
+    /// The body the screen's description says it holds, built by the screen that keeps its rows at
+    /// `width`, the columns a card hands a body and draws them in again: the card is as tall as this,
+    /// and its own count row says which rows the frame had no room for.
     pub fn body(&self, screen: Mode, width: u16) -> Option<ScreenBody> {
         Some(match screen.body()? {
             Body::Keys => ScreenBody::Rows(self.stack.body(width)),
             Body::Files => ScreenBody::Rows(self.picker.body()),
             Body::Models => ScreenBody::Rows(self.models.body()),
             Body::Settings => ScreenBody::Rows(self.settings.body(width)),
-            Body::Ledger => ScreenBody::Ledger(ledger::rows(
-                &self.stats(),
-                ledger::Shape::Screen,
-                Rect::new(0, 0, width, u16::MAX),
-                None,
-            )),
+            Body::Ledger => ScreenBody::Ledger(Sheet::laid(&self.stats(), width)),
         })
     }
 
@@ -1474,21 +1470,48 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> L
     }
 }
 
+/// A screen's sheet, laid once at the width its card hands it: the rows it holds are what the card is
+/// tall and what the card draws, and only the band a paint gives them caps them.
+pub struct Sheet(Vec<ledger::Row>);
+
+impl Sheet {
+    /// The screen's whole sheet at `width`: every block it can draw, with no band to cap it, because a
+    /// card caps the rows it draws and never the rows it is handed.
+    fn laid(facts: &ledger::Facts, width: u16) -> Sheet {
+        Sheet(ledger::rows(
+            facts,
+            ledger::Shape::Screen,
+            Rect::new(0, 0, width, u16::MAX),
+            None,
+        ))
+    }
+
+    /// The rows the sheet holds, which the card it is drawn on is this many plus its two borders tall.
+    pub fn height(&self) -> u16 {
+        u16::try_from(self.0.len()).unwrap_or(u16::MAX)
+    }
+
+    /// Draws the sheet in `body`, the band the card gives it: the rows the card holds are the cap, so
+    /// one past them is not drawn.
+    pub fn draw(&self, body: Rect, buffer: &mut Buffer, palette: &Palette) {
+        ledger::draw(&self.0, body, buffer, palette);
+    }
+}
+
 /// What a screen holds: the rows it laid at the width the card hands it, which the card is this many
 /// rows tall and which the card caps only as it draws them.
 pub enum ScreenBody {
     Rows(Vec<ScreenRow>),
-    Ledger(Vec<ledger::Row>),
+    Ledger(Sheet),
 }
 
 impl ScreenBody {
     /// How many rows the screen holds, which the card is this many plus its two borders tall.
     fn held(&self) -> u16 {
-        let held = match self {
-            ScreenBody::Rows(rows) => rows.len(),
-            ScreenBody::Ledger(rows) => rows.len(),
-        };
-        u16::try_from(held).unwrap_or(u16::MAX)
+        match self {
+            ScreenBody::Rows(rows) => u16::try_from(rows.len()).unwrap_or(u16::MAX),
+            ScreenBody::Ledger(sheet) => sheet.height(),
+        }
     }
 
     /// Draws the screen in `body`, and never in a row the card did not give it, with the rows a press
@@ -1510,8 +1533,8 @@ impl ScreenBody {
                 }
                 presses
             }
-            ScreenBody::Ledger(rows) => {
-                ledger::draw(rows, body, buffer, palette);
+            ScreenBody::Ledger(sheet) => {
+                sheet.draw(body, buffer, palette);
                 Vec::new()
             }
         }

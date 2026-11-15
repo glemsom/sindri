@@ -10,9 +10,8 @@ use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::keys::{Body, Mode};
-use sindri::ledger::Row;
 use sindri::list::ScreenRow;
-use sindri::view::{ScreenBody, Transcript, View};
+use sindri::view::{ScreenBody, Sheet, Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::served::Listing;
@@ -36,12 +35,12 @@ fn rows(body: &ScreenBody) -> &[ScreenRow] {
     rows
 }
 
-/// The rows a ledger body laid out, and no band to cap them.
-fn ledger(body: &ScreenBody) -> &[Row] {
-    let ScreenBody::Ledger(rows) = body else {
-        panic!("a ledger is a screen of rows, and this body is a card of rows of another screen");
+/// The sheet a ledger body laid, once, which the card it is drawn on is as tall as.
+fn ledger(body: &ScreenBody) -> &Sheet {
+    let ScreenBody::Ledger(sheet) = body else {
+        panic!("a ledger is a screen of its own sheet, and this body is a card of rows");
     };
-    rows
+    sheet
 }
 
 /// The words of a body of rows, one string per row.
@@ -243,12 +242,7 @@ fn the_ledger_body_holds_the_rows_it_laid_and_the_card_it_is_drawn_on_is_that_ta
     let body = view
         .body(Mode::Stats, sindri::card::body_width(tall))
         .expect("the ledger is a screen, so it answers with a body");
-    let laid = ledger(&body).len();
-    assert!(
-        laid > 1,
-        "the record's facts are a sheet of many rows, so the body carries the whole of it rather \
-         than one row standing for it: {laid}"
-    );
+    let laid = usize::from(ledger(&body).height());
 
     let mut buffer = Buffer::empty(tall);
     let told = view.paint(tall, &mut buffer);
