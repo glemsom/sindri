@@ -2,6 +2,7 @@ use rig_core::model::ModelList;
 
 use super::endpoint::Endpoint;
 use super::{Client, Credential, Failure, Verdict, credential_source};
+use crate::redact::SecretSet;
 
 pub trait Current {
     fn pair(&self) -> Endpoint;
@@ -70,7 +71,7 @@ impl Client {
             .map_err(|failure| failure.message.to_string())
             .and_then(|key| match key {
                 Some(key) => self
-                    .catalogue(at, &key)
+                    .catalogue(at, &key, &secrets)
                     .map_err(|failure| reason(at, &failure)),
                 None => Err(credential_source(at.wire())),
             });
@@ -92,10 +93,15 @@ impl Client {
         }
     }
 
-    fn catalogue(&self, at: &Endpoint, key: &str) -> Result<Vec<Served>, Failure> {
+    fn catalogue(
+        &self,
+        at: &Endpoint,
+        key: &str,
+        secrets: &SecretSet,
+    ) -> Result<Vec<Served>, Failure> {
         futures::executor::block_on(at.serving(key).catalogue(self.transport.clone()))
             .map(names_of)
-            .map_err(|error| Failure::from_wire(error, false, &self.secrets))
+            .map_err(|error| Failure::from_wire(error, false, secrets))
     }
 }
 

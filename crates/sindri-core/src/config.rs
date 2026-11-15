@@ -246,6 +246,7 @@ impl Config {
             ssh_agent: spoken_parsed(environment, "SINDRI_SSH_AGENT")?,
         })
     }
+
     /// The endpoint this config names, and `None` when it names no wire.
     pub fn endpoint(&self) -> Option<Endpoint> {
         let wire = self.provider?;

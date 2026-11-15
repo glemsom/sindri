@@ -141,13 +141,9 @@ impl Launch {
             config.secrets(),
             &Process,
         );
-        let secrets = client.secrets().clone();
         let ask = ask(config, endpoint, model.clone(), &workspace);
         let route = ask.route_of();
         let thinking = ask.thinks();
-        let asking = Asking::new(client, ask, tools.clone());
-        let shell = Shell::new(boundary.clone(), session.temp(), catalog);
-
         let record = Record::open(
             &session,
             Facts {
@@ -158,10 +154,12 @@ impl Launch {
                 boundary: &boundary,
                 limits: &limits,
                 workspace: &workspace,
-                secrets: &secrets,
+                secrets: client.secrets(),
             },
         )
         .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
+        let asking = Asking::new(client, ask, tools.clone());
+        let shell = Shell::new(boundary.clone(), session.temp(), catalog);
 
         Ok(Launch {
             session,

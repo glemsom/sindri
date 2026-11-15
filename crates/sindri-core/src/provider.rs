@@ -437,7 +437,7 @@ impl Client {
     /// literals join the run's secrets, so nothing it holds can reach a record or a line.
     pub fn signing(mut self, sign_in: Option<Result<copilot::Store, copilot::SignIn>>) -> Self {
         if let Some(Ok(store)) = &sign_in {
-            self.secrets = self.secrets.clone().union(store.secrets());
+            self.secrets = self.secrets.union(store.secrets());
         }
         self.store = sign_in;
         self
