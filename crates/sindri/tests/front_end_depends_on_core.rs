@@ -13,7 +13,13 @@ const PLATFORM: &str = "x86_64-unknown-linux-gnu";
 
 /// The parts a run is joined from, which only the core names: a front end that built one would be
 /// deciding how a run is assembled.
-const JOINED_IN_CORE: [&str; 4] = ["Asking::new", "Shell::new", "Run::new", "Record::open"];
+const JOINED_IN_CORE: [&str; 5] = [
+    "Asking::new",
+    "Shell::new",
+    "Run::new",
+    "Record::open",
+    "Client::for_endpoint",
+];
 
 fn sources(root: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();

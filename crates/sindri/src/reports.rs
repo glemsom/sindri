@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use sindri::composer::Prompt;
 use sindri::ledger::Facts;
 use sindri_core::config::Config;
-use sindri_core::launch::{Handed, Launch, Turns, served};
+use sindri_core::launch::{Handed, Launch, Machine, Turns, served};
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{SessionDocument, Told};
@@ -198,7 +198,7 @@ pub(crate) fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
     let thread = thread::spawn(move || {
         // A launch with no wire is one `main` refused before the screen was taken, so the only
         // answer this thread can leave is a listing.
-        if let Some(listing) = served(&config) {
+        if let Some(listing) = served(&Machine::this(), &config) {
             *lock(&answer) = Some(listing);
             wake.raise();
         }

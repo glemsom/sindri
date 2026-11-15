@@ -26,14 +26,14 @@ const RESTRICTED: &str = "if [ \"${1:-}\" = --version ]; then\n  \
 
 /// A machine and the homes a launch reads, all under one temporary root, so nothing a launch
 /// writes lands in the reader's own state.
-struct Ground {
+struct Homes {
     root: TempDir,
     environment: BTreeMap<String, String>,
 }
 
-impl Ground {
-    fn new() -> Ground {
-        let root = tempfile::tempdir().expect("a temp ground");
+impl Homes {
+    fn new() -> Homes {
+        let root = tempfile::tempdir().expect("a temp home");
         let mut environment = BTreeMap::new();
         for (name, directory) in [
             ("XDG_STATE_HOME", "state"),
@@ -44,7 +44,7 @@ impl Ground {
             std::fs::create_dir_all(&path).expect("a directory");
             environment.insert(String::from(name), path.display().to_string());
         }
-        Ground { root, environment }
+        Homes { root, environment }
     }
 
     fn at(&self, relative: &str) -> PathBuf {
@@ -69,7 +69,7 @@ impl Ground {
         self.environment
             .get("XDG_STATE_HOME")
             .map(Path::new)
-            .expect("the ground names a state home")
+            .expect("the homes name a state home")
     }
 }
 
@@ -113,10 +113,10 @@ fn naming_wire(base_url: String) -> Config {
 
 #[test]
 fn a_config_that_names_no_run_is_refused_by_the_launch_in_one_vocabulary() {
-    let ground = Ground::new();
+    let homes = Homes::new();
 
     let Err(refusal) = Launch::open(
-        &ground.machine(),
+        &homes.machine(),
         &Config::default(),
         Enforcement::Bubblewrap,
         FrontEnd::Batch,
@@ -140,8 +140,8 @@ fn a_config_that_names_no_run_is_refused_by_the_launch_in_one_vocabulary() {
 
 #[test]
 fn a_launch_refused_by_the_sandbox_keeps_no_record_and_asks_no_turn() {
-    let ground = Ground::new();
-    let machine = ground.machine_that_refuses();
+    let homes = Homes::new();
+    let machine = homes.machine_that_refuses();
     let wire = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
     wire.set_nonblocking(true)
         .expect("a wire that never blocks");
@@ -169,7 +169,7 @@ fn a_launch_refused_by_the_sandbox_keeps_no_record_and_asks_no_turn() {
         "the refusal is the sandbox card's own words: {}",
         refusal.message()
     );
-    let documents = named(ground.state_home(), "session.json");
+    let documents = named(homes.state_home(), "session.json");
     assert!(
         documents.is_empty(),
         "nothing is recorded before the boundary is proved: {documents:?}"
@@ -211,10 +211,10 @@ impl Turns for Kept {
 
 #[test]
 fn a_launch_records_the_wire_the_model_and_the_boundary_it_runs() {
-    let ground = Ground::new();
+    let homes = Homes::new();
 
     let mut launch = Launch::open(
-        &ground.machine(),
+        &homes.machine(),
         &naming_wire(closed_wire()),
         Enforcement::Unsafe,
         FrontEnd::Batch,
@@ -270,9 +270,9 @@ fn a_launch_records_the_wire_the_model_and_the_boundary_it_runs() {
 
 #[test]
 fn a_launch_outlives_the_runs_it_drives() {
-    let ground = Ground::new();
+    let homes = Homes::new();
     let mut launch = Launch::open(
-        &ground.machine(),
+        &homes.machine(),
         &naming_wire(closed_wire()),
         Enforcement::Unsafe,
         FrontEnd::Terminal,
@@ -296,7 +296,7 @@ fn a_launch_outlives_the_runs_it_drives() {
         "the prompt after the first runs in the session the first opened"
     );
     assert_eq!(first.session(), session.guid());
-    let documents = named(ground.state_home(), "session.json");
+    let documents = named(homes.state_home(), "session.json");
     assert_eq!(
         documents,
         [session.directory().join("session.json")],

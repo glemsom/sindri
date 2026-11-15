@@ -1,8 +1,13 @@
-use std::path::{Path, PathBuf};
+//! The launch: the boundary, the sandbox proof, the session, the record, the tools, the secrets
+//! and the client, joined in the one order that holds — nothing is recorded and no turn is asked
+//! before the sandbox has proved the boundary.
+
+use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::asking::Asking;
-use crate::config::{Config, Environment};
+use crate::bash::BWRAP;
+use crate::config::{Config, Environment, Process};
 use crate::open::Ground;
 use crate::outcome::{Facts as Reported, Outcome};
 use crate::policy::{Boundary, Enforcement};
@@ -25,9 +30,8 @@ const SETUP: u8 = 3;
 /// The exit code for a command line or a config that holds no run.
 const USAGE: u8 = 2;
 
-/// What a front end says about a launch that cannot run: one a frame can draw leaves the launch
-/// standing, and one no frame survives is the reader's shell line and the end of the launch. No run
-/// started, so a refusal is no stop reason and nothing is recorded.
+/// Why no run could start: no credential, a sandbox that will not build, a config the schema
+/// refuses. No run started, so a refusal is no stop reason and nothing is recorded.
 pub struct Refusal {
     message: String,
     code: u8,
@@ -51,8 +55,8 @@ impl Refusal {
 }
 
 /// The machine a launch stands on: the environment its homes and its sign-in are read from, and the
-/// program its sandbox is proved with. One value, so a front end hands over a config and a name, and
-/// a test stands a launch on a machine that refuses on demand.
+/// program its sandbox is proved with. One value, so the launch reads the outside world through a
+/// seam, and a test stands a launch on a machine that refuses on demand.
 pub struct Machine<'a> {
     environment: &'a dyn Environment,
     bwrap: PathBuf,
@@ -61,7 +65,7 @@ pub struct Machine<'a> {
 impl Machine<'static> {
     /// The machine this process stands on.
     pub fn this() -> Machine<'static> {
-        Machine::new(&crate::config::Process, crate::bash::BWRAP)
+        Machine::new(&Process, BWRAP)
     }
 }
 
@@ -71,14 +75,6 @@ impl<'a> Machine<'a> {
             environment,
             bwrap: bwrap.into(),
         }
-    }
-
-    pub fn environment(&self) -> &'a dyn Environment {
-        self.environment
-    }
-
-    pub fn bwrap(&self) -> &Path {
-        &self.bwrap
     }
 }
 
@@ -126,7 +122,7 @@ impl Launch {
         let workspace = std::env::current_dir().map_err(|error| {
             Refusal::new(format!("cannot read the working directory: {error}"), SETUP)
         })?;
-        let environment = machine.environment();
+        let environment = machine.environment;
         let state_home = session::state_home(&environment)
             .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
         let session = Session::create(&state_home)
@@ -134,7 +130,7 @@ impl Launch {
         let boundary = Boundary::from_config(config, &workspace, enforcement)
             .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
         // Before a turn or a record: the alternative is a run that proceeds unconfined.
-        let proof = sandbox::prove_with(machine.bwrap(), &boundary, session.temp())
+        let proof = sandbox::prove_with(&machine.bwrap, &boundary, session.temp())
             .map_err(|card| Refusal::new(card.to_string(), card.exit_code()))?;
         let limits = Limits::from_config(config, &boundary);
         let catalog = Catalog::discover(&workspace, home(&environment).as_deref());
@@ -322,15 +318,16 @@ fn hand(turns: &mut dyn Turns, launch: &Launch) {
     });
 }
 
-pub fn served(config: &Config) -> Option<Listing> {
+/// The names a wire serves, read off the endpoint a run would ask: not a run, so the client a
+/// listing signs in with is the one a run builds, with no session to expand.
+pub fn served(machine: &Machine<'_>, config: &Config) -> Option<Listing> {
     let endpoint = config.endpoint()?;
-    // Not a run: with no session to expand `{session}` to, the empty one is what is left.
     let client = Client::for_endpoint(
         &endpoint,
         headers(config),
         String::new(),
         config.secrets(),
-        &crate::config::Process,
+        &machine.environment,
     );
     Some(client.served(&endpoint, &config.credential(), &endpoint))
 }
