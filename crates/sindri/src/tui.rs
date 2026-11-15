@@ -19,13 +19,13 @@ use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
 use sindri::view::{Painted, Transcript, View};
 use sindri_core::config::{Config, Environment, Process, Touched};
+use sindri_core::launch::{Launch, Machine, Refusal};
 use sindri_core::provider::Deltas;
 use sindri_core::records::Told;
 use sindri_core::session::Session;
 use sindri_core::tools::FrontEnd;
 
 use crate::cli::Cli;
-use crate::launch::{Launch, Refusal};
 use crate::reports::{Asking, Report, Running, ask};
 use crate::signal::{Signals, Wake};
 use crate::term::{Canvas, Screen, Terminal, missing_terminal, paint, tell};
@@ -81,7 +81,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     };
     // What the run the prompt will ask for is, read behind the reader's own shell rather than
     // behind a blank frame: the repository is asked for its branch once, before the first paint.
-    let boot = crate::launch::boot(cli, config, &workspace);
+    let boot = sindri::ledger::Boot::of(config, cli.enforcement(), &workspace);
     // Asked once, before the screen is taken: the terminal that takes the window's sequences is the
     // one asked to report its focus, and one nobody can vouch for is asked nothing at all.
     let windowed = window::speaks(
@@ -108,7 +108,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // could call come from one catalog. A launch opens on the splash screen, which no record fills.
     let view = View::of(
         capabilities,
-        Facts::boot(boot, crate::launch::home()),
+        Facts::boot(boot, sindri_core::skills::home(&Process)),
         Transcript::none(),
     );
     // One telling for the whole launch, so the pace a status is told at is the launch's: the
@@ -474,7 +474,12 @@ impl<'a> Loop<'a> {
                 if let Some(mut ended) = ended {
                     ended.close();
                 }
-                match Launch::open(self.cli, &self.config, FrontEnd::Terminal) {
+                match Launch::open(
+                    &Machine::this(),
+                    &self.config,
+                    self.cli.enforcement(),
+                    FrontEnd::Terminal,
+                ) {
                     Ok(opened) => opened,
                     Err(refusal) => {
                         self.view.run_refused(refusal.message(), prompt);

@@ -9,13 +9,13 @@ use std::time::{Duration, Instant};
 use sindri::composer::Prompt;
 use sindri::ledger::Facts;
 use sindri_core::config::Config;
+use sindri_core::launch::{Handed, Launch, Turns, served};
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{SessionDocument, Told};
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Cancel, Stop, Turn};
 
-use crate::launch::{Launch, Turns};
 use crate::signal::Wake;
 use crate::term::lock;
 
@@ -169,12 +169,11 @@ impl Turns for Reports {
         }
     }
 
-    fn facts(&mut self, facts: Facts) {
-        self.push(Report::Facts(facts));
-    }
-
-    fn record(&mut self, document: &SessionDocument) {
-        self.push(Report::Record(document.clone()));
+    fn facts(&mut self, handed: Handed<'_>) {
+        self.push(Report::Facts(
+            Facts::of(handed.session, handed.document).measured(&handed.measured, handed.window),
+        ));
+        self.push(Report::Record(handed.document.clone()));
     }
 
     fn kept(&mut self, kept: &Turn) {
@@ -199,7 +198,7 @@ pub(crate) fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
     let thread = thread::spawn(move || {
         // A launch with no wire is one `main` refused before the screen was taken, so the only
         // answer this thread can leave is a listing.
-        if let Some(listing) = crate::launch::served(&config) {
+        if let Some(listing) = served(&config) {
             *lock(&answer) = Some(listing);
             wake.raise();
         }

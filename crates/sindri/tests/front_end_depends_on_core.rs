@@ -3,12 +3,35 @@
 //! and a path from the core back to the front end would close one.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::Value;
 
 /// The devbox toolchain's platform, so the resolve stays offline.
 const PLATFORM: &str = "x86_64-unknown-linux-gnu";
+
+/// The parts a run is joined from, which only the core names: a front end that built one would be
+/// deciding how a run is assembled.
+const JOINED_IN_CORE: [&str; 4] = ["Asking::new", "Shell::new", "Run::new", "Record::open"];
+
+fn sources(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        let entries = std::fs::read_dir(&directory).expect("the tree is readable");
+        for entry in entries {
+            let path = entry.expect("a directory entry").path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|kind| kind == "rs") {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
+}
 
 struct Graph {
     names: HashMap<String, String>,
@@ -109,5 +132,27 @@ fn core_depends_on_no_front_end() {
     assert!(
         !dependencies.contains(&"sindri"),
         "sindri-core must not depend on a front end, its dependencies are {dependencies:?}"
+    );
+}
+
+#[test]
+fn no_front_end_module_assembles_a_run() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut named = Vec::new();
+    for path in sources(&root) {
+        let source = std::fs::read_to_string(&path).expect("a source file is readable");
+        for (number, line) in source.lines().enumerate() {
+            let code = line.split("//").next().unwrap_or_default();
+            for part in JOINED_IN_CORE {
+                if code.contains(part) {
+                    named.push(format!("{}:{}: {part}", path.display(), number + 1));
+                }
+            }
+        }
+    }
+
+    assert!(
+        named.is_empty(),
+        "the core is the only place a run is joined, and these name a part of one: {named:#?}"
     );
 }
