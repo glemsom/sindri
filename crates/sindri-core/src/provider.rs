@@ -433,10 +433,8 @@ impl Client {
         self
     }
 
-    /// The sign-in the wire is asked with, kept whether or not it could be read: a store that
-    /// will not open is a reason both jobs can give, not a wire left out of the one that lists.
-    /// The store's own literals join the run's secrets, so nothing it holds can reach a record,
-    /// the JSON or a line of chatter.
+    /// The sign-in the wire is asked with, kept even when it could not be read: the store's own
+    /// literals join the run's secrets, so nothing it holds can reach a record or a line.
     pub fn signing(mut self, sign_in: Option<Result<copilot::Store, copilot::SignIn>>) -> Self {
         if let Some(Ok(store)) = &sign_in {
             self.secrets = self.secrets.clone().union(store.secrets());
@@ -498,9 +496,9 @@ impl Client {
         let (Wire::Copilot, Some(store)) = (wire, self.store.as_ref()) else {
             return Ok(None);
         };
-        let Ok(store) = store else {
-            return Ok(None);
-        };
+        let store = store
+            .as_ref()
+            .map_err(|reason| Failure::signed_out(reason.clone()))?;
         let session = store.session().map_err(Failure::signed_out)?;
         Ok(session.expose().map(|token| {
             secrets.add(token);

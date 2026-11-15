@@ -66,9 +66,7 @@ impl Endpoint {
     pub fn route_of(&self, model: &str) -> Option<Route> {
         match self.serving("") {
             Serving::Messages(_) => None,
-            Serving::OpenAi(config) => {
-                Some(Route::of(&OpenAiWire::new(config, model.to_owned())))
-            }
+            Serving::OpenAi(config) => Some(Route::of(&OpenAiWire::new(config, model.to_owned()))),
         }
     }
 
@@ -78,9 +76,10 @@ impl Endpoint {
     pub fn sign_in(&self, environment: &impl Environment) -> Option<Result<Store, SignIn>> {
         self.wire.credential_variable().is_none().then(|| {
             Store::resolve(environment).map_err(|error| {
-                SignIn::Unavailable(SecretSet::default().redact(format!(
-                    "the copilot sign-in cannot be read: {error}"
-                )))
+                SignIn::Unavailable(
+                    SecretSet::default()
+                        .redact(format!("the copilot sign-in cannot be read: {error}")),
+                )
             })
         })
     }
@@ -90,12 +89,10 @@ impl Endpoint {
         match self.wire {
             Wire::Anthropic => Serving::Messages(self.at_base(AnthropicConfig::new(key))),
             Wire::Openai => Serving::OpenAi(self.dressed(OpenAIConfig::new(key))),
-            Wire::Copilot => Serving::OpenAi(
-                self.dressed(OpenAIConfig::with_key(
-                    &rig_core::providers::copilot::DIALECT,
-                    key,
-                )),
-            ),
+            Wire::Copilot => Serving::OpenAi(self.dressed(OpenAIConfig::with_key(
+                &rig_core::providers::copilot::DIALECT,
+                key,
+            ))),
         }
     }
 

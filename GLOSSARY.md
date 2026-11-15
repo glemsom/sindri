@@ -81,9 +81,13 @@ A provider dialect and its endpoint configuration: `anthropic`, `openai`, `copil
 those words.
 _Avoid_: Provider, backend, API
 
+**Endpoint**:
+A wire at the address it is asked and on the route it serves: the one value a run and a listing are
+both built from, so the names a listing serves are read from the endpoint a run asks.
+_Avoid_: Provider, base url, host
+
 **Served name**:
-A model identifier read off the wire, never invented, kept beside the `(wire, base_url)` that
-produced it.
+A model identifier read off the wire, never invented, kept beside the endpoint that produced it.
 _Avoid_: Model list, catalog, available models
 
 **Route**:

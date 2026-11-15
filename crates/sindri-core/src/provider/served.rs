@@ -69,7 +69,9 @@ impl Client {
             .credential(at.wire(), credential, &mut secrets)
             .map_err(|failure| failure.message.to_string())
             .and_then(|key| match key {
-                Some(key) => self.catalogue(at, &key).map_err(|failure| reason(at, &failure)),
+                Some(key) => self
+                    .catalogue(at, &key)
+                    .map_err(|failure| reason(at, &failure)),
                 None => Err(credential_source(at.wire())),
             });
         let outcome = if current.pair() == *at {

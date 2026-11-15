@@ -461,3 +461,44 @@ fn a_copilot_listing_asks_the_store_a_run_would_sign_in_with() {
         asked.headers
     );
 }
+
+#[test]
+fn a_store_that_cannot_be_read_is_the_reason_both_jobs_give() {
+    let endpoint = Endpoint::own(Wire::Copilot);
+    let Some(Err(sign_in)) = endpoint.sign_in(&BTreeMap::new()) else {
+        panic!("a copilot endpoint asks the store, and an empty environment names no config home");
+    };
+    let words = sign_in.to_string();
+    assert!(
+        words.contains("XDG_CONFIG_HOME"),
+        "the sign-in that could not be read says why: {words}"
+    );
+
+    let replay = Replay::default();
+    let client = client_over(&replay).signing(Some(Err(sign_in)));
+
+    let listing = client.served(&endpoint, &Credential::none(), &endpoint);
+    assert_eq!(
+        listing.names(),
+        None,
+        "a store that will not open lists nothing"
+    );
+    let hint = listing.hint().expect("and the listing says why");
+    assert!(
+        hint.contains(&words),
+        "the hint is the sign-in's own words: {hint}"
+    );
+
+    let failure = client
+        .ask(&Ask::new(Wire::Copilot, GPT_5).prompt("Say hello"), &mut ())
+        .expect_err("a store that will not open asks nothing");
+    assert!(
+        failure.message.to_string().contains(&words),
+        "the run gives the same words as the listing: {failure}"
+    );
+    assert!(
+        replay.requests().is_empty(),
+        "neither job sent a request: {:?}",
+        replay.requests()
+    );
+}
