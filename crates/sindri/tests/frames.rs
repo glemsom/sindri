@@ -295,7 +295,7 @@ fn markdown_code_80x24_is_a_guttered_block_highlighted_and_one_unknown_language(
 }
 
 #[test]
-fn markdown_inline_80x24_is_a_run_of_code_set_reversed_in_a_paragraph() {
+fn markdown_inline_80x24_is_a_chip_drawn_on_the_composer_band_in_a_paragraph() {
     fixture::assert_frame("markdown-inline", 80, 24);
 }
 

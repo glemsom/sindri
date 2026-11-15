@@ -330,7 +330,7 @@ fn quoted() -> &'static str {
 }
 
 fn code() -> &'static str {
-    "```rust\nfn main() {\n    let fence = Fence::open();\n    fence.words();\n}\n```\n\n\
+    "```rust\nfn main() {\n    let fence = Fence::open(\"rust\");\n    fence.words();\n}\n```\n\n\
      ```frobnicate\nthis language names no syntax definition\n```"
 }
 

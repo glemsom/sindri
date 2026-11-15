@@ -109,7 +109,7 @@ fn kinds() -> &'static [(Scope, Ink)] {
     KINDS.get_or_init(|| {
         [
             ("comment", Ink::Dim),
-            ("string", Ink::Muted),
+            ("string", Ink::Ok),
             ("keyword.operator", Ink::Plain),
             ("keyword", Ink::Accent),
             ("storage", Ink::Accent),
@@ -171,6 +171,14 @@ struct Laid {
     destination: String,
 }
 
+/// One run of the row in hand drawn on a band of its own: the column it begins at past the words'
+/// own edge, the columns it covers, and the band under it.
+struct Underlay {
+    left: usize,
+    width: usize,
+    band: Band,
+}
+
 /// The room a block is being laid out in, and the rows it has been laid out as so far.
 /// The gutters a construct adds are subtracted from the room before a word is placed and
 /// never after, so no row this writes runs over the width and gets clipped by the paint.
@@ -206,6 +214,11 @@ struct Room {
     /// The runs of the row in hand that are ways to somewhere, measured from the words' own left
     /// edge: laid as the words land, so a link that wraps is a run on each row it wrote.
     laid: Vec<Laid>,
+    /// The runs of the row in hand drawn on a band of their own, measured from the words' own left
+    /// edge: laid as the words land, so a chip that wraps keeps its band on each row it wrote.
+    underlays: Vec<Underlay>,
+    /// The band the run being placed is drawn on, while a chip is being said.
+    under: Option<Band>,
     /// The columns the first row gives up to a marker laid at the frame's left edge, and
     /// nothing once that row has been written.
     reserve: usize,
@@ -237,6 +250,8 @@ impl Room {
             blank: true,
             destination: None,
             laid: Vec::new(),
+            underlays: Vec::new(),
+            under: None,
             code: None,
             mermaid: None,
             table: None,
@@ -334,7 +349,7 @@ impl Room {
                     let way = self.destination.clone();
                     match &mut self.table {
                         // A cell is measured only once the whole table has been read.
-                        Some(table) => table.text(&text, look, way.as_deref()),
+                        Some(table) => table.text(&text, look, way.as_deref(), None),
                         // A picture's words are kept aside for the row it is spoken of on:
                         // they are the block's, not the paragraph's.
                         None => match &mut self.image {
@@ -344,19 +359,20 @@ impl Room {
                     }
                 }
             },
-            // Inline code keeps the spacing it was written with. It is reversed over the
-            // accent rather than over no colour, because `mark` is reverse over no colour
-            // and the two would otherwise be one look.
+            // A chip keeps the spacing it was written with: the band under it, and not a face, is
+            // what tells it from the prose it sits in.
             Event::Code(text) => {
-                let reversed = match self.destination.is_some() {
-                    true => Look::new(Ink::Accent, Face::Reversed).underlined(UNDERLINE),
-                    false => Look::new(Ink::Accent, Face::Reversed),
+                let look = match self.destination.is_some() {
+                    true => Look::plain(Ink::Accent).underlined(UNDERLINE),
+                    false => Look::plain(Ink::Accent),
                 };
                 let way = self.destination.clone();
                 match &mut self.table {
-                    Some(table) => table.text(&text, reversed, way.as_deref()),
+                    Some(table) => table.text(&text, look, way.as_deref(), Some(Band::Composer)),
                     None => {
-                        self.place(&text, reversed, self.spaced);
+                        self.under = Some(Band::Composer);
+                        self.place(&text, look, self.spaced);
+                        self.under = None;
                         self.spaced = false;
                     }
                 }
@@ -375,7 +391,7 @@ impl Room {
                 let look = self.prose_look();
                 let way = self.destination.clone();
                 match &mut self.table {
-                    Some(table) => table.text(" ", look, way.as_deref()),
+                    Some(table) => table.text(" ", look, way.as_deref(), None),
                     None => match &mut self.image {
                         Some((_, alt)) => alt.push(' '),
                         None => self.spaced = true,
@@ -471,7 +487,7 @@ impl Room {
             let gap = usize::from(space && self.used > 0);
             if self.used + gap + usize::from(pen::cells(rest)) <= room {
                 if gap == 1 {
-                    self.between();
+                    self.space(look);
                 }
                 self.linked(rest, look);
                 return;
@@ -489,6 +505,25 @@ impl Room {
             if rest.is_empty() {
                 return;
             }
+        }
+    }
+
+    /// The space before a word of `look`: a word of a chip that stands on the run said just before it
+    /// is set beside its own kind, so the band runs over the spaces of one chip and never stops at
+    /// each of its words. The space before a chip, and the one between two chips, are prose's.
+    fn space(&mut self, look: Look) {
+        match self.stands() {
+            true => self.linked(" ", look),
+            false => self.between(),
+        }
+    }
+
+    /// Whether the word in hand stands on the band of the run that ended just before it, which is
+    /// what makes the space between the two one chip's own and not the prose's.
+    fn stands(&self) -> bool {
+        match (self.under, self.underlays.last()) {
+            (Some(band), Some(run)) => run.band == band && run.left + run.width == self.used,
+            _ => false,
         }
     }
 
@@ -528,6 +563,14 @@ impl Room {
         let left = self.used;
         let width = usize::from(pen::cells(text));
         self.extend(text, look);
+        if let Some(band) = self.under {
+            match self.underlays.last_mut() {
+                Some(run) if run.band == band && run.left + run.width == left => {
+                    run.width = run.width.saturating_add(width);
+                }
+                _ => self.underlays.push(Underlay { left, width, band }),
+            }
+        }
         let Some(destination) = &self.destination else {
             return;
         };
@@ -809,6 +852,14 @@ impl Room {
                     .unwrap_or(u16::MAX),
                 u16::try_from(run.width.saturating_mul(scale)).unwrap_or(u16::MAX),
                 run.destination,
+            );
+        }
+        for run in std::mem::take(&mut self.underlays) {
+            row = row.underlain(
+                u16::try_from(gutter.saturating_add(run.left.saturating_mul(scale)))
+                    .unwrap_or(u16::MAX),
+                u16::try_from(run.width.saturating_mul(scale)).unwrap_or(u16::MAX),
+                run.band,
             );
         }
         self.line.clear();
@@ -1108,11 +1159,14 @@ struct Said {
     text: String,
     look: Look,
     destination: Option<String>,
+    /// The band the words are drawn on: a chip's cell is a band of its own where the rest of the
+    /// cell is prose.
+    band: Option<Band>,
 }
 
 impl Table {
     /// A cell's words, worn bold while the header is being read.
-    fn text(&mut self, text: &str, look: Look, destination: Option<&str>) {
+    fn text(&mut self, text: &str, look: Look, destination: Option<&str>, band: Option<Band>) {
         if text.is_empty() {
             return;
         }
@@ -1122,13 +1176,16 @@ impl Table {
         };
         let destination = destination.map(str::to_owned);
         match self.cell.last_mut() {
-            Some(said) if said.look == look && said.destination == destination => {
+            Some(said)
+                if said.look == look && said.destination == destination && said.band == band =>
+            {
                 said.text.push_str(text);
             }
             _ => self.cell.push(Said {
                 text: String::from(text),
                 look,
                 destination,
+                band,
             }),
         }
     }
@@ -1220,9 +1277,11 @@ fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Row>> {
             let mut room = Room::new(u16::try_from(*width).unwrap_or(u16::MAX), &Surface::none());
             for said in cells.get(at).into_iter().flatten() {
                 room.destination = said.destination.clone();
+                room.under = said.band;
                 room.prose(&said.text, said.look);
             }
             room.destination = None;
+            room.under = None;
             room.flush_if_written();
             room.rows
         })

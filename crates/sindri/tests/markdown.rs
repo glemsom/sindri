@@ -4,6 +4,7 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use sindri::graphics::CellSize;
 use sindri::ink::{Face, Faces, Ink, Look};
 use sindri::link::Links;
@@ -239,18 +240,14 @@ fn a_heading_that_opens_an_item_hangs_its_rule_under_the_items_gutter() {
 }
 
 #[test]
-fn inline_code_is_reversed_over_the_accent() {
+fn the_words_of_a_code_span_are_the_accent_and_never_a_reversed_face() {
     let rows = markdown::rows("run `make check` first", 80);
 
     assert_eq!(drawn(&rows), ["run make check first"]);
     assert!(
-        wears(
-            &rows[0],
-            "make check",
-            Look::new(Ink::Accent, Face::Reversed)
-        ),
-        "a run of inline code is reversed over the accent, so that it is not the mark's \
-         own look: {:?}",
+        wears(&rows[0], "make check", Look::plain(Ink::Accent)),
+        "a run of inline code is the accent and wears no face, so it is told from the prose \
+         around it by the band under it: {:?}",
         rows[0].spans()
     );
 }
@@ -261,21 +258,75 @@ fn way_in_prose() -> Look {
     Look::plain(Ink::Accent).underlined(Ink::Dim)
 }
 
-/// The ways `rows` name, painted one to a frame row from its first.
-fn ways(rows: &[Row]) -> Links {
+/// The rows painted into a frame 120 columns wide, one to a row, so a test reads the cells a band
+/// was claimed on and not only the spans the words are said in.
+fn painted(rows: &[Row], links: &mut Links) -> Buffer {
     let mut buffer = Buffer::empty(Rect::new(0, 0, 120, u16::try_from(rows.len()).unwrap()));
-    let mut links = Links::none();
     for (at, row) in rows.iter().enumerate() {
         let area = Rect::new(0, u16::try_from(at).unwrap(), 120, 1);
         row.paint(
             area,
             &mut buffer,
             &Palette::TRUECOLOR,
-            &mut links,
+            links,
             &mut Sizes::none(),
         );
     }
+    buffer
+}
+
+/// The ways `rows` name, painted one to a frame row from its first.
+fn ways(rows: &[Row]) -> Links {
+    let mut links = Links::none();
+    painted(rows, &mut links);
     links
+}
+
+/// The band painted under the cells of a frame's row `y`, column by column from `left` to `right`.
+fn banded(buffer: &Buffer, y: u16, left: u16, right: u16) -> Vec<Color> {
+    (left..right).map(|x| buffer[(x, y)].bg).collect()
+}
+
+/// The frame row the words `said` are drawn on: a row of `rows` laid out as its words alone, so a
+/// test reads the cells of a construct out of the picture instead of counting rows of the layout.
+fn row_of(rows: &[Row], said: &str) -> u16 {
+    u16::try_from(
+        drawn(rows)
+            .iter()
+            .position(|row| row == said)
+            .unwrap_or_else(|| panic!("the row {said:?} is drawn on: {:?}", drawn(rows))),
+    )
+    .expect("a frame this short")
+}
+
+#[test]
+fn a_code_span_is_drawn_on_the_composer_band_and_the_words_around_it_are_not() {
+    let rows = markdown::rows("run `make check` first", 40);
+    let buffer = painted(&rows, &mut Links::none());
+    let band = Palette::TRUECOLOR.band(Band::Composer);
+
+    assert_eq!(drawn(&rows), ["run make check first"]);
+    assert_eq!(
+        banded(&buffer, 0, 4, 14),
+        [band; 10],
+        "the ten columns the chip was written over are drawn on the composer band: {:?}",
+        drawn(&rows)
+    );
+    assert_eq!(
+        buffer[(4, 0)].fg,
+        Palette::TRUECOLOR.colour(Ink::Accent),
+        "and its words are the accent, so a chip is read as the composer's own run"
+    );
+    assert_eq!(
+        banded(&buffer, 0, 0, 4),
+        [Color::Reset; 4],
+        "the prose leading up to the chip is drawn on no band"
+    );
+    assert_eq!(
+        banded(&buffer, 0, 14, 20),
+        [Color::Reset; 6],
+        "and neither is the prose after it"
+    );
 }
 
 #[test]
@@ -498,20 +549,118 @@ fn a_link_a_table_in_a_quote_holds_carries_its_destination_past_the_bar() {
 }
 
 #[test]
+fn a_code_span_in_a_table_cell_is_drawn_on_the_composer_band_past_the_cell_before_it() {
+    let rows = markdown::rows("| a | b |\n| --- | --- |\n| one | `a chip` |", 40);
+    let buffer = painted(&rows, &mut Links::none());
+    let band = Palette::TRUECOLOR.band(Band::Composer);
+    let at = row_of(&rows, "one │ a chip");
+
+    assert_eq!(
+        banded(&buffer, at, 6, 12),
+        [band; 6],
+        "the cell's chip is a band of its own, moved past the cell before it: {:?}",
+        drawn(&rows)
+    );
+    assert_eq!(
+        banded(&buffer, at, 0, 6),
+        [Color::Reset; 6],
+        "and the cell before it is the ground the table was drawn on"
+    );
+    assert_eq!(
+        banded(&buffer, at, 12, 16),
+        [Color::Reset; 4],
+        "and the row past the chip is that ground too"
+    );
+    assert_eq!(
+        banded(&buffer, at - 1, 6, 12),
+        [Color::Reset; 6],
+        "the rule over the cell is drawn on no band of the chip's"
+    );
+}
+
+#[test]
+fn a_code_span_wider_than_its_cell_wraps_at_its_own_space_and_keeps_its_band_on_both_rows() {
+    let rows = markdown::rows("| word |\n| --- |\n| `alpha beta gamma` |", 10);
+    let buffer = painted(&rows, &mut Links::none());
+    let band = Palette::TRUECOLOR.band(Band::Composer);
+    let at = row_of(&rows, "alpha beta");
+
+    assert_eq!(
+        drawn(&rows)[2..],
+        ["alpha beta", "gamma"],
+        "a chip is wrapped at its own space and never inside a word of it"
+    );
+    assert_eq!(
+        banded(&buffer, at, 0, 10),
+        [band; 10],
+        "the row of the chip it wrapped on is banded over the cell it fills"
+    );
+    assert_eq!(
+        banded(&buffer, at + 1, 0, 5),
+        [band; 5],
+        "and the row it finished on is banded over its own words too"
+    );
+    assert_eq!(
+        banded(&buffer, at + 1, 5, 10),
+        [Color::Reset; 5],
+        "and no further than those words"
+    );
+}
+
+#[test]
+fn a_code_span_that_a_table_and_a_way_both_hold_keeps_its_band_and_its_line() {
+    let rows = markdown::rows(
+        "| word |\n| --- |\n| [`gate`](https://example.test/gate) |",
+        40,
+    );
+    let mut links = Links::none();
+    let buffer = painted(&rows, &mut links);
+    let band = Palette::TRUECOLOR.band(Band::Composer);
+    let at = row_of(&rows, "gate");
+
+    assert_eq!(
+        Palette::TRUECOLOR.look_of(&buffer[(0, at)]),
+        Some(Look::plain(Ink::Accent).underlined(Ink::Dim)),
+        "a chip in a cell keeps the line a way wears: {:?}",
+        drawn(&rows)
+    );
+    assert_eq!(
+        banded(&buffer, at, 0, 4),
+        [band; 4],
+        "and the ground it is drawn on is the chip's own: {:?}",
+        drawn(&rows)
+    );
+    assert_eq!(
+        links.at(at, 0),
+        Some("https://example.test/gate"),
+        "and the cell is still a way to the destination the words were written over"
+    );
+}
+
+#[test]
 fn a_code_span_inside_a_link_is_a_way_to_the_destination_in_its_own_look() {
     let rows = markdown::rows("read [the `gate` word](https://example.test/gate)", 60);
 
     assert_eq!(drawn(&rows), ["read the gate word"]);
-    assert!(
-        wears(
-            &rows[0],
-            "gate",
-            Look::new(Ink::Accent, Face::Reversed).underlined(Ink::Dim)
-        ),
-        "a code span keeps its own look and wears the line a way wears: {:?}",
-        rows[0].spans()
+    let mut links = Links::none();
+    let buffer = painted(&rows, &mut links);
+    assert_eq!(
+        Palette::TRUECOLOR.look_of(&buffer[(9, 0)]),
+        Some(Look::plain(Ink::Accent).underlined(Ink::Dim)),
+        "a code span inside a way is the accent under the line a way wears: {}",
+        words(&rows[0])
     );
-    let links = ways(&rows);
+    assert_eq!(
+        banded(&buffer, 0, 9, 13),
+        [Palette::TRUECOLOR.band(Band::Composer); 4],
+        "the four columns the chip was written over are still the composer band: {}",
+        words(&rows[0])
+    );
+    assert_eq!(
+        banded(&buffer, 0, 13, 18),
+        [Color::Reset; 5],
+        "the rest of the way's words are prose, and no band is drawn under them"
+    );
     assert_eq!(
         links.at(0, 9),
         Some("https://example.test/gate"),
@@ -571,7 +720,7 @@ fn inline_code_keeps_the_spacing_it_was_written_with() {
     assert!(
         rows[0]
             .spans()
-            .contains(&(String::from("a  b"), Look::new(Ink::Accent, Face::Reversed))),
+            .contains(&(String::from("a  b"), Look::plain(Ink::Accent))),
         "the code's two spaces are still two: {:?}",
         rows[0].spans()
     );
@@ -662,6 +811,18 @@ fn emphasis_inside_a_quote_keeps_the_quotes_ink_and_its_gutter() {
 }
 
 #[test]
+fn a_fences_string_literal_is_drawn_in_the_ok_ink() {
+    let rows = markdown::rows("```rust\nlet s = \"x\";\n```", 40);
+
+    assert!(
+        wears(&rows[1], "\"x\"", Look::plain(Ink::Ok)),
+        "a string in a fence is drawn in the ok ink, which is what tells a literal from the \
+         words around it: {:?}",
+        rows[1].spans()
+    );
+}
+
+#[test]
 fn a_fences_words_are_drawn_as_the_fence_drew_them_and_a_mark_inside_one_stays_a_glyph() {
     let rows = markdown::rows(
         "```\n**bold** and *italic* stay glyphs\n```\n\nand `a **b** c` in a span",
@@ -685,11 +846,7 @@ fn a_fences_words_are_drawn_as_the_fence_drew_them_and_a_mark_inside_one_stays_a
         rows[0].spans()
     );
     assert!(
-        wears(
-            &rows[2],
-            "a **b** c",
-            Look::new(Ink::Accent, Face::Reversed)
-        ),
+        wears(&rows[2], "a **b** c", Look::plain(Ink::Accent)),
         "a span keeps the look code is read in, mark and all: {:?}",
         rows[2].spans()
     );
