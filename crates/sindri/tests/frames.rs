@@ -15,12 +15,12 @@ fn boot_80x24_is_every_line_of_the_splash_screen_and_no_rail_beside_it() {
 }
 
 #[test]
-fn boot_face_120x40_is_the_face_over_the_wordmark_with_the_rail_whole_beside_it() {
+fn boot_face_120x40_is_the_face_over_the_wordmark_and_the_one_over_the_rails_top_rows() {
     fixture::assert_frame("boot-face", 120, 40);
 }
 
 #[test]
-fn boot_face_small_120x14_is_the_splash_screen_of_a_frame_too_short_for_the_face() {
+fn boot_face_small_120x14_is_the_splash_screens_block_beside_a_rail_whose_face_takes_every_row() {
     fixture::assert_frame("boot-face-small", 120, 14);
 }
 

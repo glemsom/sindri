@@ -373,8 +373,9 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     );
 }
 
-/// The face a visit turns off is a picture the launch's first frame has already placed: a value
-/// handed again is the frame's own, so no placement is made into pixels a second time.
+/// The face a visit turns off is the two pictures the launch's first frame has already placed, the
+/// one over the wordmark and the one over the rail's top rows: a value handed again is the frame's
+/// own, so no placement is made into pixels a second time.
 #[test]
 fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again() {
     let (_home, environment) = config_home("face = true\n");
@@ -401,9 +402,9 @@ fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again()
     assert!(!live.draws_the_face(), "the face is turned off");
     assert_eq!(
         live.rasterises("face.png"),
-        1,
-        "and the picture the first frame placed is the one the frame holds after the visit, so \
-         nothing was transmitted twice"
+        2,
+        "and each face the frame holds, the one over the wordmark and the one over the rail's top \
+         rows, is made into pixels once: nothing was transmitted twice"
     );
 }
 

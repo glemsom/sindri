@@ -497,24 +497,30 @@ fn railed_facts() -> Facts {
     }
 }
 
-/// The splash screen a launch opens on, with the facts a launch already holds beside it: a session
-/// and a temp are a run's own, so the rail draws an em dash for each.
+/// The facts a launch already holds beside the splash screen: a session and a temp are a run's own,
+/// so the rail draws an em dash for each.
+fn boot_facts() -> facts::Facts {
+    facts::Facts::boot(
+        Boot {
+            wire: Some(Wire::Anthropic),
+            model: Some(String::from("claude-sonnet-4-5")),
+            workspace: PathBuf::from("/home/glemsom/Documents/git/sindri"),
+            branch: Some(String::from("spec/1-capability")),
+            enforcement: Enforcement::Bubblewrap,
+        },
+        None,
+    )
+}
+
+/// The splash screen a launch opens on, drawn on a terminal that places pictures or on one that
+/// places none.
 fn splash(draws: bool) -> View {
     View::of(
         match draws {
             true => caps::at(cell()),
             false => Capabilities::default(),
         },
-        facts::Facts::boot(
-            Boot {
-                wire: Some(Wire::Anthropic),
-                model: Some(String::from("claude-sonnet-4-5")),
-                workspace: PathBuf::from("/home/glemsom/Documents/git/sindri"),
-                branch: Some(String::from("spec/1-capability")),
-                enforcement: Enforcement::Bubblewrap,
-            },
-            None,
-        ),
+        boot_facts(),
         Transcript::none(),
     )
 }
@@ -1153,45 +1159,129 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
 }
 
 #[test]
-fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_over_its_wordmark() {
+fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let mut pictured = splash(true);
     let with = painted_at(&mut pictured, (120, 40));
     let mut placeless = splash(false);
     let without = painted_at(&mut placeless, (120, 40));
     let rail = rail_band(120, 40);
+    let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
 
-    let stated = |buffer: &Buffer| -> Vec<String> {
-        (rail.y..rail.bottom())
+    // The splash screen's words carry a face of their own beside the rail, so a row of the frame
+    // is the rail's only where a placement covers the rail's own columns.
+    let taken = |y: u16| -> Vec<u16> {
+        pictured_cols(&with, y)
+            .into_iter()
+            .filter(|x| (rail.x..rail.right()).contains(x))
+            .collect()
+    };
+    let rows: Vec<u16> = (rail.y..rail.bottom())
+        .filter(|y| !taken(*y).is_empty())
+        .collect();
+    assert_eq!(
+        rows,
+        (rail.y..rail.y + face.rows()).collect::<Vec<u16>>(),
+        "the face is drawn in the 120-column frame's top rows, {} of them, from the rail's first \
+         row",
+        face.rows()
+    );
+    for y in rail.y..rail.y + face.rows() {
+        let columns = taken(y);
+        assert_eq!(
+            (columns.first().copied(), columns.len()),
+            (
+                Some(rail.x + (rail.width - face.cols()) / 2),
+                usize::from(face.cols())
+            ),
+            "row {y} of the face is {} columns centred in the rail's own columns: {columns:?}",
+            face.cols()
+        );
+    }
+
+    let rule = rail.y + face.rows();
+    assert_eq!(
+        rail_row(&with, rail, rule).trim_end(),
+        "─".repeat(usize::from(rail.width)),
+        "the face the rail carries is closed by the one rule the rail draws in its body"
+    );
+    let under = rule + 1;
+    assert_eq!(
+        rail_row(&with, rail, under).trim_end(),
+        "wire      anthropic",
+        "and the first fact stands on the row under that rule, whole"
+    );
+
+    let stated = |buffer: &Buffer, from: u16| -> Vec<String> {
+        (from..rail.bottom())
             .map(|y| rail_row(buffer, rail, y).trim_end().to_owned())
             .filter(|row| !row.is_empty())
             .collect()
     };
     assert_eq!(
-        stated(&with),
-        stated(&without),
-        "the splash screen's rail draws the facts a terminal that places no picture draws, so the \
-         face over the wordmark takes no row of one"
-    );
-    assert_eq!(
-        stated(&with).first().map(String::as_str),
-        Some("wire      anthropic"),
-        "and the first of them stands on the rail's first row, under no face"
+        stated(&with, under),
+        stated(&without, rail.y),
+        "the splash screen's rail draws the facts a terminal that places no picture draws from \
+         its first row, so the face it carries takes no fact of one"
     );
     assert!(
-        !pictured_rows(&with).is_empty(),
-        "the splash screen draws the face over the band an answer goes in"
+        !stated(&with, under).iter().any(|row| row.contains("more")),
+        "and none is counted as gone, so the rail grows no row saying one went: {:?}",
+        stated(&with, under)
     );
-    let taken = (rail.y..rail.bottom())
-        .flat_map(|y| (rail.x..rail.right()).map(move |x| (x, y)))
-        .filter(|(x, y)| {
-            with.cell((*x, *y))
-                .is_some_and(|cell| cell.skip || cell.symbol().contains(PLACEHOLDER))
-        })
-        .count();
+}
+
+#[test]
+fn a_terminal_that_places_no_picture_or_a_face_turned_off_draws_the_splash_screens_rail_from_its_first_row()
+ {
+    let rail = rail_band(120, 40);
+    let mut turned_off = View::of(caps::faced(false), boot_facts(), Transcript::none());
+    let off = painted_at(&mut turned_off, (120, 40));
+    let mut placeless = View::of(Capabilities::default(), boot_facts(), Transcript::none());
+    let without = painted_at(&mut placeless, (120, 40));
+
+    assert!(
+        pictured_rows(&off).is_empty(),
+        "a splash frame the config turned the face off for is given no cell of it"
+    );
     assert_eq!(
-        taken, 0,
-        "and no cell of the rail's columns is a placement: the face is the splash screen's own, \
-         over its wordmark"
+        rail_row(&off, rail, rail.y).trim_end(),
+        "wire      anthropic",
+        "the facts stand from the rail's first row, and the row under them is the second fact: no \
+         band is reserved for a face that is not drawn, and no rule closes one"
+    );
+    assert_eq!(
+        rail_row(&without, rail, rail.y).trim_end(),
+        "wire      anthropic",
+        "and a terminal that places no picture is handed the same first row"
+    );
+    assert_eq!(
+        off, without,
+        "and every cell of the 120-column splash frame is the one a terminal that places no \
+         picture draws"
+    );
+
+    // A splash frame narrower than a ledger is handed no rail at all, so the picture it holds is
+    // the splash screen's own, over its wordmark.
+    let band = shared_band(80, 24);
+    let mut narrow = splash(true);
+    let drawn = painted_at(&mut narrow, (80, 24));
+    assert!(
+        !(band.y..band.bottom()).any(|y| rail_row(&drawn, band, y).contains("anthropic")),
+        "an 80-column splash frame is handed no rail, so it draws no fact of one"
+    );
+    let wordmark = (band.y..band.bottom())
+        .find(|y| rail_row(&drawn, band, *y).contains("sindri"))
+        .expect("the wordmark of the splash screen's block");
+    let rows = pictured_rows(&drawn);
+    assert!(
+        !rows.is_empty(),
+        "and the one picture it holds is the face over that wordmark, drawn as it was before the \
+         rail carried one"
+    );
+    assert!(
+        rows.iter().all(|y| *y < wordmark),
+        "every row of it stands over the wordmark at row {wordmark} and none beside it: the frame \
+         reserves no row for a face a rail draws, because it draws no rail: {rows:?}"
     );
 }
 

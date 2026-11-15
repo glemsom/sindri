@@ -895,14 +895,12 @@ impl View {
         // in what is left: a row's width is the width it is drawn at.
         let share = self.split(bands.transcript);
         if let Some((shape, band)) = share.rail {
-            // A strip is one row of facts and no band, a terminal that places no picture is handed
-            // no cells, and a splash screen draws the face over its wordmark: the rail beside it
-            // keeps every fact.
+            // A ledger carries the face wherever it is drawn, and a strip is one row of facts with
+            // no band to carry one in: a terminal that places no picture, or a config that turned
+            // it off, is handed no cells and reserves no row.
             let picture = match shape {
-                Rail::Ledger if !self.facts.splash() => {
-                    face::over_rail(band.area.width, &self.face_surface())
-                }
-                Rail::Ledger | Rail::Strip => None,
+                Rail::Ledger => face::over_rail(band.area.width, &self.face_surface()),
+                Rail::Strip => None,
             };
             let band = match &picture {
                 Some(picture) => band.with_picture(picture.cols(), picture.rows()),
@@ -2532,22 +2530,32 @@ mod tests {
     }
 
     #[test]
-    fn a_frame_too_short_or_too_narrow_for_the_face_is_handed_the_splash_screen_without_it() {
+    fn a_band_too_short_or_too_narrow_for_the_face_over_the_wordmark_is_the_band_a_placeless_terminal_is_handed()
+     {
         for (cols, rows) in [(120, 14), (30, 24)] {
             let (pictured, band) = splash_frame(cols, rows, true);
-            let (placeless, _) = splash_frame(cols, rows, false);
+            let (placeless, bare) = splash_frame(cols, rows, false);
 
             assert!(
                 pictured_rows(&pictured, band).is_empty(),
                 "at {cols} by {rows} the band leaves the block no rows for the face, and a face \
-                 that small is never drawn over the wordmark"
+                 that small is never drawn over the wordmark: no cell of the band an answer goes \
+                 in is a placement"
             );
             assert_eq!(
-                pictured, placeless,
-                "and every cell of the {cols} by {rows} frame is the one a terminal that places no \
-                 picture draws: no row is reserved for a face that is not drawn"
+                band_of(&pictured, band),
+                band_of(&placeless, bare),
+                "and the band is the one a terminal that places no picture is handed, row for row"
             );
         }
+
+        let (pictured, _) = splash_frame(30, 24, true);
+        let (placeless, _) = splash_frame(30, 24, false);
+        assert_eq!(
+            pictured, placeless,
+            "at 30 by 24 the frame is the splash screen and no rail beside it, so every cell of it \
+             is the one a terminal that places no picture draws"
+        );
     }
 
     #[test]

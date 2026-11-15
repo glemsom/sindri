@@ -135,10 +135,10 @@ _Avoid_: UI, client, interface
 **Sindri's face**:
 The picture of Sindri that the `sindri` binary carries beside the bundled font, measured from its
 own header into a **footprint** and drawn over those cells — decoration, so a terminal that places
-no picture is given no cells and no words for it. It stands over the **rail**'s top rows while a
-run is live, and over the wordmark of the **splash screen**, where the rail beside it keeps every
-fact. A reader turns it off in the config, and a frame with it off reserves no row: the facts
-stand from the rail's first row. Not the **face** an ink wears.
+no picture is given no cells and no words for it. It stands over the **rail**'s top rows wherever
+a rail is drawn, and over the wordmark of the **splash screen**. A reader turns it off in the
+config, and a frame with it off reserves no row: the facts stand from the rail's first row. Not the
+**face** an ink wears.
 _Avoid_: Logo, avatar, mascot, icon
 
 **Band**:
