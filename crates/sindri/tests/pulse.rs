@@ -7,11 +7,12 @@ use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::composer::Key;
+use sindri::facts::Facts;
 use sindri::ink::Ink;
 use sindri::ledger;
 use sindri::pen;
 use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph};
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 use sindri_core::provider::Deltas;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Budget, State as RunState, Stop};
@@ -43,7 +44,11 @@ fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
 }
 
 fn answering() -> View {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.text(
         "The marker is one cell and at most fourteen characters beside it, so a frame \
          narrow enough to cut prose still holds the whole mark.",
@@ -283,7 +288,11 @@ fn the_marker_prefixes_the_newest_answers_first_row_in_the_answers_own_gutter() 
 
 #[test]
 fn the_marker_heads_the_newest_answer_and_an_older_one_keeps_its_gutter() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.text("the first thing said");
     view.reasoning("and then a thought");
     view.text("and the newest answer");
@@ -340,7 +349,11 @@ fn a_settled_marker_is_the_value_at_stop_and_is_never_recomputed() {
 
 #[test]
 fn a_live_marker_draws_the_answers_row_before_the_answer_has_said_anything() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
     let rows = frame(&mut view, 60, 12);
 
@@ -349,7 +362,11 @@ fn a_live_marker_draws_the_answers_row_before_the_answer_has_said_anything() {
 
 #[test]
 fn a_frame_with_no_run_has_no_marker_on_it() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     let rows = frame(&mut view, 60, 12);
 
     assert!(

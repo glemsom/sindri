@@ -11,8 +11,9 @@ use ratatui::buffer::Buffer;
 use sindri::capability::Capabilities;
 use sindri::commands::{self, Command};
 use sindri::composer::{Key, Outcome};
+use sindri::facts::Facts;
 use sindri::keys::Mode;
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -25,7 +26,11 @@ fn say(view: &mut View, line: &str) -> Outcome {
 }
 
 fn frame(workspace: &Path) -> View {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.handed(view.facts().clone().working(workspace.to_path_buf(), None));
     view
 }
@@ -238,11 +243,12 @@ fn new_clears_the_transcript_the_frame_held() {
             text: SecretSet::default().redact("the answer the conversation was about"),
         },
     ];
-    let mut view = View::of(Capabilities::default(), entries, sindri::rows::Scroll::Tail);
-    view.handed(
-        view.facts()
-            .clone()
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default()
+            .asked()
             .working(root.path().to_path_buf(), None),
+        entries,
     );
     assert!(
         painted(&mut view).contains("the answer the conversation was about"),
@@ -358,7 +364,11 @@ fn the_commands_are_read_off_the_draft_the_reader_typed() {
 fn a_frame_with_no_workspace_loads_no_skill() {
     // A frame told no workspace has no catalog to ask, and offering a skill from a directory no run
     // could read would name a name nothing can load.
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
 
     assert_eq!(say(&mut view, "/skill:commit-message"), Outcome::Unchanged);
     assert!(view.loaded().names().is_empty());

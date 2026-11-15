@@ -9,12 +9,13 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 
 use sindri::capability::Capabilities;
-use sindri::composer::{Composer, Key, Outcome};
+use sindri::composer::{Key, Outcome};
+use sindri::facts::Facts;
 use sindri::ink::{Ink, Look};
 use sindri::keys::Mode;
 use sindri::palette::Palette;
 use sindri::picker::Row;
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 
 fn workspace(files: &[&str]) -> tempfile::TempDir {
     let root = tempfile::tempdir().expect("a temp workspace");
@@ -29,9 +30,11 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
 }
 
 fn standing(root: &Path) -> View {
-    let mut view = View::blank(Capabilities::default());
-    view.handed(view.facts().clone().working(root.to_path_buf(), None));
-    view
+    View::of(
+        Capabilities::default(),
+        Facts::default().asked().working(root.to_path_buf(), None),
+        Transcript::none(),
+    )
 }
 
 fn draft(view: &View) -> &str {
@@ -40,10 +43,12 @@ fn draft(view: &View) -> &str {
 
 /// A frame standing in `root` with `draft` typed through the keys a reader's fingers send.
 fn typing(root: &Path, draft: &str) -> View {
-    let mut composer = Composer::new();
-    composer.paste(draft);
-    let mut view = View::typing(Capabilities::default(), composer);
-    view.handed(view.facts().clone().working(root.to_path_buf(), None));
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked().working(root.to_path_buf(), None),
+        Transcript::none(),
+    );
+    view.paste(draft);
     view
 }
 
@@ -220,7 +225,11 @@ fn a_query_that_matches_nothing_offers_nothing_and_selects_nothing() {
 
 #[test]
 fn a_frame_told_no_workspace_offers_no_file() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
 
     assert_eq!(
         view.key(Key::Char('@')),

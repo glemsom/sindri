@@ -564,12 +564,13 @@ mod tests {
     use rustix::termios::{LocalModes, Winsize};
 
     use sindri::capability::{Asked, Capabilities, Question};
+    use sindri::facts::Facts;
     use sindri::ink::{Ink, Look};
     use sindri::link::{Link, Links};
     use sindri::palette::Palette;
     use sindri::pen::{self, Clip};
-    use sindri::rows::Scroll;
     use sindri::size::{SCALE, Sized};
+    use sindri::view::Transcript;
 
     use sindri_core::config::Config;
     use sindri_core::open::Ground;
@@ -886,7 +887,11 @@ mod tests {
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
         let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default(),
+            Transcript::none(),
+        );
         match launch {
             true => {
                 paint(&mut canvas, &mut view).expect("a painted frame");
@@ -981,11 +986,11 @@ mod tests {
         let mut canvas = canvas_at(&terminal, area).expect("a canvas over it");
         let mut view = View::of(
             crate::caps::sized(),
+            Facts::default().asked(),
             vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("# A gate rule"),
             }],
-            Scroll::Tail,
         );
 
         paint(&mut canvas, &mut view).expect("a painted frame");

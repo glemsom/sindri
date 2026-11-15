@@ -8,10 +8,11 @@ use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
+use sindri::facts::Facts;
 use sindri::keys::{Act, Mode, Stack};
 use sindri::mark::Cell;
 use sindri::pointer::Pointer;
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 
 use sindri_core::config::Config;
 use sindri_core::provider::served::{Listing, Where};
@@ -51,11 +52,12 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
 /// the keys the config holds — with `mode` open on top of it.
 fn screen(mode: Mode, capabilities: Capabilities) -> (tempfile::TempDir, View) {
     let root = workspace(&["src/rows.rs", "src/view.rs"]);
-    let mut view = View::blank(capabilities);
-    view.handed(
-        view.facts()
-            .clone()
+    let mut view = View::of(
+        capabilities,
+        Facts::default()
+            .asked()
             .working(root.path().to_path_buf(), None),
+        Transcript::none(),
     );
     match mode {
         Mode::Files => {

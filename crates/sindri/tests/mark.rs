@@ -10,11 +10,11 @@ use ratatui::buffer::Buffer;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
+use sindri::facts::Facts;
 use sindri::ink::Ink;
 use sindri::mark::Cell;
 use sindri::palette::Palette;
-use sindri::rows::Scroll;
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
@@ -95,7 +95,11 @@ fn copied(view: &mut View) -> String {
 
 #[test]
 fn what_the_highlight_covers_is_byte_for_byte_what_the_copy_takes() {
-    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(transcript()),
+    );
     view.drag(Cell::new(1, 2), Cell::new(6, 80));
 
     let frame = painted(&mut view);
@@ -116,7 +120,11 @@ fn what_the_highlight_covers_is_byte_for_byte_what_the_copy_takes() {
 
 #[test]
 fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
-    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(transcript()),
+    );
     view.drag(Cell::new(1, 2), Cell::new(4, 60));
 
     let before = painted(&mut view);
@@ -140,7 +148,11 @@ fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
 
 #[test]
 fn ctrl_y_with_no_mark_copies_the_last_answer() {
-    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(transcript()),
+    );
 
     let taken = copied(&mut view);
 
@@ -153,7 +165,11 @@ fn ctrl_y_with_no_mark_copies_the_last_answer() {
 
 #[test]
 fn ctrl_y_on_a_frame_with_nothing_marked_and_no_answer_hands_out_nothing() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
 
     // Painted first, because a copy reads the span the last paint drew.
     painted(&mut view);
@@ -168,7 +184,11 @@ fn ctrl_y_on_a_frame_with_nothing_marked_and_no_answer_hands_out_nothing() {
 
 #[test]
 fn shift_down_extends_the_mark_a_whole_row_at_a_time() {
-    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(transcript()),
+    );
     view.drag(Cell::new(1, 2), Cell::new(1, 60));
     let one_row = copied(&mut view);
 
@@ -202,7 +222,11 @@ fn shift_down_extends_the_mark_a_whole_row_at_a_time() {
 
 #[test]
 fn the_shift_arrows_do_nothing_when_no_mark_has_been_dragged() {
-    let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(transcript()),
+    );
     painted(&mut view);
 
     assert_eq!(
@@ -217,8 +241,8 @@ fn the_shift_arrows_do_nothing_when_no_mark_has_been_dragged() {
 fn a_heading_drawn_large_is_marked_in_the_mark_ink_and_copied_as_its_words() {
     let mut view = View::of(
         caps::kitty(),
-        vec![answer(1, "# A gate rule")],
-        Scroll::Tail,
+        Facts::default().asked(),
+        Transcript::of(vec![answer(1, "# A gate rule")]),
     );
     view.drag(Cell::new(0, 0), Cell::new(40, 100));
 

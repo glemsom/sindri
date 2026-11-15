@@ -22,7 +22,7 @@ use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout, layout_on};
 use sindri::size::Sizes;
 use sindri::stream::Stream;
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::open::Ground;
 use sindri_core::policy::{Boundary, Enforcement};
@@ -2540,8 +2540,13 @@ fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
 
 #[test]
 fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
-    let mut view = View::blank(Capabilities::default());
-    view.handed(view.facts().clone().pulsed(Some(Pulse::live(0))));
+    let mut view = View::of(
+        Capabilities::default(),
+        sindri::facts::Facts::default()
+            .asked()
+            .pulsed(Some(Pulse::live(0))),
+        Transcript::none(),
+    );
     view.text("the first run's answer");
     view.handed(
         view.facts()
@@ -2579,17 +2584,20 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
 
 #[test]
 fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
-    let mut view = View::boot(Capabilities::default());
-    view.handed(facts::Facts::boot(
-        Boot {
-            wire: None,
-            model: None,
-            workspace: PathBuf::from("/work/agent"),
-            branch: None,
-            enforcement: Enforcement::Bubblewrap,
-        },
-        None,
-    ));
+    let mut view = View::of(
+        Capabilities::default(),
+        facts::Facts::boot(
+            Boot {
+                wire: None,
+                model: None,
+                workspace: PathBuf::from("/work/agent"),
+                branch: None,
+                enforcement: Enforcement::Bubblewrap,
+            },
+            None,
+        ),
+        Transcript::none(),
+    );
     view.paste("why does the retry test fail");
     let Outcome::Send(prompt) = view.key(Key::Enter) else {
         panic!("a draft typed and sent is the prompt a run is asked with");
@@ -2624,7 +2632,11 @@ fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
 #[test]
 fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
     let stop = failed();
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        sindri::facts::Facts::default().asked(),
+        Transcript::none(),
+    );
     view.text("the answer the run got before it stopped");
     view.handed(
         view.facts()

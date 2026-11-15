@@ -17,7 +17,7 @@ use sindri::facts::Facts;
 use sindri::pointer;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
-use sindri::view::{Painted, View};
+use sindri::view::{Painted, Transcript, View};
 use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::provider::Deltas;
 use sindri_core::records::Told;
@@ -104,10 +104,13 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // not a question every paint asks again. A key typed while it thought is handed to the loop
     // rather than dropped.
     let (capabilities, typed) = Capabilities::probed(&Process, &terminal, config.draws_face());
-    let mut view = View::boot(capabilities);
     // Read the home the way `launch` reads it, so the name `/skill:name` accepts and a name a run
-    // could call come from one catalog.
-    view.handed(Facts::boot(boot, crate::launch::home()));
+    // could call come from one catalog. A launch opens on the splash screen, which no record fills.
+    let view = View::of(
+        capabilities,
+        Facts::boot(boot, crate::launch::home()),
+        Transcript::none(),
+    );
     // One telling for the whole launch, so the pace a status is told at is the launch's: the
     // screen it writes on is a second handle on the descriptor a frame is drawn on.
     let telling = match terminal.screen.try_clone() {

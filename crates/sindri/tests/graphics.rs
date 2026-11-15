@@ -4,8 +4,9 @@
 mod caps; // the terminals these frames are drawn on
 
 use sindri::capability::Capabilities;
+use sindri::facts::Facts;
 use sindri::graphics::{Ceiling, CellSize, Footprint, Refusal, Svg};
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 
 const NAMESPACE: &str = "http://www.w3.org/2000/svg";
 
@@ -304,8 +305,16 @@ fn something_that_is_not_an_svg_is_refused_with_the_reason_the_parser_gave() {
 
 #[test]
 fn a_frame_draws_at_the_cell_size_it_was_handed() {
-    let unmeasured = View::blank(Capabilities::default());
-    let measured = View::blank(caps::at(CellSize::new(9, 18)));
+    let unmeasured = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    let measured = View::of(
+        caps::at(CellSize::new(9, 18)),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
 
     assert_eq!(
         unmeasured.capabilities().cell(),

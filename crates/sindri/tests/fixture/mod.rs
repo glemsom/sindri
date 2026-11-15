@@ -9,7 +9,7 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
-use sindri::composer::{Composer, Key, Outcome};
+use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger::{self, Boot, Ctx};
@@ -19,7 +19,7 @@ use sindri::pen::{self, Clip};
 use sindri::pictures::PLACEHOLDER;
 use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::open::Ground;
 use sindri_core::policy::{Boundary, Enforcement, PolicyRecord};
@@ -68,52 +68,72 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
     println!("\ncheck: frame {fixture} ... ok");
 }
 
-fn named(name: &str) -> View {
+/// The facts a run's frame draws: the rail a launch has laid, drawn from the tail.
+fn run_facts() -> Facts {
+    Facts::default().asked().railed(facts())
+}
+
+/// The record a frame draws: the entries a run wrote, and the row the reader stands at in them.
+fn record(entries: impl IntoIterator<Item = Entry>, scroll: Scroll) -> Transcript {
+    Transcript::of(entries).scrolled(scroll)
+}
+
+/// A frame with `lines` typed into its draft through the keys a reader's fingers send, so a picture
+/// of the draft cannot be of a state the product cannot reach.
+fn typing(capabilities: Capabilities, lines: &[&str]) -> View {
+    let mut view = View::of(capabilities, Facts::default().asked(), Transcript::none());
+    for (index, line) in lines.iter().enumerate() {
+        if index > 0 {
+            view.key(Key::Newline);
+        }
+        view.paste(line);
+    }
+    view
+}
+
+fn named(name: &str, capabilities: Capabilities) -> View {
     match name {
         "boot" => splash(false),
         "boot-face" => splash(true),
         "boot-face-small" => splash(true),
-        "transcript" => running(transcript(), Scroll::Tail),
-        "gutter" => View::of(Capabilities::default(), gutter(), Scroll::Tail),
-        "transcript-scrolled" => running(transcript(), Scroll::Back(4)),
-        "thumb-head" => thumbing(Scroll::Back(44)),
-        "thumb-middle" => thumbing(Scroll::Back(22)),
-        "thumb-tail" => thumbing(Scroll::Tail),
-        "rail" => live(opening(), Scroll::Tail),
+        "transcript" => running(capabilities, transcript(), Scroll::Tail),
+        "gutter" => View::of(capabilities, Facts::default().asked(), gutter()),
+        "transcript-scrolled" => running(capabilities, transcript(), Scroll::Back(4)),
+        "thumb-head" => thumbing(capabilities, Scroll::Back(44)),
+        "thumb-middle" => thumbing(capabilities, Scroll::Back(22)),
+        "thumb-tail" => thumbing(capabilities, Scroll::Tail),
+        "rail" => live(capabilities, opening(), Scroll::Tail),
         "face" => faced(true),
         "face-off" => faced(false),
-        "streaming" => streaming(),
-        "calls" => running(calls(), Scroll::Tail),
-        "tools" => tools(),
-        "fold" => fold(false),
-        "fold-open" => fold(true),
-        "fold-answer" => folded_beside_an_answer(),
-        "empty" => View::blank(Capabilities::default()),
-        "typing" => View::typing(
-            Capabilities::default(),
-            draft(&["why does the retry test fail"]),
-        ),
-        "wrapped" => View::typing(
-            Capabilities::default(),
-            draft(&[
+        "streaming" => streaming(capabilities),
+        "calls" => running(capabilities, calls(), Scroll::Tail),
+        "tools" => tools(capabilities),
+        "fold" => fold(capabilities, false),
+        "fold-open" => fold(capabilities, true),
+        "fold-answer" => folded_beside_an_answer(capabilities),
+        "empty" => View::of(capabilities, Facts::default().asked(), Transcript::none()),
+        "typing" => typing(capabilities, &["why does the retry test fail"]),
+        "wrapped" => typing(
+            capabilities,
+            &[
                 "the draft is set where an answer is set, and a line of it wider than the band wraps \
              under the gutter — 日本語 keeps both its columns — while a line the reader broke is \
              one row of its own.",
-            ]),
+            ],
         ),
-        "grown" => View::typing(
-            Capabilities::default(),
-            draft(&[
+        "grown" => typing(
+            capabilities,
+            &[
                 "read the transcript, then the failing test,",
                 "then the patch, and say which line of the",
                 "patch the test disagrees with. Keep it to",
                 "one sentence and quote the line you mean,",
                 "the way the report does.",
-            ]),
+            ],
         ),
-        "scrolled" => View::typing(
-            Capabilities::default(),
-            draft(&[
+        "scrolled" => typing(
+            capabilities,
+            &[
                 "one: the test that fails",
                 "two: the line it fails on",
                 "three: the patch that moved it",
@@ -122,58 +142,66 @@ fn named(name: &str) -> View {
                 "six: the stop reason",
                 "seven: the session it left",
                 "eight: the question to ask",
-            ]),
+            ],
         ),
-        "commands" => View::typing(Capabilities::default(), draft(&["/"])),
-        "commands-narrow" => View::typing(Capabilities::default(), draft(&["/s"])),
-        "commands-none" => View::typing(
-            Capabilities::default(),
-            draft(&["/usr/local/bin is not on the path the run is handed"]),
+        "commands" => typing(capabilities, &["/"]),
+        "commands-narrow" => typing(capabilities, &["/s"]),
+        "commands-none" => typing(
+            capabilities,
+            &["/usr/local/bin is not on the path the run is handed"],
         ),
-        "markdown-headings" => construct(headings()),
+        "markdown-headings" => construct(capabilities, headings()),
         "markdown-headings-large" => sized(headings()),
-        "markdown-lists" => construct(lists()),
-        "markdown-table" => construct(table()),
-        "markdown-quote" => construct(quoted()),
-        "markdown-code" => construct(code()),
-        "markdown-inline" => construct(inline()),
-        "markdown-emphasis" => construct(emphasised()),
-        "markdown-link" => ways(),
-        "markdown-table-narrow" => construct(narrow()),
+        "markdown-lists" => construct(capabilities, lists()),
+        "markdown-table" => construct(capabilities, table()),
+        "markdown-quote" => construct(capabilities, quoted()),
+        "markdown-code" => construct(capabilities, code()),
+        "markdown-inline" => construct(capabilities, inline()),
+        "markdown-emphasis" => construct(capabilities, emphasised()),
+        "markdown-link" => ways(capabilities),
+        "markdown-table-narrow" => construct(capabilities, narrow()),
         // The same answer in both, three of its four fragments under the live marker and all of it
         // under the settled one; nine point four seconds is under ten, so that marker keeps its decimal.
-        "pulse-live" => with_pulse(Pulse::live(4_200), &PULSE_ANSWER[..3]),
-        "pulse-settled" => with_pulse(Pulse::settled(&Stop::Final, 9_400), &PULSE_ANSWER),
-        "stops" => running(stops(), Scroll::Tail),
-        "stop" => stopped_on(wire_refused()),
-        "refused" => refused_run(),
-        "queue" => queue(),
-        "queue-long" => queue_long(),
-        "draft-long" => draft_long(),
+        "pulse-live" => with_pulse(capabilities, Pulse::live(4_200), &PULSE_ANSWER[..3]),
+        "pulse-settled" => with_pulse(
+            capabilities,
+            Pulse::settled(&Stop::Final, 9_400),
+            &PULSE_ANSWER,
+        ),
+        "stops" => running(capabilities, stops(), Scroll::Tail),
+        "stop" => stopped_on(capabilities, wire_refused()),
+        "refused" => refused_run(capabilities),
+        "queue" => queue(capabilities),
+        "queue-long" => queue_long(capabilities),
+        "draft-long" => draft_long(capabilities),
         "keys" => {
-            let mut view = View::blank(Capabilities::default());
+            let mut view = View::of(capabilities, Facts::default().asked(), Transcript::none());
             view.key(Key::Char('?'));
             view
         }
-        "card" => over_a_run(),
-        "files" => picking(""),
-        "files-narrow" => picking("rs"),
-        "files-few" => picking("adr"),
-        "files-none" => picking("zzz"),
-        "models" => model_screen(),
+        "card" => over_a_run(capabilities),
+        "files" => picking(capabilities, ""),
+        "files-narrow" => picking(capabilities, "rs"),
+        "files-few" => picking(capabilities, "adr"),
+        "files-none" => picking(capabilities, "zzz"),
+        "models" => model_screen(capabilities),
         "settings" => {
-            let mut view = View::blank(Capabilities::default());
+            let mut view = View::of(capabilities, Facts::default().asked(), Transcript::none());
             view.open_settings(&in_force());
             view
         }
-        "settings-refused" => refused(),
-        "stats" => stats(),
-        "footer" => View::blank(Capabilities::default()),
-        "footer-live" => asked(),
-        "footer-queue" => waiting(asked(), DURING_A_RUN),
+        "settings-refused" => refused(capabilities),
+        "stats" => stats(capabilities),
+        "footer" => View::of(capabilities, Facts::default().asked(), Transcript::none()),
+        "footer-live" => asked(capabilities),
+        "footer-queue" => waiting(asked(capabilities), DURING_A_RUN),
         "picture" => pictured(),
         "mark" => {
-            let mut view = View::of(Capabilities::default(), transcript(), Scroll::Tail);
+            let mut view = View::of(
+                capabilities,
+                Facts::default().asked(),
+                record(transcript(), Scroll::Tail),
+            );
             view.drag(mark::Cell::new(20, 0), mark::Cell::new(23, 70));
             view
         }
@@ -190,77 +218,91 @@ fn named(name: &str) -> View {
 fn pictured() -> View {
     let workspace = PathBuf::from(FIXTURES).join("pictures");
 
-    let mut view = View::of(
+    View::of(
         crate::caps::pictured(),
-        vec![answer(
-            1,
-            "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n![a tall field]\
-             (tall.svg)",
-        )],
-        Scroll::Back(70),
-    );
-    view.handed(view.facts().clone().working(workspace, None));
-    view
+        Facts::default().asked().working(workspace, None),
+        record(
+            [answer(
+                1,
+                "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n![a tall field]\
+                 (tall.svg)",
+            )],
+            Scroll::Back(70),
+        ),
+    )
 }
 
 /// A frame whose terminal places pictures, with the rail's facts where the face is drawn: the
 /// picture over the rail's top rows with the switch on, and the facts from the rail's first row
 /// with it off.
 fn faced(face: bool) -> View {
-    let mut view = View::of(crate::caps::pictured().faced(face), opening(), Scroll::Tail);
-    view.handed(view.facts().clone().railed(facts()));
-    view
+    View::of(
+        crate::caps::pictured().faced(face),
+        run_facts(),
+        record(opening(), Scroll::Tail),
+    )
 }
 
 /// The frame a launch opens on: the config's wire and model, the workspace and its branch, and the
 /// enforcement the policy holds — a session and a temp are a run's own, so the rail draws an em dash
 /// for each. A terminal that places pictures is handed Sindri's face over the wordmark.
 fn splash(draws: bool) -> View {
-    let mut view = View::boot(match draws {
-        true => crate::caps::pictured(),
-        false => Capabilities::default(),
-    });
-    view.handed(Facts::boot(
-        Boot {
-            wire: Some(Wire::Anthropic),
-            model: Some(String::from("claude-sonnet-4-5")),
-            workspace: PathBuf::from("/srv/workspace"),
-            branch: Some(String::from("main")),
-            enforcement: Enforcement::Bubblewrap,
+    View::of(
+        match draws {
+            true => crate::caps::pictured(),
+            false => Capabilities::default(),
         },
-        None,
-    ));
-    view
+        Facts::boot(
+            Boot {
+                wire: Some(Wire::Anthropic),
+                model: Some(String::from("claude-sonnet-4-5")),
+                workspace: PathBuf::from("/srv/workspace"),
+                branch: Some(String::from("main")),
+                enforcement: Enforcement::Bubblewrap,
+            },
+            None,
+        ),
+        Transcript::none(),
+    )
 }
 
 /// A screen opened over a run, so the card's frame behind it is a transcript a reader was reading.
-fn over_a_run() -> View {
-    let mut view = running(transcript(), Scroll::Tail);
+fn over_a_run(capabilities: Capabilities) -> View {
+    let mut view = running(capabilities, transcript(), Scroll::Tail);
     view.key(Key::Char('?'));
     view
 }
 
-fn model_screen() -> View {
+fn model_screen(capabilities: Capabilities) -> View {
     let replay = Replay::new([Canned::reply(200, SERVED)]);
     let at = Where::own(Wire::Anthropic);
     let listing = Client::over(replay, SecretSet::default())
         .waits(|_| {})
         .served(&at, &Credential::new("sk-ant-recorded"), &at);
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(capabilities, Facts::default().asked(), Transcript::none());
     view.paste("/model");
     view.key(Key::Enter);
+    // The wire answers the screen that asked it, so the names land on a frame already open.
     view.handed(view.facts().clone().served_by(listing));
     view
 }
 
-fn construct(text: &str) -> View {
-    View::of(Capabilities::default(), vec![answer(1, text)], Scroll::Tail)
+fn construct(capabilities: Capabilities, text: &str) -> View {
+    View::of(
+        capabilities,
+        Facts::default().asked(),
+        record([answer(1, text)], Scroll::Tail),
+    )
 }
 
 /// The same answer on a terminal that draws text at more than one cell: the two highest headings are
 /// laid out as the cells the sizing leaves and measured by them.
 fn sized(text: &str) -> View {
-    View::of(crate::caps::kitty(), vec![answer(1, text)], Scroll::Tail)
+    View::of(
+        crate::caps::kitty(),
+        Facts::default().asked(),
+        record([answer(1, text)], Scroll::Tail),
+    )
 }
 
 fn headings() -> &'static str {
@@ -307,38 +349,43 @@ fn emphasised() -> &'static str {
 /// An answer's ways and the paths a call names: a link is its words with the destination travelling
 /// beside the row, a link written over its own URL says it once, and a path a call names is a way to
 /// the file the run judged openable — the one it did not is drawn as the words it was written as.
-fn ways() -> View {
+fn ways(capabilities: Capabilities) -> View {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
         .expect("the tree the product is built in");
-    let mut view = View::of(
-        Capabilities::default(),
-        vec![
-            answer(
-                1,
-                "The command is `/export` [in the spec](https://example.test/spec#12), and \
-                 [§16](§16) is where the gate is written down.",
-            ),
-            call(2, "open", r#"{"path": "GLOSSARY.md"}"#),
-            call(3, "open", r#"{"path": "site.html"}"#),
-        ],
-        Scroll::Tail,
-    );
-    view.handed(view.facts().clone().grounded(Some(ground(workspace))));
-    view
+    View::of(
+        capabilities,
+        Facts::default().asked().grounded(Some(ground(workspace))),
+        record(
+            [
+                answer(
+                    1,
+                    "The command is `/export` [in the spec](https://example.test/spec#12), and \
+                     [§16](§16) is where the gate is written down.",
+                ),
+                call(2, "open", r#"{"path": "GLOSSARY.md"}"#),
+                call(3, "open", r#"{"path": "site.html"}"#),
+            ],
+            Scroll::Tail,
+        ),
+    )
 }
 
 /// One call of each tool this product has: the settled three beside the result each one wrote, and
 /// then a turn whose three calls are still in flight — the row says the thing the call names, and a
 /// result says the verdict, the duration and the size and never the name the call row holds.
-fn tools() -> View {
+fn tools(capabilities: Capabilities) -> View {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
         .expect("the tree the product is built in");
-    let mut view = View::of(
-        Capabilities::default(),
+    View::of(
+        capabilities,
+        Facts::default()
+            .asked()
+            .grounded(Some(ground(workspace)))
+            .running(),
         vec![
             Entry::Turn { turn: 1 },
             call(
@@ -370,15 +417,7 @@ fn tools() -> View {
             call(2, "open", r#"{"path": "docs/agents/domain.md"}"#),
             call(2, "skill", r#"{"name": "code-review"}"#),
         ],
-        Scroll::Tail,
-    );
-    view.handed(
-        view.facts()
-            .clone()
-            .grounded(Some(ground(workspace)))
-            .running(),
-    );
-    view
+    )
 }
 
 /// The ground a run standing in `workspace` judges a target from.
@@ -398,7 +437,7 @@ fn narrow() -> &'static str {
 /// A workspace of the test's own, opened through the `@` key and narrowed by `query`: every row is
 /// a path relative to the temp directory, so nothing of a temp directory's name is frozen into a
 /// fixture.
-fn picking(query: &str) -> View {
+fn picking(capabilities: Capabilities, query: &str) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
     // `no_hardcoded_models` reads two numbered paths in one bracket as a hand-written model list,
     // so each record is named here and offered by name.
@@ -433,11 +472,12 @@ fn picking(query: &str) -> View {
     }
     std::fs::write(root.path().join(".gitignore"), "target/\n*.local.md\n").expect("a gitignore");
 
-    let mut view = View::blank(Capabilities::default());
-    view.handed(
-        view.facts()
-            .clone()
+    let mut view = View::of(
+        capabilities,
+        Facts::default()
+            .asked()
             .working(root.path().to_path_buf(), None),
+        Transcript::none(),
     );
     view.key(Key::Char('@'));
     for glyph in query.chars() {
@@ -461,8 +501,8 @@ fn in_force() -> Config {
     }
 }
 
-fn refused() -> View {
-    let mut view = View::boot(Capabilities::default());
+fn refused(capabilities: Capabilities) -> View {
+    let mut view = View::of(capabilities, Facts::default(), Transcript::none());
     view.open_settings(&in_force());
     for _ in 0..Config::KEYS.len() {
         let row = view
@@ -491,7 +531,7 @@ fn refused() -> View {
     view
 }
 
-fn stats() -> View {
+fn stats(capabilities: Capabilities) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
     for name in ["bash", "records"] {
         let directory = root.path().join(".agents/skills").join(name);
@@ -503,11 +543,14 @@ fn stats() -> View {
         .expect("a SKILL.md");
     }
 
-    let mut view = View::blank(Capabilities::default());
-    view.handed(
-        view.facts()
-            .clone()
-            .working(root.path().to_path_buf(), None),
+    let mut view = View::of(
+        capabilities,
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None)
+            .railed(facts())
+            .recorded(&document()),
+        Transcript::none(),
     );
     for name in ["bash", "records"] {
         view.paste(&format!("/skill:{name}"));
@@ -517,7 +560,6 @@ fn stats() -> View {
             "a skill the catalog offers is one the frame loads"
         );
     }
-    view.handed(view.facts().clone().railed(facts()).recorded(&document()));
     view.paste("/stats");
     assert_eq!(
         view.key(Key::Enter),
@@ -569,36 +611,32 @@ pub fn document() -> SessionDocument {
 
 /// A transcript of eighty turn dividers, one row each, so the rows of the band the thumb covers are
 /// counted off the frame.
-fn thumbing(scroll: Scroll) -> View {
+fn thumbing(capabilities: Capabilities, scroll: Scroll) -> View {
     View::of(
-        Capabilities::default(),
-        (1..=80).map(|turn| Entry::Turn { turn }),
-        scroll,
+        capabilities,
+        Facts::default().asked(),
+        record((1..=80).map(|turn| Entry::Turn { turn }), scroll),
     )
 }
 
-fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
-    let mut view = View::of(Capabilities::default(), entries, scroll);
-    view.handed(view.facts().clone().railed(facts()));
-    view
+fn running(capabilities: Capabilities, entries: Vec<Entry>, scroll: Scroll) -> View {
+    View::of(capabilities, run_facts(), record(entries, scroll))
 }
 
 /// A live run's rail: the facts a run in flight holds and the marker its newest answer wears, so
 /// the rail's own row steps with the frame's marker.
-fn live(entries: Vec<Entry>, scroll: Scroll) -> View {
-    let mut view = running(entries, scroll);
-    let rail = ledger::Facts {
-        state: Some(RunState::Running),
-        ..facts()
-    };
-    view.handed(
-        view.facts()
-            .clone()
-            .railed(rail)
+fn live(capabilities: Capabilities, entries: Vec<Entry>, scroll: Scroll) -> View {
+    View::of(
+        capabilities,
+        run_facts()
+            .railed(ledger::Facts {
+                state: Some(RunState::Running),
+                ..facts()
+            })
             .pulsed(Some(Pulse::live(4_200)))
             .running(),
-    );
-    view
+        record(entries, scroll),
+    )
 }
 
 pub fn facts() -> ledger::Facts {
@@ -766,11 +804,14 @@ fn gutter() -> Vec<Entry> {
     ]
 }
 
-fn streaming() -> View {
+fn streaming(capabilities: Capabilities) -> View {
     let mut entries = transcript();
     entries.push(Entry::Turn { turn: 6 });
-    let mut view = running(entries, Scroll::Tail);
-    view.handed(view.facts().clone().running());
+    let mut view = View::of(
+        capabilities,
+        run_facts().running(),
+        record(entries, Scroll::Tail),
+    );
     for fragment in [
         "The ticket asks whether the tail survives. ",
         "A fence still streaming is a code block, ",
@@ -799,14 +840,27 @@ const PULSE_ANSWER: [&str; 4] = [
     "The rows under it keep the answer's own gutter, held open and blank.",
 ];
 
-fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
+fn with_pulse(capabilities: Capabilities, pulse: Pulse, said: &[&str]) -> View {
     let state = match &pulse {
         Pulse::Live { .. } => RunState::Running,
         Pulse::Settled { stop, .. } => RunState::Stopped(stop.clone()),
     };
     let mut entries = opening();
     entries.push(Entry::Turn { turn: 2 });
-    let mut view = running(entries, Scroll::Tail);
+    let running = state == RunState::Running;
+    let rail = ledger::Facts {
+        state: Some(state),
+        ..facts()
+    };
+    let facts = Facts::default().asked().railed(rail).pulsed(Some(pulse));
+    let mut view = View::of(
+        capabilities,
+        match running {
+            true => facts.running(),
+            false => facts,
+        },
+        record(entries, Scroll::Tail),
+    );
     for fragment in [
         "The marker is a clock, so the row it heads is laid out again whenever ",
         "the mark it wears moves, and a step that changes nothing costs nothing. ",
@@ -816,16 +870,6 @@ fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
     for fragment in said {
         view.text(fragment);
     }
-    let running = state == RunState::Running;
-    let rail = ledger::Facts {
-        state: Some(state),
-        ..facts()
-    };
-    let facts = view.facts().clone().railed(rail).pulsed(Some(pulse));
-    view.handed(match running {
-        true => facts.running(),
-        false => facts,
-    });
     view
 }
 
@@ -858,16 +902,16 @@ const STOP_ANSWER: [&str; 4] = [
 
 /// The frame a failed run leaves: the marker settled on the answer it last said, and the stop entry
 /// the record keeps under it.
-fn stopped_on(stop: Stop) -> View {
-    let mut view = with_pulse(Pulse::settled(&stop, 1_240), &STOP_ANSWER);
+fn stopped_on(capabilities: Capabilities, stop: Stop) -> View {
+    let mut view = with_pulse(capabilities, Pulse::settled(&stop, 1_240), &STOP_ANSWER);
     view.stopped(&stop);
     view
 }
 
 /// The frame a run that could not start leaves: the entry a stop is, in the refusal's own words, and
 /// the draft that asked for it back in the composer.
-fn refused_run() -> View {
-    let mut view = running(transcript(), Scroll::Tail);
+fn refused_run(capabilities: Capabilities) -> View {
+    let mut view = running(capabilities, transcript(), Scroll::Tail);
     view.paste("why does the retry test fail");
     match view.key(Key::Enter) {
         Outcome::Send(prompt) => view.run_refused(
@@ -886,9 +930,12 @@ const DURING_A_RUN: &[&str] = &[
     "and say why the retry hid it",
 ];
 
-fn queue() -> View {
-    let mut view = running(transcript(), Scroll::Tail);
-    view.handed(view.facts().clone().running());
+fn queue(capabilities: Capabilities) -> View {
+    let view = View::of(
+        capabilities,
+        run_facts().running(),
+        record(transcript(), Scroll::Tail),
+    );
     let mut view = waiting(view, DURING_A_RUN);
     view.paste("and this one while they wait");
     view
@@ -906,19 +953,22 @@ const SEVEN_QUEUED: &[&str] = &[
     "and then the report",
 ];
 
-fn queue_long() -> View {
-    let mut view = running(transcript(), Scroll::Tail);
-    view.handed(view.facts().clone().running());
+fn queue_long(capabilities: Capabilities) -> View {
+    let view = View::of(
+        capabilities,
+        run_facts().running(),
+        record(transcript(), Scroll::Tail),
+    );
     let mut view = waiting(view, SEVEN_QUEUED);
     view.paste("and this one while they wait");
     view
 }
 
 /// A draft of nine lines, which is more than the composer's band draws.
-fn draft_long() -> View {
-    View::typing(
-        Capabilities::default(),
-        draft(&[
+fn draft_long(capabilities: Capabilities) -> View {
+    typing(
+        capabilities,
+        &[
             "one: the test that failed",
             "two: the line it failed on",
             "three: the patch that moved it",
@@ -928,7 +978,7 @@ fn draft_long() -> View {
             "seven: the session it left",
             "eight: the question to ask",
             "nine: the row it keeps back",
-        ]),
+        ],
     )
 }
 
@@ -944,11 +994,12 @@ fn waiting(mut view: View, prompts: &[&str]) -> View {
 }
 
 /// The frame a prompt just sent leaves: a run in flight and nothing said yet.
-fn asked() -> View {
-    let mut view = View::blank(Capabilities::default());
-    view.settle();
-    view.handed(view.facts().clone().running().pulsed(Some(Pulse::live(0))));
-    view
+fn asked(capabilities: Capabilities) -> View {
+    View::of(
+        capabilities,
+        Facts::default().running().pulsed(Some(Pulse::live(0))),
+        Transcript::none(),
+    )
 }
 
 /// A `cargo test` run of twenty rows, which is a result longer than its fold.
@@ -961,8 +1012,8 @@ fn output() -> String {
 
 /// A transcript whose newest result is longer than its fold, with the answer the run wrote above
 /// it: the result is the work and folds, the answer is the reader's and never does.
-fn fold(open: bool) -> View {
-    let mut view = running(folded_run(), Scroll::Tail);
+fn fold(capabilities: Capabilities, open: bool) -> View {
+    let mut view = running(capabilities, folded_run(), Scroll::Tail);
     if open {
         assert_eq!(
             view.key(Key::Fold),
@@ -993,7 +1044,7 @@ fn folded_run() -> Vec<Entry> {
     ]
 }
 
-fn folded_beside_an_answer() -> View {
+fn folded_beside_an_answer(capabilities: Capabilities) -> View {
     let mut entries = folded_run();
     entries.push(Entry::Turn { turn: 2 });
     entries.push(answer(
@@ -1006,7 +1057,7 @@ fn folded_beside_an_answer() -> View {
          The fold opens on one key and on a mark grown over a row of it, and a fold a reader \
          opened stays open through a scroll, a resize and the entry that lands beside it.",
     ));
-    running(entries, Scroll::Tail)
+    running(capabilities, entries, Scroll::Tail)
 }
 
 fn calls() -> Vec<Entry> {
@@ -1079,29 +1130,25 @@ fn answer(turn: u32, text: &str) -> Entry {
     }
 }
 
-/// A composer typed a line at a time through the same keys a reader's fingers send, so a picture
-/// of the draft cannot be of a state the product cannot reach.
-fn draft(lines: &[&str]) -> Composer {
-    let mut composer = Composer::new();
-    for (index, line) in lines.iter().enumerate() {
-        if index > 0 {
-            composer.key(Key::Newline);
-        }
-        composer.paste(line);
-    }
-    composer
-}
-
 fn drawn(name: &str, cols: u16, rows: u16) -> String {
-    drawn_taking(name, cols, rows, false)
+    let mut view = named(name, Capabilities::default());
+    let mut terminal =
+        Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
+    let palette = view.capabilities().palette();
+    let completed = terminal
+        .draw(|frame| {
+            view.paint(frame.area(), frame.buffer_mut());
+        })
+        .expect("the frame is painted");
+    text(name, &palette, completed.buffer)
 }
 
 /// The same frame drawn where the terminal reports a pointer and where it reports none: a pointer
 /// is never drawn into a cell, so the two are the one frame.
 pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
     let fixture = format!("{name}-{cols}x{rows}");
-    let taken = drawn_taking(name, cols, rows, true);
-    let none = drawn_taking(name, cols, rows, false);
+    let taken = drawn_taking(name, cols, rows, Capabilities::default().reporting(true));
+    let none = drawn_taking(name, cols, rows, Capabilities::default().reporting(false));
 
     assert_eq!(
         taken, none,
@@ -1111,10 +1158,8 @@ pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
     println!("\ncheck: frame {fixture} pointer ... ok");
 }
 
-fn drawn_taking(name: &str, cols: u16, rows: u16, pointer: bool) -> String {
-    let mut view = named(name);
-    let capabilities = view.capabilities().clone().reporting(pointer);
-    view.drawn_on(capabilities);
+fn drawn_taking(name: &str, cols: u16, rows: u16, capabilities: Capabilities) -> String {
+    let mut view = named(name, capabilities);
     let palette = view.capabilities().palette();
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
