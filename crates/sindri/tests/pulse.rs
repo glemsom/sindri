@@ -8,7 +8,7 @@ use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::Key;
 use sindri::ink::Ink;
-use sindri::ledger::Facts;
+use sindri::ledger;
 use sindri::pen;
 use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph};
 use sindri::view::View;
@@ -43,7 +43,7 @@ fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
 }
 
 fn answering() -> View {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.text(
         "The marker is one cell and at most fourteen characters beside it, so a frame \
          narrow enough to cut prose still holds the whole mark.",
@@ -227,11 +227,16 @@ fn the_widest_marker_asks_for_one_cell_and_fourteen_columns() {
 #[test]
 fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
     let mut view = answering();
-    view.set_facts(Facts {
+    let rail = ledger::Facts {
         state: Some(RunState::Running),
-        ..Facts::default()
-    });
-    view.set_pulse(Some(Pulse::live(4_200)));
+        ..ledger::Facts::default()
+    };
+    view.handed(
+        view.facts()
+            .clone()
+            .railed(rail)
+            .pulsed(Some(Pulse::live(4_200))),
+    );
     let rows = frame(&mut view, 60, 12);
     let state_row = rows
         .iter()
@@ -247,7 +252,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
         "and the rail's own row wears the same one, so no two drawings show two steps"
     );
 
-    view.set_pulse(Some(Pulse::live(4_280)));
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_280))));
     let rows = frame(&mut view, 60, 12);
 
     assert_eq!(
@@ -263,7 +268,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
 #[test]
 fn the_marker_prefixes_the_newest_answers_first_row_in_the_answers_own_gutter() {
     let mut view = answering();
-    view.set_pulse(Some(Pulse::live(4_200)));
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
     let rows = frame(&mut view, 60, 12);
 
     assert_eq!(
@@ -278,11 +283,11 @@ fn the_marker_prefixes_the_newest_answers_first_row_in_the_answers_own_gutter() 
 
 #[test]
 fn the_marker_heads_the_newest_answer_and_an_older_one_keeps_its_gutter() {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.text("the first thing said");
     view.reasoning("and then a thought");
     view.text("and the newest answer");
-    view.set_pulse(Some(Pulse::live(4_200)));
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
     let rows = frame(&mut view, 60, 12);
 
     assert_eq!(
@@ -296,7 +301,11 @@ fn the_marker_heads_the_newest_answer_and_an_older_one_keeps_its_gutter() {
 #[test]
 fn a_marker_survives_a_narrow_frame() {
     let mut view = answering();
-    view.set_pulse(Some(Pulse::settled(&Stop::Cancelled, 5_000)));
+    view.handed(
+        view.facts()
+            .clone()
+            .pulsed(Some(Pulse::settled(&Stop::Cancelled, 5_000))),
+    );
     let rows = frame(&mut view, 24, 12);
 
     assert!(
@@ -310,7 +319,11 @@ fn a_marker_survives_a_narrow_frame() {
 #[test]
 fn a_settled_marker_is_the_value_at_stop_and_is_never_recomputed() {
     let mut view = answering();
-    view.set_pulse(Some(Pulse::settled(&Stop::Final, 9_400)));
+    view.handed(
+        view.facts()
+            .clone()
+            .pulsed(Some(Pulse::settled(&Stop::Final, 9_400))),
+    );
     let at_stop = frame(&mut view, 60, 12);
     assert_eq!(
         at_stop[0], "✓ 9.4s The marker is one cell and at most fourteen",
@@ -327,8 +340,8 @@ fn a_settled_marker_is_the_value_at_stop_and_is_never_recomputed() {
 
 #[test]
 fn a_live_marker_draws_the_answers_row_before_the_answer_has_said_anything() {
-    let mut view = View::boot(Capabilities::default());
-    view.set_pulse(Some(Pulse::live(4_200)));
+    let mut view = View::blank(Capabilities::default());
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
     let rows = frame(&mut view, 60, 12);
 
     assert_eq!(rows[0], "⠹ 4.2s", "the marker, and the row it heads");
@@ -336,7 +349,7 @@ fn a_live_marker_draws_the_answers_row_before_the_answer_has_said_anything() {
 
 #[test]
 fn a_frame_with_no_run_has_no_marker_on_it() {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     let rows = frame(&mut view, 60, 12);
 
     assert!(

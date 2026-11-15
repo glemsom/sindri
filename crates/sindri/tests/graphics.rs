@@ -304,8 +304,8 @@ fn something_that_is_not_an_svg_is_refused_with_the_reason_the_parser_gave() {
 
 #[test]
 fn a_frame_draws_at_the_cell_size_it_was_handed() {
-    let unmeasured = View::boot(Capabilities::default());
-    let measured = View::boot(caps::at(CellSize::new(9, 18)));
+    let unmeasured = View::blank(Capabilities::default());
+    let measured = View::blank(caps::at(CellSize::new(9, 18)));
 
     assert_eq!(
         unmeasured.capabilities().cell(),

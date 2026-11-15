@@ -3,16 +3,14 @@
 //! picture a reader sees are produced by the same code.
 
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::Path;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::config::{Config, Touched};
 use sindri_core::conversation::Conversation;
-use sindri_core::open::Ground;
 use sindri_core::provider::Deltas;
-use sindri_core::provider::served::Listing;
-use sindri_core::records::{Entry, SessionDocument};
+use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Load, Loaded, Stop, Turn};
 use sindri_core::skills::{Catalog, Skill};
@@ -22,11 +20,12 @@ use crate::card;
 use crate::commands::{self, Command};
 use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, PLACEHOLDER, Prompt, State};
 use crate::face;
+use crate::facts::{Facts, Focus};
 use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
 use crate::kept::{Kept, Move};
 use crate::keys::{self, Act, Body, Mode, Stack};
-use crate::ledger::{Boot, Facts, Rail, Share};
+use crate::ledger::{self, Rail, Share};
 use crate::link::Links;
 use crate::list::{self, Beside, ScreenRow};
 use crate::mark::{Cell, Mark, Span};
@@ -246,33 +245,17 @@ pub struct View {
     conversation: Conversation,
     superseded: bool,
     stack: Stack,
-    pulse: Option<Pulse>,
-    rail: Facts,
-    /// Whether this frame is still the splash screen a launch opened on.
-    splash: bool,
-    record: Option<SessionDocument>,
+    /// Never one fact at a time: a frame's screen follows from the value it holds whole.
+    facts: Facts,
     mark: Option<Mark>,
-    workspace: Option<PathBuf>,
-    ground: Option<Ground>,
     picker: Picker,
     models: Models,
     loaded: Loaded,
-    home: Option<PathBuf>,
     settings: Settings,
     /// The draft the reader waved the commands card away for: the card stays closed while the draft
     /// holds those words, and a draft that changes gives it back.
     dismissed: Option<String>,
     capabilities: Capabilities,
-    focus: Focus,
-}
-
-/// Whether the terminal reports this window as the one being read. A terminal that never reports
-/// is being read, so a frame drawn where no report ever arrives is the frame it has always been.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum Focus {
-    #[default]
-    Focused,
-    Away,
 }
 
 /// One entry the last paint drew, and the rows of the band it stands on.
@@ -283,9 +266,21 @@ struct Laid {
 }
 
 impl View {
+    /// The frame a launch opens on, and the one screen a frame handed no facts can draw: a wordmark,
+    /// what the product is, and the commands a reader starts from.
     pub fn boot(capabilities: Capabilities) -> View {
         View {
             capabilities,
+            ..View::default()
+        }
+    }
+
+    /// A frame of no entries, of a run a prompt has been asked for and that has said nothing: what a
+    /// test draws a key, a card or a footer on, and never a launch.
+    pub fn blank(capabilities: Capabilities) -> View {
+        View {
+            capabilities,
+            facts: Facts::default().asked(),
             ..View::default()
         }
     }
@@ -303,6 +298,7 @@ impl View {
             rows,
             scroll,
             capabilities,
+            facts: Facts::default().asked(),
             ..View::default()
         }
     }
@@ -311,6 +307,7 @@ impl View {
         View {
             composer,
             capabilities,
+            facts: Facts::default().asked(),
             ..View::default()
         }
     }
@@ -361,18 +358,8 @@ impl View {
         self.rows.retire();
         self.stream = Stream::new();
         self.scroll = Scroll::Tail;
-        self.splash = false;
+        self.facts = self.facts.clone().asked();
         self.superseded = false;
-    }
-
-    pub fn set_workspace(&mut self, workspace: PathBuf) {
-        self.workspace = Some(workspace);
-    }
-
-    /// The place a run judges a target from: a launch opens with the first prompt, so a frame drawn
-    /// before one names no ground and draws every path as the words it was written as.
-    pub fn set_ground(&mut self, ground: Option<Ground>) {
-        self.ground = ground;
     }
 
     pub fn picker(&self) -> &Picker {
@@ -383,32 +370,24 @@ impl View {
         &self.models
     }
 
-    pub fn set_served(&mut self, listing: Listing) {
-        self.models.served(listing);
-    }
-
     pub fn loaded(&self) -> &Loaded {
         &self.loaded
-    }
-
-    pub fn set_home(&mut self, home: Option<PathBuf>) {
-        self.home = home;
     }
 
     pub fn capabilities(&self) -> &Capabilities {
         &self.capabilities
     }
 
-    /// The one value a frame is handed after it is built: the settings visit that moved the config's
-    /// face switch, and a test that draws one frame again on a terminal whose one fact differs. Not
-    /// the way a frame is built.
+    /// The terminal a frame draws on, handed again after it is built: the settings visit that moved
+    /// the config's face switch, and a test that draws one frame again on a terminal whose one fact
+    /// differs. Not the way a frame is built.
     pub fn drawn_on(&mut self, capabilities: Capabilities) {
         self.capabilities = capabilities;
     }
 
     fn surface(&self) -> Surface {
         Surface::of(
-            self.workspace.as_deref(),
+            self.facts.workspace(),
             self.capabilities.cell(),
             self.capabilities.pictures().draws(),
             self.capabilities.sizes_text(),
@@ -444,9 +423,11 @@ impl View {
     }
 
     /// The stop the run ended on, laid in the transcript where the run ended: the entry the record
-    /// keeps, wearing the same word as the marker beside it.
+    /// keeps, wearing the same word as the marker beside it, and the frame handed back to its tail
+    /// where the reader is owed the ending.
     pub fn stopped(&mut self, stop: &Stop) {
         self.rows.stopped(stop.clone());
+        self.scroll = Scroll::Tail;
     }
 
     /// A run that could not start is the entry a stop is, and the prompt it was asked with is never
@@ -459,10 +440,6 @@ impl View {
             true => self.composer.recall(prompt),
             false => self.enqueue(prompt),
         }
-    }
-
-    pub fn set_record(&mut self, document: &SessionDocument) {
-        self.record = Some(document.clone());
     }
 
     pub fn mode(&self) -> Mode {
@@ -614,7 +591,7 @@ impl View {
         self.rows = Rows::new();
         self.scroll = Scroll::Tail;
         self.stream = Stream::new();
-        self.pulse = None;
+        self.facts = self.facts.clone().pulsed(None);
         self.mark = None;
         self.drawn = Drawn::none();
         self.loaded.clear();
@@ -627,10 +604,10 @@ impl View {
     /// keeps, discovered afresh. A name put in this set by hand would answer `already_loaded`
     /// to a later model load for a body nothing had ever handed over.
     fn skill(&mut self, name: &str) -> Outcome {
-        let Some(workspace) = self.workspace.clone() else {
+        let Some(workspace) = self.facts.workspace().map(Path::to_path_buf) else {
             return Outcome::Unchanged;
         };
-        let catalog = Catalog::discover(&workspace, self.home.as_deref());
+        let catalog = Catalog::discover(&workspace, self.facts.home());
         if !catalog.get(name).is_some_and(Skill::human_invocable) {
             return Outcome::Unchanged;
         }
@@ -641,6 +618,7 @@ impl View {
     }
 
     fn model(&mut self) -> Outcome {
+        self.handed(self.facts.clone().unserved());
         self.models = Models::new();
         self.stack.open(Mode::Models);
         Outcome::Served
@@ -676,10 +654,10 @@ impl View {
         if !self.composer.at_word_start() {
             return self.composer.key(key);
         }
-        let Some(root) = self.workspace.clone() else {
+        let Some(root) = self.facts.workspace() else {
             return Outcome::Unchanged;
         };
-        self.picker = Picker::walk(&root);
+        self.picker = Picker::walk(root);
         self.stack.open(Mode::Files);
         Outcome::Edited
     }
@@ -831,33 +809,20 @@ impl View {
         self.composer.paste(text);
     }
 
-    pub fn set_facts(&mut self, facts: Facts) {
-        self.rail = facts;
+    /// The facts this frame draws, handed whole: a frame handed no facts is the splash screen, and
+    /// one handed a run's is that run's frame. The draft answers a cancel out of the value, and the
+    /// served names are a screen's own copy, so both are taken here and nowhere else.
+    pub fn handed(&mut self, facts: Facts) {
+        self.composer.set_state(match facts.live() {
+            true => State::Running,
+            false => State::Idle,
+        });
+        self.models = std::mem::take(&mut self.models).served_by(facts.served().cloned());
+        self.facts = facts;
     }
 
-    /// The frame a launch opens on: the facts the launch already holds, and the splash screen
-    /// drawn from them. A frame no launch told what the run is draws nothing, so the splash
-    /// screen is a front end's to open and never a guess at what a run would have been.
-    pub fn splash(&mut self, boot: Boot) {
-        self.rail = Facts::boot(boot);
-        self.splash = true;
-    }
-
-    pub fn set_state(&mut self, state: State) {
-        // A run that settled is the reader's to read, so the frame is handed back to its tail.
-        if state == State::Idle {
-            self.scroll = Scroll::Tail;
-        }
-        self.composer.set_state(state);
-    }
-
-    /// What the terminal's focus report says: the one surface that takes the keys lets its accent
-    /// edge go while nobody is looking, and takes it up again when the reader comes back.
-    pub fn set_focused(&mut self, focused: bool) {
-        self.focus = match focused {
-            true => Focus::Focused,
-            false => Focus::Away,
-        };
+    pub fn facts(&self) -> &Facts {
+        &self.facts
     }
 
     /// What the terminal's pointer report is answered with: a notch moves the transcript through the
@@ -898,12 +863,6 @@ impl View {
         true
     }
 
-    /// Hands the frame its newest answer's marker. The elapsed time is the caller's, because a
-    /// frame holds no clock, and a settled marker keeps the number the run stopped at.
-    pub fn set_pulse(&mut self, pulse: Option<Pulse>) {
-        self.pulse = pulse;
-    }
-
     /// Paints this frame into `area`, and hands back what the pass told the terminal. Painting is
     /// what tells the row cache how wide the transcript is, so a resize invalidates it here and the
     /// same pass reflows; the composer's rows are measured when the frame is drawn.
@@ -925,7 +884,7 @@ impl View {
             // no cells, and a splash screen draws the face over its wordmark: the rail beside it
             // keeps every fact.
             let picture = match shape {
-                Rail::Ledger if !self.splash => {
+                Rail::Ledger if !self.facts.splash() => {
                     face::over_rail(band.area.width, &self.face_surface())
                 }
                 Rail::Ledger | Rail::Strip => None,
@@ -935,10 +894,10 @@ impl View {
                 None => band,
             };
             rail::paint(
-                &self.rail,
+                self.facts.rail(),
                 shape,
                 band,
-                self.pulse.as_ref(),
+                self.facts.pulse(),
                 buffer,
                 &self.capabilities.palette(),
             );
@@ -955,7 +914,7 @@ impl View {
             &mut painted.links,
             &mut painted.sizes,
         );
-        if self.splash {
+        if self.facts.splash() {
             let surface = self.face_surface();
             splash::paint(
                 share.transcript,
@@ -1037,13 +996,13 @@ impl View {
     /// it or with no rail at all: a strip is a live run's one row, and no run is live at the
     /// splash screen.
     fn split(&self, band: Rect) -> Share {
-        if self.splash && Rail::of(band.width) != Rail::Ledger {
+        if self.facts.splash() && Rail::of(band.width) != Rail::Ledger {
             return Share {
                 transcript: band,
                 rail: None,
             };
         }
-        crate::ledger::split(&self.rail, band)
+        ledger::split(self.facts.rail(), band)
     }
 
     /// The transcript is drawn in the well, the darkest of the three bands. The turn in flight is
@@ -1067,10 +1026,10 @@ impl View {
         // How many rows a picture takes is part of the rows an entry was laid out as, so the
         // surface reaches the cache before a window is measured.
         self.rows.retune(self.surface());
-        self.rows.stand(self.ground.as_ref());
+        self.rows.stand(self.facts.ground());
         // Laid into the rows it heads rather than painted over them: the answer's first row is
         // wrapped around it, and the prose it introduces is never cut by the mark.
-        let head = self.pulse.as_ref().map(Pulse::head);
+        let head = self.facts.pulse().map(Pulse::head);
         self.rows.live(&self.stream, head.as_ref());
         let total = self.rows.height();
         // A window measured from the tail follows a run that grows; one the reader took back keeps
@@ -1309,7 +1268,7 @@ impl View {
     /// The look the one surface that takes the keys draws its edge row in, given what the
     /// terminal has reported about who is reading.
     fn edge(&self) -> Look {
-        match self.focus {
+        match self.facts.focus() {
             Focus::Focused => self.capabilities.palette().accent_edge(),
             Focus::Away => self.capabilities.palette().dim_edge(),
         }
@@ -1353,11 +1312,14 @@ impl View {
 
     /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
     /// frame with no record has no screen, because what a run spent is the record's to say.
-    fn stats(&self) -> Facts {
-        let Some(document) = &self.record else {
-            return Facts::default();
+    fn stats(&self) -> ledger::Facts {
+        let Some(document) = self.facts.record() else {
+            return ledger::Facts::default();
         };
-        self.rail.clone().recorded(document, self.loaded.names())
+        self.facts
+            .rail()
+            .clone()
+            .recorded(document, self.loaded.names())
     }
 
     fn hints(&self) -> Vec<Hint> {
@@ -1484,7 +1446,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> B
 /// whole and capped only by the rows the card gives it.
 pub enum ScreenBody {
     Rows(Vec<ScreenRow>),
-    Ledger(Box<Facts>),
+    Ledger(Box<ledger::Facts>),
 }
 
 impl ScreenBody {
@@ -1650,8 +1612,11 @@ mod tests {
 
     use ratatui::style::Color;
 
+    use std::path::PathBuf;
+
     use super::*;
     use crate::composer::{MAX_ROWS, MIN_ROWS, PLACEHOLDER};
+    use crate::ledger::Boot;
 
     use crate::capability::caps::{inked, pictured, pointing, sized};
     use crate::ink::{Face, Look};
@@ -1661,8 +1626,8 @@ mod tests {
     use crate::rows::THUMB;
 
     /// Enough facts that the ledger fills its column top to bottom.
-    fn rail() -> Facts {
-        Facts {
+    fn rail() -> ledger::Facts {
+        ledger::Facts {
             wire: Some(String::from("anthropic")),
             model: Some(String::from("claude-sonnet-4-5-20250929")),
             think: Some(String::from("high")),
@@ -1678,7 +1643,7 @@ mod tests {
             sandbox: Some(Enforcement::Bubblewrap),
             session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
             temp: Some(PathBuf::from("/srv/sessions/9f2c7a41/tmp")),
-            ..Facts::default()
+            ..ledger::Facts::default()
         }
     }
 
@@ -1876,7 +1841,7 @@ mod tests {
             Mode::Settings,
             Mode::Stats,
         ] {
-            let mut view = View::boot(Capabilities::default());
+            let mut view = View::blank(Capabilities::default());
             view.paste("the draft behind the card");
             view.screen(mode);
 
@@ -1918,14 +1883,14 @@ mod tests {
     #[test]
     fn the_accent_edge_recedes_while_the_window_is_unfocused_and_returns_when_it_is_focused() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::blank(Capabilities::default());
         view.paste("the draft the composer band is drawn from");
         let lit = edge_row(&mut view, &palette);
 
-        view.set_focused(false);
+        view.handed(view.facts().clone().focused(false));
         let away = edge_row(&mut view, &palette);
 
-        view.set_focused(true);
+        view.handed(view.facts().clone().focused(true));
         let back = edge_row(&mut view, &palette);
 
         assert_eq!(
@@ -1945,7 +1910,7 @@ mod tests {
     fn a_frame_with_no_colour_draws_no_accent_edge_on_any_surface() {
         let palette = Palette::SLOTS;
         for open in [None, Some(Mode::Keys)] {
-            let mut view = View::boot(inked(palette));
+            let mut view = View::blank(inked(palette));
             view.paste("the draft the composer band is drawn from");
             if let Some(mode) = open {
                 view.screen(mode);
@@ -1978,7 +1943,7 @@ mod tests {
             }],
             Scroll::Tail,
         );
-        view.set_facts(rail());
+        view.handed(view.facts().clone().railed(rail()));
         view.paste("the draft");
 
         let area = screen(120, 40);
@@ -2061,7 +2026,7 @@ mod tests {
                 }],
                 Scroll::Tail,
             );
-            view.set_facts(rail());
+            view.handed(view.facts().clone().railed(rail()));
 
             let area = screen(cols, rows);
             let mut buffer = Buffer::empty(area);
@@ -2130,7 +2095,7 @@ mod tests {
             }],
             Scroll::Tail,
         );
-        view.set_facts(rail());
+        view.handed(view.facts().clone().railed(rail()));
         view.paste("the draft the composer band is drawn from");
 
         let area = screen(120, 40);
@@ -2207,7 +2172,7 @@ mod tests {
             true => pictured(),
             false => Capabilities::default(),
         });
-        view.splash(boot());
+        view.handed(Facts::boot(boot(), None));
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -2327,6 +2292,25 @@ mod tests {
             (Some(first), Some(last)) => (*first, *last),
             _ => panic!("the splash screen fills no row of the band: {drawn:?}"),
         }
+    }
+
+    #[test]
+    fn a_frame_built_with_no_facts_draws_the_splash_screen() {
+        let mut view = View::boot(Capabilities::default());
+        assert!(
+            drawn(&mut view, 120, 40).contains("sindri"),
+            "a frame handed no facts is the splash screen, and its wordmark is the screen"
+        );
+    }
+
+    #[test]
+    fn a_frame_handed_a_runs_facts_is_not_the_splash_screen() {
+        let mut view = View::blank(Capabilities::default());
+        view.handed(Facts::default().asked().running());
+        assert!(
+            !drawn(&mut view, 120, 40).contains("sindri"),
+            "a frame handed a run's facts is that run's frame, and draws no wordmark"
+        );
     }
 
     #[test]
@@ -2548,7 +2532,7 @@ mod tests {
 
         let area = screen(80, 24);
         let mut view = View::boot(Capabilities::default());
-        view.splash(boot());
+        view.handed(Facts::boot(boot(), None));
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
         let on_rail = (area.y..area.bottom())
@@ -2570,11 +2554,10 @@ mod tests {
     fn a_run_sent_from_the_splash_screen_leaves_the_frame_to_the_conversation() {
         let mut view = View::boot(Capabilities::default());
         assert!(
-            !drawn(&mut view, 120, 40).contains("sindri"),
-            "a frame no launch told what the run is draws no splash screen"
+            drawn(&mut view, 120, 40).contains("sindri"),
+            "the frame a launch opens on is the splash screen"
         );
 
-        view.splash(boot());
         view.settle();
 
         assert!(
@@ -2653,9 +2636,9 @@ mod tests {
     }
 
     fn asking(queued: usize) -> View {
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::blank(Capabilities::default());
         view.settle();
-        view.set_state(State::Running);
+        view.handed(view.facts().clone().running());
         for text in ["one", "two", "three"].into_iter().take(queued) {
             view.enqueue(prompt(text));
         }
@@ -2671,7 +2654,7 @@ mod tests {
 
     /// The footer row a boot frame draws.
     fn footer(cols: u16, rows: u16) -> String {
-        drawn_footer(&mut View::boot(Capabilities::default()), cols, rows)
+        drawn_footer(&mut View::blank(Capabilities::default()), cols, rows)
     }
 
     #[test]
@@ -2743,7 +2726,7 @@ mod tests {
 
     #[test]
     fn each_set_is_cut_in_survival_order_at_four_widths() {
-        for mut view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
+        for mut view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
             let mut cut: Vec<usize> = Vec::new();
             for cols in [120, 72, 52, 40] {
                 let drawn = drawn_footer(&mut view, cols, 24);
@@ -2760,7 +2743,7 @@ mod tests {
 
     #[test]
     fn no_hint_is_cut_mid_word_at_any_width_between_twenty_and_two_hundred() {
-        for mut view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
+        for mut view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
             let set = whole(&view);
             for cols in 20..=200u16 {
                 let drawn = drawn_footer(&mut view, cols, 24);
@@ -2784,7 +2767,7 @@ mod tests {
 
     #[test]
     fn the_slash_is_named_in_every_frame_at_every_width_that_holds_a_hint_after_it() {
-        for mut view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
+        for mut view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
             let set = whole(&view);
             let at = set
                 .iter()
@@ -2908,7 +2891,7 @@ mod tests {
     fn the_footer_draws_each_hint_as_a_key_and_the_words_that_say_what_it_does() {
         let palette = Palette::TRUECOLOR;
         for cols in [120, 72] {
-            for mut view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
+            for mut view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
                 let area = screen(cols, 24);
                 let mut buffer = Buffer::empty(area);
                 view.paint(area, &mut buffer);
@@ -2943,7 +2926,7 @@ mod tests {
     #[test]
     fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_explains_it() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::blank(Capabilities::default());
         view.key(Key::Char('?'));
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
@@ -3265,8 +3248,12 @@ mod tests {
         for file in ["alpha.rs", "zeta.rs"] {
             std::fs::write(workspace.path().join(file), "").expect("a file");
         }
-        let mut view = View::boot(pointing());
-        view.set_workspace(workspace.path().to_path_buf());
+        let mut view = View::blank(pointing());
+        view.handed(
+            view.facts()
+                .clone()
+                .working(workspace.path().to_path_buf(), None),
+        );
         assert_eq!(
             view.key(Key::Char('@')),
             Outcome::Edited,
@@ -3334,7 +3321,7 @@ mod tests {
 
     #[test]
     fn a_press_on_a_commands_row_sends_what_enter_sends() {
-        let mut view = View::boot(pointing());
+        let mut view = View::blank(pointing());
         view.key(Key::Char('/'));
         let (drawn, told) = painted_and_told(&mut view, 120, 40);
         let row = row_holding(&drawn, "/quit");
@@ -3349,14 +3336,14 @@ mod tests {
 
     #[test]
     fn a_press_on_a_commands_row_sends_what_enter_on_the_typed_line_sends() {
-        let mut clicked = View::boot(pointing());
+        let mut clicked = View::blank(pointing());
         for glyph in ['/', 'n'] {
             clicked.key(Key::Char(glyph));
         }
         let (drawn, told) = painted_and_told(&mut clicked, 120, 40);
         let row = row_holding(&drawn, "/settings");
 
-        let mut typed = View::boot(Capabilities::default());
+        let mut typed = View::blank(Capabilities::default());
         for glyph in "/settings".chars() {
             typed.key(Key::Char(glyph));
         }
@@ -3676,7 +3663,7 @@ mod tests {
     fn a_settled_run_leaves_the_frame_at_the_tail() {
         let mut view = scrolled_back();
 
-        view.set_state(State::Idle);
+        view.stopped(&Stop::Final);
 
         assert_eq!(
             view.scroll(),
@@ -3806,7 +3793,7 @@ mod tests {
 
     #[test]
     fn the_card_that_lists_the_keys_names_the_two_pages_and_the_tail() {
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::blank(Capabilities::default());
         view.key(Key::Char('?'));
         let buffer = painted(&mut view, 120, 40);
         let body = card_body(&buffer)
@@ -3846,7 +3833,7 @@ mod tests {
     #[test]
     fn every_hint_the_table_writes_is_drawn_in_the_frame_that_honours_it() {
         let mut drawn: Vec<&'static str> = Vec::new();
-        for view in [View::boot(Capabilities::default()), asking(0), asking(3)] {
+        for view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
             let depth = depth(&view);
             for width in 20..=200u16 {
                 for hint in kept(&view.hints(), width, &depth) {
@@ -3873,7 +3860,7 @@ mod tests {
                 .any(|binding| binding.name.split(", ").any(|name| name == hint.key));
             let opens = match hint.key.chars().next() {
                 Some(glyph) if pen::cells(hint.key) == 1 => {
-                    let mut view = View::boot(Capabilities::default());
+                    let mut view = View::blank(Capabilities::default());
                     view.key(Key::Char(glyph));
                     view.card().is_some() && view.composer().text() == hint.key
                 }
@@ -3967,10 +3954,13 @@ mod tests {
             }],
             Scroll::Back(70),
         );
-        view.set_workspace(PathBuf::from(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/fixtures/pictures"
-        )));
+        view.handed(view.facts().clone().working(
+            PathBuf::from(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/pictures"
+            )),
+            None,
+        ));
         painted(&mut view, 120, rows)
     }
 
@@ -4263,9 +4253,9 @@ mod tests {
         cols: u16,
         rows: u16,
     ) -> (Buffer, Rect, Rect) {
-        let mut view = View::boot(inked(palette));
+        let mut view = View::blank(inked(palette));
         view.settle();
-        view.set_state(State::Running);
+        view.handed(view.facts().clone().running());
         for at in 1..=count {
             view.enqueue(prompt(&format!("prompt {at}")));
         }
@@ -4426,7 +4416,7 @@ mod tests {
 
     #[test]
     fn a_draft_wider_than_the_band_wraps_under_the_gutter_and_never_splits_a_wide_glyph() {
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::blank(Capabilities::default());
         view.paste(&pen::filled(60, '日'));
 
         let area = screen(60, 24);
@@ -4451,7 +4441,7 @@ mod tests {
     #[test]
     fn an_empty_draft_says_what_the_band_can_do_in_the_dim_ink_until_a_glyph_arrives() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::blank(Capabilities::default());
 
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
@@ -4483,7 +4473,7 @@ mod tests {
     #[test]
     fn a_card_covers_the_composer_and_leaves_it_readable_and_out_of_reach() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::blank(Capabilities::default());
         view.paste("a draft of mine");
         view.screen(Mode::Keys);
 
@@ -4512,8 +4502,8 @@ mod tests {
 
     #[test]
     fn a_query_wider_than_the_body_is_cut_at_its_edge_and_not_dropped() {
-        let mut view = View::boot(Capabilities::default());
-        view.set_workspace(std::env::temp_dir());
+        let mut view = View::blank(Capabilities::default());
+        view.handed(view.facts().clone().working(std::env::temp_dir(), None));
         view.key(Key::Char('@'));
         for _ in 0..60 {
             view.key(Key::Char('x'));
@@ -4532,7 +4522,7 @@ mod tests {
 
     #[test]
     fn a_screen_has_no_caret_for_the_terminal_to_put_anywhere() {
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::blank(Capabilities::default());
         let area = screen(40, 12);
         assert!(
             view.cursor(area).is_some(),

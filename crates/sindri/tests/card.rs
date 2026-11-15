@@ -57,7 +57,11 @@ fn opened(over: View, mode: Mode) -> View {
             view.key(Key::Char('?'));
         }
         Mode::Files => {
-            view.set_workspace(root.path().to_path_buf());
+            view.handed(
+                view.facts()
+                    .clone()
+                    .working(root.path().to_path_buf(), None),
+            );
             view.key(Key::Char('@'));
         }
         Mode::Models => {
@@ -347,7 +351,7 @@ fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_ed
 fn a_card_drawn_in_a_window_nobody_is_reading_keeps_the_dim_edge() {
     let palette = Palette::TRUECOLOR;
     let mut view = on_screen(Mode::Keys);
-    view.set_focused(false);
+    view.handed(view.facts().clone().focused(false));
     let buffer = painted(&mut view, 120, 40);
     let (top, _, left, _) = corners(&buffer).expect("a card drawn with its border");
 
@@ -534,7 +538,7 @@ fn a_description_wider_than_the_card_wraps_under_its_own_column_and_hangs_under_
 
 #[test]
 fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.open_settings(&Config::default());
     view.refuse("max_turns two hundred will not parse: invalid digit found in string");
     let buffer = painted(&mut view, 120, 40);
@@ -554,7 +558,7 @@ fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
 fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
     let reason = "bad value in max_turns: `two hundred` will not parse: invalid digit found in \
                   string";
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.open_settings(&Config::default());
     view.refuse(reason);
     let palette = view.capabilities().palette();
@@ -602,7 +606,7 @@ fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
 #[test]
 fn a_frame_too_short_for_the_settings_visit_draws_the_head_of_the_list_and_keeps_the_verdict_back()
 {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.open_settings(&Config::default());
     view.refuse(
         "bad value in max_turns: `two hundred` will not parse: invalid digit found in string",
@@ -1050,7 +1054,7 @@ fn every_screen_is_drawn_on_a_card_as_tall_as_the_rows_it_holds() {
 #[test]
 fn the_model_list_is_a_card_as_tall_as_the_names_it_holds() {
     let mut view = opened(conversation(), Mode::Models);
-    view.set_served(served());
+    view.handed(view.facts().clone().served_by(served()));
     let buffer = painted(&mut view, 120, 40);
 
     let (top, bottom, ..) = corners(&buffer).expect("a card drawn with its border");

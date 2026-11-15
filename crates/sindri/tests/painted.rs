@@ -104,7 +104,7 @@ fn a_pass_hands_back_the_run_it_draws_at_more_than_one_cell() {
 
 #[test]
 fn a_press_on_a_row_the_pass_laid_chooses_that_row() {
-    let mut view = View::boot(caps::pointing());
+    let mut view = View::blank(caps::pointing());
     view.key(Key::Char('/'));
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let (row, _) = drawn_at(&buffer, "/quit");

@@ -29,8 +29,8 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
 }
 
 fn standing(root: &Path) -> View {
-    let mut view = View::boot(Capabilities::default());
-    view.set_workspace(root.to_path_buf());
+    let mut view = View::blank(Capabilities::default());
+    view.handed(view.facts().clone().working(root.to_path_buf(), None));
     view
 }
 
@@ -43,7 +43,7 @@ fn typing(root: &Path, draft: &str) -> View {
     let mut composer = Composer::new();
     composer.paste(draft);
     let mut view = View::typing(Capabilities::default(), composer);
-    view.set_workspace(root.to_path_buf());
+    view.handed(view.facts().clone().working(root.to_path_buf(), None));
     view
 }
 
@@ -220,7 +220,7 @@ fn a_query_that_matches_nothing_offers_nothing_and_selects_nothing() {
 
 #[test]
 fn a_frame_told_no_workspace_offers_no_file() {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
 
     assert_eq!(
         view.key(Key::Char('@')),

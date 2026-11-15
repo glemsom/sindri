@@ -109,8 +109,6 @@ impl Composer {
         self.state
     }
 
-    /// The run loop sets this when a run starts and when it stops, and nothing else in the
-    /// frame may.
     pub fn set_state(&mut self, state: State) {
         self.state = state;
     }

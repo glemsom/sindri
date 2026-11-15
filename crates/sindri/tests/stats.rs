@@ -41,9 +41,8 @@ fn painted(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
 }
 
 fn opened() -> View {
-    let mut view = View::boot(Capabilities::default());
-    view.set_facts(facts());
-    view.set_record(&document());
+    let mut view = View::blank(Capabilities::default());
+    view.handed(view.facts().clone().railed(facts()).recorded(&document()));
     view.paste("/stats");
     assert_eq!(
         view.key(Key::Enter),

@@ -51,8 +51,12 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
 /// the keys the config holds — with `mode` open on top of it.
 fn screen(mode: Mode, capabilities: Capabilities) -> (tempfile::TempDir, View) {
     let root = workspace(&["src/rows.rs", "src/view.rs"]);
-    let mut view = View::boot(capabilities);
-    view.set_workspace(root.path().to_path_buf());
+    let mut view = View::blank(capabilities);
+    view.handed(
+        view.facts()
+            .clone()
+            .working(root.path().to_path_buf(), None),
+    );
     match mode {
         Mode::Files => {
             view.key(Key::Char('@'));
@@ -65,7 +69,7 @@ fn screen(mode: Mode, capabilities: Capabilities) -> (tempfile::TempDir, View) {
         other => panic!("{other:?} keeps no list, so no screen of it is opened here"),
     }
     // The model screen opens empty, so the wire's answer is handed to it once it stands.
-    view.set_served(listed());
+    view.handed(view.facts().clone().served_by(listed()));
     assert_eq!(
         view.mode(),
         mode,

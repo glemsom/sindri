@@ -27,9 +27,19 @@ impl Models {
         Models::default()
     }
 
-    pub fn served(&mut self, listing: Listing) {
-        self.listing = Some(listing);
-        self.selected = 0;
+    /// The same screen with the names the wire served, which is the screen's own copy of a fact the
+    /// frame's value holds. A listing that is not the one the screen holds puts the mark back on the
+    /// first row; the same listing handed again leaves the reader where they were.
+    pub fn served_by(self, listing: Option<Listing>) -> Models {
+        let moved = self.listing != listing;
+        Models {
+            listing,
+            selected: match moved {
+                true => 0,
+                false => self.selected,
+            },
+            ..self
+        }
     }
 
     pub fn waiting(&self) -> bool {
