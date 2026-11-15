@@ -73,11 +73,6 @@ fn run_facts() -> Facts {
     Facts::default().asked().railed(facts())
 }
 
-/// The record a frame draws: the entries a run wrote, and the row the reader stands at in them.
-fn record(entries: impl IntoIterator<Item = Entry>, scroll: Scroll) -> Transcript {
-    Transcript::of(entries).scrolled(scroll)
-}
-
 /// A frame with `lines` typed into its draft through the keys a reader's fingers send, so a picture
 /// of the draft cannot be of a state the product cannot reach.
 fn typing(capabilities: Capabilities, lines: &[&str]) -> View {
@@ -91,13 +86,20 @@ fn typing(capabilities: Capabilities, lines: &[&str]) -> View {
     view
 }
 
+/// The frames this front end paints, each built from the three values it draws: the terminal a test
+/// states, the facts it holds and the record it draws. A frame that needs pictures, large text or no
+/// face states its own terminal; every other one is drawn on `capabilities`.
 fn named(name: &str, capabilities: Capabilities) -> View {
     match name {
         "boot" => splash(false),
         "boot-face" => splash(true),
         "boot-face-small" => splash(true),
         "transcript" => running(capabilities, transcript(), Scroll::Tail),
-        "gutter" => View::of(capabilities, Facts::default().asked(), gutter()),
+        "gutter" => View::of(
+            capabilities,
+            Facts::default().asked(),
+            Transcript::of(gutter()),
+        ),
         "transcript-scrolled" => running(capabilities, transcript(), Scroll::Back(4)),
         "thumb-head" => thumbing(capabilities, Scroll::Back(44)),
         "thumb-middle" => thumbing(capabilities, Scroll::Back(22)),
@@ -200,7 +202,7 @@ fn named(name: &str, capabilities: Capabilities) -> View {
             let mut view = View::of(
                 capabilities,
                 Facts::default().asked(),
-                record(transcript(), Scroll::Tail),
+                Transcript::of(transcript()),
             );
             view.drag(mark::Cell::new(20, 0), mark::Cell::new(23, 70));
             view
@@ -221,14 +223,12 @@ fn pictured() -> View {
     View::of(
         crate::caps::pictured(),
         Facts::default().asked().working(workspace, None),
-        record(
-            [answer(
-                1,
-                "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n![a tall field]\
+        Transcript::of([answer(
+            1,
+            "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n![a tall field]\
                  (tall.svg)",
-            )],
-            Scroll::Back(70),
-        ),
+        )])
+        .scrolled(Scroll::Back(70)),
     )
 }
 
@@ -239,7 +239,7 @@ fn faced(face: bool) -> View {
     View::of(
         crate::caps::pictured().faced(face),
         run_facts(),
-        record(opening(), Scroll::Tail),
+        Transcript::of(opening()),
     )
 }
 
@@ -291,7 +291,7 @@ fn construct(capabilities: Capabilities, text: &str) -> View {
     View::of(
         capabilities,
         Facts::default().asked(),
-        record([answer(1, text)], Scroll::Tail),
+        Transcript::of([answer(1, text)]),
     )
 }
 
@@ -301,7 +301,7 @@ fn sized(text: &str) -> View {
     View::of(
         crate::caps::kitty(),
         Facts::default().asked(),
-        record([answer(1, text)], Scroll::Tail),
+        Transcript::of([answer(1, text)]),
     )
 }
 
@@ -357,18 +357,15 @@ fn ways(capabilities: Capabilities) -> View {
     View::of(
         capabilities,
         Facts::default().asked().grounded(Some(ground(workspace))),
-        record(
-            [
-                answer(
-                    1,
-                    "The command is `/export` [in the spec](https://example.test/spec#12), and \
+        Transcript::of([
+            answer(
+                1,
+                "The command is `/export` [in the spec](https://example.test/spec#12), and \
                      [§16](§16) is where the gate is written down.",
-                ),
-                call(2, "open", r#"{"path": "GLOSSARY.md"}"#),
-                call(3, "open", r#"{"path": "site.html"}"#),
-            ],
-            Scroll::Tail,
-        ),
+            ),
+            call(2, "open", r#"{"path": "GLOSSARY.md"}"#),
+            call(3, "open", r#"{"path": "site.html"}"#),
+        ]),
     )
 }
 
@@ -386,7 +383,7 @@ fn tools(capabilities: Capabilities) -> View {
             .asked()
             .grounded(Some(ground(workspace)))
             .running(),
-        vec![
+        Transcript::of(vec![
             Entry::Turn { turn: 1 },
             call(
                 1,
@@ -416,7 +413,7 @@ fn tools(capabilities: Capabilities) -> View {
             call(2, "bash", r#"{"command": "cargo test --workspace"}"#),
             call(2, "open", r#"{"path": "docs/agents/domain.md"}"#),
             call(2, "skill", r#"{"name": "code-review"}"#),
-        ],
+        ]),
     )
 }
 
@@ -615,12 +612,16 @@ fn thumbing(capabilities: Capabilities, scroll: Scroll) -> View {
     View::of(
         capabilities,
         Facts::default().asked(),
-        record((1..=80).map(|turn| Entry::Turn { turn }), scroll),
+        Transcript::of((1..=80).map(|turn| Entry::Turn { turn })).scrolled(scroll),
     )
 }
 
 fn running(capabilities: Capabilities, entries: Vec<Entry>, scroll: Scroll) -> View {
-    View::of(capabilities, run_facts(), record(entries, scroll))
+    View::of(
+        capabilities,
+        run_facts(),
+        Transcript::of(entries).scrolled(scroll),
+    )
 }
 
 /// A live run's rail: the facts a run in flight holds and the marker its newest answer wears, so
@@ -635,7 +636,7 @@ fn live(capabilities: Capabilities, entries: Vec<Entry>, scroll: Scroll) -> View
             })
             .pulsed(Some(Pulse::live(4_200)))
             .running(),
-        record(entries, scroll),
+        Transcript::of(entries).scrolled(scroll),
     )
 }
 
@@ -807,11 +808,7 @@ fn gutter() -> Vec<Entry> {
 fn streaming(capabilities: Capabilities) -> View {
     let mut entries = transcript();
     entries.push(Entry::Turn { turn: 6 });
-    let mut view = View::of(
-        capabilities,
-        run_facts().running(),
-        record(entries, Scroll::Tail),
-    );
+    let mut view = View::of(capabilities, run_facts().running(), Transcript::of(entries));
     for fragment in [
         "The ticket asks whether the tail survives. ",
         "A fence still streaming is a code block, ",
@@ -859,7 +856,7 @@ fn with_pulse(capabilities: Capabilities, pulse: Pulse, said: &[&str]) -> View {
             true => facts.running(),
             false => facts,
         },
-        record(entries, Scroll::Tail),
+        Transcript::of(entries),
     );
     for fragment in [
         "The marker is a clock, so the row it heads is laid out again whenever ",
@@ -934,7 +931,7 @@ fn queue(capabilities: Capabilities) -> View {
     let view = View::of(
         capabilities,
         run_facts().running(),
-        record(transcript(), Scroll::Tail),
+        Transcript::of(transcript()),
     );
     let mut view = waiting(view, DURING_A_RUN);
     view.paste("and this one while they wait");
@@ -957,7 +954,7 @@ fn queue_long(capabilities: Capabilities) -> View {
     let view = View::of(
         capabilities,
         run_facts().running(),
-        record(transcript(), Scroll::Tail),
+        Transcript::of(transcript()),
     );
     let mut view = waiting(view, SEVEN_QUEUED);
     view.paste("and this one while they wait");

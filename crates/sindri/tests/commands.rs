@@ -26,13 +26,13 @@ fn say(view: &mut View, line: &str) -> Outcome {
 }
 
 fn frame(workspace: &Path) -> View {
-    let mut view = View::of(
+    View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(workspace.to_path_buf(), None),
         Transcript::none(),
-    );
-    view.handed(view.facts().clone().working(workspace.to_path_buf(), None));
-    view
+    )
 }
 
 fn workspace_with(name: &str, frontmatter: &str) -> tempfile::TempDir {
@@ -248,7 +248,7 @@ fn new_clears_the_transcript_the_frame_held() {
         Facts::default()
             .asked()
             .working(root.path().to_path_buf(), None),
-        entries,
+        Transcript::of(entries),
     );
     assert!(
         painted(&mut view).contains("the answer the conversation was about"),

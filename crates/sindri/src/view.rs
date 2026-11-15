@@ -265,8 +265,8 @@ struct Laid {
     band: Range<u16>,
 }
 
-/// The record a frame draws, and the row the reader stands at in it: the third value a frame is
-/// built from. A launch hands over the entries it recorded and the tail; a test states both.
+/// The record a frame draws and the row the reader stands at in it: the third of the three values a
+/// frame is built from.
 #[derive(Clone, Debug, Default)]
 pub struct Transcript {
     entries: Vec<Entry>,
@@ -282,7 +282,7 @@ impl Transcript {
         }
     }
 
-    /// No record at all: the frame a run a prompt has been asked for has said nothing in.
+    /// No record at all.
     pub fn none() -> Transcript {
         Transcript::default()
     }
@@ -293,46 +293,37 @@ impl Transcript {
     }
 }
 
-impl From<Vec<Entry>> for Transcript {
-    fn from(entries: Vec<Entry>) -> Transcript {
-        Transcript::of(entries)
-    }
-}
-
 impl View {
     /// The one place a frame is built, in a launch and in a test alike: what its terminal can do, the
     /// facts it draws, and the record it draws them from. A frame built with no facts is the splash
     /// screen, and every other screen follows from the value it is handed.
-    pub fn of(capabilities: Capabilities, facts: Facts, transcript: impl Into<Transcript>) -> View {
-        let Transcript { entries, scroll } = transcript.into();
+    pub fn of(capabilities: Capabilities, facts: Facts, transcript: Transcript) -> View {
+        let Transcript { entries, scroll } = transcript;
         let mut rows = Rows::new();
         for entry in entries {
             rows.push(entry);
         }
-        let mut composer = Composer::new();
-        composer.set_state(match facts.live() {
-            true => State::Running,
-            false => State::Idle,
-        });
-        View {
+        let mut view = View {
             rows,
             scroll,
             drawn: Drawn::none(),
-            composer,
+            composer: Composer::new(),
             stream: Stream::new(),
             queue: Queue::default(),
             conversation: Conversation::default(),
             superseded: false,
             stack: Stack::default(),
-            models: Models::new().served_by(facts.served().cloned()),
-            facts,
+            models: Models::new(),
+            facts: Facts::default(),
             mark: None,
             picker: Picker::default(),
             loaded: Loaded::default(),
             settings: Settings::default(),
             dismissed: None,
             capabilities,
-        }
+        };
+        view.handed(facts);
+        view
     }
 
     pub fn composer(&self) -> &Composer {
@@ -381,6 +372,7 @@ impl View {
         self.rows.retire();
         self.stream = Stream::new();
         self.scroll = Scroll::Tail;
+        self.composer.set_state(State::Idle);
         self.facts = self.facts.clone().asked();
         self.superseded = false;
     }
@@ -1968,10 +1960,10 @@ mod tests {
         let mut view = View::of(
             inked(palette),
             Facts::default().asked().railed(rail()),
-            vec![Entry::Assistant {
+            Transcript::of(vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("```rust\nfn main() {}\n```\n\nand prose"),
-            }],
+            }]),
         );
         view.paste("the draft");
 
@@ -2050,10 +2042,10 @@ mod tests {
             let mut view = View::of(
                 Capabilities::default(),
                 Facts::default().asked().railed(rail()),
-                vec![Entry::Assistant {
+                Transcript::of(vec![Entry::Assistant {
                     turn: 1,
                     text: SecretSet::default().redact("the transcript the rail is drawn beside"),
-                }],
+                }]),
             );
 
             let area = screen(cols, rows);
@@ -2116,12 +2108,12 @@ mod tests {
         let mut view = View::of(
             Capabilities::default(),
             Facts::default().asked().railed(rail()),
-            vec![Entry::Assistant {
+            Transcript::of(vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact(
                     "```rust\nfn main() {\n    fence.words();\n}\n```\n\nand the prose under it",
                 ),
-            }],
+            }]),
         );
         view.paste("the draft the composer band is drawn from");
 
@@ -2325,7 +2317,7 @@ mod tests {
     }
 
     #[test]
-    fn a_frame_draws_the_terminal_the_facts_and_the_record_it_was_handed() {
+    fn a_frame_draws_the_three_values_it_was_built_from() {
         let mut view = View::of(
             inked(Palette::ANSI),
             Facts::default().asked().railed(rail()),
@@ -2733,7 +2725,6 @@ mod tests {
             Facts::default().running(),
             Transcript::none(),
         );
-        view.settle();
         for text in ["one", "two", "three"].into_iter().take(queued) {
             view.enqueue(prompt(text));
         }
@@ -4422,7 +4413,6 @@ mod tests {
             Facts::default().running(),
             Transcript::none(),
         );
-        view.settle();
         for at in 1..=count {
             view.enqueue(prompt(&format!("prompt {at}")));
         }

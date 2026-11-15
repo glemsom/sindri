@@ -987,10 +987,10 @@ mod tests {
         let mut view = View::of(
             crate::caps::sized(),
             Facts::default().asked(),
-            vec![Entry::Assistant {
+            Transcript::of(vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("# A gate rule"),
-            }],
+            }]),
         );
 
         paint(&mut canvas, &mut view).expect("a painted frame");

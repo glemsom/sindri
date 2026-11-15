@@ -413,10 +413,10 @@ fn frame(workspace: &Path, text: &str, draws: bool) -> View {
         sindri::facts::Facts::default()
             .asked()
             .working(workspace.to_path_buf(), None),
-        vec![Entry::Assistant {
+        Transcript::of(vec![Entry::Assistant {
             turn: 1,
             text: SecretSet::default().redact(text),
-        }],
+        }]),
     )
 }
 
@@ -720,7 +720,9 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
                 picture in it is never measured";
     let mut view = View::of(
         caps::at(cell()),
-        sindri::facts::Facts::default().asked(),
+        sindri::facts::Facts::default()
+            .asked()
+            .working(workspace.clone(), None),
         Transcript::of(vec![
             Entry::Assistant {
                 turn: 1,
@@ -732,7 +734,6 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
             },
         ]),
     );
-    view.handed(view.facts().clone().working(workspace.clone(), None));
 
     painted_at(&mut view, SCREEN);
     assert_eq!(
