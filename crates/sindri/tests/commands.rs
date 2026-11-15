@@ -2,18 +2,23 @@
 //! history cleared, a set emptied, a name handed on, the launch ended. Every test types the line a reader types
 //! into a frame built the way the terminal builds one; the wire and the save behind `/model` are proved elsewhere.
 
+mod caps; // the terminals these frames are drawn on
+
 use std::path::Path;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::commands::{self, Command};
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::keys::Mode;
-use sindri::view::{Transcript, View};
+use sindri::mark::Cell;
+use sindri::pointer::Pointer;
+use sindri::view::{Painted, Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -59,6 +64,28 @@ fn painted(view: &mut View) -> String {
         .buffer
         .clone();
     rows_of(&drawn)
+}
+
+/// A frame 120 by 40 painted with the pointer taken: what a press on one of its rows is read
+/// against.
+fn painted_and_told(view: &mut View) -> (Buffer, Painted) {
+    let area = Rect::new(0, 0, 120, 40);
+    let mut buffer = Buffer::empty(area);
+    let told = view.paint(area, &mut buffer);
+    (buffer, told)
+}
+
+/// The row a frame draws `said` on, so a press can land where the words are.
+fn row_holding(buffer: &Buffer, said: &str) -> u16 {
+    let area = buffer.area;
+    (area.y..area.bottom())
+        .find(|y| {
+            let row: String = (area.x..area.right())
+                .map(|x| buffer.cell((x, *y)).expect("a cell of the row").symbol())
+                .collect();
+            row.contains(said)
+        })
+        .unwrap_or_else(|| panic!("the frame draws {said:?} on no row of it"))
 }
 
 /// Whether the commands card is drawn: its name hangs in the top row of a border, and the footer
@@ -524,4 +551,40 @@ fn a_command_that_takes_a_word_is_written_into_the_draft_to_name_it() {
     view.paste(":commit-message");
     assert_eq!(view.key(Key::Enter), Outcome::Edited);
     assert_eq!(view.loaded().names(), ["commit-message"]);
+}
+
+#[test]
+fn a_press_on_a_command_row_chooses_it_the_way_a_file_row_is_chosen() {
+    let mut clicked = View::of(
+        caps::pointing(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    clicked.paste("/s");
+    let (drawn, told) = painted_and_told(&mut clicked);
+    let row = row_holding(&drawn, "/stats");
+
+    let mut typed = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    typed.paste("/stats");
+
+    assert_eq!(
+        clicked.pointer(&told, Pointer::Press(Cell::new(row, 40))),
+        typed.key(Key::Enter),
+        "a press on the row that draws `/stats` sends what `Enter` on the typed line `/stats` \
+         sends"
+    );
+    assert_eq!(
+        clicked.composer().text(),
+        typed.composer().text(),
+        "which leaves the frame exactly as that typed line leaves it"
+    );
+    assert_eq!(
+        clicked.mode(),
+        typed.mode(),
+        "with the same screen standing over it"
+    );
 }
