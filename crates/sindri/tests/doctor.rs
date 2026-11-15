@@ -358,6 +358,36 @@ fn a_sandbox_that_will_not_build_is_refused_as_a_run_is_and_exits_three() {
     );
 }
 
+/// A key, so the run the doctor is held against gets as far as the sandbox a launch proves.
+const RUN_KEY: &str = "sk-ant-a-key-no-refusal-may-draw";
+
+#[test]
+fn a_sandbox_refusal_is_the_words_a_run_refuses_in_byte_for_byte() {
+    let ground = Ground::new();
+    let path = ground.machine(RESTRICTED);
+
+    let doctor = run(ground.command(&path).args(["doctor"]));
+    let asked = run(ground
+        .command(&path)
+        .env("ANTHROPIC_API_KEY", RUN_KEY)
+        .args(["-b", "triage this"]));
+
+    assert_eq!(
+        doctor.status.code(),
+        asked.status.code(),
+        "a doctor and a run refused by the same sandbox exit the same: doctor said {:?}, the run said {:?}\ndoctor stderr:\n{}\nrun stderr:\n{}",
+        doctor.status.code(),
+        asked.status.code(),
+        text(&doctor.stderr),
+        text(&asked.stderr)
+    );
+    assert_eq!(
+        text(&doctor.stderr),
+        text(&asked.stderr),
+        "the refusal is the run's own words, byte for byte, and never a report's"
+    );
+}
+
 #[test]
 fn the_proof_is_a_real_bubblewrap_invocation_rather_than_a_version_probe() {
     let ground = Ground::new();

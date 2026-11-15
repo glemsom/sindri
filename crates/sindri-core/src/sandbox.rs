@@ -8,7 +8,7 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
-use crate::bash::{self, BWRAP};
+use crate::bash;
 use crate::policy::{Boundary, Enforcement};
 
 pub const EXIT_CODE: u8 = 3;
@@ -130,10 +130,6 @@ impl fmt::Display for Card {
 }
 
 impl Error for Card {}
-
-pub fn prove(boundary: &Boundary, session_temp: &Path) -> Result<Proof, Card> {
-    prove_with(Path::new(BWRAP), boundary, session_temp)
-}
 
 /// The same three checks over a program named rather than looked up: the seam a test reaches
 /// with a stand-in that refuses on demand, so every refusal is provable without a broken kernel.

@@ -14,7 +14,7 @@ use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
 use sindri_core::records::{Entry, SessionDocument, read_transcript};
 use sindri_core::run::{Cancel, Stop, Turn};
-use sindri_core::tools::{BASH, FrontEnd};
+use sindri_core::tools::FrontEnd;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
@@ -65,9 +65,9 @@ impl Homes {
         Machine::new(&self.environment, bwrap)
     }
 
-    /// A skill under the homes' own home, which is the scope the launch reads before the
-    /// workspace's.
-    fn user_skill(&self, name: &str, description: &str) -> PathBuf {
+    /// A skill under the homes' own home: the launch reads its workspace from the process, so a
+    /// test cannot hand it a directory of its own.
+    fn user_skill(&self, name: &str, description: &str) {
         let directory = self.at("home").join(".agents").join("skills").join(name);
         std::fs::create_dir_all(&directory).expect("a skill directory");
         std::fs::write(
@@ -75,7 +75,6 @@ impl Homes {
             format!("---\nname: {name}\ndescription: {description}\n---\n\nBody of {name}.\n"),
         )
         .expect("a SKILL.md");
-        directory
     }
 
     fn state_home(&self) -> &Path {
@@ -362,14 +361,13 @@ fn a_launch_hands_the_words_and_skills_its_tools_were_built_from() {
         .expect("the boundary the launch was opened with holds")
         .description();
     assert_eq!(
-        launch.describes(BASH),
-        Some(described.as_str()),
+        launch.bash_description(),
+        described,
         "the words a run hands the model for `bash` are the boundary it was opened with, not a \
          rendering beside it"
     );
 
     let listed: Vec<String> = launch
-        .catalog()
         .listing()
         .into_iter()
         .map(|entry| entry.name)

@@ -50,8 +50,7 @@ fn write(report: &str) -> io::Result<()> {
     stdout.flush()
 }
 
-/// Every fact is read off the launch the run would be made from, so a report and a run cannot
-/// disagree about the wire, the boundary, the enforcement or the tools.
+/// Every fact is read off the launch the run would be made from.
 struct Report {
     enforcement: Enforcement,
     workspace: PathBuf,
@@ -68,16 +67,13 @@ impl Report {
             enforcement: figure.enforcement,
             workspace: figure.workspace,
             proof: figure.proof,
-            described: launch
-                .describes(BASH)
-                .expect("`bash` is the one tool every run registers")
-                .to_owned(),
-            listing: launch.catalog().listing(),
-            diagnostics: launch.catalog().diagnostics().to_vec(),
+            described: launch.bash_description().to_owned(),
+            listing: launch.listing(),
+            diagnostics: launch.diagnostics().to_vec(),
         }
     }
 
-    fn render(&self) -> String {
+    fn render(self) -> String {
         let mut lines: Vec<String> = vec![String::from("sindri doctor")];
         lines.push(fact("enforcement", self.enforcement.word()));
         lines.push(fact("workspace", &self.workspace.display().to_string()));
@@ -86,7 +82,7 @@ impl Report {
         lines.push(String::new());
         lines.push(format!("the description the model is given for `{BASH}`"));
         lines.push(String::new());
-        lines.push(self.described.clone());
+        lines.push(self.described);
 
         lines.push(String::new());
         lines.extend(skills(&self.listing));
