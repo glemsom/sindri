@@ -20,8 +20,8 @@ use crate::records::{Facts, Record, SessionDocument};
 use crate::run::{Cancel, Limits, Run, Shell, Turn};
 use crate::sandbox::{self, Proof};
 use crate::session::{self, Session};
-use crate::skills::{Catalog, home};
-use crate::tools::{FrontEnd, ToolSet};
+use crate::skills::{self, Catalog, Diagnostic, home};
+use crate::tools::{BASH, FrontEnd, ToolSet};
 use crate::wire::Wire;
 
 /// The exit code for a launch that had nothing to run *with*.
@@ -96,6 +96,7 @@ pub struct Launch {
     asking: Asking,
     shell: Shell,
     tools: ToolSet,
+    catalog: Catalog,
     model: String,
     wire: Wire,
     route: Option<Route>,
@@ -118,15 +119,36 @@ impl Launch {
                 USAGE,
             ));
         };
+        let state_home = session::state_home(&machine.environment)
+            .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
+        let session = Session::create(&state_home)
+            .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
+        Launch::assemble(
+            machine,
+            config,
+            enforcement,
+            front_end,
+            endpoint,
+            model,
+            &session,
+        )
+        .inspect_err(|_| session.discard())
+    }
+
+    fn assemble(
+        machine: &Machine<'_>,
+        config: &Config,
+        enforcement: Enforcement,
+        front_end: FrontEnd,
+        endpoint: Endpoint,
+        model: String,
+        session: &Session,
+    ) -> Result<Launch, Refusal> {
         let wire = endpoint.wire();
         let workspace = std::env::current_dir().map_err(|error| {
             Refusal::new(format!("cannot read the working directory: {error}"), SETUP)
         })?;
         let environment = machine.environment;
-        let state_home = session::state_home(&environment)
-            .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
-        let session = Session::create(&state_home)
-            .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
         let boundary = Boundary::from_config(config, &workspace, enforcement)
             .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
         // Before a turn or a record: the alternative is a run that proceeds unconfined.
@@ -151,7 +173,7 @@ impl Launch {
         let route = ask.route_of();
         let thinking = ask.thinks();
         let record = Record::open(
-            &session,
+            session,
             Facts {
                 wire,
                 model: &model,
@@ -165,16 +187,17 @@ impl Launch {
         )
         .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
         let asking = Asking::new(client, ask, tools.clone());
-        let shell = Shell::new(boundary.clone(), session.temp(), catalog);
+        let shell = Shell::new(boundary.clone(), session.temp(), catalog.clone());
 
         Ok(Launch {
-            session,
+            session: session.clone(),
             boundary,
             limits,
             record,
             asking,
             shell,
             tools,
+            catalog,
             model,
             wire,
             route,
@@ -206,6 +229,31 @@ impl Launch {
             &self.record.document().workspace,
         )
         .ok()
+    }
+
+    /// The words a run on this launch hands the model about `bash`, the one tool every run
+    /// registers.
+    pub fn bash_description(&self) -> &str {
+        self.tools
+            .get(BASH)
+            .expect("`bash` is the one tool every run registers")
+            .description()
+    }
+
+    /// The skills a run on this launch would be offered, by name and with the scope each came
+    /// from.
+    pub fn listing(&self) -> Vec<skills::Listing> {
+        self.catalog.listing()
+    }
+
+    /// The skill files discovery could not read, and where each one lies.
+    pub fn diagnostics(&self) -> &[Diagnostic] {
+        self.catalog.diagnostics()
+    }
+
+    /// A launch nobody drove recorded no run, so the session it made goes whole.
+    pub fn discard(self) {
+        self.session.discard();
     }
 
     pub fn max_turns(&self) -> u32 {

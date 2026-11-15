@@ -97,6 +97,11 @@ impl Session {
             }
         }
     }
+    /// A session nothing was written to goes whole, because a directory no run kept is one no
+    /// reader should find; a removal that fails is not a run's to report.
+    pub fn discard(&self) {
+        let _ = std::fs::remove_dir_all(&self.directory);
+    }
     pub fn finish(&mut self) -> Result<(), SessionError> {
         let entries = std::fs::read_dir(&self.temp).map_err(|error| SessionError::Unreadable {
             path: self.temp.clone(),

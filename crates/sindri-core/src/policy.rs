@@ -212,11 +212,6 @@ impl Boundary {
         lines.join("\n")
     }
 
-    /// The description the model sees, so a diagnostic cannot describe the boundary differently.
-    pub fn doctor_description(&self) -> String {
-        self.description()
-    }
-
     pub fn record_policy(&self) -> PolicyRecord {
         PolicyRecord {
             enforcement: self.enforcement,
