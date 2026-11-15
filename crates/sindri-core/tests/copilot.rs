@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use sindri_core::config::config_path;
-use sindri_core::provider::copilot::{self, DeviceCode, SignIn, Store, store_dir};
+use sindri_core::provider::copilot::{self, DeviceCode, SignIn, Signing, Store, store_dir};
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Verdict};
 use sindri_core::redact::{MASK, SecretSet};
@@ -260,7 +260,8 @@ fn a_copilot_ask_is_sent_with_the_session_the_store_holds() {
     );
     let signed_in = store(&home, &replay);
     signed_in.login(|_| {}).expect("the sign-in finishes");
-    let client = Client::over(replay.clone(), SecretSet::default()).store(signed_in);
+    let client =
+        Client::over(replay.clone(), SecretSet::default()).signing(Some(Signing::Store(signed_in)));
 
     let answer = client
         .ask(
@@ -285,7 +286,8 @@ fn a_copilot_ask_is_sent_with_the_session_the_store_holds() {
 fn a_copilot_ask_with_no_sign_in_asks_for_a_login_instead_of_sending() {
     let home = tempfile::tempdir().expect("a temp config home");
     let replay = Replay::default();
-    let client = Client::over(replay.clone(), SecretSet::default()).store(store(&home, &replay));
+    let client = Client::over(replay.clone(), SecretSet::default())
+        .signing(Some(Signing::Store(store(&home, &replay))));
 
     let failure = client
         .ask(

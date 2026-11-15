@@ -8,6 +8,7 @@ use sindri_core::open::Ground;
 use sindri_core::outcome::{Facts as Reported, Outcome};
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::preamble::Preamble;
+use sindri_core::provider::copilot::Signing;
 use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::served::Listing;
 use sindri_core::provider::{Ask, Client, Deltas, Route, Usage};
@@ -141,6 +142,11 @@ impl Launch {
             config.secrets(),
             &Process,
         );
+        // A sign-in that cannot be read is a setup fault, refused here rather than at the first
+        // turn: nothing has been recorded yet, and a run that cannot be signed in writes nothing.
+        if let Some(Signing::Unreadable(reason)) = client.sign_in() {
+            return Err(Refusal::new(reason.to_string(), USAGE));
+        }
         let ask = ask(config, endpoint, model.clone(), &workspace);
         let route = ask.route_of();
         let thinking = ask.thinks();

@@ -9,8 +9,7 @@ use rig_core::http_client::{
     Bytes, Error, HttpClientExt, LazyBody, MultipartForm, Request, Response, StreamingResponse,
 };
 use sindri_core::config::Config;
-use sindri_core::provider::copilot::Store;
-use sindri_core::provider::copilot::store_dir;
+use sindri_core::provider::copilot::{self, Signing, Store, store_dir};
 use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::served::Listing;
 use sindri_core::provider::transport::{Canned, Replay};
@@ -377,23 +376,24 @@ fn a_listing_is_read_from_the_endpoint_a_run_asks() {
     let listing = client.served(&endpoint, &config.credential(), &endpoint);
     client.ask(&ask, &mut ()).expect("a recorded reply answers");
 
-    assert_eq!(
-        listing.at(),
-        ask.endpoint(),
-        "the names are kept beside the very endpoint the run asks"
+    assert!(
+        listing.names().is_some(),
+        "the first request is the listing, answered at the endpoint the config names"
     );
     assert_eq!(
         ask.route_of(),
         Some(Route::Responses),
         "the route the config names is the one the run is sent on"
     );
-    for seen in replay.requests() {
-        assert!(
-            seen.url.starts_with("https://gateway.example/v1/"),
-            "both jobs ask the one endpoint the config names: {}",
-            seen.url
-        );
-    }
+    let requested: Vec<String> = replay.requests().into_iter().map(|seen| seen.url).collect();
+    assert_eq!(
+        requested,
+        [
+            "https://gateway.example/v1/models",
+            "https://gateway.example/v1/responses"
+        ],
+        "the listing and the run are read at the one endpoint the config names"
+    );
 }
 
 const DEVICE_CODE: &str = r#"{"device_code":"3584cd8a","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","interval":1,"expires_in":900}"#;
@@ -437,7 +437,7 @@ fn a_copilot_listing_asks_the_store_a_run_would_sign_in_with() {
     );
     let signed_in = store(&home, &replay);
     signed_in.login(|_| {}).expect("the sign-in finishes");
-    let client = client_over(&replay).signing(Some(Ok(signed_in)));
+    let client = client_over(&replay).signing(Some(Signing::Store(signed_in)));
     let endpoint = Endpoint::own(Wire::Copilot);
 
     let listing = client.served(&endpoint, &Credential::none(), &endpoint);
@@ -465,17 +465,18 @@ fn a_copilot_listing_asks_the_store_a_run_would_sign_in_with() {
 #[test]
 fn a_store_that_cannot_be_read_is_the_reason_both_jobs_give() {
     let endpoint = Endpoint::own(Wire::Copilot);
-    let Some(Err(sign_in)) = endpoint.sign_in(&BTreeMap::new()) else {
-        panic!("a copilot endpoint asks the store, and an empty environment names no config home");
+    let Some(Signing::Unreadable(unreadable)) = copilot::signing(Wire::Copilot, &BTreeMap::new())
+    else {
+        panic!("a copilot wire asks the store, and an empty environment names no config home");
     };
-    let words = sign_in.to_string();
+    let words = unreadable.to_string();
     assert!(
         words.contains("XDG_CONFIG_HOME"),
         "the sign-in that could not be read says why: {words}"
     );
 
     let replay = Replay::default();
-    let client = client_over(&replay).signing(Some(Err(sign_in)));
+    let client = client_over(&replay).signing(Some(Signing::Unreadable(unreadable)));
 
     let listing = client.served(&endpoint, &Credential::none(), &endpoint);
     assert_eq!(

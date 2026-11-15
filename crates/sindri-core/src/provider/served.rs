@@ -66,15 +66,13 @@ impl Client {
     /// evidence about another.
     pub fn served(&self, at: &Endpoint, credential: &Credential, current: &dyn Current) -> Listing {
         let mut secrets = self.secrets.clone();
-        let read = self
-            .credential(at.wire(), credential, &mut secrets)
-            .map_err(|failure| failure.message.to_string())
-            .and_then(|key| match key {
-                Some(key) => self
-                    .catalogue(at, &key, &secrets)
-                    .map_err(|failure| reason(at, &failure)),
-                None => Err(credential_source(at.wire())),
-            });
+        let read = match self.credential(credential, &mut secrets) {
+            Ok(Some(key)) => self
+                .names(at, &key, &secrets)
+                .map_err(|failure| reason(at, &failure)),
+            Ok(None) => Err(credential_source(at.wire())),
+            Err(failure) => Err(failure.message.to_string()),
+        };
         let outcome = if current.pair() == *at {
             match read {
                 Ok(names) => Outcome::Listed(names),
@@ -93,13 +91,8 @@ impl Client {
         }
     }
 
-    fn catalogue(
-        &self,
-        at: &Endpoint,
-        key: &str,
-        secrets: &SecretSet,
-    ) -> Result<Vec<Served>, Failure> {
-        futures::executor::block_on(at.serving(key).catalogue(self.transport.clone()))
+    fn names(&self, at: &Endpoint, key: &str, secrets: &SecretSet) -> Result<Vec<Served>, Failure> {
+        futures::executor::block_on(at.serving(key).names(self.transport.clone()))
             .map(names_of)
             .map_err(|error| Failure::from_wire(error, false, secrets))
     }

@@ -1,6 +1,6 @@
-//! The wire at the address it is asked, and on the route it serves: the one value a
-//! run and a listing are both built from, so the names a listing serves are read from the endpoint
-//! a run asks.
+//! The wire at the address it is asked and on the route it serves. Which client carries it is
+//! decided here and nowhere else, so a fourth wire is one arm of one match, and a listing cannot
+//! learn what a run asks from a client of its own.
 
 // rig's configs and its error are large, and one of each is built per job: the boxes clippy
 // asks for are an allocation bought with nothing.
@@ -8,7 +8,6 @@
 
 use std::fmt;
 
-use rig_core::completion::CompletionRequest;
 use rig_core::error::ProviderError;
 use rig_core::http_client::DynHttpClient;
 use rig_core::model::ModelList;
@@ -16,11 +15,7 @@ use rig_core::providers::anthropic::AnthropicConfig;
 use rig_core::providers::openai::OpenAIConfig;
 use rig_core::providers::openai::wire::OpenAiWire;
 
-use super::copilot::{SignIn, Store};
 use super::route::Route;
-use super::{Answer, Client, Deltas, Failure};
-use crate::config::Environment;
-use crate::redact::SecretSet;
 use crate::wire::Wire;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -61,27 +56,13 @@ impl Endpoint {
         self.base_url.as_deref()
     }
 
-    /// rig's choice for the dialect and the served name, or the one the run names; `None` for a
-    /// dialect that serves one endpoint.
+    /// rig reads the route off the served name unless the run named one, and a dialect that serves
+    /// one endpoint names none.
     pub fn route_of(&self, model: &str) -> Option<Route> {
         match self.serving("") {
             Serving::Messages(_) => None,
             Serving::OpenAi(config) => Some(Route::of(&OpenAiWire::new(config, model.to_owned()))),
         }
-    }
-
-    /// The sign-in this wire asks with: the copilot store when it can be read, and its own words
-    /// when it cannot, because a store that will not open is no reason to refuse before a job is
-    /// asked.
-    pub fn sign_in(&self, environment: &impl Environment) -> Option<Result<Store, SignIn>> {
-        self.wire.credential_variable().is_none().then(|| {
-            Store::resolve(environment).map_err(|error| {
-                SignIn::Unavailable(
-                    SecretSet::default()
-                        .redact(format!("the copilot sign-in cannot be read: {error}")),
-                )
-            })
-        })
     }
 
     /// The dialect's client: the one place a wire decides what carries it.
@@ -130,40 +111,11 @@ pub(super) enum Serving {
 }
 
 impl Serving {
-    /// The names this dialect serves, through the same client a run asks.
-    pub(super) async fn catalogue(
-        self,
-        transport: DynHttpClient,
-    ) -> Result<ModelList, ProviderError> {
+    /// The names this dialect serves, through the same client a run asks with.
+    pub(super) async fn names(self, transport: DynHttpClient) -> Result<ModelList, ProviderError> {
         match self {
             Serving::Messages(config) => config.connect(transport).list_models().await,
             Serving::OpenAi(config) => config.connect(transport).list_models().await,
-        }
-    }
-
-    /// The run's request carried on this dialect's client, through `client`.
-    pub(super) fn carried(
-        self,
-        client: &Client,
-        model: &str,
-        request: CompletionRequest,
-        deltas: &mut dyn Deltas,
-        secrets: &SecretSet,
-    ) -> Result<Answer, Failure> {
-        let transport = client.transport.clone();
-        match self {
-            Serving::Messages(config) => client.drive(
-                config.connect(transport).completion(model),
-                request,
-                deltas,
-                secrets,
-            ),
-            Serving::OpenAi(config) => client.drive(
-                config.connect(transport).completion(model),
-                request,
-                deltas,
-                secrets,
-            ),
         }
     }
 }
