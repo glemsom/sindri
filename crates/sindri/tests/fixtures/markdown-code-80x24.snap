@@ -5,7 +5,7 @@ expression: drawn
 markdown-code at 80x24
 00 |▏ rust                                                                          | dim:2 accent+faint:4 plain:74
 01 |▏ fn main() {                                                                   | dim:2 accent:2 plain:76
-02 |▏     let fence = Fence::open();                                                | dim:2 plain:4 accent:3 plain:71
+02 |▏     let fence = Fence::open("rust");                                          | dim:2 plain:4 accent:3 plain:21 ok:6 plain:44
 03 |▏     fence.words();                                                            | dim:2 plain:78
 04 |▏ }                                                                             | dim:2 plain:78
 05 |                                                                                | plain:80
