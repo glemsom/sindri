@@ -12,18 +12,10 @@ pub fn height(facts: &Facts, width: u16) -> u16 {
     u16::try_from(laid(facts, width).len()).unwrap_or(u16::MAX)
 }
 
-/// Draws the layout in `body`, every row shifted to the card's own row and column, and never a row
-/// the card did not give it: a card is a layer, so a row outside it is a row it does not hold.
+/// Draws the layout in `body`, the band the card gives it: the rows the card holds are the cap, so
+/// one past them is not drawn.
 pub fn paint(facts: &Facts, body: Rect, buffer: &mut Buffer, palette: &Palette) {
-    for row in laid(facts, body.width)
-        .iter()
-        .take(usize::from(body.height))
-    {
-        let y = body.y.saturating_add(row.y());
-        for (x, part) in row.parts() {
-            part.draw(buffer, body.x.saturating_add(*x), y, palette);
-        }
-    }
+    ledger::draw(&laid(facts, body.width), body, buffer, palette);
 }
 
 /// The screen's whole layout at `width`: every block it can draw, with no band to cap it.
