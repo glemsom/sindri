@@ -26,8 +26,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # The version a laptop pins too, so both materialise the same shell.
-  DEVBOX_VERSION: 0.19.0
+  # One version, two names: since 0.19 the tarball is a launcher that runs whatever GitHub
+  # calls "latest" unless DEVBOX_USE_VERSION says otherwise, so the launcher's pin, not the
+  # tarball's name, is the one the gate is measured by.
+  DEVBOX_VERSION: 0.21.0
+  DEVBOX_USE_VERSION: 0.21.0
 
 jobs:
   check:

@@ -5,7 +5,7 @@ members = ["crates/sindri-core", "crates/sindri"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.100"
 
 # The renderer is measured by an eval and shipped in release, so the test profile draws it at
 # the speed it ships at: unoptimized it is nine times slower, which no budget here was chosen
