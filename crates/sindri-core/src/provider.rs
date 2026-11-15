@@ -3,6 +3,7 @@
 //! library carried it, how a reply was framed, or which dialect spoke.
 
 pub mod copilot;
+pub mod endpoint;
 pub mod retry;
 pub mod route;
 pub mod served;
@@ -23,14 +24,14 @@ use rig_core::completion::{
 };
 use rig_core::error::{ErrorKind, ProviderError};
 use rig_core::http_client::{DynHttpClient, HttpClientExt};
-use rig_core::providers::anthropic::AnthropicConfig;
-use rig_core::providers::openai::OpenAIConfig;
 use rig_core::streaming::{Item, StreamEvent};
 use rig_core::wire::{Encoded, Wire as RigWire, WireFrame};
 
+use self::endpoint::{Endpoint, Serving};
 use self::retry::{Backoff, Sleep, until_final};
 pub use self::route::Route;
 use self::transport::Http;
+use crate::config;
 use crate::redact::{MASK, Redacted, SecretSet};
 use crate::tools::Tool;
 use crate::wire::Wire;
@@ -65,9 +66,8 @@ impl fmt::Debug for Credential {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ask {
-    wire: Wire,
+    endpoint: Endpoint,
     model: String,
-    base_url: Option<String>,
     credential: Credential,
     preamble: Option<String>,
     earlier: Vec<Turn>,
@@ -75,15 +75,17 @@ pub struct Ask {
     tools: Vec<ToolDefinition>,
     prompt: String,
     thinking: bool,
-    route: Option<Route>,
 }
 
 impl Ask {
     pub fn new(wire: Wire, model: impl Into<String>) -> Self {
+        Self::of(Endpoint::own(wire), model)
+    }
+
+    pub fn of(endpoint: Endpoint, model: impl Into<String>) -> Self {
         Self {
-            wire,
+            endpoint,
             model: model.into(),
-            base_url: None,
             credential: Credential::none(),
             preamble: None,
             earlier: Vec::new(),
@@ -91,7 +93,6 @@ impl Ask {
             tools: Vec::new(),
             prompt: String::new(),
             thinking: false,
-            route: None,
         }
     }
 
@@ -140,7 +141,7 @@ impl Ask {
     }
 
     pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
-        self.base_url = Some(base_url.into());
+        self.endpoint = self.endpoint.based(base_url);
         self
     }
 
@@ -156,22 +157,8 @@ impl Ask {
     }
 
     pub fn route(mut self, route: Route) -> Self {
-        self.route = Some(route);
+        self.endpoint = self.endpoint.routed(Some(route));
         self
-    }
-
-    fn endpoint(&self, key: &str) -> OpenAIConfig {
-        let mut endpoint = match self.wire {
-            Wire::Copilot => OpenAIConfig::with_key(&rig_core::providers::copilot::DIALECT, key),
-            Wire::Anthropic | Wire::Openai => OpenAIConfig::new(key),
-        };
-        if let Some(base_url) = &self.base_url {
-            endpoint = endpoint.with_base_url(base_url);
-        }
-        if let Some(route) = self.route {
-            endpoint = endpoint.with_route(route.chosen());
-        }
-        endpoint
     }
 
     /// Every dialect refuses an empty message, so a prompt that got no answer travels alone: the
@@ -325,10 +312,9 @@ impl Verdict {
 }
 
 fn credential_source(wire: Wire) -> String {
-    match wire {
-        Wire::Anthropic => "set ANTHROPIC_API_KEY".to_owned(),
-        Wire::Openai => "set OPENAI_API_KEY".to_owned(),
-        Wire::Copilot => format!("run `{}`", copilot::LOGIN),
+    match wire.credential_variable() {
+        Some(variable) => format!("set {variable}"),
+        None => format!("run `{}`", copilot::LOGIN),
     }
 }
 
@@ -409,7 +395,7 @@ pub struct Client {
     transport: DynHttpClient,
     backoff: Arc<dyn Backoff + Send + Sync>,
     secrets: SecretSet,
-    store: Option<copilot::Store>,
+    signing: Option<copilot::Signing>,
 }
 
 impl fmt::Debug for Client {
@@ -418,7 +404,7 @@ impl fmt::Debug for Client {
             .debug_struct("Client")
             .field("transport", &self.transport)
             .field("secrets", &self.secrets.len())
-            .field("store", &self.store)
+            .field("signing", &self.signing)
             .finish_non_exhaustive()
     }
 }
@@ -429,12 +415,26 @@ impl Client {
             transport: DynHttpClient::new(transport),
             backoff: Arc::new(Sleep),
             secrets,
-            store: None,
+            signing: None,
         }
     }
 
-    pub fn store(mut self, store: copilot::Store) -> Self {
-        self.store = Some(store);
+    pub fn secrets(&self) -> &SecretSet {
+        &self.secrets
+    }
+
+    /// The sign-in this client asks its wire with, kept even when it could not be read.
+    pub fn sign_in(&self) -> Option<&copilot::Signing> {
+        self.signing.as_ref()
+    }
+
+    /// The sign-in the wire is asked with: the store's own literals join the run's, so nothing it
+    /// holds can reach a record or a line of chatter.
+    pub fn signing(mut self, signing: Option<copilot::Signing>) -> Self {
+        if let Some(copilot::Signing::Store(store)) = &signing {
+            self.secrets = self.secrets.union(store.secrets());
+        }
+        self.signing = signing;
         self
     }
 
@@ -443,10 +443,12 @@ impl Client {
         self
     }
 
-    pub fn http(
+    pub fn for_endpoint(
+        endpoint: &Endpoint,
         headers: Vec<(String, String)>,
         session: impl Into<String>,
         secrets: SecretSet,
+        environment: &impl config::Environment,
     ) -> Self {
         Self::over(
             Http::new(headers)
@@ -454,6 +456,7 @@ impl Client {
                 .over(rig_reqwest::ReqwestClient::default()),
             secrets,
         )
+        .signing(copilot::signing(endpoint.wire(), environment))
     }
 
     pub fn ask(&self, ask: &Ask, deltas: &mut dyn Deltas) -> Result<Answer, Failure> {
@@ -461,47 +464,69 @@ impl Client {
         // A session resolved here joins the set this ask is scrubbed with, so a wire
         // that echoes it back is echoed back masked.
         let mut secrets = self.secrets.clone();
-        let credential = match ask.credential.expose() {
-            Some(key) => Some(key.to_owned()),
-            None => self.session(ask.wire, &mut secrets)?,
+        let credential = self.credential(&ask.credential, &mut secrets)?;
+        let Some(key) = credential else {
+            return Err(Failure::unconfigured(ask.endpoint.wire()));
         };
-        let credential = credential.as_deref();
-        match ask.wire {
-            Wire::Anthropic => {
-                let Some(key) = credential else {
-                    return Err(Failure::unconfigured(Wire::Anthropic));
-                };
-                let mut endpoint = AnthropicConfig::new(key);
-                if let Some(base_url) = &ask.base_url {
-                    endpoint = endpoint.with_base_url(base_url);
-                }
-                let model = endpoint
-                    .connect(self.transport.clone())
-                    .completion(ask.model.clone());
-                self.drive(model, request, deltas, &secrets)
-            }
-            Wire::Openai | Wire::Copilot => {
-                let Some(key) = credential else {
-                    return Err(Failure::unconfigured(ask.wire));
-                };
-                let model = ask
-                    .endpoint(key)
-                    .connect(self.transport.clone())
-                    .completion(ask.model.clone());
-                self.drive(model, request, deltas, &secrets)
-            }
+        self.carry(
+            ask.endpoint.serving(&key),
+            &ask.model,
+            request,
+            deltas,
+            &secrets,
+        )
+    }
+
+    /// The credential a wire is asked with: the one the job was given, or the session the sign-in
+    /// resolves when it has none of its own.
+    fn credential(
+        &self,
+        given: &Credential,
+        secrets: &mut SecretSet,
+    ) -> Result<Option<String>, Failure> {
+        match given.expose() {
+            Some(key) => Ok(Some(key.to_owned())),
+            None => self.session(secrets),
         }
     }
 
-    fn session(&self, wire: Wire, secrets: &mut SecretSet) -> Result<Option<String>, Failure> {
-        let (Wire::Copilot, Some(store)) = (wire, self.store.as_ref()) else {
-            return Ok(None);
+    fn session(&self, secrets: &mut SecretSet) -> Result<Option<String>, Failure> {
+        let session = match &self.signing {
+            None => return Ok(None),
+            Some(copilot::Signing::Store(store)) => store.session().map_err(Failure::signed_out)?,
+            Some(copilot::Signing::Unreadable(reason)) => {
+                return Err(Failure::signed_out(reason.clone()));
+            }
         };
-        let session = store.session().map_err(Failure::signed_out)?;
         Ok(session.expose().map(|token| {
             secrets.add(token);
             token.to_owned()
         }))
+    }
+
+    fn carry(
+        &self,
+        serving: Serving,
+        model: &str,
+        request: CompletionRequest,
+        deltas: &mut dyn Deltas,
+        secrets: &SecretSet,
+    ) -> Result<Answer, Failure> {
+        let transport = self.transport.clone();
+        match serving {
+            Serving::Messages(config) => self.drive(
+                config.connect(transport).completion(model),
+                request,
+                deltas,
+                secrets,
+            ),
+            Serving::OpenAi(config) => self.drive(
+                config.connect(transport).completion(model),
+                request,
+                deltas,
+                secrets,
+            ),
+        }
     }
 
     fn drive<W>(

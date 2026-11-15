@@ -15,7 +15,8 @@ use sindri::pointer::Pointer;
 use sindri::view::{Transcript, View};
 
 use sindri_core::config::Config;
-use sindri_core::provider::served::{Listing, Where};
+use sindri_core::provider::endpoint::Endpoint;
+use sindri_core::provider::served::Listing;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential};
 use sindri_core::redact::SecretSet;
@@ -26,7 +27,7 @@ const ANTHROPIC_MODELS: &str =
 
 /// The listing the model screen is handed: names a wire really served, read through the listing code.
 fn listed() -> Listing {
-    let at = Where::own(Wire::Anthropic);
+    let at = Endpoint::own(Wire::Anthropic);
     Client::over(
         Replay::new([Canned::reply(200, ANTHROPIC_MODELS)]),
         SecretSet::default(),

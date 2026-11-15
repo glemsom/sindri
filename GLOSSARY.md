@@ -77,13 +77,22 @@ _Avoid_: Context, environment, base path, root
 ## Words from the wire
 
 **Wire**:
-A provider dialect and its endpoint configuration: `anthropic`, `openai`, `copilot`, and exactly
-those words.
+A provider dialect: `anthropic`, `openai`, `copilot`, and exactly those words.
 _Avoid_: Provider, backend, API
 
+**Endpoint**:
+A wire at the address it is asked and on the route it serves: the one value a run and a listing are
+both built from, so the names a listing serves are read from the endpoint a run asks.
+_Avoid_: Provider, host, client
+
+**Signing**:
+The sign-in a wire that has no key of its own is asked with: the store its session is read from, or
+the words saying why there is none. One value covers both, so a run and a listing cannot disagree
+about whether there is a sign-in at all.
+_Avoid_: Credential (that one is what a wire is asked with), token, account
+
 **Served name**:
-A model identifier read off the wire, never invented, kept beside the `(wire, base_url)` that
-produced it.
+A model identifier read off the wire, never invented, kept beside the endpoint that produced it.
 _Avoid_: Model list, catalog, available models
 
 **Route**:

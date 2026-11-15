@@ -15,7 +15,8 @@ use sindri::models::{CAP, Models};
 use sindri::pointer::Pointer;
 use sindri::view::{Painted, Transcript, View};
 
-use sindri_core::provider::served::{Listing, Where};
+use sindri_core::provider::endpoint::Endpoint;
+use sindri_core::provider::served::Listing;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential};
 use sindri_core::redact::SecretSet;
@@ -29,14 +30,14 @@ const SECOND: &str = "claude-haiku-4-5";
 
 fn listed() -> Listing {
     let replay = Replay::new([Canned::reply(200, ANTHROPIC_MODELS)]);
-    let at = Where::own(sindri_core::wire::Wire::Anthropic);
+    let at = Endpoint::own(sindri_core::wire::Wire::Anthropic);
     Client::over(replay, SecretSet::default())
         .waits(|_| {})
         .served(&at, &Credential::new("sk-ant-recorded"), &at)
 }
 
 fn silent() -> Listing {
-    let at = Where::own(sindri_core::wire::Wire::Anthropic);
+    let at = Endpoint::own(sindri_core::wire::Wire::Anthropic);
     Client::over(Replay::new([]), SecretSet::default())
         .waits(|_| {})
         .served(&at, &Credential::none(), &at)
@@ -228,7 +229,7 @@ fn the_screen_offers_eight_rows_and_no_more() {
     // Leaked so it is the `'static` text a canned answer needs: this catalogue is one a test wrote, and
     // nothing reads it afterwards.
     let replay = Replay::new([Canned::reply(200, Box::leak(catalogue.into_boxed_str()))]);
-    let at = Where::own(sindri_core::wire::Wire::Anthropic);
+    let at = Endpoint::own(sindri_core::wire::Wire::Anthropic);
     let listing = Client::over(replay, SecretSet::default())
         .waits(|_| {})
         .served(&at, &Credential::new("sk-ant-recorded"), &at);

@@ -1,4 +1,6 @@
+use crate::provider::Credential;
 use crate::provider::Route;
+use crate::provider::endpoint::Endpoint;
 use crate::redact::{MASK, SecretSet};
 use crate::wire::Wire;
 use serde::Deserialize;
@@ -244,6 +246,25 @@ impl Config {
             ssh_agent: spoken_parsed(environment, "SINDRI_SSH_AGENT")?,
         })
     }
+
+    /// The endpoint this config names, and `None` when it names no wire.
+    pub fn endpoint(&self) -> Option<Endpoint> {
+        let wire = self.provider?;
+        let endpoint = match &self.base_url {
+            Some(base_url) => Endpoint::at(wire, base_url.clone()),
+            None => Endpoint::own(wire),
+        };
+        Some(endpoint.routed(self.route))
+    }
+
+    /// The credential this config names, if any: a wire signed in to has none here.
+    pub fn credential(&self) -> Credential {
+        match &self.api_key {
+            Some(key) => Credential::new(key.clone()),
+            None => Credential::none(),
+        }
+    }
+
     pub fn secrets(&self) -> SecretSet {
         let mut secrets = SecretSet::default();
         for secret in self.api_key.iter() {

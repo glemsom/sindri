@@ -10,6 +10,7 @@ use rig_core::providers::copilot::auth::{
 use super::Credential;
 use crate::config::{self, ConfigError, Environment};
 use crate::redact::{Redacted, SecretSet};
+use crate::wire::Wire;
 
 pub const LOGIN: &str = "sindri auth login copilot";
 
@@ -65,6 +66,15 @@ impl fmt::Display for SignIn {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.message().to_string())
     }
+}
+
+/// A copilot wire's sign-in: the store its session is read from, or its own words for why there is
+/// none. One value, asked by both a run and a listing, so neither can hold a sign-in the other
+/// cannot see.
+#[derive(Clone, Debug)]
+pub enum Signing {
+    Store(Store),
+    Unreadable(SignIn),
 }
 
 #[derive(Clone)]
@@ -153,6 +163,17 @@ impl fmt::Debug for Store {
             .field("path", &self.path())
             .finish_non_exhaustive()
     }
+}
+
+/// The sign-in a wire is asked with: the store when it can be read, and the words it failed with
+/// when it cannot, because a config home that will not open is a fact both jobs have to state.
+pub fn signing(wire: Wire, environment: &impl Environment) -> Option<Signing> {
+    (wire == Wire::Copilot).then(|| match Store::resolve(environment) {
+        Ok(store) => Signing::Store(store),
+        Err(error) => Signing::Unreadable(SignIn::Unavailable(
+            SecretSet::default().redact(format!("the copilot sign-in cannot be read: {error}")),
+        )),
+    })
 }
 
 pub fn store_dir(environment: &impl Environment) -> Result<PathBuf, ConfigError> {
