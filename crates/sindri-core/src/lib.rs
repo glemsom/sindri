@@ -3,6 +3,7 @@ pub mod bash;
 pub mod config;
 pub mod conversation;
 pub mod first_run;
+pub mod launch;
 pub mod open;
 pub mod outcome;
 pub mod policy;
