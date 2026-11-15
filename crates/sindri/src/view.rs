@@ -1384,11 +1384,11 @@ enum Page {
 /// Where a paint pass put each part of the frame: the bands it shared the rows out in, the cells it
 /// gave the transcript, and the body it gave a card when one was drawn. The caret is read off it
 /// rather than laid out a second time.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct Layout {
     /// The rows the transcript was drawn in, after the rail took its share.
     pub transcript: Rect,
-    /// The composer's band's last rows: the queue's, and none at all while nothing waits.
+    /// The rows the queue was given at the foot of the composer's band, and none while nothing waits.
     pub queue: Rect,
     /// The one row saying how far back from the tail the frame stands, and none at the tail.
     pub notice: Rect,

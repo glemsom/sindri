@@ -149,6 +149,13 @@ row and the newest at the foot. What a band cannot hold it counts: the rows of a
 composer's ceiling, and the prompts of a queue past the rows it was given.
 _Avoid_: Region, pane, panel, viewport
 
+**Layout**:
+Where one pass put each part of the frame: the bands it shared the rows into, the columns the
+transcript was given beside a rail, and the body a card was given when one was drawn. A caret is a
+read of it rather than a second count of a draft's rows, so the frame a reader was shown is the frame
+a key is answered from.
+_Avoid_: Geometry, arrangement, tiling, regions
+
 **Footer**:
 The frame's last row: the hints of what a key does **this** frame can honour, most valuable first, each
 giving up its tail as the row narrows, and a key the frame cannot answer not named at all. An idle

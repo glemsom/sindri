@@ -10,7 +10,9 @@ use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
+use sindri::ledger;
 use sindri::mark::Cell;
+use sindri::palette::Palette;
 use sindri::pointer::Pointer;
 use sindri::rows::Scroll;
 use sindri::view::{Painted, Transcript, View};
@@ -406,6 +408,76 @@ fn a_pass_under_a_card_hands_back_the_body_the_screens_rows_were_drawn_in() {
         card.right() + 1,
         rule,
         "and the body's last column is the one before the rule that closes it: {card:?}"
+    );
+}
+
+/// Enough facts that the rail is drawn: a frame beside a rail has its rows cut before they are
+/// shared out.
+fn railed() -> Facts {
+    Facts::default().asked().railed(ledger::Facts {
+        wire: Some(String::from("anthropic")),
+        model: Some(String::from("claude-sonnet-4-6")),
+        ..ledger::Facts::default()
+    })
+}
+
+#[test]
+fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
+    let mut view = View::of(
+        caps::inked(Palette::TRUECOLOR),
+        railed(),
+        Transcript::of(turns(3)),
+    );
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+
+    let well = buffer
+        .cell((0, 0))
+        .expect("a cell of the frame's first row")
+        .bg;
+    let rail = (1..120)
+        .find(|x| buffer.cell((*x, 0)).is_some_and(|cell| cell.bg != well))
+        .expect("the rail's ground stands beside the transcript's");
+
+    assert_eq!(
+        laid.transcript.right(),
+        rail,
+        "the transcript is given the columns up to the rail's and not the frame's: {laid:?}"
+    );
+    assert!(
+        laid.transcript.width < 120,
+        "a frame beside a rail hands the transcript less than its own width: {laid:?}"
+    );
+}
+
+#[test]
+fn the_caret_is_read_in_the_band_the_pass_drew_and_not_in_one_counted_again() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("1\n2\n3\n4\n5");
+    let (_, told) = painted_and_told(&mut view, 40, 12);
+
+    assert_eq!(
+        view.cursor(&told),
+        Some((3, 10)),
+        "a five-row draft takes six of the frame's twelve rows, so its last row is row ten and \
+         the caret waits one column into it"
+    );
+
+    for _ in 0.."1\n2\n3\n4\n5".len() {
+        view.key(Key::Backspace);
+    }
+
+    assert_eq!(
+        view.cursor(&told),
+        Some((2, 6)),
+        "the empty draft stands in the band the pass drew, which began at row five: a band \
+         counted again for a draft of one row would answer row ten instead"
     );
 }
 
