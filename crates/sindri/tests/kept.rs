@@ -7,9 +7,13 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
+use sindri::commands;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
+use sindri::ink::Ink;
+use sindri::kept::{Kept, Move};
 use sindri::keys::{Act, Mode, Stack};
+use sindri::list;
 use sindri::mark::Cell;
 use sindri::pointer::Pointer;
 use sindri::view::{Transcript, View};
@@ -221,5 +225,160 @@ fn a_press_on_a_row_of_the_visit_is_no_act() {
         view.mode(),
         Mode::Settings,
         "and the screen the visit is drawn on is still open"
+    );
+}
+
+#[test]
+fn the_commands_card_walks_the_rows_its_word_leaves() {
+    let mut card = commands::Card::of("/s").expect("a card holds this word");
+
+    assert_eq!(
+        card.rows().iter().map(|row| row.name).collect::<Vec<_>>(),
+        ["/settings", "/skill", "/stats"],
+        "`/s` leaves the three commands a name of which holds it"
+    );
+    assert_eq!(
+        card.selected(),
+        0,
+        "the mark opens on the row the words name rather than on a row the frame picked"
+    );
+
+    assert!(card.walked(Move::Next), "`↓` walks the card down a row");
+    assert_eq!(card.selected(), 1, "the second row the word leaves");
+    assert!(card.walked(Move::Next));
+    assert_eq!(card.selected(), 2, "and the third");
+    assert!(
+        !card.walked(Move::Next),
+        "a movement past the last row of the card moves nothing"
+    );
+    assert_eq!(card.selected(), 2, "so the mark stands where it stood");
+
+    assert!(card.walked(Move::Previous), "`↑` walks it back");
+    assert_eq!(card.selected(), 1);
+}
+
+#[test]
+fn a_glyph_narrows_the_card_and_the_row_its_words_name_is_marked() {
+    let mut card = commands::Card::of("/n").expect("a card holds this word");
+    assert!(
+        card.walked(Move::Next),
+        "the card is walked off the row it opened on"
+    );
+    assert_eq!(card.selected(), 1, "which is `/settings`");
+
+    assert!(
+        card.typed(Key::Char('e')),
+        "`e` changes the rows the card hands, which is a frame to paint"
+    );
+
+    assert_eq!(
+        card.rows().iter().map(|row| row.name).collect::<Vec<_>>(),
+        ["/new"],
+        "`/ne` leaves the one command whose name starts the word"
+    );
+    assert_eq!(
+        card.selected(),
+        0,
+        "and the row the words name is the row marked, not the row the mark was walked to"
+    );
+
+    for _ in 0.."/ne".len() {
+        card.typed(Key::Backspace);
+    }
+    assert!(
+        card.rows().is_empty(),
+        "a word erased past the slash leaves no row at all"
+    );
+}
+
+#[test]
+fn a_press_marks_the_row_of_the_card_it_landed_on() {
+    let mut card = commands::Card::of("/s").expect("a card holds this word");
+
+    assert!(
+        card.pressed(2),
+        "a press on the third row of the card chooses that row"
+    );
+    assert_eq!(
+        card.selected(),
+        2,
+        "and the mark stands where the press landed"
+    );
+    assert_eq!(
+        card.spelling(),
+        "/stats",
+        "which is the line `Enter` then sends"
+    );
+
+    assert!(
+        !card.pressed(3),
+        "a press on a row the card does not hold chooses nothing"
+    );
+    assert_eq!(card.selected(), 2, "and marks nothing");
+
+    let rows = card.body();
+    assert_eq!(
+        rows[2].spans[0].0,
+        list::MARK,
+        "the row the press landed on opens with the mark"
+    );
+    assert_eq!(
+        rows[2].spans[0].1.ink(),
+        Ink::Accent,
+        "and is drawn in the accent, so the reader's eye lands on the row `Enter` takes"
+    );
+    for (at, row) in rows.iter().enumerate().filter(|(at, _)| *at != 2) {
+        assert_ne!(row.spans[0].0, list::MARK, "row {at} wears no mark");
+        assert_eq!(
+            row.spans[0].1.ink(),
+            Ink::Plain,
+            "and the blank of the mark's columns stands in the ink of the row it opens"
+        );
+    }
+}
+
+#[test]
+fn the_arrow_keys_walk_the_commands_card_over_the_draft() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("/s");
+
+    assert_eq!(
+        view.card().map(commands::Card::selected),
+        Some(0),
+        "the draft opens the card on the row its word names"
+    );
+    assert_eq!(
+        view.key(Key::Down),
+        Outcome::Edited,
+        "`↓` walks the card, which is a frame to paint"
+    );
+    assert_eq!(
+        view.card().map(commands::Card::selected),
+        Some(1),
+        "and the mark stands on the second row the word leaves"
+    );
+    assert_eq!(view.key(Key::Up), Outcome::Edited, "`↑` walks it back");
+    assert_eq!(view.card().map(commands::Card::selected), Some(0));
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Unchanged,
+        "a movement off the first row of the card moves nothing"
+    );
+
+    assert_eq!(view.key(Key::Down), Outcome::Edited);
+    assert_eq!(view.card().map(commands::Card::selected), Some(1));
+    assert_eq!(
+        view.key(Key::Char('e')),
+        Outcome::Edited,
+        "a glyph narrows the card the draft holds"
+    );
+    assert_eq!(
+        view.card().map(commands::Card::selected),
+        Some(0),
+        "and typing after a walk puts the mark back on the row the words name"
     );
 }

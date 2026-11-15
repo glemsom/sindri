@@ -187,9 +187,9 @@ _Avoid_: File browser, autocomplete, fuzzy finder, file search
 **Commands card**:
 The card a draft beginning with a slash draws: every command with the one line that says what it
 does, ranked by how the word after the slash sits in a name — a name it starts, then a name it holds —
-and the first row the one the draft names. `Esc` closes it and keeps the words, a word no command
-holds is a draft again, and the one command that takes a word after it is written into the draft for
-the reader to name.
+and the row the draft's word names the row marked, `↑`, `↓` and a press walking the mark to another
+row. `Esc` closes it and keeps the words, a word no command holds is a draft again, and the one
+command that takes a word after it is written into the draft for the reader to name.
 _Avoid_: Palette, slash menu, command list, autocomplete
 
 **Splash screen**:
