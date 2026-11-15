@@ -777,11 +777,11 @@ pub fn split(facts: &Facts, band: Rect) -> Share {
     }
 }
 
-/// The rows `shape` lays on `area`, in the order it reads them: the row of the band each stands on
-/// and the column each part starts at, never more of them than the band holds. A live rail's state
-/// row wears the marker's step, and a shape handed none draws none.
-pub(crate) fn rows(facts: &Facts, shape: Shape, area: Rect, marker: Option<&Pulse>) -> Vec<Row> {
-    let area = Rect::new(0, 0, area.width, area.height);
+/// The rows `shape` lays in a band `band` wide and tall, from that band's own origin: the row each
+/// stands on and the column each part starts at, never more of them than the band holds. `draw` is
+/// what places them where the band sits, and a live rail's state row wears the marker's step.
+pub(crate) fn rows(facts: &Facts, shape: Shape, band: Rect, marker: Option<&Pulse>) -> Vec<Row> {
+    let area = Rect::new(0, 0, band.width, band.height);
     match shape {
         Shape::Screen => sheet_rows(facts, area),
         Shape::Ledger => rail_rows(facts, Rail::Ledger, area, marker),
@@ -867,8 +867,8 @@ fn sheet_rows(facts: &Facts, area: Rect) -> Vec<Row> {
     rows
 }
 
-/// One row of a shape, laid out: the row of the band it stands on, the runs it draws and the column
-/// of the band each starts at.
+/// One row of a shape, laid out: the row it stands on and the column each of its runs starts at,
+/// both counted from the band's own origin, and what each run draws.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Row {
     y: u16,
@@ -2645,53 +2645,63 @@ mod tests {
     #[test]
     fn a_band_s_rows_are_drawn_at_the_origin_it_is_handed() {
         let facts = run();
-        let rows = rows(&facts, Shape::Screen, band(81, u16::MAX), None);
+        let laid = rows(
+            &facts,
+            Shape::Screen,
+            Rect {
+                x: 4,
+                y: 2,
+                ..band(81, u16::MAX)
+            },
+            None,
+        );
         let area = Rect::new(0, 0, 100, 24);
-        let at = Rect::new(4, 2, 81, 20);
+        let at = Rect::new(14, 4, 81, 20);
         let palette = Palette::TRUECOLOR;
         let mut buffer = Buffer::empty(area);
 
-        draw(&rows, at, &mut buffer, &palette);
+        draw(&laid, at, &mut buffer, &palette);
 
         assert_eq!(
-            (rows[0].y(), rows[0].parts()[0].0),
+            (laid[0].y(), laid[0].parts()[0].0),
             (0, 0),
             "a shape lays its rows from the band's own origin, so its first row is row 0 column 0 \
-             whatever the band's left edge is"
+             whatever row and column the band it was handed sits at"
         );
         assert_eq!(
-            glyphs(&buffer, 2).trim_end(),
-            "    run",
+            glyphs(&buffer, at.y).trim_end(),
+            "              run",
             "the run block's name is drawn from the column the door is handed, and its first \
-             glyph stands at column 4"
+             glyph stands at column 14"
         );
         let blank = |y: u16, from: u16, to: u16| {
             (from..to).all(|x| buffer.cell((x, y)).expect("a cell of the band").symbol() == " ")
         };
         assert!(
             (0..at.y).all(|y| blank(y, 0, area.width)),
-            "no row stands above the origin row, so every cell of the two rows over it is blank"
+            "no row stands above the origin row, so every cell of the four rows over it is blank"
         );
         assert!(
             blank(at.y, 0, at.x),
-            "no row starts left of the origin column, so the cells before column 4 are blank"
+            "no row starts left of the origin column, so the cells before column 14 are blank"
         );
     }
 
     #[test]
     fn the_door_draws_no_row_past_the_rows_the_band_gives_it() {
         let facts = run();
-        let rows = rows(&facts, Shape::Screen, band(81, u16::MAX), None);
+        let laid = rows(&facts, Shape::Screen, band(81, u16::MAX), None);
         let area = band(81, 6);
         let palette = Palette::TRUECOLOR;
         let mut buffer = Buffer::empty(area);
 
-        draw(&rows, band(81, 1), &mut buffer, &palette);
+        draw(&laid, band(81, 1), &mut buffer, &palette);
 
         assert_eq!(
             glyphs(&buffer, 0).trim_end(),
             "run",
-            "the first row of the sheet is drawn at the origin, however few rows the band holds"
+            "the first row of the screen's layout is drawn at the origin, however few rows the band \
+             holds"
         );
         assert!(
             (1..area.height).all(|y| glyphs(&buffer, y).trim().is_empty()),
