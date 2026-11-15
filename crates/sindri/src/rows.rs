@@ -101,8 +101,7 @@ pub struct Row {
     /// The runs of this row a terminal draws at more than one cell: the row is measured by the
     /// cells they leave, and its spans say the words they are written as.
     sizes: Vec<Sized>,
-    /// The runs of this row's cells drawn on a band of their own, measured from its left edge: a
-    /// chip is a band under a span where the row's own band is a band under the whole of it.
+    /// The runs of this row's cells drawn on a band of their own, measured from its left edge.
     underlays: Vec<Underlay>,
 }
 
@@ -142,8 +141,8 @@ impl Row {
         self
     }
 
-    /// The `width` columns of this row that begin `left` columns in, drawn on `band`: a chip is a
-    /// band under a span where `banded` is a band under the whole row.
+    /// The `width` columns of this row that begin `left` columns in, drawn on `band` where `banded`
+    /// draws the whole row on one.
     pub fn underlain(mut self, left: u16, width: u16, band: Band) -> Row {
         self.underlays.push(Underlay { left, width, band });
         self
@@ -201,9 +200,9 @@ impl Row {
         &self.spans
     }
 
-    /// This row moved `by` columns right: the ways it names and the cells a terminal draws at more
-    /// than one are measured from its left edge, so they move with the words while the band it
-    /// stands on and the picture placed over it stay where the row does.
+    /// This row moved `by` columns right: the ways it names, the cells a terminal draws at more than
+    /// one and the runs underlain with a band are measured from its left edge, so they move with the
+    /// words while the band it stands on and the picture placed over it stay where the row does.
     fn shifted(self, by: u16) -> Row {
         Row {
             spans: self.spans,

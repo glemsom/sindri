@@ -173,7 +173,7 @@ struct Laid {
 
 /// One run of the row in hand drawn on a band of its own: the column it begins at past the words'
 /// own edge, the columns it covers, and the band under it.
-struct Placed {
+struct Underlay {
     left: usize,
     width: usize,
     band: Band,
@@ -215,8 +215,8 @@ struct Room {
     /// edge: laid as the words land, so a link that wraps is a run on each row it wrote.
     laid: Vec<Laid>,
     /// The runs of the row in hand drawn on a band of their own, measured from the words' own left
-    /// edge: a chip is a band on its span where a fence's band is the whole row.
-    grounds: Vec<Placed>,
+    /// edge: laid as the words land, so a chip that wraps keeps its band on each row it wrote.
+    underlays: Vec<Underlay>,
     /// The band the run being placed is drawn on, while a chip is being said.
     under: Option<Band>,
     /// The columns the first row gives up to a marker laid at the frame's left edge, and
@@ -250,7 +250,7 @@ impl Room {
             blank: true,
             destination: None,
             laid: Vec::new(),
-            grounds: Vec::new(),
+            underlays: Vec::new(),
             under: None,
             code: None,
             mermaid: None,
@@ -359,9 +359,8 @@ impl Room {
                     }
                 }
             },
-            // A chip keeps the spacing it was written with, and its words are the accent drawn over
-            // the composer band: the band, and not a face, is what tells it from the prose it sits
-            // in.
+            // A chip keeps the spacing it was written with: the band under it, and not a face, is
+            // what tells it from the prose it sits in.
             Event::Code(text) => {
                 let look = match self.destination.is_some() {
                     true => Look::plain(Ink::Accent).underlined(UNDERLINE),
@@ -437,13 +436,6 @@ impl Room {
     /// cannot hold is the next row's and never a clipped one. The spacing the source put between
     /// two runs is kept, so a full stop written against a link's word stays against it.
     fn prose(&mut self, text: &str, look: Look) {
-        // A run on a band of its own is placed whole, so the spaces between its own words are
-        // drawn on the band: a chip wraps at the row's edge and never between two of its words.
-        if self.under.is_some() {
-            self.place(text, look, self.spaced);
-            self.spaced = false;
-            return;
-        }
         let mut rest = text;
         let mut space = self.spaced;
         while !rest.is_empty() {
@@ -495,7 +487,7 @@ impl Room {
             let gap = usize::from(space && self.used > 0);
             if self.used + gap + usize::from(pen::cells(rest)) <= room {
                 if gap == 1 {
-                    self.between();
+                    self.space(look);
                 }
                 self.linked(rest, look);
                 return;
@@ -513,6 +505,25 @@ impl Room {
             if rest.is_empty() {
                 return;
             }
+        }
+    }
+
+    /// The space before a word of `look`: a word of a chip that stands on the run said just before it
+    /// is set beside its own kind, so the band runs over the spaces of one chip and never stops at
+    /// each of its words. The space before a chip, and the one between two chips, are prose's.
+    fn space(&mut self, look: Look) {
+        match self.stands() {
+            true => self.linked(" ", look),
+            false => self.between(),
+        }
+    }
+
+    /// Whether the word in hand stands on the band of the run that ended just before it, which is
+    /// what makes the space between the two one chip's own and not the prose's.
+    fn stands(&self) -> bool {
+        match (self.under, self.underlays.last()) {
+            (Some(band), Some(run)) => run.band == band && run.left + run.width == self.used,
+            _ => false,
         }
     }
 
@@ -553,11 +564,11 @@ impl Room {
         let width = usize::from(pen::cells(text));
         self.extend(text, look);
         if let Some(band) = self.under {
-            match self.grounds.last_mut() {
+            match self.underlays.last_mut() {
                 Some(run) if run.band == band && run.left + run.width == left => {
                     run.width = run.width.saturating_add(width);
                 }
-                _ => self.grounds.push(Placed { left, width, band }),
+                _ => self.underlays.push(Underlay { left, width, band }),
             }
         }
         let Some(destination) = &self.destination else {
@@ -843,7 +854,7 @@ impl Room {
                 run.destination,
             );
         }
-        for run in std::mem::take(&mut self.grounds) {
+        for run in std::mem::take(&mut self.underlays) {
             row = row.underlain(
                 u16::try_from(gutter.saturating_add(run.left.saturating_mul(scale)))
                     .unwrap_or(u16::MAX),

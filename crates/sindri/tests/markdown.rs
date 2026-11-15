@@ -287,6 +287,18 @@ fn banded(buffer: &Buffer, y: u16, left: u16, right: u16) -> Vec<Color> {
     (left..right).map(|x| buffer[(x, y)].bg).collect()
 }
 
+/// The frame row the words `said` are drawn on: a row of `rows` laid out as its words alone, so a
+/// test reads the cells of a construct out of the picture instead of counting rows of the layout.
+fn row_of(rows: &[Row], said: &str) -> u16 {
+    u16::try_from(
+        drawn(rows)
+            .iter()
+            .position(|row| row == said)
+            .unwrap_or_else(|| panic!("the row {said:?} is drawn on: {:?}", drawn(rows))),
+    )
+    .expect("a frame this short")
+}
+
 #[test]
 fn a_code_span_is_drawn_on_the_composer_band_and_the_words_around_it_are_not() {
     let rows = markdown::rows("run `make check` first", 40);
@@ -537,33 +549,61 @@ fn a_link_a_table_in_a_quote_holds_carries_its_destination_past_the_bar() {
 }
 
 #[test]
-fn a_code_span_in_a_table_cell_is_drawn_on_the_composer_band() {
-    let rows = markdown::rows("| word |\n| --- |\n| `a chip` |", 40);
+fn a_code_span_in_a_table_cell_is_drawn_on_the_composer_band_past_the_cell_before_it() {
+    let rows = markdown::rows("| a | b |\n| --- | --- |\n| one | `a chip` |", 40);
     let buffer = painted(&rows, &mut Links::none());
     let band = Palette::TRUECOLOR.band(Band::Composer);
-    let at = u16::try_from(
-        drawn(&rows)
-            .iter()
-            .position(|row| row == "a chip")
-            .unwrap_or_else(|| panic!("the row the cell is drawn on: {:?}", drawn(&rows))),
-    )
-    .expect("a frame this short");
+    let at = row_of(&rows, "one │ a chip");
 
     assert_eq!(
-        banded(&buffer, at, 0, 6),
+        banded(&buffer, at, 6, 12),
         [band; 6],
-        "the cell's chip is a band of its own inside the row it was drawn on: {:?}",
+        "the cell's chip is a band of its own, moved past the cell before it: {:?}",
         drawn(&rows)
     );
     assert_eq!(
-        banded(&buffer, at, 6, 10),
-        [Color::Reset; 4],
-        "and the row past the chip is the ground the table was drawn on"
+        banded(&buffer, at, 0, 6),
+        [Color::Reset; 6],
+        "and the cell before it is the ground the table was drawn on"
     );
     assert_eq!(
-        banded(&buffer, at - 1, 0, 6),
+        banded(&buffer, at, 12, 16),
+        [Color::Reset; 4],
+        "and the row past the chip is that ground too"
+    );
+    assert_eq!(
+        banded(&buffer, at - 1, 6, 12),
         [Color::Reset; 6],
         "the rule over the cell is drawn on no band of the chip's"
+    );
+}
+
+#[test]
+fn a_code_span_wider_than_its_cell_wraps_at_its_own_space_and_keeps_its_band_on_both_rows() {
+    let rows = markdown::rows("| word |\n| --- |\n| `alpha beta gamma` |", 10);
+    let buffer = painted(&rows, &mut Links::none());
+    let band = Palette::TRUECOLOR.band(Band::Composer);
+    let at = row_of(&rows, "alpha beta");
+
+    assert_eq!(
+        drawn(&rows)[2..],
+        ["alpha beta", "gamma"],
+        "a chip is wrapped at its own space and never inside a word of it"
+    );
+    assert_eq!(
+        banded(&buffer, at, 0, 10),
+        [band; 10],
+        "the row of the chip it wrapped on is banded over the cell it fills"
+    );
+    assert_eq!(
+        banded(&buffer, at + 1, 0, 5),
+        [band; 5],
+        "and the row it finished on is banded over its own words too"
+    );
+    assert_eq!(
+        banded(&buffer, at + 1, 5, 10),
+        [Color::Reset; 5],
+        "and no further than those words"
     );
 }
 
@@ -576,13 +616,7 @@ fn a_code_span_that_a_table_and_a_way_both_hold_keeps_its_band_and_its_line() {
     let mut links = Links::none();
     let buffer = painted(&rows, &mut links);
     let band = Palette::TRUECOLOR.band(Band::Composer);
-    let at = u16::try_from(
-        drawn(&rows)
-            .iter()
-            .position(|row| row == "gate")
-            .unwrap_or_else(|| panic!("the row the cell is drawn on: {:?}", drawn(&rows))),
-    )
-    .expect("a frame this short");
+    let at = row_of(&rows, "gate");
 
     assert_eq!(
         Palette::TRUECOLOR.look_of(&buffer[(0, at)]),
