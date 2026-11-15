@@ -453,6 +453,51 @@ fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
 }
 
 #[test]
+fn a_pass_hands_back_the_rail_beside_the_transcript_and_none_while_no_fact_is_known() {
+    let mut view = View::of(Capabilities::default(), railed(), Transcript::of(turns(3)));
+    let area = Rect::new(0, 0, 120, 40);
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    let (shape, rail) = laid
+        .rail
+        .expect("a frame whose facts know one is drawn with a rail beside the transcript");
+    let rail = rail.area;
+
+    assert_eq!(
+        shape,
+        ledger::Rail::Ledger,
+        "a frame 120 columns wide is handed the ledger's column rather than its strip"
+    );
+    assert_eq!(
+        (rail.y, rail.height),
+        (laid.transcript.y, laid.transcript.height),
+        "the rail stands the rows the transcript was given: {laid:?}"
+    );
+    assert_eq!(
+        rail.right(),
+        area.right(),
+        "its last column is the frame's last column: {laid:?}"
+    );
+
+    let mut plain = View::of(
+        Capabilities::default(),
+        Facts::default(),
+        Transcript::of(turns(3)),
+    );
+    let (_, told) = painted_and_told(&mut plain, 120, 40);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+
+    assert_eq!(
+        laid.rail, None,
+        "a frame whose facts know nothing draws no rail, so the value names none: {laid:?}"
+    );
+}
+
+#[test]
 fn the_caret_is_read_in_the_band_the_pass_drew_and_not_in_one_counted_again() {
     let mut view = View::of(
         Capabilities::default(),

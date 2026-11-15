@@ -25,7 +25,7 @@ use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
 use crate::kept::{Kept, Move};
 use crate::keys::{self, Act, Body, Mode, Stack};
-use crate::ledger::{self, Rail, Share};
+use crate::ledger::{self, Rail, RailBand, Share};
 use crate::link::Links;
 use crate::list::{self, Beside, ScreenRow};
 use crate::mark::{Cell, Mark, Span};
@@ -903,6 +903,7 @@ impl View {
         // in what is left: a row's width is the width it is drawn at.
         let share = self.split(layout.transcript);
         layout.transcript = share.transcript;
+        layout.rail = share.rail;
         if let Some((shape, band)) = share.rail {
             // A ledger carries the face wherever it is drawn, and a strip is one row of facts with
             // no band to carry one in: a terminal that places no picture, or a config that turned
@@ -1382,8 +1383,8 @@ enum Page {
 }
 
 /// Where a paint pass put each part of the frame: the bands it shared the rows out in, the cells it
-/// gave the transcript, and the body it gave a card when one was drawn. The caret is read off it
-/// rather than laid out a second time.
+/// gave the transcript, the rail it stood beside them, and the body it gave a card when one was
+/// drawn. The caret is read off it rather than laid out a second time.
 #[derive(Clone, Copy, Debug)]
 pub struct Layout {
     /// The rows the transcript was drawn in, after the rail took its share.
@@ -1398,6 +1399,9 @@ pub struct Layout {
     pub footer: Rect,
     /// The cells a card's body was drawn in, and none while no card was drawn.
     pub card: Option<Rect>,
+    /// The rail's shape and the band it drew in beside the transcript, and none while the frame
+    /// drew no rail.
+    pub rail: Option<(Rail, RailBand)>,
 }
 
 /// Places the picture `row` stands on over the block of cells the transcript reserved. A
@@ -1463,6 +1467,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> L
             ..area
         },
         card: None,
+        rail: None,
     }
 }
 
@@ -1677,56 +1682,28 @@ mod tests {
             .unwrap_or_else(|| panic!("row {y}, column {x} reads back as no look"))
     }
 
-    /// The rows the card's two borders stand on and the columns its corners are drawn at: the frame
-    /// it was opened from is still on the screen either side of it.
-    fn card_frame(buffer: &Buffer) -> (u16, u16, u16, u16) {
-        let found = |y: u16, glyph: char| {
-            (buffer.area.x..buffer.area.right()).find(|x| {
-                buffer
-                    .cell((*x, y))
-                    .is_some_and(|cell| cell.symbol() == glyph.to_string())
-            })
-        };
-        let rows = buffer.area.y..buffer.area.bottom();
-        let top = rows
-            .clone()
-            .find(|y| found(*y, '╭').is_some())
-            .expect("the card has an edge row");
-        let bottom = rows
-            .rev()
-            .find(|y| found(*y, '╰').is_some())
-            .expect("the card has a foot");
-        (
-            top,
-            bottom,
-            found(top, '╭').expect("a left corner"),
-            found(top, '╮').expect("a right corner"),
-        )
+    /// The frame a pass laid out, read off the value it handed back.
+    fn laid_out(painted: &Painted) -> Layout {
+        painted
+            .layout()
+            .expect("a pass that drew a frame hands back the frame it laid out")
     }
 
-    /// The columns between the two corners of the card, which are the columns of the frame under it.
-    fn card_columns(buffer: &Buffer) -> (u16, u16) {
-        let (_, _, left, right) = card_frame(buffer);
-        (left, right)
+    /// The card's body, as the pass that drew it laid the cells out.
+    fn card_body(painted: &Painted) -> Rect {
+        laid_out(painted)
+            .card
+            .expect("a frame drawn under a card hands back the body the card gave it")
     }
 
-    /// The rows the card's body is drawn in: between its two borders.
-    fn card_body(buffer: &Buffer) -> Range<u16> {
-        let (top, bottom, ..) = card_frame(buffer);
-        top + 1..bottom
-    }
-
-    /// A frame holding a draft of `lines` lines painted in `palette` at `cols` by `rows`, and the
-    /// band the composer was drawn in.
-    fn composer(palette: Palette, lines: usize, cols: u16, rows: u16) -> (Buffer, Rect) {
+    /// A frame holding a draft of `lines` lines painted in `palette` at `cols` by `rows`, and where
+    /// that pass laid it out.
+    fn composer(palette: Palette, lines: usize, cols: u16, rows: u16) -> (Buffer, Layout) {
         let draft: Vec<String> = (1..=lines).map(|line| line.to_string()).collect();
         let mut view = View::of(inked(palette), Facts::default().asked(), Transcript::none());
         view.paste(&draft.join("\n"));
-        let area = screen(cols, rows);
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
-        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
-        (buffer, band)
+        let (buffer, told) = painted_and_told(&mut view, cols, rows);
+        (buffer, laid_out(&told))
     }
 
     #[test]
@@ -1734,7 +1711,8 @@ mod tests {
         let palette = Palette::TRUECOLOR;
         for lines in 1..=5 {
             for (cols, rows) in [(120, 40), (60, 24)] {
-                let (buffer, band) = composer(palette, lines, cols, rows);
+                let (buffer, laid) = composer(palette, lines, cols, rows);
+                let band = laid.composer;
 
                 for row in 0..band.height {
                     for x in band.x..band.right() {
@@ -1769,7 +1747,8 @@ mod tests {
         let faint = Look::new(Ink::Accent, Face::Faint);
         for lines in 1..=5 {
             for (cols, rows) in [(120, 40), (60, 24)] {
-                let (buffer, band) = composer(palette, lines, cols, rows);
+                let (buffer, laid) = composer(palette, lines, cols, rows);
+                let band = laid.composer;
 
                 for x in band.x..band.right() {
                     assert_eq!(
@@ -1788,7 +1767,8 @@ mod tests {
     fn no_band_is_lit_twice_or_shadowed_twice_at_either_end_of_its_height() {
         let palette = Palette::TRUECOLOR;
         for lines in [1, 5] {
-            let (buffer, band) = composer(palette, lines, 120, 40);
+            let (buffer, laid) = composer(palette, lines, 120, 40);
+            let band = laid.composer;
             let lit_and_shadowed = |edge: Edge| -> Vec<u16> {
                 (band.y..band.bottom())
                     .filter(|y| {
@@ -1832,9 +1812,10 @@ mod tests {
 
     #[test]
     fn the_ramp_moves_the_surface_under_the_cells_and_adds_no_ink_but_the_accent_edge() {
-        let (coloured, band) = composer(Palette::TRUECOLOR, 3, 120, 40);
-        let (flat, flat_band) = composer(Palette::SLOTS, 3, 120, 40);
-        assert_eq!(band, flat_band);
+        let (coloured, laid) = composer(Palette::TRUECOLOR, 3, 120, 40);
+        let (flat, flat_laid) = composer(Palette::SLOTS, 3, 120, 40);
+        assert_eq!(laid.composer, flat_laid.composer);
+        let band = laid.composer;
 
         let area = coloured.area;
         for y in area.y..area.bottom() {
@@ -1872,11 +1853,9 @@ mod tests {
             view.paste("the draft behind the card");
             view.screen(mode);
 
-            let area = screen(120, 40);
-            let mut buffer = Buffer::empty(area);
-            view.paint(area, &mut buffer);
-            let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
-            let (left, right) = card_columns(&buffer);
+            let (buffer, told) = painted_and_told(&mut view, 120, 40);
+            let band = laid_out(&told).composer;
+            let (left, right) = card::border_columns(card_body(&told));
             assert!(
                 band.x < left && right + 1 < band.right(),
                 "the card leaves the composer's edge row visible in its gutters at {left} and \
@@ -1900,10 +1879,8 @@ mod tests {
 
     /// The look the composer's edge row is drawn in, in the frame the view paints now.
     fn edge_row(view: &mut View, palette: &Palette) -> Look {
-        let area = screen(120, 40);
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
-        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
+        let (buffer, told) = painted_and_told(view, 120, 40);
+        let band = laid_out(&told).composer;
         look_at(&buffer, palette, band.x, band.y)
     }
 
@@ -1995,7 +1972,8 @@ mod tests {
 
     #[test]
     fn a_frame_with_no_colour_draws_the_composer_as_a_flat_band() {
-        let (buffer, band) = composer(Palette::SLOTS, 5, 120, 40);
+        let (buffer, laid) = composer(Palette::SLOTS, 5, 120, 40);
+        let band = laid.composer;
         for y in band.y..band.bottom() {
             for x in band.x..band.right() {
                 assert_eq!(
@@ -2010,7 +1988,8 @@ mod tests {
     #[test]
     fn a_frame_with_one_row_to_give_the_composer_draws_it_lit() {
         let palette = Palette::TRUECOLOR;
-        let (buffer, band) = composer(palette, 1, 60, 2);
+        let (buffer, laid) = composer(palette, 1, 60, 2);
+        let band = laid.composer;
 
         assert_eq!(band.height, 1, "a two-row frame gives the composer one row");
         assert_eq!(
@@ -2024,7 +2003,8 @@ mod tests {
     #[test]
     fn sixty_columns_show_the_raised_band_and_lose_no_hint_from_the_footer() {
         let palette = Palette::TRUECOLOR;
-        let (buffer, band) = composer(palette, 1, 60, 24);
+        let (buffer, laid) = composer(palette, 1, 60, 24);
+        let band = laid.composer;
 
         assert_eq!(
             under(&buffer, band.x, band.y),
@@ -2037,7 +2017,7 @@ mod tests {
             "a sixty-column frame leaves no shadow under the composer"
         );
         assert_eq!(
-            drawn_row(&buffer, buffer.area.bottom() - 1).trim_end(),
+            drawn_row(&buffer, laid.footer.y).trim_end(),
             "Enter send · / commands · @ files · ? keys · Ctrl-Q quit",
             "the raised band takes no row the footer had, and every hint that fits in sixty \
              columns is still drawn"
@@ -2057,26 +2037,23 @@ mod tests {
                 }]),
             );
 
-            let area = screen(cols, rows);
-            let mut buffer = Buffer::empty(area);
-            view.paint(area, &mut buffer);
-
-            let bands = bands(area, view.composer().rows(), view.queue().rows(), 0);
-            let share = view.split(bands.transcript);
-            let (shape, band) = share.rail.expect("a frame this wide holds a ledger");
-            let rail = band.area;
+            let (buffer, told) = painted_and_told(&mut view, cols, rows);
+            let laid = laid_out(&told);
+            let transcript = laid.transcript;
+            let (shape, rail) = laid.rail.expect("a frame this wide holds a ledger");
+            let rail = rail.area;
             assert_eq!(shape, Rail::Ledger);
             assert_eq!(
-                share.transcript.right(),
+                transcript.right(),
                 rail.x,
                 "the transcript loses a column to the lit rule: it ends at column {} and the rail \
                  begins at {}",
-                share.transcript.right(),
+                transcript.right(),
                 rail.x
             );
 
-            for y in share.transcript.y..share.transcript.bottom() {
-                for x in share.transcript.x..share.transcript.right() {
+            for y in transcript.y..transcript.bottom() {
+                for x in transcript.x..transcript.right() {
                     assert_eq!(
                         under(&buffer, x, y),
                         palette.band(Band::Well),
@@ -2128,7 +2105,7 @@ mod tests {
 
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
+        let told = view.paint(area, &mut buffer);
 
         let cells = |band: Band| -> Vec<(u16, u16)> {
             (area.y..area.bottom())
@@ -2160,7 +2137,7 @@ mod tests {
             }
         }
 
-        let last = area.bottom() - 1;
+        let last = laid_out(&told).footer.y;
         let banded = (area.x..area.right()).find(|x| {
             let cell = buffer.cell((*x, last)).expect("a cell of the footer");
             [Band::Rail, Band::Well]
@@ -2204,11 +2181,8 @@ mod tests {
             Facts::boot(boot(), None),
             Transcript::none(),
         );
-        let area = screen(cols, rows);
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
-        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).transcript;
-        (buffer, view.split(band).transcript)
+        let (buffer, told) = painted_and_told(&mut view, cols, rows);
+        (buffer, laid_out(&told).transcript)
     }
 
     /// Whether this cell is no glyph of the splash screen's: one a picture is placed over, or the
@@ -2701,10 +2675,8 @@ mod tests {
     }
 
     fn drawn_footer(view: &mut View, cols: u16, rows: u16) -> String {
-        let area = screen(cols, rows);
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
-        drawn_row(&buffer, area.bottom() - 1)
+        let (buffer, told) = painted_and_told(view, cols, rows);
+        drawn_row(&buffer, laid_out(&told).footer.y)
     }
 
     /// The footer row a boot frame draws.
@@ -2989,9 +2961,9 @@ mod tests {
             ] {
                 let area = screen(cols, 24);
                 let mut buffer = Buffer::empty(area);
-                view.paint(area, &mut buffer);
+                let told = view.paint(area, &mut buffer);
 
-                let row = area.bottom() - 1;
+                let row = laid_out(&told).footer.y;
                 let drawn = drawn_row(&buffer, row);
                 let depth = depth(&view);
                 let mut tail = 0;
@@ -3027,14 +2999,12 @@ mod tests {
             Transcript::none(),
         );
         view.key(Key::Char('?'));
-        let area = screen(120, 40);
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
+        let (buffer, told) = painted_and_told(&mut view, 120, 40);
 
-        let (left, right) = card_columns(&buffer);
+        let body = card_body(&told);
         let mut listed = 0;
-        for y in card_body(&buffer) {
-            let runs: Vec<(Look, String)> = runs_of(&buffer, &palette, y, left + 1, right)
+        for y in body.y..body.bottom() {
+            let runs: Vec<(Look, String)> = runs_of(&buffer, &palette, y, body.x, body.right())
                 .into_iter()
                 .filter(|(_, text)| !text.trim().is_empty())
                 .collect();
@@ -3903,8 +3873,9 @@ mod tests {
             Transcript::none(),
         );
         view.key(Key::Char('?'));
-        let buffer = painted(&mut view, 120, 40);
-        let body = card_body(&buffer)
+        let (buffer, told) = painted_and_told(&mut view, 120, 40);
+        let held = card_body(&told);
+        let body = (held.y..held.bottom())
             .map(|y| drawn_row(&buffer, y))
             .collect::<Vec<_>>()
             .join("\n");
@@ -4371,14 +4342,14 @@ mod tests {
     }
 
     /// An idle frame holding `count` waiting prompts behind the draft `draft`, painted at `cols`
-    /// by `rows`, with the band and the queue's rows inside it.
+    /// by `rows`, and the frame it laid out.
     fn waiting_behind(
         palette: Palette,
         draft: &str,
         count: usize,
         cols: u16,
         rows: u16,
-    ) -> (Buffer, Rect, Rect) {
+    ) -> (Buffer, Layout) {
         let mut view = View::of(
             inked(palette),
             Facts::default().running(),
@@ -4388,17 +4359,16 @@ mod tests {
             view.enqueue(prompt(&format!("prompt {at}")));
         }
         view.paste(draft);
-        let area = screen(cols, rows);
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
-        let bands = bands(area, view.composer().rows(), view.queue().rows(), 0);
-        (buffer, bands.composer, bands.queue)
+        let (buffer, told) = painted_and_told(&mut view, cols, rows);
+        (buffer, laid_out(&told))
     }
 
     #[test]
     fn a_queue_of_three_is_drawn_under_the_draft_one_prompt_to_a_row_with_the_newest_at_the_foot() {
         let palette = Palette::TRUECOLOR;
-        let (buffer, band, queue) = waiting_behind(palette, "a draft", 3, 120, 24);
+        let (buffer, laid) = waiting_behind(palette, "a draft", 3, 120, 24);
+        let band = laid.composer;
+        let queue = laid.queue;
 
         assert_eq!(
             draft_rows(&buffer, band),
@@ -4426,7 +4396,9 @@ mod tests {
     #[test]
     fn a_queue_longer_than_its_band_draws_the_newest_it_holds_and_the_count_of_the_rest() {
         let palette = Palette::TRUECOLOR;
-        let (buffer, band, queue) = waiting_behind(palette, "a draft", 7, 120, 24);
+        let (buffer, laid) = waiting_behind(palette, "a draft", 7, 120, 24);
+        let band = laid.composer;
+        let queue = laid.queue;
 
         assert_eq!(
             queue.height,
@@ -4456,7 +4428,9 @@ mod tests {
     #[test]
     fn a_frame_with_nothing_queued_draws_no_queue_row_and_the_transcript_keeps_them_all() {
         let palette = Palette::TRUECOLOR;
-        let (buffer, band, queue) = waiting_behind(palette, "a draft", 0, 120, 24);
+        let (buffer, laid) = waiting_behind(palette, "a draft", 0, 120, 24);
+        let band = laid.composer;
+        let queue = laid.queue;
 
         assert_eq!(queue.height, 0, "nothing waiting is no queue row at all");
         assert_eq!(
@@ -4475,36 +4449,35 @@ mod tests {
 
         let mut view = turns(100);
         view.paste("a draft");
-        let area = screen(120, 24);
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
-        let bands = bands(area, view.composer().rows(), view.queue().rows(), 0);
+        let (buffer, told) = painted_and_told(&mut view, 120, 24);
+        let laid = laid_out(&told);
         assert_eq!(
-            bands.transcript.bottom(),
-            bands.composer.y,
+            laid.transcript.bottom(),
+            laid.composer.y,
             "the transcript's band runs down to the composer's edge"
         );
         assert!(
-            drawn_row(&buffer, bands.composer.y - 1).contains("turn"),
+            drawn_row(&buffer, laid.composer.y - 1).contains("turn"),
             "and the row above the edge is the transcript's own, drawn by it"
         );
     }
 
     #[test]
     fn the_transcript_keeps_every_row_the_queue_does_not_need() {
-        let area = screen(120, 24);
-        let (draft, queue) = (2, 3);
+        let palette = Palette::TRUECOLOR;
+        let (_, waited) = waiting_behind(palette, "a draft", 3, 120, 24);
+        let (_, clear) = waiting_behind(palette, "a draft", 0, 120, 24);
 
         assert_eq!(
-            bands(area, draft, 0, 0).transcript.height,
-            bands(area, draft, queue, 0).transcript.height + queue,
+            clear.transcript.height,
+            waited.transcript.height + waited.queue.height,
             "the row a queue takes is a row the transcript had, and it is given back the moment \
              nothing waits"
         );
         assert_eq!(
-            bands(area, draft, 0, 0).composer.height,
-            draft,
-            "a band with no queue is the draft's rows and not a row more"
+            clear.composer.height,
+            waited.composer.height - waited.queue.height,
+            "and the queue's rows are drawn in the band the draft had, not over the transcript's"
         );
     }
 
@@ -4518,10 +4491,8 @@ mod tests {
             Transcript::none(),
         );
         view.paste(&draft.join("\n"));
-        let area = screen(120, 24);
-        let mut buffer = Buffer::empty(area);
-        let painted = view.paint(area, &mut buffer);
-        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
+        let (buffer, told) = painted_and_told(&mut view, 120, 24);
+        let band = laid_out(&told).composer;
 
         assert_eq!(
             draft_rows(&buffer, band),
@@ -4536,7 +4507,7 @@ mod tests {
             "the count is the dim ink"
         );
         let (_, y) = view
-            .cursor(&painted)
+            .cursor(&told)
             .expect("a caret is drawn for a long draft");
         assert_eq!(
             y,
@@ -4554,11 +4525,8 @@ mod tests {
         );
         view.paste(&pen::filled(60, '日'));
 
-        let area = screen(60, 24);
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
-
-        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
+        let (buffer, told) = painted_and_told(&mut view, 60, 24);
+        let band = laid_out(&told).composer;
         let wide = |count| pen::filled(count, '日');
         assert_eq!(
             draft_rows(&buffer, band),
@@ -4582,11 +4550,8 @@ mod tests {
             Transcript::none(),
         );
 
-        let area = screen(120, 40);
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
-
-        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
+        let (buffer, told) = painted_and_told(&mut view, 120, 40);
+        let band = laid_out(&told).composer;
         let (empty, _) = place_of(&buffer, PLACEHOLDER);
         let gutter = pen::cells(INDENT);
         assert!(
@@ -4601,8 +4566,7 @@ mod tests {
         );
 
         view.key(Key::Char('a'));
-        let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
+        let buffer = painted(&mut view, 120, 40);
         assert!(
             !drawn_row(&buffer, band.y + HAIRLINE_ROWS).contains(PLACEHOLDER),
             "the placeholder outlived the first glyph the reader typed"
@@ -4620,11 +4584,8 @@ mod tests {
         view.paste("a draft of mine");
         view.screen(Mode::Keys);
 
-        let area = screen(120, 40);
-        let mut buffer = Buffer::empty(area);
-        let painted = view.paint(area, &mut buffer);
-
-        let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
+        let (buffer, told) = painted_and_told(&mut view, 120, 40);
+        let band = laid_out(&told).composer;
         let (drawn, column) = place_of(&buffer, "a draft of mine");
         assert_eq!(
             column, 2,
@@ -4637,7 +4598,7 @@ mod tests {
              they will return to"
         );
         assert_eq!(
-            view.cursor(&painted),
+            view.cursor(&told),
             None,
             "and no caret waits in a band that takes no key"
         );
