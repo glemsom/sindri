@@ -22,8 +22,8 @@ use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::picture::{self, Surface};
 use sindri::pictures::{PLACEHOLDER, Pictures};
-use sindri::rows::{Row, Scroll};
-use sindri::view::View;
+use sindri::rows::Row;
+use sindri::view::{Transcript, View};
 use sindri_core::policy::Enforcement;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -405,19 +405,19 @@ fn cell() -> CellSize {
 }
 
 fn frame(workspace: &Path, text: &str, draws: bool) -> View {
-    let mut view = View::of(
+    View::of(
         match draws {
             true => caps::at(cell()),
             false => Capabilities::default(),
         },
-        vec![Entry::Assistant {
+        sindri::facts::Facts::default()
+            .asked()
+            .working(workspace.to_path_buf(), None),
+        Transcript::of(vec![Entry::Assistant {
             turn: 1,
             text: SecretSet::default().redact(text),
-        }],
-        Scroll::Tail,
-    );
-    view.handed(view.facts().clone().working(workspace.to_path_buf(), None));
-    view
+        }]),
+    )
 }
 
 fn painted_at(view: &mut View, size: (u16, u16)) -> Buffer {
@@ -500,37 +500,39 @@ fn railed_facts() -> Facts {
 /// The splash screen a launch opens on, with the facts a launch already holds beside it: a session
 /// and a temp are a run's own, so the rail draws an em dash for each.
 fn splash(draws: bool) -> View {
-    let mut view = View::boot(match draws {
-        true => caps::at(cell()),
-        false => Capabilities::default(),
-    });
-    view.handed(facts::Facts::boot(
-        Boot {
-            wire: Some(Wire::Anthropic),
-            model: Some(String::from("claude-sonnet-4-5")),
-            workspace: PathBuf::from("/home/glemsom/Documents/git/sindri"),
-            branch: Some(String::from("spec/1-capability")),
-            enforcement: Enforcement::Bubblewrap,
+    View::of(
+        match draws {
+            true => caps::at(cell()),
+            false => Capabilities::default(),
         },
-        None,
-    ));
-    view
+        facts::Facts::boot(
+            Boot {
+                wire: Some(Wire::Anthropic),
+                model: Some(String::from("claude-sonnet-4-5")),
+                workspace: PathBuf::from("/home/glemsom/Documents/git/sindri"),
+                branch: Some(String::from("spec/1-capability")),
+                enforcement: Enforcement::Bubblewrap,
+            },
+            None,
+        ),
+        Transcript::none(),
+    )
 }
 
 /// A frame whose rail carries the twelve facts, and a transcript of nothing: the rail is the picture
 /// a face is drawn over. A terminal that places none has no face to turn off, so `face` is no fact of
 /// its frame.
 fn railed(draws: bool, face: bool) -> View {
-    let mut view = View::of(
+    View::of(
         match draws {
             true => caps::faced(face),
             false => Capabilities::default(),
         },
-        Vec::new(),
-        Scroll::Tail,
-    );
-    view.handed(view.facts().clone().railed(railed_facts()));
-    view
+        sindri::facts::Facts::default()
+            .asked()
+            .railed(railed_facts()),
+        Transcript::none(),
+    )
 }
 
 /// The band the transcript and the rail share in a `cols` by `rows` frame: everything above the
@@ -718,7 +720,10 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
                 picture in it is never measured";
     let mut view = View::of(
         caps::at(cell()),
-        vec![
+        sindri::facts::Facts::default()
+            .asked()
+            .working(workspace.clone(), None),
+        Transcript::of(vec![
             Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact(format!("![first](old.png) {}", tall.repeat(6))),
@@ -727,10 +732,8 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
                 turn: 2,
                 text: SecretSet::default().redact("![second](shot.png) the newest answer"),
             },
-        ],
-        Scroll::Tail,
+        ]),
     );
-    view.handed(view.facts().clone().working(workspace.clone(), None));
 
     painted_at(&mut view, SCREEN);
     assert_eq!(

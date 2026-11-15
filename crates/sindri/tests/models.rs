@@ -8,11 +8,12 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
+use sindri::facts::Facts;
 use sindri::keys::Mode;
 use sindri::mark::Cell;
 use sindri::models::{CAP, Models};
 use sindri::pointer::Pointer;
-use sindri::view::{Painted, View};
+use sindri::view::{Painted, Transcript, View};
 
 use sindri_core::provider::served::{Listing, Where};
 use sindri_core::provider::transport::{Canned, Replay};
@@ -287,7 +288,7 @@ fn a_key_a_filter_box_has_no_use_for_moves_nothing() {
 }
 
 fn screen(capabilities: Capabilities) -> View {
-    let mut view = View::blank(capabilities);
+    let mut view = View::of(capabilities, Facts::default().asked(), Transcript::none());
     view.paste("/model");
     view.key(Key::Enter);
     view.handed(view.facts().clone().served_by(listed()));
@@ -297,7 +298,11 @@ fn screen(capabilities: Capabilities) -> View {
 
 #[test]
 fn a_screen_opened_again_asks_the_wire_rather_than_serving_the_names_it_held() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.handed(view.facts().clone().served_by(listed()));
     view.paste("/model");
     view.key(Key::Enter);

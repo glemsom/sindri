@@ -13,10 +13,11 @@ use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::composer::Key;
+use sindri::facts::Facts;
 use sindri::ink::{Face, Ink, Look};
 use sindri::keys::{Act, Mode};
 use sindri::palette::Palette;
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::provider::served::{Listing, Where};
 use sindri_core::provider::transport::{Canned, Replay};
@@ -126,7 +127,11 @@ fn conversation_in(capabilities: Capabilities) -> View {
             ),
         },
     ];
-    View::of(capabilities, entries, sindri::rows::Scroll::Tail)
+    View::of(
+        capabilities,
+        Facts::default().asked(),
+        Transcript::of(entries).scrolled(sindri::rows::Scroll::Tail),
+    )
 }
 
 /// The same frame with a draft typed into it, so the composer band is behind the card too.
@@ -538,7 +543,11 @@ fn a_description_wider_than_the_card_wraps_under_its_own_column_and_hangs_under_
 
 #[test]
 fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.open_settings(&Config::default());
     view.refuse("max_turns two hundred will not parse: invalid digit found in string");
     let buffer = painted(&mut view, 120, 40);
@@ -558,7 +567,11 @@ fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
 fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
     let reason = "bad value in max_turns: `two hundred` will not parse: invalid digit found in \
                   string";
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.open_settings(&Config::default());
     view.refuse(reason);
     let palette = view.capabilities().palette();
@@ -606,7 +619,11 @@ fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
 #[test]
 fn a_frame_too_short_for_the_settings_visit_draws_the_head_of_the_list_and_keeps_the_verdict_back()
 {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.open_settings(&Config::default());
     view.refuse(
         "bad value in max_turns: `two hundred` will not parse: invalid digit found in string",

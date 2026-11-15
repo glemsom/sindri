@@ -9,7 +9,7 @@ use sindri::composer::{Key, Outcome};
 use sindri::keys::{Body, Mode};
 use sindri::ledger::Facts;
 use sindri::list::ScreenRow;
-use sindri::view::{ScreenBody, View};
+use sindri::view::{ScreenBody, Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::provider::Route;
 use sindri_core::provider::served::{Listing, Where};
@@ -83,9 +83,13 @@ fn every_screen_names_the_body_it_holds_and_the_draft_names_none() {
     }
 
     assert!(
-        View::blank(Capabilities::default())
-            .body(Mode::Composer, 60)
-            .is_none(),
+        View::of(
+            Capabilities::default(),
+            sindri::facts::Facts::default().asked(),
+            Transcript::none()
+        )
+        .body(Mode::Composer, 60)
+        .is_none(),
         "and the frame draws the body the screen names and no other: a draft asked for one is \
          answered with none, because there is no card to hand it"
     );
@@ -100,11 +104,12 @@ fn the_path_picker_body_holds_the_query_row_first_and_the_count_of_matches_last(
             .expect("a folder");
         std::fs::write(&path, "").expect("a file");
     }
-    let mut view = View::blank(Capabilities::default());
-    view.handed(
-        view.facts()
-            .clone()
+    let mut view = View::of(
+        Capabilities::default(),
+        sindri::facts::Facts::default()
+            .asked()
             .working(root.path().to_path_buf(), None),
+        Transcript::none(),
     );
     assert_eq!(
         view.key(Key::Char('@')),
@@ -149,7 +154,11 @@ fn served(payload: &'static str) -> Listing {
 
 #[test]
 fn the_served_names_body_asks_while_the_wire_is_unasked_and_says_so_when_it_served_nothing() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        sindri::facts::Facts::default().asked(),
+        Transcript::none(),
+    );
     let body = view
         .body(Mode::Models, 60)
         .expect("the served names are a screen and hold a body");
@@ -176,7 +185,11 @@ fn the_served_names_body_asks_while_the_wire_is_unasked_and_says_so_when_it_serv
 
 #[test]
 fn the_settings_body_ends_in_the_refusal_that_turned_the_visit_back() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        sindri::facts::Facts::default().asked(),
+        Transcript::none(),
+    );
     view.open_settings(&Config::default());
     let body = view
         .body(Mode::Settings, 60)
@@ -209,8 +222,14 @@ fn the_settings_body_ends_in_the_refusal_that_turned_the_visit_back() {
 
 #[test]
 fn the_ledger_body_holds_the_facts_the_record_wrote() {
-    let mut view = View::blank(Capabilities::default());
-    view.handed(view.facts().clone().railed(facts()).recorded(&document()));
+    let view = View::of(
+        Capabilities::default(),
+        sindri::facts::Facts::default()
+            .asked()
+            .railed(facts())
+            .recorded(&document()),
+        Transcript::none(),
+    );
     let body = view
         .body(Mode::Stats, 120)
         .expect("the ledger is a screen, so it answers with a body");
@@ -243,7 +262,11 @@ fn the_ledger_body_holds_the_facts_the_record_wrote() {
 
 #[test]
 fn the_keys_body_hangs_no_choice_off_any_of_its_rows() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        sindri::facts::Facts::default().asked(),
+        Transcript::none(),
+    );
     view.key(Key::Char('?'));
     let body = view
         .body(Mode::Keys, 60)

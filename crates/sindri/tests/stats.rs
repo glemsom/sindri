@@ -10,8 +10,9 @@ use ratatui::backend::TestBackend;
 use sindri::capability::Capabilities;
 use sindri::commands::{self, Command};
 use sindri::composer::{Key, Outcome};
+use sindri::facts::Facts;
 use sindri::keys::Mode;
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 
 #[allow(dead_code)] // the harness draws every frame; this binary asks it for the run only
 mod fixture; // one frame rendered at a fixed size into the text a fixture holds
@@ -41,8 +42,14 @@ fn painted(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
 }
 
 fn opened() -> View {
-    let mut view = View::blank(Capabilities::default());
-    view.handed(view.facts().clone().railed(facts()).recorded(&document()));
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default()
+            .asked()
+            .railed(facts())
+            .recorded(&document()),
+        Transcript::none(),
+    );
     view.paste("/stats");
     assert_eq!(
         view.key(Key::Enter),
@@ -139,7 +146,11 @@ fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
 
 #[test]
 fn a_frame_handed_no_record_and_no_fact_still_opens_the_screen_with_its_title_and_no_row() {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default(),
+        Transcript::none(),
+    );
     view.paste("/stats");
     view.key(Key::Enter);
 

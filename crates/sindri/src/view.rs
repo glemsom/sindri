@@ -232,7 +232,7 @@ impl Painted {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct View {
     rows: Rows,
     scroll: Scroll,
@@ -265,51 +265,65 @@ struct Laid {
     band: Range<u16>,
 }
 
+/// The record a frame draws and the row the reader stands at in it: the third of the three values a
+/// frame is built from.
+#[derive(Clone, Debug, Default)]
+pub struct Transcript {
+    entries: Vec<Entry>,
+    scroll: Scroll,
+}
+
+impl Transcript {
+    /// The record `entries` hold, with the frame at its tail.
+    pub fn of(entries: impl IntoIterator<Item = Entry>) -> Transcript {
+        Transcript {
+            entries: entries.into_iter().collect(),
+            scroll: Scroll::Tail,
+        }
+    }
+
+    /// No record at all.
+    pub fn none() -> Transcript {
+        Transcript::default()
+    }
+
+    /// The same record with the frame standing `scroll` rows off its tail.
+    pub fn scrolled(self, scroll: Scroll) -> Transcript {
+        Transcript { scroll, ..self }
+    }
+}
+
 impl View {
-    /// The frame a launch opens on, and the one screen a frame handed no facts can draw: a wordmark,
-    /// what the product is, and the commands a reader starts from.
-    pub fn boot(capabilities: Capabilities) -> View {
-        View {
-            capabilities,
-            ..View::default()
-        }
-    }
-
-    /// A frame of no entries, of a run a prompt has been asked for and that has said nothing: what a
-    /// test draws a key, a card or a footer on, and never a launch.
-    pub fn blank(capabilities: Capabilities) -> View {
-        View {
-            capabilities,
-            facts: Facts::default().asked(),
-            ..View::default()
-        }
-    }
-
-    pub fn of(
-        capabilities: Capabilities,
-        entries: impl IntoIterator<Item = Entry>,
-        scroll: Scroll,
-    ) -> View {
+    /// The one place a frame is built, in a launch and in a test alike: what its terminal can do, the
+    /// facts it draws, and the record it draws them from. A frame built with no facts is the splash
+    /// screen, and every other screen follows from the value it is handed.
+    pub fn of(capabilities: Capabilities, facts: Facts, transcript: Transcript) -> View {
+        let Transcript { entries, scroll } = transcript;
         let mut rows = Rows::new();
         for entry in entries {
             rows.push(entry);
         }
-        View {
+        let mut view = View {
             rows,
             scroll,
+            drawn: Drawn::none(),
+            composer: Composer::new(),
+            stream: Stream::new(),
+            queue: Queue::default(),
+            conversation: Conversation::default(),
+            superseded: false,
+            stack: Stack::default(),
+            models: Models::new(),
+            facts: Facts::default(),
+            mark: None,
+            picker: Picker::default(),
+            loaded: Loaded::default(),
+            settings: Settings::default(),
+            dismissed: None,
             capabilities,
-            facts: Facts::default().asked(),
-            ..View::default()
-        }
-    }
-
-    pub fn typing(capabilities: Capabilities, composer: Composer) -> View {
-        View {
-            composer,
-            capabilities,
-            facts: Facts::default().asked(),
-            ..View::default()
-        }
+        };
+        view.handed(facts);
+        view
     }
 
     pub fn composer(&self) -> &Composer {
@@ -358,6 +372,7 @@ impl View {
         self.rows.retire();
         self.stream = Stream::new();
         self.scroll = Scroll::Tail;
+        self.composer.set_state(State::Idle);
         self.facts = self.facts.clone().asked();
         self.superseded = false;
     }
@@ -1696,9 +1711,8 @@ mod tests {
     /// band the composer was drawn in.
     fn composer(palette: Palette, lines: usize, cols: u16, rows: u16) -> (Buffer, Rect) {
         let draft: Vec<String> = (1..=lines).map(|line| line.to_string()).collect();
-        let mut typed = Composer::new();
-        typed.paste(&draft.join("\n"));
-        let mut view = View::typing(inked(palette), typed);
+        let mut view = View::of(inked(palette), Facts::default().asked(), Transcript::none());
+        view.paste(&draft.join("\n"));
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -1841,7 +1855,11 @@ mod tests {
             Mode::Settings,
             Mode::Stats,
         ] {
-            let mut view = View::blank(Capabilities::default());
+            let mut view = View::of(
+                Capabilities::default(),
+                Facts::default().asked(),
+                Transcript::none(),
+            );
             view.paste("the draft behind the card");
             view.screen(mode);
 
@@ -1883,7 +1901,11 @@ mod tests {
     #[test]
     fn the_accent_edge_recedes_while_the_window_is_unfocused_and_returns_when_it_is_focused() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::blank(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
         view.paste("the draft the composer band is drawn from");
         let lit = edge_row(&mut view, &palette);
 
@@ -1910,7 +1932,7 @@ mod tests {
     fn a_frame_with_no_colour_draws_no_accent_edge_on_any_surface() {
         let palette = Palette::SLOTS;
         for open in [None, Some(Mode::Keys)] {
-            let mut view = View::blank(inked(palette));
+            let mut view = View::of(inked(palette), Facts::default().asked(), Transcript::none());
             view.paste("the draft the composer band is drawn from");
             if let Some(mode) = open {
                 view.screen(mode);
@@ -1937,13 +1959,12 @@ mod tests {
         let palette = Palette::SLOTS;
         let mut view = View::of(
             inked(palette),
-            vec![Entry::Assistant {
+            Facts::default().asked().railed(rail()),
+            Transcript::of(vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("```rust\nfn main() {}\n```\n\nand prose"),
-            }],
-            Scroll::Tail,
+            }]),
         );
-        view.handed(view.facts().clone().railed(rail()));
         view.paste("the draft");
 
         let area = screen(120, 40);
@@ -2020,13 +2041,12 @@ mod tests {
         for (cols, rows) in [(120, 40), (100, 40)] {
             let mut view = View::of(
                 Capabilities::default(),
-                vec![Entry::Assistant {
+                Facts::default().asked().railed(rail()),
+                Transcript::of(vec![Entry::Assistant {
                     turn: 1,
                     text: SecretSet::default().redact("the transcript the rail is drawn beside"),
-                }],
-                Scroll::Tail,
+                }]),
             );
-            view.handed(view.facts().clone().railed(rail()));
 
             let area = screen(cols, rows);
             let mut buffer = Buffer::empty(area);
@@ -2087,15 +2107,14 @@ mod tests {
         let palette = Palette::TRUECOLOR;
         let mut view = View::of(
             Capabilities::default(),
-            vec![Entry::Assistant {
+            Facts::default().asked().railed(rail()),
+            Transcript::of(vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact(
                     "```rust\nfn main() {\n    fence.words();\n}\n```\n\nand the prose under it",
                 ),
-            }],
-            Scroll::Tail,
+            }]),
         );
-        view.handed(view.facts().clone().railed(rail()));
         view.paste("the draft the composer band is drawn from");
 
         let area = screen(120, 40);
@@ -2168,11 +2187,14 @@ mod tests {
     /// terminal that places pictures is handed Sindri's face over the wordmark, and one that places
     /// none is handed the splash screen alone.
     fn splash_frame(cols: u16, rows: u16, draws: bool) -> (Buffer, Rect) {
-        let mut view = View::boot(match draws {
-            true => pictured(),
-            false => Capabilities::default(),
-        });
-        view.handed(Facts::boot(boot(), None));
+        let mut view = View::of(
+            match draws {
+                true => pictured(),
+                false => Capabilities::default(),
+            },
+            Facts::boot(boot(), None),
+            Transcript::none(),
+        );
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -2295,8 +2317,60 @@ mod tests {
     }
 
     #[test]
+    fn a_frame_draws_the_three_values_it_was_built_from() {
+        let mut view = View::of(
+            inked(Palette::ANSI),
+            Facts::default().asked().railed(rail()),
+            Transcript::of([Entry::Turn { turn: 1 }]),
+        );
+        let buffer = painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.capabilities().palette(),
+            Palette::ANSI,
+            "a frame is drawn in the colours of the terminal it was handed"
+        );
+        assert!(
+            holds(&buffer, "turn 1"),
+            "and draws the record it was handed: {:?}",
+            frame_rows(&buffer)
+        );
+        assert!(
+            holds(&buffer, "anthropic"),
+            "and lays the facts it was handed: {:?}",
+            frame_rows(&buffer)
+        );
+    }
+
+    #[test]
+    fn a_frame_draws_the_record_from_the_row_the_reader_stands_at() {
+        let turns = (1..=80).map(|turn| Entry::Turn { turn });
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::of(turns).scrolled(Scroll::Back(3)),
+        );
+        let buffer = painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Back(3),
+            "the record is handed with the row the reader stands at, and the frame keeps it"
+        );
+        let (notice, _) = notice_of(&buffer);
+        assert!(
+            notice.starts_with("3 rows back"),
+            "and the frame says how far back it stands: {notice:?}"
+        );
+    }
+
+    #[test]
     fn a_frame_built_with_no_facts_draws_the_splash_screen() {
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default(),
+            Transcript::none(),
+        );
         assert!(
             drawn(&mut view, 120, 40).contains("sindri"),
             "a frame handed no facts is the splash screen, and its wordmark is the screen"
@@ -2305,8 +2379,11 @@ mod tests {
 
     #[test]
     fn a_frame_handed_a_runs_facts_is_not_the_splash_screen() {
-        let mut view = View::blank(Capabilities::default());
-        view.handed(Facts::default().asked().running());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked().running(),
+            Transcript::none(),
+        );
         assert!(
             !drawn(&mut view, 120, 40).contains("sindri"),
             "a frame handed a run's facts is that run's frame, and draws no wordmark"
@@ -2531,8 +2608,11 @@ mod tests {
         );
 
         let area = screen(80, 24);
-        let mut view = View::boot(Capabilities::default());
-        view.handed(Facts::boot(boot(), None));
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::boot(boot(), None),
+            Transcript::none(),
+        );
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
         let on_rail = (area.y..area.bottom())
@@ -2552,7 +2632,11 @@ mod tests {
 
     #[test]
     fn a_run_sent_from_the_splash_screen_leaves_the_frame_to_the_conversation() {
-        let mut view = View::boot(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default(),
+            Transcript::none(),
+        );
         assert!(
             drawn(&mut view, 120, 40).contains("sindri"),
             "the frame a launch opens on is the splash screen"
@@ -2636,9 +2720,11 @@ mod tests {
     }
 
     fn asking(queued: usize) -> View {
-        let mut view = View::blank(Capabilities::default());
-        view.settle();
-        view.handed(view.facts().clone().running());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().running(),
+            Transcript::none(),
+        );
         for text in ["one", "two", "three"].into_iter().take(queued) {
             view.enqueue(prompt(text));
         }
@@ -2654,7 +2740,15 @@ mod tests {
 
     /// The footer row a boot frame draws.
     fn footer(cols: u16, rows: u16) -> String {
-        drawn_footer(&mut View::blank(Capabilities::default()), cols, rows)
+        drawn_footer(
+            &mut View::of(
+                Capabilities::default(),
+                Facts::default().asked(),
+                Transcript::none(),
+            ),
+            cols,
+            rows,
+        )
     }
 
     #[test]
@@ -2726,7 +2820,15 @@ mod tests {
 
     #[test]
     fn each_set_is_cut_in_survival_order_at_four_widths() {
-        for mut view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
+        for mut view in [
+            View::of(
+                Capabilities::default(),
+                Facts::default().asked(),
+                Transcript::none(),
+            ),
+            asking(0),
+            asking(3),
+        ] {
             let mut cut: Vec<usize> = Vec::new();
             for cols in [120, 72, 52, 40] {
                 let drawn = drawn_footer(&mut view, cols, 24);
@@ -2743,7 +2845,15 @@ mod tests {
 
     #[test]
     fn no_hint_is_cut_mid_word_at_any_width_between_twenty_and_two_hundred() {
-        for mut view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
+        for mut view in [
+            View::of(
+                Capabilities::default(),
+                Facts::default().asked(),
+                Transcript::none(),
+            ),
+            asking(0),
+            asking(3),
+        ] {
             let set = whole(&view);
             for cols in 20..=200u16 {
                 let drawn = drawn_footer(&mut view, cols, 24);
@@ -2767,7 +2877,15 @@ mod tests {
 
     #[test]
     fn the_slash_is_named_in_every_frame_at_every_width_that_holds_a_hint_after_it() {
-        for mut view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
+        for mut view in [
+            View::of(
+                Capabilities::default(),
+                Facts::default().asked(),
+                Transcript::none(),
+            ),
+            asking(0),
+            asking(3),
+        ] {
             let set = whole(&view);
             let at = set
                 .iter()
@@ -2891,7 +3009,15 @@ mod tests {
     fn the_footer_draws_each_hint_as_a_key_and_the_words_that_say_what_it_does() {
         let palette = Palette::TRUECOLOR;
         for cols in [120, 72] {
-            for mut view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
+            for mut view in [
+                View::of(
+                    Capabilities::default(),
+                    Facts::default().asked(),
+                    Transcript::none(),
+                ),
+                asking(0),
+                asking(3),
+            ] {
                 let area = screen(cols, 24);
                 let mut buffer = Buffer::empty(area);
                 view.paint(area, &mut buffer);
@@ -2926,7 +3052,11 @@ mod tests {
     #[test]
     fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_explains_it() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::blank(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
         view.key(Key::Char('?'));
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
@@ -2964,8 +3094,8 @@ mod tests {
     fn turns(count: u32) -> View {
         View::of(
             Capabilities::default(),
-            (1..=count).map(|turn| Entry::Turn { turn }),
-            Scroll::Tail,
+            Facts::default().asked(),
+            Transcript::of((1..=count).map(|turn| Entry::Turn { turn })),
         )
     }
 
@@ -2973,8 +3103,8 @@ mod tests {
     fn turns_taken(count: u32) -> View {
         View::of(
             pointing(),
-            (1..=count).map(|turn| Entry::Turn { turn }),
-            Scroll::Tail,
+            Facts::default().asked(),
+            Transcript::of((1..=count).map(|turn| Entry::Turn { turn })),
         )
     }
 
@@ -2987,7 +3117,8 @@ mod tests {
             .join("\n");
         View::of(
             Capabilities::default(),
-            vec![
+            Facts::default().asked(),
+            Transcript::of(vec![
                 Entry::Turn { turn: 1 },
                 Entry::Call {
                     turn: 1,
@@ -3005,8 +3136,7 @@ mod tests {
                     elapsed_ms: 1_800,
                     exit: Some(Exit::Code(0)),
                 },
-            ],
-            Scroll::Tail,
+            ]),
         )
     }
 
@@ -3248,11 +3378,12 @@ mod tests {
         for file in ["alpha.rs", "zeta.rs"] {
             std::fs::write(workspace.path().join(file), "").expect("a file");
         }
-        let mut view = View::blank(pointing());
-        view.handed(
-            view.facts()
-                .clone()
+        let mut view = View::of(
+            pointing(),
+            Facts::default()
+                .asked()
                 .working(workspace.path().to_path_buf(), None),
+            Transcript::none(),
         );
         assert_eq!(
             view.key(Key::Char('@')),
@@ -3321,7 +3452,7 @@ mod tests {
 
     #[test]
     fn a_press_on_a_commands_row_sends_what_enter_sends() {
-        let mut view = View::blank(pointing());
+        let mut view = View::of(pointing(), Facts::default().asked(), Transcript::none());
         view.key(Key::Char('/'));
         let (drawn, told) = painted_and_told(&mut view, 120, 40);
         let row = row_holding(&drawn, "/quit");
@@ -3336,14 +3467,18 @@ mod tests {
 
     #[test]
     fn a_press_on_a_commands_row_sends_what_enter_on_the_typed_line_sends() {
-        let mut clicked = View::blank(pointing());
+        let mut clicked = View::of(pointing(), Facts::default().asked(), Transcript::none());
         for glyph in ['/', 'n'] {
             clicked.key(Key::Char(glyph));
         }
         let (drawn, told) = painted_and_told(&mut clicked, 120, 40);
         let row = row_holding(&drawn, "/settings");
 
-        let mut typed = View::blank(Capabilities::default());
+        let mut typed = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
         for glyph in "/settings".chars() {
             typed.key(Key::Char(glyph));
         }
@@ -3468,8 +3603,8 @@ mod tests {
     fn one_row_back_is_said_in_the_singular() {
         let mut view = View::of(
             Capabilities::default(),
-            (1..=100).map(|turn| Entry::Turn { turn }),
-            Scroll::Back(1),
+            Facts::default().asked(),
+            Transcript::of((1..=100).map(|turn| Entry::Turn { turn })).scrolled(Scroll::Back(1)),
         );
         let buffer = painted(&mut view, 120, 40);
 
@@ -3530,11 +3665,11 @@ mod tests {
     fn a_band_that_lays_the_history_out_again_does_not_move_the_reader_off_their_rows() {
         let mut view = View::of(
             Capabilities::default(),
-            (1..=20).map(|turn| Entry::Assistant {
+            Facts::default().asked(),
+            Transcript::of((1..=20).map(|turn| Entry::Assistant {
                 turn,
                 text: SecretSet::default().redact(pen::filled(300, 'w')),
-            }),
-            Scroll::Tail,
+            })),
         );
         painted(&mut view, 120, 40);
         view.key(Key::PageUp);
@@ -3793,7 +3928,11 @@ mod tests {
 
     #[test]
     fn the_card_that_lists_the_keys_names_the_two_pages_and_the_tail() {
-        let mut view = View::blank(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
         view.key(Key::Char('?'));
         let buffer = painted(&mut view, 120, 40);
         let body = card_body(&buffer)
@@ -3833,7 +3972,15 @@ mod tests {
     #[test]
     fn every_hint_the_table_writes_is_drawn_in_the_frame_that_honours_it() {
         let mut drawn: Vec<&'static str> = Vec::new();
-        for view in [View::blank(Capabilities::default()), asking(0), asking(3)] {
+        for view in [
+            View::of(
+                Capabilities::default(),
+                Facts::default().asked(),
+                Transcript::none(),
+            ),
+            asking(0),
+            asking(3),
+        ] {
             let depth = depth(&view);
             for width in 20..=200u16 {
                 for hint in kept(&view.hints(), width, &depth) {
@@ -3860,7 +4007,11 @@ mod tests {
                 .any(|binding| binding.name.split(", ").any(|name| name == hint.key));
             let opens = match hint.key.chars().next() {
                 Some(glyph) if pen::cells(hint.key) == 1 => {
-                    let mut view = View::blank(Capabilities::default());
+                    let mut view = View::of(
+                        Capabilities::default(),
+                        Facts::default().asked(),
+                        Transcript::none(),
+                    );
                     view.key(Key::Char(glyph));
                     view.card().is_some() && view.composer().text() == hint.key
                 }
@@ -3877,12 +4028,12 @@ mod tests {
 
     #[test]
     fn the_terminal_cursor_lands_on_the_carets_row_of_the_draft() {
-        let composer = {
-            let mut composer = Composer::new();
-            composer.paste("first line\nsecond line");
-            composer
-        };
-        let view = View::typing(Capabilities::default(), composer);
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
+        view.paste("first line\nsecond line");
         let area = screen(40, 12);
 
         assert_eq!(view.composer().rows(), 3);
@@ -3913,11 +4064,11 @@ mod tests {
     fn the_draft_is_set_in_the_column_an_answer_is_set_in_behind_a_sigil() {
         let mut view = View::of(
             Capabilities::default(),
-            vec![Entry::Assistant {
+            Facts::default().asked(),
+            Transcript::of(vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("an answer opens here"),
-            }],
-            Scroll::Tail,
+            }]),
         );
         view.paste("a draft opens here");
 
@@ -3945,22 +4096,22 @@ mod tests {
     fn field(rows: u16) -> Buffer {
         let mut view = View::of(
             pictured(),
-            vec![Entry::Assistant {
+            Facts::default().asked().working(
+                PathBuf::from(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/tests/fixtures/pictures"
+                )),
+                None,
+            ),
+            Transcript::of(vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact(
                     "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n\
                      ![a tall field](tall.svg)",
                 ),
-            }],
-            Scroll::Back(70),
+            }])
+            .scrolled(Scroll::Back(70)),
         );
-        view.handed(view.facts().clone().working(
-            PathBuf::from(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/tests/fixtures/pictures"
-            )),
-            None,
-        ));
         painted(&mut view, 120, rows)
     }
 
@@ -4028,8 +4179,8 @@ mod tests {
     fn scrolled(count: u32, scroll: Scroll) -> View {
         View::of(
             Capabilities::default(),
-            (1..=count).map(|turn| Entry::Turn { turn }),
-            scroll,
+            Facts::default().asked(),
+            Transcript::of((1..=count).map(|turn| Entry::Turn { turn })).scrolled(scroll),
         )
     }
 
@@ -4125,7 +4276,11 @@ mod tests {
         entries.extend((1..=79).map(|turn| Entry::Turn { turn }));
         // A window taken further back than the transcript reaches lands on its first row.
         painted(
-            &mut View::of(Capabilities::default(), entries, Scroll::Back(u32::MAX)),
+            &mut View::of(
+                Capabilities::default(),
+                Facts::default().asked(),
+                Transcript::of(entries).scrolled(Scroll::Back(u32::MAX)),
+            ),
             cols,
             40,
         )
@@ -4176,11 +4331,11 @@ mod tests {
                     true => sized(),
                     false => Capabilities::default(),
                 },
-                vec![Entry::Assistant {
+                Facts::default().asked(),
+                Transcript::of(vec![Entry::Assistant {
                     turn: 1,
                     text: SecretSet::default().redact("# A gate"),
-                }],
-                Scroll::Tail,
+                }]),
             );
             let mut buffer = Buffer::empty(area);
             view.paint(area, &mut buffer);
@@ -4200,11 +4355,11 @@ mod tests {
         let area = screen(100, 30);
         let mut view = View::of(
             sized(),
-            vec![Entry::Assistant {
+            Facts::default().asked(),
+            Transcript::of(vec![Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("# A gate"),
-            }],
-            Scroll::Tail,
+            }]),
         );
         view.key(Key::Char('?'));
         let mut buffer = Buffer::empty(area);
@@ -4253,9 +4408,11 @@ mod tests {
         cols: u16,
         rows: u16,
     ) -> (Buffer, Rect, Rect) {
-        let mut view = View::blank(inked(palette));
-        view.settle();
-        view.handed(view.facts().clone().running());
+        let mut view = View::of(
+            inked(palette),
+            Facts::default().running(),
+            Transcript::none(),
+        );
         for at in 1..=count {
             view.enqueue(prompt(&format!("prompt {at}")));
         }
@@ -4384,9 +4541,12 @@ mod tests {
     fn a_draft_past_the_ceiling_says_how_many_rows_it_keeps_back_and_keeps_the_caret_inside() {
         let palette = Palette::TRUECOLOR;
         let draft: Vec<String> = (1..=9).map(|line| line.to_string()).collect();
-        let mut typed = Composer::new();
-        typed.paste(&draft.join("\n"));
-        let mut view = View::typing(Capabilities::default(), typed);
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
+        view.paste(&draft.join("\n"));
         let area = screen(120, 24);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -4416,7 +4576,11 @@ mod tests {
 
     #[test]
     fn a_draft_wider_than_the_band_wraps_under_the_gutter_and_never_splits_a_wide_glyph() {
-        let mut view = View::blank(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
         view.paste(&pen::filled(60, '日'));
 
         let area = screen(60, 24);
@@ -4441,7 +4605,11 @@ mod tests {
     #[test]
     fn an_empty_draft_says_what_the_band_can_do_in_the_dim_ink_until_a_glyph_arrives() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::blank(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
 
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
@@ -4473,7 +4641,11 @@ mod tests {
     #[test]
     fn a_card_covers_the_composer_and_leaves_it_readable_and_out_of_reach() {
         let palette = Palette::TRUECOLOR;
-        let mut view = View::blank(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
         view.paste("a draft of mine");
         view.screen(Mode::Keys);
 
@@ -4502,8 +4674,11 @@ mod tests {
 
     #[test]
     fn a_query_wider_than_the_body_is_cut_at_its_edge_and_not_dropped() {
-        let mut view = View::blank(Capabilities::default());
-        view.handed(view.facts().clone().working(std::env::temp_dir(), None));
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked().working(std::env::temp_dir(), None),
+            Transcript::none(),
+        );
         view.key(Key::Char('@'));
         for _ in 0..60 {
             view.key(Key::Char('x'));
@@ -4522,7 +4697,11 @@ mod tests {
 
     #[test]
     fn a_screen_has_no_caret_for_the_terminal_to_put_anywhere() {
-        let mut view = View::blank(Capabilities::default());
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
         let area = screen(40, 12);
         assert!(
             view.cursor(area).is_some(),
@@ -4541,11 +4720,12 @@ mod tests {
 
     #[test]
     fn a_draft_holding_a_wide_glyph_puts_the_caret_in_the_column_the_glyph_occupies() {
-        let view = View::typing(Capabilities::default(), {
-            let mut composer = Composer::new();
-            composer.paste("日本");
-            composer
-        });
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
+        view.paste("日本");
 
         assert_eq!(
             view.cursor(screen(40, 12)),
@@ -4557,8 +4737,13 @@ mod tests {
 
     /// Where the caret a frame `cols` by `rows` wide puts the terminal's cursor, in a frame the
     /// view has painted: the band's rows are a fact about the width, so nothing is asked before it.
-    fn caret_at(composer: Composer, cols: u16, rows: u16) -> Option<(u16, u16)> {
-        let mut view = View::typing(Capabilities::default(), composer);
+    fn caret_at(draft: &str, cols: u16, rows: u16) -> Option<(u16, u16)> {
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
+        view.paste(draft);
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
         view.paint(area, &mut buffer);
@@ -4567,21 +4752,17 @@ mod tests {
 
     #[test]
     fn the_caret_follows_the_draft_onto_the_row_the_wrap_gave_it() {
-        let asking = || {
-            let mut composer = Composer::new();
-            composer.paste(&pen::filled(60, 'x'));
-            composer
-        };
+        let asking = pen::filled(60, 'x');
 
         assert_eq!(
-            caret_at(asking(), 40, 12),
+            caret_at(&asking, 40, 12),
             Some((24, 10)),
             "a thirty-eight column room holds thirty-eight glyphs of a draft of sixty, so the \
              caret waits twenty-two columns into the band's second row rather than off the \
              frame"
         );
         assert_eq!(
-            caret_at(asking(), 80, 12),
+            caret_at(&asking, 80, 12),
             Some((62, 10)),
             "and a frame wide enough to hold the draft shows it on the one row it takes"
         );
@@ -4589,14 +4770,10 @@ mod tests {
 
     #[test]
     fn a_caret_past_a_full_row_waits_on_the_bands_last_cell() {
-        let asking = || {
-            let mut composer = Composer::new();
-            composer.paste(&pen::filled(38, 'x'));
-            composer
-        };
+        let asking = pen::filled(38, 'x');
 
         assert_eq!(
-            caret_at(asking(), 40, 12),
+            caret_at(&asking, 40, 12),
             Some((39, 10)),
             "a draft that fills the row's thirty-eight columns leaves the caret no cell after it, \
              and a terminal keeps its cursor on the last one rather than giving it up"

@@ -2,23 +2,39 @@
 //! answers only its own keys, and `?` and `↑` resolving where the tables say they do.
 
 use sindri::capability::Capabilities;
-use sindri::composer::{Composer, Key, Outcome};
+use sindri::composer::{Key, Outcome};
+use sindri::facts::Facts;
 use sindri::keys::{Act, DESCRIPTIONS, Description, Mode};
-use sindri::view::View;
+use sindri::view::{Transcript, View};
 
-fn typed(lines: &[&str]) -> Composer {
-    let mut composer = Composer::new();
+fn typed(lines: &[&str]) -> View {
+    drafted(
+        View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        ),
+        lines,
+    )
+}
+
+/// The same frame with `lines` typed into its draft through the keys a reader's fingers send.
+fn drafted(mut view: View, lines: &[&str]) -> View {
     for (index, line) in lines.iter().enumerate() {
         if index > 0 {
-            composer.key(Key::Newline);
+            view.key(Key::Newline);
         }
-        composer.paste(line);
+        view.paste(line);
     }
-    composer
+    view
 }
 
 fn waiting(draft: &[&str], prompts: &[&str]) -> View {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     for prompt in prompts {
         view.paste(prompt);
         match view.key(Key::Enter) {
@@ -26,13 +42,7 @@ fn waiting(draft: &[&str], prompts: &[&str]) -> View {
             other => panic!("a draft should have been sent, and {other:?} came instead"),
         }
     }
-    for (index, line) in draft.iter().enumerate() {
-        if index > 0 {
-            view.key(Key::Newline);
-        }
-        view.paste(line);
-    }
-    view
+    drafted(view, draft)
 }
 
 #[test]
@@ -151,7 +161,11 @@ fn the_stats_screen_is_the_sixth_mode_and_answers_escape_and_nothing_else() {
 
 #[test]
 fn question_mark_opens_the_keys_screen_and_escape_closes_it() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
 
     assert_eq!(view.mode(), Mode::Composer, "a launch opens on the draft");
     assert_eq!(
@@ -174,7 +188,7 @@ fn question_mark_opens_the_keys_screen_and_escape_closes_it() {
 
 #[test]
 fn a_question_mark_with_a_draft_typed_is_a_glyph_and_not_a_screen() {
-    let mut view = View::typing(Capabilities::default(), typed(&["why is the sky"]));
+    let mut view = typed(&["why is the sky"]);
 
     assert_eq!(
         view.key(Key::Char('?')),
@@ -193,7 +207,11 @@ fn a_question_mark_with_a_draft_typed_is_a_glyph_and_not_a_screen() {
 fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
     // The screen is opened on an empty draft, because that is the only place `?` is a key: from there a
     // glyph that reached the draft under it would show.
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.key(Key::Char('?'));
 
     for key in [
@@ -264,7 +282,7 @@ fn the_pickers_up_and_down_are_the_lists_and_never_the_drafts() {
 
 #[test]
 fn up_on_the_first_line_is_the_queues_and_off_it_moves_the_caret() {
-    let mut view = View::typing(Capabilities::default(), typed(&["one", "two"]));
+    let mut view = typed(&["one", "two"]);
 
     assert_eq!(
         view.key(Key::Up),
@@ -351,7 +369,12 @@ fn ctrl_x_drops_the_newest_queued_prompt() {
 #[test]
 fn ctrl_x_with_nothing_queued_is_not_a_repaint() {
     assert_eq!(
-        View::blank(Capabilities::default()).key(Key::Drop),
+        View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none()
+        )
+        .key(Key::Drop),
         Outcome::Unchanged,
         "there is no newest queued prompt to drop, so the frame is the one it was"
     );
@@ -375,7 +398,11 @@ fn ctrl_x_is_bound_in_one_mode_and_one_row() {
 
 #[test]
 fn a_paste_while_a_screen_is_open_reaches_no_draft() {
-    let mut view = View::blank(Capabilities::default());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.key(Key::Char('?'));
 
     view.paste("a prompt nobody can see");

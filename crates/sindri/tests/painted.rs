@@ -9,10 +9,11 @@ use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
+use sindri::facts::Facts;
 use sindri::mark::Cell;
 use sindri::pointer::Pointer;
 use sindri::rows::Scroll;
-use sindri::view::{Painted, View};
+use sindri::view::{Painted, Transcript, View};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
@@ -68,8 +69,8 @@ fn drawn_at(buffer: &Buffer, said: &str) -> (u16, u16) {
 fn a_pass_hands_back_the_destination_a_row_named() {
     let mut view = View::of(
         Capabilities::default(),
-        answer("see [the gate](https://example.test/gate)"),
-        Scroll::Tail,
+        Facts::default().asked(),
+        Transcript::of(answer("see [the gate](https://example.test/gate)")),
     );
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let (row, column) = drawn_at(&buffer, "the gate");
@@ -84,7 +85,11 @@ fn a_pass_hands_back_the_destination_a_row_named() {
 
 #[test]
 fn a_pass_hands_back_the_run_it_draws_at_more_than_one_cell() {
-    let mut view = View::of(caps::kitty(), answer("# A gate rule"), Scroll::Tail);
+    let mut view = View::of(
+        caps::kitty(),
+        Facts::default().asked(),
+        Transcript::of(answer("# A gate rule")),
+    );
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let laid = told.sizes().laid();
 
@@ -104,7 +109,11 @@ fn a_pass_hands_back_the_run_it_draws_at_more_than_one_cell() {
 
 #[test]
 fn a_press_on_a_row_the_pass_laid_chooses_that_row() {
-    let mut view = View::blank(caps::pointing());
+    let mut view = View::of(
+        caps::pointing(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
     view.key(Key::Char('/'));
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let (row, _) = drawn_at(&buffer, "/quit");
@@ -120,8 +129,10 @@ fn a_press_on_a_row_the_pass_laid_chooses_that_row() {
 fn a_pass_under_a_card_tells_the_terminal_nothing_of_the_frame_beneath_it() {
     let mut view = View::of(
         caps::kitty(),
-        answer("# A gate rule\n\nsee [the gate](https://example.test/gate)"),
-        Scroll::Tail,
+        Facts::default().asked(),
+        Transcript::of(answer(
+            "# A gate rule\n\nsee [the gate](https://example.test/gate)",
+        )),
     );
     view.key(Key::Char('/'));
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
@@ -146,8 +157,8 @@ fn a_pass_under_a_card_tells_the_terminal_nothing_of_the_frame_beneath_it() {
 fn a_pass_hands_back_the_height_the_whole_transcript_held() {
     let mut view = View::of(
         Capabilities::default(),
-        answer("- gate\n- rule\n- mark"),
-        Scroll::Tail,
+        Facts::default().asked(),
+        Transcript::of(answer("- gate\n- rule\n- mark")),
     );
     let (_, told) = painted_and_told(&mut view, 120, 40);
 
@@ -160,7 +171,11 @@ fn a_pass_hands_back_the_height_the_whole_transcript_held() {
 
 #[test]
 fn a_pass_hands_back_the_band_a_page_moves_by() {
-    let mut view = View::of(Capabilities::default(), turns(200), Scroll::Tail);
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(turns(200)),
+    );
     let (_, told) = painted_and_told(&mut view, 120, 40);
     let band = u32::from(told.drawn().band());
 
@@ -188,8 +203,8 @@ fn a_pass_hands_back_the_band_a_page_moves_by() {
 fn a_pass_hands_back_the_entry_it_laid_on_a_row() {
     let mut view = View::of(
         Capabilities::default(),
-        [turns(1), answer("- gate\n- rule\n- mark")].concat(),
-        Scroll::Tail,
+        Facts::default().asked(),
+        Transcript::of([turns(1), answer("- gate\n- rule\n- mark")].concat()),
     );
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let (row, _) = drawn_at(&buffer, "gate");
@@ -215,8 +230,8 @@ fn a_pass_hands_back_the_entry_it_laid_on_a_row() {
 fn a_pass_hands_back_the_span_a_copy_takes() {
     let mut view = View::of(
         Capabilities::default(),
-        answer("- gate\n- rule\n- mark"),
-        Scroll::Tail,
+        Facts::default().asked(),
+        Transcript::of(answer("- gate\n- rule\n- mark")),
     );
     let (buffer, _) = painted_and_told(&mut view, 120, 40);
     let (row, column) = drawn_at(&buffer, "rule");
@@ -235,8 +250,8 @@ fn a_pass_hands_back_the_span_a_copy_takes() {
 fn an_act_that_replaces_the_transcript_empties_what_the_pass_drew() {
     let mut view = View::of(
         Capabilities::default(),
-        answer("- gate\n- rule\n- mark"),
-        Scroll::Tail,
+        Facts::default().asked(),
+        Transcript::of(answer("- gate\n- rule\n- mark")),
     );
     let (buffer, _) = painted_and_told(&mut view, 120, 40);
     let (row, column) = drawn_at(&buffer, "rule");
