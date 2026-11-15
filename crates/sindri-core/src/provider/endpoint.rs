@@ -2,6 +2,10 @@
 //! run and a listing are both built from, so the names a listing serves are read from the endpoint
 //! a run asks.
 
+// rig's configs and its error are large, and one of each is built per job: the boxes clippy
+// asks for are an allocation bought with nothing.
+#![allow(clippy::large_enum_variant, clippy::result_large_err)]
+
 use std::fmt;
 
 use rig_core::completion::CompletionRequest;

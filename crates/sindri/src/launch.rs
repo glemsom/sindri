@@ -141,8 +141,6 @@ impl Launch {
             config.secrets(),
             &Process,
         );
-        // The store's own literals join the run's secrets, so nothing it holds can reach a
-        // record, the JSON or a line of chatter.
         let secrets = client.secrets().clone();
         let ask = ask(config, endpoint, model.clone(), &workspace);
         let route = ask.route_of();

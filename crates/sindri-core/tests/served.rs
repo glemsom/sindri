@@ -2,18 +2,22 @@
 //! catalogues recorded from the two vendors. Nothing reaches the network: the transport hands back
 //! recorded bytes, so the parsing and the request are a live run's and only the socket is missing.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use rig_core::http_client::{
     Bytes, Error, HttpClientExt, LazyBody, MultipartForm, Request, Response, StreamingResponse,
 };
 use sindri_core::config::Config;
+use sindri_core::provider::copilot::Store;
+use sindri_core::provider::copilot::store_dir;
 use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::served::Listing;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Credential, Route};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
+use tempfile::TempDir;
 
 const ANTHROPIC_MODELS: &str = include_str!("fixtures/providers/anthropic_models.json");
 const OPENAI_MODELS: &str = include_str!("fixtures/providers/openai_models.json");
@@ -390,4 +394,70 @@ fn a_listing_is_read_from_the_endpoint_a_run_asks() {
             seen.url
         );
     }
+}
+
+const DEVICE_CODE: &str = r#"{"device_code":"3584cd8a","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","interval":1,"expires_in":900}"#;
+
+const ACCESS_TOKEN: &str = r#"{"access_token":"gho_recorded_github_token"}"#;
+
+const LIVE_SESSION: &str = "tid=recorded_copilot_session";
+
+const LIVE: &str = r#"{"token":"tid=recorded_copilot_session","expires_at":4000000000,"endpoints":{"api":"https://api.githubcopilot.com"}}"#;
+
+fn environment(home: &TempDir) -> BTreeMap<String, String> {
+    let mut vars = BTreeMap::new();
+    vars.insert(
+        String::from("XDG_CONFIG_HOME"),
+        home.path().display().to_string(),
+    );
+    vars
+}
+
+fn store(home: &TempDir, replay: &Replay) -> Store {
+    let dir = store_dir(&environment(home)).expect("a config home is named");
+    Store::over(replay.clone(), dir)
+}
+
+fn sign_in_replies(exchange: &'static str) -> Vec<Canned> {
+    vec![
+        Canned::reply(200, DEVICE_CODE),
+        Canned::reply(200, ACCESS_TOKEN),
+        Canned::reply(200, exchange),
+    ]
+}
+
+#[test]
+fn a_copilot_listing_asks_the_store_a_run_would_sign_in_with() {
+    let home = tempfile::tempdir().expect("a temp config home");
+    let replay = Replay::new(
+        sign_in_replies(LIVE)
+            .into_iter()
+            .chain([Canned::reply(200, OPENAI_MODELS)])
+            .collect::<Vec<_>>(),
+    );
+    let signed_in = store(&home, &replay);
+    signed_in.login(|_| {}).expect("the sign-in finishes");
+    let client = client_over(&replay).signing(Some(Ok(signed_in)));
+    let endpoint = Endpoint::own(Wire::Copilot);
+
+    let listing = client.served(&endpoint, &Credential::none(), &endpoint);
+
+    assert_eq!(
+        listing.names().map(|names| names.len()),
+        Some(3),
+        "the dialect answered with the catalogue it serves"
+    );
+    let asked = replay
+        .requests()
+        .into_iter()
+        .find(|seen| seen.url.ends_with("/models"))
+        .expect("the catalogue was asked for");
+    assert!(
+        asked.headers.contains(&(
+            String::from("authorization"),
+            format!("Bearer {LIVE_SESSION}")
+        )),
+        "the listing is asked with the session a run signs in for: {:?}",
+        asked.headers
+    );
 }

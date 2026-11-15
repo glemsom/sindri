@@ -400,7 +400,7 @@ pub struct Client {
     transport: DynHttpClient,
     backoff: Arc<dyn Backoff + Send + Sync>,
     secrets: SecretSet,
-    store: Option<copilot::Store>,
+    store: Option<Result<copilot::Store, copilot::SignIn>>,
 }
 
 impl fmt::Debug for Client {
@@ -429,7 +429,19 @@ impl Client {
     }
 
     pub fn store(mut self, store: copilot::Store) -> Self {
-        self.store = Some(store);
+        self.store = Some(Ok(store));
+        self
+    }
+
+    /// The sign-in the wire is asked with, kept whether or not it could be read: a store that
+    /// will not open is a reason both jobs can give, not a wire left out of the one that lists.
+    /// The store's own literals join the run's secrets, so nothing it holds can reach a record,
+    /// the JSON or a line of chatter.
+    pub fn signing(mut self, sign_in: Option<Result<copilot::Store, copilot::SignIn>>) -> Self {
+        if let Some(Ok(store)) = &sign_in {
+            self.secrets = self.secrets.clone().union(store.secrets());
+        }
+        self.store = sign_in;
         self
     }
 
@@ -445,17 +457,13 @@ impl Client {
         secrets: SecretSet,
         environment: &impl config::Environment,
     ) -> Self {
-        let mut client = Self::over(
+        Self::over(
             Http::new(headers)
                 .session(session)
                 .over(rig_reqwest::ReqwestClient::default()),
             secrets,
-        );
-        if let Some(Ok(store)) = endpoint.sign_in(environment) {
-            client.secrets = client.secrets.union(store.secrets());
-            client = client.store(store);
-        }
-        client
+        )
+        .signing(endpoint.sign_in(environment))
     }
 
     pub fn ask(&self, ask: &Ask, deltas: &mut dyn Deltas) -> Result<Answer, Failure> {
@@ -488,6 +496,9 @@ impl Client {
 
     fn session(&self, wire: Wire, secrets: &mut SecretSet) -> Result<Option<String>, Failure> {
         let (Wire::Copilot, Some(store)) = (wire, self.store.as_ref()) else {
+            return Ok(None);
+        };
+        let Ok(store) = store else {
             return Ok(None);
         };
         let session = store.session().map_err(Failure::signed_out)?;
