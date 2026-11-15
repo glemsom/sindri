@@ -32,6 +32,7 @@ pub fn paint(
     }
     ledger::draw(
         &ledger::rows(facts, rail.into(), band.facts, marker),
+        band.facts,
         buffer,
         palette,
     );

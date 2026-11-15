@@ -781,6 +781,7 @@ pub fn split(facts: &Facts, band: Rect) -> Share {
 /// and the column each part starts at, never more of them than the band holds. A live rail's state
 /// row wears the marker's step, and a shape handed none draws none.
 pub(crate) fn rows(facts: &Facts, shape: Shape, area: Rect, marker: Option<&Pulse>) -> Vec<Row> {
+    let area = Rect::new(0, 0, area.width, area.height);
     match shape {
         Shape::Screen => sheet_rows(facts, area),
         Shape::Ledger => rail_rows(facts, Rail::Ledger, area, marker),
@@ -788,12 +789,14 @@ pub(crate) fn rows(facts: &Facts, shape: Shape, area: Rect, marker: Option<&Puls
     }
 }
 
-/// Draws the rows a shape laid, and nothing else: the one place a row's parts reach a frame, so an
-/// adapter is the band it is handed and no rule of its own.
-pub(crate) fn draw(rows: &[Row], buffer: &mut Buffer, palette: &Palette) {
-    for row in rows {
+/// Draws the rows a shape laid at the origin it is handed, and never a row the band did not give
+/// it: the one place a row's parts reach a frame, so an adapter is the band it is handed and no rule
+/// of its own.
+pub(crate) fn draw(rows: &[Row], at: Rect, buffer: &mut Buffer, palette: &Palette) {
+    for row in rows.iter().take(usize::from(at.height)) {
+        let y = at.y.saturating_add(row.y());
         for (x, part) in row.parts() {
-            part.draw(buffer, *x, row.y(), palette);
+            part.draw(buffer, at.x.saturating_add(*x), y, palette);
         }
     }
 }
@@ -2116,7 +2119,12 @@ mod tests {
         let palette = Palette::TRUECOLOR;
         let mut buffer = Buffer::empty(area);
         pen::claim(&mut buffer, area, palette.ground(None));
-        draw(&rows(facts, shape, area, marker), &mut buffer, &palette);
+        draw(
+            &rows(facts, shape, area, marker),
+            area,
+            &mut buffer,
+            &palette,
+        );
         buffer
     }
 
@@ -2406,6 +2414,7 @@ mod tests {
         pen::claim(&mut buffer, area, palette.ground(None));
         draw(
             &rows(facts, Shape::Screen, area, None),
+            area,
             &mut buffer,
             &palette,
         );
@@ -2631,6 +2640,63 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_band_s_rows_are_drawn_at_the_origin_it_is_handed() {
+        let facts = run();
+        let rows = rows(&facts, Shape::Screen, band(81, u16::MAX), None);
+        let area = Rect::new(0, 0, 100, 24);
+        let at = Rect::new(4, 2, 81, 20);
+        let palette = Palette::TRUECOLOR;
+        let mut buffer = Buffer::empty(area);
+
+        draw(&rows, at, &mut buffer, &palette);
+
+        assert_eq!(
+            (rows[0].y(), rows[0].parts()[0].0),
+            (0, 0),
+            "a shape lays its rows from the band's own origin, so its first row is row 0 column 0 \
+             whatever the band's left edge is"
+        );
+        assert_eq!(
+            glyphs(&buffer, 2).trim_end(),
+            "    run",
+            "the run block's name is drawn from the column the door is handed, and its first \
+             glyph stands at column 4"
+        );
+        let blank = |y: u16, from: u16, to: u16| {
+            (from..to).all(|x| buffer.cell((x, y)).expect("a cell of the band").symbol() == " ")
+        };
+        assert!(
+            (0..at.y).all(|y| blank(y, 0, area.width)),
+            "no row stands above the origin row, so every cell of the two rows over it is blank"
+        );
+        assert!(
+            blank(at.y, 0, at.x),
+            "no row starts left of the origin column, so the cells before column 4 are blank"
+        );
+    }
+
+    #[test]
+    fn the_door_draws_no_row_past_the_rows_the_band_gives_it() {
+        let facts = run();
+        let rows = rows(&facts, Shape::Screen, band(81, u16::MAX), None);
+        let area = band(81, 6);
+        let palette = Palette::TRUECOLOR;
+        let mut buffer = Buffer::empty(area);
+
+        draw(&rows, band(81, 1), &mut buffer, &palette);
+
+        assert_eq!(
+            glyphs(&buffer, 0).trim_end(),
+            "run",
+            "the first row of the sheet is drawn at the origin, however few rows the band holds"
+        );
+        assert!(
+            (1..area.height).all(|y| glyphs(&buffer, y).trim().is_empty()),
+            "a band one row tall is handed one row, so every row under the origin is blank"
+        );
     }
 
     #[test]
