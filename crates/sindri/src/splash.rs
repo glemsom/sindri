@@ -1,18 +1,15 @@
-//! The splash screen: Sindri's face over the wordmark, the one line that says what the product is,
-//! and three commands with the line that explains each, set as one block and centred in the band an
-//! answer would go. The launch's own paint pass, never an entry, so a quit there leaves no record.
+//! The splash screen: the wordmark, the one line that says what the product is, and three commands
+//! with the line that explains each, set as one block and centred in the band an answer would go.
+//! The launch's own paint pass, never an entry, so a quit there leaves no record.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::commands;
-use crate::face;
 use crate::ink::{Face, Ink, Look};
 use crate::link::Links;
 use crate::palette::Palette;
 use crate::pen;
-use crate::picture::Surface;
-use crate::pictures::Pictures;
 use crate::rows::{Row, wrap_under};
 use crate::size::Sizes;
 
@@ -24,21 +21,15 @@ const WHAT: &str = "An AI agent that is a Unix filter and a terminal UI over one
 /// in one column whatever the width of the command they hang from.
 const HANG: u16 = 2;
 
-/// The row kept blank between the face and the wordmark, so the wordmark is never read as part of
-/// the picture.
-const GAP: u16 = 1;
-
 /// Paints the splash screen into the band the transcript is drawn in: the block of words centred
-/// in it and the face over them. A band shorter than the block draws it from the band's first
-/// row, so a terminal too small holds the splash screen's head rather than its middle.
+/// in it. A band shorter than the block draws it from the band's first row, so a terminal too small
+/// holds the splash screen's head rather than its middle.
 pub fn paint(
     area: Rect,
     buffer: &mut Buffer,
     palette: &Palette,
     links: &mut Links,
     sizes: &mut Sizes,
-    pictures: &mut Pictures,
-    surface: &Surface,
 ) {
     if area.width == 0 || area.height == 0 {
         return;
@@ -53,35 +44,10 @@ pub fn paint(
         .unwrap_or(0)
         .min(area.width);
     let lines = u16::try_from(block.len()).unwrap_or(u16::MAX);
-    let face = face::over_wordmark(
-        columns,
-        area.height.saturating_sub(lines.saturating_add(GAP)),
-        surface,
-    );
-    let reserved = face
-        .as_ref()
-        .map_or(0, |picture| picture.rows().saturating_add(GAP));
-    let height = lines.saturating_add(reserved);
     let x = area
         .x
         .saturating_add(area.width.saturating_sub(columns) / 2);
-    let mut y = area
-        .y
-        .saturating_add(area.height.saturating_sub(height) / 2);
-    if let Some(face) = &face {
-        pictures.place(
-            face,
-            surface.cell(),
-            Rect {
-                x,
-                y,
-                width: face.cols(),
-                height: face.rows(),
-            },
-            buffer,
-        );
-        y = y.saturating_add(reserved);
-    }
+    let mut y = area.y.saturating_add(area.height.saturating_sub(lines) / 2);
     for row in block {
         if y >= area.bottom() {
             return;

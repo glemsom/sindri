@@ -928,15 +928,12 @@ impl View {
             &mut painted.sizes,
         );
         if self.facts.splash() {
-            let surface = self.face_surface();
             splash::paint(
                 share.transcript,
                 buffer,
                 &self.capabilities.palette(),
                 &mut painted.links,
                 &mut painted.sizes,
-                self.capabilities.pictures_mut(),
-                &surface,
             );
         }
         self.notice_band(bands.notice, buffer);
@@ -2182,8 +2179,8 @@ mod tests {
     }
 
     /// The cells a splash screen frame `cols` by `rows` is painted into, and what it draws: a
-    /// terminal that places pictures is handed Sindri's face, in the band the words stand in and
-    /// over the rail's top rows, and one that places none is handed the splash screen alone.
+    /// terminal that places pictures is handed the rail's face beside the block, and one that places
+    /// none is handed the splash screen alone.
     fn splash_frame(cols: u16, rows: u16, draws: bool) -> (Buffer, Rect) {
         let mut view = View::of(
             match draws {
@@ -2268,18 +2265,12 @@ mod tests {
         }
     }
 
-    /// The first and last columns of `buffer` inside `band` that a placement of the face covers.
-    fn pictured_columns(buffer: &Buffer, band: Rect, rows: &[u16]) -> (u16, u16) {
-        let placed: Vec<u16> = (band.x..band.right())
-            .filter(|x| {
-                rows.iter()
-                    .any(|y| buffer.cell((*x, *y)).is_some_and(placed))
-            })
-            .collect();
-        match (placed.first(), placed.last()) {
-            (Some(left), Some(right)) => (*left, *right),
-            _ => panic!("no column of the band holds a placement: {placed:?}"),
-        }
+    /// The row of `band` the splash screen's wordmark stands on: the one row of the block that
+    /// says the product's name.
+    fn wordmark_row(buffer: &Buffer, band: Rect) -> u16 {
+        (band.y..band.bottom())
+            .find(|y| drawn_row(buffer, *y).contains("sindri"))
+            .expect("the splash screen draws the wordmark")
     }
 
     /// The first and last columns of `buffer` inside `band` that a splash screen frame's block
@@ -2441,9 +2432,7 @@ mod tests {
         let palette = Palette::TRUECOLOR;
         let (buffer, band) = splash_frame(120, 40, false);
 
-        let wordmark = (band.y..band.bottom())
-            .find(|y| drawn_row(&buffer, *y).contains("sindri"))
-            .expect("the splash screen draws the wordmark");
+        let wordmark = wordmark_row(&buffer, band);
         let look =
             |x: u16, y: u16| Look::of(buffer.cell((x, y)).expect("a cell of the band"), &palette);
         let (left, _) = filled_columns(&buffer, band, wordmark);
@@ -2466,35 +2455,21 @@ mod tests {
     }
 
     #[test]
-    fn the_face_stands_over_the_wordmark_and_the_block_stands_under_it() {
-        let (buffer, band) = splash_frame(120, 40, true);
-        let over = pictured_rows(&buffer, band);
-        let wordmark = (band.y..band.bottom())
-            .find(|y| drawn_row(&buffer, *y).contains("sindri"))
-            .expect("the splash screen draws the wordmark");
+    fn the_block_stands_on_the_rows_a_terminal_that_places_no_picture_puts_it_on() {
+        let (pictured, band) = splash_frame(120, 40, true);
+        let (placeless, bare) = splash_frame(120, 40, false);
 
         assert_eq!(
-            over.len(),
+            band_of(&pictured, band),
+            band_of(&placeless, bare),
+            "at 120 by 40 the band an answer goes in holds the rows of words it holds where no \
+             picture is placed, the wordmark on row {}",
+            wordmark_row(&pictured, band)
+        );
+        assert_eq!(
+            wordmark_row(&pictured, band),
             15,
-            "the face is fitted under the sixteen rows it is drawn in at most: {} rows of a band \
-             {} tall",
-            over.len(),
-            band.height
-        );
-        assert_eq!(
-            over.last().map(|y| y.saturating_add(2)),
-            Some(wordmark),
-            "the face stands over the wordmark with one blank row between them, so no row of the \
-             block is drawn inside the picture"
-        );
-
-        let (over_left, over_right) = pictured_columns(&buffer, band, &over);
-        let (wordmark_left, _) = filled_columns(&buffer, band, wordmark);
-        assert_eq!(
-            (over_left, over_right),
-            (wordmark_left, wordmark_left + 24),
-            "the face stands over the wordmark the block opens with, its own left edge on the \
-             block's: columns {over_left} to {over_right} over a wordmark from {wordmark_left}"
+            "and that is the row `boot-120x40` puts the wordmark on"
         );
     }
 
@@ -2530,21 +2505,15 @@ mod tests {
     }
 
     #[test]
-    fn a_band_too_short_or_too_narrow_for_the_face_over_the_wordmark_is_a_placeless_band() {
-        for (cols, rows) in [(120, 14), (30, 24)] {
+    fn no_cell_of_the_band_a_launch_opens_on_is_a_picture() {
+        for (cols, rows) in [(120, 40), (120, 14), (30, 24), (80, 24)] {
             let (pictured, band) = splash_frame(cols, rows, true);
-            let (placeless, bare) = splash_frame(cols, rows, false);
 
             assert!(
                 pictured_rows(&pictured, band).is_empty(),
-                "at {cols} by {rows} the band leaves the block no rows for the face, and a face \
-                 that small is never drawn over the wordmark: no cell of the band an answer goes \
-                 in is a placement"
-            );
-            assert_eq!(
-                band_of(&pictured, band),
-                band_of(&placeless, bare),
-                "and the band is the one a terminal that places no picture is handed, row for row"
+                "at {cols} by {rows} the band an answer goes in holds no picture of the splash \
+                 screen's, so no cell of it is a placement: {:?}",
+                pictured_rows(&pictured, band)
             );
         }
     }
@@ -2558,31 +2527,6 @@ mod tests {
             pictured, placeless,
             "at 30 by 24 the frame is the splash screen and no rail beside it, so every cell of it \
              is the one a terminal that places no picture draws"
-        );
-    }
-
-    #[test]
-    fn a_terminal_that_places_no_picture_is_handed_the_splash_screen_without_the_face_or_its_rows()
-    {
-        let (placeless, placeless_band) = splash_frame(120, 40, false);
-        let (pictured, pictured_band) = splash_frame(120, 40, true);
-
-        assert!(
-            pictured_rows(&placeless, placeless_band).is_empty(),
-            "a terminal that places no picture is given no cell of the face"
-        );
-        let bare = band_of(&placeless, placeless_band);
-        let faced = band_of(&pictured, pictured_band);
-        assert_eq!(
-            block(&bare),
-            block(&faced),
-            "and the block it is handed is the words the face crowds over, row for row"
-        );
-        assert!(
-            filled_rows(&bare, placeless_band).0 < filled_rows(&faced, pictured_band).0,
-            "the block stands higher where no row is reserved: {} against {}",
-            filled_rows(&bare, placeless_band).0,
-            filled_rows(&faced, pictured_band).0
         );
     }
 

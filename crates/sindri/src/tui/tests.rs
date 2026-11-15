@@ -276,8 +276,8 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
 
 const FRAME: (u16, u16) = (120, 40);
 
-/// The frame a launch opens on, with a rail of facts and a terminal that places pictures: the two
-/// things the face is drawn over and in.
+/// The frame a launch opens on, with a rail of facts and a terminal that places pictures: the face
+/// is drawn over the rail's top rows and takes no row of the block's band.
 fn railed(config: &Config) -> View {
     let boot = Boot {
         wire: Some(Wire::Anthropic),
@@ -373,9 +373,9 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     );
 }
 
-/// The face a visit turns off is the two pictures the launch's first frame has already placed, the
-/// one over the wordmark and the one over the rail's top rows: a value handed again is the frame's
-/// own, so no placement is made into pixels a second time.
+/// The face a visit turns off is the one picture the launch's first frame has already placed over
+/// the rail's top rows: a value handed again is the frame's own, so no placement is made into pixels
+/// a second time.
 #[test]
 fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again() {
     let (_home, environment) = config_home("face = true\n");
@@ -402,9 +402,8 @@ fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again()
     assert!(!live.draws_the_face(), "the face is turned off");
     assert_eq!(
         live.rasterises("face.png"),
-        2,
-        "and each face the frame holds, the one over the wordmark and the one over the rail's top \
-         rows, is made into pixels once: nothing was transmitted twice"
+        1,
+        "and the rail's one face is made into pixels once: nothing was transmitted twice"
     );
 }
 

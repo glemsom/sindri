@@ -1,6 +1,6 @@
 //! Sindri's face: the picture the binary carries instead of the workspace holding it. It is
-//! measured from its own header and drawn as the decoration it is, so a frame whose terminal
-//! places no picture is given neither a cell nor a word for it.
+//! measured from its own header and drawn as the decoration it is over the rail's top rows, so a
+//! frame whose terminal places no picture is given neither a cell nor a word for it.
 
 use crate::graphics::Ceiling;
 use crate::picture::{self, Picture, Surface};
@@ -20,21 +20,6 @@ pub const CAP: u16 = 12;
 /// is given and never taller than [`CAP`].
 pub fn over_rail(cols: u16, surface: &Surface) -> Option<Picture> {
     measure(Ceiling::new(cols, CAP), surface)
-}
-
-/// The most rows the face is drawn in over the splash screen's wordmark, and the fewest columns and
-/// rows it is drawn there at all: more would be the screen rather than the head of it, less a
-/// smudge. A frame that small is handed the splash screen without the face and reserves no row.
-const WORDMARK_CAP: u16 = 16;
-const WORDMARK_FLOOR_COLS: u16 = 12;
-const WORDMARK_FLOOR_ROWS: u16 = 8;
-
-/// The face as the splash screen draws it over its wordmark: measured into the columns of the block
-/// it stands over and the rows the band leaves it, and never taller than [`WORDMARK_CAP`].
-pub fn over_wordmark(cols: u16, rows: u16, surface: &Surface) -> Option<Picture> {
-    let picture = measure(Ceiling::new(cols, rows.min(WORDMARK_CAP)), surface)?;
-    let clears = picture.cols() >= WORDMARK_FLOOR_COLS && picture.rows() >= WORDMARK_FLOOR_ROWS;
-    clears.then_some(picture)
 }
 
 /// The face measured into the cells `ceiling` leaves it, or nothing at all: decoration that

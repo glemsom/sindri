@@ -99,44 +99,6 @@ fn a_face_too_tall_for_its_band_gives_way_on_rows_and_never_on_shape() {
 }
 
 #[test]
-fn the_face_over_the_wordmark_is_measured_into_the_rows_the_band_leaves_it_and_no_more() {
-    let over = face::over_wordmark(76, 40, &carried(true)).expect("a band this tall holds it");
-
-    assert_eq!(
-        (over.cols(), over.rows()),
-        (25, 15),
-        "eighty cells by fifty fitted under seventy-six columns and the sixteen rows it is drawn \
-         in at most is twenty-five by fifteen"
-    );
-    assert_eq!(
-        face::over_wordmark(76, 16, &carried(true))
-            .expect("sixteen rows are the whole of its height")
-            .rows(),
-        over.rows(),
-        "a band with more rows than the face takes is given the same face: the cap and not the \
-         band's height is what it gives way to"
-    );
-}
-
-#[test]
-fn a_band_too_short_or_too_narrow_for_the_face_over_the_wordmark_is_given_none() {
-    assert!(
-        face::over_wordmark(76, 7, &carried(true)).is_none(),
-        "seven rows over the block are six under the face's own shape, which is a smudge and not \
-         the picture the splash screen opens on"
-    );
-    assert!(
-        face::over_wordmark(11, 40, &carried(true)).is_none(),
-        "and eleven columns are too few for it whatever rows stand under them"
-    );
-    assert!(
-        face::over_wordmark(76, 40, &carried(false)).is_none(),
-        "a terminal that places no picture is given no face, so the splash screen reserves no row \
-         for one"
-    );
-}
-
-#[test]
 fn a_terminal_that_places_no_picture_is_given_no_cells_and_no_words_for_the_face() {
     assert!(
         face::measure(Ceiling::new(40, 12), &carried(false)).is_none(),
@@ -1167,8 +1129,6 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let rail = rail_band(120, 40);
     let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
 
-    // A splash screen carries a face of the block's own beside the rail, so the rail's rows are the
-    // ones a placement covers in the rail's own columns.
     let pictured_in_rail = |y: u16| -> Vec<u16> {
         pictured_cols(&with, y)
             .into_iter()
@@ -1240,7 +1200,8 @@ fn a_splash_screen_the_face_is_turned_off_for_is_the_one_a_placeless_terminal_dr
 
     assert!(
         pictured_rows(&off).is_empty(),
-        "a splash frame the config turned the face off for is given no cell of it"
+        "a splash frame the config turned the face off for is given no cell of the one the rail \
+         carries"
     );
     assert_eq!(
         rail_row(&off, rail, rail.y).trim_end(),
@@ -1256,22 +1217,17 @@ fn a_splash_screen_the_face_is_turned_off_for_is_the_one_a_placeless_terminal_dr
 }
 
 #[test]
-fn an_eighty_column_splash_screen_draws_no_face_of_a_rail_as_a_runs_frame_draws_none() {
-    let strip = shared_band(80, 24).bottom() - 1;
+fn an_eighty_column_splash_screen_holds_no_face_and_neither_does_a_runs_frame() {
     let mut launching = splash(true);
     let splash = painted_at(&mut launching, (80, 24));
     let mut live = railed(true, true);
     let run = painted_at(&mut live, (80, 24));
 
     assert!(
-        !pictured_rows(&splash).is_empty(),
-        "the 80-column splash screen is a pictured frame all the same: the face it holds is the \
-         block's own"
-    );
-    assert!(
-        pictured_cols(&splash, strip).is_empty(),
-        "and it is handed no rail, so the row a strip would stand on holds no cell of a face: {:?}",
-        pictured_cols(&splash, strip)
+        pictured_rows(&splash).is_empty(),
+        "80 columns leave no rail beside the splash screen, and the frame carries no other face: \
+         {:?}",
+        pictured_rows(&splash)
     );
     assert!(
         pictured_rows(&run).is_empty(),
