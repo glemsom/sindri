@@ -245,7 +245,7 @@ fn faced(face: bool) -> View {
 
 /// The frame a launch opens on: the config's wire and model, the workspace and its branch, and the
 /// enforcement the policy holds — a session and a temp are a run's own, so the rail draws an em dash
-/// for each. A terminal that places pictures is handed Sindri's face over the wordmark.
+/// for each. A terminal that places pictures is handed the face over the wordmark and the rail's.
 fn splash(draws: bool) -> View {
     View::of(
         match draws {
