@@ -43,7 +43,6 @@ use crate::rows::{INDENT, Row, Rows, Scroll};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
-use crate::stats;
 use crate::stream::{Said, Stream};
 
 #[derive(Clone, Copy)]
@@ -968,12 +967,11 @@ impl View {
         painted = Painted::none();
         self.highlight(share.transcript, buffer, drawn.span());
         self.note(&mut painted, drawn);
-        let width = card::body_width(area);
         let held = card::paint(
             area,
             name,
             leaves,
-            body.held(width),
+            body.held(),
             buffer,
             self.edge(),
             &self.capabilities.palette(),
@@ -1011,7 +1009,12 @@ impl View {
             Body::Files => ScreenBody::Rows(self.picker.body()),
             Body::Models => ScreenBody::Rows(self.models.body()),
             Body::Settings => ScreenBody::Rows(self.settings.body(width)),
-            Body::Ledger => ScreenBody::Ledger(Box::new(self.stats())),
+            Body::Ledger => ScreenBody::Ledger(ledger::rows(
+                &self.stats(),
+                ledger::Shape::Screen,
+                Rect::new(0, 0, width, u16::MAX),
+                None,
+            )),
         })
     }
 
@@ -1471,20 +1474,21 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> L
     }
 }
 
-/// What a screen holds: the rows a card is as tall as, or the ledger's own layout, which is laid
-/// whole and capped only by the rows the card gives it.
+/// What a screen holds: the rows it laid at the width the card hands it, which the card is this many
+/// rows tall and which the card caps only as it draws them.
 pub enum ScreenBody {
     Rows(Vec<ScreenRow>),
-    Ledger(Box<ledger::Facts>),
+    Ledger(Vec<ledger::Row>),
 }
 
 impl ScreenBody {
     /// How many rows the screen holds, which the card is this many plus its two borders tall.
-    fn held(&self, width: u16) -> u16 {
-        match self {
-            ScreenBody::Rows(rows) => u16::try_from(rows.len()).unwrap_or(u16::MAX),
-            ScreenBody::Ledger(facts) => stats::height(facts, width),
-        }
+    fn held(&self) -> u16 {
+        let held = match self {
+            ScreenBody::Rows(rows) => rows.len(),
+            ScreenBody::Ledger(rows) => rows.len(),
+        };
+        u16::try_from(held).unwrap_or(u16::MAX)
     }
 
     /// Draws the screen in `body`, and never in a row the card did not give it, with the rows a press
@@ -1506,8 +1510,8 @@ impl ScreenBody {
                 }
                 presses
             }
-            ScreenBody::Ledger(facts) => {
-                stats::paint(facts, body, buffer, palette);
+            ScreenBody::Ledger(rows) => {
+                ledger::draw(rows, body, buffer, palette);
                 Vec::new()
             }
         }

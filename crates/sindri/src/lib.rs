@@ -32,6 +32,5 @@ pub mod settings; // the config file's keys as one list, the value each of them 
 pub mod size; // the runs of a row a terminal draws at twice the cell, measured by the cells they leave
 pub mod spell; // a call's arguments as the fact the tool names: the words a reader would type
 pub mod splash; // the frame a launch opens on: a wordmark, what the product is, and three commands
-pub mod stats; // the ledger's second adapter: the band a screen is handed, the rows the ledger lays
 pub mod stream; // the turn in flight: the answer and the thought of the run's newest turn, fed a
 pub mod view; // what one frame holds and where each part of it goes

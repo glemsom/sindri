@@ -4,20 +4,21 @@
 
 mod caps; // the terminals these frames are drawn on
 
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::keys::{Body, Mode};
-use sindri::ledger::Facts;
+use sindri::ledger::Row;
 use sindri::list::ScreenRow;
 use sindri::view::{ScreenBody, Transcript, View};
 use sindri_core::config::Config;
-use sindri_core::provider::Route;
 use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::served::Listing;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{State as RunState, Stop};
 use sindri_core::wire::Wire;
 
 const EMPTY_CATALOGUE: &str = "{\"data\":[]}";
@@ -25,7 +26,7 @@ const EMPTY_CATALOGUE: &str = "{\"data\":[]}";
 #[allow(dead_code)] // this binary reads the fixture's record, and paints no frame
 mod fixture;
 
-use fixture::{GUID, document, facts};
+use fixture::{document, facts};
 
 /// Every row of a body of rows.
 fn rows(body: &ScreenBody) -> &[ScreenRow] {
@@ -35,12 +36,12 @@ fn rows(body: &ScreenBody) -> &[ScreenRow] {
     rows
 }
 
-/// The facts a ledger body lays out.
-fn ledger(body: &ScreenBody) -> &Facts {
-    let ScreenBody::Ledger(facts) = body else {
-        panic!("a ledger is a screen of facts, and this body is a card of rows");
+/// The rows a ledger body laid out, and no band to cap them.
+fn ledger(body: &ScreenBody) -> &[Row] {
+    let ScreenBody::Ledger(rows) = body else {
+        panic!("a ledger is a screen of rows, and this body is a card of rows of another screen");
     };
-    facts
+    rows
 }
 
 /// The words of a body of rows, one string per row.
@@ -222,8 +223,8 @@ fn the_settings_body_ends_in_the_refusal_that_turned_the_visit_back() {
 }
 
 #[test]
-fn the_ledger_body_holds_the_facts_the_record_wrote() {
-    let view = View::of(
+fn the_ledger_body_holds_the_rows_it_laid_and_the_card_it_is_drawn_on_is_that_tall() {
+    let mut view = View::of(
         Capabilities::default(),
         sindri::facts::Facts::default()
             .asked()
@@ -231,33 +232,52 @@ fn the_ledger_body_holds_the_facts_the_record_wrote() {
             .recorded(&document()),
         Transcript::none(),
     );
-    let body = view
-        .body(Mode::Stats, 120)
-        .expect("the ledger is a screen, so it answers with a body");
-    let held = ledger(&body);
+    view.paste("/stats");
+    assert_eq!(
+        view.key(Key::Enter),
+        Outcome::Edited,
+        "a `/stats` line opens the screen it names, which is a frame to paint"
+    );
 
-    assert_eq!(
-        held.route,
-        Some(Route::Chat),
-        "the route the record wrote is the one the screen lays out, and the frame does not read it \
-         off the document again"
+    let tall = Rect::new(0, 0, 120, 60);
+    let body = view
+        .body(Mode::Stats, sindri::card::body_width(tall))
+        .expect("the ledger is a screen, so it answers with a body");
+    let laid = ledger(&body).len();
+    assert!(
+        laid > 1,
+        "the record's facts are a sheet of many rows, so the body carries the whole of it rather \
+         than one row standing for it: {laid}"
     );
+
+    let mut buffer = Buffer::empty(tall);
+    let told = view.paint(tall, &mut buffer);
+    let card = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out")
+        .card
+        .expect("the screen is drawn on a card, so the pass hands back the body it gave it");
     assert_eq!(
-        held.spend.total,
-        Some(51_300),
-        "so is what the run spent: every ask summed, which is the record's own total and not a \
-         number the frame holds"
+        usize::from(card.height),
+        laid,
+        "the card is as tall as the rows its body carries, because a frame taller than the sheet \
+         caps nothing: the pass draws every row the body laid and no row it did not"
     );
-    assert_eq!(
-        held.state,
-        Some(RunState::Stopped(Stop::Final)),
-        "and the state the run ended on is the record's word for its stop"
-    );
-    assert_eq!(
-        held.session.as_deref(),
-        Some(GUID),
-        "the session the frame was handed stands beside the record's facts, because the record \
-         does not name it"
+
+    let small = Rect::new(0, 0, 80, 24);
+    let mut buffer = Buffer::empty(small);
+    let told = view.paint(small, &mut buffer);
+    let card = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out")
+        .card
+        .expect("a screen too short for the card still draws one");
+    assert!(
+        laid > usize::from(card.height),
+        "a card the frame cannot hold draws the rows that fit and counts the rest back, so the \
+         pass hands back fewer rows than the body carries and never a body trimmed to the frame: \
+         {laid} rows laid, {} drawn",
+        card.height
     );
 }
 

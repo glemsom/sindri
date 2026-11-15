@@ -868,9 +868,10 @@ fn sheet_rows(facts: &Facts, area: Rect) -> Vec<Row> {
 }
 
 /// One row of a shape, laid out: the row it stands on and the column each of its runs starts at,
-/// both counted from the band's own origin, and what each run draws.
+/// both counted from the band's own origin, and what each run draws. A row is a screen's or a rail's
+/// laid row, and it is opaque outside the ledger: only the shape that laid it knows what it says.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Row {
+pub struct Row {
     y: u16,
     parts: Vec<(u16, Part)>,
 }
