@@ -8,6 +8,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
+use sindri::facts::Facts;
 use sindri::keys::Mode;
 use sindri::mark::Cell;
 use sindri::models::{CAP, Models};
@@ -41,6 +42,12 @@ fn silent() -> Listing {
         .served(&at, &Credential::none(), &at)
 }
 
+/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
+/// it means to and hands the value back.
+fn landed(view: &mut View, change: impl FnOnce(Facts) -> Facts) {
+    view.handed(change(view.facts().clone()));
+}
+
 fn offered(models: &Models) -> Vec<String> {
     models
         .rows()
@@ -50,8 +57,7 @@ fn offered(models: &Models) -> Vec<String> {
 }
 
 fn narrowed(query: &str) -> Models {
-    let mut models = Models::new();
-    models.served(listed());
+    let mut models = Models::new().served_by(Some(listed()));
     for glyph in query.chars() {
         models.key(Key::Char(glyph));
     }
@@ -64,7 +70,7 @@ fn the_rows_are_the_names_the_wire_served_in_the_order_it_served_them() {
     assert!(models.waiting(), "a screen opens before the wire answers");
     assert!(offered(&models).is_empty(), "and offers nothing yet");
 
-    models.served(listed());
+    models = models.served_by(Some(listed()));
 
     assert!(!models.waiting());
     assert_eq!(
@@ -116,8 +122,7 @@ fn a_name_the_query_starts_ranks_above_one_that_merely_holds_it() {
 
 #[test]
 fn a_query_that_starts_a_later_name_puts_it_first() {
-    let mut models = Models::new();
-    models.served(listed());
+    let mut models = Models::new().served_by(Some(listed()));
     for glyph in SECOND.chars() {
         models.key(Key::Char(glyph));
     }
@@ -127,8 +132,7 @@ fn a_query_that_starts_a_later_name_puts_it_first() {
 
 #[test]
 fn a_row_the_list_holds_is_chosen_by_a_press_on_it_and_one_it_does_not_holds_nothing() {
-    let mut models = Models::new();
-    models.served(listed());
+    let mut models = Models::new().served_by(Some(listed()));
     let rows = models.rows().len();
 
     assert!(
@@ -153,8 +157,7 @@ fn a_row_the_list_holds_is_chosen_by_a_press_on_it_and_one_it_does_not_holds_not
 
 #[test]
 fn the_selection_walks_the_rows_and_stops_at_the_ends() {
-    let mut models = Models::new();
-    models.served(listed());
+    let mut models = Models::new().served_by(Some(listed()));
 
     assert!(!models.up(), "there is no row above the first");
     assert!(models.down());
@@ -169,8 +172,7 @@ fn the_selection_walks_the_rows_and_stops_at_the_ends() {
 
 #[test]
 fn a_narrower_query_puts_the_selection_back_on_the_best_match() {
-    let mut models = Models::new();
-    models.served(listed());
+    let mut models = Models::new().served_by(Some(listed()));
     models.down();
 
     for glyph in "haiku".chars() {
@@ -236,16 +238,14 @@ fn the_screen_offers_eight_rows_and_no_more() {
     let listing = Client::over(replay, SecretSet::default())
         .waits(|_| {})
         .served(&at, &Credential::new("sk-ant-recorded"), &at);
-    let mut models = Models::new();
-    models.served(listing);
+    let models = Models::new().served_by(Some(listing));
 
     assert_eq!(models.rows().len(), CAP);
 }
 
 #[test]
 fn a_wire_that_could_not_answer_offers_its_hint_and_no_names() {
-    let mut models = Models::new();
-    models.served(silent());
+    let models = Models::new().served_by(Some(silent()));
 
     assert!(offered(&models).is_empty(), "an unasked wire has no names");
     assert!(
@@ -260,8 +260,7 @@ fn a_wire_that_could_not_answer_offers_its_hint_and_no_names() {
 
 #[test]
 fn a_key_a_filter_box_has_no_use_for_moves_nothing() {
-    let mut models = Models::new();
-    models.served(listed());
+    let mut models = Models::new().served_by(Some(listed()));
 
     for key in [Key::Left, Key::Home, Key::Enter, Key::Quit, Key::Cancel] {
         assert!(
@@ -274,10 +273,10 @@ fn a_key_a_filter_box_has_no_use_for_moves_nothing() {
 }
 
 fn screen(capabilities: Capabilities) -> View {
-    let mut view = View::boot(capabilities);
+    let mut view = View::blank(capabilities);
     view.paste("/model");
     view.key(Key::Enter);
-    view.set_served(listed());
+    landed(&mut view, |facts| facts.served_by(listed()));
     assert_eq!(view.mode(), Mode::Models);
     view
 }

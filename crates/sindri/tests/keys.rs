@@ -18,7 +18,7 @@ fn typed(lines: &[&str]) -> Composer {
 }
 
 fn waiting(draft: &[&str], prompts: &[&str]) -> View {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     for prompt in prompts {
         view.paste(prompt);
         match view.key(Key::Enter) {
@@ -151,7 +151,7 @@ fn the_stats_screen_is_the_sixth_mode_and_answers_escape_and_nothing_else() {
 
 #[test]
 fn question_mark_opens_the_keys_screen_and_escape_closes_it() {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
 
     assert_eq!(view.mode(), Mode::Composer, "a launch opens on the draft");
     assert_eq!(
@@ -193,7 +193,7 @@ fn a_question_mark_with_a_draft_typed_is_a_glyph_and_not_a_screen() {
 fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
     // The screen is opened on an empty draft, because that is the only place `?` is a key: from there a
     // glyph that reached the draft under it would show.
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.key(Key::Char('?'));
 
     for key in [
@@ -351,7 +351,7 @@ fn ctrl_x_drops_the_newest_queued_prompt() {
 #[test]
 fn ctrl_x_with_nothing_queued_is_not_a_repaint() {
     assert_eq!(
-        View::boot(Capabilities::default()).key(Key::Drop),
+        View::blank(Capabilities::default()).key(Key::Drop),
         Outcome::Unchanged,
         "there is no newest queued prompt to drop, so the frame is the one it was"
     );
@@ -375,7 +375,7 @@ fn ctrl_x_is_bound_in_one_mode_and_one_row() {
 
 #[test]
 fn a_paste_while_a_screen_is_open_reaches_no_draft() {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.key(Key::Char('?'));
 
     view.paste("a prompt nobody can see");

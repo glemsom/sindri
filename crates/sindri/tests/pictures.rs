@@ -15,6 +15,7 @@ use ratatui::layout::{Position, Rect};
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::face;
+use sindri::facts;
 use sindri::graphics::{Ceiling, CellSize};
 use sindri::ledger::{self, Boot, Ctx, Facts, Rail};
 use sindri::mark::Cell;
@@ -399,6 +400,12 @@ fn a_picture_whose_words_are_wider_than_the_band_wraps_and_is_never_cut() {
 
 const SCREEN: (u16, u16) = (100, 30);
 
+/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
+/// it means to and hands the value back.
+fn landed(view: &mut View, change: impl FnOnce(facts::Facts) -> facts::Facts) {
+    view.handed(change(view.facts().clone()));
+}
+
 fn cell() -> CellSize {
     CellSize::new(10, 20)
 }
@@ -415,7 +422,9 @@ fn frame(workspace: &Path, text: &str, draws: bool) -> View {
         }],
         Scroll::Tail,
     );
-    view.set_workspace(workspace.to_path_buf());
+    landed(&mut view, |facts| {
+        facts.working(workspace.to_path_buf(), None)
+    });
     view
 }
 
@@ -503,13 +512,16 @@ fn splash(draws: bool) -> View {
         true => caps::at(cell()),
         false => Capabilities::default(),
     });
-    view.splash(Boot {
-        wire: Some(Wire::Anthropic),
-        model: Some(String::from("claude-sonnet-4-5")),
-        workspace: PathBuf::from("/home/glemsom/Documents/git/sindri"),
-        branch: Some(String::from("spec/1-capability")),
-        enforcement: Enforcement::Bubblewrap,
-    });
+    view.handed(facts::Facts::boot(
+        Boot {
+            wire: Some(Wire::Anthropic),
+            model: Some(String::from("claude-sonnet-4-5")),
+            workspace: PathBuf::from("/home/glemsom/Documents/git/sindri"),
+            branch: Some(String::from("spec/1-capability")),
+            enforcement: Enforcement::Bubblewrap,
+        },
+        None,
+    ));
     view
 }
 
@@ -525,7 +537,7 @@ fn railed(draws: bool, face: bool) -> View {
         Vec::new(),
         Scroll::Tail,
     );
-    view.set_facts(railed_facts());
+    landed(&mut view, |facts| facts.railed(railed_facts()));
     view
 }
 
@@ -726,7 +738,7 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
         ],
         Scroll::Tail,
     );
-    view.set_workspace(workspace.clone());
+    landed(&mut view, |facts| facts.working(workspace.clone(), None));
 
     painted_at(&mut view, SCREEN);
     assert_eq!(

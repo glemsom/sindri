@@ -221,3 +221,9 @@ places pictures, and whether Sindri's **face** is drawn over the rail. Probed on
 frame and handed to the frame whole; a terminal that reports nothing is drawn in the cells one that
 reports everything is, minus the facts it does not have.
 _Avoid_: Terminal features, environment, detection, caps
+
+**Frame facts**: the workspace and the ground it is judged against, the home the skills are read from,
+the served name, the run's record, the state the run is in, the facts the rail lays, the pulse at the
+head of the answer, and whether the window is being read, gathered as one value and handed to the
+frame whole: a frame handed no facts is the **splash screen**, and a frame handed a run's is that
+run's frame. _Avoid_: View model, props, session state, context.

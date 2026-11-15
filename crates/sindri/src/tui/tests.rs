@@ -198,7 +198,7 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
     let path = home.path().join("sindri").join("config.toml");
     let stage = Stage::open();
     let config = stage.config(&environment);
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.open_settings(&config);
 
     walk_to(&mut view, "model");
@@ -238,7 +238,7 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
     let path = home.path().join("sindri").join("config.toml");
     let stage = Stage::open();
     let config = stage.config(&environment);
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.open_settings(&config);
 
     walk_to(&mut view, "context_window");
@@ -273,13 +273,14 @@ const FRAME: (u16, u16) = (120, 40);
 /// things the face is drawn over and in.
 fn railed(config: &Config) -> View {
     let mut view = View::boot(crate::caps::pictured().faced(config.draws_face()));
-    view.splash(Boot {
+    let boot = Boot {
         wire: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-6")),
         workspace: PathBuf::from("/work/sindri"),
         branch: None,
         enforcement: Enforcement::Bubblewrap,
-    });
+    };
+    view.handed(Facts::boot(boot, None));
     view
 }
 
@@ -473,7 +474,7 @@ fn prompt_of(text: &str) -> Prompt {
 #[test]
 fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launch() {
     let stage = Stage::open();
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.paste("why does the retry test fail");
     let environment = std::collections::BTreeMap::new();
     let mut live = stage.launch(view, Config::default(), &environment);
@@ -504,7 +505,7 @@ fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
     let mut live = stage.launch(
-        View::boot(Capabilities::default()),
+        View::blank(Capabilities::default()),
         Config::default(),
         &environment,
     );
@@ -522,7 +523,7 @@ fn a_pass_with_no_run_in_flight_lands_nothing_and_ends_nothing() {
 #[test]
 fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() {
     let stage = Stage::open();
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
     // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
@@ -552,7 +553,7 @@ fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() 
 #[test]
 fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_their_own() {
     let stage = Stage::open();
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
     view.paste("and then the release check");
@@ -596,7 +597,7 @@ fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
     let environment = std::collections::BTreeMap::new();
     let signals = Signals::install().expect("a signal pipe");
     let mut live = stage.launch(
-        View::boot(Capabilities::default()),
+        View::blank(Capabilities::default()),
         Config::default(),
         &environment,
     );
@@ -614,7 +615,7 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
     let palette = Palette::TRUECOLOR;
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.paste("the draft the composer band is drawn from");
     // A stream that carries a window: nothing else raises a notification at all.
     let mut live = stage.launch_in_a_window(view, Config::default(), &environment);

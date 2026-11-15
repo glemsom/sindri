@@ -9,6 +9,7 @@ use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
+use sindri::facts;
 use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
 use sindri::ledger::Boot;
@@ -2516,6 +2517,12 @@ fn a_stop_read_back_from_a_transcript_is_drawn_with_the_reason_a_reader_missed()
     );
 }
 
+/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
+/// it means to and hands the value back.
+fn landed(view: &mut View, change: impl FnOnce(facts::Facts) -> facts::Facts) {
+    view.handed(change(view.facts().clone()));
+}
+
 /// The rows of a frame at `cols` by `rows`: what a reader is handed, painted through the one seam.
 fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
     let area = Rect::new(0, 0, cols, rows);
@@ -2539,10 +2546,12 @@ fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
 
 #[test]
 fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
-    let mut view = View::boot(Capabilities::default());
-    view.set_pulse(Some(Pulse::live(0)));
+    let mut view = View::blank(Capabilities::default());
+    landed(&mut view, |facts| facts.pulsed(Some(Pulse::live(0))));
     view.text("the first run's answer");
-    view.set_pulse(Some(Pulse::settled(&Stop::Final, 1_200)));
+    landed(&mut view, |facts| {
+        facts.pulsed(Some(Pulse::settled(&Stop::Final, 1_200)))
+    });
     view.stopped(&Stop::Final);
     let ended = frame(&mut view, 60, 12);
 
@@ -2556,7 +2565,7 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
     );
 
     view.settle();
-    view.set_pulse(Some(Pulse::live(0)));
+    landed(&mut view, |facts| facts.pulsed(Some(Pulse::live(0))));
     view.text("the second run is working");
     let after = frame(&mut view, 60, 12);
     let at = |said: &str| {
@@ -2575,13 +2584,16 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
 #[test]
 fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
     let mut view = View::boot(Capabilities::default());
-    view.splash(Boot {
-        wire: None,
-        model: None,
-        workspace: PathBuf::from("/work/agent"),
-        branch: None,
-        enforcement: Enforcement::Bubblewrap,
-    });
+    view.handed(facts::Facts::boot(
+        Boot {
+            wire: None,
+            model: None,
+            workspace: PathBuf::from("/work/agent"),
+            branch: None,
+            enforcement: Enforcement::Bubblewrap,
+        },
+        None,
+    ));
     view.paste("why does the retry test fail");
     let Outcome::Send(prompt) = view.key(Key::Enter) else {
         panic!("a draft typed and sent is the prompt a run is asked with");
@@ -2616,9 +2628,11 @@ fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
 #[test]
 fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
     let stop = failed();
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.text("the answer the run got before it stopped");
-    view.set_pulse(Some(Pulse::settled(&stop, 1_240)));
+    landed(&mut view, |facts| {
+        facts.pulsed(Some(Pulse::settled(&stop, 1_240)))
+    });
     view.stopped(&stop);
     let drawn = frame(&mut view, 40, 12);
     let whole = drawn.join("\n");

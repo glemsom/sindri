@@ -59,7 +59,7 @@ fn resolved(home: &TempDir) -> Config {
 }
 
 fn opened(home: &TempDir) -> View {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.open_settings(&resolved(home));
     view
 }
@@ -167,7 +167,7 @@ fn a_save_keeps_the_credential_the_wire_its_own_variable_gave_the_launch() {
         String::from("ANTHROPIC_API_KEY"),
         String::from("sk-ant-from-the-wires-variable"),
     );
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.open_settings(&Config::resolve(&environment, Flags::default()).expect("a config"));
     walk_to(&mut view, "model");
     view.key(Key::Clear);
@@ -231,7 +231,7 @@ fn an_emptied_row_unsets_the_key_so_the_environment_speaks_again() {
         String::from("SINDRI_MODEL"),
         String::from("from-the-environment"),
     );
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.open_settings(&Config::resolve(&environment, Flags::default()).expect("a config"));
     walk_to(&mut view, "model");
 
@@ -427,7 +427,7 @@ fn the_screen_starts_from_the_config_as_it_resolved_and_not_from_the_file_alone(
         String::from("SINDRI_MODEL"),
         String::from("from-the-environment"),
     );
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.open_settings(&Config::resolve(&environment, Flags::default()).expect("a config"));
     walk_to(&mut view, "thinking");
 

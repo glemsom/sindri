@@ -11,8 +11,9 @@ use std::time::Duration;
 use rustix::event::Timespec;
 use rustix::event::{PollFd, PollFlags, poll};
 use sindri::capability::Capabilities;
-use sindri::composer::{Outcome, Prompt, State};
+use sindri::composer::{Outcome, Prompt};
 use sindri::decode::{Decoder, Event};
+use sindri::facts::Facts;
 use sindri::pointer;
 use sindri::pulse::{self, Pulse};
 use sindri::settings::persist;
@@ -104,11 +105,9 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     // rather than dropped.
     let (capabilities, typed) = Capabilities::probed(&Process, &terminal, config.draws_face());
     let mut view = View::boot(capabilities);
-    view.set_workspace(workspace.clone());
-    // Read the way `launch` reads it, so the name `/skill:name` accepts and a name a run could
-    // call come from one catalog.
-    view.set_home(crate::launch::home());
-    view.splash(boot);
+    // Read the home the way `launch` reads it, so the name `/skill:name` accepts and a name a run
+    // could call come from one catalog.
+    view.handed(Facts::boot(boot, crate::launch::home()));
     // One telling for the whole launch, so the pace a status is told at is the launch's: the
     // screen it writes on is a second handle on the descriptor a frame is drawn on.
     let telling = match terminal.screen.try_clone() {
@@ -236,6 +235,13 @@ impl<'a> Loop<'a> {
         })
     }
 
+    /// A fact that landed on the frame, beside the facts it already draws: the frame is handed the
+    /// whole value, never the one fact.
+    fn landed(&mut self, change: impl FnOnce(Facts) -> Facts) {
+        let facts = change(self.view.facts().clone());
+        self.view.handed(facts);
+    }
+
     fn paint(&mut self) -> io::Result<()> {
         self.painted = paint(&mut self.canvas, &mut self.view)?;
         Ok(())
@@ -290,7 +296,8 @@ impl<'a> Loop<'a> {
             self.telling.due()?;
 
             if let Some(flight) = &self.running {
-                self.view.set_pulse(Some(Pulse::live(flight.elapsed_ms())));
+                let elapsed_ms = flight.elapsed_ms();
+                self.landed(|facts| facts.pulsed(Some(Pulse::live(elapsed_ms))));
             }
 
             // Read every pass and not only the pass the pipe woke: the word is a flag that is never
@@ -357,7 +364,7 @@ impl<'a> Loop<'a> {
             // The one report a reader never sent: the frame recedes while nobody is reading it,
             // and a run that ends while it is away is the one that raises a notification.
             Event::Focus(focused) => {
-                self.view.set_focused(focused);
+                self.landed(|facts| facts.focused(focused));
                 self.telling.focused(focused);
                 self.paint()?;
                 return Ok(None);
@@ -480,8 +487,7 @@ impl<'a> Loop<'a> {
         self.view.settle();
         // The ground a path a call names is drawn against is the one the run it starts will judge by.
         let ground = launching.ground();
-        self.view.set_ground(ground);
-        self.view.set_state(State::Running);
+        self.landed(|facts| facts.grounded(ground).running());
         let earlier = self.view.earlier();
         self.running = Some(Running::start(
             launching,
@@ -491,7 +497,7 @@ impl<'a> Loop<'a> {
         ));
         // The marker before the run has said anything: the first step of the cycle and no time on
         // the clock yet, so the frame a prompt is sent from already says a run has begun.
-        self.view.set_pulse(Some(Pulse::live(0)));
+        self.landed(|facts| facts.pulsed(Some(Pulse::live(0))));
         self.paint()?;
         self.told(Told::Asking { turn: 1 })?;
         Ok(())
@@ -547,12 +553,12 @@ impl<'a> Loop<'a> {
                 }
                 // A status changes no cell: it is written by the one thing here that owns a tty.
                 Report::Told(told) => self.told(told)?,
-                Report::Facts(facts) => {
-                    self.view.set_facts(facts);
+                Report::Facts(rail) => {
+                    self.landed(|facts| facts.railed(rail));
                     painted = true;
                 }
                 Report::Record(document) => {
-                    self.view.set_record(&document);
+                    self.landed(|facts| facts.recorded(&document));
                     painted = true;
                 }
                 // No cell: the transcript already drew the turn it keeps.
@@ -572,9 +578,8 @@ impl<'a> Loop<'a> {
             })?;
             // The last frame the run itself paints: once it is gone the wait goes back to forever,
             // and the settled marker stays on the frame for every later paint to draw.
-            self.view.set_pulse(Some(Pulse::settled(stop, elapsed_ms)));
+            self.landed(|facts| facts.pulsed(Some(Pulse::settled(stop, elapsed_ms))).idle());
             self.view.stopped(stop);
-            self.view.set_state(State::Idle);
             painted = true;
             if let Some(flight) = self.running.take()
                 && let Some(taken) = flight.handed_back()
@@ -597,7 +602,7 @@ impl<'a> Loop<'a> {
         let Some(listing) = landed else {
             return Ok(());
         };
-        self.view.set_served(listing);
+        self.landed(|facts| facts.served_by(listing));
         self.paint()?;
         if let Some(flight) = self.asking.take() {
             flight.joined();

@@ -27,9 +27,10 @@ impl Models {
         Models::default()
     }
 
-    pub fn served(&mut self, listing: Listing) {
-        self.listing = Some(listing);
-        self.selected = 0;
+    /// The same screen with the names the wire served, and the row the reader is on: the screen's own
+    /// copy of a fact the frame's value holds, taken when the value is handed.
+    pub fn served_by(self, listing: Option<Listing>) -> Models {
+        Models { listing, ..self }
     }
 
     pub fn waiting(&self) -> bool {

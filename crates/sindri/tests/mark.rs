@@ -153,7 +153,7 @@ fn ctrl_y_with_no_mark_copies_the_last_answer() {
 
 #[test]
 fn ctrl_y_on_a_frame_with_nothing_marked_and_no_answer_hands_out_nothing() {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
 
     // Painted first, because a copy reads the span the last paint drew.
     painted(&mut view);

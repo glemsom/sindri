@@ -9,9 +9,10 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
-use sindri::composer::{Composer, Key, Outcome, State};
+use sindri::composer::{Composer, Key, Outcome};
+use sindri::facts::Facts;
 use sindri::ink::{Faces, Ink, Look};
-use sindri::ledger::{Boot, Ctx, Facts};
+use sindri::ledger::{self, Boot, Ctx};
 use sindri::mark;
 use sindri::palette::Palette;
 use sindri::pen::{self, Clip};
@@ -39,6 +40,12 @@ pub const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 /// wire really served rather than from a list written down here.
 const SERVED: &str =
     include_str!("../../../sindri-core/tests/fixtures/providers/anthropic_models.json");
+
+/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
+/// it means to and hands the value back.
+pub fn landed(view: &mut View, change: impl FnOnce(Facts) -> Facts) {
+    view.handed(change(view.facts().clone()));
+}
 
 pub fn assert_frame(name: &str, cols: u16, rows: u16) {
     let fixture = format!("{name}-{cols}x{rows}");
@@ -87,7 +94,7 @@ fn named(name: &str) -> View {
         "fold" => fold(false),
         "fold-open" => fold(true),
         "fold-answer" => folded_beside_an_answer(),
-        "empty" => View::boot(Capabilities::default()),
+        "empty" => View::blank(Capabilities::default()),
         "typing" => View::typing(
             Capabilities::default(),
             draft(&["why does the retry test fail"]),
@@ -150,7 +157,7 @@ fn named(name: &str) -> View {
         "queue-long" => queue_long(),
         "draft-long" => draft_long(),
         "keys" => {
-            let mut view = View::boot(Capabilities::default());
+            let mut view = View::blank(Capabilities::default());
             view.key(Key::Char('?'));
             view
         }
@@ -161,13 +168,13 @@ fn named(name: &str) -> View {
         "files-none" => picking("zzz"),
         "models" => model_screen(),
         "settings" => {
-            let mut view = View::boot(Capabilities::default());
+            let mut view = View::blank(Capabilities::default());
             view.open_settings(&in_force());
             view
         }
         "settings-refused" => refused(),
         "stats" => stats(),
-        "footer" => View::boot(Capabilities::default()),
+        "footer" => View::blank(Capabilities::default()),
         "footer-live" => asked(),
         "footer-queue" => waiting(asked(), DURING_A_RUN),
         "picture" => pictured(),
@@ -198,7 +205,7 @@ fn pictured() -> View {
         )],
         Scroll::Back(70),
     );
-    view.set_workspace(workspace);
+    landed(&mut view, |facts| facts.working(workspace, None));
     view
 }
 
@@ -207,7 +214,7 @@ fn pictured() -> View {
 /// with it off.
 fn faced(face: bool) -> View {
     let mut view = View::of(crate::caps::pictured().faced(face), opening(), Scroll::Tail);
-    view.set_facts(facts());
+    landed(&mut view, |held| held.railed(facts()));
     view
 }
 
@@ -219,13 +226,16 @@ fn splash(draws: bool) -> View {
         true => crate::caps::pictured(),
         false => Capabilities::default(),
     });
-    view.splash(Boot {
-        wire: Some(Wire::Anthropic),
-        model: Some(String::from("claude-sonnet-4-5")),
-        workspace: PathBuf::from("/srv/workspace"),
-        branch: Some(String::from("main")),
-        enforcement: Enforcement::Bubblewrap,
-    });
+    view.handed(Facts::boot(
+        Boot {
+            wire: Some(Wire::Anthropic),
+            model: Some(String::from("claude-sonnet-4-5")),
+            workspace: PathBuf::from("/srv/workspace"),
+            branch: Some(String::from("main")),
+            enforcement: Enforcement::Bubblewrap,
+        },
+        None,
+    ));
     view
 }
 
@@ -242,10 +252,10 @@ fn model_screen() -> View {
     let listing = Client::over(replay, SecretSet::default())
         .waits(|_| {})
         .served(&at, &Credential::new("sk-ant-recorded"), &at);
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.paste("/model");
     view.key(Key::Enter);
-    view.set_served(listing);
+    landed(&mut view, |facts| facts.served_by(listing));
     view
 }
 
@@ -321,7 +331,7 @@ fn ways() -> View {
         ],
         Scroll::Tail,
     );
-    view.set_ground(Some(ground(workspace)));
+    landed(&mut view, |facts| facts.grounded(Some(ground(workspace))));
     view
 }
 
@@ -368,8 +378,9 @@ fn tools() -> View {
         ],
         Scroll::Tail,
     );
-    view.set_ground(Some(ground(workspace)));
-    view.set_state(State::Running);
+    landed(&mut view, |facts| {
+        facts.grounded(Some(ground(workspace))).running()
+    });
     view
 }
 
@@ -425,8 +436,10 @@ fn picking(query: &str) -> View {
     }
     std::fs::write(root.path().join(".gitignore"), "target/\n*.local.md\n").expect("a gitignore");
 
-    let mut view = View::boot(Capabilities::default());
-    view.set_workspace(root.path().to_path_buf());
+    let mut view = View::blank(Capabilities::default());
+    landed(&mut view, |facts| {
+        facts.working(root.path().to_path_buf(), None)
+    });
     view.key(Key::Char('@'));
     for glyph in query.chars() {
         view.key(Key::Char(glyph));
@@ -491,9 +504,10 @@ fn stats() -> View {
         .expect("a SKILL.md");
     }
 
-    let mut view = View::boot(Capabilities::default());
-    view.set_workspace(root.path().to_path_buf());
-    view.set_home(None);
+    let mut view = View::blank(Capabilities::default());
+    landed(&mut view, |facts| {
+        facts.working(root.path().to_path_buf(), None)
+    });
     for name in ["bash", "records"] {
         view.paste(&format!("/skill:{name}"));
         assert_eq!(
@@ -502,8 +516,7 @@ fn stats() -> View {
             "a skill the catalog offers is one the frame loads"
         );
     }
-    view.set_facts(facts());
-    view.set_record(&document());
+    landed(&mut view, |held| held.railed(facts()).recorded(&document()));
     view.paste("/stats");
     assert_eq!(
         view.key(Key::Enter),
@@ -565,7 +578,7 @@ fn thumbing(scroll: Scroll) -> View {
 
 fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
     let mut view = View::of(Capabilities::default(), entries, scroll);
-    view.set_facts(facts());
+    landed(&mut view, |held| held.railed(facts()));
     view
 }
 
@@ -573,17 +586,18 @@ fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
 /// the rail's own row steps with the frame's marker.
 fn live(entries: Vec<Entry>, scroll: Scroll) -> View {
     let mut view = running(entries, scroll);
-    view.set_facts(Facts {
+    let rail = ledger::Facts {
         state: Some(RunState::Running),
         ..facts()
+    };
+    landed(&mut view, |held| {
+        held.railed(rail).pulsed(Some(Pulse::live(4_200))).running()
     });
-    view.set_pulse(Some(Pulse::live(4_200)));
-    view.set_state(State::Running);
     view
 }
 
-pub fn facts() -> Facts {
-    Facts {
+pub fn facts() -> ledger::Facts {
+    ledger::Facts {
         wire: Some(String::from("anthropic")),
         model: Some(String::from("claude-sonnet-4-5-20250929")),
         think: Some(String::from("high")),
@@ -603,7 +617,7 @@ pub fn facts() -> Facts {
         temp: Some(PathBuf::from(
             "/home/glemsom/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
         )),
-        ..Facts::default()
+        ..ledger::Facts::default()
     }
 }
 
@@ -751,7 +765,7 @@ fn streaming() -> View {
     let mut entries = transcript();
     entries.push(Entry::Turn { turn: 6 });
     let mut view = running(entries, Scroll::Tail);
-    view.set_state(State::Running);
+    landed(&mut view, |facts| facts.running());
     for fragment in [
         "The ticket asks whether the tail survives. ",
         "A fence still streaming is a code block, ",
@@ -797,14 +811,18 @@ fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
     for fragment in said {
         view.text(fragment);
     }
-    if state == RunState::Running {
-        view.set_state(State::Running);
-    }
-    view.set_facts(Facts {
+    let running = state == RunState::Running;
+    let rail = ledger::Facts {
         state: Some(state),
         ..facts()
+    };
+    landed(&mut view, |held| {
+        let held = held.railed(rail).pulsed(Some(pulse));
+        match running {
+            true => held.running(),
+            false => held.idle(),
+        }
     });
-    view.set_pulse(Some(pulse));
     view
 }
 
@@ -867,7 +885,7 @@ const DURING_A_RUN: &[&str] = &[
 
 fn queue() -> View {
     let mut view = running(transcript(), Scroll::Tail);
-    view.set_state(State::Running);
+    landed(&mut view, |facts| facts.running());
     let mut view = waiting(view, DURING_A_RUN);
     view.paste("and this one while they wait");
     view
@@ -887,7 +905,7 @@ const SEVEN_QUEUED: &[&str] = &[
 
 fn queue_long() -> View {
     let mut view = running(transcript(), Scroll::Tail);
-    view.set_state(State::Running);
+    landed(&mut view, |facts| facts.running());
     let mut view = waiting(view, SEVEN_QUEUED);
     view.paste("and this one while they wait");
     view
@@ -924,10 +942,11 @@ fn waiting(mut view: View, prompts: &[&str]) -> View {
 
 /// The frame a prompt just sent leaves: a run in flight and nothing said yet.
 fn asked() -> View {
-    let mut view = View::boot(Capabilities::default());
+    let mut view = View::blank(Capabilities::default());
     view.settle();
-    view.set_state(State::Running);
-    view.set_pulse(Some(Pulse::live(0)));
+    landed(&mut view, |facts| {
+        facts.running().pulsed(Some(Pulse::live(0)))
+    });
     view
 }
 
