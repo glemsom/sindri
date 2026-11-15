@@ -186,15 +186,16 @@ impl Drawn {
     }
 }
 
-/// What one paint pass tells the terminal and what it drew: the destinations the frame names, the
-/// runs it draws at more than one cell, the rows a press chooses, and the transcript's own record.
-/// No cell carries any of it.
+/// What one paint pass tells the terminal and what it drew: where it laid the frame out, the
+/// destinations the frame names, the runs it draws at more than one cell, the rows a press chooses,
+/// and the transcript's own record. No cell carries any of it.
 #[derive(Debug)]
 pub struct Painted {
     links: Links,
     sizes: Sizes,
     presses: Vec<Press>,
     drawn: Drawn,
+    layout: Option<Layout>,
 }
 
 impl Painted {
@@ -205,6 +206,7 @@ impl Painted {
             sizes: Sizes::none(),
             presses: Vec::new(),
             drawn: Drawn::none(),
+            layout: None,
         }
     }
 
@@ -221,6 +223,12 @@ impl Painted {
     /// What this pass drew of the transcript, which is what the frame's own keys are answered from.
     pub fn drawn(&self) -> &Drawn {
         &self.drawn
+    }
+
+    /// Where this pass drew the frame: the bands it shared out and the body it gave a card, and
+    /// nothing at all for a pass that has laid no frame out yet.
+    pub fn layout(&self) -> Option<Layout> {
+        self.layout
     }
 
     /// The row a press at `at` landed on, as the list its screen keeps names it, when it landed on one.
@@ -878,14 +886,14 @@ impl View {
         true
     }
 
-    /// Paints this frame into `area`, and hands back what the pass told the terminal. Painting is
-    /// what tells the row cache how wide the transcript is, so a resize invalidates it here and the
-    /// same pass reflows; the composer's rows are measured when the frame is drawn.
+    /// Paints this frame into `area`, and hands back what the pass told the terminal and where it
+    /// drew. Painting is what tells the row cache how wide the transcript is, so a resize
+    /// invalidates it here and the same pass reflows; the composer's rows are measured as it draws.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let mut painted = Painted::none();
         pen::claim(buffer, area, self.capabilities.palette().ground(None));
         self.composer.set_room(View::room(area.width));
-        let bands = bands(
+        let mut layout = bands(
             area,
             self.composer.rows(),
             self.queue.rows(),
@@ -893,7 +901,8 @@ impl View {
         );
         // The rail's share is taken from the transcript's band before the transcript is laid out
         // in what is left: a row's width is the width it is drawn at.
-        let share = self.split(bands.transcript);
+        let share = self.split(layout.transcript);
+        layout.transcript = share.transcript;
         if let Some((shape, band)) = share.rail {
             // A ledger carries the face wherever it is drawn, and a strip is one row of facts with
             // no band to carry one in: a terminal that places no picture, or a config that turned
@@ -936,9 +945,9 @@ impl View {
                 &mut painted.sizes,
             );
         }
-        self.notice_band(bands.notice, buffer);
-        self.composer_band(bands.composer, bands.queue, buffer);
-        self.footer(bands.footer, buffer);
+        self.notice_band(layout.notice, buffer);
+        self.composer_band(layout.composer, layout.queue, buffer);
+        self.footer(layout.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
         // reader sees the transcript they will return to, and sees that it is out of reach.
         let screen = self.stack.top();
@@ -950,6 +959,7 @@ impl View {
                 .settle(share.transcript, buffer, &self.capabilities.palette());
             self.highlight(share.transcript, buffer, drawn.span());
             self.note(&mut painted, drawn);
+            painted.layout = Some(layout);
             return painted;
         };
         // The band under a card takes no key, so the frame under it is no way to anywhere — and no
@@ -968,6 +978,8 @@ impl View {
             &self.capabilities.palette(),
         );
         painted.presses = body.paint(held, buffer, &self.capabilities.palette());
+        layout.card = Some(held);
+        painted.layout = Some(layout);
         painted
     }
 
@@ -1284,35 +1296,26 @@ impl View {
         }
     }
 
-    /// Where the terminal's own cursor belongs, and nothing when the caret has run past the
-    /// band's edge. The caret is never a cell of the frame: an ink names a foreground only, so
-    /// a caret drawn as a cell would be invisible on the space it usually sits on.
-    pub fn cursor(&self, area: Rect) -> Option<(u16, u16)> {
+    /// Where the terminal's own cursor belongs, read off the band the pass handed back, and nothing
+    /// when the caret has run past that edge. The caret is never a cell of the frame: an ink names a
+    /// foreground only, so a caret drawn as a cell would be invisible on the space it sits on.
+    pub fn cursor(&self, painted: &Painted) -> Option<(u16, u16)> {
         // The draft behind a card is dimmed and takes no key, so a caret there would point at a
         // cell the reader cannot type into.
         if self.stack.modal().is_some() {
             return None;
         }
-        let bands = bands(
-            area,
-            self.composer.rows(),
-            self.queue.rows(),
-            self.notice_rows(),
-        );
+        let band = painted.layout()?.composer;
         let (row, column) = self.composer.caret();
-        let y = bands
-            .composer
-            .y
-            .checked_add(HAIRLINE_ROWS)?
-            .checked_add(row)?;
+        let y = band.y.checked_add(HAIRLINE_ROWS)?.checked_add(row)?;
         // A caret past the band's last cell waits on that cell, the way a terminal keeps the cursor
         // at its right margin rather than giving it up.
-        let x = area
+        let x = band
             .x
             .checked_add(pen::cells(INDENT))?
             .checked_add(column)?
-            .min(area.right().saturating_sub(1));
-        (area.width > 0 && y < bands.composer.bottom()).then_some((x, y))
+            .min(band.right().saturating_sub(1));
+        (band.width > 0 && y < band.bottom()).then_some((x, y))
     }
 
     /// The columns the draft's words have: the band's width less the gutter an answer is set from.
@@ -1378,13 +1381,23 @@ enum Page {
     Forward,
 }
 
-struct Bands {
-    transcript: Rect,
+/// Where a paint pass put each part of the frame: the bands it shared the rows out in, the cells it
+/// gave the transcript, and the body it gave a card when one was drawn. The caret is read off it
+/// rather than laid out a second time.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Layout {
+    /// The rows the transcript was drawn in, after the rail took its share.
+    pub transcript: Rect,
     /// The composer's band's last rows: the queue's, and none at all while nothing waits.
-    queue: Rect,
-    notice: Rect,
-    composer: Rect,
-    footer: Rect,
+    pub queue: Rect,
+    /// The one row saying how far back from the tail the frame stands, and none at the tail.
+    pub notice: Rect,
+    /// The draft's rows under its edge, with the queue's rows at their foot.
+    pub composer: Rect,
+    /// The frame's last row: the hints of what a key does this frame.
+    pub footer: Rect,
+    /// The cells a card's body was drawn in, and none while no card was drawn.
+    pub card: Option<Rect>,
 }
 
 /// Places the picture `row` stands on over the block of cells the transcript reserved. A
@@ -1413,7 +1426,7 @@ fn place(
     pictures.place(picture, cell, block, buffer);
 }
 
-fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> Bands {
+fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> Layout {
     let footer = area.height.min(1);
     let above = area.height.saturating_sub(footer);
     let composer = composer_rows.min(above);
@@ -1424,7 +1437,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> B
     let notice_y = area.y.saturating_add(transcript);
     let composer_y = notice_y.saturating_add(notice);
     let queue_y = composer_y.saturating_add(composer);
-    Bands {
+    Layout {
         transcript: Rect {
             height: transcript,
             ..area
@@ -1449,6 +1462,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> B
             height: footer,
             ..area
         },
+        card: None,
     }
 }
 
@@ -3990,10 +4004,12 @@ mod tests {
         );
         view.paste("first line\nsecond line");
         let area = screen(40, 12);
+        let mut buffer = Buffer::empty(area);
+        let painted = view.paint(area, &mut buffer);
 
         assert_eq!(view.composer().rows(), 3);
         assert_eq!(
-            view.cursor(area),
+            view.cursor(&painted),
             Some((13, 10)),
             "the caret's column is the one it takes in the draft, and the draft is set two \
              columns in"
@@ -4504,7 +4520,7 @@ mod tests {
         view.paste(&draft.join("\n"));
         let area = screen(120, 24);
         let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
+        let painted = view.paint(area, &mut buffer);
         let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
 
         assert_eq!(
@@ -4520,7 +4536,7 @@ mod tests {
             "the count is the dim ink"
         );
         let (_, y) = view
-            .cursor(area)
+            .cursor(&painted)
             .expect("a caret is drawn for a long draft");
         assert_eq!(
             y,
@@ -4606,7 +4622,7 @@ mod tests {
 
         let area = screen(120, 40);
         let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
+        let painted = view.paint(area, &mut buffer);
 
         let band = bands(area, view.composer().rows(), view.queue().rows(), 0).composer;
         let (drawn, column) = place_of(&buffer, "a draft of mine");
@@ -4621,7 +4637,7 @@ mod tests {
              they will return to"
         );
         assert_eq!(
-            view.cursor(area),
+            view.cursor(&painted),
             None,
             "and no caret waits in a band that takes no key"
         );
@@ -4658,15 +4674,18 @@ mod tests {
             Transcript::none(),
         );
         let area = screen(40, 12);
+        let mut buffer = Buffer::empty(area);
+        let painted = view.paint(area, &mut buffer);
         assert!(
-            view.cursor(area).is_some(),
+            view.cursor(&painted).is_some(),
             "the empty draft's caret has a cell before the screen opens"
         );
 
         view.key(Key::Char('?'));
+        let painted = view.paint(area, &mut buffer);
 
         assert_eq!(
-            view.cursor(area),
+            view.cursor(&painted),
             None,
             "a screen is the whole frame and has no draft in it, so the caret is not left \
              floating over a list"
@@ -4675,15 +4694,8 @@ mod tests {
 
     #[test]
     fn a_draft_holding_a_wide_glyph_puts_the_caret_in_the_column_the_glyph_occupies() {
-        let mut view = View::of(
-            Capabilities::default(),
-            Facts::default().asked(),
-            Transcript::none(),
-        );
-        view.paste("日本");
-
         assert_eq!(
-            view.cursor(screen(40, 12)),
+            caret_at("日本", 40, 12),
             Some((6, 10)),
             "two wide glyphs take four columns, so the caret waits in the fourth from the \
              gutter the draft is set in"
@@ -4701,8 +4713,8 @@ mod tests {
         view.paste(draft);
         let area = screen(cols, rows);
         let mut buffer = Buffer::empty(area);
-        view.paint(area, &mut buffer);
-        view.cursor(area)
+        let painted = view.paint(area, &mut buffer);
+        view.cursor(&painted)
     }
 
     #[test]

@@ -313,7 +313,7 @@ pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<Pain
     canvas.autoresize()?;
     let area = canvas.current_buffer_mut().area;
     let painted = view.paint(area, canvas.current_buffer_mut());
-    let cursor = view.cursor(area);
+    let cursor = view.cursor(&painted);
     canvas.backend_mut().links(painted.links());
     canvas.backend_mut().sizes(painted.sizes());
     canvas.draw(|frame| {
@@ -899,8 +899,8 @@ mod tests {
             false => {
                 canvas
                     .draw(|frame| {
-                        view.paint(frame.area(), frame.buffer_mut());
-                        if let Some(at) = view.cursor(frame.area()) {
+                        let painted = view.paint(frame.area(), frame.buffer_mut());
+                        if let Some(at) = view.cursor(&painted) {
                             frame.set_cursor_position(at);
                         }
                     })
