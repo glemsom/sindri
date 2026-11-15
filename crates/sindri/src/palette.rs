@@ -70,9 +70,9 @@ impl Palette {
             plain: (Color::Indexed(255), Modifier::empty()),
             dim: (Color::Indexed(246), Modifier::empty()),
             muted: (Color::Indexed(250), Modifier::empty()),
-            accent: (Color::Indexed(179), Modifier::empty()),
-            ok: (Color::Indexed(108), Modifier::empty()),
-            err: (Color::Indexed(174), Modifier::empty()),
+            accent: (Color::Indexed(80), Modifier::empty()),
+            ok: (Color::Indexed(115), Modifier::empty()),
+            err: (Color::Indexed(210), Modifier::empty()),
             mark: (Color::Reset, Modifier::REVERSED),
         },
         bands: Bands {
@@ -95,27 +95,27 @@ impl Palette {
     /// The design as it was drawn.
     pub const TRUECOLOR: Palette = Palette {
         inks: Inks {
-            plain: (Color::Rgb(233, 241, 251), Modifier::empty()),
-            dim: (Color::Rgb(141, 149, 159), Modifier::empty()),
-            muted: (Color::Rgb(181, 189, 199), Modifier::empty()),
-            accent: (Color::Rgb(226, 168, 96), Modifier::empty()),
-            ok: (Color::Rgb(140, 184, 132), Modifier::empty()),
-            err: (Color::Rgb(208, 104, 106), Modifier::empty()),
+            plain: (Color::Rgb(231, 240, 250), Modifier::empty()),
+            dim: (Color::Rgb(136, 146, 156), Modifier::empty()),
+            muted: (Color::Rgb(175, 185, 195), Modifier::empty()),
+            accent: (Color::Rgb(92, 200, 232), Modifier::empty()),
+            ok: (Color::Rgb(127, 211, 166), Modifier::empty()),
+            err: (Color::Rgb(242, 128, 122), Modifier::empty()),
             mark: (Color::Reset, Modifier::REVERSED),
         },
         bands: Bands {
-            rail: Color::Rgb(26, 30, 36),
-            composer: Color::Rgb(32, 37, 44),
-            well: Color::Rgb(20, 23, 28),
+            rail: Color::Rgb(19, 27, 37),
+            composer: Color::Rgb(25, 35, 47),
+            well: Color::Rgb(14, 21, 29),
         },
         ramp: Ramp {
             steps: [
-                Color::Rgb(48, 54, 64),
-                Color::Rgb(40, 45, 54),
-                Color::Rgb(32, 37, 44),
-                Color::Rgb(26, 30, 36),
-                Color::Rgb(20, 23, 28),
-                Color::Rgb(12, 14, 18),
+                Color::Rgb(36, 49, 63),
+                Color::Rgb(30, 42, 55),
+                Color::Rgb(25, 35, 47),
+                Color::Rgb(19, 27, 37),
+                Color::Rgb(14, 21, 29),
+                Color::Rgb(8, 13, 19),
             ],
         },
     };
@@ -404,6 +404,53 @@ mod tests {
             assert!(
                 matches!(Palette::TRUECOLOR.edge(edge), Color::Rgb(..)),
                 "{edge:?} is the colour the design was drawn in"
+            );
+        }
+    }
+
+    #[test]
+    fn every_palette_the_probe_hands_out_is_a_spelling_the_floor_and_the_ladder_are_proved_on() {
+        let mut picked: Vec<Palette> = Vec::new();
+
+        // The vocabulary the probe reads, so every spelling it accepts and every one it turns down
+        // is walked: a palette gated on one of these cannot land unproved.
+        let no_colour = [None, Some("1")];
+        let terms = [
+            None,
+            Some(""),
+            Some("dumb"),
+            Some("screen-256color"),
+            Some("xterm-direct"),
+            Some("xterm-truecolor"),
+        ];
+        let colorterms = [None, Some("truecolor"), Some("24bit"), Some("24-bit")];
+
+        for no_color in no_colour {
+            for term in terms {
+                for colorterm in colorterms {
+                    let palette = Palette::probed(no_color, term, colorterm);
+                    if palette == Palette::SLOTS {
+                        continue;
+                    }
+                    assert!(
+                        SPELLED.iter().any(|(_, spelled)| *spelled == palette),
+                        "the probe hands NO_COLOR={no_color:?} TERM={term:?} \
+                         COLORTERM={colorterm:?} a palette no spelling in SPELLED names, so a \
+                         third palette lands without the legibility floor and the ladder being \
+                         re-proved on it"
+                    );
+                    if !picked.contains(&palette) {
+                        picked.push(palette);
+                    }
+                }
+            }
+        }
+
+        for (spelling, palette) in SPELLED {
+            assert!(
+                picked.contains(&palette),
+                "{spelling} is a spelling these tests prove and no fact the probe reads picks it, \
+                 so it names a palette no terminal is ever drawn in"
             );
         }
     }
