@@ -276,8 +276,8 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
 
 const FRAME: (u16, u16) = (120, 40);
 
-/// The frame a launch opens on, with a rail of facts and a terminal that places pictures: the rail
-/// the face is drawn over, beside the band no row of it is taken from.
+/// The frame a launch opens on, with a rail of facts and a terminal that places pictures: the face
+/// is drawn over the rail's top rows and takes no row of the block's band.
 fn railed(config: &Config) -> View {
     let boot = Boot {
         wire: Some(Wire::Anthropic),

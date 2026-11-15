@@ -1,6 +1,6 @@
 //! Sindri's face: the picture the binary carries instead of the workspace holding it. It is
-//! measured from its own header and drawn as the decoration it is, so a frame whose terminal
-//! places no picture is given neither a cell nor a word for it.
+//! measured from its own header and drawn as the decoration it is over the rail's top rows, so a
+//! frame whose terminal places no picture is given neither a cell nor a word for it.
 
 use crate::graphics::Ceiling;
 use crate::picture::{self, Picture, Surface};

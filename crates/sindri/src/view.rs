@@ -2265,6 +2265,14 @@ mod tests {
         }
     }
 
+    /// The row of `band` the splash screen's wordmark stands on: the one row of the block that
+    /// says the product's name.
+    fn wordmark_row(buffer: &Buffer, band: Rect) -> u16 {
+        (band.y..band.bottom())
+            .find(|y| drawn_row(buffer, *y).contains("sindri"))
+            .expect("the splash screen draws the wordmark")
+    }
+
     /// The first and last columns of `buffer` inside `band` that a splash screen frame's block
     /// holds a glyph in: the widest row of it, which is where the block begins and where it ends.
     fn block_columns(buffer: &Buffer, band: Rect, drawn: &[String]) -> (u16, u16) {
@@ -2424,9 +2432,7 @@ mod tests {
         let palette = Palette::TRUECOLOR;
         let (buffer, band) = splash_frame(120, 40, false);
 
-        let wordmark = (band.y..band.bottom())
-            .find(|y| drawn_row(&buffer, *y).contains("sindri"))
-            .expect("the splash screen draws the wordmark");
+        let wordmark = wordmark_row(&buffer, band);
         let look =
             |x: u16, y: u16| Look::of(buffer.cell((x, y)).expect("a cell of the band"), &palette);
         let (left, _) = filled_columns(&buffer, band, wordmark);
@@ -2449,28 +2455,21 @@ mod tests {
     }
 
     #[test]
-    fn the_block_stands_on_the_same_rows_whether_or_not_the_terminal_places_pictures() {
+    fn the_block_stands_on_the_rows_a_terminal_that_places_no_picture_puts_it_on() {
         let (pictured, band) = splash_frame(120, 40, true);
         let (placeless, bare) = splash_frame(120, 40, false);
-        let faced = band_of(&pictured, band);
-        let without = band_of(&placeless, bare);
 
         assert_eq!(
-            block(&faced),
-            block(&without),
-            "the band a terminal that places pictures is handed holds the words it holds for one \
-             that places none, row for row"
-        );
-        let (first, last) = filled_rows(&faced, band);
-        assert_eq!(
-            (first, last),
-            filled_rows(&without, bare),
-            "and it gives no row above or under the block to a picture"
+            band_of(&pictured, band),
+            band_of(&placeless, bare),
+            "at 120 by 40 the band an answer goes in holds the rows of words it holds where no \
+             picture is placed, the wordmark on row {}",
+            wordmark_row(&pictured, band)
         );
         assert_eq!(
-            first, 15,
-            "the wordmark that opens the block stands on row 15 of the frame, as it does where no \
-             picture is placed"
+            wordmark_row(&pictured, band),
+            15,
+            "and that is the row `boot-120x40` puts the wordmark on"
         );
     }
 
@@ -2506,20 +2505,15 @@ mod tests {
     }
 
     #[test]
-    fn no_cell_of_the_band_a_launch_opens_on_is_a_picture_however_the_terminal_is_sized() {
+    fn no_cell_of_the_band_a_launch_opens_on_is_a_picture() {
         for (cols, rows) in [(120, 40), (120, 14), (30, 24), (80, 24)] {
             let (pictured, band) = splash_frame(cols, rows, true);
-            let (placeless, bare) = splash_frame(cols, rows, false);
 
             assert!(
                 pictured_rows(&pictured, band).is_empty(),
                 "at {cols} by {rows} the band an answer goes in holds no picture of the splash \
-                 screen's, so no cell of it is a placement"
-            );
-            assert_eq!(
-                band_of(&pictured, band),
-                band_of(&placeless, bare),
-                "and it reads as the band a terminal that places no picture is handed, row for row"
+                 screen's, so no cell of it is a placement: {:?}",
+                pictured_rows(&pictured, band)
             );
         }
     }

@@ -1,7 +1,6 @@
 //! The splash screen: the wordmark, the one line that says what the product is, and three commands
-//! with the line that explains each, set as one block and centred in the band an answer would go,
-//! with the rail beside it and nothing over it. The launch's own paint pass, never an entry, so a
-//! quit there leaves no record.
+//! with the line that explains each, set as one block and centred in the band an answer would go.
+//! The launch's own paint pass, never an entry, so a quit there leaves no record.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;

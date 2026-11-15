@@ -1129,8 +1129,6 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let rail = rail_band(120, 40);
     let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
 
-    // The rail carries the frame's one face, so the rail's rows are the ones a placement covers in
-    // the rail's own columns.
     let pictured_in_rail = |y: u16| -> Vec<u16> {
         pictured_cols(&with, y)
             .into_iter()
