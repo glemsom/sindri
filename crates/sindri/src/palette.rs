@@ -409,6 +409,53 @@ mod tests {
     }
 
     #[test]
+    fn every_palette_the_probe_hands_out_is_a_spelling_the_floor_and_the_ladder_are_proved_on() {
+        let mut picked: Vec<Palette> = Vec::new();
+
+        // The vocabulary the probe reads, so every spelling it accepts and every one it turns down
+        // is walked: a palette gated on one of these cannot land unproved.
+        let no_colour = [None, Some("1")];
+        let terms = [
+            None,
+            Some(""),
+            Some("dumb"),
+            Some("screen-256color"),
+            Some("xterm-direct"),
+            Some("xterm-truecolor"),
+        ];
+        let colorterms = [None, Some("truecolor"), Some("24bit"), Some("24-bit")];
+
+        for no_color in no_colour {
+            for term in terms {
+                for colorterm in colorterms {
+                    let palette = Palette::probed(no_color, term, colorterm);
+                    if palette == Palette::SLOTS {
+                        continue;
+                    }
+                    assert!(
+                        SPELLED.iter().any(|(_, spelled)| *spelled == palette),
+                        "the probe hands NO_COLOR={no_color:?} TERM={term:?} \
+                         COLORTERM={colorterm:?} a palette no spelling in SPELLED names, so a \
+                         third palette lands without the legibility floor and the ladder being \
+                         re-proved on it"
+                    );
+                    if !picked.contains(&palette) {
+                        picked.push(palette);
+                    }
+                }
+            }
+        }
+
+        for (spelling, palette) in SPELLED {
+            assert!(
+                picked.contains(&palette),
+                "{spelling} is a spelling these tests prove and no fact the probe reads picks it, \
+                 so it names a palette no terminal is ever drawn in"
+            );
+        }
+    }
+
+    #[test]
     fn the_lit_edge_and_the_shadow_are_surfaces_no_ink_is_drawn_in() {
         for (spelling, palette) in SPELLED {
             let lit = palette.edge(Edge::Lit);
