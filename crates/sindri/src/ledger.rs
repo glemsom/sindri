@@ -1381,10 +1381,10 @@ const SCREEN_BLOCKS: [(&str, &[Kind]); 8] = [
     ("session", &[Kind::Session, Kind::Temp]),
 ];
 
-/// The screen's blocks as the columns hold them: a block is drawn whole where it fits or moved on to
-/// the next column, never split, so a block's name stands over every row it belongs to.
+/// The screen's blocks flowed into the columns that hold them, and the rows no column could: a block is
+/// never split, so a block's name stands over every row it belongs to.
 #[derive(Default)]
-struct Sheet {
+struct Flow {
     columns: Vec<Column>,
     /// The rows no column could hold, counted under the last column's last row.
     went: usize,
@@ -1408,10 +1408,10 @@ struct Placed {
 /// The screen's blocks flowed into columns, the narrowest the band holds a whole column in: the
 /// columns are there for the room they add, so a wider band never narrows one, and a block whole is
 /// what a column holds or what it hands on.
-fn sheet(known: &[Fact], area: Rect) -> Sheet {
+fn sheet(known: &[Fact], area: Rect) -> Flow {
     let blocks = blocks(known);
     if area.width == 0 || area.height == 0 || blocks.is_empty() {
-        return Sheet::default();
+        return Flow::default();
     }
     let holds = columns(area.width, blocks.len());
     for count in 1..=holds {
@@ -1458,7 +1458,7 @@ fn flow(
     count: usize,
     width: u16,
     rows: u16,
-) -> Sheet {
+) -> Flow {
     let mut columns: Vec<Column> = (0..count)
         .map(|at| Column {
             x: area
@@ -1505,7 +1505,7 @@ fn flow(
         });
     }
     columns.retain(|column| !column.blocks.is_empty());
-    Sheet { columns, went }
+    Flow { columns, went }
 }
 
 /// The columns a band `width` wide is cut into: as many as hold a whole one, and never more than
