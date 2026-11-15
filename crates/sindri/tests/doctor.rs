@@ -155,7 +155,7 @@ const WIRE_KEY: &str = "sk-ant-a-key-no-report-may-draw";
 #[test]
 fn a_key_in_the_wires_own_variable_is_a_run_the_doctor_describes() {
     let ground = Ground::new();
-    let path = std::env::var("PATH").expect("this machine has a PATH");
+    let path = ground.machine(PROVES);
 
     let output = run(ground
         .command(&path)
@@ -208,7 +208,7 @@ fn every_skill_found_is_listed_with_the_scope_it_came_from() {
     let ground = Ground::new();
     ground.user_skill("greet", "say hello to whoever is there");
     ground.repo_skill("review", "read the diff before you commit it");
-    let path = std::env::var("PATH").expect("this machine has a PATH");
+    let path = ground.machine(PROVES);
 
     let output = run(ground.command(&path).args(["doctor"]));
 
@@ -253,7 +253,7 @@ fn a_name_of_wide_glyphs_leaves_the_column_every_description_starts_in() {
     let ground = Ground::new();
     ground.repo_skill("日本語", "the row that says so");
     ground.repo_skill("review", "read the diff before you commit it");
-    let path = std::env::var("PATH").expect("this machine has a PATH");
+    let path = ground.machine(PROVES);
 
     let output = run(ground.command(&path).args(["doctor"]));
     let out = text(&output.stdout);
@@ -283,7 +283,7 @@ fn a_shadowed_name_reports_both_sides_and_the_nearer_scope_wins() {
     let ground = Ground::new();
     ground.user_skill("greet", "the user's own hello");
     ground.repo_skill("greet", "the repository's hello");
-    let path = std::env::var("PATH").expect("this machine has a PATH");
+    let path = ground.machine(PROVES);
 
     let output = run(ground.command(&path).args(["doctor"]));
 
@@ -471,7 +471,7 @@ fn a_skill_file_that_will_not_parse_is_reported_where_it_lies() {
     let ground = Ground::new();
     let broken = ground.broken_repo_skill("nameless");
     ground.repo_skill("review", "read the diff before you commit it");
-    let path = std::env::var("PATH").expect("this machine has a PATH");
+    let path = ground.machine(PROVES);
 
     let output = run(ground.command(&path).args(["doctor"]));
 
@@ -498,7 +498,7 @@ fn a_skill_file_that_will_not_parse_is_reported_where_it_lies() {
 fn a_builtin_shadowed_by_a_nearer_scope_is_named_by_the_scope_alone() {
     let ground = Ground::new();
     ground.repo_skill("commit-message", "the repository's own way with a subject");
-    let path = std::env::var("PATH").expect("this machine has a PATH");
+    let path = ground.machine(PROVES);
 
     let output = run(ground.command(&path).args(["doctor"]));
 
