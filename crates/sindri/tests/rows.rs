@@ -2517,12 +2517,6 @@ fn a_stop_read_back_from_a_transcript_is_drawn_with_the_reason_a_reader_missed()
     );
 }
 
-/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
-/// it means to and hands the value back.
-fn landed(view: &mut View, change: impl FnOnce(facts::Facts) -> facts::Facts) {
-    view.handed(change(view.facts().clone()));
-}
-
 /// The rows of a frame at `cols` by `rows`: what a reader is handed, painted through the one seam.
 fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
     let area = Rect::new(0, 0, cols, rows);
@@ -2547,11 +2541,13 @@ fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
 #[test]
 fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
     let mut view = View::blank(Capabilities::default());
-    landed(&mut view, |facts| facts.pulsed(Some(Pulse::live(0))));
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(0))));
     view.text("the first run's answer");
-    landed(&mut view, |facts| {
-        facts.pulsed(Some(Pulse::settled(&Stop::Final, 1_200)))
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .pulsed(Some(Pulse::settled(&Stop::Final, 1_200))),
+    );
     view.stopped(&Stop::Final);
     let ended = frame(&mut view, 60, 12);
 
@@ -2565,7 +2561,7 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
     );
 
     view.settle();
-    landed(&mut view, |facts| facts.pulsed(Some(Pulse::live(0))));
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(0))));
     view.text("the second run is working");
     let after = frame(&mut view, 60, 12);
     let at = |said: &str| {
@@ -2630,9 +2626,11 @@ fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
     let stop = failed();
     let mut view = View::blank(Capabilities::default());
     view.text("the answer the run got before it stopped");
-    landed(&mut view, |facts| {
-        facts.pulsed(Some(Pulse::settled(&stop, 1_240)))
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .pulsed(Some(Pulse::settled(&stop, 1_240))),
+    );
     view.stopped(&stop);
     let drawn = frame(&mut view, 40, 12);
     let whole = drawn.join("\n");

@@ -41,12 +41,6 @@ pub const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 const SERVED: &str =
     include_str!("../../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
-/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
-/// it means to and hands the value back.
-pub fn landed(view: &mut View, change: impl FnOnce(Facts) -> Facts) {
-    view.handed(change(view.facts().clone()));
-}
-
 pub fn assert_frame(name: &str, cols: u16, rows: u16) {
     let fixture = format!("{name}-{cols}x{rows}");
     let drawn = drawn(name, cols, rows);
@@ -205,7 +199,7 @@ fn pictured() -> View {
         )],
         Scroll::Back(70),
     );
-    landed(&mut view, |facts| facts.working(workspace, None));
+    view.handed(view.facts().clone().working(workspace, None));
     view
 }
 
@@ -214,7 +208,7 @@ fn pictured() -> View {
 /// with it off.
 fn faced(face: bool) -> View {
     let mut view = View::of(crate::caps::pictured().faced(face), opening(), Scroll::Tail);
-    landed(&mut view, |held| held.railed(facts()));
+    view.handed(view.facts().clone().railed(facts()));
     view
 }
 
@@ -255,7 +249,7 @@ fn model_screen() -> View {
     let mut view = View::blank(Capabilities::default());
     view.paste("/model");
     view.key(Key::Enter);
-    landed(&mut view, |facts| facts.served_by(listing));
+    view.handed(view.facts().clone().served_by(listing));
     view
 }
 
@@ -331,7 +325,7 @@ fn ways() -> View {
         ],
         Scroll::Tail,
     );
-    landed(&mut view, |facts| facts.grounded(Some(ground(workspace))));
+    view.handed(view.facts().clone().grounded(Some(ground(workspace))));
     view
 }
 
@@ -378,9 +372,12 @@ fn tools() -> View {
         ],
         Scroll::Tail,
     );
-    landed(&mut view, |facts| {
-        facts.grounded(Some(ground(workspace))).running()
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .grounded(Some(ground(workspace)))
+            .running(),
+    );
     view
 }
 
@@ -437,9 +434,11 @@ fn picking(query: &str) -> View {
     std::fs::write(root.path().join(".gitignore"), "target/\n*.local.md\n").expect("a gitignore");
 
     let mut view = View::blank(Capabilities::default());
-    landed(&mut view, |facts| {
-        facts.working(root.path().to_path_buf(), None)
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .working(root.path().to_path_buf(), None),
+    );
     view.key(Key::Char('@'));
     for glyph in query.chars() {
         view.key(Key::Char(glyph));
@@ -505,9 +504,11 @@ fn stats() -> View {
     }
 
     let mut view = View::blank(Capabilities::default());
-    landed(&mut view, |facts| {
-        facts.working(root.path().to_path_buf(), None)
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .working(root.path().to_path_buf(), None),
+    );
     for name in ["bash", "records"] {
         view.paste(&format!("/skill:{name}"));
         assert_eq!(
@@ -516,7 +517,7 @@ fn stats() -> View {
             "a skill the catalog offers is one the frame loads"
         );
     }
-    landed(&mut view, |held| held.railed(facts()).recorded(&document()));
+    view.handed(view.facts().clone().railed(facts()).recorded(&document()));
     view.paste("/stats");
     assert_eq!(
         view.key(Key::Enter),
@@ -578,7 +579,7 @@ fn thumbing(scroll: Scroll) -> View {
 
 fn running(entries: Vec<Entry>, scroll: Scroll) -> View {
     let mut view = View::of(Capabilities::default(), entries, scroll);
-    landed(&mut view, |held| held.railed(facts()));
+    view.handed(view.facts().clone().railed(facts()));
     view
 }
 
@@ -590,9 +591,13 @@ fn live(entries: Vec<Entry>, scroll: Scroll) -> View {
         state: Some(RunState::Running),
         ..facts()
     };
-    landed(&mut view, |held| {
-        held.railed(rail).pulsed(Some(Pulse::live(4_200))).running()
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .railed(rail)
+            .pulsed(Some(Pulse::live(4_200)))
+            .running(),
+    );
     view
 }
 
@@ -765,7 +770,7 @@ fn streaming() -> View {
     let mut entries = transcript();
     entries.push(Entry::Turn { turn: 6 });
     let mut view = running(entries, Scroll::Tail);
-    landed(&mut view, |facts| facts.running());
+    view.handed(view.facts().clone().running());
     for fragment in [
         "The ticket asks whether the tail survives. ",
         "A fence still streaming is a code block, ",
@@ -816,12 +821,10 @@ fn with_pulse(pulse: Pulse, said: &[&str]) -> View {
         state: Some(state),
         ..facts()
     };
-    landed(&mut view, |held| {
-        let held = held.railed(rail).pulsed(Some(pulse));
-        match running {
-            true => held.running(),
-            false => held.idle(),
-        }
+    let facts = view.facts().clone().railed(rail).pulsed(Some(pulse));
+    view.handed(match running {
+        true => facts.running(),
+        false => facts,
     });
     view
 }
@@ -885,7 +888,7 @@ const DURING_A_RUN: &[&str] = &[
 
 fn queue() -> View {
     let mut view = running(transcript(), Scroll::Tail);
-    landed(&mut view, |facts| facts.running());
+    view.handed(view.facts().clone().running());
     let mut view = waiting(view, DURING_A_RUN);
     view.paste("and this one while they wait");
     view
@@ -905,7 +908,7 @@ const SEVEN_QUEUED: &[&str] = &[
 
 fn queue_long() -> View {
     let mut view = running(transcript(), Scroll::Tail);
-    landed(&mut view, |facts| facts.running());
+    view.handed(view.facts().clone().running());
     let mut view = waiting(view, SEVEN_QUEUED);
     view.paste("and this one while they wait");
     view
@@ -944,9 +947,7 @@ fn waiting(mut view: View, prompts: &[&str]) -> View {
 fn asked() -> View {
     let mut view = View::blank(Capabilities::default());
     view.settle();
-    landed(&mut view, |facts| {
-        facts.running().pulsed(Some(Pulse::live(0)))
-    });
+    view.handed(view.facts().clone().running().pulsed(Some(Pulse::live(0))));
     view
 }
 

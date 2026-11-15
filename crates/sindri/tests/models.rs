@@ -8,7 +8,6 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
-use sindri::facts::Facts;
 use sindri::keys::Mode;
 use sindri::mark::Cell;
 use sindri::models::{CAP, Models};
@@ -40,12 +39,6 @@ fn silent() -> Listing {
     Client::over(Replay::new([]), SecretSet::default())
         .waits(|_| {})
         .served(&at, &Credential::none(), &at)
-}
-
-/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
-/// it means to and hands the value back.
-fn landed(view: &mut View, change: impl FnOnce(Facts) -> Facts) {
-    view.handed(change(view.facts().clone()));
 }
 
 fn offered(models: &Models) -> Vec<String> {
@@ -259,6 +252,27 @@ fn a_wire_that_could_not_answer_offers_its_hint_and_no_names() {
 }
 
 #[test]
+fn a_listing_the_screen_has_not_held_puts_the_mark_back_on_the_first_row() {
+    let mut models = Models::new().served_by(Some(listed()));
+    models.down();
+    assert_eq!(models.selected(), 1, "the reader walked down one row");
+
+    let held = models.served_by(Some(listed()));
+    assert_eq!(
+        held.selected(),
+        1,
+        "the listing the screen already holds leaves the reader where they were"
+    );
+
+    let fresh = held.served_by(Some(silent()));
+    assert_eq!(
+        fresh.selected(),
+        0,
+        "and a listing that is not the one it holds puts the mark back on the first row"
+    );
+}
+
+#[test]
 fn a_key_a_filter_box_has_no_use_for_moves_nothing() {
     let mut models = Models::new().served_by(Some(listed()));
 
@@ -276,9 +290,24 @@ fn screen(capabilities: Capabilities) -> View {
     let mut view = View::blank(capabilities);
     view.paste("/model");
     view.key(Key::Enter);
-    landed(&mut view, |facts| facts.served_by(listed()));
+    view.handed(view.facts().clone().served_by(listed()));
     assert_eq!(view.mode(), Mode::Models);
     view
+}
+
+#[test]
+fn a_screen_opened_again_asks_the_wire_rather_than_serving_the_names_it_held() {
+    let mut view = View::blank(Capabilities::default());
+    view.handed(view.facts().clone().served_by(listed()));
+    view.paste("/model");
+    view.key(Key::Enter);
+
+    let rows = frame(&mut view, 120, 40);
+    assert!(
+        rows.iter()
+            .any(|row| row.contains("asking the wire what it serves")),
+        "the names a screen held are the ones it was asked for, and asking again says so: {rows:#?}"
+    );
 }
 
 #[test]

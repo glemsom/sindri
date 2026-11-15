@@ -109,7 +109,6 @@ impl Composer {
         self.state
     }
 
-    /// Set by the frame from the value it is handed, and from nowhere else.
     pub fn set_state(&mut self, state: State) {
         self.state = state;
     }

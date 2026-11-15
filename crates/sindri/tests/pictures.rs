@@ -400,12 +400,6 @@ fn a_picture_whose_words_are_wider_than_the_band_wraps_and_is_never_cut() {
 
 const SCREEN: (u16, u16) = (100, 30);
 
-/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
-/// it means to and hands the value back.
-fn landed(view: &mut View, change: impl FnOnce(facts::Facts) -> facts::Facts) {
-    view.handed(change(view.facts().clone()));
-}
-
 fn cell() -> CellSize {
     CellSize::new(10, 20)
 }
@@ -422,9 +416,7 @@ fn frame(workspace: &Path, text: &str, draws: bool) -> View {
         }],
         Scroll::Tail,
     );
-    landed(&mut view, |facts| {
-        facts.working(workspace.to_path_buf(), None)
-    });
+    view.handed(view.facts().clone().working(workspace.to_path_buf(), None));
     view
 }
 
@@ -537,7 +529,7 @@ fn railed(draws: bool, face: bool) -> View {
         Vec::new(),
         Scroll::Tail,
     );
-    landed(&mut view, |facts| facts.railed(railed_facts()));
+    view.handed(view.facts().clone().railed(railed_facts()));
     view
 }
 
@@ -738,7 +730,7 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
         ],
         Scroll::Tail,
     );
-    landed(&mut view, |facts| facts.working(workspace.clone(), None));
+    view.handed(view.facts().clone().working(workspace.clone(), None));
 
     painted_at(&mut view, SCREEN);
     assert_eq!(

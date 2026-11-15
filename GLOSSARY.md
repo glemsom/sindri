@@ -225,5 +225,7 @@ _Avoid_: Terminal features, environment, detection, caps
 **Frame facts**: the workspace and the ground it is judged against, the home the skills are read from,
 the served name, the run's record, the state the run is in, the facts the rail lays, the pulse at the
 head of the answer, and whether the window is being read, gathered as one value and handed to the
-frame whole: a frame handed no facts is the **splash screen**, and a frame handed a run's is that
-run's frame. _Avoid_: View model, props, session state, context.
+frame whole. The value is also the screen the frame is drawn as: the **splash screen** until a prompt
+has been asked for — holding what the launch already knows and no run's fact, so no fact that lands
+ends it — and that run's frame from the prompt on. _Avoid_: View model, props, session state,
+context.

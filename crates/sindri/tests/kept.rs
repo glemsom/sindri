@@ -8,7 +8,6 @@ use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
-use sindri::facts::Facts;
 use sindri::keys::{Act, Mode, Stack};
 use sindri::mark::Cell;
 use sindri::pointer::Pointer;
@@ -48,20 +47,16 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
     root
 }
 
-/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
-/// it means to and hands the value back.
-fn landed(view: &mut View, change: impl FnOnce(Facts) -> Facts) {
-    view.handed(change(view.facts().clone()));
-}
-
 /// A frame holding every list there is — a workspace the picker walks, the names the wire served and
 /// the keys the config holds — with `mode` open on top of it.
 fn screen(mode: Mode, capabilities: Capabilities) -> (tempfile::TempDir, View) {
     let root = workspace(&["src/rows.rs", "src/view.rs"]);
     let mut view = View::blank(capabilities);
-    landed(&mut view, |facts| {
-        facts.working(root.path().to_path_buf(), None)
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .working(root.path().to_path_buf(), None),
+    );
     match mode {
         Mode::Files => {
             view.key(Key::Char('@'));
@@ -74,7 +69,7 @@ fn screen(mode: Mode, capabilities: Capabilities) -> (tempfile::TempDir, View) {
         other => panic!("{other:?} keeps no list, so no screen of it is opened here"),
     }
     // The model screen opens empty, so the wire's answer is handed to it once it stands.
-    landed(&mut view, |facts| facts.served_by(listed()));
+    view.handed(view.facts().clone().served_by(listed()));
     assert_eq!(
         view.mode(),
         mode,

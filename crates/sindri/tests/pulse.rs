@@ -7,7 +7,6 @@ use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::composer::Key;
-use sindri::facts::Facts;
 use sindri::ink::Ink;
 use sindri::ledger;
 use sindri::pen;
@@ -21,12 +20,6 @@ const GLYPHS: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '�
 
 fn failed() -> Stop {
     Stop::Error(SecretSet::default().redact("the wire went away"))
-}
-
-/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
-/// it means to and hands the value back.
-fn landed(view: &mut View, change: impl FnOnce(Facts) -> Facts) {
-    view.handed(change(view.facts().clone()));
 }
 
 fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
@@ -238,9 +231,12 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
         state: Some(RunState::Running),
         ..ledger::Facts::default()
     };
-    landed(&mut view, |facts| {
-        facts.railed(rail).pulsed(Some(Pulse::live(4_200)))
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .railed(rail)
+            .pulsed(Some(Pulse::live(4_200))),
+    );
     let rows = frame(&mut view, 60, 12);
     let state_row = rows
         .iter()
@@ -256,7 +252,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
         "and the rail's own row wears the same one, so no two drawings show two steps"
     );
 
-    landed(&mut view, |facts| facts.pulsed(Some(Pulse::live(4_280))));
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_280))));
     let rows = frame(&mut view, 60, 12);
 
     assert_eq!(
@@ -272,7 +268,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
 #[test]
 fn the_marker_prefixes_the_newest_answers_first_row_in_the_answers_own_gutter() {
     let mut view = answering();
-    landed(&mut view, |facts| facts.pulsed(Some(Pulse::live(4_200))));
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
     let rows = frame(&mut view, 60, 12);
 
     assert_eq!(
@@ -291,7 +287,7 @@ fn the_marker_heads_the_newest_answer_and_an_older_one_keeps_its_gutter() {
     view.text("the first thing said");
     view.reasoning("and then a thought");
     view.text("and the newest answer");
-    landed(&mut view, |facts| facts.pulsed(Some(Pulse::live(4_200))));
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
     let rows = frame(&mut view, 60, 12);
 
     assert_eq!(
@@ -305,9 +301,11 @@ fn the_marker_heads_the_newest_answer_and_an_older_one_keeps_its_gutter() {
 #[test]
 fn a_marker_survives_a_narrow_frame() {
     let mut view = answering();
-    landed(&mut view, |facts| {
-        facts.pulsed(Some(Pulse::settled(&Stop::Cancelled, 5_000)))
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .pulsed(Some(Pulse::settled(&Stop::Cancelled, 5_000))),
+    );
     let rows = frame(&mut view, 24, 12);
 
     assert!(
@@ -321,9 +319,11 @@ fn a_marker_survives_a_narrow_frame() {
 #[test]
 fn a_settled_marker_is_the_value_at_stop_and_is_never_recomputed() {
     let mut view = answering();
-    landed(&mut view, |facts| {
-        facts.pulsed(Some(Pulse::settled(&Stop::Final, 9_400)))
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .pulsed(Some(Pulse::settled(&Stop::Final, 9_400))),
+    );
     let at_stop = frame(&mut view, 60, 12);
     assert_eq!(
         at_stop[0], "✓ 9.4s The marker is one cell and at most fourteen",
@@ -341,7 +341,7 @@ fn a_settled_marker_is_the_value_at_stop_and_is_never_recomputed() {
 #[test]
 fn a_live_marker_draws_the_answers_row_before_the_answer_has_said_anything() {
     let mut view = View::blank(Capabilities::default());
-    landed(&mut view, |facts| facts.pulsed(Some(Pulse::live(4_200))));
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
     let rows = frame(&mut view, 60, 12);
 
     assert_eq!(rows[0], "⠹ 4.2s", "the marker, and the row it heads");

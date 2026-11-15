@@ -1,6 +1,6 @@
-//! The facts a frame draws, gathered as one value: what a launch knows before a run, and what the
-//! run and its session add as they land. A frame handed no facts is the splash screen, and only a
-//! launch's opening facts are the splash screen's.
+//! The workspace and its ground, the home skills are read from, the served name, the record, the
+//! state, the rail's facts, the marker and the focus, gathered as one value and handed to the frame
+//! whole, beside the screen those facts are drawn as.
 
 use std::path::{Path, PathBuf};
 
@@ -8,13 +8,12 @@ use sindri_core::open::Ground;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::SessionDocument;
 
-use crate::composer::State;
 use crate::ledger::{self, Boot};
 use crate::pulse::Pulse;
 
-/// The facts a frame draws, as one value: what a launch knows before a run, and what the run and its
-/// session add as they land. A frame handed no facts is the splash screen, and only a launch's
-/// opening facts are the splash screen's.
+/// Handed whole, never a fact at a time: the screen a frame is drawn as follows from it, so a frame
+/// handed none is the splash screen and one handed a run's is that run's frame. No fact that lands
+/// ends the splash screen, because the facts a launch opens on are the splash screen's own.
 #[derive(Clone, Debug)]
 pub struct Facts {
     rail: ledger::Facts,
@@ -24,7 +23,7 @@ pub struct Facts {
     served: Option<Listing>,
     record: Option<SessionDocument>,
     pulse: Option<Pulse>,
-    state: State,
+    live: bool,
     focus: Focus,
     splash: bool,
 }
@@ -49,7 +48,7 @@ impl Default for Facts {
             served: None,
             record: None,
             pulse: None,
-            state: State::Idle,
+            live: false,
             focus: Focus::Focused,
             splash: true,
         }
@@ -57,15 +56,6 @@ impl Default for Facts {
 }
 
 impl Facts {
-    /// The facts of a run a launch has told nothing of yet: what a frame drawn by no launch, and a
-    /// screen test's frame, is built from. Not the splash screen.
-    pub fn run() -> Facts {
-        Facts {
-            splash: false,
-            ..Facts::default()
-        }
-    }
-
     /// The facts a launch opens on, beside the home its skills are read from: the splash screen over
     /// the wire, the model, the workspace, the branch and the enforcement it already knows.
     pub fn boot(boot: Boot, home: Option<PathBuf>) -> Facts {
@@ -78,45 +68,62 @@ impl Facts {
         }
     }
 
-    /// The same value with the facts the run's rail lays, as the launch's report carries them.
+    /// The same value as the frame a prompt has been asked for: the splash screen is over.
+    pub fn asked(mut self) -> Facts {
+        self.splash = false;
+        self
+    }
+
+    /// The same value with the run that prompt starts.
+    pub fn running(mut self) -> Facts {
+        self.live = true;
+        self.asked()
+    }
+
+    /// The same value with the run that prompt started ended.
+    pub fn idle(mut self) -> Facts {
+        self.live = false;
+        self
+    }
+
     pub fn railed(mut self, rail: ledger::Facts) -> Facts {
         self.rail = rail;
         self
     }
 
-    /// The same value with the record a run's launch has written so far.
     pub fn recorded(mut self, document: &SessionDocument) -> Facts {
         self.record = Some(document.clone());
         self
     }
 
-    /// The same value with the directory the run writes in and the home its skills are read from.
     pub fn working(mut self, workspace: PathBuf, home: Option<PathBuf>) -> Facts {
         self.workspace = Some(workspace);
         self.home = home;
         self
     }
 
-    /// The same value with the place a run judges a target from, or nothing where its temp will not
-    /// resolve.
     pub fn grounded(mut self, ground: Option<Ground>) -> Facts {
         self.ground = ground;
         self
     }
 
-    /// The same value with the names a wire served.
     pub fn served_by(mut self, listing: Listing) -> Facts {
         self.served = Some(listing);
         self
     }
 
-    /// The same value with the marker at the head of the newest answer.
+    /// The same value with the names a wire served dropped: a screen that asks again holds none until
+    /// that answer lands.
+    pub fn unserved(mut self) -> Facts {
+        self.served = None;
+        self
+    }
+
     pub fn pulsed(mut self, pulse: Option<Pulse>) -> Facts {
         self.pulse = pulse;
         self
     }
 
-    /// The same value with the terminal's report of who is reading.
     pub fn focused(mut self, focused: bool) -> Facts {
         self.focus = match focused {
             true => Focus::Focused,
@@ -125,27 +132,14 @@ impl Facts {
         self
     }
 
-    /// The same value as the frame a prompt has been asked for: the splash screen is over.
-    pub fn asked(mut self) -> Facts {
-        self.splash = false;
-        self
-    }
-
-    /// The same value with the run a prompt has just started.
-    pub fn running(mut self) -> Facts {
-        self.state = State::Running;
-        self.splash = false;
-        self
-    }
-
-    /// The same value with the run a stop has ended.
-    pub fn idle(mut self) -> Facts {
-        self.state = State::Idle;
-        self
-    }
-
     pub fn splash(&self) -> bool {
         self.splash
+    }
+
+    /// Whether a run is live: the draft band's two words, where the rail says the run's state whole,
+    /// the stop it ended on included.
+    pub fn live(&self) -> bool {
+        self.live
     }
 
     pub fn rail(&self) -> &ledger::Facts {
@@ -174,10 +168,6 @@ impl Facts {
 
     pub fn pulse(&self) -> Option<&Pulse> {
         self.pulse.as_ref()
-    }
-
-    pub fn state(&self) -> State {
-        self.state
     }
 
     pub fn focus(&self) -> Focus {
@@ -268,17 +258,17 @@ mod tests {
     }
 
     #[test]
-    fn a_run_a_launch_has_told_the_frame_of_is_no_longer_the_splash_screen() {
-        let facts = Facts::run().railed(rail()).running();
+    fn a_run_a_prompt_has_been_asked_for_is_no_longer_the_splash_screen() {
+        let facts = Facts::default().running();
         assert!(
             !facts.splash(),
-            "a run whose rail the launch has laid is that run's frame, and never the splash screen"
+            "a run asked for is that run's frame, and never the splash screen"
         );
-        assert_eq!(
-            facts.state(),
-            State::Running,
-            "and the run it was told of is the one that is running"
+        assert!(
+            facts.live(),
+            "and the run it was asked for is the one that is live"
         );
+        assert!(!facts.idle().live(), "and the run a stop ended is not");
     }
 
     #[test]
@@ -359,11 +349,7 @@ mod tests {
             landed.pulse(),
             "no marker at the head of the answer moved with it"
         );
-        assert_eq!(
-            recorded.state(),
-            landed.state(),
-            "and no state moved with it"
-        );
+        assert_eq!(recorded.live(), landed.live(), "and no state moved with it");
 
         let focused = landed.clone().focused(false);
         assert_eq!(

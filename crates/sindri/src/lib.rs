@@ -4,7 +4,7 @@ pub mod commands; // the `/` commands: a draft line the frame answers itself
 pub mod composer; // the draft a prompt is typed into, as a value rather than a widget
 pub mod decode; // the bytes a key arrives as, answered as the key or the paste
 pub mod face; // the picture the binary carries: Sindri's face, measured and never said in words
-pub mod facts; // the facts a frame draws, gathered as one value: the launch's and the run's, and the screen they are
+pub mod facts; // the facts a frame draws, gathered as one value and handed whole, and the screen they are drawn as
 pub mod graphics; // an SVG becomes the pixels a picture is drawn in
 pub mod ink; // the look a cell is drawn in, asked for by name: its ink, its faces, its underline
 pub mod kept; // the list a screen keeps: what a movement, a typed glyph and a press reach

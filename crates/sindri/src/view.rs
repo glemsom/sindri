@@ -245,7 +245,7 @@ pub struct View {
     conversation: Conversation,
     superseded: bool,
     stack: Stack,
-    /// The facts this frame draws, handed whole: a frame handed none is the splash screen.
+    /// Never one fact at a time: a frame's screen follows from the value it holds whole.
     facts: Facts,
     mark: Option<Mark>,
     picker: Picker,
@@ -266,7 +266,7 @@ struct Laid {
 }
 
 impl View {
-    /// The frame a launch opens on, and the one screen a frame with no facts can draw: a wordmark,
+    /// The frame a launch opens on, and the one screen a frame handed no facts can draw: a wordmark,
     /// what the product is, and the commands a reader starts from.
     pub fn boot(capabilities: Capabilities) -> View {
         View {
@@ -275,12 +275,12 @@ impl View {
         }
     }
 
-    /// A frame of no entries, of no facts and no run's: what a test draws a screen on, and never a
-    /// launch.
+    /// A frame of no entries, of a run a prompt has been asked for and that has said nothing: what a
+    /// test draws a key, a card or a footer on, and never a launch.
     pub fn blank(capabilities: Capabilities) -> View {
         View {
             capabilities,
-            facts: Facts::run(),
+            facts: Facts::default().asked(),
             ..View::default()
         }
     }
@@ -298,7 +298,7 @@ impl View {
             rows,
             scroll,
             capabilities,
-            facts: Facts::run(),
+            facts: Facts::default().asked(),
             ..View::default()
         }
     }
@@ -307,7 +307,7 @@ impl View {
         View {
             composer,
             capabilities,
-            facts: Facts::run(),
+            facts: Facts::default().asked(),
             ..View::default()
         }
     }
@@ -618,6 +618,7 @@ impl View {
     }
 
     fn model(&mut self) -> Outcome {
+        self.handed(self.facts.clone().unserved());
         self.models = Models::new();
         self.stack.open(Mode::Models);
         Outcome::Served
@@ -809,10 +810,13 @@ impl View {
     }
 
     /// The facts this frame draws, handed whole: a frame handed no facts is the splash screen, and
-    /// one handed a run's is that run's frame. A launch hands a new value when a fact lands, and a
-    /// settings visit that moved the config's face is the one door `drawn_on` still is.
+    /// one handed a run's is that run's frame. The draft answers a cancel out of the value, and the
+    /// served names are a screen's own copy, so both are taken here and nowhere else.
     pub fn handed(&mut self, facts: Facts) {
-        self.composer.set_state(facts.state());
+        self.composer.set_state(match facts.live() {
+            true => State::Running,
+            false => State::Idle,
+        });
         self.models = std::mem::take(&mut self.models).served_by(facts.served().cloned());
         self.facts = facts;
     }
@@ -1883,10 +1887,10 @@ mod tests {
         view.paste("the draft the composer band is drawn from");
         let lit = edge_row(&mut view, &palette);
 
-        landed(&mut view, |facts| facts.focused(false));
+        view.handed(view.facts().clone().focused(false));
         let away = edge_row(&mut view, &palette);
 
-        landed(&mut view, |facts| facts.focused(true));
+        view.handed(view.facts().clone().focused(true));
         let back = edge_row(&mut view, &palette);
 
         assert_eq!(
@@ -1939,7 +1943,7 @@ mod tests {
             }],
             Scroll::Tail,
         );
-        landed(&mut view, |facts| facts.railed(rail()));
+        view.handed(view.facts().clone().railed(rail()));
         view.paste("the draft");
 
         let area = screen(120, 40);
@@ -2022,7 +2026,7 @@ mod tests {
                 }],
                 Scroll::Tail,
             );
-            landed(&mut view, |facts| facts.railed(rail()));
+            view.handed(view.facts().clone().railed(rail()));
 
             let area = screen(cols, rows);
             let mut buffer = Buffer::empty(area);
@@ -2091,7 +2095,7 @@ mod tests {
             }],
             Scroll::Tail,
         );
-        landed(&mut view, |facts| facts.railed(rail()));
+        view.handed(view.facts().clone().railed(rail()));
         view.paste("the draft the composer band is drawn from");
 
         let area = screen(120, 40);
@@ -2290,12 +2294,6 @@ mod tests {
         }
     }
 
-    /// A fact that landed on the frame under test, beside the facts it already draws: the whole
-    /// value is handed, and never the one fact.
-    fn landed(view: &mut View, change: impl FnOnce(Facts) -> Facts) {
-        view.handed(change(view.facts().clone()));
-    }
-
     #[test]
     fn a_frame_built_with_no_facts_draws_the_splash_screen() {
         let mut view = View::boot(Capabilities::default());
@@ -2308,7 +2306,7 @@ mod tests {
     #[test]
     fn a_frame_handed_a_runs_facts_is_not_the_splash_screen() {
         let mut view = View::blank(Capabilities::default());
-        view.handed(Facts::run().running());
+        view.handed(Facts::default().asked().running());
         assert!(
             !drawn(&mut view, 120, 40).contains("sindri"),
             "a frame handed a run's facts is that run's frame, and draws no wordmark"
@@ -2640,7 +2638,7 @@ mod tests {
     fn asking(queued: usize) -> View {
         let mut view = View::blank(Capabilities::default());
         view.settle();
-        landed(&mut view, |facts| facts.running());
+        view.handed(view.facts().clone().running());
         for text in ["one", "two", "three"].into_iter().take(queued) {
             view.enqueue(prompt(text));
         }
@@ -3251,9 +3249,11 @@ mod tests {
             std::fs::write(workspace.path().join(file), "").expect("a file");
         }
         let mut view = View::blank(pointing());
-        landed(&mut view, |facts| {
-            facts.working(workspace.path().to_path_buf(), None)
-        });
+        view.handed(
+            view.facts()
+                .clone()
+                .working(workspace.path().to_path_buf(), None),
+        );
         assert_eq!(
             view.key(Key::Char('@')),
             Outcome::Edited,
@@ -3954,15 +3954,13 @@ mod tests {
             }],
             Scroll::Back(70),
         );
-        landed(&mut view, |facts| {
-            facts.working(
-                PathBuf::from(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/tests/fixtures/pictures"
-                )),
-                None,
-            )
-        });
+        view.handed(view.facts().clone().working(
+            PathBuf::from(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/pictures"
+            )),
+            None,
+        ));
         painted(&mut view, 120, rows)
     }
 
@@ -4257,7 +4255,7 @@ mod tests {
     ) -> (Buffer, Rect, Rect) {
         let mut view = View::blank(inked(palette));
         view.settle();
-        landed(&mut view, |facts| facts.running());
+        view.handed(view.facts().clone().running());
         for at in 1..=count {
             view.enqueue(prompt(&format!("prompt {at}")));
         }
@@ -4505,7 +4503,7 @@ mod tests {
     #[test]
     fn a_query_wider_than_the_body_is_cut_at_its_edge_and_not_dropped() {
         let mut view = View::blank(Capabilities::default());
-        landed(&mut view, |facts| facts.working(std::env::temp_dir(), None));
+        view.handed(view.facts().clone().working(std::env::temp_dir(), None));
         view.key(Key::Char('@'));
         for _ in 0..60 {
             view.key(Key::Char('x'));

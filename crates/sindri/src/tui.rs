@@ -235,13 +235,6 @@ impl<'a> Loop<'a> {
         })
     }
 
-    /// A fact that landed on the frame, beside the facts it already draws: the frame is handed the
-    /// whole value, never the one fact.
-    fn landed(&mut self, change: impl FnOnce(Facts) -> Facts) {
-        let facts = change(self.view.facts().clone());
-        self.view.handed(facts);
-    }
-
     fn paint(&mut self) -> io::Result<()> {
         self.painted = paint(&mut self.canvas, &mut self.view)?;
         Ok(())
@@ -297,7 +290,12 @@ impl<'a> Loop<'a> {
 
             if let Some(flight) = &self.running {
                 let elapsed_ms = flight.elapsed_ms();
-                self.landed(|facts| facts.pulsed(Some(Pulse::live(elapsed_ms))));
+                let facts = self
+                    .view
+                    .facts()
+                    .clone()
+                    .pulsed(Some(Pulse::live(elapsed_ms)));
+                self.view.handed(facts);
             }
 
             // Read every pass and not only the pass the pipe woke: the word is a flag that is never
@@ -364,7 +362,7 @@ impl<'a> Loop<'a> {
             // The one report a reader never sent: the frame recedes while nobody is reading it,
             // and a run that ends while it is away is the one that raises a notification.
             Event::Focus(focused) => {
-                self.landed(|facts| facts.focused(focused));
+                self.view.handed(self.view.facts().clone().focused(focused));
                 self.telling.focused(focused);
                 self.paint()?;
                 return Ok(None);
@@ -487,7 +485,8 @@ impl<'a> Loop<'a> {
         self.view.settle();
         // The ground a path a call names is drawn against is the one the run it starts will judge by.
         let ground = launching.ground();
-        self.landed(|facts| facts.grounded(ground).running());
+        self.view
+            .handed(self.view.facts().clone().grounded(ground).running());
         let earlier = self.view.earlier();
         self.running = Some(Running::start(
             launching,
@@ -497,7 +496,8 @@ impl<'a> Loop<'a> {
         ));
         // The marker before the run has said anything: the first step of the cycle and no time on
         // the clock yet, so the frame a prompt is sent from already says a run has begun.
-        self.landed(|facts| facts.pulsed(Some(Pulse::live(0))));
+        self.view
+            .handed(self.view.facts().clone().pulsed(Some(Pulse::live(0))));
         self.paint()?;
         self.told(Told::Asking { turn: 1 })?;
         Ok(())
@@ -554,11 +554,12 @@ impl<'a> Loop<'a> {
                 // A status changes no cell: it is written by the one thing here that owns a tty.
                 Report::Told(told) => self.told(told)?,
                 Report::Facts(rail) => {
-                    self.landed(|facts| facts.railed(rail));
+                    self.view.handed(self.view.facts().clone().railed(rail));
                     painted = true;
                 }
                 Report::Record(document) => {
-                    self.landed(|facts| facts.recorded(&document));
+                    self.view
+                        .handed(self.view.facts().clone().recorded(&document));
                     painted = true;
                 }
                 // No cell: the transcript already drew the turn it keeps.
@@ -578,7 +579,13 @@ impl<'a> Loop<'a> {
             })?;
             // The last frame the run itself paints: once it is gone the wait goes back to forever,
             // and the settled marker stays on the frame for every later paint to draw.
-            self.landed(|facts| facts.pulsed(Some(Pulse::settled(stop, elapsed_ms))).idle());
+            let facts = self
+                .view
+                .facts()
+                .clone()
+                .pulsed(Some(Pulse::settled(stop, elapsed_ms)))
+                .idle();
+            self.view.handed(facts);
             self.view.stopped(stop);
             painted = true;
             if let Some(flight) = self.running.take()
@@ -602,7 +609,8 @@ impl<'a> Loop<'a> {
         let Some(listing) = landed else {
             return Ok(());
         };
-        self.landed(|facts| facts.served_by(listing));
+        self.view
+            .handed(self.view.facts().clone().served_by(listing));
         self.paint()?;
         if let Some(flight) = self.asking.take() {
             flight.joined();

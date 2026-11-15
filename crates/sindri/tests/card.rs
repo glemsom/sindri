@@ -13,7 +13,6 @@ use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::composer::Key;
-use sindri::facts::Facts;
 use sindri::ink::{Face, Ink, Look};
 use sindri::keys::{Act, Mode};
 use sindri::palette::Palette;
@@ -33,12 +32,6 @@ const SCREENS: [Mode; 5] = [
     Mode::Settings,
     Mode::Stats,
 ];
-
-/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
-/// it means to and hands the value back.
-fn landed(view: &mut View, change: impl FnOnce(Facts) -> Facts) {
-    view.handed(change(view.facts().clone()));
-}
 
 /// The name a screen wears in the border of the card it is drawn on.
 fn name(mode: Mode) -> &'static str {
@@ -64,9 +57,11 @@ fn opened(over: View, mode: Mode) -> View {
             view.key(Key::Char('?'));
         }
         Mode::Files => {
-            landed(&mut view, |facts| {
-                facts.working(root.path().to_path_buf(), None)
-            });
+            view.handed(
+                view.facts()
+                    .clone()
+                    .working(root.path().to_path_buf(), None),
+            );
             view.key(Key::Char('@'));
         }
         Mode::Models => {
@@ -356,7 +351,7 @@ fn a_card_drawn_in_no_colour_keeps_the_accent_on_its_name_and_draws_no_accent_ed
 fn a_card_drawn_in_a_window_nobody_is_reading_keeps_the_dim_edge() {
     let palette = Palette::TRUECOLOR;
     let mut view = on_screen(Mode::Keys);
-    landed(&mut view, |facts| facts.focused(false));
+    view.handed(view.facts().clone().focused(false));
     let buffer = painted(&mut view, 120, 40);
     let (top, _, left, _) = corners(&buffer).expect("a card drawn with its border");
 
@@ -1059,7 +1054,7 @@ fn every_screen_is_drawn_on_a_card_as_tall_as_the_rows_it_holds() {
 #[test]
 fn the_model_list_is_a_card_as_tall_as_the_names_it_holds() {
     let mut view = opened(conversation(), Mode::Models);
-    landed(&mut view, |facts| facts.served_by(served()));
+    view.handed(view.facts().clone().served_by(served()));
     let buffer = painted(&mut view, 120, 40);
 
     let (top, bottom, ..) = corners(&buffer).expect("a card drawn with its border");

@@ -10,7 +10,6 @@ use ratatui::buffer::Buffer;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Composer, Key, Outcome};
-use sindri::facts::Facts;
 use sindri::ink::{Ink, Look};
 use sindri::keys::Mode;
 use sindri::palette::Palette;
@@ -29,15 +28,9 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
     root
 }
 
-/// A fact that landed on the frame: the frame hands its facts back whole, so a test changes the one
-/// it means to and hands the value back.
-fn landed(view: &mut View, change: impl FnOnce(Facts) -> Facts) {
-    view.handed(change(view.facts().clone()));
-}
-
 fn standing(root: &Path) -> View {
     let mut view = View::blank(Capabilities::default());
-    landed(&mut view, |facts| facts.working(root.to_path_buf(), None));
+    view.handed(view.facts().clone().working(root.to_path_buf(), None));
     view
 }
 
@@ -50,7 +43,7 @@ fn typing(root: &Path, draft: &str) -> View {
     let mut composer = Composer::new();
     composer.paste(draft);
     let mut view = View::typing(Capabilities::default(), composer);
-    landed(&mut view, |facts| facts.working(root.to_path_buf(), None));
+    view.handed(view.facts().clone().working(root.to_path_buf(), None));
     view
 }
 

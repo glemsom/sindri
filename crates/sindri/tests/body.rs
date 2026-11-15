@@ -101,9 +101,11 @@ fn the_path_picker_body_holds_the_query_row_first_and_the_count_of_matches_last(
         std::fs::write(&path, "").expect("a file");
     }
     let mut view = View::blank(Capabilities::default());
-    fixture::landed(&mut view, |facts| {
-        facts.working(root.path().to_path_buf(), None)
-    });
+    view.handed(
+        view.facts()
+            .clone()
+            .working(root.path().to_path_buf(), None),
+    );
     assert_eq!(
         view.key(Key::Char('@')),
         Outcome::Edited,
@@ -159,7 +161,7 @@ fn the_served_names_body_asks_while_the_wire_is_unasked_and_says_so_when_it_serv
         said(&body)
     );
 
-    fixture::landed(&mut view, |facts| facts.served_by(served(EMPTY_CATALOGUE)));
+    view.handed(view.facts().clone().served_by(served(EMPTY_CATALOGUE)));
     let body = view
         .body(Mode::Models, 60)
         .expect("a screen handed an empty catalogue still holds a body");
@@ -208,7 +210,7 @@ fn the_settings_body_ends_in_the_refusal_that_turned_the_visit_back() {
 #[test]
 fn the_ledger_body_holds_the_facts_the_record_wrote() {
     let mut view = View::blank(Capabilities::default());
-    fixture::landed(&mut view, |held| held.railed(facts()).recorded(&document()));
+    view.handed(view.facts().clone().railed(facts()).recorded(&document()));
     let body = view
         .body(Mode::Stats, 120)
         .expect("the ledger is a screen, so it answers with a body");
