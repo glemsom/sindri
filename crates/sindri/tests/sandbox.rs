@@ -2,6 +2,8 @@
 //! stand-in `bwrap` first on `PATH`, and its stderr, stdout and exit code read back. A stand-in is a machine that
 //! refuses on demand, so all three failures are provable here without a broken kernel.
 
+mod modules; // the module a source file belongs to
+
 use std::fs::Permissions;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
@@ -361,10 +363,10 @@ fn enforcement_becomes_unsafe_only_where_the_command_line_flag_is_read() {
     for (file, _) in &core {
         assert!(
             matches!(
-                file.as_str(),
-                "crates/sindri-core/src/policy.rs"
-                    | "crates/sindri-core/src/bash.rs"
-                    | "crates/sindri-core/src/sandbox.rs"
+                modules::of(file),
+                "crates/sindri-core/src/policy"
+                    | "crates/sindri-core/src/bash"
+                    | "crates/sindri-core/src/sandbox"
             ),
             "the core reads the fact only where it defines, enforces and proves it, \
              never in {file} where a config could reach it"
