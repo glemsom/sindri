@@ -39,7 +39,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Check out the tree
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # devbox needs Nix underneath it, and the action turns on the `nix-command` and
       # `flakes` features devbox expects. Pinned to a commit, not a tag, so the code CI
@@ -60,7 +60,7 @@ jobs:
       # Keyed on the lockfile and the manifest, so a toolchain change misses the cache
       # instead of hiding behind a stale one.
       - name: Cache the pinned Rust toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/sindri
           key: sindri-toolchain-${{ runner.os }}-${{ hashFiles('devbox.lock', 'devbox.json') }}
