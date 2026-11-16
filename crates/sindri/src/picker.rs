@@ -6,10 +6,8 @@ use std::path::Path;
 
 use crate::composer::Key;
 use crate::ink::{Ink, Look};
-use crate::kept::{Kept, Move, Narrow};
+use crate::kept::{CAP, Kept, Move, Narrow, leaves};
 use crate::list::{self, Item, ScreenRow};
-
-pub const CAP: usize = 8;
 
 /// The one line the picker says in place of its rows when no file answers.
 const NO_FILE: &str = "no file answers";
@@ -19,15 +17,6 @@ const NO_FILE: &str = "no file answers";
 pub struct Row<'a> {
     pub name: &'a str,
     pub directory: &'a str,
-}
-
-/// How a query sits in a path, strongest first: the order of the variants is the order the rows
-/// come in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Rank {
-    NameStarts,
-    NameHolds,
-    PathHolds,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -54,6 +43,9 @@ impl Picker {
             }
             files.push(relative.to_owned());
         }
+        // The walk hands siblings back in whatever order the filesystem keeps them, and the rank keeps
+        // the order it is handed, so the files are sorted here and nowhere else.
+        files.sort_unstable();
         Picker {
             files,
             narrow: Narrow::default(),
@@ -69,9 +61,12 @@ impl Picker {
         self.ranked().into_iter().take(CAP).map(split).collect()
     }
 
-    /// Every path the query leaves, in one total order: rank, then nearness, then the path itself.
+    /// Every path the query leaves, in the one order the rank gives.
     fn ranked(&self) -> Vec<&str> {
-        leaves(&self.files, self.narrow.query())
+        leaves(
+            self.files.iter().map(|path| (path.as_str(), path.as_str())),
+            self.narrow.query(),
+        )
     }
 
     pub fn selected(&self) -> usize {
@@ -80,17 +75,13 @@ impl Picker {
 
     /// How many files the query leaves, whether or not the card has a row for them.
     pub fn matches(&self) -> usize {
-        let query = self.narrow.query().to_lowercase();
-        self.files
-            .iter()
-            .filter(|path| rank(path, &query).is_some())
-            .count()
+        count(&self.files, self.narrow.query())
     }
 
     pub fn key(&mut self, key: Key) -> bool {
         let Picker { files, narrow } = self;
         let files = files.as_slice();
-        narrow.typed(key, |query| leaves(files, query).len().min(CAP))
+        narrow.typed(key, |query| count(files, query).min(CAP))
     }
 
     /// The rows the picker's card holds: the query at the head, one row per file with the row the
@@ -126,15 +117,9 @@ impl Picker {
     }
 }
 
-/// Every path `query` leaves, in one total order: rank, then nearness, then the path itself.
-fn leaves<'a>(files: &'a [String], query: &str) -> Vec<&'a str> {
-    let query = query.to_lowercase();
-    let mut ranked: Vec<(Rank, usize, &str)> = files
-        .iter()
-        .filter_map(|path| Some((rank(path, &query)?, nearness(path), path.as_str())))
-        .collect();
-    ranked.sort_unstable();
-    ranked.into_iter().map(|(_, _, path)| path).collect()
+/// How many of `files` the query leaves, whether or not the card has a row for them.
+fn count(files: &[String], query: &str) -> usize {
+    leaves(files.iter().map(|path| (path.as_str(), ())), query).len()
 }
 
 /// The one spelling a single-quoted word cannot swallow is `'\''`, so every quote inside it
@@ -166,28 +151,6 @@ fn leaves_alone(glyph: char) -> bool {
 /// A directory in a working tree and a file in a worktree: a checkout's own bookkeeping and
 /// never something a reader points a prompt at.
 const GIT_DIRECTORY: &str = ".git";
-
-fn nearness(path: &str) -> usize {
-    path.matches('/').count()
-}
-
-/// How `query`, read as lowercase, sits in `path`, or none when it does not sit in it at all: an
-/// empty query is a query every name starts.
-fn rank(path: &str, query: &str) -> Option<Rank> {
-    if query.is_empty() {
-        return Some(Rank::NameStarts);
-    }
-    let name = split(path).name.to_lowercase();
-    if name.starts_with(query) {
-        return Some(Rank::NameStarts);
-    }
-    if name.contains(query) {
-        return Some(Rank::NameHolds);
-    }
-    path.to_lowercase()
-        .contains(query)
-        .then_some(Rank::PathHolds)
-}
 
 /// The file's name and the directory it sits in, which spell the path back with a `/` between them.
 fn split(path: &str) -> Row<'_> {
@@ -298,56 +261,6 @@ mod tests {
             "`.git` is the walk's own bookkeeping and never a file to point a prompt at, \
              while a hidden file a reader may well mean — a `.gitignore` is one — is \
              offered like any other"
-        );
-    }
-
-    #[test]
-    fn the_files_nearest_the_working_directory_come_first() {
-        let root = workspace(&["deep/middle/near.rs", "near.rs"]);
-        let picker = Picker::walk(root.path());
-
-        assert_eq!(
-            offered(&picker),
-            vec![String::from("near.rs"), String::from("deep/middle/near.rs")],
-            "proximity is the ranking: a file in the directory the run stands in is nearer \
-             than one three directories down, and it comes first"
-        );
-    }
-
-    #[test]
-    fn a_name_the_query_starts_outranks_a_name_it_holds_and_a_path_it_holds_comes_last() {
-        let root = workspace(&["x/y/z/late.rs", "src/a/deep.rs", "app.rs"]);
-
-        assert_eq!(
-            offered(&narrowed(root.path(), "a")),
-            vec![
-                String::from("app.rs"),
-                String::from("x/y/z/late.rs"),
-                String::from("src/a/deep.rs"),
-            ],
-            "a name the query starts is a name a reader is typing, so it comes first; a name \
-             that holds the query comes next; and a path that holds it only in its \
-             directories comes last, however near the file sits"
-        );
-    }
-
-    #[test]
-    fn two_matches_of_one_rank_come_in_one_order_every_time() {
-        let root = workspace(&["zebra.rs", "alpha.rs"]);
-        let once = offered(&Picker::walk(root.path()));
-        let twice = offered(&Picker::walk(root.path()));
-
-        assert_eq!(
-            once,
-            vec![String::from("alpha.rs"), String::from("zebra.rs")],
-            "the walk hands back siblings in whatever order the filesystem keeps them, so two \
-             names of one rank are ordered here: the path is the last word on it, and \
-             `alpha.rs` sorts before `zebra.rs`"
-        );
-        assert_eq!(
-            twice, once,
-            "and a second walk of the same workspace offers the same list in the same order, \
-             because nothing about the order is left to the filesystem"
         );
     }
 

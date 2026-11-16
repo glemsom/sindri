@@ -2,10 +2,8 @@ use sindri_core::provider::served::Listing;
 
 use crate::composer::Key;
 use crate::ink::Ink;
-use crate::kept::{Kept, Move, Narrow};
+use crate::kept::{CAP, Kept, Move, Narrow, leaves};
 use crate::list::{self, Beside, ScreenRow};
-
-pub const CAP: usize = 8;
 
 /// The one line the screen says in place of its rows while the wire has yet to answer.
 const ASKING: &str = "asking the wire what it serves";
@@ -51,10 +49,26 @@ impl Models {
 
     /// The first `CAP` names the query leaves, which are the rows the card draws.
     pub fn rows(&self) -> Vec<Row<'_>> {
-        leaves(self.listing.as_ref(), self.narrow.query())
+        leaves(self.names(), self.narrow.query())
             .into_iter()
             .take(CAP)
             .collect()
+    }
+
+    /// The served names as the rank reads them, in the order the wire listed them: the id a query is
+    /// read against, and the row the card draws.
+    fn names(&self) -> impl Iterator<Item = (&str, Row<'_>)> + '_ {
+        self.listing
+            .as_ref()
+            .and_then(Listing::names)
+            .unwrap_or_default()
+            .iter()
+            .map(|served| {
+                (
+                    served.id.as_str(),
+                    (served.id.as_str(), served.label.as_str()),
+                )
+            })
     }
 
     pub fn selected(&self) -> usize {
@@ -85,30 +99,20 @@ impl Models {
 
     pub fn key(&mut self, key: Key) -> bool {
         let Models { listing, narrow } = self;
-        let listing = listing.as_ref();
-        narrow.typed(key, |query| leaves(listing, query).len().min(CAP))
+        let names = listing
+            .as_ref()
+            .and_then(Listing::names)
+            .unwrap_or_default();
+        narrow.typed(key, |query| {
+            leaves(names.iter().map(|served| (served.id.as_str(), ())), query)
+                .len()
+                .min(CAP)
+        })
     }
 
     pub fn chosen(&self) -> Option<&str> {
         self.rows().get(self.narrow.mark()).map(|(id, _)| *id)
     }
-}
-
-/// Every name `query` leaves, ranked and in the wire's own order for ties.
-fn leaves<'a>(listing: Option<&'a Listing>, query: &str) -> Vec<Row<'a>> {
-    let Some(names) = listing.and_then(Listing::names) else {
-        return Vec::new();
-    };
-    let query = query.to_lowercase();
-    let mut ranked: Vec<(u8, Row<'a>)> = names
-        .iter()
-        .filter_map(|served| {
-            rank(&served.id, &query).map(|rank| (rank, (served.id.as_str(), served.label.as_str())))
-        })
-        .collect();
-    // Stable, so names that rank alike stay in the order the wire listed them in.
-    ranked.sort_by_key(|(rank, _)| *rank);
-    ranked.into_iter().map(|(_, row)| row).collect()
 }
 
 impl Kept for Models {
@@ -123,15 +127,4 @@ impl Kept for Models {
     fn pressed(&mut self, at: usize) -> bool {
         self.narrow.pressed(at, self.rows().len())
     }
-}
-
-fn rank(id: &str, query: &str) -> Option<u8> {
-    if query.is_empty() {
-        return Some(0);
-    }
-    let id = id.to_lowercase();
-    if id.starts_with(query) {
-        return Some(0);
-    }
-    id.contains(query).then_some(1)
 }

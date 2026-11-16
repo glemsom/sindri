@@ -9,10 +9,10 @@ use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
-use sindri::kept::{Kept, Move};
+use sindri::kept::{CAP, Kept, Move};
 use sindri::keys::Mode;
 use sindri::mark::Cell;
-use sindri::models::{CAP, Models};
+use sindri::models::Models;
 use sindri::pointer::Pointer;
 use sindri::view::{Painted, Transcript, View};
 
@@ -93,37 +93,14 @@ fn a_query_narrows_the_rows_as_it_is_typed() {
 }
 
 #[test]
-fn a_name_the_query_starts_ranks_above_one_that_merely_holds_it() {
-    // The wire's order puts `claude-sonnet-4-6` first, so a ranking that only filtered would keep it
-    // first; `4` starts neither name and both hold it.
-    let mut models = narrowed("4");
-    assert_eq!(
-        offered(&models),
-        [String::from(FIRST), String::from(SECOND)],
-        "both names hold the query and neither starts with it, so the wire's own order \
-         settles what the rank cannot"
-    );
-
-    models.key(Key::Backspace);
-    for glyph in "claude-h".chars() {
-        models.key(Key::Char(glyph));
-    }
+fn a_query_that_reaches_one_name_leaves_that_name_to_choose() {
+    let models = narrowed(SECOND);
 
     assert_eq!(
-        offered(&models),
-        [String::from(SECOND)],
-        "a query that starts one name and not the other leaves that one"
+        models.chosen(),
+        Some(SECOND),
+        "one name answers the query and the card draws it first, so `Enter` takes it"
     );
-}
-
-#[test]
-fn a_query_that_starts_a_later_name_puts_it_first() {
-    let mut models = Models::new().served_by(Some(listed()));
-    for glyph in SECOND.chars() {
-        models.key(Key::Char(glyph));
-    }
-
-    assert_eq!(models.chosen(), Some(SECOND));
 }
 
 #[test]
