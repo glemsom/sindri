@@ -1,0 +1,257 @@
+use super::*;
+
+fn workspace(files: &[&str]) -> tempfile::TempDir {
+    let root = tempfile::tempdir().expect("a temp workspace");
+    for file in files {
+        let path = root.path().join(file);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("the directories a file sits in");
+        }
+        std::fs::write(&path, "").expect("a file");
+    }
+    root
+}
+
+fn offered(picker: &Picker) -> Vec<String> {
+    picker
+        .rows()
+        .into_iter()
+        .map(|row| match row.directory {
+            "" => row.name.to_owned(),
+            directory => format!("{directory}/{}", row.name),
+        })
+        .collect()
+}
+
+fn narrowed(root: &Path, query: &str) -> Picker {
+    let mut picker = Picker::walk(root);
+    for glyph in query.chars() {
+        picker.key(Key::Char(glyph));
+    }
+    picker
+}
+
+#[test]
+fn an_ignored_file_is_never_offered_and_a_tracked_one_always_can_be() {
+    let root = workspace(&["tracked.rs", "notes.log", "target/artifact.rs"]);
+    std::fs::write(root.path().join(".gitignore"), "*.log\ntarget/\n").expect("a gitignore");
+
+    let rows = offered(&Picker::walk(root.path()));
+
+    assert!(
+        rows.contains(&String::from("tracked.rs")),
+        "a file git tracks is a file the reader may point at, and the walk found {rows:?}"
+    );
+    assert!(
+        !rows
+            .iter()
+            .any(|row| row.ends_with(".log") || row.starts_with("target/")),
+        "an ignored path is a path the run cannot read, so the reader is never offered \
+             it, and the walk found {rows:?}"
+    );
+}
+
+#[test]
+fn a_file_git_tracks_is_offered_even_when_its_name_starts_with_a_dot() {
+    let root = workspace(&[".github/workflows/ci.yml"]);
+
+    let rows = offered(&Picker::walk(root.path()));
+
+    assert_eq!(
+        rows,
+        vec![String::from(".github/workflows/ci.yml")],
+        "hidden is git's word to say, not a dot's: a tracked file is offered wherever \
+             it is"
+    );
+}
+
+#[test]
+fn a_checkouts_own_bookkeeping_is_never_a_row() {
+    let root = workspace(&[
+        ".git/config",
+        ".git/refs/heads/main",
+        ".gitignore",
+        "rows.rs",
+    ]);
+
+    assert_eq!(
+        offered(&Picker::walk(root.path())),
+        vec![String::from(".gitignore"), String::from("rows.rs")],
+        "`.git` is the walk's own bookkeeping and never a file to point a prompt at, \
+             while a hidden file a reader may well mean — a `.gitignore` is one — is \
+             offered like any other"
+    );
+}
+
+#[test]
+fn a_row_is_the_files_name_and_the_directory_it_sits_in() {
+    let root = workspace(&["docs/adr/note.md", "rows.rs"]);
+
+    assert_eq!(
+        Picker::walk(root.path()).rows(),
+        vec![
+            Row {
+                name: "rows.rs",
+                directory: ""
+            },
+            Row {
+                name: "note.md",
+                directory: "docs/adr"
+            },
+        ],
+        "a row a reader reads is the name they are looking for with the directory it sits \
+             in beside it, and a file at the top of the workspace has no directory to name"
+    );
+}
+
+#[test]
+fn a_query_narrows_the_rows_as_it_is_typed() {
+    let root = workspace(&["rows.rs", "rail.rs", "view.rs"]);
+
+    assert_eq!(
+        offered(&narrowed(root.path(), "R")),
+        vec![
+            String::from("rail.rs"),
+            String::from("rows.rs"),
+            String::from("view.rs"),
+        ],
+        "a query is read as part of a path, in either case, and every path here ends \
+             in `.rs`"
+    );
+    assert_eq!(
+        offered(&narrowed(root.path(), "ro")),
+        vec![String::from("rows.rs")],
+        "and it narrows as it is typed: every file holds an `r`, and one holds `ro`"
+    );
+    assert_eq!(
+        offered(&narrowed(root.path(), "rows.r")),
+        vec![String::from("rows.rs")],
+        "until one file is left"
+    );
+}
+
+#[test]
+fn the_screen_offers_eight_rows_and_no_more() {
+    let files: Vec<String> = (0..20).map(|at| format!("file{at}.rs")).collect();
+    let files: Vec<&str> = files.iter().map(String::as_str).collect();
+    let root = workspace(&files);
+
+    assert_eq!(
+        Picker::walk(root.path()).rows().len(),
+        CAP,
+        "§12 caps the list at eight rows, however many files the workspace holds"
+    );
+}
+
+#[test]
+fn the_eight_rows_are_the_eight_the_query_names() {
+    let files: Vec<String> = (0..20).map(|at| format!("file{at:02}.rs")).collect();
+    let files: Vec<&str> = files.iter().map(String::as_str).collect();
+    let root = workspace(&files);
+
+    assert_eq!(
+        offered(&narrowed(root.path(), "file17")),
+        vec![String::from("file17.rs")],
+        "the cap ends the list and never the workspace: a file past the eighth row is \
+             reached by the query"
+    );
+}
+
+#[test]
+fn a_query_counts_every_file_it_leaves_and_draws_only_the_first_eight() {
+    let files: Vec<String> = (0..17).map(|at| format!("file{at:02}.rs")).collect();
+    let files: Vec<&str> = files.iter().map(String::as_str).collect();
+    let root = workspace(&files);
+    let picker = narrowed(root.path(), "file");
+
+    assert_eq!(
+        picker.rows().len(),
+        CAP,
+        "the card has room for eight rows and draws eight"
+    );
+    assert_eq!(
+        picker.matches(),
+        17,
+        "and the count says what the draw cannot: seventeen files hold the query, eight \
+             of them are on the screen"
+    );
+}
+
+#[test]
+fn a_query_that_matches_nothing_draws_no_row_and_counts_none() {
+    let root = workspace(&["rows.rs", "rail.rs"]);
+    let picker = narrowed(root.path(), "zzz");
+
+    assert!(
+        picker.rows().is_empty(),
+        "no file holds `zzz`, so no row is drawn"
+    );
+    assert_eq!(picker.matches(), 0, "and none is counted");
+    assert_eq!(
+        picker.word(),
+        None,
+        "nor is there a path for Enter to spell"
+    );
+}
+
+#[test]
+fn selecting_a_row_names_the_path_as_one_shell_word() {
+    let root = workspace(&["rows.rs", "notes/a file.rs"]);
+    let mut picker = Picker::walk(root.path());
+
+    assert_eq!(
+        picker.word(),
+        Some(String::from("rows.rs ")),
+        "a path a shell reads as one word needs no quotes, and the space after it is \
+             where the next word of the prompt starts"
+    );
+    assert!(picker.walked(Move::Next));
+    assert_eq!(
+        picker.word(),
+        Some(String::from("'notes/a file.rs' ")),
+        "a path a shell would read as two words is quoted, so what lands in the draft \
+             is the one path the reader picked"
+    );
+}
+
+#[test]
+fn a_word_a_shell_would_eat_is_quoted_whole() {
+    assert_eq!(
+        shell_word("crates/sindri/src/rows.rs"),
+        "crates/sindri/src/rows.rs"
+    );
+    assert_eq!(shell_word("a file.rs"), "'a file.rs'");
+    assert_eq!(shell_word("it's.rs"), r"'it'\''s.rs'");
+    assert_eq!(shell_word("$HOME.rs"), "'$HOME.rs'");
+    assert_eq!(shell_word("a;b.rs"), "'a;b.rs'");
+    assert_eq!(
+        shell_word("-v.rs"),
+        "./-v.rs",
+        "a word a shell reads as a flag is a word that is not a file, so the path is \
+             spelled from the working directory"
+    );
+}
+
+#[test]
+fn a_picker_with_no_file_offers_nothing_to_point_at() {
+    let root = workspace(&[]);
+    let mut picker = Picker::walk(root.path());
+
+    assert!(picker.rows().is_empty());
+    assert_eq!(picker.word(), None);
+    assert!(!picker.walked(Move::Next));
+}
+
+#[test]
+fn a_workspace_walks_as_paths_relative_to_itself() {
+    let root = workspace(&["crates/sindri/src/rows.rs"]);
+    let picker = Picker::walk(root.path());
+
+    assert_eq!(
+        offered(&picker),
+        vec![String::from("crates/sindri/src/rows.rs")],
+        "the row a reader reads and the word a selection inserts are the path as the \
+             run's own working directory spells it, and neither is the temp directory's \
+             absolute path"
+    );
+}

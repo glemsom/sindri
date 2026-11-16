@@ -179,6 +179,38 @@ audit_test_name() {
 read_declarations
 audit_undeclared_test_file
 report undeclared-test-file "${violations_undeclared_test_file[@]}"
+inline_lines=()
+
+read_inline_test_modules() {
+  local -a under_src=()
+  local file
+  for file in "${rust_files[@]}"; do
+    case $file in
+      src/* | */src/*) under_src+=("$file") ;;
+    esac
+  done
+  ((${#under_src[@]})) || return 0
+  mapfile -t inline_lines < <(awk -v US=$'\x1f' '
+    { sub(/\r$/, "") }
+    /^[[:space:]]*(#\[[^]]*\][[:space:]]*)?(pub([[:space:]]*\([^)]*\))?[[:space:]]+)?mod[[:space:]]+tests[[:space:]]*\{/ {
+      print FILENAME US FNR
+    }
+  ' "${under_src[@]}")
+}
+
+violations_inline_test_module=()
+
+audit_inline_test_module() {
+  local record file line
+  for record in "${inline_lines[@]}"; do
+    IFS=$'\x1f' read -r file line <<<"$record"
+    violations_inline_test_module+=("$file:$line: an inline test module in src; its body belongs in a sibling tests.rs")
+  done
+}
+
+read_inline_test_modules
+audit_inline_test_module
+report inline-test-module "${violations_inline_test_module[@]}"
 read_test_names
 audit_test_name
 report test-name "${violations_test_name[@]}"

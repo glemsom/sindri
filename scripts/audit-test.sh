@@ -76,7 +76,77 @@ assert_rules() { # desc rule...
 run "$clean"
 assert_code 0 "a tree whose blocks stop at three lines"
 assert_rules "a tree whose blocks stop at three lines" \
-  undeclared-test-file test-name comment-block comment-citation
+  undeclared-test-file inline-test-module test-name comment-block comment-citation
+
+inline="$scratch/inline-test-module"
+cp -a "$clean" "$inline"
+printf '%s\n' \
+  '#[cfg(test)]' \
+  'mod tests {' \
+  '    #[test]' \
+  '    fn demo_keeps_a_field() {}' \
+  '}' >>"$inline/crates/demo/src/field.rs"
+run "$inline"
+assert_code 1 "inline-test-module, a test module in src"
+assert_line 'audit: inline-test-module ... FAIL' "inline-test-module, a test module in src"
+assert_has 'crates/demo/src/field.rs:6: ' "inline-test-module, a test module in src"
+
+spelled="$scratch/inline-test-module-spelled"
+cp -a "$clean" "$spelled"
+printf '%s\n' \
+  '#[cfg(test)]' \
+  '#[cfg(all(test, feature = "x"))]' \
+  '/// The tests.' \
+  'mod tests {' \
+  '    #[test]' \
+  '    fn demo_keeps_a_field() {}' \
+  '}' >>"$spelled/crates/demo/src/field.rs"
+run "$spelled"
+assert_code 1 "inline-test-module, whichever attribute and comment stands above it"
+assert_has 'crates/demo/src/field.rs:8: ' "inline-test-module, whichever attribute and comment stands above it"
+
+one_line="$scratch/inline-test-module-one-line"
+cp -a "$clean" "$one_line"
+printf '%s\n' '#[cfg(test)] mod tests { #[test] fn demo_keeps_a_field() {} }' \
+  >>"$one_line/crates/demo/src/field.rs"
+run "$one_line"
+assert_code 1 "inline-test-module, the module written on one line"
+assert_has 'crates/demo/src/field.rs:5: ' "inline-test-module, the module written on one line"
+
+reached="$scratch/inline-test-module-pub"
+cp -a "$clean" "$reached"
+printf '%s\n' \
+  '#[cfg(test)]' \
+  'pub(crate) mod tests {' \
+  '    #[test]' \
+  '    fn demo_keeps_a_field() {}' \
+  '}' >>"$reached/crates/demo/src/field.rs"
+run "$reached"
+assert_code 1 "inline-test-module, a test module reached through pub(crate)"
+assert_has 'crates/demo/src/field.rs:6: ' "inline-test-module, a test module reached through pub(crate)"
+
+helper="$scratch/inline-test-module-helper"
+cp -a "$clean" "$helper"
+printf '%s\n' \
+  '#[cfg(test)]' \
+  'mod caps {' \
+  '    pub(crate) fn pictured() {}' \
+  '}' >>"$helper/crates/demo/src/field.rs"
+run "$helper"
+assert_code 0 "inline-test-module, a helper module under src"
+assert_line 'audit: inline-test-module ... ok' "inline-test-module, a helper module under src"
+
+outside="$scratch/inline-test-module-outside-src"
+cp -a "$clean" "$outside"
+plant "$outside" crates/demo/tests/inline.rs \
+  '#[cfg(test)]' \
+  'mod tests {' \
+  '    #[test]' \
+  '    fn demo_keeps_a_field() {}' \
+  '}'
+run "$outside"
+assert_code 0 "inline-test-module, a test module under tests/"
+assert_line 'audit: inline-test-module ... ok' "inline-test-module, a test module under tests/"
 
 undeclared="$scratch/undeclared"
 cp -a "$clean" "$undeclared"
@@ -253,7 +323,8 @@ start=$(date +%s%N)
 run "$repo_root"
 elapsed_ms=$(( ($(date +%s%N) - start) / 1000000 ))
 assert_code 0 "this tree"
-assert_rules "this tree" undeclared-test-file test-name comment-block comment-citation
+assert_rules "this tree" \
+  undeclared-test-file inline-test-module test-name comment-block comment-citation
 if (( elapsed_ms < 1000 )); then ok "this tree: ${elapsed_ms}ms, under a second"; else
   bad "this tree: ${elapsed_ms}ms, want under a second"; fi
 
