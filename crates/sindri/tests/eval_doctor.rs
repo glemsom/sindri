@@ -1,7 +1,9 @@
-//! `doctor`'s description is the `bash` tool's, byte for byte: the bytes printed under its heading are cut out
-//! of the report and held against what the tool set a run registers renders, both enforcement worlds walked.
-//! An eval is judged by `make evals` and never by `make test`, which is why the test here is ignored.
+//! `doctor`'s description is the `bash` tool's, byte for byte: the bytes printed under its heading are held
+//! against what the tool set registers, over a stand-in `bwrap` first on `PATH`, so both worlds are walked
+//! on a runner whose kernel forbids an unprivileged sandbox. An eval is judged by `make evals`, not `make test`.
 
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
@@ -10,6 +12,12 @@ use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::skills::Catalog;
 use sindri_core::tools::{BASH, FrontEnd, ToolSet};
 use tempfile::TempDir;
+
+/// A stand-in `bwrap` that answers the version and builds every sandbox it is asked for: a proof this
+/// machine's kernel has no say in.
+const PROVES: &str = "if [ \"${1:-}\" = --version ]; then\n  \
+                      echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
+                      exit 0";
 
 struct Ground {
     /// Held so the directories outlive the paths that name them.
@@ -53,14 +61,23 @@ impl Ground {
         std::fs::canonicalize(&self.workspace).expect("the workspace resolves")
     }
 
-    fn command(&self) -> Command {
+    /// The stand-in `bwrap`, first on the child's `PATH`: a sandbox the eval lends the run rather than one
+    /// it asks the kernel for.
+    fn machine(&self) -> String {
+        let bin = self.config.join("machine");
+        std::fs::create_dir_all(&bin).expect("a machine directory");
+        let bwrap = bin.join("bwrap");
+        std::fs::write(&bwrap, format!("#!/bin/sh\n{PROVES}\n")).expect("a stand-in bwrap");
+        std::fs::set_permissions(&bwrap, Permissions::from_mode(0o755))
+            .expect("the stand-in is executable");
+        format!("{}:/usr/bin:/bin", bin.display())
+    }
+
+    fn command(&self, path: &str) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
         command
             .env_clear()
-            .env(
-                "PATH",
-                std::env::var("PATH").expect("this machine has a PATH"),
-            )
+            .env("PATH", path)
             .env("XDG_CONFIG_HOME", &self.config)
             .env("XDG_STATE_HOME", &self.state)
             .env("HOME", &self.config)
@@ -124,17 +141,18 @@ fn diff(printed: &str, registered: &str) -> String {
 #[ignore = "an eval is judged by `make evals`, not by `make test`"]
 fn doctor_prints_the_bash_description_the_model_is_given_byte_for_byte() {
     let ground = Ground::new();
+    let path = ground.machine();
 
     for (flags, enforcement) in [
         (Vec::<&str>::new(), Enforcement::Bubblewrap),
         (vec!["--yolo-unsafe"], Enforcement::Unsafe),
     ] {
-        let output = run(ground.command().args(&flags).arg("doctor"));
+        let output = run(ground.command(&path).args(&flags).arg("doctor"));
         let out = text(&output.stdout);
-        assert!(
-            matches!(output.status.code(), Some(0) | Some(3)),
-            "doctor ended {:?} instead of reporting, under {flags:?}:\n{out}",
-            output.status.code()
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "every world a stand-in sandbox is handed reports whole, under {flags:?}:\n{out}",
         );
         assert!(
             output.stderr.is_empty(),
