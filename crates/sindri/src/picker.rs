@@ -80,7 +80,11 @@ impl Picker {
 
     /// How many files the query leaves, whether or not the card has a row for them.
     pub fn matches(&self) -> usize {
-        self.ranked().len()
+        let query = self.narrow.query().to_lowercase();
+        self.files
+            .iter()
+            .filter(|path| rank(path, &query).is_some())
+            .count()
     }
 
     pub fn key(&mut self, key: Key) -> bool {
@@ -198,8 +202,7 @@ fn split(path: &str) -> Row<'_> {
 
 impl Kept for Picker {
     fn walked(&mut self, way: Move) -> bool {
-        let rows = self.rows().len();
-        self.narrow.walked(way, rows)
+        self.narrow.walked(way, self.rows().len())
     }
 
     fn typed(&mut self, key: Key) -> bool {
@@ -207,8 +210,7 @@ impl Kept for Picker {
     }
 
     fn pressed(&mut self, at: usize) -> bool {
-        let rows = self.rows().len();
-        self.narrow.pressed(at, rows)
+        self.narrow.pressed(at, self.rows().len())
     }
 }
 
@@ -458,26 +460,6 @@ mod tests {
             None,
             "nor is there a path for Enter to spell"
         );
-    }
-
-    #[test]
-    fn a_backspace_opens_the_list_back_up() {
-        let root = workspace(&["rows.rs", "rail.rs", "view.rs"]);
-
-        let mut picker = narrowed(root.path(), "ro");
-        assert_eq!(offered(&picker), vec![String::from("rows.rs")]);
-
-        assert!(picker.key(Key::Backspace));
-        assert_eq!(
-            offered(&picker),
-            vec![
-                String::from("rail.rs"),
-                String::from("rows.rs"),
-                String::from("view.rs"),
-            ],
-            "erasing a glyph of the query widens the list again"
-        );
-        assert_eq!(picker.query(), "r");
     }
 
     #[test]

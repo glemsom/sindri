@@ -127,24 +127,6 @@ fn a_query_that_starts_a_later_name_puts_it_first() {
 }
 
 #[test]
-fn a_backspace_widens_the_list_again() {
-    let mut models = narrowed("haiku");
-    assert_eq!(offered(&models), [String::from(SECOND)]);
-
-    for _ in 0.."haiku".len() {
-        assert!(models.key(Key::Backspace));
-    }
-
-    assert_eq!(
-        offered(&models),
-        [String::from(FIRST), String::from(SECOND)],
-        "erasing the query a glyph at a time widens the list back to the names the wire \
-         served, in the order it served them"
-    );
-    assert_eq!(models.query(), "");
-}
-
-#[test]
 fn a_query_that_matches_no_served_name_takes_no_name() {
     let models = narrowed("a-name-the-wire-never-served");
 

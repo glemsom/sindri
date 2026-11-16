@@ -119,7 +119,7 @@ fn typed(view: &View) -> [String; 3] {
 
 /// The four lists there are, stood on a bench: the picker's files, the names the wire served, the
 /// config's keys and the card a draft opens, each answering the seam as the frame asks it.
-enum List {
+enum Bench {
     Files(Picker),
     Models(Models),
     Settings(Settings),
@@ -127,40 +127,40 @@ enum List {
 }
 
 /// A workspace of four files, one of which a query can take away from under the mark.
-fn files() -> List {
+fn files() -> Bench {
     let root = workspace(&["a1.rs", "b1.rs", "m.rs", "zz.rs"]);
-    List::Files(Picker::walk(root.path()))
+    Bench::Files(Picker::walk(root.path()))
 }
 
 /// The names a recorded wire served, which are two.
-fn served() -> List {
-    List::Models(Models::new().served_by(Some(listed())))
+fn served() -> Bench {
+    Bench::Models(Models::new().served_by(Some(listed())))
 }
 
 /// The config's keys, which are the rows a visit holds and the one list with no query.
-fn visit() -> List {
-    List::Settings(Settings::of(&Config::default()))
+fn visit() -> Bench {
+    Bench::Settings(Settings::of(&Config::default()))
 }
 
 /// The card a bare slash opens, which holds every command in one order.
-fn card() -> List {
-    List::Card(commands::Card::of("/").expect("a bare slash holds every command"))
+fn card() -> Bench {
+    Bench::Card(commands::Card::of("/").expect("a bare slash holds every command"))
 }
 
-impl List {
+impl Bench {
     fn name(&self) -> &'static str {
         match self {
-            List::Files(_) => "picker",
-            List::Models(_) => "served names",
-            List::Settings(_) => "visit",
-            List::Card(_) => "card",
+            Bench::Files(_) => "picker",
+            Bench::Models(_) => "served names",
+            Bench::Settings(_) => "visit",
+            Bench::Card(_) => "card",
         }
     }
 
     /// The rows the list holds, each as the word it spells.
     fn rows(&self) -> Vec<String> {
         match self {
-            List::Files(picker) => picker
+            Bench::Files(picker) => picker
                 .rows()
                 .into_iter()
                 .map(|row| match row.directory {
@@ -168,13 +168,13 @@ impl List {
                     directory => format!("{directory}/{}", row.name),
                 })
                 .collect(),
-            List::Models(models) => models
+            Bench::Models(models) => models
                 .rows()
                 .into_iter()
                 .map(|(id, _)| id.to_owned())
                 .collect(),
-            List::Settings(settings) => settings.rows().map(|(key, _)| key.to_owned()).collect(),
-            List::Card(card) => card
+            Bench::Settings(settings) => settings.rows().map(|(key, _)| key.to_owned()).collect(),
+            Bench::Card(card) => card
                 .rows()
                 .into_iter()
                 .map(|row| row.name.to_owned())
@@ -185,10 +185,10 @@ impl List {
     /// The mark, which is the row the reader stands on.
     fn mark(&self) -> usize {
         match self {
-            List::Files(picker) => picker.selected(),
-            List::Models(models) => models.selected(),
-            List::Settings(settings) => settings.current(),
-            List::Card(card) => card.selected(),
+            Bench::Files(picker) => picker.selected(),
+            Bench::Models(models) => models.selected(),
+            Bench::Settings(settings) => settings.current(),
+            Bench::Card(card) => card.selected(),
         }
     }
 
@@ -209,31 +209,31 @@ impl List {
     }
 }
 
-impl Kept for List {
+impl Kept for Bench {
     fn walked(&mut self, way: Move) -> bool {
         match self {
-            List::Files(picker) => picker.walked(way),
-            List::Models(models) => models.walked(way),
-            List::Settings(settings) => settings.walked(way),
-            List::Card(card) => card.walked(way),
+            Bench::Files(picker) => picker.walked(way),
+            Bench::Models(models) => models.walked(way),
+            Bench::Settings(settings) => settings.walked(way),
+            Bench::Card(card) => card.walked(way),
         }
     }
 
     fn typed(&mut self, key: Key) -> bool {
         match self {
-            List::Files(picker) => picker.typed(key),
-            List::Models(models) => models.typed(key),
-            List::Settings(settings) => settings.typed(key),
-            List::Card(card) => card.typed(key),
+            Bench::Files(picker) => picker.typed(key),
+            Bench::Models(models) => models.typed(key),
+            Bench::Settings(settings) => settings.typed(key),
+            Bench::Card(card) => card.typed(key),
         }
     }
 
     fn pressed(&mut self, at: usize) -> bool {
         match self {
-            List::Files(picker) => picker.pressed(at),
-            List::Models(models) => models.pressed(at),
-            List::Settings(settings) => settings.pressed(at),
-            List::Card(card) => card.pressed(at),
+            Bench::Files(picker) => picker.pressed(at),
+            Bench::Models(models) => models.pressed(at),
+            Bench::Settings(settings) => settings.pressed(at),
+            Bench::Card(card) => card.pressed(at),
         }
     }
 }
@@ -345,7 +345,7 @@ fn an_edit_that_still_reaches_the_mark_leaves_it_where_the_reader_put_it() {
 #[test]
 fn an_edit_that_re_ranks_the_rows_leaves_the_mark_at_the_index_it_stood_at() {
     let root = workspace(&["abe.rs", "bob.rs"]);
-    let mut picker = List::Files(Picker::walk(root.path()));
+    let mut picker = Bench::Files(Picker::walk(root.path()));
     assert!(picker.walked(Move::Next));
     assert_eq!(
         picker.marked().as_deref(),
@@ -367,6 +367,95 @@ fn an_edit_that_re_ranks_the_rows_leaves_the_mark_at_the_index_it_stood_at() {
         "and the mark keeps the place the reader put it in: the eye stays where it was, and \
          the row underneath it is the query's to change"
     );
+
+    let mut card = card();
+    for _ in 0..4 {
+        assert!(card.walked(Move::Next));
+    }
+    assert_eq!(card.marked().as_deref(), Some("/settings"));
+
+    card.ask("s");
+
+    assert_eq!(
+        card.rows(),
+        [
+            String::from("/settings"),
+            String::from("/skill"),
+            String::from("/stats")
+        ],
+        "`s` is the letter three names start, and the fourth row they leave is the one the \
+         reader stands on"
+    );
+    assert_eq!(
+        card.marked().as_deref(),
+        Some("/stats"),
+        "and the mark of the card stands at the index it stood at, as every list's does, \
+         though the row it pointed at is drawn on the first"
+    );
+}
+
+#[test]
+fn an_erasure_widens_the_rows_every_list_leaves() {
+    let mut picker = files();
+    picker.ask("m");
+    assert_eq!(picker.rows(), [String::from("m.rs")], "`m` leaves one file");
+
+    assert!(
+        picker.typed(Key::Backspace),
+        "erasing a glyph of the query widens the list, which is a frame to paint"
+    );
+    assert_eq!(
+        picker.rows().len(),
+        4,
+        "and the four files of the workspace answer the query again"
+    );
+    assert_eq!(picker.mark(), 0, "with the mark on the row it stood on");
+
+    let mut models = served();
+    models.ask("haiku");
+    assert_eq!(models.rows(), [String::from("claude-haiku-4-5")]);
+
+    for _ in 0.."haiku".len() {
+        assert!(models.typed(Key::Backspace));
+    }
+    assert_eq!(
+        models.rows().len(),
+        2,
+        "erasing the query a glyph at a time hands the served names back in the wire's own order"
+    );
+
+    let mut commands = card();
+    commands.ask("t");
+    assert_eq!(
+        commands.rows().len(),
+        3,
+        "`/t` leaves the three names that hold it"
+    );
+
+    assert!(commands.typed(Key::Backspace));
+    assert_eq!(
+        commands.rows().len(),
+        commands::TABLE.len(),
+        "erasing the glyph hands every command back to the card"
+    );
+
+    let mut bare = card();
+    assert!(
+        bare.typed(Key::Backspace),
+        "erasing the slash of the card's query is a query erased"
+    );
+    assert!(
+        !bare.typed(Key::Backspace),
+        "and a query with nothing left to erase is no change at all, so nothing is painted"
+    );
+
+    for mut list in [files(), served()] {
+        let name = list.name();
+        assert!(
+            !list.typed(Key::Backspace),
+            "nor is an erasure at the {name} list a change where its query holds no glyph"
+        );
+    }
 }
 
 #[test]

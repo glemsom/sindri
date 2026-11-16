@@ -126,7 +126,6 @@ impl Settings {
         self.rows.get(self.current()).is_some()
     }
 
-    /// The row the keys act on, which is the row the mark stands on.
     fn standing(&mut self) -> &mut Row {
         let at = self.narrow.mark();
         &mut self.rows[at]

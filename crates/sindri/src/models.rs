@@ -49,8 +49,12 @@ impl Models {
         self.narrow.query()
     }
 
+    /// The first `CAP` names the query leaves, which are the rows the card draws.
     pub fn rows(&self) -> Vec<Row<'_>> {
         leaves(self.listing.as_ref(), self.narrow.query())
+            .into_iter()
+            .take(CAP)
+            .collect()
     }
 
     pub fn selected(&self) -> usize {
@@ -82,7 +86,7 @@ impl Models {
     pub fn key(&mut self, key: Key) -> bool {
         let Models { listing, narrow } = self;
         let listing = listing.as_ref();
-        narrow.typed(key, |query| leaves(listing, query).len())
+        narrow.typed(key, |query| leaves(listing, query).len().min(CAP))
     }
 
     pub fn chosen(&self) -> Option<&str> {
@@ -90,7 +94,7 @@ impl Models {
     }
 }
 
-/// The names `query` leaves, ranked and in the wire's own order for ties, the first `CAP` of them.
+/// Every name `query` leaves, ranked and in the wire's own order for ties.
 fn leaves<'a>(listing: Option<&'a Listing>, query: &str) -> Vec<Row<'a>> {
     let Some(names) = listing.and_then(Listing::names) else {
         return Vec::new();
@@ -104,13 +108,12 @@ fn leaves<'a>(listing: Option<&'a Listing>, query: &str) -> Vec<Row<'a>> {
         .collect();
     // Stable, so names that rank alike stay in the order the wire listed them in.
     ranked.sort_by_key(|(rank, _)| *rank);
-    ranked.into_iter().take(CAP).map(|(_, row)| row).collect()
+    ranked.into_iter().map(|(_, row)| row).collect()
 }
 
 impl Kept for Models {
     fn walked(&mut self, way: Move) -> bool {
-        let rows = self.rows().len();
-        self.narrow.walked(way, rows)
+        self.narrow.walked(way, self.rows().len())
     }
 
     fn typed(&mut self, key: Key) -> bool {
@@ -118,8 +121,7 @@ impl Kept for Models {
     }
 
     fn pressed(&mut self, at: usize) -> bool {
-        let rows = self.rows().len();
-        self.narrow.pressed(at, rows)
+        self.narrow.pressed(at, self.rows().len())
     }
 }
 

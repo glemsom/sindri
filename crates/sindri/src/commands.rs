@@ -135,8 +135,7 @@ impl Card {
 
 impl Kept for Card {
     fn walked(&mut self, way: Move) -> bool {
-        let rows = self.rows().len();
-        self.narrow.walked(way, rows)
+        self.narrow.walked(way, self.rows().len())
     }
 
     fn typed(&mut self, key: Key) -> bool {
@@ -144,8 +143,7 @@ impl Kept for Card {
     }
 
     fn pressed(&mut self, at: usize) -> bool {
-        let rows = self.rows().len();
-        self.narrow.pressed(at, rows)
+        self.narrow.pressed(at, self.rows().len())
     }
 }
 

@@ -57,8 +57,8 @@ impl Narrow {
     }
 
     /// A typed glyph or an erasure, and whether the query changed. `rows` answers how many rows a
-    /// query leaves as the screen draws them, and the mark keeps the place it stood in while those
-    /// rows still reach it: a row an edit took away sends it to the nearest one left.
+    /// query leaves, and the mark keeps the place it stood in: a row an edit took away sends the
+    /// mark to the nearest one left.
     pub fn typed(&mut self, key: Key, rows: impl Fn(&str) -> usize) -> bool {
         let changed = match key {
             Key::Char(glyph) if !glyph.is_control() => {
