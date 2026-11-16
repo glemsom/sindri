@@ -128,7 +128,7 @@ enum Bench {
 
 /// A workspace of four files, one of which a query can take away from under the mark.
 fn files() -> Bench {
-    let root = workspace(&["a1.rs", "b1.rs", "m.rs", "zz.rs"]);
+    let root = workspace(&["alpha.rs", "baker.rs", "mars.rs", "zulu.rs"]);
     Bench::Files(Picker::walk(root.path()))
 }
 
@@ -292,7 +292,7 @@ fn an_edit_that_still_reaches_the_mark_leaves_it_where_the_reader_put_it() {
     assert!(picker.walked(Move::Next));
     assert_eq!(
         picker.marked().as_deref(),
-        Some("m.rs"),
+        Some("mars.rs"),
         "the mark of the picker stands on the third of the four files"
     );
     picker.ask("rs");
@@ -303,7 +303,7 @@ fn an_edit_that_still_reaches_the_mark_leaves_it_where_the_reader_put_it() {
     );
     assert_eq!(
         picker.marked().as_deref(),
-        Some("m.rs"),
+        Some("mars.rs"),
         "and the mark of the picker stands on the file the reader pointed at"
     );
 
@@ -398,7 +398,11 @@ fn an_edit_that_re_ranks_the_rows_leaves_the_mark_at_the_index_it_stood_at() {
 fn an_erasure_widens_the_rows_every_list_leaves() {
     let mut picker = files();
     picker.ask("m");
-    assert_eq!(picker.rows(), [String::from("m.rs")], "`m` leaves one file");
+    assert_eq!(
+        picker.rows(),
+        [String::from("mars.rs")],
+        "`m` leaves one file"
+    );
 
     assert!(
         picker.typed(Key::Backspace),
@@ -464,16 +468,20 @@ fn an_edit_that_takes_the_marked_row_away_leaves_the_mark_on_the_nearest_row() {
     for _ in 0..3 {
         assert!(picker.walked(Move::Next));
     }
-    assert_eq!(picker.marked().as_deref(), Some("zz.rs"));
-    picker.ask("1");
+    assert_eq!(picker.marked().as_deref(), Some("zulu.rs"));
+    picker.ask("a");
     assert_eq!(
         picker.rows(),
-        [String::from("a1.rs"), String::from("b1.rs")],
-        "`1` takes the marked file away and leaves two above it"
+        [
+            String::from("alpha.rs"),
+            String::from("baker.rs"),
+            String::from("mars.rs")
+        ],
+        "`a` takes the marked file away and leaves three above it"
     );
     assert_eq!(
         picker.marked().as_deref(),
-        Some("b1.rs"),
+        Some("mars.rs"),
         "so the mark of the picker stands on the nearest row kept rather than on the first"
     );
 
