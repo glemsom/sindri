@@ -29,7 +29,6 @@ pub fn leaves<'a, T>(items: impl IntoIterator<Item = (&'a str, T)>, query: &str)
     ranked.into_iter().map(|(_, _, row)| row).collect()
 }
 
-/// The name of a spelling: everything after its last `/`, and the spelling where it holds none.
 fn name(spelling: &str) -> &str {
     match spelling.rsplit_once('/') {
         Some((_, name)) => name,
@@ -37,7 +36,6 @@ fn name(spelling: &str) -> &str {
     }
 }
 
-/// How many directories a spelling sits under, which is the count of its `/`.
 fn nearness(spelling: &str) -> usize {
     spelling.matches('/').count()
 }

@@ -43,7 +43,8 @@ impl Picker {
             }
             files.push(relative.to_owned());
         }
-        // The walk hands siblings back in filesystem order, so the query's order is the only one left.
+        // The walk hands siblings back in whatever order the filesystem keeps them, and the rank keeps
+        // the order it is handed, so the files are sorted here and nowhere else.
         files.sort_unstable();
         Picker {
             files,
@@ -74,17 +75,13 @@ impl Picker {
 
     /// How many files the query leaves, whether or not the card has a row for them.
     pub fn matches(&self) -> usize {
-        self.ranked().len()
+        count(&self.files, self.narrow.query())
     }
 
     pub fn key(&mut self, key: Key) -> bool {
         let Picker { files, narrow } = self;
         let files = files.as_slice();
-        narrow.typed(key, |query| {
-            leaves(files.iter().map(|path| (path.as_str(), ())), query)
-                .len()
-                .min(CAP)
-        })
+        narrow.typed(key, |query| count(files, query).min(CAP))
     }
 
     /// The rows the picker's card holds: the query at the head, one row per file with the row the
@@ -118,6 +115,11 @@ impl Picker {
         let path = *self.ranked().get(self.narrow.mark())?;
         Some(format!("{} ", shell_word(path)))
     }
+}
+
+/// How many of `files` the query leaves, whether or not the card has a row for them.
+fn count(files: &[String], query: &str) -> usize {
+    leaves(files.iter().map(|path| (path.as_str(), ())), query).len()
 }
 
 /// The one spelling a single-quoted word cannot swallow is `'\''`, so every quote inside it

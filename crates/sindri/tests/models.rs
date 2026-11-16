@@ -93,6 +93,17 @@ fn a_query_narrows_the_rows_as_it_is_typed() {
 }
 
 #[test]
+fn a_query_that_reaches_one_name_leaves_that_name_to_choose() {
+    let models = narrowed(SECOND);
+
+    assert_eq!(
+        models.chosen(),
+        Some(SECOND),
+        "one name answers the query and the card draws it first, so `Enter` takes it"
+    );
+}
+
+#[test]
 fn a_query_that_matches_no_served_name_takes_no_name() {
     let models = narrowed("a-name-the-wire-never-served");
 

@@ -797,6 +797,18 @@ fn one_rank_answers_a_name_a_query_starts_a_name_it_holds_and_a_path_it_holds() 
 }
 
 #[test]
+fn one_rank_reads_the_query_and_the_name_it_sits_in_as_one_case() {
+    let spellings = ["readme.md", "src/app.rs", "myapp.rs", "app/log.rs"];
+
+    assert_eq!(
+        leaves(spellings.map(|spelling| (spelling, spelling)), "APP"),
+        ["src/app.rs", "myapp.rs", "app/log.rs"],
+        "a reader who types in capitals narrows the rows as one who does not: the query is read \
+         as lowercase, and so is the name it is read against"
+    );
+}
+
+#[test]
 fn the_rows_of_one_rank_come_nearest_first_and_in_the_order_they_were_handed() {
     let spellings = ["holds.rs", "deep/holds.rs"];
 

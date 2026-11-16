@@ -49,10 +49,26 @@ impl Models {
 
     /// The first `CAP` names the query leaves, which are the rows the card draws.
     pub fn rows(&self) -> Vec<Row<'_>> {
-        ranked(self.listing.as_ref(), self.narrow.query())
+        leaves(self.names(), self.narrow.query())
             .into_iter()
             .take(CAP)
             .collect()
+    }
+
+    /// The served names as the rank reads them, in the order the wire listed them: the id a query is
+    /// read against, and the row the card draws.
+    fn names(&self) -> impl Iterator<Item = (&str, Row<'_>)> + '_ {
+        self.listing
+            .as_ref()
+            .and_then(Listing::names)
+            .unwrap_or_default()
+            .iter()
+            .map(|served| {
+                (
+                    served.id.as_str(),
+                    (served.id.as_str(), served.label.as_str()),
+                )
+            })
     }
 
     pub fn selected(&self) -> usize {
@@ -83,27 +99,20 @@ impl Models {
 
     pub fn key(&mut self, key: Key) -> bool {
         let Models { listing, narrow } = self;
-        let listing = listing.as_ref();
-        narrow.typed(key, |query| ranked(listing, query).len().min(CAP))
+        let names = listing
+            .as_ref()
+            .and_then(Listing::names)
+            .unwrap_or_default();
+        narrow.typed(key, |query| {
+            leaves(names.iter().map(|served| (served.id.as_str(), ())), query)
+                .len()
+                .min(CAP)
+        })
     }
 
     pub fn chosen(&self) -> Option<&str> {
         self.rows().get(self.narrow.mark()).map(|(id, _)| *id)
     }
-}
-
-/// Every served name `query` leaves, as the row the card draws: the wire's own order for ties.
-fn ranked<'a>(listing: Option<&'a Listing>, query: &str) -> Vec<Row<'a>> {
-    let Some(names) = listing.and_then(Listing::names) else {
-        return Vec::new();
-    };
-    let items = names.iter().map(|served| {
-        (
-            served.id.as_str(),
-            (served.id.as_str(), served.label.as_str()),
-        )
-    });
-    leaves(items, query)
 }
 
 impl Kept for Models {

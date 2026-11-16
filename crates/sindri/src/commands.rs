@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use crate::composer::Key;
 use crate::ink::Ink;
 use crate::kept::{Kept, Move, Narrow, leaves};
@@ -161,20 +163,29 @@ fn tail(draft: &str) -> &str {
     }
 }
 
-/// The rows the word after the slash leaves, handed in the one order their names give.
+/// The rows the word after the slash leaves, handed to the rank by name.
 fn ranked(asked: &str) -> Vec<Row> {
     let Some(body) = asked.strip_prefix('/') else {
         return Vec::new();
     };
     let query = body.split(':').next().unwrap_or_default();
-    leaves(by_name().iter().map(|row| (row.name, *row)), query)
+    leaves(by_name().iter().map(|row| (plain(row), *row)), query)
 }
 
-/// The table in the order its names give, so the rows of one rank come out alphabetical.
-fn by_name() -> Vec<Row> {
-    let mut rows = TABLE.to_vec();
-    rows.sort_by_key(|row| row.name);
-    rows
+/// The name a query is read against: a command is spelled with a slash and named without one, so a
+/// word that holds a slash of its own names no command at all.
+fn plain(row: &Row) -> &'static str {
+    row.name.strip_prefix('/').unwrap_or(row.name)
+}
+
+/// The table in the order its names give, which is the order the rows of one rank come in, sorted once.
+fn by_name() -> &'static [Row] {
+    static BY_NAME: OnceLock<Vec<Row>> = OnceLock::new();
+    BY_NAME.get_or_init(|| {
+        let mut rows = TABLE.to_vec();
+        rows.sort_unstable_by_key(|row| row.name);
+        rows
+    })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -253,7 +264,7 @@ mod tests {
 
     #[test]
     fn a_word_no_command_holds_holds_no_card() {
-        for draft in ["/skillet", "/usr", "/etc/hosts"] {
+        for draft in ["/skillet", "/usr", "/etc/hosts", "//", "/src/rows.rs"] {
             assert!(
                 Card::of(draft).is_none(),
                 "{draft:?} names no command, so it is a draft the reader meant to send"
