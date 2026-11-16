@@ -1,6 +1,8 @@
 //! The pen is the one module that writes a glyph into a cell, measures a column, fills a row to its
 //! edge and hangs a run on one, and each of those is a search of the tree with a test behind it.
 
+mod modules; // the module a source file belongs to
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -75,7 +77,7 @@ fn the_pen_is_the_only_module_that_writes_a_glyph_into_a_cell() {
         let found = everywhere(&sources, writing);
         assert!(!found.is_empty(), "the pen writes a cell with {writing}");
         assert!(
-            found.iter().all(|at| at.starts_with(PEN)),
+            found.iter().all(|at| modules::of(at) == modules::of(PEN)),
             "one module writes a glyph into a cell, and it is the pen: {writing} is written in \
              {found:?}"
         );
@@ -120,7 +122,7 @@ fn the_pen_fills_a_row_to_its_edge_and_hangs_a_run_on_one_and_no_other_module_do
 
     let fills = everywhere(&sources, "repeat(");
     assert!(
-        fills.iter().all(|at| at.starts_with(PEN)),
+        fills.iter().all(|at| modules::of(at) == modules::of(PEN)),
         "a row that fills to its edge is the pen's, and repeating a glyph to spell one is not a \
          second way to fill it: {fills:?}"
     );
