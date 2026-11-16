@@ -1,6 +1,6 @@
-//! The list a screen keeps: what a cursor movement walks, what a typed glyph reaches and which row a
-//! press chooses — the picker's files, the wire's served names, the config's keys and the commands
-//! card a draft opens answering alike.
+//! The list a screen keeps: the query a reader types at it, the mark they walk, and the rule that puts
+//! the mark back when an edit takes the row it stood on away — the picker's files, the wire's served
+//! names, the config's keys and the commands card a draft opens answering alike.
 
 use crate::composer::Key;
 
@@ -17,7 +17,7 @@ pub enum Move {
 pub trait Kept {
     /// The mark a way along, and whether it moved.
     fn walked(&mut self, way: Move) -> bool;
-    /// A typed glyph or an erasure, and whether the rows changed.
+    /// A typed glyph or an erasure, and whether the list changed.
     fn typed(&mut self, key: Key) -> bool;
     /// The row a press landed on, marked, and whether the list still holds it.
     fn pressed(&mut self, at: usize) -> bool;
@@ -56,13 +56,10 @@ impl Narrow {
         self.mark = 0;
     }
 
-    /// A typed glyph or an erasure, and whether the query changed. `rows` answers the rows a query
-    /// leaves as the screen draws them, each as the word it spells; the mark stands on the row it
-    /// stood on where they still hold it, and on the nearest of them where they do not.
-    pub fn typed<'a>(&mut self, key: Key, rows: impl Fn(&str) -> Vec<&'a str>) -> bool {
-        let stood = rows(&self.query)
-            .get(self.mark)
-            .map(|spelt| spelt.to_string());
+    /// A typed glyph or an erasure, and whether the query changed. `rows` answers how many rows a
+    /// query leaves as the screen draws them, and the mark keeps the place it stood in while those
+    /// rows still reach it: a row an edit took away sends it to the nearest one left.
+    pub fn typed(&mut self, key: Key, rows: impl Fn(&str) -> usize) -> bool {
         let changed = match key {
             Key::Char(glyph) if !glyph.is_control() => {
                 self.query.push(glyph);
@@ -74,11 +71,7 @@ impl Narrow {
         if !changed {
             return false;
         }
-        let rows = rows(&self.query);
-        self.mark = match stood.and_then(|spelt| rows.iter().position(|row| *row == spelt)) {
-            Some(at) => at,
-            None => self.mark.min(rows.len().saturating_sub(1)),
-        };
+        self.mark = self.mark.min(rows(&self.query).saturating_sub(1));
         true
     }
 

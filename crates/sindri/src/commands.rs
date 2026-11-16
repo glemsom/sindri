@@ -140,12 +140,7 @@ impl Kept for Card {
     }
 
     fn typed(&mut self, key: Key) -> bool {
-        self.narrow.typed(key, |words| {
-            ranked(word(words))
-                .into_iter()
-                .map(|row| row.name)
-                .collect()
-        })
+        self.narrow.typed(key, |words| ranked(word(words)).len())
     }
 
     fn pressed(&mut self, at: usize) -> bool {

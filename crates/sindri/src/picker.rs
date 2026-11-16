@@ -86,9 +86,7 @@ impl Picker {
     pub fn key(&mut self, key: Key) -> bool {
         let Picker { files, narrow } = self;
         let files = files.as_slice();
-        narrow.typed(key, |query| {
-            leaves(files, query).into_iter().take(CAP).collect()
-        })
+        narrow.typed(key, |query| leaves(files, query).len().min(CAP))
     }
 
     /// The rows the picker's card holds: the query at the head, one row per file with the row the

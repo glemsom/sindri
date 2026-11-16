@@ -286,7 +286,7 @@ fn the_mark_stops_at_the_first_row_and_at_the_last_of_every_list() {
 }
 
 #[test]
-fn an_edit_that_still_leaves_the_marked_row_leaves_the_mark_on_it() {
+fn an_edit_that_still_reaches_the_mark_leaves_it_where_the_reader_put_it() {
     let mut picker = files();
     assert!(picker.walked(Move::Next));
     assert!(picker.walked(Move::Next));
@@ -295,16 +295,16 @@ fn an_edit_that_still_leaves_the_marked_row_leaves_the_mark_on_it() {
         Some("m.rs"),
         "the mark of the picker stands on the third of the four files"
     );
-    picker.ask("m");
+    picker.ask("rs");
     assert_eq!(
-        picker.rows(),
-        [String::from("m.rs")],
-        "`m` leaves the file the mark stands on and no other"
+        picker.rows().len(),
+        4,
+        "every path of the workspace holds `rs`, so the query leaves them all"
     );
     assert_eq!(
         picker.marked().as_deref(),
         Some("m.rs"),
-        "so the mark of the picker stands on that file still, which is drawn on the first row"
+        "and the mark of the picker stands on the file the reader pointed at"
     );
 
     let mut models = served();
@@ -312,32 +312,60 @@ fn an_edit_that_still_leaves_the_marked_row_leaves_the_mark_on_it() {
     assert_eq!(models.marked().as_deref(), Some("claude-haiku-4-5"));
     models.ask("claude-");
     assert_eq!(
-        models.mark(),
-        1,
-        "the names the query leaves are the two the wire served in its own order, so the mark \
-         of the served names stands where it stood"
+        models.rows().len(),
+        2,
+        "both served names hold `claude-`, in the wire's own order"
     );
-    assert_eq!(models.marked().as_deref(), Some("claude-haiku-4-5"));
+    assert_eq!(
+        models.marked().as_deref(),
+        Some("claude-haiku-4-5"),
+        "so the mark of the served names stands on the name the reader pointed at"
+    );
 
     let mut card = card();
     assert!(card.walked(Move::Next));
-    assert!(card.walked(Move::Next));
     assert_eq!(
         card.marked().as_deref(),
-        Some("/new"),
-        "the mark of the card stands on the third row a bare slash leaves"
+        Some("/model"),
+        "the mark of the card stands on the second row a bare slash leaves"
     );
-    card.ask("n");
+    card.ask(":");
     assert_eq!(
-        card.rows(),
-        [String::from("/new"), String::from("/settings")],
-        "`/n` leaves the name it starts and the one it holds, the started name first"
+        card.rows().len(),
+        commands::TABLE.len(),
+        "a colon names a skill's word without narrowing the rows, so every command is left"
     );
     assert_eq!(
         card.marked().as_deref(),
-        Some("/new"),
-        "and the mark of the card goes with the row it stood on rather than staying at the \
-         index it stood at"
+        Some("/model"),
+        "and the mark of the card stands on the row the reader pointed at"
+    );
+}
+
+#[test]
+fn an_edit_that_re_ranks_the_rows_leaves_the_mark_at_the_index_it_stood_at() {
+    let root = workspace(&["abe.rs", "bob.rs"]);
+    let mut picker = List::Files(Picker::walk(root.path()));
+    assert!(picker.walked(Move::Next));
+    assert_eq!(
+        picker.marked().as_deref(),
+        Some("bob.rs"),
+        "the mark stands on the second of the two files"
+    );
+
+    picker.ask("b");
+
+    assert_eq!(
+        picker.rows(),
+        [String::from("bob.rs"), String::from("abe.rs")],
+        "`b` is the letter `bob.rs` starts and `abe.rs` merely holds, so the query turns the \
+         two rows around"
+    );
+    assert_eq!(
+        picker.mark(),
+        1,
+        "and the mark keeps the place the reader put it in: the eye stays where it was, and \
+         the row underneath it is the query's to change"
     );
 }
 
@@ -390,7 +418,7 @@ fn an_edit_that_takes_the_marked_row_away_leaves_the_mark_on_the_nearest_row() {
     assert_eq!(
         card.marked().as_deref(),
         Some("/stats"),
-        "so the mark of the card stands on the nearest row kept under the one it stood on"
+        "so the mark of the card stands on the nearest row kept, which is the last row left"
     );
 }
 

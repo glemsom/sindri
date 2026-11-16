@@ -82,12 +82,7 @@ impl Models {
     pub fn key(&mut self, key: Key) -> bool {
         let Models { listing, narrow } = self;
         let listing = listing.as_ref();
-        narrow.typed(key, |query| {
-            leaves(listing, query)
-                .into_iter()
-                .map(|(id, _)| id)
-                .collect()
-        })
+        narrow.typed(key, |query| leaves(listing, query).len())
     }
 
     pub fn chosen(&self) -> Option<&str> {
