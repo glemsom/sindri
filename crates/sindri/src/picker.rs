@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::composer::Key;
 use crate::ink::{Ink, Look};
-use crate::kept::{Kept, Move};
+use crate::kept::{Kept, Move, Narrow};
 use crate::list::{self, Item, ScreenRow};
 
 pub const CAP: usize = 8;
@@ -33,8 +33,7 @@ enum Rank {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Picker {
     files: Vec<String>,
-    query: String,
-    selected: usize,
+    narrow: Narrow,
 }
 
 impl Picker {
@@ -57,13 +56,12 @@ impl Picker {
         }
         Picker {
             files,
-            query: String::new(),
-            selected: 0,
+            narrow: Narrow::default(),
         }
     }
 
     pub fn query(&self) -> &str {
-        &self.query
+        self.narrow.query()
     }
 
     /// The first `CAP` matching paths, each split into the file's name and its directory.
@@ -73,53 +71,24 @@ impl Picker {
 
     /// Every path the query leaves, in one total order: rank, then nearness, then the path itself.
     fn ranked(&self) -> Vec<&str> {
-        let query = self.query.to_lowercase();
-        let mut ranked: Vec<(Rank, usize, &str)> = self
-            .files
-            .iter()
-            .filter_map(|path| Some((rank(path, &query)?, nearness(path), path.as_str())))
-            .collect();
-        ranked.sort_unstable();
-        ranked.into_iter().map(|(_, _, path)| path).collect()
+        leaves(&self.files, self.narrow.query())
     }
 
     pub fn selected(&self) -> usize {
-        self.selected
+        self.narrow.mark()
     }
 
     /// How many files the query leaves, whether or not the card has a row for them.
     pub fn matches(&self) -> usize {
-        let query = self.query.to_lowercase();
-        self.files
-            .iter()
-            .filter(|path| rank(path, &query).is_some())
-            .count()
+        self.ranked().len()
     }
 
     pub fn key(&mut self, key: Key) -> bool {
-        match key {
-            Key::Char(glyph) if !glyph.is_control() => {
-                self.query.push(glyph);
-                self.reselect();
-                true
-            }
-            Key::Backspace => {
-                let erased = self.query.pop().is_some();
-                if erased {
-                    self.reselect();
-                }
-                erased
-            }
-            _ => false,
-        }
-    }
-
-    /// An edit re-ranks the rows, so one the query took away sends the selection back to the
-    /// nearest row; a row the query still leaves keeps it where the reader put it.
-    fn reselect(&mut self) {
-        if self.selected >= self.rows().len() {
-            self.selected = 0;
-        }
+        let Picker { files, narrow } = self;
+        let files = files.as_slice();
+        narrow.typed(key, |query| {
+            leaves(files, query).into_iter().take(CAP).collect()
+        })
     }
 
     /// The rows the picker's card holds: the query at the head, one row per file with the row the
@@ -149,34 +118,21 @@ impl Picker {
         rows
     }
 
-    /// The row a press landed on: the selection moves to it, and a press on no row of the list moves
-    /// nothing.
-    pub fn select(&mut self, at: usize) -> bool {
-        if at >= self.rows().len() {
-            return false;
-        }
-        self.selected = at;
-        true
-    }
-
-    pub fn up(&mut self) -> bool {
-        let moved = self.selected > 0;
-        self.selected = self.selected.saturating_sub(1);
-        moved
-    }
-
-    pub fn down(&mut self) -> bool {
-        let moved = self.selected.saturating_add(1) < self.rows().len();
-        if moved {
-            self.selected += 1;
-        }
-        moved
-    }
-
     pub fn word(&self) -> Option<String> {
-        let path = *self.ranked().get(self.selected)?;
+        let path = *self.ranked().get(self.narrow.mark())?;
         Some(format!("{} ", shell_word(path)))
     }
+}
+
+/// Every path `query` leaves, in one total order: rank, then nearness, then the path itself.
+fn leaves<'a>(files: &'a [String], query: &str) -> Vec<&'a str> {
+    let query = query.to_lowercase();
+    let mut ranked: Vec<(Rank, usize, &str)> = files
+        .iter()
+        .filter_map(|path| Some((rank(path, &query)?, nearness(path), path.as_str())))
+        .collect();
+    ranked.sort_unstable();
+    ranked.into_iter().map(|(_, _, path)| path).collect()
 }
 
 /// The one spelling a single-quoted word cannot swallow is `'\''`, so every quote inside it
@@ -244,10 +200,8 @@ fn split(path: &str) -> Row<'_> {
 
 impl Kept for Picker {
     fn walked(&mut self, way: Move) -> bool {
-        match way {
-            Move::Previous => self.up(),
-            Move::Next => self.down(),
-        }
+        let rows = self.rows().len();
+        self.narrow.walked(way, rows)
     }
 
     fn typed(&mut self, key: Key) -> bool {
@@ -255,7 +209,8 @@ impl Kept for Picker {
     }
 
     fn pressed(&mut self, at: usize) -> bool {
-        self.select(at)
+        let rows = self.rows().len();
+        self.narrow.pressed(at, rows)
     }
 }
 
@@ -292,32 +247,6 @@ mod tests {
             picker.key(Key::Char(glyph));
         }
         picker
-    }
-
-    #[test]
-    fn a_row_the_list_holds_is_chosen_by_a_press_on_it_and_one_it_does_not_holds_nothing() {
-        let root = workspace(&["alpha.rs", "zeta.rs"]);
-        let mut picker = Picker::walk(root.path());
-        let rows = picker.rows().len();
-
-        assert!(
-            picker.select(1),
-            "the second row of the list is a press the picker takes"
-        );
-        assert_eq!(
-            picker.selected(),
-            1,
-            "and the selection moves to the row the press landed on"
-        );
-        assert!(
-            !picker.select(rows + 7),
-            "a press past the last row is a row no list holds"
-        );
-        assert_eq!(
-            picker.selected(),
-            1,
-            "so the selection stays on the row it was"
-        );
     }
 
     #[test]
@@ -534,94 +463,6 @@ mod tests {
     }
 
     #[test]
-    fn the_selection_stays_on_a_drawn_row_as_the_query_narrows_widens_and_empties() {
-        let root = workspace(&["rock.rs", "rover.rs", "rows.rs", "view.rs"]);
-        let mut picker = Picker::walk(root.path());
-        picker.down();
-        picker.down();
-        assert_eq!(picker.selected(), 2, "the third of four rows is selected");
-
-        for (query, drawn) in [("o", 3), ("ro", 3), ("row", 1), ("", 4)] {
-            while !picker.query().is_empty() {
-                picker.key(Key::Backspace);
-            }
-            for glyph in query.chars() {
-                picker.key(Key::Char(glyph));
-            }
-            assert_eq!(picker.rows().len(), drawn, "`{query}` leaves {drawn} rows");
-            assert!(
-                picker.selected() < picker.rows().len(),
-                "the query `{query}` leaves {drawn} rows, and the selection stands on one of \
-                 them rather than on a row the query took away"
-            );
-        }
-    }
-
-    #[test]
-    fn the_arrows_walk_the_rows_and_stop_at_the_ends() {
-        let root = workspace(&["one.rs", "two.rs"]);
-        let mut picker = Picker::walk(root.path());
-
-        assert_eq!(picker.selected(), 0, "a picker opens on the nearest file");
-        assert!(
-            !picker.up(),
-            "there is no row above the first, so `↑` moves nothing and nothing is painted"
-        );
-        assert!(picker.down());
-        assert_eq!(picker.selected(), 1);
-        assert!(!picker.down(), "nor below the last");
-        assert!(picker.up());
-        assert_eq!(picker.selected(), 0);
-    }
-
-    #[test]
-    fn a_query_that_still_leaves_the_selected_row_keeps_the_selection_on_it() {
-        let root = workspace(&["rows.rs", "rail.rs"]);
-        let mut picker = Picker::walk(root.path());
-        picker.down();
-        assert_eq!(
-            picker.rows()[1].name,
-            "rows.rs",
-            "the selection stands on the second row, which is `rows.rs`"
-        );
-
-        picker.key(Key::Char('r'));
-
-        assert_eq!(
-            picker.selected(),
-            1,
-            "`r` leaves both files in the order they stood, so the row the reader pointed at \
-             is still drawn and the selection stays on it"
-        );
-        assert_eq!(
-            picker.rows()[1].name,
-            "rows.rs",
-            "which is still the file the reader pointed at"
-        );
-    }
-
-    #[test]
-    fn a_query_that_takes_the_selected_row_away_puts_the_selection_back_on_the_nearest_row() {
-        let root = workspace(&["rows.rs", "rail.rs"]);
-        let mut picker = Picker::walk(root.path());
-        picker.down();
-
-        picker.key(Key::Char('o'));
-
-        assert_eq!(
-            picker.rows().len(),
-            1,
-            "`o` leaves `rows.rs` and nothing else, so the row the selection stood on is gone"
-        );
-        assert_eq!(
-            picker.selected(),
-            0,
-            "and a row the query took away cannot hold the selection: the nearest row the \
-             query leaves is the one a reader means"
-        );
-    }
-
-    #[test]
     fn a_backspace_opens_the_list_back_up() {
         let root = workspace(&["rows.rs", "rail.rs", "view.rs"]);
 
@@ -642,21 +483,6 @@ mod tests {
     }
 
     #[test]
-    fn a_key_a_filter_box_has_no_use_for_moves_nothing() {
-        let root = workspace(&["rows.rs"]);
-        let mut picker = Picker::walk(root.path());
-
-        for key in [Key::Left, Key::Home, Key::Enter, Key::Quit, Key::Cancel] {
-            assert!(
-                !picker.key(key),
-                "{key:?} is not a glyph and not an erasure, so the filter box is not the \
-                 key's to answer"
-            );
-        }
-        assert_eq!(picker.query(), "");
-    }
-
-    #[test]
     fn selecting_a_row_names_the_path_as_one_shell_word() {
         let root = workspace(&["rows.rs", "notes/a file.rs"]);
         let mut picker = Picker::walk(root.path());
@@ -667,7 +493,7 @@ mod tests {
             "a path a shell reads as one word needs no quotes, and the space after it is \
              where the next word of the prompt starts"
         );
-        picker.down();
+        assert!(picker.walked(Move::Next));
         assert_eq!(
             picker.word(),
             Some(String::from("'notes/a file.rs' ")),
@@ -701,7 +527,7 @@ mod tests {
 
         assert!(picker.rows().is_empty());
         assert_eq!(picker.word(), None);
-        assert!(!picker.down());
+        assert!(!picker.walked(Move::Next));
     }
 
     #[test]

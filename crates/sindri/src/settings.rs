@@ -3,13 +3,13 @@ use sindri_core::redact::MASK;
 
 use crate::composer::Key;
 use crate::ink::Ink;
-use crate::kept::{Kept, Move};
+use crate::kept::{Kept, Move, Narrow};
 use crate::list::{self, Beside, ScreenRow};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Settings {
     rows: Vec<Row>,
-    current: usize,
+    narrow: Narrow,
     refusal: Option<String>,
 }
 
@@ -31,7 +31,7 @@ impl Settings {
                     touched: false,
                 })
                 .collect(),
-            current: 0,
+            narrow: Narrow::default(),
             refusal: None,
         }
     }
@@ -41,7 +41,7 @@ impl Settings {
     }
 
     pub fn current(&self) -> usize {
-        self.current
+        self.narrow.mark()
     }
 
     pub fn refusal(&self) -> Option<&str> {
@@ -80,27 +80,11 @@ impl Settings {
         self.refusal = Some(reason.to_owned());
     }
 
-    pub fn down(&mut self) -> bool {
-        if self.rows.is_empty() {
-            return false;
-        }
-        self.current = (self.current + 1) % self.rows.len();
-        true
-    }
-
-    pub fn up(&mut self) -> bool {
-        if self.rows.is_empty() {
-            return false;
-        }
-        self.current = (self.current + self.rows.len() - 1) % self.rows.len();
-        true
-    }
-
     pub fn clear(&mut self) -> bool {
         if !self.has_row() {
             return false;
         }
-        let row = &mut self.rows[self.current];
+        let row = self.standing();
         if row.text.is_empty() {
             return false;
         }
@@ -114,10 +98,10 @@ impl Settings {
         if !self.has_row() {
             return false;
         }
-        if !Config::TOGGLES.contains(&self.rows[self.current].key) {
+        if !Config::TOGGLES.contains(&self.standing().key) {
             return self.write(' ');
         }
-        let row = &mut self.rows[self.current];
+        let row = self.standing();
         row.text = match row.text.as_str() {
             "true" => String::from("false"),
             _ => String::from("true"),
@@ -139,12 +123,18 @@ impl Settings {
     }
 
     fn has_row(&self) -> bool {
-        self.rows.get(self.current).is_some()
+        self.rows.get(self.current()).is_some()
+    }
+
+    /// The row the keys act on, which is the row the mark stands on.
+    fn standing(&mut self) -> &mut Row {
+        let at = self.narrow.mark();
+        &mut self.rows[at]
     }
 
     fn write(&mut self, glyph: char) -> bool {
         self.unmask();
-        let row = &mut self.rows[self.current];
+        let row = self.standing();
         row.text.push(glyph);
         row.touched = true;
         self.refusal = None;
@@ -155,9 +145,9 @@ impl Settings {
     /// this screen may hold even for one keystroke.
     fn backspace(&mut self) -> bool {
         let masked = self.unmask();
-        let erased = self.rows[self.current].text.pop().is_some() || masked;
+        let erased = self.standing().text.pop().is_some() || masked;
         if erased {
-            self.rows[self.current].touched = true;
+            self.standing().touched = true;
             self.refusal = None;
         }
         erased
@@ -166,7 +156,7 @@ impl Settings {
     /// The mask is what the file holds and not what a reader typed: the first glyph replaces
     /// it, and the row holds no value a save may write until one does.
     fn unmask(&mut self) -> bool {
-        let row = &mut self.rows[self.current];
+        let row = self.standing();
         let masked = row.text == MASK;
         if masked {
             row.text.clear();
@@ -177,10 +167,7 @@ impl Settings {
 
 impl Kept for Settings {
     fn walked(&mut self, way: Move) -> bool {
-        match way {
-            Move::Previous => self.up(),
-            Move::Next => self.down(),
-        }
+        self.narrow.walked(way, self.rows.len())
     }
 
     fn typed(&mut self, key: Key) -> bool {
@@ -233,7 +220,7 @@ mod tests {
             {
                 return;
             }
-            settings.down();
+            settings.walked(Move::Next);
         }
         panic!("{key} is a key of the schema, so the screen has a row for it");
     }
@@ -295,27 +282,11 @@ mod tests {
         assert!(!settings.clear());
         assert!(!settings.space());
         assert!(!settings.key(Key::Char('x')));
-        assert!(!settings.down());
+        assert!(!settings.walked(Move::Next));
         assert!(
             settings.touched().is_empty(),
             "a visit to a screen that was never opened is a file with nothing to write"
         );
-    }
-
-    #[test]
-    fn the_list_is_a_ring_so_the_last_key_is_one_press_from_the_first() {
-        let mut settings = Settings::of(&Config::default());
-
-        assert_eq!(settings.current(), 0, "a screen opens on its first key");
-        settings.up();
-        assert_eq!(
-            settings.current(),
-            Config::KEYS.len() - 1,
-            "the row above the first is the last, because a list of fourteen keys is walked \
-             rather than climbed"
-        );
-        settings.down();
-        assert_eq!(settings.current(), 0);
     }
 
     #[test]
