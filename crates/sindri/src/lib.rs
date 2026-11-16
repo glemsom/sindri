@@ -7,7 +7,7 @@ pub mod face; // the picture the binary carries: Sindri's face, measured and nev
 pub mod facts; // the facts a frame draws, gathered as one value and handed whole, and the screen they are drawn as
 pub mod graphics; // an SVG becomes the pixels a picture is drawn in
 pub mod ink; // the look a cell is drawn in, asked for by name: its ink, its faces, its underline
-pub mod kept; // the list a screen keeps: what a movement, a typed glyph and a press reach
+pub mod kept; // the list a screen keeps: its query, its mark, and what a movement or a press reaches
 pub mod keys; // the mode stack and one key table per mode
 pub mod ledger; // the run's facts, the one way each value is spelled, and the rows they are laid out in
 pub mod link; // the destination a run of cells names, written by the backend that draws the frame

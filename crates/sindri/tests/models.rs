@@ -9,6 +9,7 @@ use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
+use sindri::kept::{Kept, Move};
 use sindri::keys::Mode;
 use sindri::mark::Cell;
 use sindri::models::{CAP, Models};
@@ -126,81 +127,6 @@ fn a_query_that_starts_a_later_name_puts_it_first() {
 }
 
 #[test]
-fn a_row_the_list_holds_is_chosen_by_a_press_on_it_and_one_it_does_not_holds_nothing() {
-    let mut models = Models::new().served_by(Some(listed()));
-    let rows = models.rows().len();
-
-    assert!(
-        models.select(1),
-        "the second row of the list is a press the screen takes"
-    );
-    assert_eq!(
-        models.chosen(),
-        Some(SECOND),
-        "and the selection moves to the row the press landed on"
-    );
-    assert!(
-        !models.select(rows + 7),
-        "a press past the last row is a row no list holds"
-    );
-    assert_eq!(
-        models.selected(),
-        1,
-        "so the selection stays on the row it was"
-    );
-}
-
-#[test]
-fn the_selection_walks_the_rows_and_stops_at_the_ends() {
-    let mut models = Models::new().served_by(Some(listed()));
-
-    assert!(!models.up(), "there is no row above the first");
-    assert!(models.down());
-    assert_eq!(models.selected(), 1);
-    assert_eq!(
-        models.chosen(),
-        Some(SECOND),
-        "and the row the selection is on is the name a key would write"
-    );
-    assert!(!models.down(), "nor below the last");
-}
-
-#[test]
-fn a_narrower_query_puts_the_selection_back_on_the_best_match() {
-    let mut models = Models::new().served_by(Some(listed()));
-    models.down();
-
-    for glyph in "haiku".chars() {
-        models.key(Key::Char(glyph));
-    }
-
-    assert_eq!(
-        models.selected(),
-        0,
-        "a query that leaves a shorter list cannot keep a row that may be gone, and the best \
-         match the query leaves is the one a reader means"
-    );
-}
-
-#[test]
-fn a_backspace_widens_the_list_again() {
-    let mut models = narrowed("haiku");
-    assert_eq!(offered(&models), [String::from(SECOND)]);
-
-    for _ in 0.."haiku".len() {
-        assert!(models.key(Key::Backspace));
-    }
-
-    assert_eq!(
-        offered(&models),
-        [String::from(FIRST), String::from(SECOND)],
-        "erasing the query a glyph at a time widens the list back to the names the wire \
-         served, in the order it served them"
-    );
-    assert_eq!(models.query(), "");
-}
-
-#[test]
 fn a_query_that_matches_no_served_name_takes_no_name() {
     let models = narrowed("a-name-the-wire-never-served");
 
@@ -256,7 +182,7 @@ fn a_wire_that_could_not_answer_offers_its_hint_and_no_names() {
 #[test]
 fn a_listing_the_screen_has_not_held_puts_the_mark_back_on_the_first_row() {
     let mut models = Models::new().served_by(Some(listed()));
-    models.down();
+    assert!(models.walked(Move::Next));
     assert_eq!(models.selected(), 1, "the reader walked down one row");
 
     let held = models.served_by(Some(listed()));
@@ -272,20 +198,6 @@ fn a_listing_the_screen_has_not_held_puts_the_mark_back_on_the_first_row() {
         0,
         "and a listing that is not the one it holds puts the mark back on the first row"
     );
-}
-
-#[test]
-fn a_key_a_filter_box_has_no_use_for_moves_nothing() {
-    let mut models = Models::new().served_by(Some(listed()));
-
-    for key in [Key::Left, Key::Home, Key::Enter, Key::Quit, Key::Cancel] {
-        assert!(
-            !models.key(key),
-            "{key:?} is not a glyph and not an erasure, so the filter box is not the key's \
-             to answer"
-        );
-    }
-    assert_eq!(models.query(), "");
 }
 
 fn screen(capabilities: Capabilities) -> View {

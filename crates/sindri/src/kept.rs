@@ -1,6 +1,6 @@
-//! The list a screen keeps: what a cursor movement walks, what a typed glyph reaches and which row a
-//! press chooses — the picker's files, the wire's served names, the config's keys and the commands
-//! card a draft opens answering alike.
+//! The list a screen keeps: the query a reader types at it, the mark they walk, and the rule that puts
+//! the mark back when an edit takes the row it stood on away — the picker's files, the wire's served
+//! names, the config's keys and the commands card a draft opens answering alike.
 
 use crate::composer::Key;
 
@@ -17,8 +17,86 @@ pub enum Move {
 pub trait Kept {
     /// The mark a way along, and whether it moved.
     fn walked(&mut self, way: Move) -> bool;
-    /// A typed glyph or an erasure, and whether the rows changed.
+    /// A typed glyph or an erasure, and whether the list changed.
     fn typed(&mut self, key: Key) -> bool;
     /// The row a press landed on, marked, and whether the list still holds it.
     fn pressed(&mut self, at: usize) -> bool;
+}
+
+/// The query a reader types at a list and the mark they walk: held once, so a glyph typed, a glyph
+/// erased and a movement are one act on every screen, and a mark an edit takes its row from goes to
+/// the nearest row the query leaves.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Narrow {
+    query: String,
+    mark: usize,
+}
+
+impl Narrow {
+    /// The list asked with `query`, the mark on the first row it leaves.
+    pub fn asked(query: impl Into<String>) -> Narrow {
+        Narrow {
+            query: query.into(),
+            mark: 0,
+        }
+    }
+
+    /// The query, as the reader typed it.
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+
+    /// The row the mark stands on.
+    pub fn mark(&self) -> usize {
+        self.mark
+    }
+
+    /// The mark back on the first row, for a screen handed a list that is not the one it held.
+    pub fn restart(&mut self) {
+        self.mark = 0;
+    }
+
+    /// A typed glyph or an erasure, and whether the query changed. `rows` answers how many rows a
+    /// query leaves, and the mark keeps the place it stood in: a row an edit took away sends the
+    /// mark to the nearest one left.
+    pub fn typed(&mut self, key: Key, rows: impl Fn(&str) -> usize) -> bool {
+        let changed = match key {
+            Key::Char(glyph) if !glyph.is_control() => {
+                self.query.push(glyph);
+                true
+            }
+            Key::Backspace => self.query.pop().is_some(),
+            _ => false,
+        };
+        if !changed {
+            return false;
+        }
+        self.mark = self.mark.min(rows(&self.query).saturating_sub(1));
+        true
+    }
+
+    /// The mark a way along the `rows` a screen holds, and whether it moved: no row above the first
+    /// and none below the last, so the ends are where a list stops.
+    pub fn walked(&mut self, way: Move, rows: usize) -> bool {
+        let at = match way {
+            Move::Previous => self.mark.checked_sub(1),
+            Move::Next => (self.mark + 1 < rows).then(|| self.mark + 1),
+        };
+        match at {
+            Some(at) => {
+                self.mark = at;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The mark on the row a press landed on, where the `rows` a screen holds still hold it.
+    pub fn pressed(&mut self, at: usize, rows: usize) -> bool {
+        if at >= rows {
+            return false;
+        }
+        self.mark = at;
+        true
+    }
 }

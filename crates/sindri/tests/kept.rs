@@ -15,7 +15,10 @@ use sindri::kept::{Kept, Move};
 use sindri::keys::{Act, Mode, Stack};
 use sindri::list;
 use sindri::mark::Cell;
+use sindri::models::Models;
+use sindri::picker::Picker;
 use sindri::pointer::Pointer;
+use sindri::settings::Settings;
 use sindri::view::{Transcript, View};
 
 use sindri_core::config::Config;
@@ -112,6 +115,435 @@ fn typed(view: &View) -> [String; 3] {
         view.models().query().to_owned(),
         value,
     ]
+}
+
+/// The four lists there are, stood on a bench: the picker's files, the names the wire served, the
+/// config's keys and the card a draft opens, each answering the seam as the frame asks it.
+enum Bench {
+    Files(Picker),
+    Models(Models),
+    Settings(Settings),
+    Card(commands::Card),
+}
+
+/// A workspace of four files, one of which a query can take away from under the mark.
+fn files() -> Bench {
+    let root = workspace(&["alpha.rs", "baker.rs", "mars.rs", "zulu.rs"]);
+    Bench::Files(Picker::walk(root.path()))
+}
+
+/// The names a recorded wire served, which are two.
+fn served() -> Bench {
+    Bench::Models(Models::new().served_by(Some(listed())))
+}
+
+/// The config's keys, which are the rows a visit holds and the one list with no query.
+fn visit() -> Bench {
+    Bench::Settings(Settings::of(&Config::default()))
+}
+
+/// The card a bare slash opens, which holds every command in one order.
+fn card() -> Bench {
+    Bench::Card(commands::Card::of("/").expect("a bare slash holds every command"))
+}
+
+impl Bench {
+    fn name(&self) -> &'static str {
+        match self {
+            Bench::Files(_) => "picker",
+            Bench::Models(_) => "served names",
+            Bench::Settings(_) => "visit",
+            Bench::Card(_) => "card",
+        }
+    }
+
+    /// The rows the list holds, each as the word it spells.
+    fn rows(&self) -> Vec<String> {
+        match self {
+            Bench::Files(picker) => picker
+                .rows()
+                .into_iter()
+                .map(|row| match row.directory {
+                    "" => row.name.to_owned(),
+                    directory => format!("{directory}/{}", row.name),
+                })
+                .collect(),
+            Bench::Models(models) => models
+                .rows()
+                .into_iter()
+                .map(|(id, _)| id.to_owned())
+                .collect(),
+            Bench::Settings(settings) => settings.rows().map(|(key, _)| key.to_owned()).collect(),
+            Bench::Card(card) => card
+                .rows()
+                .into_iter()
+                .map(|row| row.name.to_owned())
+                .collect(),
+        }
+    }
+
+    /// The mark, which is the row the reader stands on.
+    fn mark(&self) -> usize {
+        match self {
+            Bench::Files(picker) => picker.selected(),
+            Bench::Models(models) => models.selected(),
+            Bench::Settings(settings) => settings.current(),
+            Bench::Card(card) => card.selected(),
+        }
+    }
+
+    /// The word the row the mark stands on spells.
+    fn marked(&self) -> Option<String> {
+        self.rows().into_iter().nth(self.mark())
+    }
+
+    /// The glyphs of `asked`, typed at the list one at a time.
+    fn ask(&mut self, asked: &str) {
+        for glyph in asked.chars() {
+            assert!(
+                self.typed(Key::Char(glyph)),
+                "{glyph:?} changes the rows the {} list hands, which is a frame to paint",
+                self.name()
+            );
+        }
+    }
+}
+
+impl Kept for Bench {
+    fn walked(&mut self, way: Move) -> bool {
+        match self {
+            Bench::Files(picker) => picker.walked(way),
+            Bench::Models(models) => models.walked(way),
+            Bench::Settings(settings) => settings.walked(way),
+            Bench::Card(card) => card.walked(way),
+        }
+    }
+
+    fn typed(&mut self, key: Key) -> bool {
+        match self {
+            Bench::Files(picker) => picker.typed(key),
+            Bench::Models(models) => models.typed(key),
+            Bench::Settings(settings) => settings.typed(key),
+            Bench::Card(card) => card.typed(key),
+        }
+    }
+
+    fn pressed(&mut self, at: usize) -> bool {
+        match self {
+            Bench::Files(picker) => picker.pressed(at),
+            Bench::Models(models) => models.pressed(at),
+            Bench::Settings(settings) => settings.pressed(at),
+            Bench::Card(card) => card.pressed(at),
+        }
+    }
+}
+
+#[test]
+fn the_mark_stops_at_the_first_row_and_at_the_last_of_every_list() {
+    for mut list in [files(), served(), visit(), card()] {
+        let name = list.name();
+        let last = list.rows().len() - 1;
+        assert!(
+            last > 0,
+            "the {name} list holds a row under the first, so the ends are two ends"
+        );
+        assert_eq!(
+            list.mark(),
+            0,
+            "the {name} list opens its mark on the first row"
+        );
+        assert!(
+            !list.walked(Move::Previous),
+            "no row of the {name} list sits above the first, so `↑` moves nothing and paints nothing"
+        );
+        assert_eq!(
+            list.mark(),
+            0,
+            "and the mark of the {name} list stands where it stood"
+        );
+
+        for at in 0..last {
+            assert!(
+                list.walked(Move::Next),
+                "the {name} list holds a row under the mark at {at}"
+            );
+            assert_eq!(
+                list.mark(),
+                at + 1,
+                "and the mark of the {name} list walks to it"
+            );
+        }
+        assert!(
+            !list.walked(Move::Next),
+            "nor is there a row of the {name} list under the last, so `↓` moves nothing"
+        );
+        assert_eq!(
+            list.mark(),
+            last,
+            "so the mark of the {name} list stops on its last row"
+        );
+    }
+}
+
+#[test]
+fn an_edit_that_still_reaches_the_mark_leaves_it_where_the_reader_put_it() {
+    let mut picker = files();
+    assert!(picker.walked(Move::Next));
+    assert!(picker.walked(Move::Next));
+    assert_eq!(
+        picker.marked().as_deref(),
+        Some("mars.rs"),
+        "the mark of the picker stands on the third of the four files"
+    );
+    picker.ask("rs");
+    assert_eq!(
+        picker.rows().len(),
+        4,
+        "every path of the workspace holds `rs`, so the query leaves them all"
+    );
+    assert_eq!(
+        picker.marked().as_deref(),
+        Some("mars.rs"),
+        "and the mark of the picker stands on the file the reader pointed at"
+    );
+
+    let mut models = served();
+    assert!(models.walked(Move::Next));
+    assert_eq!(models.marked().as_deref(), Some("claude-haiku-4-5"));
+    models.ask("claude-");
+    assert_eq!(
+        models.rows().len(),
+        2,
+        "both served names hold `claude-`, in the wire's own order"
+    );
+    assert_eq!(
+        models.marked().as_deref(),
+        Some("claude-haiku-4-5"),
+        "so the mark of the served names stands on the name the reader pointed at"
+    );
+
+    let mut card = card();
+    assert!(card.walked(Move::Next));
+    assert_eq!(
+        card.marked().as_deref(),
+        Some("/model"),
+        "the mark of the card stands on the second row a bare slash leaves"
+    );
+    card.ask(":");
+    assert_eq!(
+        card.rows().len(),
+        commands::TABLE.len(),
+        "a colon names a skill's word without narrowing the rows, so every command is left"
+    );
+    assert_eq!(
+        card.marked().as_deref(),
+        Some("/model"),
+        "and the mark of the card stands on the row the reader pointed at"
+    );
+}
+
+#[test]
+fn an_edit_that_re_ranks_the_rows_leaves_the_mark_at_the_index_it_stood_at() {
+    let root = workspace(&["abe.rs", "bob.rs"]);
+    let mut picker = Bench::Files(Picker::walk(root.path()));
+    assert!(picker.walked(Move::Next));
+    assert_eq!(
+        picker.marked().as_deref(),
+        Some("bob.rs"),
+        "the mark stands on the second of the two files"
+    );
+
+    picker.ask("b");
+
+    assert_eq!(
+        picker.rows(),
+        [String::from("bob.rs"), String::from("abe.rs")],
+        "`b` is the letter `bob.rs` starts and `abe.rs` merely holds, so the query turns the \
+         two rows around"
+    );
+    assert_eq!(
+        picker.mark(),
+        1,
+        "and the mark keeps the place the reader put it in: the eye stays where it was, and \
+         the row underneath it is the query's to change"
+    );
+
+    let mut card = card();
+    for _ in 0..4 {
+        assert!(card.walked(Move::Next));
+    }
+    assert_eq!(card.marked().as_deref(), Some("/settings"));
+
+    card.ask("s");
+
+    assert_eq!(
+        card.rows(),
+        [
+            String::from("/settings"),
+            String::from("/skill"),
+            String::from("/stats")
+        ],
+        "`s` is the letter three names start, and the fourth row they leave is the one the \
+         reader stands on"
+    );
+    assert_eq!(
+        card.marked().as_deref(),
+        Some("/stats"),
+        "and the mark of the card stands at the index it stood at, as every list's does, \
+         though the row it pointed at is drawn on the first"
+    );
+}
+
+#[test]
+fn an_erasure_widens_the_rows_every_list_leaves() {
+    let mut picker = files();
+    picker.ask("m");
+    assert_eq!(
+        picker.rows(),
+        [String::from("mars.rs")],
+        "`m` leaves one file"
+    );
+
+    assert!(
+        picker.typed(Key::Backspace),
+        "erasing a glyph of the query widens the list, which is a frame to paint"
+    );
+    assert_eq!(
+        picker.rows().len(),
+        4,
+        "and the four files of the workspace answer the query again"
+    );
+    assert_eq!(picker.mark(), 0, "with the mark on the row it stood on");
+
+    let mut models = served();
+    models.ask("haiku");
+    assert_eq!(models.rows(), [String::from("claude-haiku-4-5")]);
+
+    for _ in 0.."haiku".len() {
+        assert!(models.typed(Key::Backspace));
+    }
+    assert_eq!(
+        models.rows().len(),
+        2,
+        "erasing the query a glyph at a time hands the served names back in the wire's own order"
+    );
+
+    let mut commands = card();
+    commands.ask("t");
+    assert_eq!(
+        commands.rows().len(),
+        3,
+        "`/t` leaves the three names that hold it"
+    );
+
+    assert!(commands.typed(Key::Backspace));
+    assert_eq!(
+        commands.rows().len(),
+        commands::TABLE.len(),
+        "erasing the glyph hands every command back to the card"
+    );
+
+    let mut bare = card();
+    assert!(
+        bare.typed(Key::Backspace),
+        "erasing the slash of the card's query is a query erased"
+    );
+    assert!(
+        !bare.typed(Key::Backspace),
+        "and a query with nothing left to erase is no change at all, so nothing is painted"
+    );
+
+    for mut list in [files(), served()] {
+        let name = list.name();
+        assert!(
+            !list.typed(Key::Backspace),
+            "nor is an erasure at the {name} list a change where its query holds no glyph"
+        );
+    }
+}
+
+#[test]
+fn an_edit_that_takes_the_marked_row_away_leaves_the_mark_on_the_nearest_row() {
+    let mut picker = files();
+    for _ in 0..3 {
+        assert!(picker.walked(Move::Next));
+    }
+    assert_eq!(picker.marked().as_deref(), Some("zulu.rs"));
+    picker.ask("a");
+    assert_eq!(
+        picker.rows(),
+        [
+            String::from("alpha.rs"),
+            String::from("baker.rs"),
+            String::from("mars.rs")
+        ],
+        "`a` takes the marked file away and leaves three above it"
+    );
+    assert_eq!(
+        picker.marked().as_deref(),
+        Some("mars.rs"),
+        "so the mark of the picker stands on the nearest row kept rather than on the first"
+    );
+
+    let mut models = served();
+    assert!(models.walked(Move::Next));
+    models.ask("so");
+    assert_eq!(
+        models.rows(),
+        [String::from("claude-sonnet-4-6")],
+        "`so` takes the served name the mark stands on away and leaves the other"
+    );
+    assert_eq!(
+        models.marked().as_deref(),
+        Some("claude-sonnet-4-6"),
+        "so the mark of the served names stands on the nearest row kept, which is the last"
+    );
+
+    let mut card = card();
+    assert!(card.walked(Move::Next));
+    assert!(card.walked(Move::Next));
+    card.ask("t");
+    assert_eq!(
+        card.rows(),
+        [
+            String::from("/quit"),
+            String::from("/settings"),
+            String::from("/stats")
+        ],
+        "`/t` takes `/new` away and leaves the three names that hold it"
+    );
+    assert_eq!(
+        card.marked().as_deref(),
+        Some("/stats"),
+        "so the mark of the card stands on the nearest row kept, which is the last row left"
+    );
+}
+
+#[test]
+fn a_press_marks_the_row_it_landed_on_and_a_press_past_the_last_marks_nothing() {
+    for mut list in [files(), served(), card()] {
+        let name = list.name();
+        assert!(
+            list.pressed(1),
+            "the second row of the {name} list is a row a press lands on"
+        );
+        assert_eq!(
+            list.mark(),
+            1,
+            "and the mark of the {name} list stands where the press landed"
+        );
+
+        let rows = list.rows().len();
+        assert!(
+            !list.pressed(rows),
+            "a press under the last row of the {name} list lands on no row"
+        );
+        assert_eq!(
+            list.mark(),
+            1,
+            "so the mark of the {name} list stands where it stood"
+        );
+    }
 }
 
 #[test]
@@ -225,69 +657,6 @@ fn a_press_on_a_row_of_the_visit_is_no_act() {
         view.mode(),
         Mode::Settings,
         "and the screen the visit is drawn on is still open"
-    );
-}
-
-#[test]
-fn the_commands_card_walks_the_rows_its_word_leaves() {
-    let mut card = commands::Card::of("/s").expect("a card holds this word");
-
-    assert_eq!(
-        card.rows().iter().map(|row| row.name).collect::<Vec<_>>(),
-        ["/settings", "/skill", "/stats"],
-        "`/s` leaves the three commands a name of which holds it"
-    );
-    assert_eq!(
-        card.selected(),
-        0,
-        "the mark opens on the row the words name rather than on a row the frame picked"
-    );
-
-    assert!(card.walked(Move::Next), "`↓` walks the card down a row");
-    assert_eq!(card.selected(), 1, "the second row the word leaves");
-    assert!(card.walked(Move::Next));
-    assert_eq!(card.selected(), 2, "and the third");
-    assert!(
-        !card.walked(Move::Next),
-        "a movement past the last row of the card moves nothing"
-    );
-    assert_eq!(card.selected(), 2, "so the mark stands where it stood");
-
-    assert!(card.walked(Move::Previous), "`↑` walks it back");
-    assert_eq!(card.selected(), 1);
-}
-
-#[test]
-fn a_glyph_narrows_the_card_and_the_row_its_words_name_is_marked() {
-    let mut card = commands::Card::of("/n").expect("a card holds this word");
-    assert!(
-        card.walked(Move::Next),
-        "the card is walked off the row it opened on"
-    );
-    assert_eq!(card.selected(), 1, "which is `/settings`");
-
-    assert!(
-        card.typed(Key::Char('e')),
-        "`e` changes the rows the card hands, which is a frame to paint"
-    );
-
-    assert_eq!(
-        card.rows().iter().map(|row| row.name).collect::<Vec<_>>(),
-        ["/new"],
-        "`/ne` leaves the one command whose name starts the word"
-    );
-    assert_eq!(
-        card.selected(),
-        0,
-        "and the row the words name is the row marked, not the row the mark was walked to"
-    );
-
-    for _ in 0.."/ne".len() {
-        card.typed(Key::Backspace);
-    }
-    assert!(
-        card.rows().is_empty(),
-        "a word erased past the slash leaves no row at all"
     );
 }
 

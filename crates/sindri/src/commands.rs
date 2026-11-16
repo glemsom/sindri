@@ -1,6 +1,6 @@
 use crate::composer::Key;
 use crate::ink::Ink;
-use crate::kept::{Kept, Move};
+use crate::kept::{Kept, Move, Narrow};
 use crate::list::{self, Beside, ScreenRow};
 
 const NEW: &str = "/new";
@@ -63,14 +63,7 @@ pub const SPLASH: usize = 3;
 /// the word starts before a name it holds, and one order for ties — and the row the mark stands on.
 #[derive(Clone, Debug)]
 pub struct Card {
-    /// The words the card was read from, which are the draft's own: the card stands while the reader's
-    /// words do, and a row's line is spelled from them.
-    words: String,
-    word: String,
-    tail: String,
-    rows: Vec<Row>,
-    /// The row the mark stands on: the row the words name, until a movement or a press moves it.
-    selected: usize,
+    narrow: Narrow,
 }
 
 impl Card {
@@ -81,63 +74,27 @@ impl Card {
             true => draft.trim(),
             false => return None,
         };
-        let card = Card::read(words.to_owned(), None);
-        match card.rows.is_empty() {
+        match ranked(word(words)).is_empty() {
             true => None,
-            false => Some(card),
+            false => Some(Card {
+                narrow: Narrow::asked(words),
+            }),
         }
-    }
-
-    /// The card the `words` open, the mark on the row it stood on where those words still leave that row
-    /// and on the row they name where they do not. Words that open with no slash open no row.
-    fn read(words: String, marked: Option<&'static str>) -> Card {
-        let mut card = Card {
-            words,
-            word: String::new(),
-            tail: String::new(),
-            rows: Vec::new(),
-            selected: 0,
-        };
-        if !card.words.starts_with('/') {
-            return card;
-        }
-        let draft = card.words.trim();
-        let word = draft.split_whitespace().next().unwrap_or_default();
-        card.tail = match word.find(':') {
-            Some(at) => word[at..].to_owned(),
-            None => draft[word.len()..].to_owned(),
-        };
-        card.word = word.to_owned();
-        card.rows = ranked(word);
-        card.selected = match card.rows.iter().position(|row| Some(row.name) == marked) {
-            Some(at) => at,
-            None => card.named(),
-        };
-        card
-    }
-
-    /// The row whose name the word already spells, which is the row whose line is the draft itself, and
-    /// the first row where the word spells no name at all.
-    fn named(&self) -> usize {
-        self.rows
-            .iter()
-            .position(|row| self.word.starts_with(row.name))
-            .unwrap_or(0)
     }
 
     /// The rows the word leaves, in the order the card draws them.
-    pub fn rows(&self) -> &[Row] {
-        &self.rows
+    pub fn rows(&self) -> Vec<Row> {
+        ranked(word(self.words()))
     }
 
     /// The words the card was read from, which are the draft's own.
     pub fn words(&self) -> &str {
-        &self.words
+        self.narrow.query()
     }
 
     /// The row the mark stands on.
     pub fn selected(&self) -> usize {
-        self.selected
+        self.narrow.mark()
     }
 
     /// The rows the card hands its frame: every row the word leaves with the one line that says what it
@@ -147,11 +104,11 @@ impl Card {
             query: None,
             said: None,
             items: list::columned(
-                self.rows.iter().map(|row| (row.name, row.says)),
+                self.rows().into_iter().map(|row| (row.name, row.says)),
                 Ink::Plain,
                 Beside::Own(Ink::Dim),
             ),
-            selected: self.selected,
+            selected: self.narrow.mark(),
             marker: list::MARK,
             chooses: true,
         }
@@ -161,67 +118,54 @@ impl Card {
     /// What choosing the marked row sends: the draft itself where its word already spells the name, and
     /// the name followed by what the word left otherwise.
     pub fn spelling(&self) -> String {
-        self.spelling_of(self.selected)
-            .unwrap_or_else(|| self.words.clone())
+        self.spelling_of(self.narrow.mark())
+            .unwrap_or_else(|| self.words().to_owned())
     }
 
     /// The draft as the row at `at` spells it: the row's name followed by what the word left.
     pub fn spelling_of(&self, at: usize) -> Option<String> {
-        let chosen = self.rows.get(at)?;
-        Some(match self.word.starts_with(chosen.name) {
-            true => self.words.clone(),
-            false => format!("{}{}", chosen.name, self.tail),
+        let chosen = *self.rows().get(at)?;
+        let words = self.words();
+        Some(match word(words).starts_with(chosen.name) {
+            true => words.to_owned(),
+            false => format!("{}{}", chosen.name, tail(words)),
         })
     }
 }
 
 impl Kept for Card {
     fn walked(&mut self, way: Move) -> bool {
-        let at = match way {
-            Move::Previous => self.selected.checked_sub(1),
-            Move::Next => self
-                .selected
-                .checked_add(1)
-                .filter(|at| *at < self.rows.len()),
-        };
-        match at {
-            Some(at) => {
-                self.selected = at;
-                true
-            }
-            None => false,
-        }
+        self.narrow.walked(way, self.rows().len())
     }
 
     fn typed(&mut self, key: Key) -> bool {
-        let mut words = self.words.clone();
-        match key {
-            Key::Char(glyph) if !glyph.is_control() => words.push(glyph),
-            Key::Backspace => {
-                if words.pop().is_none() {
-                    return false;
-                }
-            }
-            _ => return false,
-        }
-        let marked = self.rows.get(self.selected).map(|row| row.name);
-        let before = std::mem::take(&mut self.rows);
-        *self = Card::read(words, marked);
-        before != self.rows
+        self.narrow.typed(key, |words| ranked(word(words)).len())
     }
 
     fn pressed(&mut self, at: usize) -> bool {
-        if at >= self.rows.len() {
-            return false;
-        }
-        self.selected = at;
-        true
+        self.narrow.pressed(at, self.rows().len())
+    }
+}
+
+/// The first word of a draft, which is the word the rows are ranked by.
+fn word(draft: &str) -> &str {
+    draft.split_whitespace().next().unwrap_or_default()
+}
+
+/// What a draft leaves after the word: from a `:` in that word, or the rest of the line after it.
+fn tail(draft: &str) -> &str {
+    let word = word(draft);
+    match word.find(':') {
+        Some(at) => &word[at..],
+        None => &draft[word.len()..],
     }
 }
 
 /// The rows the word after the slash leaves, ranked and in the one order their names give.
 fn ranked(word: &str) -> Vec<Row> {
-    let body = word.strip_prefix('/').unwrap_or_default();
+    let Some(body) = word.strip_prefix('/') else {
+        return Vec::new();
+    };
     let asked = body.split(':').next().unwrap_or_default().to_lowercase();
     let mut held: Vec<(u8, Row)> = TABLE
         .iter()

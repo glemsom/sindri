@@ -2,7 +2,7 @@ use sindri_core::provider::served::Listing;
 
 use crate::composer::Key;
 use crate::ink::Ink;
-use crate::kept::{Kept, Move};
+use crate::kept::{Kept, Move, Narrow};
 use crate::list::{self, Beside, ScreenRow};
 
 pub const CAP: usize = 8;
@@ -18,8 +18,7 @@ pub type Row<'a> = (&'a str, &'a str);
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Models {
     listing: Option<Listing>,
-    query: String,
-    selected: usize,
+    narrow: Narrow,
 }
 
 impl Models {
@@ -30,16 +29,12 @@ impl Models {
     /// The same screen with the names the wire served, which is the screen's own copy of a fact the
     /// frame's value holds. A listing that is not the one the screen holds puts the mark back on the
     /// first row; the same listing handed again leaves the reader where they were.
-    pub fn served_by(self, listing: Option<Listing>) -> Models {
-        let moved = self.listing != listing;
-        Models {
-            listing,
-            selected: match moved {
-                true => 0,
-                false => self.selected,
-            },
-            ..self
+    pub fn served_by(mut self, listing: Option<Listing>) -> Models {
+        if self.listing != listing {
+            self.listing = listing;
+            self.narrow.restart();
         }
+        self
     }
 
     pub fn waiting(&self) -> bool {
@@ -51,28 +46,19 @@ impl Models {
     }
 
     pub fn query(&self) -> &str {
-        &self.query
+        self.narrow.query()
     }
 
+    /// The first `CAP` names the query leaves, which are the rows the card draws.
     pub fn rows(&self) -> Vec<Row<'_>> {
-        let Some(names) = self.listing.as_ref().and_then(Listing::names) else {
-            return Vec::new();
-        };
-        let query = self.query.to_lowercase();
-        let mut ranked: Vec<(u8, Row<'_>)> = names
-            .iter()
-            .filter_map(|served| {
-                rank(&served.id, &query)
-                    .map(|rank| (rank, (served.id.as_str(), served.label.as_str())))
-            })
-            .collect();
-        // Stable, so names that rank alike stay in the order the wire listed them in.
-        ranked.sort_by_key(|(rank, _)| *rank);
-        ranked.into_iter().take(CAP).map(|(_, row)| row).collect()
+        leaves(self.listing.as_ref(), self.narrow.query())
+            .into_iter()
+            .take(CAP)
+            .collect()
     }
 
     pub fn selected(&self) -> usize {
-        self.selected
+        self.narrow.mark()
     }
 
     /// The rows the screen's card holds: the query at the head, one row per served name with the row
@@ -98,58 +84,36 @@ impl Models {
     }
 
     pub fn key(&mut self, key: Key) -> bool {
-        match key {
-            Key::Char(glyph) if !glyph.is_control() => {
-                self.query.push(glyph);
-                self.selected = 0;
-                true
-            }
-            Key::Backspace => {
-                let erased = self.query.pop().is_some();
-                if erased {
-                    self.selected = 0;
-                }
-                erased
-            }
-            _ => false,
-        }
-    }
-
-    /// The row a press landed on: the selection moves to it, and a press on no row of the list moves
-    /// nothing.
-    pub fn select(&mut self, at: usize) -> bool {
-        if at >= self.rows().len() {
-            return false;
-        }
-        self.selected = at;
-        true
-    }
-
-    pub fn up(&mut self) -> bool {
-        let moved = self.selected > 0;
-        self.selected = self.selected.saturating_sub(1);
-        moved
-    }
-
-    pub fn down(&mut self) -> bool {
-        let moved = self.selected.saturating_add(1) < self.rows().len();
-        if moved {
-            self.selected += 1;
-        }
-        moved
+        let Models { listing, narrow } = self;
+        let listing = listing.as_ref();
+        narrow.typed(key, |query| leaves(listing, query).len().min(CAP))
     }
 
     pub fn chosen(&self) -> Option<&str> {
-        self.rows().get(self.selected).map(|(id, _)| *id)
+        self.rows().get(self.narrow.mark()).map(|(id, _)| *id)
     }
+}
+
+/// Every name `query` leaves, ranked and in the wire's own order for ties.
+fn leaves<'a>(listing: Option<&'a Listing>, query: &str) -> Vec<Row<'a>> {
+    let Some(names) = listing.and_then(Listing::names) else {
+        return Vec::new();
+    };
+    let query = query.to_lowercase();
+    let mut ranked: Vec<(u8, Row<'a>)> = names
+        .iter()
+        .filter_map(|served| {
+            rank(&served.id, &query).map(|rank| (rank, (served.id.as_str(), served.label.as_str())))
+        })
+        .collect();
+    // Stable, so names that rank alike stay in the order the wire listed them in.
+    ranked.sort_by_key(|(rank, _)| *rank);
+    ranked.into_iter().map(|(_, row)| row).collect()
 }
 
 impl Kept for Models {
     fn walked(&mut self, way: Move) -> bool {
-        match way {
-            Move::Previous => self.up(),
-            Move::Next => self.down(),
-        }
+        self.narrow.walked(way, self.rows().len())
     }
 
     fn typed(&mut self, key: Key) -> bool {
@@ -157,7 +121,7 @@ impl Kept for Models {
     }
 
     fn pressed(&mut self, at: usize) -> bool {
-        self.select(at)
+        self.narrow.pressed(at, self.rows().len())
     }
 }
 
