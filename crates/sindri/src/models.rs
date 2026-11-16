@@ -2,10 +2,8 @@ use sindri_core::provider::served::Listing;
 
 use crate::composer::Key;
 use crate::ink::Ink;
-use crate::kept::{Kept, Move, Narrow};
+use crate::kept::{CAP, Kept, Move, Narrow, leaves};
 use crate::list::{self, Beside, ScreenRow};
-
-pub const CAP: usize = 8;
 
 /// The one line the screen says in place of its rows while the wire has yet to answer.
 const ASKING: &str = "asking the wire what it serves";
@@ -51,7 +49,7 @@ impl Models {
 
     /// The first `CAP` names the query leaves, which are the rows the card draws.
     pub fn rows(&self) -> Vec<Row<'_>> {
-        leaves(self.listing.as_ref(), self.narrow.query())
+        ranked(self.listing.as_ref(), self.narrow.query())
             .into_iter()
             .take(CAP)
             .collect()
@@ -86,7 +84,7 @@ impl Models {
     pub fn key(&mut self, key: Key) -> bool {
         let Models { listing, narrow } = self;
         let listing = listing.as_ref();
-        narrow.typed(key, |query| leaves(listing, query).len().min(CAP))
+        narrow.typed(key, |query| ranked(listing, query).len().min(CAP))
     }
 
     pub fn chosen(&self) -> Option<&str> {
@@ -94,21 +92,18 @@ impl Models {
     }
 }
 
-/// Every name `query` leaves, ranked and in the wire's own order for ties.
-fn leaves<'a>(listing: Option<&'a Listing>, query: &str) -> Vec<Row<'a>> {
+/// Every served name `query` leaves, as the row the card draws: the wire's own order for ties.
+fn ranked<'a>(listing: Option<&'a Listing>, query: &str) -> Vec<Row<'a>> {
     let Some(names) = listing.and_then(Listing::names) else {
         return Vec::new();
     };
-    let query = query.to_lowercase();
-    let mut ranked: Vec<(u8, Row<'a>)> = names
-        .iter()
-        .filter_map(|served| {
-            rank(&served.id, &query).map(|rank| (rank, (served.id.as_str(), served.label.as_str())))
-        })
-        .collect();
-    // Stable, so names that rank alike stay in the order the wire listed them in.
-    ranked.sort_by_key(|(rank, _)| *rank);
-    ranked.into_iter().map(|(_, row)| row).collect()
+    let items = names.iter().map(|served| {
+        (
+            served.id.as_str(),
+            (served.id.as_str(), served.label.as_str()),
+        )
+    });
+    leaves(items, query)
 }
 
 impl Kept for Models {
@@ -123,15 +118,4 @@ impl Kept for Models {
     fn pressed(&mut self, at: usize) -> bool {
         self.narrow.pressed(at, self.rows().len())
     }
-}
-
-fn rank(id: &str, query: &str) -> Option<u8> {
-    if query.is_empty() {
-        return Some(0);
-    }
-    let id = id.to_lowercase();
-    if id.starts_with(query) {
-        return Some(0);
-    }
-    id.contains(query).then_some(1)
 }

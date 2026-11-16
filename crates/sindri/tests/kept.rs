@@ -11,7 +11,7 @@ use sindri::commands;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::ink::Ink;
-use sindri::kept::{Kept, Move};
+use sindri::kept::{Kept, Move, leaves};
 use sindri::keys::{Act, Mode, Stack};
 use sindri::list;
 use sindri::mark::Cell;
@@ -780,5 +780,39 @@ fn the_arrow_keys_walk_the_commands_card_over_the_draft() {
         view.card().map(commands::Card::selected),
         Some(0),
         "and typing after a walk puts the mark back on the row the words name"
+    );
+}
+
+#[test]
+fn one_rank_answers_a_name_a_query_starts_a_name_it_holds_and_a_path_it_holds() {
+    let spellings = ["readme.md", "src/app.rs", "myapp.rs", "app/log.rs"];
+
+    assert_eq!(
+        leaves(spellings.map(|spelling| (spelling, spelling)), "app"),
+        ["src/app.rs", "myapp.rs", "app/log.rs"],
+        "`app.rs` under `src` is a name the query starts, `myapp.rs` a name it holds and \
+         `app/log.rs` a path it holds, so the rank hands them back in that order, and \
+         `readme.md`, which holds nothing of `app`, is left out"
+    );
+}
+
+#[test]
+fn the_rows_of_one_rank_come_nearest_first_and_in_the_order_they_were_handed() {
+    let spellings = ["holds.rs", "deep/holds.rs"];
+
+    assert_eq!(
+        leaves(spellings.map(|spelling| (spelling, spelling)), "holds"),
+        ["holds.rs", "deep/holds.rs"],
+        "both names start the query, so the rank cannot settle them and the spelling \
+         sitting directly in the working directory is the nearer of the two"
+    );
+
+    let spellings = ["zulu.rs", "alpha.rs"];
+
+    assert_eq!(
+        leaves(spellings.map(|spelling| (spelling, spelling)), ""),
+        ["zulu.rs", "alpha.rs"],
+        "an empty query is a query every name starts, and two rows of one rank and one \
+         nearness come back in the order they were handed in, whatever their names are"
     );
 }

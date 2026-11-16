@@ -1,6 +1,6 @@
 use crate::composer::Key;
 use crate::ink::Ink;
-use crate::kept::{Kept, Move, Narrow};
+use crate::kept::{Kept, Move, Narrow, leaves};
 use crate::list::{self, Beside, ScreenRow};
 
 const NEW: &str = "/new";
@@ -161,29 +161,20 @@ fn tail(draft: &str) -> &str {
     }
 }
 
-/// The rows the word after the slash leaves, ranked and in the one order their names give.
-fn ranked(word: &str) -> Vec<Row> {
-    let Some(body) = word.strip_prefix('/') else {
+/// The rows the word after the slash leaves, handed in the one order their names give.
+fn ranked(asked: &str) -> Vec<Row> {
+    let Some(body) = asked.strip_prefix('/') else {
         return Vec::new();
     };
-    let asked = body.split(':').next().unwrap_or_default().to_lowercase();
-    let mut held: Vec<(u8, Row)> = TABLE
-        .iter()
-        .filter_map(|row| {
-            let name = row
-                .name
-                .strip_prefix('/')
-                .unwrap_or_default()
-                .to_lowercase();
-            match (name.starts_with(&asked), name.contains(&asked)) {
-                (true, _) => Some((0, *row)),
-                (false, true) => Some((1, *row)),
-                (false, false) => None,
-            }
-        })
-        .collect();
-    held.sort_by(|(left, one), (right, other)| left.cmp(right).then(one.name.cmp(other.name)));
-    held.into_iter().map(|(_, row)| row).collect()
+    let query = body.split(':').next().unwrap_or_default();
+    leaves(by_name().iter().map(|row| (row.name, *row)), query)
+}
+
+/// The table in the order its names give, so the rows of one rank come out alphabetical.
+fn by_name() -> Vec<Row> {
+    let mut rows = TABLE.to_vec();
+    rows.sort_by_key(|row| row.name);
+    rows
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -243,39 +234,21 @@ mod tests {
     }
 
     #[test]
-    fn a_bare_slash_holds_every_command_in_one_order() {
-        assert_eq!(
-            names("/"),
-            [HELP, MODEL, NEW, QUIT, SETTINGS, SKILL, STATS],
-            "every command starts the empty word, so the list is the table in the one order its \
-             names give it"
-        );
-    }
+    fn a_bare_slash_holds_every_command() {
+        let held = names("/");
 
-    #[test]
-    fn the_list_narrows_as_the_word_is_typed() {
-        assert_eq!(names("/s"), [SETTINGS, SKILL, STATS]);
         assert_eq!(
-            names("/st"),
-            [STATS],
-            "a name that starts with the word is not one that holds it, so `/st` leaves `/stats` \
-             alone"
+            held.len(),
+            TABLE.len(),
+            "every command starts the empty word, so the card holds them all: {held:?}"
         );
-    }
-
-    #[test]
-    fn a_name_the_word_starts_outranks_a_name_it_holds() {
-        assert_eq!(
-            names("/n"),
-            [NEW, SETTINGS],
-            "`/settings` holds the word and `/new` starts with it, so the row that starts goes first"
-        );
-        assert_eq!(
-            names("/N"),
-            [NEW, SETTINGS],
-            "the word and the name are read in one case, so a reader who types in capitals \
-             narrows the list as one who does not"
-        );
+        for row in TABLE {
+            assert!(
+                held.contains(&row.name),
+                "the card holds no row for {:?}: {held:?}",
+                row.name
+            );
+        }
     }
 
     #[test]
