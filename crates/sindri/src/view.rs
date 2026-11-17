@@ -1358,8 +1358,20 @@ impl View {
             y: band.bottom().saturating_sub(FOOT_ROWS),
             ..edge
         };
-        boxed_row(buffer, edge, (EDGE_OPEN, EDGE_CLOSE), self.composer_edge(), &palette);
-        boxed_row(buffer, foot, (FOOT_OPEN, FOOT_CLOSE), palette.dim_edge(), &palette);
+        boxed_row(
+            buffer,
+            edge,
+            (EDGE_OPEN, EDGE_CLOSE),
+            self.composer_edge(),
+            &palette,
+        );
+        boxed_row(
+            buffer,
+            foot,
+            (FOOT_OPEN, FOOT_CLOSE),
+            palette.dim_edge(),
+            &palette,
+        );
         for y in edge.y.saturating_add(1)..foot.y {
             pen::glyph(buffer, band.x, y, UPRIGHT, palette.dim_edge(), &palette);
             pen::glyph(
