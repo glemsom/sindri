@@ -1,3 +1,4 @@
+pub mod band; // a row of the composer's band: the gutter it opens with and the runs it is drawn as
 pub mod bill; // the draft's own count: the files its words name, the command it opens with, and the characters it holds
 pub mod capability; // what the terminal a frame draws on can do: its cell, its colours, its sizing, its pointer, its pictures and the face over the rail
 pub mod card; // a screen's card: its border, its name, the key that leaves, over the frame it dims

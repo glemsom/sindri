@@ -15,6 +15,7 @@ use sindri_core::redact::SecretSet;
 use sindri_core::run::{Load, Loaded, Stop, Turn};
 use sindri_core::skills::{Catalog, Skill};
 
+use crate::band;
 use crate::bill::Bill;
 use crate::capability::Capabilities;
 use crate::card;
@@ -166,10 +167,6 @@ fn inside(band: Rect) -> Rect {
 fn draft_end(band: Rect, queue: Rect) -> u16 {
     queue.y.min(band.bottom().saturating_sub(FOOT_ROWS))
 }
-
-/// The sigil that opens the draft, standing in the gutter an answer is set from — `rows::INDENT`
-/// columns wide, inside the box the band closes into.
-const SIGIL: &str = "\u{203a} ";
 
 /// The name the commands card carries in its top border, in the shape `? keys` and `@ files`
 /// wear theirs.
@@ -1306,11 +1303,11 @@ impl View {
                 break;
             }
             let opens = row == 0 && self.composer.scroll() == 0;
-            band_row(
+            band::row(
                 buffer,
                 Rect { y, ..draft },
                 opens,
-                (*line, ink),
+                &[(*line, ink)],
                 &self.capabilities.palette(),
             );
             under = y.saturating_add(1);
@@ -1322,11 +1319,11 @@ impl View {
                 1 => String::from("1 row kept back"),
                 kept => format!("{kept} rows kept back"),
             };
-            band_row(
+            band::row(
                 buffer,
                 Rect { y: under, ..draft },
                 false,
-                (&counted, Ink::Dim),
+                &[(&counted, Ink::Dim)],
                 &self.capabilities.palette(),
             );
         }
@@ -1338,21 +1335,21 @@ impl View {
         let mut at = prompts.y;
         if let Some(kept) = shown.kept_back {
             let counted = format!("{kept} more queued");
-            band_row(
+            band::row(
                 buffer,
                 Rect { y: at, ..prompts },
                 false,
-                (&counted, Ink::Dim),
+                &[(&counted, Ink::Dim)],
                 &self.capabilities.palette(),
             );
             at = at.saturating_add(1);
         }
         for line in &shown.prompts {
-            band_row(
+            band::row(
                 buffer,
                 Rect { y: at, ..prompts },
                 true,
-                (line, Ink::Dim),
+                &[(line.as_str(), Ink::Dim)],
                 &self.capabilities.palette(),
             );
             at = at.saturating_add(1);
@@ -1798,27 +1795,6 @@ fn whole_row<S: AsRef<str>, D: Copy + Into<Look>>(
         },
         spans,
         Clip::Whole,
-        palette,
-    );
-}
-
-/// Writes one row of the composer's band. The sigil opens the row a prompt's words begin on and
-/// every other row keeps the gutter blank under it, so a line of the draft and a waited prompt both
-/// begin in the answer's first column.
-fn band_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), palette: &Palette) {
-    let gutter = match opens {
-        true => SIGIL,
-        false => INDENT,
-    };
-    pen::write(
-        buffer,
-        Rect {
-            y: area.y,
-            height: 1,
-            ..area
-        },
-        &[(gutter, Ink::Dim), words],
-        Clip::Edge,
         palette,
     );
 }

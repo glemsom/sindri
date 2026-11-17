@@ -20,6 +20,7 @@ use crate::palette::{Band, Edge};
 use crate::pictures::PLACEHOLDER as PLACED;
 use crate::pulse::STEP_MS;
 use crate::readback::under;
+use crate::rows::SIGIL;
 use crate::rows::THUMB;
 
 /// Enough facts that the ledger fills its column top to bottom.

@@ -28,8 +28,11 @@ use crate::stream::Stream;
 /// row is and the blank after it, so every entry's words begin in one column.
 pub(crate) const INDENT: &str = "  ";
 
+/// The sigil the reader's own words are set from, two columns of it: the row a prompt is asked on and
+/// the draft that asks the next one alike.
+pub(crate) const SIGIL: &str = "› ";
+
 const RULE: &str = "─ ";
-const SIGIL: &str = "› ";
 const THOUGHT: &str = "│ ";
 
 const PENDING: char = '…';
