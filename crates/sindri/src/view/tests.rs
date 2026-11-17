@@ -3028,25 +3028,6 @@ fn the_draft_is_set_behind_its_sigil_one_column_in_from_the_bands_upright() {
     );
 }
 
-/// The row `words` are drawn on, and the column the row's gutter begins in.
-fn gutter_of(buffer: &Buffer, words: &str) -> (u16, u16) {
-    let area = buffer.area;
-    for y in area.y..area.bottom() {
-        let row = drawn_row(buffer, y);
-        if let Some(at) = row.find(words) {
-            let at = pen::cells(&row[..at]);
-            return (y, at.saturating_sub(pen::cells(SIGIL)));
-        }
-    }
-    panic!("no row of the frame draws {words:?}");
-}
-
-/// The ink of the cell the row `words` are drawn on opens its gutter with.
-fn gutter_ink(buffer: &Buffer, palette: &Palette, words: &str) -> Ink {
-    let (y, at) = gutter_of(buffer, words);
-    look_at(buffer, palette, at, y).ink()
-}
-
 /// The frame the picture fixtures draw: an answer naming a diagram outside the workspace and a
 /// tall field the workspace's own svg draws, read from the tail a long way back.
 fn field(rows: u16) -> Buffer {
@@ -3758,8 +3739,14 @@ fn a_caret_at_the_end_of_a_full_row_waits_in_the_last_column_inside_the_box() {
     );
 }
 
+/// The ink the gutter of the row at `x`, `y` is drawn in: the cell its sigil stands in, or the blank
+/// the indent leaves there.
+fn gutter_ink(buffer: &Buffer, palette: &Palette, x: u16, y: u16) -> Ink {
+    look_at(buffer, palette, x, y).ink()
+}
+
 #[test]
-fn the_sigil_of_the_row_the_caret_waits_in_is_lit_and_the_sigils_above_and_below_it_are_not() {
+fn the_sigil_is_lit_on_the_row_the_caret_waits_in_and_on_no_other() {
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(
         Capabilities::default(),
@@ -3770,58 +3757,72 @@ fn the_sigil_of_the_row_the_caret_waits_in_is_lit_and_the_sigils_above_and_below
     view.key(Key::Up);
     view.key(Key::Up);
 
-    let (buffer, _) = painted_and_told(&mut view, 120, 40);
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let band = laid_out(&told).composer;
+    let gutter = band.x + 1;
+    let first = band.y + EDGE_ROWS;
     assert_eq!(
-        gutter_ink(&buffer, &palette, "one"),
+        gutter_ink(&buffer, &palette, gutter, first),
         Ink::Accent,
         "the caret waits on the row the draft opens with, so its sigil is the lit one"
     );
     assert_eq!(
-        gutter_ink(&buffer, &palette, "three"),
+        gutter_ink(&buffer, &palette, gutter, first + 1),
         Ink::Dim,
-        "and the row below the caret's keeps the dim ink, having no sigil of its own"
+        "and the row under the caret's keeps the dim ink where its sigil would stand"
+    );
+    assert_eq!(
+        gutter_ink(&buffer, &palette, gutter, first + 2),
+        Ink::Dim,
+        "as does the row under that one"
     );
 
     view.key(Key::Down);
-    let (buffer, _) = painted_and_told(&mut view, 120, 40);
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let band = laid_out(&told).composer;
+    let first = band.y + EDGE_ROWS;
     assert_eq!(
-        gutter_ink(&buffer, &palette, "one"),
+        gutter_ink(&buffer, &palette, band.x + 1, first),
         Ink::Dim,
         "the caret has left the draft's first row, so its sigil is no longer lit"
     );
     assert_eq!(
-        gutter_ink(&buffer, &palette, "two"),
+        gutter_ink(&buffer, &palette, band.x + 1, first + 1),
         Ink::Dim,
-        "and only a row the draft opens with wears a sigil at all: the row the caret waits in \
-         is indented in the dim ink"
+        "and the row the caret waits in is indented in the dim ink, wearing no sigil of its own"
     );
 }
 
 #[test]
-fn the_placeholder_and_a_queued_row_keep_the_dim_ink_the_row_that_opens_a_draft_does_not() {
+fn a_placeholder_and_a_waiting_prompt_light_no_sigil_and_keep_the_dim_ink() {
     let palette = Palette::TRUECOLOR;
     let mut empty = View::of(
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::none(),
     );
-    let (buffer, _) = painted_and_told(&mut empty, 120, 40);
-    let (row, at) = gutter_of(&buffer, PLACEHOLDER);
+    let (buffer, told) = painted_and_told(&mut empty, 120, 40);
+    let band = laid_out(&told).composer;
     assert_eq!(
-        look_at(&buffer, &palette, at.saturating_add(pen::cells(SIGIL)), row).ink(),
+        gutter_ink(&buffer, &palette, band.x + 1, band.y + EDGE_ROWS),
         Ink::Dim,
         "a draft holding nothing lights no sigil, so the placeholder keeps the dim ink"
     );
 
-    let (buffer, _) = waiting_behind(palette, "a draft", 1, 120, 24);
-    let (row, at) = gutter_of(&buffer, "prompt 1");
+    let (buffer, laid) = waiting_behind(palette, "a draft", 1, 120, 24);
+    let prompts = inside(laid.queue);
     assert_eq!(
-        look_at(&buffer, &palette, at.saturating_add(pen::cells(SIGIL)), row).ink(),
+        gutter_ink(&buffer, &palette, prompts.x, prompts.y),
         Ink::Dim,
-        "a waiting prompt is no row the caret waits in, so its words keep the dim ink"
+        "a waiting prompt is no row the caret waits in, so its sigil keeps the dim ink"
     );
     assert_eq!(
-        gutter_ink(&buffer, &palette, "a draft"),
+        gutter_ink(
+            &buffer,
+            &palette,
+            laid.composer.x + 1,
+            laid.composer.y + EDGE_ROWS
+        ),
         Ink::Accent,
         "and the draft above it is the row the caret waits in, so its sigil is the one that is lit"
     );
@@ -3829,24 +3830,29 @@ fn the_placeholder_and_a_queued_row_keep_the_dim_ink_the_row_that_opens_a_draft_
 
 #[test]
 fn every_palette_draws_the_inks_of_a_draft_row_in_its_own_colours() {
+    let root = tempfile::tempdir().expect("a temp workspace");
+    std::fs::create_dir_all(root.path().join("src")).expect("the directories a file sits in");
+    std::fs::write(root.path().join("src/rows.rs"), "").expect("a file");
+
     for palette in [Palette::SLOTS, Palette::ANSI, Palette::TRUECOLOR] {
         let mut view = View::of(
             inked(palette),
             Facts::default()
                 .asked()
-                .working(PathBuf::from(env!("CARGO_MANIFEST_DIR")), None),
+                .working(root.path().to_path_buf(), None),
             Transcript::none(),
         );
         view.paste("/model src/rows.rs `a span` plain");
+        // A draft that names a command opens the commands card, whose scrim would dim every cell.
         view.key(Key::Escape);
-        let (buffer, _) = painted_and_told(&mut view, 120, 40);
+        let (buffer, told) = painted_and_told(&mut view, 120, 40);
+        let band = laid_out(&told).composer;
         let (words, at) = place_of(&buffer, "/model src/rows.rs `a span` plain");
         let column = |word: &str| {
             at.saturating_add(pen::cells(
                 &words[..words.find(word).expect("a word of the draft row")],
             ))
         };
-        let y = gutter_of(&buffer, "/model src/rows.rs `a span` plain").0;
 
         for (word, ink) in [
             ("/model", Ink::Accent),
@@ -3855,9 +3861,9 @@ fn every_palette_draws_the_inks_of_a_draft_row_in_its_own_colours() {
             ("plain", Ink::Plain),
         ] {
             assert_eq!(
-                look_at(&buffer, &palette, column(word), y).ink(),
-                ink,
-                "{palette:?} draws {word:?} in the {} ink of its own inks",
+                look_at(&buffer, &palette, column(word), band.y + EDGE_ROWS),
+                Look::plain(ink),
+                "{palette:?} draws {word:?} in the {} ink, of the inks it holds itself",
                 ink.name()
             );
         }

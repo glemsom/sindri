@@ -1289,13 +1289,21 @@ impl View {
         };
         let prompts = inside(queue);
         let empty = self.composer.text().is_empty();
-        let rows = match empty {
-            true => vec![PLACEHOLDER],
-            false => self.composer.lines(),
+        // The placeholder is no row of the draft, so it lights no sigil and keeps the dim ink.
+        let waited = (!empty).then(|| usize::from(self.composer.caret().0));
+        let scroll = self.composer.scroll();
+        let rows: Vec<Vec<(&str, Ink)>> = match empty {
+            true => vec![vec![(PLACEHOLDER, Ink::Dim)]],
+            false => self
+                .composer
+                .lines()
+                .into_iter()
+                .enumerate()
+                .map(|(row, line)| draft::runs(line, row == 0 && scroll == 0, &self.files))
+                .collect(),
         };
-        let waited = usize::from(self.composer.caret().0);
         let mut under = draft.y;
-        for (row, line) in rows.iter().enumerate() {
+        for (row, runs) in rows.iter().enumerate() {
             let Some(offset) = u16::try_from(row).ok() else {
                 break;
             };
@@ -1305,22 +1313,16 @@ impl View {
             if y >= draft.bottom() {
                 break;
             }
-            let opens = row == 0 && self.composer.scroll() == 0;
-            let lit = opens && !empty && row == waited;
-            let gutter = match (opens, lit) {
+            let gutter = match (row == 0 && scroll == 0, waited == Some(row)) {
                 (true, true) => band::Gutter::Lit,
                 (true, false) => band::Gutter::Open,
                 (false, _) => band::Gutter::Blank,
-            };
-            let runs = match empty {
-                true => vec![(PLACEHOLDER, Ink::Dim)],
-                false => draft::runs(line, opens, &self.files),
             };
             band::row(
                 buffer,
                 Rect { y, ..draft },
                 gutter,
-                &runs,
+                runs,
                 &self.capabilities.palette(),
             );
             under = y.saturating_add(1);

@@ -23,8 +23,8 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
     root
 }
 
-/// The runs a row is drawn as, each joined to the one before it where the two share an ink, so a test
-/// reads the inks a row is made of rather than the pieces the split between them left.
+/// The row's runs, each joined to the one before it where the two share an ink: what a reader sees
+/// rather than the pieces the split between them left.
 fn joined(row: &str, opens: bool, files: &Files) -> Vec<(String, Ink)> {
     let mut joined: Vec<(String, Ink)> = Vec::new();
     for (run, ink) in runs(row, opens, files) {
@@ -34,10 +34,6 @@ fn joined(row: &str, opens: bool, files: &Files) -> Vec<(String, Ink)> {
         }
     }
     joined
-}
-
-fn drawn(row: &str, opens: bool, files: &Files) -> Vec<(String, Ink)> {
-    joined(row, opens, files)
 }
 
 #[test]
@@ -73,18 +69,24 @@ fn a_row_that_opens_with_a_command_the_card_holds_draws_that_word_in_the_accent(
     let files = Files::default();
 
     assert_eq!(
-        drawn("/model gpt-5", true, &files),
+        joined("/model gpt-5", true, &files),
         [
             (String::from("/model"), Ink::Accent),
             (String::from(" gpt-5"), Ink::Plain)
         ],
-        "the word the draft opens with is the command it would send, and the words after it are \
-         its argument"
+        "the word the draft opens with is the command it would send, and the words after it are its \
+         argument"
     );
     assert_eq!(
-        drawn("/skill:commit", true, &files),
+        joined("/skill:commit", true, &files),
         [(String::from("/skill:commit"), Ink::Accent)],
         "the one command that takes a word after it is a command the card holds"
+    );
+    assert_eq!(
+        joined("/mod", true, &files),
+        [(String::from("/mod"), Ink::Accent)],
+        "a name the card still holds rows for wears the accent as it is typed, so the ink does not \
+         flicker between one key and the next"
     );
 }
 
@@ -93,7 +95,7 @@ fn a_word_the_card_holds_no_row_for_stays_plain() {
     let files = Files::default();
 
     assert_eq!(
-        drawn("/skillet is a pan", true, &files),
+        joined("/skillet is a pan", true, &files),
         [(String::from("/skillet is a pan"), Ink::Plain)],
         "a draft that opens with a word no command holds is a draft the reader meant to send"
     );
@@ -104,13 +106,13 @@ fn only_the_word_the_row_opens_with_can_wear_the_accent() {
     let files = Files::default();
 
     assert_eq!(
-        drawn("run /help", true, &files),
+        joined("run /help", true, &files),
         [(String::from("run /help"), Ink::Plain)],
         "a command is only a command where the draft opens with it, so a later word never takes the \
          accent"
     );
     assert_eq!(
-        drawn("/model /help", true, &files),
+        joined("/model /help", true, &files),
         [
             (String::from("/model"), Ink::Accent),
             (String::from(" /help"), Ink::Plain)
@@ -118,12 +120,17 @@ fn only_the_word_the_row_opens_with_can_wear_the_accent() {
         "and no second word of that row takes it, though the card holds one"
     );
     assert_eq!(
-        drawn("`/model` next", true, &files),
+        joined("`/model` next", true, &files),
         [
             (String::from("`/model`"), Ink::Muted),
             (String::from(" next"), Ink::Plain)
         ],
         "a command inside a span is set in backticks and draws no accent at all"
+    );
+    assert_eq!(
+        joined(" /model", true, &files),
+        [(String::from(" /model"), Ink::Plain)],
+        "a row that opens with a blank opens with no command at all, so the word under it is quiet"
     );
 }
 
@@ -132,7 +139,7 @@ fn a_row_that_opens_nothing_never_wears_the_accent() {
     let files = Files::default();
 
     assert_eq!(
-        drawn("/model", false, &files),
+        joined("/model", false, &files),
         [(String::from("/model"), Ink::Plain)],
         "a command opens the draft, so a row under the first one is no command however it reads"
     );
@@ -144,23 +151,23 @@ fn a_word_naming_a_file_of_the_workspace_is_drawn_in_the_ok_ink() {
     let files = Files::walk(root.path());
 
     assert_eq!(
-        drawn("read src/rows.rs and Cargo.toml", true, &files),
+        joined("read src/rows.rs and Cargo.toml", true, &files),
         [
             (String::from("read "), Ink::Plain),
             (String::from("src/rows.rs"), Ink::Ok),
             (String::from(" and "), Ink::Plain),
             (String::from("Cargo.toml"), Ink::Ok)
         ],
-        "a word the walk holds is a file the prompt points at, and a word it does not is a word"
+        "a word the walk holds is a file the prompt points at, in the ink a file is given"
     );
     assert_eq!(
-        drawn("/model src/rows.rs", true, &files),
+        joined("/model src/rows.rs", true, &files),
         [
             (String::from("/model"), Ink::Accent),
             (String::from(" "), Ink::Plain),
             (String::from("src/rows.rs"), Ink::Ok)
         ],
-        "the file ink outranks the accent's row but never the accent's own word"
+        "the word the row opens with keeps the accent, and the file after it takes the ok ink"
     );
 }
 
@@ -170,7 +177,7 @@ fn a_backticked_span_recedes_into_the_muted_ink_and_a_file_named_in_it_with_it()
     let files = Files::walk(root.path());
 
     assert_eq!(
-        drawn("keep `src/rows.rs` as it is", true, &files),
+        joined("keep `src/rows.rs` as it is", true, &files),
         [
             (String::from("keep "), Ink::Plain),
             (String::from("`src/rows.rs`"), Ink::Muted),
@@ -186,12 +193,13 @@ fn a_backtick_the_row_never_closes_leaves_the_rest_of_the_row_plain() {
     let files = Files::walk(root.path());
 
     assert_eq!(
-        drawn("/model `src/rows.rs", true, &files),
+        joined("/model ` src/rows.rs and more", true, &files),
         [
             (String::from("/model"), Ink::Accent),
-            (String::from(" `src/rows.rs"), Ink::Plain)
+            (String::from(" ` src/rows.rs and more"), Ink::Plain)
         ],
-        "a backtick with no backtick after it opens no span, so nothing after it recedes"
+        "a backtick with no backtick after it opens no span, so the rest of the row recedes into no \
+         ink at all — not even the ok ink a file it names is drawn in"
     );
 }
 

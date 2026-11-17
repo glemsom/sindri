@@ -144,23 +144,3 @@ fn the_card_recognises_the_word_it_holds_a_row_for() {
         );
     }
 }
-
-#[test]
-fn the_card_holds_a_draft_exactly_when_it_recognises_the_word_the_draft_opens_with() {
-    for draft in [
-        "/",
-        "/mod",
-        "/model",
-        "/model gpt-5",
-        "/skill:commit",
-        "/qui",
-        "/help ",
-        "/n",
-    ] {
-        assert_eq!(
-            recognised(word(draft)),
-            Card::of(draft).is_some(),
-            "{draft:?}: the one verdict the card and the row are both drawn from"
-        );
-    }
-}

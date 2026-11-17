@@ -8,9 +8,8 @@ use crate::palette::Palette;
 use crate::pen::{self, Clip};
 use crate::rows::{INDENT, SIGIL};
 
-/// The column a row of the band opens in: `Lit` is the sigil of the row the caret waits in, `Open`
-/// the sigil of a prompt's first row, and `Blank` the indent under one. A prompt and the row it is
-/// waited in begin in the answer's first column.
+/// The gutter a row of the band opens with: `Lit` is the sigil of the row the caret waits in, `Open`
+/// the sigil of a row a prompt's words begin on, and `Blank` the indent under one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Gutter {
     Lit,
@@ -27,13 +26,13 @@ pub fn row(
     runs: &[(&str, Ink)],
     palette: &Palette,
 ) {
-    let (gutter, ink) = match gutter {
+    let (column, ink) = match gutter {
         Gutter::Lit => (SIGIL, Ink::Accent),
         Gutter::Open => (SIGIL, Ink::Dim),
         Gutter::Blank => (INDENT, Ink::Dim),
     };
     let mut spans: Vec<(&str, Ink)> = Vec::with_capacity(runs.len().saturating_add(1));
-    spans.push((gutter, ink));
+    spans.push((column, ink));
     spans.extend_from_slice(runs);
     pen::write(
         buffer,
