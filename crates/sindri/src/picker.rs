@@ -1,10 +1,11 @@
-//! The walk is the `ignore` crate's, which reads a tree as `git` does, with two of its
-//! defaults turned around: `hidden(false)`, because a tracked file may be a dotfile, and
-//! `require_git(false)`, because a workspace that is no checkout still has a `.gitignore`.
+//! The `@` screen: the workspace's files narrowed by the query typed at it, the rows a card shows
+//! of what the query leaves, and the word a selection puts in the draft. The files themselves are
+//! the workspace's own walk, held rather than repeated.
 
 use std::path::Path;
 
 use crate::composer::Key;
+use crate::files::Files;
 use crate::ink::{Ink, Look};
 use crate::kept::{CAP, Kept, Move, Narrow, leaves};
 use crate::list::{self, Item, ScreenRow};
@@ -19,33 +20,21 @@ pub struct Row<'a> {
     pub directory: &'a str,
 }
 
+/// The `@` screen: the files of the workspace it was opened on, and the query typed at them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Picker {
-    files: Vec<String>,
+    files: Files,
     narrow: Narrow,
 }
 
 impl Picker {
     pub fn walk(root: &Path) -> Picker {
-        let mut files: Vec<String> = Vec::new();
-        let mut walk = ignore::WalkBuilder::new(root);
-        walk.hidden(false).require_git(false);
-        for entry in walk.build().flatten() {
-            let path = entry.path();
-            if entry.file_type().is_none_or(|kind| kind.is_dir()) {
-                continue;
-            }
-            let Some(relative) = path.strip_prefix(root).ok().and_then(|rest| rest.to_str()) else {
-                continue;
-            };
-            if relative.split('/').any(|step| step == GIT_DIRECTORY) {
-                continue;
-            }
-            files.push(relative.to_owned());
-        }
-        // The walk hands siblings back in whatever order the filesystem keeps them, and the rank keeps
-        // the order it is handed, so the files are sorted here and nowhere else.
-        files.sort_unstable();
+        Picker::over(Files::walk(root))
+    }
+
+    /// The same screen over a walk already made: the frame's own, so the rows a query leaves and the
+    /// count the band's edge hangs are never of two workspaces.
+    pub fn over(files: Files) -> Picker {
         Picker {
             files,
             narrow: Narrow::default(),
@@ -64,7 +53,10 @@ impl Picker {
     /// Every path the query leaves, in the one order the rank gives.
     fn ranked(&self) -> Vec<&str> {
         leaves(
-            self.files.iter().map(|path| (path.as_str(), path.as_str())),
+            self.files
+                .paths()
+                .iter()
+                .map(|path| (path.as_str(), path.as_str())),
             self.narrow.query(),
         )
     }
@@ -75,12 +67,12 @@ impl Picker {
 
     /// How many files the query leaves, whether or not the card has a row for them.
     pub fn matches(&self) -> usize {
-        count(&self.files, self.narrow.query())
+        count(self.files.paths(), self.narrow.query())
     }
 
     pub fn key(&mut self, key: Key) -> bool {
         let Picker { files, narrow } = self;
-        let files = files.as_slice();
+        let files = files.paths();
         narrow.typed(key, |query| count(files, query).min(CAP))
     }
 
@@ -147,10 +139,6 @@ pub fn shell_word(path: &str) -> String {
 fn leaves_alone(glyph: char) -> bool {
     glyph.is_ascii_alphanumeric() || matches!(glyph, '.' | '_' | '-' | '/')
 }
-
-/// A directory in a working tree and a file in a worktree: a checkout's own bookkeeping and
-/// never something a reader points a prompt at.
-const GIT_DIRECTORY: &str = ".git";
 
 /// The file's name and the directory it sits in, which spell the path back with a `/` between them.
 fn split(path: &str) -> Row<'_> {

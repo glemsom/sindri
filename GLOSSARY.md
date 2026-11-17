@@ -149,6 +149,13 @@ row and the newest at the foot. What a band cannot hold it counts: the rows of a
 composer's ceiling, and the prompts of a queue past the rows it was given.
 _Avoid_: Region, pane, panel, viewport
 
+**Draft count**:
+What Enter would send, counted on the far corner of the composer's band: the files the draft's words
+name, the command it opens with, and the characters it holds. It is a count of the draft and never of
+the run's facts, it follows every edit, and a frame too narrow for the whole of it draws none of it —
+the rule keeps the row.
+_Avoid_: Tokens, stats, progress
+
 **Layout**:
 Where one pass put each part of the frame: the bands it shared the rows into, the columns the
 transcript was given beside a rail, and the body a card was given when one was drawn. A caret is a

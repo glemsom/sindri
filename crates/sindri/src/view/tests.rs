@@ -100,6 +100,24 @@ fn rule_span(buffer: &Buffer, band: Rect) -> (u16, u16) {
     (band.x + pen::cells(&row[..first]), pen::columns(columns))
 }
 
+/// The columns of an edge row the draft's count is hung in, and none when no count hangs there: the
+/// rule's last column names the one the count begins at, and the far corner is no column of it.
+fn count_span(buffer: &Buffer, band: Rect) -> Range<u16> {
+    let (first, columns) = rule_span(buffer, band);
+    first.saturating_add(columns)..band.right().saturating_sub(1)
+}
+
+/// The columns of an edge row the edge itself draws: its word, its rule, its head and a corner at each
+/// end, and never a column of the count hung on the corner beside them.
+fn edge_columns(buffer: &Buffer, band: Rect) -> Vec<u16> {
+    let counted = count_span(buffer, band);
+    let close = band.right().saturating_sub(1);
+    (band.x..close)
+        .filter(|x| !counted.contains(x))
+        .chain([close])
+        .collect()
+}
+
 /// The column the head of a live run's edge stands in, read off the row it was drawn on.
 fn head_at(buffer: &Buffer, band: Rect) -> u16 {
     let row = drawn_glyphs(buffer, band.y);
@@ -153,7 +171,7 @@ fn the_composer_that_takes_the_keys_lights_its_edge_row_with_the_accent() {
             let (buffer, laid) = composer(palette, lines, cols, rows);
             let band = laid.composer;
 
-            for x in band.x..band.right() {
+            for x in edge_columns(&buffer, band) {
                 assert_eq!(
                     look_at(&buffer, &palette, x, band.y),
                     faint,
@@ -430,16 +448,19 @@ fn sixty_columns_show_the_raised_band_and_lose_no_hint_from_the_footer() {
 #[test]
 fn a_composer_at_rest_draws_a_box_that_opens_and_closes_on_its_edge_and_is_footed() {
     let palette = Palette::TRUECOLOR;
-    for lines in [0, 1, 3, 5] {
+    for (lines, counted) in [(0, ""), (1, "1 char"), (3, "5 chars"), (5, "9 chars")] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
         let rule = pen::filled(band.width - 2, HAIRLINE);
         let word = PROMPT_EDGE;
-        let edged = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
+        let edged = pen::filled(
+            band.width - pen::cells(word) - pen::cells(counted) - 3,
+            HAIRLINE,
+        );
 
         assert_eq!(
             drawn_glyphs(&buffer, band.y),
-            format!("{EDGE_OPEN}{word} {edged}{EDGE_CLOSE}"),
+            format!("{EDGE_OPEN}{word} {edged}{counted}{EDGE_CLOSE}"),
             "the {} row band a draft of {lines} lines takes does not open on the mode it is \
                  in and close along its edge",
             band.height
@@ -466,16 +487,19 @@ fn a_composer_at_rest_draws_a_box_that_opens_and_closes_on_its_edge_and_is_foote
 #[test]
 fn the_edge_of_a_band_at_rest_says_prompt_inside_its_opening_corner_in_the_faint_accent() {
     let palette = Palette::TRUECOLOR;
-    for lines in [0, 1, 3, 5] {
+    for (lines, counted) in [(0, ""), (1, "1 char"), (3, "5 chars"), (5, "9 chars")] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
         let word = PROMPT_EDGE;
-        let rule = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
+        let rule = pen::filled(
+            band.width - pen::cells(word) - pen::cells(counted) - 3,
+            HAIRLINE,
+        );
         let row = drawn_glyphs(&buffer, band.y);
 
         assert_eq!(
             row,
-            format!("{EDGE_OPEN}{word} {rule}{EDGE_CLOSE}"),
+            format!("{EDGE_OPEN}{word} {rule}{counted}{EDGE_CLOSE}"),
             "the edge of the {} row band a draft of {lines} lines takes says no mode, or says \
                  it outside the corner",
             band.height
@@ -485,7 +509,7 @@ fn the_edge_of_a_band_at_rest_says_prompt_inside_its_opening_corner_in_the_faint
             "a band no run is live in carries no head: its edge is still, and the frame keeps no \
                  clock to move one"
         );
-        for x in band.x..band.right() {
+        for x in edge_columns(&buffer, band) {
             assert_eq!(
                 look_at(&buffer, &palette, x, band.y),
                 palette.accent_edge(),
@@ -494,6 +518,118 @@ fn the_edge_of_a_band_at_rest_says_prompt_inside_its_opening_corner_in_the_faint
             );
         }
     }
+}
+
+#[test]
+fn the_edge_hangs_the_drafts_own_count_on_its_far_corner() {
+    let palette = Palette::TRUECOLOR;
+    let (buffer, laid) = composer(palette, 1, 120, 40);
+    let band = laid.composer;
+    let row = drawn_glyphs(&buffer, band.y);
+    let ruled = row.strip_suffix("1 char┐").unwrap_or_else(|| {
+        panic!("the edge hangs no count of the draft on its far corner: {row:?}")
+    });
+
+    assert_eq!(
+        ruled.chars().next_back(),
+        Some(HAIRLINE),
+        "the rule does not end in the column before the count begins: {row:?}"
+    );
+}
+
+#[test]
+fn an_empty_draft_hangs_no_count_beside_a_rail_of_facts() {
+    let palette = Palette::TRUECOLOR;
+    let (buffer, laid) = drafted(Facts::default().asked().railed(rail()), palette, 0, 120, 40);
+    let band = laid.composer;
+    let rule = pen::filled(band.width - pen::cells(PROMPT_EDGE) - 3, HAIRLINE);
+
+    assert_eq!(
+        drawn_glyphs(&buffer, band.y),
+        format!("{EDGE_OPEN}{PROMPT_EDGE} {rule}{EDGE_CLOSE}"),
+        "an empty draft bills nothing, so the edge of a band beside a rail hangs no count"
+    );
+}
+
+#[test]
+fn a_frame_too_narrow_for_the_whole_count_draws_none_of_it_and_the_rule_keeps_the_row() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = View::of(inked(palette), Facts::default().asked(), Transcript::none());
+    // A thousand characters bill a count wider than the sixteen columns the box leaves.
+    for _ in 0..500 {
+        view.paste("a ");
+    }
+    let (buffer, told) = painted_and_told(&mut view, 18, 24);
+    let band = laid_out(&told).composer;
+    let rule = pen::filled(band.width - pen::cells(PROMPT_EDGE) - 3, HAIRLINE);
+
+    assert_eq!(
+        drawn_glyphs(&buffer, band.y),
+        format!("{EDGE_OPEN}{PROMPT_EDGE} {rule}{EDGE_CLOSE}"),
+        "a count the row has no room for is refused whole, and the rule keeps the row"
+    );
+}
+
+#[test]
+fn the_count_is_refused_where_the_rule_would_lose_its_last_column_and_drawn_one_column_wider() {
+    let palette = Palette::TRUECOLOR;
+    // Four lines are seven characters, so the count is the same seven columns at either width.
+    let (refused, laid) = composer(palette, 4, 16, 24);
+    let band = laid.composer;
+    let rule = pen::filled(band.width - pen::cells(PROMPT_EDGE) - 3, HAIRLINE);
+
+    assert_eq!(
+        drawn_glyphs(&refused, band.y),
+        format!("{EDGE_OPEN}{PROMPT_EDGE} {rule}{EDGE_CLOSE}"),
+        "a count that would leave the rule no column of its own is refused whole, so the rule \
+         keeps the row"
+    );
+
+    let (drawn, laid) = composer(palette, 4, 17, 24);
+    let band = laid.composer;
+
+    assert_eq!(
+        drawn_glyphs(&drawn, band.y),
+        format!("{EDGE_OPEN}{PROMPT_EDGE} {HAIRLINE}7 chars{EDGE_CLOSE}"),
+        "one column wider, the count hangs and the rule keeps the one column left below it"
+    );
+}
+
+#[test]
+fn the_count_is_drawn_in_the_quiet_inks_the_frame_already_gives_a_meaning() {
+    let palette = Palette::TRUECOLOR;
+    let root = tempfile::tempdir().expect("a temp workspace");
+    std::fs::create_dir_all(root.path().join("src")).expect("the directories a file sits in");
+    std::fs::write(root.path().join("src/rows.rs"), "").expect("a file");
+    let mut view = View::of(
+        inked(palette),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
+        Transcript::none(),
+    );
+    view.paste("read src/rows.rs");
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let band = laid_out(&told).composer;
+    let counted = pen::cells("1 file · 16 chars");
+    let mut x = band.right() - 1 - counted;
+
+    for (width, ink) in [(6, Ink::Muted), (3, Ink::Dim), (8, Ink::Muted)] {
+        for _ in 0..width {
+            assert_eq!(
+                look_at(&buffer, &palette, x, band.y),
+                Look::plain(ink),
+                "column {x} of the count the edge hangs is not the {} ink its part is drawn in",
+                ink.name()
+            );
+            x += 1;
+        }
+    }
+    assert_eq!(
+        x,
+        band.right() - 1,
+        "the count is drawn whole, and the far corner is the column after it"
+    );
 }
 
 #[test]
@@ -525,7 +661,7 @@ fn the_edge_of_a_band_a_run_is_live_in_says_running_in_the_accent_with_one_head_
              word is never a column of it",
         first + columns
     );
-    for x in band.x..band.right() {
+    for x in edge_columns(&buffer, band) {
         assert_eq!(
             look_at(&buffer, &palette, x, band.y),
             palette.lit_edge(),
@@ -606,7 +742,7 @@ fn the_word_and_the_head_recede_to_the_dim_edge_while_the_window_is_away_and_und
         drawn_glyphs(&buffer, band.y).contains(EDGE_HEAD),
         "the head is still drawn while nobody reads the window, and only recedes"
     );
-    for x in band.x..band.right() {
+    for x in edge_columns(&buffer, band) {
         assert_eq!(
             look_at(&buffer, &palette, x, band.y),
             palette.dim_edge(),
@@ -621,7 +757,10 @@ fn the_word_and_the_head_recede_to_the_dim_edge_while_the_window_is_away_and_und
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let band = laid_out(&told).composer;
     let (left, right) = card::border_columns(card_body(&told));
-    for x in (band.x..left).chain(right + 1..band.right()) {
+    for x in edge_columns(&buffer, band)
+        .into_iter()
+        .filter(|x| *x < left || *x > right)
+    {
         assert_eq!(
             look_at(&buffer, &palette, x, band.y),
             palette.dim_edge(),

@@ -29,6 +29,12 @@ fn wide(text: &str) -> bool {
     text.chars().any(|glyph| cell(glyph) > 1)
 }
 
+/// How many glyphs a run is made of: a draft's bill counts these, and a column is never one of
+/// them, since a column is the cells a run draws in.
+pub fn glyphs(text: &str) -> usize {
+    text.chars().count()
+}
+
 /// A count of columns as a row's own arithmetic carries it: one wider than any row can be drawn in
 /// is the widest a row holds.
 pub fn columns(columns: usize) -> u16 {
@@ -198,7 +204,7 @@ pub fn hang<S: AsRef<str>, D: Copy + Into<Look>>(
 }
 
 /// The columns a run of spans takes: every span measured by what it draws.
-fn width<S: AsRef<str>, D>(spans: &[(S, D)]) -> u16 {
+pub fn width<S: AsRef<str>, D>(spans: &[(S, D)]) -> u16 {
     spans
         .iter()
         .map(|(text, _)| cells(text.as_ref()))
