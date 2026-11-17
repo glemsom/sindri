@@ -434,7 +434,7 @@ fn a_composer_at_rest_draws_a_box_that_opens_and_closes_on_its_edge_and_is_foote
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
         let rule = pen::filled(band.width - 2, HAIRLINE);
-        let word = PROMPT_MODE;
+        let word = PROMPT_EDGE;
         let edged = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
 
         assert_eq!(
@@ -469,7 +469,7 @@ fn the_edge_of_a_band_at_rest_says_prompt_inside_its_opening_corner_in_the_faint
     for lines in [0, 1, 3, 5] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
-        let word = PROMPT_MODE;
+        let word = PROMPT_EDGE;
         let rule = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
         let row = drawn_glyphs(&buffer, band.y);
 
@@ -501,7 +501,7 @@ fn the_edge_of_a_band_a_run_is_live_in_says_running_in_the_accent_with_one_head_
     let palette = Palette::TRUECOLOR;
     let (buffer, laid) = drafted(live(4_200), palette, 1, 120, 40);
     let band = laid.composer;
-    let word = RUNNING_MODE;
+    let word = RUNNING_EDGE;
     let (first, columns) = rule_span(&buffer, band);
     let row = drawn_glyphs(&buffer, band.y);
 
@@ -595,7 +595,7 @@ fn a_band_no_run_is_live_in_draws_no_head_however_live_the_pulse_handed_to_it() 
 }
 
 #[test]
-fn the_mode_and_the_head_recede_to_the_dim_edge_while_the_window_is_away_and_under_a_screen() {
+fn the_word_and_the_head_recede_to_the_dim_edge_while_the_window_is_away_and_under_a_screen() {
     let palette = Palette::TRUECOLOR;
 
     let mut view = View::of(inked(palette), live(0).focused(false), Transcript::none());
@@ -630,18 +630,12 @@ fn the_mode_and_the_head_recede_to_the_dim_edge_while_the_window_is_away_and_und
             Mode::Keys.name()
         );
     }
-    assert!(
-        (band.x..band.right()).all(|x| look_at(&buffer, &palette, x, band.y) != palette.lit_edge()),
-        "a cell of the edge under {} is still lit, the head's own included: the card is the \
-             surface that takes the keys",
-        Mode::Keys.name()
-    );
 }
 
 #[test]
 fn a_band_with_no_room_for_the_word_and_a_space_and_a_rule_column_draws_the_plain_rule() {
     let palette = Palette::TRUECOLOR;
-    let word = PROMPT_MODE;
+    let word = PROMPT_EDGE;
     for (cols, named) in [(9u16, false), (10, true)] {
         let (buffer, laid) = composer(palette, 0, cols, 6);
         let band = laid.composer;

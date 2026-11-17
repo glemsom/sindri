@@ -143,8 +143,8 @@ const FOOT_CLOSE: char = '┘';
 const UPRIGHT: char = '│';
 
 /// The two words the band's edge says: what the band is for, and never what a key does.
-const PROMPT_MODE: &str = "prompt";
-const RUNNING_MODE: &str = "running";
+const PROMPT_EDGE: &str = "prompt";
+const RUNNING_EDGE: &str = "running";
 
 /// The heavier cell the rule carries while a run is live: the head travels the rule's own columns.
 const EDGE_HEAD: char = '━';
@@ -1038,7 +1038,7 @@ impl View {
             leaves,
             body.held(),
             buffer,
-            self.edge(),
+            self.edge(self.capabilities.palette().accent_edge()),
             &self.capabilities.palette(),
         );
         painted.presses = body.paint(held, buffer, &self.capabilities.palette());
@@ -1386,7 +1386,7 @@ impl View {
         }
     }
 
-    /// The band's edge row: its mode just inside the opening corner, one blank column, and the rule
+    /// The band's edge row: its word just inside the opening corner, one blank column, and the rule
     /// running on to the far corner with a live run's head on one of its own columns. A band with no
     /// room for the whole word keeps the plain rule.
     fn composer_edge_row(&self, row: Rect, buffer: &mut Buffer) {
@@ -1419,7 +1419,7 @@ impl View {
             pen::glyph(buffer, rule.x.saturating_sub(1), row.y, ' ', look, &palette);
         }
         pen::rule(buffer, rule, HAIRLINE, look, &palette);
-        if self.composer.state() == State::Running && rule.width > 0 {
+        if self.facts.live() && rule.width > 0 {
             let step = self.edge_step() % u64::from(rule.width);
             let at = rule
                 .x
@@ -1430,9 +1430,9 @@ impl View {
 
     /// The word the band's edge says: the band only takes the draft, or a run is live.
     fn edge_word(&self) -> &'static str {
-        match self.composer.state() {
-            State::Idle => PROMPT_MODE,
-            State::Running => RUNNING_MODE,
+        match self.facts.live() {
+            true => RUNNING_EDGE,
+            false => PROMPT_EDGE,
         }
     }
 
@@ -1446,24 +1446,23 @@ impl View {
     }
 
     /// The look the composer's edge row is drawn in: the accent lit while a run is live, the accent
-    /// faint while the band only waits, and the dim edge for a window nobody reads or a screen
-    /// standing over the band.
+    /// faint while the band only waits, and the dim edge while a screen stands over the band.
     fn composer_edge(&self) -> Look {
         let palette = self.capabilities.palette();
-        if self.stack.modal().is_some() || self.facts.focus() == Focus::Away {
+        if self.stack.modal().is_some() {
             return palette.dim_edge();
         }
-        match self.composer.state() {
-            State::Running => palette.lit_edge(),
-            State::Idle => palette.accent_edge(),
-        }
+        self.edge(match self.facts.live() {
+            true => palette.lit_edge(),
+            false => palette.accent_edge(),
+        })
     }
 
-    /// The look the one surface that takes the keys draws its edge row in, given what the
-    /// terminal has reported about who is reading.
-    fn edge(&self) -> Look {
+    /// The look an edge that takes the keys is drawn in, given what the terminal has reported about
+    /// who is reading: the look it earns while the window is read, and the dim edge while it is not.
+    fn edge(&self, look: Look) -> Look {
         match self.facts.focus() {
-            Focus::Focused => self.capabilities.palette().accent_edge(),
+            Focus::Focused => look,
             Focus::Away => self.capabilities.palette().dim_edge(),
         }
     }
@@ -1790,7 +1789,6 @@ fn boxed_row(
     pen::rule(buffer, inside(row), HAIRLINE, look, palette);
 }
 
-/// The two corners of one row of the box, in the one look that row is drawn in.
 fn corners(
     buffer: &mut Buffer,
     row: Rect,
