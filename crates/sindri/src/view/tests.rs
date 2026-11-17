@@ -14,13 +14,13 @@ use super::*;
 use crate::composer::{MAX_ROWS, MIN_ROWS, PLACEHOLDER};
 use crate::ledger::Boot;
 
-use crate::band::SIGIL;
 use crate::capability::caps::{inked, pictured, pointing, sized};
 use crate::ink::{Face, Look};
 use crate::palette::{Band, Edge};
 use crate::pictures::PLACEHOLDER as PLACED;
 use crate::pulse::STEP_MS;
 use crate::readback::under;
+use crate::rows::SIGIL;
 use crate::rows::THUMB;
 
 /// Enough facts that the ledger fills its column top to bottom.

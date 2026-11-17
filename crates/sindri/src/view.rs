@@ -1307,7 +1307,7 @@ impl View {
                 buffer,
                 Rect { y, ..draft },
                 opens,
-                &[band::Run::in_ink(line, ink)],
+                &[(*line, ink)],
                 &self.capabilities.palette(),
             );
             under = y.saturating_add(1);
@@ -1323,7 +1323,7 @@ impl View {
                 buffer,
                 Rect { y: under, ..draft },
                 false,
-                &[band::Run::in_ink(&counted, Ink::Dim)],
+                &[(&counted, Ink::Dim)],
                 &self.capabilities.palette(),
             );
         }
@@ -1339,7 +1339,7 @@ impl View {
                 buffer,
                 Rect { y: at, ..prompts },
                 false,
-                &[band::Run::in_ink(&counted, Ink::Dim)],
+                &[(&counted, Ink::Dim)],
                 &self.capabilities.palette(),
             );
             at = at.saturating_add(1);
@@ -1349,7 +1349,7 @@ impl View {
                 buffer,
                 Rect { y: at, ..prompts },
                 true,
-                &[band::Run::in_ink(line, Ink::Dim)],
+                &[(line.as_str(), Ink::Dim)],
                 &self.capabilities.palette(),
             );
             at = at.saturating_add(1);

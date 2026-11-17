@@ -1,5 +1,5 @@
-//! What a row of the composer's band is drawn as: the gutter it opens with, the ink each run of
-//! it is read in, and where a run the row has no room for stops.
+//! What a row of the composer's band is drawn as: the gutter it opens with, the ink each run of it is
+//! read in, and where a run the row has no room for stops.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -8,19 +8,6 @@ use super::*;
 use crate::readback::inks;
 
 const PALETTE: Palette = Palette::TRUECOLOR;
-
-fn band(width: u16, height: u16) -> Rect {
-    Rect {
-        x: 0,
-        y: 0,
-        width,
-        height,
-    }
-}
-
-fn run(text: &str, ink: Ink) -> Run<'_> {
-    Run::in_ink(text, ink)
-}
 
 fn glyphs(buffer: &Buffer, y: u16) -> String {
     (buffer.area.x..buffer.area.right())
@@ -36,7 +23,7 @@ fn glyphs(buffer: &Buffer, y: u16) -> String {
 
 #[test]
 fn a_row_of_one_run_draws_the_gutter_then_the_words_in_the_runs_ink() {
-    let area = band(11, 1);
+    let area = Rect::new(0, 0, 11, 1);
     let mut opened = Buffer::empty(area);
     let mut indented = Buffer::empty(area);
 
@@ -44,14 +31,14 @@ fn a_row_of_one_run_draws_the_gutter_then_the_words_in_the_runs_ink() {
         &mut opened,
         area,
         true,
-        &[run("the draft", Ink::Accent)],
+        &[("the draft", Ink::Accent)],
         &PALETTE,
     );
     row(
         &mut indented,
         area,
         false,
-        &[run("the draft", Ink::Accent)],
+        &[("the draft", Ink::Accent)],
         &PALETTE,
     );
 
@@ -79,7 +66,7 @@ fn a_row_of_one_run_draws_the_gutter_then_the_words_in_the_runs_ink() {
 
 #[test]
 fn a_row_of_several_runs_draws_each_in_the_ink_it_carries_in_order() {
-    let area = band(15, 1);
+    let area = Rect::new(0, 0, 15, 1);
     let mut buffer = Buffer::empty(area);
 
     row(
@@ -87,9 +74,9 @@ fn a_row_of_several_runs_draws_each_in_the_ink_it_carries_in_order() {
         area,
         true,
         &[
-            run("one ", Ink::Plain),
-            run("two ", Ink::Accent),
-            run("three", Ink::Err),
+            ("one ", Ink::Plain),
+            ("two ", Ink::Accent),
+            ("three", Ink::Err),
         ],
         &PALETTE,
     );
@@ -97,8 +84,7 @@ fn a_row_of_several_runs_draws_each_in_the_ink_it_carries_in_order() {
     assert_eq!(
         glyphs(&buffer, 0),
         "\u{203a} one two three",
-        "the runs stand side by side in the order the row is handed them, with no column \
-             between them"
+        "the runs stand side by side in the order the row is handed them, with no column between them"
     );
     assert_eq!(
         inks(&buffer, 0, &PALETTE),
@@ -108,21 +94,21 @@ fn a_row_of_several_runs_draws_each_in_the_ink_it_carries_in_order() {
             (Ink::Accent, 4),
             (Ink::Err, 5)
         ],
-        "each run reads back as one stretch of cells in the ink it carries, so a row of three \
-             inks is three runs and not one"
+        "each run reads back as one stretch of cells in the ink it carries, so a row of three inks is \
+         three runs and not one"
     );
 }
 
 #[test]
-fn a_run_the_row_has_no_room_for_stops_at_the_rows_right_edge() {
-    let area = band(10, 1);
-    let mut buffer = Buffer::empty(band(10, 2));
+fn a_run_the_row_has_no_room_for_is_cut_at_the_edge_and_the_run_after_it_is_dropped() {
+    let area = Rect::new(0, 0, 10, 1);
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 2));
 
     row(
         &mut buffer,
         area,
         true,
-        &[run("abcdefghijkl", Ink::Plain)],
+        &[("abcdefghijkl", Ink::Plain), ("more", Ink::Err)],
         &PALETTE,
     );
 
@@ -134,11 +120,11 @@ fn a_run_the_row_has_no_room_for_stops_at_the_rows_right_edge() {
     assert_eq!(
         inks(&buffer, 0, &PALETTE),
         [(Ink::Dim, 2), (Ink::Plain, 8)],
-        "the columns the cut leaves are the run's own, so the row past them carries no ink"
+        "the columns the cut leaves are the run's own, and the run after them has no column to start in"
     );
     assert_eq!(
         glyphs(&buffer, 1),
-        "          ",
+        pen::blank(10),
         "the rest of the run wraps to no row below it: a row of the band is one row"
     );
 }
