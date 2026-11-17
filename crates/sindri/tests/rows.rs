@@ -2647,7 +2647,10 @@ fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
             .unwrap_or_else(|| panic!("the frame draws {said:?}: {whole}"))
     };
     let entry = at("✗ error");
-    let draft = at("› why does the retry test fail");
+    let draft = drawn
+        .iter()
+        .position(|row| row.contains("› why does the retry test fail"))
+        .unwrap_or_else(|| panic!("the frame draws the draft that asked for it: {whole}"));
 
     assert_eq!(
         drawn[entry + 1],

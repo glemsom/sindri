@@ -118,7 +118,7 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "wrapped" => typing(
             capabilities,
             &[
-                "the draft is set where an answer is set, and a line of it wider than the band wraps \
+                "the draft is set inside the band's box, and a line of it wider than the band wraps \
              under the gutter — 日本語 keeps both its columns — while a line the reader broke is \
              one row of its own.",
             ],

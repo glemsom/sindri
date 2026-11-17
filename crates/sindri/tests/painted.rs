@@ -509,9 +509,9 @@ fn the_caret_is_read_in_the_band_the_pass_drew_and_not_in_one_counted_again() {
 
     assert_eq!(
         view.cursor(&told),
-        Some((3, 10)),
-        "a five-row draft takes six of the frame's twelve rows, so its last row is row ten and \
-         the caret waits one column into it"
+        Some((4, 9)),
+        "a five-row draft takes seven of the frame's twelve rows, so its last row is row nine \
+         and the caret waits one column past the gutter, inside the box"
     );
 
     for _ in 0.."1\n2\n3\n4\n5".len() {
@@ -520,8 +520,8 @@ fn the_caret_is_read_in_the_band_the_pass_drew_and_not_in_one_counted_again() {
 
     assert_eq!(
         view.cursor(&told),
-        Some((2, 6)),
-        "the empty draft stands in the band the pass drew, which began at row five: a band \
+        Some((3, 5)),
+        "the empty draft stands in the band the pass drew, which began at row four: a band \
          counted again for a draft of one row would answer row ten instead"
     );
 }
