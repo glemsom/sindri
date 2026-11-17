@@ -1,7 +1,6 @@
 use ratatui::buffer::Cell;
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::composer;
 use crate::ink::{Face, Faces, Ink, Look};
 
 /// The colours one spelling of the design is drawn in: three palettes, one design, and never a
@@ -39,7 +38,9 @@ struct Ramp {
     steps: [Color; STEPS],
 }
 
-const STEPS: usize = composer::MAX_ROWS as usize;
+/// The rungs of the ladder, one short of the tallest band: a band at its ceiling repeats a rung
+/// rather than leaving one of them out.
+const STEPS: usize = 8;
 
 impl Palette {
     /// The terminal's own six slots, no background and no edge: what a reader who asked for no
@@ -89,6 +90,7 @@ impl Palette {
                 Color::Indexed(235),
                 Color::Indexed(234),
                 Color::Indexed(233),
+                Color::Indexed(232),
             ],
         },
     };
@@ -117,6 +119,7 @@ impl Palette {
                 Color::Rgb(25, 35, 47),
                 Color::Rgb(19, 27, 37),
                 Color::Rgb(14, 21, 29),
+                Color::Rgb(11, 17, 24),
                 Color::Rgb(8, 13, 19),
             ],
         },
@@ -287,9 +290,9 @@ impl Edge {
     pub const ALL: [Edge; 2] = [Edge::Lit, Edge::Shadow];
 }
 
-/// The step of the ramp the `row`th of `rows` rows lands on: both ends are drawn at every height a
-/// band takes, so none is lit twice and none is shadowed twice. A surface taller than the ramp has
-/// fewer steps than rows and repeats one, and a surface of one row is drawn lit.
+/// The step of the ramp the `row`th of `rows` rows lands on: the lit rung on its top row and the
+/// shadow on its last, never more than one rung between neighbours, so a band taller than the
+/// ladder repeats a rung rather than leaving one out. A surface of one row is drawn lit.
 fn step_at(row: u16, rows: u16) -> usize {
     let span = usize::from(rows.saturating_sub(1));
     match span {

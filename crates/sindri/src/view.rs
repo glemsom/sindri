@@ -1390,12 +1390,12 @@ impl View {
         }
         let palette = self.capabilities.palette();
         let edge = Rect { height: 1, ..band };
-        if band.height <= FOOT_ROWS || inside(band).width == 0 {
+        if band.height <= 1 || inside(band).width == 0 {
             pen::rule(buffer, edge, HAIRLINE, self.composer_edge(), &palette);
             return;
         }
         let foot = Rect {
-            y: band.bottom().saturating_sub(FOOT_ROWS),
+            y: band.bottom().saturating_sub(1),
             ..edge
         };
         self.composer_edge_row(edge, buffer);
