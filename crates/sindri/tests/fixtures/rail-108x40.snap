@@ -39,7 +39,7 @@ rail at 108x40
 33 |                                                                                                            | plain:108
 34 |                                                                                                            | plain:108
 35 |                                                                                                            | plain:108
-36 |                                                                                                            | plain:108
-37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:108
-38 |› what should the run do?                                                                                   | dim:25 plain:83
+36 |┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:108
+37 |│› what should the run do?                                                                                 │| dim:26 plain:81 dim:1
+38 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:108
 39 |Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:32

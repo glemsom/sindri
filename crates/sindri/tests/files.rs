@@ -307,15 +307,21 @@ fn body_rows(buffer: &Buffer) -> Vec<String> {
     ) else {
         return rows.into_iter().map(|row| row.trim().to_owned()).collect();
     };
+    let border: Vec<char> = rows[top].chars().collect();
+    let sides = (
+        border.iter().position(|glyph| *glyph == '╭'),
+        border.iter().rposition(|glyph| *glyph == '╮'),
+    );
     rows[top + 1..bottom]
         .iter()
         .map(|row| {
             let glyphs: Vec<char> = row.chars().collect();
-            match (
-                glyphs.iter().position(|glyph| *glyph == '│'),
-                glyphs.iter().rposition(|glyph| *glyph == '│'),
-            ) {
-                (Some(left), Some(right)) => glyphs[left + 1..right].iter().collect(),
+            match sides {
+                (Some(left), Some(right))
+                    if glyphs.get(left) == Some(&'│') && glyphs.get(right) == Some(&'│') =>
+                {
+                    glyphs[left + 1..right].iter().collect()
+                }
                 _ => row.clone(),
             }
         })

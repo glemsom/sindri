@@ -225,12 +225,12 @@ fn wrapped_80x24_is_a_draft_wider_than_the_band_set_under_the_gutter() {
 }
 
 #[test]
-fn typing_120x40_is_a_composer_at_its_two_row_floor() {
+fn typing_120x40_is_a_composer_at_its_three_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }
 
 #[test]
-fn grown_120x40_is_a_composer_at_its_six_row_ceiling() {
+fn grown_120x40_is_a_composer_at_its_seven_row_ceiling() {
     fixture::assert_frame("grown", 120, 40);
 }
 

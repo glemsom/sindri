@@ -21,9 +21,9 @@ wrapped at 80x24
 15 |                                                                                | plain:80
 16 |                                                                                | plain:80
 17 |                                                                                | plain:80
-18 |                                                                                | plain:80
-19 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80
-20 |› the draft is set where an answer is set, and a line of it wider than the band | dim:2 plain:78
-21 |  wraps under the gutter — 日 本 語  keeps both its columns — while a line the     | dim:2 plain:78
-22 |  reader broke is one row of its own.                                           | dim:2 plain:78
+18 |┌──────────────────────────────────────────────────────────────────────────────┐| accent+faint:80
+19 |│› the draft is set inside the band's box, and a line of it wider than the     │| dim:3 plain:76 dim:1
+20 |│  band wraps under the gutter — 日 本 語  keeps both its columns — while a line  │| dim:3 plain:76 dim:1
+21 |│  the reader broke is one row of its own.                                     │| dim:3 plain:76 dim:1
+22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
 23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7

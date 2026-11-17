@@ -1079,19 +1079,19 @@ fn runs(drawn: &str) -> Vec<Run> {
 }
 
 /// The rows the composer's band took in the last frame that painted it: the gap between the row of
-/// its hairline and the row of the footer's first hint. The hairline is the one drawn from the
-/// frame's first column, because a rail draws hairlines of its own and paints them after it.
+/// its edge and the row of the footer's first hint. The edge is the one drawn from the frame's first
+/// column, because a rail draws rules of its own and paints them after it.
 fn composer_rows(drawn: &str) -> Option<u16> {
-    let (mut hairline, mut footer) = (None, None);
+    let (mut edge, mut footer) = (None, None);
     for run in runs(drawn) {
-        if run.glyphs.starts_with('─') && run.column == 1 {
-            hairline = Some(run.row);
+        if (run.glyphs.starts_with('┌') || run.glyphs.starts_with('─')) && run.column == 1 {
+            edge = Some(run.row);
         }
         if run.glyphs.contains(FIRST_HINT) {
             footer = Some(run.row);
         }
     }
-    Some(footer? - hairline?)
+    Some(footer? - edge?)
 }
 
 fn row_of(drawn: &str, needle: &str) -> Option<u16> {
@@ -1177,8 +1177,8 @@ fn a_bracketed_paste_arrives_as_one_draft_with_its_line_breaks_kept() {
     );
     assert_eq!(
         composer_rows(&drawn.text()),
-        Some(2),
-        "the composer starts at its two-row floor: {:?}",
+        Some(3),
+        "the composer starts at its three-row floor, its edge and its foot counted: {:?}",
         drawn.text()
     );
 
@@ -1200,8 +1200,8 @@ fn a_bracketed_paste_arrives_as_one_draft_with_its_line_breaks_kept() {
     }
     assert_eq!(
         composer_rows(&frame),
-        Some(4),
-        "three lines make a four-row composer: {frame:?}"
+        Some(5),
+        "three lines make a five-row composer: {frame:?}"
     );
 
     pty.type_bytes(&[0x11]);
@@ -1228,7 +1228,7 @@ fn a_paste_that_arrives_as_a_burst_is_one_draft_too() {
     pty.type_bytes(b"one\rtwo");
 
     assert!(
-        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        drawn.wait_until(|frame| composer_rows(frame) == Some(4)),
         "two lines in one draft: the box grew a row for the break a paste kept rather \
          than sent: {:?}",
         drawn.text()
@@ -1254,7 +1254,7 @@ fn a_reported_ctrl_enter_breaks_the_line_rather_than_sending() {
     pty.type_bytes(b"two");
 
     assert!(
-        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        drawn.wait_until(|frame| composer_rows(frame) == Some(4)),
         "Ctrl+Enter is a line break and not the key that sends: {:?}",
         drawn.text()
     );
@@ -1284,7 +1284,7 @@ fn a_key_the_protocol_reports_by_name_is_the_key_the_terminal_speaks() {
     pty.type_bytes(b"\x1b[106;5u");
 
     assert!(
-        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        drawn.wait_until(|frame| composer_rows(frame) == Some(4)),
         "the reported Ctrl-J broke the line rather than sending it: {:?}",
         drawn.text()
     );
@@ -1293,7 +1293,7 @@ fn a_key_the_protocol_reports_by_name_is_the_key_the_terminal_speaks() {
 
     assert!(
         drawn.wait_until(|frame| {
-            composer_rows(frame) == Some(2)
+            composer_rows(frame) == Some(3)
                 && caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 1)
         }),
         "the reported Ctrl-C cleared the draft the byte would have cleared: {:?}",
@@ -1325,7 +1325,7 @@ fn a_reported_shift_enter_breaks_the_line_rather_than_sending() {
     pty.type_bytes(b"two");
 
     assert!(
-        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        drawn.wait_until(|frame| composer_rows(frame) == Some(4)),
         "Shift+Enter is a newline and not the key that sends: {:?}",
         drawn.text()
     );
@@ -1361,7 +1361,7 @@ fn drafted(ground: &Ground, keys: &[&[u8]]) -> String {
         pty.type_bytes(key);
     }
     assert!(
-        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        drawn.wait_until(|frame| composer_rows(frame) == Some(4)),
         "two lines of draft: {:?}",
         drawn.text()
     );
@@ -1387,7 +1387,7 @@ fn enter_takes_the_draft_out_of_the_composer() {
     pty.type_bytes(b"\x1b[13;2u");
     pty.type_bytes(b"two");
     assert!(
-        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
+        drawn.wait_until(|frame| composer_rows(frame) == Some(4)),
         "two lines of draft: {:?}",
         drawn.text()
     );
@@ -1395,7 +1395,7 @@ fn enter_takes_the_draft_out_of_the_composer() {
     pty.type_bytes(b"\r");
 
     assert!(
-        drawn.wait_until(|frame| composer_rows(frame) == Some(2)),
+        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
         "the draft left the composer and the band is back at its floor: {:?}",
         drawn.text()
     );
@@ -1552,8 +1552,9 @@ fn recorded(state: &std::path::Path, needle: &str) -> bool {
     false
 }
 
-/// The columns the composer sets a draft in, before the first of its words.
-const GUTTER: u16 = 2;
+/// The columns the composer sets a draft in before the first of its words: the band's upright, the
+/// sigil and the blank after it.
+const GUTTER: u16 = 3;
 
 /// Types a draft and sends it, and waits until the run it started has a request in flight. The caret
 /// is what the draft is waited on and not the words: a glyph typed is a glyph painted, so a caret
@@ -2018,7 +2019,7 @@ fn enter_during_a_run_keeps_the_prompt_in_the_composer_under_the_draft() {
     let frame = drawn.text();
     let waited = picture(&frame)
         .into_iter()
-        .find(|(_, glyphs)| glyphs.starts_with("\u{203a} read the test that failed"))
+        .find(|(_, glyphs)| glyphs.contains("\u{203a} read the test that failed"))
         .map(|(row, _)| row);
     assert!(
         waited
@@ -2028,8 +2029,9 @@ fn enter_during_a_run_keeps_the_prompt_in_the_composer_under_the_draft() {
     );
     assert_eq!(
         composer_rows(&frame),
-        Some(3),
-        "and it is a row of the composer's own band: the draft's and the prompt's, and no row more"
+        Some(4),
+        "and it is a row of the composer's own band: the draft's, the prompt's, the edge and \
+             the foot, and no row more"
     );
 
     wire.release();

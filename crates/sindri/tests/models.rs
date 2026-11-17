@@ -246,15 +246,22 @@ fn body(frame: &[String]) -> Vec<String> {
         .iter()
         .rposition(|row| row.contains('\u{2570}'))
         .expect("a card drawn with its bottom border");
+    let border: Vec<char> = frame[top].chars().collect();
+    let sides = (
+        border.iter().position(|glyph| *glyph == '\u{256d}'),
+        border.iter().rposition(|glyph| *glyph == '\u{256e}'),
+    );
     frame[top + 1..bottom]
         .iter()
         .map(|said| {
             let glyphs: Vec<char> = said.chars().collect();
-            match (
-                glyphs.iter().position(|glyph| *glyph == '\u{2502}'),
-                glyphs.iter().rposition(|glyph| *glyph == '\u{2502}'),
-            ) {
-                (Some(left), Some(right)) => glyphs[left + 1..right].iter().collect::<String>(),
+            match sides {
+                (Some(left), Some(right))
+                    if glyphs.get(left) == Some(&'\u{2502}')
+                        && glyphs.get(right) == Some(&'\u{2502}') =>
+                {
+                    glyphs[left + 1..right].iter().collect::<String>()
+                }
                 _ => said.clone(),
             }
             .trim()

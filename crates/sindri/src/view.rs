@@ -18,7 +18,7 @@ use sindri_core::skills::{Catalog, Skill};
 use crate::capability::Capabilities;
 use crate::card;
 use crate::commands::{self, Command};
-use crate::composer::{Composer, HAIRLINE_ROWS, Key, Outcome, PLACEHOLDER, Prompt, State};
+use crate::composer::{Composer, EDGE_ROWS, FOOT_ROWS, Key, Outcome, PLACEHOLDER, Prompt, State};
 use crate::face;
 use crate::facts::{Facts, Focus};
 use crate::graphics::CellSize;
@@ -134,8 +134,32 @@ const SEPARATOR: Look = Look::plain(Ink::Dim);
 
 const HAIRLINE: char = '─';
 
+/// The box a composer's band closes into: a corner at each end of its edge and of its foot, and the
+/// upright down each side that the draft's words are set between.
+const EDGE_OPEN: char = '┌';
+const EDGE_CLOSE: char = '┐';
+const FOOT_OPEN: char = '└';
+const FOOT_CLOSE: char = '┘';
+const UPRIGHT: char = '│';
+
+/// The band inside its box: the one column an upright takes at each side is not a column of the
+/// draft, and the two are never a row's.
+fn inside(band: Rect) -> Rect {
+    Rect {
+        x: band.x.saturating_add(1),
+        width: band.width.saturating_sub(2),
+        ..band
+    }
+}
+
+/// The first row of the band the draft may not be drawn in: the queue's first row while prompts
+/// wait, and the foot's when none do.
+fn draft_end(band: Rect, queue: Rect) -> u16 {
+    queue.y.min(band.bottom().saturating_sub(FOOT_ROWS))
+}
+
 /// The sigil that opens the draft, standing in the gutter an answer is set from — `rows::INDENT`
-/// columns wide, so the reader's own words begin where the run's do.
+/// columns wide, inside the box the band closes into.
 const SIGIL: &str = "\u{203a} ";
 
 /// The name the commands card carries in its top border, in the shape `? keys` and `@ files`
@@ -925,7 +949,7 @@ impl View {
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let mut painted = Painted::none();
         pen::claim(buffer, area, self.capabilities.palette().ground(None));
-        self.composer.set_room(View::room(area.width));
+        self.composer.set_room(View::room(area));
         let mut layout = bands(
             area,
             self.composer.rows(),
@@ -1234,19 +1258,20 @@ impl View {
                 self.capabilities.palette().raised(row, band.height),
             );
         }
-        pen::rule(
-            buffer,
-            Rect { height: 1, ..band },
-            HAIRLINE,
-            self.composer_edge(),
-            &self.capabilities.palette(),
-        );
+        self.composer_inside(band, queue, buffer);
+        self.composer_box(band, buffer);
+    }
 
+    /// The draft, its placeholder, the rows it keeps back and the queue's prompts, all drawn in the
+    /// columns the box leaves them: one column in from each upright, the gutter its sigil stands in
+    /// before the words.
+    fn composer_inside(&self, band: Rect, queue: Rect, buffer: &mut Buffer) {
         let draft = Rect {
-            y: band.y.saturating_add(HAIRLINE_ROWS),
-            height: queue.y.saturating_sub(band.y.saturating_add(HAIRLINE_ROWS)),
-            ..band
+            y: band.y.saturating_add(EDGE_ROWS),
+            height: draft_end(band, queue).saturating_sub(band.y.saturating_add(EDGE_ROWS)),
+            ..inside(band)
         };
+        let prompts = inside(queue);
         let (rows, ink) = match self.composer.text().is_empty() {
             true => (vec![PLACEHOLDER], Ink::Dim),
             false => (self.composer.lines(), Ink::Plain),
@@ -1288,16 +1313,16 @@ impl View {
             );
         }
 
-        if queue.height == 0 {
+        if prompts.height == 0 {
             return;
         }
-        let shown = self.queue.shown(queue.height);
-        let mut at = queue.y;
+        let shown = self.queue.shown(prompts.height);
+        let mut at = prompts.y;
         if let Some(kept) = shown.kept_back {
             let counted = format!("{kept} more queued");
             band_row(
                 buffer,
-                Rect { y: at, ..queue },
+                Rect { y: at, ..prompts },
                 false,
                 (&counted, Ink::Dim),
                 &self.capabilities.palette(),
@@ -1307,12 +1332,56 @@ impl View {
         for line in &shown.prompts {
             band_row(
                 buffer,
-                Rect { y: at, ..queue },
+                Rect { y: at, ..prompts },
                 true,
                 (line, Ink::Dim),
                 &self.capabilities.palette(),
             );
             at = at.saturating_add(1);
+        }
+    }
+
+    /// Closes the band into one box, drawn after its contents so no glyph of the draft stands in an
+    /// upright's column: the rule a band of one row is drawn with, and otherwise a corner at each
+    /// end of its edge and of its foot and an upright down each side between them.
+    fn composer_box(&self, band: Rect, buffer: &mut Buffer) {
+        if band.height == 0 {
+            return;
+        }
+        let palette = self.capabilities.palette();
+        let edge = Rect { height: 1, ..band };
+        if band.height <= FOOT_ROWS || inside(band).width == 0 {
+            pen::rule(buffer, edge, HAIRLINE, self.composer_edge(), &palette);
+            return;
+        }
+        let foot = Rect {
+            y: band.bottom().saturating_sub(FOOT_ROWS),
+            ..edge
+        };
+        boxed_row(
+            buffer,
+            edge,
+            (EDGE_OPEN, EDGE_CLOSE),
+            self.composer_edge(),
+            &palette,
+        );
+        boxed_row(
+            buffer,
+            foot,
+            (FOOT_OPEN, FOOT_CLOSE),
+            palette.dim_edge(),
+            &palette,
+        );
+        for y in edge.y.saturating_add(1)..foot.y {
+            pen::glyph(buffer, band.x, y, UPRIGHT, palette.dim_edge(), &palette);
+            pen::glyph(
+                buffer,
+                band.right().saturating_sub(1),
+                y,
+                UPRIGHT,
+                palette.dim_edge(),
+                &palette,
+            );
         }
     }
 
@@ -1343,22 +1412,24 @@ impl View {
         if self.stack.modal().is_some() {
             return None;
         }
-        let band = painted.layout()?.composer;
+        let laid = painted.layout()?;
+        let band = laid.composer;
+        let boxed = inside(band);
         let (row, column) = self.composer.caret();
-        let y = band.y.checked_add(HAIRLINE_ROWS)?.checked_add(row)?;
-        // A caret past the band's last cell waits on that cell, the way a terminal keeps the cursor
-        // at its right margin rather than giving it up.
-        let x = band
+        let y = band.y.checked_add(EDGE_ROWS)?.checked_add(row)?;
+        // A caret past the box's last column waits on that column, the way a terminal keeps the
+        // cursor at its right margin rather than giving it up — and never on an upright.
+        let x = boxed
             .x
             .checked_add(pen::cells(INDENT))?
             .checked_add(column)?
-            .min(band.right().saturating_sub(1));
-        (band.width > 0 && y < band.bottom()).then_some((x, y))
+            .min(boxed.right().saturating_sub(1));
+        (boxed.width > 0 && y < draft_end(band, laid.queue)).then_some((x, y))
     }
 
-    /// The columns the draft's words have: the band's width less the gutter an answer is set from.
-    fn room(width: u16) -> u16 {
-        width.saturating_sub(pen::cells(INDENT))
+    /// The columns the draft's words have: the band's inside, less the gutter an answer is set from.
+    fn room(band: Rect) -> u16 {
+        inside(band).width.saturating_sub(pen::cells(INDENT))
     }
 
     /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
@@ -1430,7 +1501,7 @@ pub struct Layout {
     pub queue: Rect,
     /// The one row saying how far back from the tail the frame stands, and none at the tail.
     pub notice: Rect,
-    /// The draft's rows under its edge, with the queue's rows at their foot.
+    /// The band's own rows: its edge, the draft under it, the queue's rows and its foot.
     pub composer: Rect,
     /// The frame's last row: the hints of what a key does this frame.
     pub footer: Rect,
@@ -1477,7 +1548,13 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> L
     let transcript = room.saturating_sub(notice);
     let notice_y = area.y.saturating_add(transcript);
     let composer_y = notice_y.saturating_add(notice);
-    let queue_y = composer_y.saturating_add(composer);
+    let band_bottom = composer_y.saturating_add(composer);
+    // A queued prompt stands inside the box, under the draft and above the foot, so the foot is the
+    // band's last row and the queue's rows are the ones just above it.
+    let queue_y = match queue {
+        0 => band_bottom,
+        _ => band_bottom.saturating_sub(FOOT_ROWS),
+    };
     Layout {
         transcript: Rect {
             height: transcript,
@@ -1499,7 +1576,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> L
             ..area
         },
         footer: Rect {
-            y: queue_y.saturating_add(queue),
+            y: band_bottom.saturating_add(queue),
             height: footer,
             ..area
         },
@@ -1632,6 +1709,20 @@ fn band_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), pa
         },
         &[(gutter, Ink::Dim), words],
         Clip::Edge,
+        palette,
+    );
+}
+
+/// One ruled row of the box: a corner at each end and the rule between them, all in one look.
+fn boxed_row(buffer: &mut Buffer, row: Rect, corners: (char, char), look: Look, palette: &Palette) {
+    pen::glyph(buffer, row.x, row.y, corners.0, look, palette);
+    pen::rule(buffer, inside(row), HAIRLINE, look, palette);
+    pen::glyph(
+        buffer,
+        row.right().saturating_sub(1),
+        row.y,
+        corners.1,
+        look,
         palette,
     );
 }

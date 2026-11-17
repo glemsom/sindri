@@ -9,21 +9,21 @@ boot at 80x24
 03 |                                                                                | plain:80
 04 |                                                                                | plain:80
 05 |                                                                                | plain:80
-06 |                                                                                | plain:80
-07 |       sindri                                                                   | plain:7 accent+bold:6 plain:67
-08 |                                                                                | plain:80
-09 |       An AI agent that is a Unix filter and a terminal UI over one core.       | plain:80
-10 |                                                                                | plain:80
-11 |       /model     ask the wire what it serves, and name the one to run          | plain:7 accent:11 dim:52 plain:10
-12 |       /settings  the keys the config holds, and the value each is set to       | plain:7 accent:11 dim:55 plain:7
-13 |       /stats     the facts the rail is too narrow to hold                      | plain:7 accent:11 dim:40 plain:22
+06 |       sindri                                                                   | plain:7 accent+bold:6 plain:67
+07 |                                                                                | plain:80
+08 |       An AI agent that is a Unix filter and a terminal UI over one core.       | plain:80
+09 |                                                                                | plain:80
+10 |       /model     ask the wire what it serves, and name the one to run          | plain:7 accent:11 dim:52 plain:10
+11 |       /settings  the keys the config holds, and the value each is set to       | plain:7 accent:11 dim:55 plain:7
+12 |       /stats     the facts the rail is too narrow to hold                      | plain:7 accent:11 dim:40 plain:22
+13 |                                                                                | plain:80
 14 |                                                                                | plain:80
 15 |                                                                                | plain:80
 16 |                                                                                | plain:80
 17 |                                                                                | plain:80
 18 |                                                                                | plain:80
 19 |                                                                                | plain:80
-20 |                                                                                | plain:80
-21 |────────────────────────────────────────────────────────────────────────────────| accent+faint:80
-22 |› what should the run do?                                                       | dim:25 plain:55
+20 |┌──────────────────────────────────────────────────────────────────────────────┐| accent+faint:80
+21 |│› what should the run do?                                                     │| dim:26 plain:53 dim:1
+22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
 23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7

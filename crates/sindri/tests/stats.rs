@@ -134,9 +134,10 @@ fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
         rows[last]
     );
     assert!(
-        rows[last - 2].starts_with('─'),
-        "and so is the composer's band, its hairline running where the gutter reaches it: {:?}",
-        rows[last - 2]
+        rows[last - 3].starts_with('┌') && rows[last - 1].starts_with('└'),
+        "and so is the composer's band, its edge and its foot opening where the gutter reaches \
+         them: {:?}",
+        (&rows[last - 3], &rows[last - 1])
     );
     assert!(
         rows.iter().any(|row| row.contains("╭─ /stats")),
