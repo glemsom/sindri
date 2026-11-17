@@ -159,23 +159,27 @@ fn backspace_eats_a_whole_glyph_however_many_bytes_it_took() {
 }
 
 #[test]
-fn an_empty_draft_takes_the_two_row_floor() {
-    assert_eq!(Composer::new().rows(), 2);
-    assert_eq!(Composer::new().visible_rows(), 1);
+fn an_empty_draft_takes_the_bands_three_row_floor() {
+    assert_eq!(Composer::new().rows(), MIN_ROWS);
+    assert_eq!(
+        Composer::new().visible_rows(),
+        1,
+        "the floor is the band's edge, its foot and the one row an empty draft sits on"
+    );
     assert_eq!(
         holding("one line").rows(),
-        2,
-        "one line still takes the hairline and one row"
+        MIN_ROWS,
+        "one line still takes the edge, the foot and one row"
     );
 }
 
 #[test]
 fn a_line_per_row_grows_the_box_to_its_ceiling_and_no_further() {
-    for lines in 1..MAX_ROWS {
+    for lines in 1..=MAX_ROWS - EDGE_ROWS - FOOT_ROWS {
         assert_eq!(
             numbered(usize::from(lines)).rows(),
-            lines + HAIRLINE_ROWS,
-            "{lines} lines take the hairline and one row each"
+            lines + EDGE_ROWS + FOOT_ROWS,
+            "{lines} lines take the band's edge, its foot and one row each"
         );
     }
     assert_eq!(numbered(5).rows(), MAX_ROWS);
@@ -196,6 +200,25 @@ fn a_line_per_row_grows_the_box_to_its_ceiling_and_no_further() {
              inside it"
     );
     assert_eq!(numbered(9).rows(), MAX_ROWS);
+}
+
+#[test]
+fn the_bands_ceiling_leaves_five_rows_for_the_draft_and_no_more() {
+    assert_eq!(
+        numbered(5).visible_rows(),
+        MAX_ROWS - EDGE_ROWS - FOOT_ROWS,
+        "a band at its ceiling is its edge, its foot and five rows of draft"
+    );
+    assert_eq!(
+        numbered(9).visible_rows(),
+        MAX_ROWS - EDGE_ROWS - FOOT_ROWS - 1,
+        "and a draft past it gives one of those rows to the row that counts the rest"
+    );
+    assert_eq!(
+        numbered(4).visible_rows(),
+        4,
+        "a draft under the ceiling is drawn whole, with no row kept back"
+    );
 }
 
 #[test]
@@ -357,8 +380,8 @@ fn a_draft_wider_than_the_room_wraps_where_its_words_end() {
     );
     assert_eq!(
         composer.rows(),
-        3,
-        "two rows of draft and the band's one row of edge"
+        4,
+        "two rows of draft, the band's edge and its foot"
     );
 }
 
@@ -428,7 +451,7 @@ fn a_word_wider_than_the_room_is_broken_where_a_glyph_ends() {
         "two wide glyphs fill five columns and the fifth is left blank, so no glyph is drawn \
              half on one row and half on the next"
     );
-    assert_eq!(composer.rows(), 4);
+    assert_eq!(composer.rows(), 5);
 }
 
 #[test]
@@ -481,7 +504,7 @@ fn a_pasted_prompt_is_one_draft_with_its_line_breaks_kept() {
         ],
         "one draft of four lines, not four prompts"
     );
-    assert_eq!(composer.rows(), 5);
+    assert_eq!(composer.rows(), 6);
 }
 
 #[test]

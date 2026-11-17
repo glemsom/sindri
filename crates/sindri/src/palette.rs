@@ -82,6 +82,7 @@ impl Palette {
         },
         ramp: Ramp {
             steps: [
+                Color::Indexed(239),
                 Color::Indexed(238),
                 Color::Indexed(237),
                 Color::Indexed(236),
@@ -110,6 +111,7 @@ impl Palette {
         },
         ramp: Ramp {
             steps: [
+                Color::Rgb(42, 56, 71),
                 Color::Rgb(36, 49, 63),
                 Color::Rgb(30, 42, 55),
                 Color::Rgb(25, 35, 47),

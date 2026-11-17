@@ -240,6 +240,27 @@ fn a_raised_surface_ramps_from_the_lit_edge_down_to_the_shadow() {
 }
 
 #[test]
+fn a_band_at_its_ceiling_takes_a_step_of_its_own_on_every_row() {
+    for (spelling, palette) in SPELLED {
+        let mut steps: Vec<Color> = Vec::new();
+        for row in 0..MAX_ROWS {
+            let step = palette.step(row, MAX_ROWS);
+            assert!(
+                !steps.contains(&step),
+                "{spelling} draws row {row} of a {MAX_ROWS}-row band on a step the row above it \
+                     already sits on, so two rows of the surface are drawn in one"
+            );
+            steps.push(step);
+        }
+        assert_eq!(
+            steps.len(),
+            usize::from(MAX_ROWS),
+            "{spelling} gives a band at its ceiling fewer steps than it has rows"
+        );
+    }
+}
+
+#[test]
 fn a_three_row_band_is_the_lit_edge_its_own_ground_and_the_shadow() {
     for (spelling, palette) in SPELLED {
         assert_eq!(

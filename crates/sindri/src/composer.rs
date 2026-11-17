@@ -2,12 +2,15 @@ use sindri_core::config::Touched;
 
 use crate::pen;
 
-pub const MIN_ROWS: u16 = 2;
+pub const MIN_ROWS: u16 = EDGE_ROWS + FOOT_ROWS + 1;
 
-pub const MAX_ROWS: u16 = 6;
+pub const MAX_ROWS: u16 = 7;
 
-/// The band's top row is its edge and not draft, so a band of `MIN_ROWS` paints one row.
-pub const HAIRLINE_ROWS: u16 = 1;
+/// The band's top row is its edge and not draft.
+pub const EDGE_ROWS: u16 = 1;
+
+/// The band's bottom row is its foot and not draft.
+pub const FOOT_ROWS: u16 = 1;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum State {
@@ -114,8 +117,8 @@ impl Composer {
     }
 
     /// The columns the frame gives the draft's words: the band's width less the gutter its sigil
-    /// stands in. The frame hands it over before the band is placed, so a draft wraps at the width
-    /// it is drawn at and at no other.
+    /// stands in and the upright either side of the box. The frame hands it over before the band is
+    /// placed, so a draft wraps at the width it is drawn at and at no other.
     pub fn set_room(&mut self, room: u16) {
         self.room = Some(room);
     }
@@ -142,7 +145,7 @@ impl Composer {
     fn visible(drawn: usize) -> u16 {
         let room = u16::try_from(drawn)
             .unwrap_or(u16::MAX)
-            .min(MAX_ROWS - HAIRLINE_ROWS);
+            .min(MAX_ROWS - EDGE_ROWS - FOOT_ROWS);
         match usize::from(room) < drawn {
             true => room.saturating_sub(1),
             false => room,
@@ -182,12 +185,13 @@ impl Composer {
     }
 
     /// The draft as the band draws it: the rows its words wrap into, the rows the band takes for
-    /// them with its one edge row counted, and the first of them the scroll reaches.
+    /// them with its edge and foot counted, and the first of them the scroll reaches.
     fn laid(&self) -> (Vec<Row>, u16, usize) {
         let drawn = self.drawn();
         let rows = u16::try_from(drawn.len())
             .unwrap_or(u16::MAX)
-            .saturating_add(HAIRLINE_ROWS)
+            .saturating_add(EDGE_ROWS)
+            .saturating_add(FOOT_ROWS)
             .clamp(MIN_ROWS, MAX_ROWS);
         let visible = usize::from(Composer::visible(drawn.len()));
         let first = self.scroll.min(drawn.len().saturating_sub(visible));
