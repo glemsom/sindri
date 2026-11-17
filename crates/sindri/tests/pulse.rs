@@ -11,7 +11,7 @@ use sindri::facts::Facts;
 use sindri::ink::Ink;
 use sindri::ledger;
 use sindri::pen;
-use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph};
+use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph, step};
 use sindri::view::{Transcript, View};
 use sindri_core::provider::Deltas;
 use sindri_core::redact::SecretSet;
@@ -74,6 +74,27 @@ fn the_marker_steps_one_braille_glyph_every_eighty_milliseconds() {
             "and not a millisecond longer"
         );
     }
+}
+
+#[test]
+fn the_step_advances_once_every_eighty_milliseconds_and_holds_to_its_last_one() {
+    assert_eq!(
+        step(0),
+        0,
+        "a step is a whole number of the 80 ms the pulse is measured in"
+    );
+    assert_eq!(step(STEP_MS), 1, "the first step begins on its own mark");
+    assert_eq!(
+        step(3 * STEP_MS - 1),
+        2,
+        "and a step holds to the last millisecond it was given"
+    );
+    assert_eq!(
+        step(4_200),
+        52,
+        "the marker and the band's head read one step, so four seconds and two tenths is the \
+             same step to both"
+    );
 }
 
 #[test]

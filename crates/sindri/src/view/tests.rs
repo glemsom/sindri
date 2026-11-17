@@ -18,6 +18,7 @@ use crate::capability::caps::{inked, pictured, pointing, sized};
 use crate::ink::{Face, Look};
 use crate::palette::{Band, Edge};
 use crate::pictures::PLACEHOLDER as PLACED;
+use crate::pulse::STEP_MS;
 use crate::readback::under;
 use crate::rows::THUMB;
 
@@ -66,11 +67,46 @@ fn card_body(painted: &Painted) -> Rect {
 /// A frame holding a draft of `lines` lines painted in `palette` at `cols` by `rows`, and where
 /// that pass laid it out.
 fn composer(palette: Palette, lines: usize, cols: u16, rows: u16) -> (Buffer, Layout) {
+    drafted(Facts::default().asked(), palette, lines, cols, rows)
+}
+
+/// The same band under `facts`, which is what says whether a run is live on it.
+fn drafted(facts: Facts, palette: Palette, lines: usize, cols: u16, rows: u16) -> (Buffer, Layout) {
     let draft: Vec<String> = (1..=lines).map(|line| line.to_string()).collect();
-    let mut view = View::of(inked(palette), Facts::default().asked(), Transcript::none());
+    let mut view = View::of(inked(palette), facts, Transcript::none());
     view.paste(&draft.join("\n"));
     let (buffer, told) = painted_and_told(&mut view, cols, rows);
     (buffer, laid_out(&told))
+}
+
+/// The facts of a band a run is live in, standing on the step `elapsed_ms` of the pulse reaches.
+fn live(elapsed_ms: u64) -> Facts {
+    Facts::default()
+        .running()
+        .pulsed(Some(Pulse::live(elapsed_ms)))
+}
+
+/// The columns the band's edge gives its rule: the first of them, and how many there are, read off
+/// the row the frame drew rather than counted off the layout again.
+fn rule_span(buffer: &Buffer, band: Rect) -> (u16, u16) {
+    let row = drawn_glyphs(buffer, band.y);
+    let first = row
+        .find([HAIRLINE, EDGE_HEAD])
+        .unwrap_or_else(|| panic!("the edge of the band is not ruled: {row:?}"));
+    let columns = row
+        .chars()
+        .filter(|glyph| [HAIRLINE, EDGE_HEAD].contains(glyph))
+        .count();
+    (band.x + pen::cells(&row[..first]), pen::columns(columns))
+}
+
+/// The column the head of a live run's edge stands in, read off the row it was drawn on.
+fn head_at(buffer: &Buffer, band: Rect) -> u16 {
+    let row = drawn_glyphs(buffer, band.y);
+    let at = row
+        .find(EDGE_HEAD)
+        .expect("a live run's edge carries a head");
+    band.x + pen::cells(&row[..at])
 }
 
 #[test]
@@ -398,12 +434,14 @@ fn a_composer_at_rest_draws_a_box_that_opens_and_closes_on_its_edge_and_is_foote
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
         let rule = pen::filled(band.width - 2, HAIRLINE);
+        let word = PROMPT_EDGE;
+        let edged = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
 
         assert_eq!(
             drawn_glyphs(&buffer, band.y),
-            format!("{EDGE_OPEN}{rule}{EDGE_CLOSE}"),
-            "the {} row band a draft of {lines} lines takes does not open and close along \
-                 its edge",
+            format!("{EDGE_OPEN}{word} {edged}{EDGE_CLOSE}"),
+            "the {} row band a draft of {lines} lines takes does not open on the mode it is \
+                 in and close along its edge",
             band.height
         );
         assert_eq!(
@@ -423,6 +461,246 @@ fn a_composer_at_rest_draws_a_box_that_opens_and_closes_on_its_edge_and_is_foote
             "the corner the foot opens with is not the dim edge the shadow is drawn in"
         );
     }
+}
+
+#[test]
+fn the_edge_of_a_band_at_rest_says_prompt_inside_its_opening_corner_in_the_faint_accent() {
+    let palette = Palette::TRUECOLOR;
+    for lines in [0, 1, 3, 5] {
+        let (buffer, laid) = composer(palette, lines, 120, 40);
+        let band = laid.composer;
+        let word = PROMPT_EDGE;
+        let rule = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
+        let row = drawn_glyphs(&buffer, band.y);
+
+        assert_eq!(
+            row,
+            format!("{EDGE_OPEN}{word} {rule}{EDGE_CLOSE}"),
+            "the edge of the {} row band a draft of {lines} lines takes says no mode, or says \
+                 it outside the corner",
+            band.height
+        );
+        assert!(
+            !row.contains(EDGE_HEAD),
+            "a band no run is live in carries no head: its edge is still, and the frame keeps no \
+                 clock to move one"
+        );
+        for x in band.x..band.right() {
+            assert_eq!(
+                look_at(&buffer, &palette, x, band.y),
+                palette.accent_edge(),
+                "column {x} of the edge row is not the faint accent a band at rest wears: the \
+                     word, the rule and the corners are one row in one look"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_edge_of_a_band_a_run_is_live_in_says_running_in_the_accent_with_one_head_on_the_rule() {
+    let palette = Palette::TRUECOLOR;
+    let (buffer, laid) = drafted(live(4_200), palette, 1, 120, 40);
+    let band = laid.composer;
+    let word = RUNNING_EDGE;
+    let (first, columns) = rule_span(&buffer, band);
+    let row = drawn_glyphs(&buffer, band.y);
+
+    assert!(
+        row.starts_with(&format!("{EDGE_OPEN}{word} ")),
+        "a live run's edge does not open on the mode it is in, inside the corner: {row:?}"
+    );
+    assert!(
+        row.ends_with(EDGE_CLOSE),
+        "a live run's edge does not rule on to the far corner: {row:?}"
+    );
+    assert_eq!(
+        row.matches(EDGE_HEAD).count(),
+        1,
+        "a live run's edge carries one head and no more: {row:?}"
+    );
+    let head = head_at(&buffer, band);
+    assert!(
+        (first..first + columns).contains(&head),
+        "the head stands at column {head}, away from the rule's own columns {first} to {}: the \
+             word is never a column of it",
+        first + columns
+    );
+    for x in band.x..band.right() {
+        assert_eq!(
+            look_at(&buffer, &palette, x, band.y),
+            palette.lit_edge(),
+            "column {x} of a live run's edge row is not the accent lit: the word, the rule and \
+                 the head are one row in one look"
+        );
+    }
+}
+
+#[test]
+fn every_step_of_the_pulse_moves_the_head_one_column_and_the_rule_s_width_is_one_cycle() {
+    let palette = Palette::TRUECOLOR;
+    let (buffer, laid) = drafted(live(0), palette, 1, 60, 24);
+    let band = laid.composer;
+    let (first, columns) = rule_span(&buffer, band);
+
+    assert_eq!(
+        head_at(&buffer, band),
+        first,
+        "a live band with no step behind it stands its head where the rule begins"
+    );
+    for step in 0..6u64 {
+        for at in [step * STEP_MS, step * STEP_MS + STEP_MS - 1] {
+            let (buffer, _) = drafted(live(at), palette, 1, 60, 24);
+            assert_eq!(
+                head_at(&buffer, band),
+                first + pen::columns(usize::try_from(step).unwrap_or(0)),
+                "step {step} of the pulse, at {at} ms, is not one column further along the rule"
+            );
+        }
+    }
+    let (buffer, _) = drafted(live(u64::from(columns) * STEP_MS), palette, 1, 60, 24);
+    assert_eq!(
+        head_at(&buffer, band),
+        first,
+        "one cycle of the head is the rule's own width of {columns} columns, and it wraps back \
+             to the first"
+    );
+}
+
+#[test]
+fn two_passes_of_one_live_frame_put_the_head_on_one_cell() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = View::of(inked(palette), live(4_200), Transcript::none());
+    view.paste("the draft the band is drawn from");
+    let band = laid_out(&painted_and_told(&mut view, 60, 24).1).composer;
+
+    let once = head_at(&painted(&mut view, 60, 24), band);
+    let again = head_at(&painted(&mut view, 60, 24), band);
+
+    assert_eq!(
+        once, again,
+        "the view keeps no clock of its own, so two passes at one elapsed time draw one cell"
+    );
+}
+
+#[test]
+fn a_band_no_run_is_live_in_draws_no_head_however_live_the_pulse_handed_to_it() {
+    let palette = Palette::TRUECOLOR;
+    let facts = Facts::default().asked().pulsed(Some(Pulse::live(4_200)));
+    let (buffer, laid) = drafted(facts, palette, 1, 60, 24);
+
+    assert!(
+        !drawn_glyphs(&buffer, laid.composer.y).contains(EDGE_HEAD),
+        "the head is the run's, so a band no run is live in says the mode and nothing else"
+    );
+}
+
+#[test]
+fn the_word_and_the_head_recede_to_the_dim_edge_while_the_window_is_away_and_under_a_screen() {
+    let palette = Palette::TRUECOLOR;
+
+    let mut view = View::of(inked(palette), live(0).focused(false), Transcript::none());
+    view.paste("the draft the band is drawn from");
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let band = laid_out(&told).composer;
+    assert!(
+        drawn_glyphs(&buffer, band.y).contains(EDGE_HEAD),
+        "the head is still drawn while nobody reads the window, and only recedes"
+    );
+    for x in band.x..band.right() {
+        assert_eq!(
+            look_at(&buffer, &palette, x, band.y),
+            palette.dim_edge(),
+            "column {x} of the edge a window nobody reads is not the dim edge: the word and the \
+                 head recede with the rule"
+        );
+    }
+
+    let mut view = View::of(inked(palette), live(0), Transcript::none());
+    view.paste("the draft the band is drawn from");
+    view.screen(Mode::Keys);
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let band = laid_out(&told).composer;
+    let (left, right) = card::border_columns(card_body(&told));
+    for x in (band.x..left).chain(right + 1..band.right()) {
+        assert_eq!(
+            look_at(&buffer, &palette, x, band.y),
+            palette.dim_edge(),
+            "column {x} of the edge under {} is not the dim edge, and the card is the surface \
+                 that takes the keys",
+            Mode::Keys.name()
+        );
+    }
+}
+
+#[test]
+fn a_band_with_no_room_for_the_word_and_a_space_and_a_rule_column_draws_the_plain_rule() {
+    let palette = Palette::TRUECOLOR;
+    let word = PROMPT_EDGE;
+    for (cols, named) in [(9u16, false), (10, true)] {
+        let (buffer, laid) = composer(palette, 0, cols, 6);
+        let band = laid.composer;
+        let drawn = drawn_glyphs(&buffer, band.y);
+        let expected = match named {
+            true => format!("{EDGE_OPEN}{word} {}{EDGE_CLOSE}", pen::filled(1, HAIRLINE)),
+            false => format!(
+                "{EDGE_OPEN}{}{EDGE_CLOSE}",
+                pen::filled(band.width - 2, HAIRLINE)
+            ),
+        };
+
+        assert_eq!(
+            drawn, expected,
+            "a band of {cols} columns takes the word where the word, its blank column and one \
+                 rule column do not all fit, or gives it up where they do"
+        );
+    }
+
+    let (buffer, laid) = drafted(live(0), palette, 0, 9, 6);
+    let band = laid.composer;
+    assert_eq!(
+        drawn_glyphs(&buffer, band.y),
+        format!(
+            "{EDGE_OPEN}{EDGE_HEAD}{}{EDGE_CLOSE}",
+            pen::filled(band.width - 3, HAIRLINE)
+        ),
+        "a band too narrow for the word still travels its head over the plain rule"
+    );
+}
+
+#[test]
+fn one_draft_drawn_idle_and_live_differs_on_the_edge_row_and_the_footer_and_nowhere_in_its_bands() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = View::of(
+        inked(palette),
+        Facts::default().asked().pulsed(Some(Pulse::live(4_200))),
+        Transcript::none(),
+    );
+    view.paste("the draft the two frames are drawn from");
+    let (resting, resting_layout) = painted_and_told(&mut view, 120, 40);
+    view.handed(view.facts().clone().running());
+    let (live, live_layout) = painted_and_told(&mut view, 120, 40);
+    let laid = laid_out(&resting_layout);
+    let band = laid.composer;
+
+    assert_eq!(
+        band,
+        laid_out(&live_layout).composer,
+        "a run being live takes no row and no column the band had at rest"
+    );
+    for y in band.y..band.bottom() {
+        assert_eq!(
+            drawn_row(&resting, y) == drawn_row(&live, y),
+            y != band.y,
+            "row {y} of the band is not what the mode and the head leave of it: the mode is the \
+                 edge's word and the run's state is the footer's"
+        );
+    }
+    assert_ne!(
+        drawn_row(&resting, laid.footer.y),
+        drawn_row(&live, laid.footer.y),
+        "the footer of an idle draft and one of a live run say the same keys, so neither says \
+             what the frame can honour"
+    );
 }
 
 #[test]
