@@ -739,11 +739,9 @@ impl View {
         Outcome::Edited
     }
 
-    /// `@`, a key only where it starts a word, for the reason `?` is one only on an empty draft:
-    /// a prompt that could not hold `someone@host` cannot name an address. A frame told no
-    /// workspace offers no file rather than walking the process's own directory. The screen walks
-    /// the workspace afresh, because a run may have written a file the last walk did not hold, and
-    /// the count is judged against the same walk for as long as it stands.
+    /// `@`, a key only where it starts a word, for the reason `?` is one only on an empty draft: a
+    /// prompt that could not hold `someone@host` cannot name an address, and a frame told no
+    /// workspace offers no file rather than walking the process's own directory.
     fn at(&mut self, key: Key) -> Outcome {
         if !self.composer.at_word_start() {
             return self.composer.key(key);
@@ -751,6 +749,8 @@ impl View {
         let Some(root) = self.facts.workspace() else {
             return Outcome::Unchanged;
         };
+        // A run may have written a file since the last walk, and the edge counts against this one
+        // for as long as the screen stands.
         self.files = Files::walk(root);
         self.picker = Picker::over(self.files.clone());
         self.stack.open(Mode::Files);
