@@ -36,6 +36,14 @@ fn a_string_is_measured_by_display_width_and_not_by_the_glyphs_it_is_made_of() {
 }
 
 #[test]
+fn the_glyphs_a_run_is_made_of_are_a_count_of_characters_and_never_of_columns() {
+    assert_eq!(glyphs("keys"), 4);
+    assert_eq!(glyphs("日本"), 2);
+    assert_eq!(glyphs("e\u{301}"), 2);
+    assert_eq!(glyphs(""), 0);
+}
+
+#[test]
 fn a_run_the_row_has_no_room_for_is_refused_whole() {
     let mut narrow = row_of(3);
     run(&mut narrow, &[("keys", Ink::Plain)], Clip::Whole);

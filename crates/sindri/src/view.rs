@@ -741,7 +741,9 @@ impl View {
 
     /// `@`, a key only where it starts a word, for the reason `?` is one only on an empty draft:
     /// a prompt that could not hold `someone@host` cannot name an address. A frame told no
-    /// workspace offers no file rather than walking the process's own directory.
+    /// workspace offers no file rather than walking the process's own directory. The screen walks
+    /// the workspace afresh, because a run may have written a file the last walk did not hold, and
+    /// the count is judged against the same walk for as long as it stands.
     fn at(&mut self, key: Key) -> Outcome {
         if !self.composer.at_word_start() {
             return self.composer.key(key);
@@ -749,7 +751,8 @@ impl View {
         let Some(root) = self.facts.workspace() else {
             return Outcome::Unchanged;
         };
-        self.picker = Picker::walk(root);
+        self.files = Files::walk(root);
+        self.picker = Picker::over(self.files.clone());
         self.stack.open(Mode::Files);
         Outcome::Edited
     }
@@ -1430,19 +1433,16 @@ impl View {
             );
         }
         let count = self.draft_count();
-        let counted = pen::cells(
-            &count
-                .iter()
-                .map(|(part, _)| part.as_str())
-                .collect::<String>(),
-        );
-        let drawn = match counted > 0 && room.width > opening.saturating_add(counted) {
-            true => counted,
-            false => 0,
-        };
+        let counted = pen::width(&count);
+        // The count hangs on the far corner only where the rule keeps a column below it: a frame
+        // too narrow for the whole count draws none of it, and the rule keeps the row.
+        let hung = pen::hanging(room, counted)
+            .filter(|first| *first > room.x.saturating_add(opening))
+            .map(|_| counted)
+            .unwrap_or(0);
         let rule = Rect {
             x: room.x.saturating_add(opening),
-            width: room.width.saturating_sub(opening).saturating_sub(drawn),
+            width: room.width.saturating_sub(opening).saturating_sub(hung),
             ..room
         };
         pen::rule(buffer, rule, HAIRLINE, look, &palette);
@@ -1453,7 +1453,7 @@ impl View {
                 .saturating_add(pen::columns(usize::try_from(step).unwrap_or(0)));
             pen::glyph(buffer, at, row.y, EDGE_HEAD, look, &palette);
         }
-        if drawn > 0 {
+        if hung > 0 {
             pen::hang(buffer, room, &count, &palette);
         }
     }

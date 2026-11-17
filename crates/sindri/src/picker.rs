@@ -29,8 +29,14 @@ pub struct Picker {
 
 impl Picker {
     pub fn walk(root: &Path) -> Picker {
+        Picker::over(Files::walk(root))
+    }
+
+    /// The same screen over a walk already made: the frame's own, so the rows a query leaves and the
+    /// count the band's edge hangs are never of two workspaces.
+    pub fn over(files: Files) -> Picker {
         Picker {
-            files: Files::walk(root),
+            files,
             narrow: Narrow::default(),
         }
     }

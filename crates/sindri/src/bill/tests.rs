@@ -46,6 +46,18 @@ fn one_file_is_a_file_and_two_are_files() {
 }
 
 #[test]
+fn a_file_the_draft_names_twice_is_one_file_of_material() {
+    let root = workspace(&["src/rows.rs"]);
+    let files = Files::walk(root.path());
+
+    assert_eq!(
+        Bill::of("read src/rows.rs, then src/rows.rs again", &files).map(|bill| bill.parts()),
+        Some(vec![String::from("1 file"), String::from("40 chars")]),
+        "the same file named twice is one file of material, however often the draft says it"
+    );
+}
+
+#[test]
 fn a_draft_that_opens_with_a_command_bills_one_command() {
     let files = Files::default();
 

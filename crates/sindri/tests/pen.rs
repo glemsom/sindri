@@ -96,12 +96,13 @@ fn the_pen_is_the_only_module_that_writes_a_glyph_into_a_cell() {
 fn no_module_but_the_pen_answers_a_column_by_counting_glyphs() {
     let sources = front_end();
 
+    // `pen::glyphs` answers how many glyphs a run is made of, and no column is ever one of them, so
+    // the one module that counts glyphs is the one module that measures a column.
     let counted = everywhere(&sources, "chars().count()");
-    assert_eq!(
-        counted,
-        Vec::<String>::new(),
+    assert!(
+        counted.iter().all(|at| modules::of(at) == modules::of(PEN)),
         "a column is measured by the cells a run draws in, never by the glyphs it is made of, and \
-         the pen is the one module that measures"
+         the pen is the one module that measures: {counted:?}"
     );
 
     let padded = everywhere(&sources, "{:<")

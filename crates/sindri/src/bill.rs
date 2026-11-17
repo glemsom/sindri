@@ -1,13 +1,16 @@
 //! The bill of a draft: the characters it holds, and the files and the command its words name — the
 //! count the band's edge hangs on its far corner.
 
-use crate::files::Files;
+use std::collections::BTreeSet;
 
-/// What one draft costs, counted once and said in words by the band's edge.
+use crate::files::Files;
+use crate::pen;
+
+/// What one draft would send, counted: the material the band's edge hangs in words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bill {
     files: usize,
-    commands: usize,
+    command: bool,
     chars: usize,
 }
 
@@ -17,12 +20,15 @@ impl Bill {
         match draft.is_empty() {
             true => None,
             false => Some(Bill {
+                // A file a draft names twice is one file of material, and the words in the order
+                // they sit say nothing a count of the set does not.
                 files: draft
                     .split_whitespace()
                     .filter(|word| files.names(word))
-                    .count(),
-                commands: usize::from(crate::commands::read(draft).is_some()),
-                chars: draft.char_indices().count(),
+                    .collect::<BTreeSet<&str>>()
+                    .len(),
+                command: crate::commands::read(draft).is_some(),
+                chars: pen::glyphs(draft),
             }),
         }
     }
@@ -33,8 +39,8 @@ impl Bill {
         if self.files > 0 {
             parts.push(spoken(self.files, "file", "files"));
         }
-        if self.commands > 0 {
-            parts.push(spoken(self.commands, "command", "commands"));
+        if self.command {
+            parts.push(String::from("1 command"));
         }
         if self.chars > 0 {
             parts.push(spoken(self.chars, "char", "chars"));

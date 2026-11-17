@@ -107,6 +107,17 @@ fn count_span(buffer: &Buffer, band: Rect) -> Range<u16> {
     first.saturating_add(columns)..band.right().saturating_sub(1)
 }
 
+/// The columns of an edge row the edge itself draws: its word, its rule, its head and a corner at each
+/// end, and never a column of the count hung on the corner beside them.
+fn edge_columns(buffer: &Buffer, band: Rect) -> Vec<u16> {
+    let counted = count_span(buffer, band);
+    let close = band.right().saturating_sub(1);
+    (band.x..close)
+        .filter(|x| !counted.contains(x))
+        .chain([close])
+        .collect()
+}
+
 /// The column the head of a live run's edge stands in, read off the row it was drawn on.
 fn head_at(buffer: &Buffer, band: Rect) -> u16 {
     let row = drawn_glyphs(buffer, band.y);
@@ -160,10 +171,7 @@ fn the_composer_that_takes_the_keys_lights_its_edge_row_with_the_accent() {
             let (buffer, laid) = composer(palette, lines, cols, rows);
             let band = laid.composer;
 
-            for x in band.x..band.right() {
-                if count_span(&buffer, band).contains(&x) {
-                    continue;
-                }
+            for x in edge_columns(&buffer, band) {
                 assert_eq!(
                     look_at(&buffer, &palette, x, band.y),
                     faint,
@@ -501,10 +509,7 @@ fn the_edge_of_a_band_at_rest_says_prompt_inside_its_opening_corner_in_the_faint
             "a band no run is live in carries no head: its edge is still, and the frame keeps no \
                  clock to move one"
         );
-        for x in band.x..band.right() {
-            if count_span(&buffer, band).contains(&x) {
-                continue;
-            }
+        for x in edge_columns(&buffer, band) {
             assert_eq!(
                 look_at(&buffer, &palette, x, band.y),
                 palette.accent_edge(),
@@ -562,6 +567,31 @@ fn a_frame_too_narrow_for_the_whole_count_draws_none_of_it_and_the_rule_keeps_th
         drawn_glyphs(&buffer, band.y),
         format!("{EDGE_OPEN}{PROMPT_EDGE} {rule}{EDGE_CLOSE}"),
         "a count the row has no room for is refused whole, and the rule keeps the row"
+    );
+}
+
+#[test]
+fn the_count_is_refused_where_the_rule_would_lose_its_last_column_and_drawn_one_column_wider() {
+    let palette = Palette::TRUECOLOR;
+    // Four lines are seven characters, so the count is the same seven columns at either width.
+    let (refused, laid) = composer(palette, 4, 16, 24);
+    let band = laid.composer;
+    let rule = pen::filled(band.width - pen::cells(PROMPT_EDGE) - 3, HAIRLINE);
+
+    assert_eq!(
+        drawn_glyphs(&refused, band.y),
+        format!("{EDGE_OPEN}{PROMPT_EDGE} {rule}{EDGE_CLOSE}"),
+        "a count that would leave the rule no column of its own is refused whole, so the rule \
+         keeps the row"
+    );
+
+    let (drawn, laid) = composer(palette, 4, 17, 24);
+    let band = laid.composer;
+
+    assert_eq!(
+        drawn_glyphs(&drawn, band.y),
+        format!("{EDGE_OPEN}{PROMPT_EDGE} {HAIRLINE}7 chars{EDGE_CLOSE}"),
+        "one column wider, the count hangs and the rule keeps the one column left below it"
     );
 }
 
@@ -631,10 +661,7 @@ fn the_edge_of_a_band_a_run_is_live_in_says_running_in_the_accent_with_one_head_
              word is never a column of it",
         first + columns
     );
-    for x in band.x..band.right() {
-        if count_span(&buffer, band).contains(&x) {
-            continue;
-        }
+    for x in edge_columns(&buffer, band) {
         assert_eq!(
             look_at(&buffer, &palette, x, band.y),
             palette.lit_edge(),
@@ -715,10 +742,7 @@ fn the_word_and_the_head_recede_to_the_dim_edge_while_the_window_is_away_and_und
         drawn_glyphs(&buffer, band.y).contains(EDGE_HEAD),
         "the head is still drawn while nobody reads the window, and only recedes"
     );
-    for x in band.x..band.right() {
-        if count_span(&buffer, band).contains(&x) {
-            continue;
-        }
+    for x in edge_columns(&buffer, band) {
         assert_eq!(
             look_at(&buffer, &palette, x, band.y),
             palette.dim_edge(),
@@ -733,10 +757,10 @@ fn the_word_and_the_head_recede_to_the_dim_edge_while_the_window_is_away_and_und
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let band = laid_out(&told).composer;
     let (left, right) = card::border_columns(card_body(&told));
-    for x in (band.x..left).chain(right + 1..band.right()) {
-        if count_span(&buffer, band).contains(&x) {
-            continue;
-        }
+    for x in edge_columns(&buffer, band)
+        .into_iter()
+        .filter(|x| *x < left || *x > right)
+    {
         assert_eq!(
             look_at(&buffer, &palette, x, band.y),
             palette.dim_edge(),

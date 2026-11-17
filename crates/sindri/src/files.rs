@@ -46,9 +46,11 @@ impl Files {
         }
     }
 
-    /// Whether `word` is one of the paths, exactly.
+    /// Whether `word` is one of the paths, exactly: the walk is sorted, so the answer is one search.
     pub fn names(&self, word: &str) -> bool {
-        self.paths().iter().any(|path| path == word)
+        self.paths()
+            .binary_search_by(|path| path.as_str().cmp(word))
+            .is_ok()
     }
 }
 
