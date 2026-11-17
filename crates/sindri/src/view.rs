@@ -36,7 +36,7 @@ use crate::picker::Picker;
 use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::pointer::{Notch, Pointer};
-use crate::pulse::Pulse;
+use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
 use crate::rows::{INDENT, Row, Rows, Scroll};
@@ -142,7 +142,11 @@ const FOOT_OPEN: char = '└';
 const FOOT_CLOSE: char = '┘';
 const UPRIGHT: char = '│';
 
-/// The heavier rule the edge carries while a run is live: the head travels the rule's own columns.
+/// The two words the band's edge says: what the band is for, and never what a key does.
+const PROMPT_MODE: &str = "prompt";
+const RUNNING_MODE: &str = "running";
+
+/// The heavier cell the rule carries while a run is live: the head travels the rule's own columns.
 const EDGE_HEAD: char = '━';
 
 /// The band inside its box: the one column an upright takes at each side is not a column of the
@@ -1382,24 +1386,15 @@ impl View {
         }
     }
 
-    /// The band's edge row: the mode word just inside the opening corner, one blank column, and the
-    /// rule running on to the far corner with a live run's head on one of its own columns. A band with
-    /// no room for the word keeps the plain rule, and so does one of a single row.
+    /// The band's edge row: its mode just inside the opening corner, one blank column, and the rule
+    /// running on to the far corner with a live run's head on one of its own columns. A band with no
+    /// room for the whole word keeps the plain rule.
     fn composer_edge_row(&self, row: Rect, buffer: &mut Buffer) {
         let palette = self.capabilities.palette();
         let look = self.composer_edge();
-        let state = self.composer.state();
-        pen::glyph(buffer, row.x, row.y, EDGE_OPEN, look, &palette);
-        pen::glyph(
-            buffer,
-            row.right().saturating_sub(1),
-            row.y,
-            EDGE_CLOSE,
-            look,
-            &palette,
-        );
+        corners(buffer, row, (EDGE_OPEN, EDGE_CLOSE), look, &palette);
         let room = inside(row);
-        let word = state.mode();
+        let word = self.edge_word();
         let cells = pen::cells(word);
         let named = cells.saturating_add(2) <= room.width;
         let rule = match named {
@@ -1424,12 +1419,29 @@ impl View {
             pen::glyph(buffer, rule.x.saturating_sub(1), row.y, ' ', look, &palette);
         }
         pen::rule(buffer, rule, HAIRLINE, look, &palette);
-        if state == State::Running && rule.width > 0 {
-            let step = self.facts.pulse().and_then(Pulse::step).unwrap_or(0);
+        if self.composer.state() == State::Running && rule.width > 0 {
+            let step = self.edge_step() % u64::from(rule.width);
             let at = rule
                 .x
-                .saturating_add(u16::try_from(step % u64::from(rule.width)).unwrap_or(0));
+                .saturating_add(pen::columns(usize::try_from(step).unwrap_or(0)));
             pen::glyph(buffer, at, row.y, EDGE_HEAD, look, &palette);
+        }
+    }
+
+    /// The word the band's edge says: the band only takes the draft, or a run is live.
+    fn edge_word(&self) -> &'static str {
+        match self.composer.state() {
+            State::Idle => PROMPT_MODE,
+            State::Running => RUNNING_MODE,
+        }
+    }
+
+    /// The step the edge's head stands on: the pulse's own, and the first of the cycle while no live
+    /// pulse has said anything yet.
+    fn edge_step(&self) -> u64 {
+        match self.facts.pulse() {
+            Some(Pulse::Live { elapsed_ms }) => pulse::step(*elapsed_ms),
+            Some(Pulse::Settled { .. }) | None => 0,
         }
     }
 
@@ -1438,13 +1450,12 @@ impl View {
     /// standing over the band.
     fn composer_edge(&self) -> Look {
         let palette = self.capabilities.palette();
-        if self.stack.modal().is_some() {
+        if self.stack.modal().is_some() || self.facts.focus() == Focus::Away {
             return palette.dim_edge();
         }
-        match (self.facts.focus(), self.composer.state()) {
-            (Focus::Away, _) => palette.dim_edge(),
-            (Focus::Focused, State::Running) => palette.lit_edge(),
-            (Focus::Focused, State::Idle) => palette.accent_edge(),
+        match self.composer.state() {
+            State::Running => palette.lit_edge(),
+            State::Idle => palette.accent_edge(),
         }
     }
 
@@ -1768,14 +1779,31 @@ fn band_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), pa
 }
 
 /// One ruled row of the box: a corner at each end and the rule between them, all in one look.
-fn boxed_row(buffer: &mut Buffer, row: Rect, corners: (char, char), look: Look, palette: &Palette) {
-    pen::glyph(buffer, row.x, row.y, corners.0, look, palette);
+fn boxed_row(
+    buffer: &mut Buffer,
+    row: Rect,
+    (open, close): (char, char),
+    look: Look,
+    palette: &Palette,
+) {
+    corners(buffer, row, (open, close), look, palette);
     pen::rule(buffer, inside(row), HAIRLINE, look, palette);
+}
+
+/// The two corners of one row of the box, in the one look that row is drawn in.
+fn corners(
+    buffer: &mut Buffer,
+    row: Rect,
+    (open, close): (char, char),
+    look: Look,
+    palette: &Palette,
+) {
+    pen::glyph(buffer, row.x, row.y, open, look, palette);
     pen::glyph(
         buffer,
         row.right().saturating_sub(1),
         row.y,
-        corners.1,
+        close,
         look,
         palette,
     );

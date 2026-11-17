@@ -77,7 +77,7 @@ fn the_marker_steps_one_braille_glyph_every_eighty_milliseconds() {
 }
 
 #[test]
-fn the_step_advances_once_every_eighty_milliseconds_and_the_glyph_is_read_off_it() {
+fn the_step_advances_once_every_eighty_milliseconds_and_holds_to_its_last_one() {
     assert_eq!(
         step(0),
         0,
@@ -96,56 +96,6 @@ fn the_step_advances_once_every_eighty_milliseconds_and_the_glyph_is_read_off_it
         52,
         "the marker and the band's head read one step, so four seconds and two tenths is the \
              same step to both"
-    );
-}
-
-#[test]
-fn a_settled_pulse_stands_on_no_step_and_a_live_band_is_the_one_its_head_travels() {
-    let mut view = answering();
-    let edge = |view: &mut View| {
-        frame(view, 120, 12)
-            .into_iter()
-            .find(|row| row.starts_with('┌'))
-            .expect("a frame asked for a prompt holds a composer band")
-    };
-
-    view.handed(
-        view.facts()
-            .clone()
-            .running()
-            .pulsed(Some(Pulse::live(4_200))),
-    );
-    let live = edge(&mut view);
-
-    view.handed(
-        view.facts()
-            .clone()
-            .pulsed(Some(Pulse::settled(&Stop::Final, 4_200))),
-    );
-    let settled = edge(&mut view);
-
-    view.handed(
-        view.facts()
-            .clone()
-            .pulsed(Some(Pulse::settled(&Stop::Final, 12_000_000))),
-    );
-    let later = edge(&mut view);
-
-    assert_eq!(
-        live.matches('━').count(),
-        1,
-        "a live run's edge carries one head: {live:?}"
-    );
-    assert_ne!(
-        live.find('━'),
-        settled.find('━'),
-        "a settled pulse stands on no step, so the head rests where the rule starts rather \
-             than where the live frame's step left it: {settled:?}"
-    );
-    assert_eq!(
-        settled.find('━'),
-        later.find('━'),
-        "and stays there however long the settled pulse says the run ran"
     );
 }
 

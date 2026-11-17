@@ -76,7 +76,13 @@ fn run_facts() -> Facts {
 /// A frame with `lines` typed into its draft through the keys a reader's fingers send, so a picture
 /// of the draft cannot be of a state the product cannot reach.
 fn typing(capabilities: Capabilities, lines: &[&str]) -> View {
-    let mut view = View::of(capabilities, Facts::default().asked(), Transcript::none());
+    drafting(capabilities, Facts::default().asked(), lines)
+}
+
+/// The same draft under the facts the frame is handed, which is what says whether a run is live in
+/// the band it is drawn in.
+fn drafting(capabilities: Capabilities, facts: Facts, lines: &[&str]) -> View {
+    let mut view = View::of(capabilities, facts, Transcript::none());
     for (index, line) in lines.iter().enumerate() {
         if index > 0 {
             view.key(Key::Newline);
@@ -114,6 +120,10 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "fold-open" => fold(capabilities, true),
         "fold-answer" => folded_beside_an_answer(capabilities),
         "empty" => View::of(capabilities, Facts::default().asked(), Transcript::none()),
+        // One draft drawn twice, a run live in the second: the edge is the one row they disagree
+        // on, and the footer is the row the run's own state already spoke on.
+        "edge" => typing(capabilities, &EDGE_DRAFT),
+        "edge-live" => drafting(capabilities, Facts::default().running(), &EDGE_DRAFT),
         "typing" => typing(capabilities, &["why does the retry test fail"]),
         "wrapped" => typing(
             capabilities,
@@ -829,6 +839,9 @@ fn streaming(capabilities: Capabilities) -> View {
     }
     view
 }
+
+/// The one draft the two edge fixtures are drawn from.
+const EDGE_DRAFT: [&str; 1] = ["the band's edge says what the band is for"];
 
 const PULSE_ANSWER: [&str; 4] = [
     "A braille marker at the head of the newest answer carries the run's elapsed ",

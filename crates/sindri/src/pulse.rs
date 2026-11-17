@@ -79,14 +79,6 @@ impl Pulse {
         }
     }
 
-    /// The step a live run's frame stands on, and none once it has settled.
-    pub(crate) fn step(&self) -> Option<u64> {
-        match self {
-            Pulse::Live { elapsed_ms } => Some(step(*elapsed_ms)),
-            Pulse::Settled { .. } => None,
-        }
-    }
-
     fn mark(&self) -> (char, Ink) {
         match self {
             Pulse::Live { elapsed_ms } => (pulse_glyph(*elapsed_ms), Ink::Accent),

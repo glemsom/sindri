@@ -230,6 +230,16 @@ fn typing_120x40_is_a_composer_at_its_three_row_floor() {
 }
 
 #[test]
+fn edge_120x40_is_a_band_that_only_takes_the_draft() {
+    fixture::assert_frame("edge", 120, 40);
+}
+
+#[test]
+fn edge_live_120x40_is_that_band_with_a_run_live_in_it_and_a_head_on_its_edge() {
+    fixture::assert_frame("edge-live", 120, 40);
+}
+
+#[test]
 fn grown_120x40_is_a_composer_at_its_seven_row_ceiling() {
     fixture::assert_frame("grown", 120, 40);
 }

@@ -19,16 +19,6 @@ pub enum State {
     Running,
 }
 
-impl State {
-    /// The word the band's edge says: the band only takes the draft, or a run is live.
-    pub fn mode(self) -> &'static str {
-        match self {
-            State::Idle => "prompt",
-            State::Running => "running",
-        }
-    }
-}
-
 /// A key decoded from the bytes a terminal sends, so `Ctrl-J` and `Shift+Enter` are one key
 /// here, and a glyph is one press however many bytes it took.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

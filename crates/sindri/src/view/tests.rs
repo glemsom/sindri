@@ -86,14 +86,18 @@ fn live(elapsed_ms: u64) -> Facts {
         .pulsed(Some(Pulse::live(elapsed_ms)))
 }
 
-/// The columns the band's edge gives its rule: the first of them, and how many there are.
-fn rule_span(band: Rect) -> (u16, u16) {
-    let room = inside(band);
-    let word = pen::cells(State::Running.mode());
-    (
-        room.x + word + 1,
-        room.width.saturating_sub(word).saturating_sub(1),
-    )
+/// The columns the band's edge gives its rule: the first of them, and how many there are, read off
+/// the row the frame drew rather than counted off the layout again.
+fn rule_span(buffer: &Buffer, band: Rect) -> (u16, u16) {
+    let row = drawn_glyphs(buffer, band.y);
+    let first = row
+        .find([HAIRLINE, EDGE_HEAD])
+        .unwrap_or_else(|| panic!("the edge of the band is not ruled: {row:?}"));
+    let columns = row
+        .chars()
+        .filter(|glyph| [HAIRLINE, EDGE_HEAD].contains(glyph))
+        .count();
+    (band.x + pen::cells(&row[..first]), pen::columns(columns))
 }
 
 /// The column the head of a live run's edge stands in, read off the row it was drawn on.
@@ -430,7 +434,7 @@ fn a_composer_at_rest_draws_a_box_that_opens_and_closes_on_its_edge_and_is_foote
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
         let rule = pen::filled(band.width - 2, HAIRLINE);
-        let word = State::Idle.mode();
+        let word = PROMPT_MODE;
         let edged = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
 
         assert_eq!(
@@ -465,7 +469,7 @@ fn the_edge_of_a_band_at_rest_says_prompt_inside_its_opening_corner_in_the_faint
     for lines in [0, 1, 3, 5] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
-        let word = State::Idle.mode();
+        let word = PROMPT_MODE;
         let rule = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
         let row = drawn_glyphs(&buffer, band.y);
 
@@ -497,8 +501,8 @@ fn the_edge_of_a_band_a_run_is_live_in_says_running_in_the_accent_with_one_head_
     let palette = Palette::TRUECOLOR;
     let (buffer, laid) = drafted(live(4_200), palette, 1, 120, 40);
     let band = laid.composer;
-    let word = State::Running.mode();
-    let (first, columns) = rule_span(band);
+    let word = RUNNING_MODE;
+    let (first, columns) = rule_span(&buffer, band);
     let row = drawn_glyphs(&buffer, band.y);
 
     assert!(
@@ -536,7 +540,7 @@ fn every_step_of_the_pulse_moves_the_head_one_column_and_the_rule_s_width_is_one
     let palette = Palette::TRUECOLOR;
     let (buffer, laid) = drafted(live(0), palette, 1, 60, 24);
     let band = laid.composer;
-    let (first, columns) = rule_span(band);
+    let (first, columns) = rule_span(&buffer, band);
 
     assert_eq!(
         head_at(&buffer, band),
@@ -626,12 +630,18 @@ fn the_mode_and_the_head_recede_to_the_dim_edge_while_the_window_is_away_and_und
             Mode::Keys.name()
         );
     }
+    assert!(
+        (band.x..band.right()).all(|x| look_at(&buffer, &palette, x, band.y) != palette.lit_edge()),
+        "a cell of the edge under {} is still lit, the head's own included: the card is the \
+             surface that takes the keys",
+        Mode::Keys.name()
+    );
 }
 
 #[test]
 fn a_band_with_no_room_for_the_word_and_a_space_and_a_rule_column_draws_the_plain_rule() {
     let palette = Palette::TRUECOLOR;
-    let word = State::Idle.mode();
+    let word = PROMPT_MODE;
     for (cols, named) in [(9u16, false), (10, true)] {
         let (buffer, laid) = composer(palette, 0, cols, 6);
         let band = laid.composer;
