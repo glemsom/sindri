@@ -10,6 +10,7 @@ use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
+use sindri::ink::{Ink, Look};
 use sindri::ledger;
 use sindri::mark::Cell;
 use sindri::palette::Palette;
@@ -498,102 +499,109 @@ fn a_pass_hands_back_the_rail_beside_the_transcript_and_none_while_no_fact_is_kn
 }
 
 #[test]
-fn the_caret_is_read_in_the_band_the_pass_drew_and_not_in_one_counted_again() {
+fn the_block_is_drawn_in_the_band_the_pass_drew_and_not_in_one_counted_again() {
+    let palette = Palette::TRUECOLOR;
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::none(),
     );
     view.paste("1\n2\n3\n4\n5");
-    let (_, told) = painted_and_told(&mut view, 40, 12);
+    let (buffer, told) = painted_and_told(&mut view, 40, 12);
+    let band = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out")
+        .composer;
 
     assert_eq!(
-        view.cursor(&told),
+        caret_cell(&buffer, &palette, band),
         Some((4, 9)),
         "a five-row draft takes seven of the frame's twelve rows, so its last row is row nine \
-         and the caret waits one column past the gutter, inside the box"
+         and the block waits one column past the gutter, inside the box"
     );
 
     for _ in 0.."1\n2\n3\n4\n5".len() {
         view.key(Key::Backspace);
     }
 
+    let (buffer, told) = painted_and_told(&mut view, 40, 12);
+    let band = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out")
+        .composer;
+    let (x, y) = caret_cell(&buffer, &palette, band).expect("the empty draft's caret is drawn");
+
     assert_eq!(
-        view.cursor(&told),
-        Some((3, 5)),
-        "the empty draft stands in the band the pass drew, which began at row four: a band \
-         counted again for a draft of one row would answer row ten instead"
+        (x, y),
+        (band.x + 3, band.y + 1),
+        "the empty draft's block stands in the band this pass drew, on its first draft row \
+         and one column past the upright and its gutter"
     );
 }
 
-/// Whether `cell` is one the band `band` holds: a caret is never a cell outside it.
+/// The one cell of `area` that reads back as the mark: the block the draft's caret stands in, as the
+/// frame draws it rather than as the view counts it.
+fn caret_cell(buffer: &Buffer, palette: &Palette, area: Rect) -> Option<(u16, u16)> {
+    let mut found = None;
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            let cell = buffer.cell((x, y)).expect("a cell of the area");
+            if Look::of(cell, palette) != Some(Look::plain(Ink::Mark)) {
+                continue;
+            }
+            assert!(
+                found.is_none(),
+                "{area:?} carries one block and not two: {:?} and ({x}, {y})",
+                found
+            );
+            found = Some((x, y));
+        }
+    }
+    found
+}
+
+/// Whether `cell` is one the band `band` holds: a block is never a cell outside it.
 fn holds_cell(band: Rect, (x, y): (u16, u16)) -> bool {
     (band.x..band.right()).contains(&x) && (band.y..band.bottom()).contains(&y)
 }
 
 #[test]
-fn a_frame_with_a_card_and_one_without_answer_their_caret_from_the_layout_they_handed_back() {
-    let draft = |text: &str| {
-        let mut view = View::of(
-            Capabilities::default(),
-            Facts::default().asked(),
-            Transcript::none(),
-        );
-        view.paste(text);
-        view
-    };
-
-    let mut plain = draft("a draft of mine");
-    let (_, told) = painted_and_told(&mut plain, 40, 12);
+fn a_frame_with_no_card_keeps_the_block_in_the_band_the_pass_handed_back() {
+    let palette = Palette::TRUECOLOR;
+    let mut plain = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    plain.paste("a draft of mine");
+    let (buffer, told) = painted_and_told(&mut plain, 40, 12);
     let laid = told
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
     assert_eq!(laid.card, None, "a draft alone draws no card: {laid:?}");
-    let caret = plain
-        .cursor(&told)
-        .expect("a draft takes the keys, so its caret has a cell");
+    let block = caret_cell(&buffer, &palette, laid.composer)
+        .expect("a draft takes the keys, so its block is drawn");
     assert!(
-        holds_cell(laid.composer, caret),
-        "a frame with no card puts the caret in the composer's band the pass handed back: \
-         {caret:?} in {:?}",
+        holds_cell(laid.composer, block),
+        "a frame with no card puts the block in the composer's band the pass handed back: \
+         {block:?} in {:?}",
         laid.composer
     );
 
-    let mut slashed = draft("");
-    slashed.key(Key::Char('/'));
-    let (_, told) = painted_and_told(&mut slashed, 40, 12);
-    let laid = told
-        .layout()
-        .expect("a card over the frame is no frame of its own: the bands are still laid out");
-    assert!(
-        laid.card.is_some(),
-        "a draft beginning with a slash draws the commands card: {laid:?}"
+    let mut screen = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
     );
-    let caret = slashed
-        .cursor(&told)
-        .expect("the draft behind the card still takes the keys, so a caret is placed");
-    assert!(
-        holds_cell(laid.composer, caret),
-        "and it is a cell of the same band, read off the same value: {caret:?} in {:?}",
-        laid.composer
-    );
-
-    let mut screen = draft("");
     screen.key(Key::Char('?'));
-    let (_, told) = painted_and_told(&mut screen, 40, 12);
+    let (buffer, told) = painted_and_told(&mut screen, 40, 12);
     let laid = told
         .layout()
         .expect("a screen is drawn over a frame that was laid out under it");
     assert!(laid.card.is_some(), "a screen is drawn on a card: {laid:?}");
     assert_eq!(
-        screen.cursor(&told),
+        caret_cell(&buffer, &palette, laid.composer),
         None,
-        "and a screen is the whole frame with no draft in it, so it asks for no caret at all"
-    );
-
-    assert_eq!(
-        plain.cursor(&Painted::none()),
-        None,
-        "a value no pass has laid a frame out in answers no caret"
+        "and a screen is the whole frame with no draft in it, so no block is drawn there"
     );
 }

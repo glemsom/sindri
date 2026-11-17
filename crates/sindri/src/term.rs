@@ -306,21 +306,15 @@ pub(crate) fn canvas_at(
     )
 }
 
-/// Paints the frame the view holds now, and puts the terminal's cursor where the view says. The
-/// buffer is painted first, because the ways a frame names are known only after it is painted and
-/// the backend must hold them before the frame is written.
+/// Paints the frame the view holds now. The buffer is painted first, because the ways a frame names
+/// are known only after it is painted and the backend must hold them before the frame is written.
 pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<Painted> {
     canvas.autoresize()?;
     let area = canvas.current_buffer_mut().area;
     let painted = view.paint(area, canvas.current_buffer_mut());
-    let cursor = view.cursor(&painted);
     canvas.backend_mut().links(painted.links());
     canvas.backend_mut().sizes(painted.sizes());
-    canvas.draw(|frame| {
-        if let Some(at) = cursor {
-            frame.set_cursor_position(at);
-        }
-    })?;
+    canvas.draw(|_| {})?;
     Ok(painted)
 }
 

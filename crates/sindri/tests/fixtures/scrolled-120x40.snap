@@ -39,7 +39,7 @@ scrolled at 120x40
 33 |│  five: the budget it spent                                                                                           │| dim:3 plain:116 dim:1
 34 |│  six: the stop reason                                                                                                │| dim:3 plain:116 dim:1
 35 |│  seven: the session it left                                                                                          │| dim:3 plain:116 dim:1
-36 |│  eight: the question to ask                                                                                          │| dim:3 plain:116 dim:1
+36 |│  eight: the question to ask                                                                                          │| dim:3 plain:26 mark:1 plain:89 dim:1
 37 |│  4 rows kept back                                                                                                    │| dim:19 plain:100 dim:1
 38 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120
 39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47

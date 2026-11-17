@@ -7,6 +7,7 @@ mod caps; // the terminals these frames are drawn on
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
@@ -14,7 +15,7 @@ use sindri::facts::Facts;
 use sindri::ink::Ink;
 use sindri::mark::Cell;
 use sindri::palette::Palette;
-use sindri::view::{Transcript, View};
+use sindri::view::{Layout, Painted, Transcript, View};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
@@ -46,20 +47,25 @@ fn answer(turn: u32, text: &str) -> Entry {
     }
 }
 
-fn painted(view: &mut View) -> Buffer {
+fn painted(view: &mut View) -> (Buffer, Layout) {
     let (cols, rows) = SCREEN;
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
+    let mut told = Painted::none();
     let completed = terminal
         .draw(|frame| {
-            view.paint(frame.area(), frame.buffer_mut());
+            told = view.paint(frame.area(), frame.buffer_mut());
         })
         .expect("the frame is painted");
-    completed.buffer.clone()
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    (completed.buffer.clone(), laid)
 }
 
-fn highlighted(buffer: &Buffer, palette: &Palette) -> String {
-    let area = buffer.area;
+/// The cells the highlight covers, read off the rows the transcript was given: the block the draft's
+/// caret stands in reads back as the mark too, and it is no cell of a mark run.
+fn highlighted(buffer: &Buffer, palette: &Palette, area: Rect) -> String {
     let mut rows: Vec<String> = Vec::new();
     for y in area.y..area.bottom() {
         let mut line = String::new();
@@ -102,8 +108,8 @@ fn what_the_highlight_covers_is_byte_for_byte_what_the_copy_takes() {
     );
     view.drag(Cell::new(1, 2), Cell::new(6, 80));
 
-    let frame = painted(&mut view);
-    let marked = highlighted(&frame, &view.capabilities().palette());
+    let (frame, laid) = painted(&mut view);
+    let marked = highlighted(&frame, &view.capabilities().palette(), laid.transcript);
     let taken = copied(&mut view);
 
     assert!(
@@ -127,15 +133,15 @@ fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
     );
     view.drag(Cell::new(1, 2), Cell::new(4, 60));
 
-    let before = painted(&mut view);
+    let (before, laid) = painted(&mut view);
     let taken = copied(&mut view);
-    let after = painted(&mut view);
+    let (after, repainted) = painted(&mut view);
     let again = copied(&mut view);
 
     assert!(!taken.is_empty(), "there was a mark to copy: {before:?}");
     assert_eq!(
-        highlighted(&after, &view.capabilities().palette()),
-        highlighted(&before, &view.capabilities().palette()),
+        highlighted(&after, &view.capabilities().palette(), repainted.transcript),
+        highlighted(&before, &view.capabilities().palette(), laid.transcript),
         "a redraw keeps the highlight, because the mark is corners of the band and not a \
          picture of a frame that has been thrown away"
     );
@@ -246,7 +252,7 @@ fn a_heading_drawn_large_is_marked_in_the_mark_ink_and_copied_as_its_words() {
     );
     view.drag(Cell::new(0, 0), Cell::new(40, 100));
 
-    let frame = painted(&mut view);
+    let (frame, _) = painted(&mut view);
     let palette = view.capabilities().palette();
     let row_of = |y: u16| -> String {
         (frame.area.x..frame.area.right())

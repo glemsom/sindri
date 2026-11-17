@@ -48,6 +48,22 @@ pub fn border_columns(body: Rect) -> (u16, u16) {
     )
 }
 
+/// The cells a card named for a body `rows` tall covers in `area`: the frame itself where it is too
+/// narrow for a border of its own, and the box it is drawn in otherwise.
+pub fn bounds(area: Rect, rows: u16) -> Rect {
+    if area.width < NARROW {
+        return area;
+    }
+    let width = area.width.min(WIDTH);
+    let height = rows.saturating_add(2).min(area.height);
+    Rect {
+        x: area.x + (area.width - width) / 2,
+        y: area.y + (area.height - height) / 2,
+        width,
+        height,
+    }
+}
+
 /// Paints a card named `name`, whose key that leaves is `leaves`, into `area`, and returns the rows
 /// the screen inside it draws in: the card's columns less its border and inset, and as many of the
 /// body's `rows` as the frame has room for.
@@ -118,17 +134,10 @@ fn boxed(
     edge: Look,
     palette: &Palette,
 ) -> Rect {
-    let width = area.width.min(WIDTH);
-    let height = rows.saturating_add(2).min(area.height);
-    let card = Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y + (area.height - height) / 2,
-        width,
-        height,
-    };
+    let card = bounds(area, rows);
     grounded(buffer, card, palette);
 
-    let (held, kept) = capped(rows, height.saturating_sub(2));
+    let (held, kept) = capped(rows, card.height.saturating_sub(2));
     let body = Rect {
         x: card.x + INSET,
         y: card.y.saturating_add(1),

@@ -994,6 +994,9 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
 enum Painted {
     Moved(u16, u16),
     Glyph(char),
+    /// The reverse face turned on or off, which is the one face a frame draws that a run of glyphs
+    /// cannot say: the block the draft's caret stands in.
+    Reversed(bool),
 }
 
 fn painted(drawn: &str) -> Vec<Painted> {
@@ -1006,6 +1009,9 @@ fn painted(drawn: &str) -> Vec<Painted> {
             if let Some((row, column)) = sequence.move_to {
                 painted.push(Painted::Moved(row, column));
             }
+            if let Some(on) = sequence.reversed {
+                painted.push(Painted::Reversed(on));
+            }
             rest = &rest[sequence.taken..];
             continue;
         }
@@ -1017,6 +1023,9 @@ fn painted(drawn: &str) -> Vec<Painted> {
 
 struct Sequence {
     move_to: Option<(u16, u16)>,
+    /// Whether the sequence turns the reverse face on or off, and none for a sequence that says
+    /// nothing about it.
+    reversed: Option<bool>,
     taken: usize,
 }
 
@@ -1027,6 +1036,7 @@ fn sequence(drawn: &str) -> Option<Sequence> {
         let taken = 1 + rest.chars().next().map_or(0, char::len_utf8);
         return Some(Sequence {
             move_to: None,
+            reversed: None,
             taken,
         });
     };
@@ -1039,7 +1049,16 @@ fn sequence(drawn: &str) -> Option<Sequence> {
             Some((row.parse().ok()?, column.parse().ok()?))
         })
         .flatten();
-    Some(Sequence { move_to, taken })
+    let reversed = match (last, &params[..end]) {
+        ('m', "7") => Some(true),
+        ('m', "0" | "27") => Some(false),
+        _ => None,
+    };
+    Some(Sequence {
+        move_to,
+        reversed,
+        taken,
+    })
 }
 
 /// One run of glyphs the stream wrote without the cursor leaving them. A frame paints only the cells
@@ -1073,6 +1092,7 @@ fn runs(drawn: &str) -> Vec<Run> {
                 moved = false;
                 column = column.saturating_add(1);
             }
+            Painted::Reversed(_) => {}
         }
     }
     runs
@@ -1153,16 +1173,63 @@ fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
     })
 }
 
-/// The cell the last frame left the caret on: typing paints one glyph per frame, so where the caret
-/// waits is how a test knows the last glyph of a draft landed.
+/// The cell the last frame drew the block in: typing paints one glyph per frame, so where the block
+/// stands is how a test knows the last glyph of a draft landed.
 fn caret_at(drawn: &str) -> Option<(u16, u16)> {
-    painted(drawn)
-        .into_iter()
-        .filter_map(|mark| match mark {
-            Painted::Moved(at, column) => Some((at, column)),
-            Painted::Glyph(_) => None,
-        })
-        .next_back()
+    let (mut at, mut block, mut reversed) = (None, None, false);
+    for mark in painted(drawn) {
+        match mark {
+            Painted::Moved(row, column) => at = Some((row, column)),
+            Painted::Glyph(glyph) => {
+                if let Some((row, column)) = at {
+                    if reversed {
+                        block = Some((row, column));
+                    }
+                    at = Some((row, column.saturating_add(pen::cell(glyph).max(1))));
+                }
+            }
+            Painted::Reversed(on) => reversed = on,
+        }
+    }
+    block
+}
+
+#[test]
+fn the_launch_hides_the_terminals_own_caret_and_never_asks_for_it() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(b"a draft");
+    assert!(
+        drawn.wait_until(|frame| frame.contains("chars")),
+        "the typed glyphs are counted on the band's edge: {:?}",
+        drawn.text()
+    );
+    let frame = drawn.text();
+    assert!(
+        frame.contains("\u{1b}[?25l"),
+        "the terminal's own caret is hidden for the whole launch: {frame:?}"
+    );
+    assert!(
+        !frame.contains("\u{1b}[?25h"),
+        "and never shown again to stand beside the block: {frame:?}"
+    );
+    assert!(
+        caret_at(&frame).is_some(),
+        "because the cell it would stand in is the band's block: {frame:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
 }
 
 #[test]

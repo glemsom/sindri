@@ -40,6 +40,6 @@ grown at 120x40
 34 |│  then the patch, and say which line of the                                                                           │| dim:3 plain:116 dim:1
 35 |│  patch the test disagrees with. Keep it to                                                                           │| dim:3 plain:116 dim:1
 36 |│  one sentence and quote the line you mean,                                                                           │| dim:3 plain:116 dim:1
-37 |│  the way the report does.                                                                                            │| dim:3 plain:116 dim:1
+37 |│  the way the report does.                                                                                            │| dim:3 plain:24 mark:1 plain:91 dim:1
 38 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120
 39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47

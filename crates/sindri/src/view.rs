@@ -1041,16 +1041,25 @@ impl View {
         painted = Painted::none();
         self.highlight(share.transcript, buffer, drawn.span());
         self.note(&mut painted, drawn);
+        let rows = body.held();
         let held = card::paint(
             area,
             name,
             leaves,
-            body.held(),
+            rows,
             buffer,
             self.edge(self.capabilities.palette().accent_edge()),
             &self.capabilities.palette(),
         );
         painted.presses = body.paint(held, buffer, &self.capabilities.palette());
+        // A card's scrim strips the faces the band was drawn with, so a carded frame stamps its block
+        // again — and never on a cell the card itself holds.
+        self.block(
+            layout.composer,
+            layout.queue,
+            Some(card::bounds(area, rows)),
+            buffer,
+        );
         layout.card = Some(held);
         painted.layout = Some(layout);
         painted
@@ -1275,6 +1284,7 @@ impl View {
             );
         }
         self.composer_inside(band, queue, buffer);
+        self.block(band, queue, None, buffer);
         self.composer_box(band, buffer);
     }
 
@@ -1525,17 +1535,27 @@ impl View {
         }
     }
 
-    /// Where the terminal's own cursor belongs, read off the band the pass handed back, and nothing
-    /// when the caret has run past that edge. The caret is never a cell of the frame: an ink names a
-    /// foreground only, so a caret drawn as a cell would be invisible on the space it sits on.
-    pub fn cursor(&self, painted: &Painted) -> Option<(u16, u16)> {
-        // The draft behind a card is dimmed and takes no key, so a caret there would point at a
-        // cell the reader cannot type into.
+    /// Stamps the cell the draft's caret stands in, when this frame draws one and no card holds it: a
+    /// card scrims the band and grounds its own box, so a block on one of its cells would be a mark on
+    /// the card and not on the draft.
+    fn block(&self, band: Rect, queue: Rect, card: Option<Rect>, buffer: &mut Buffer) {
+        let Some((x, y)) = self.caret(band, queue) else {
+            return;
+        };
+        if card.is_some_and(|card| {
+            (card.x..card.right()).contains(&x) && (card.y..card.bottom()).contains(&y)
+        }) {
+            return;
+        }
+        pen::stamp(buffer, x, y, Ink::Mark.style(&self.capabilities.palette()));
+    }
+
+    /// The cell the draft's caret stands in, and nothing while a screen stands over the band: the
+    /// draft behind it takes no key, so a block there would claim a cell the reader cannot type into.
+    fn caret(&self, band: Rect, queue: Rect) -> Option<(u16, u16)> {
         if self.stack.modal().is_some() {
             return None;
         }
-        let laid = painted.layout()?;
-        let band = laid.composer;
         let boxed = inside(band);
         let (row, column) = self.composer.caret();
         let y = band.y.checked_add(EDGE_ROWS)?.checked_add(row)?;
@@ -1546,7 +1566,7 @@ impl View {
             .checked_add(pen::cells(INDENT))?
             .checked_add(column)?
             .min(boxed.right().saturating_sub(1));
-        (boxed.width > 0 && y < draft_end(band, laid.queue)).then_some((x, y))
+        (boxed.width > 0 && y < draft_end(band, queue)).then_some((x, y))
     }
 
     /// The columns the draft's words have: the band's inside, less the gutter an answer is set from.
@@ -1614,7 +1634,7 @@ enum Page {
 
 /// Where a paint pass put each part of the frame: the bands it shared the rows out in, the cells it
 /// gave the transcript, the rail it stood beside them, and the body it gave a card when one was
-/// drawn. The caret is read off it rather than laid out a second time.
+/// drawn. The band the block is stamped on is this pass's, and never a second laying out of it.
 #[derive(Clone, Copy, Debug)]
 pub struct Layout {
     /// The rows the transcript was drawn in, after the rail took its share.

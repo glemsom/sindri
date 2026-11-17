@@ -115,6 +115,34 @@ fn a_claim_keeps_the_face_a_cell_wore_and_a_wash_strips_it() {
 }
 
 #[test]
+fn a_stamp_reads_back_as_the_ink_it_stamped_and_keeps_the_glyph_and_the_ground() {
+    let bold = Look::new(Ink::Accent, Face::Bold);
+    let mut row = row_of(4);
+    let area = row.area;
+    row.set_style(area, PALETTE.ground(Some(Band::Composer)));
+    write(&mut row, area, &[("keys", bold)], Clip::Edge, &PALETTE);
+
+    stamp(&mut row, 0, 0, Ink::Mark.style(&PALETTE));
+
+    assert_eq!(
+        Look::of(row.cell((0, 0)).expect("a cell of the row"), &PALETTE),
+        Some(Look::plain(Ink::Mark)),
+        "the cell it is given reads back as the mark alone, the weight under it gone"
+    );
+    assert_eq!(
+        row.cell((0, 0)).expect("a cell of the row").bg,
+        PALETTE.band(Band::Composer),
+        "and the block keeps the ground the cell sits on"
+    );
+    assert_eq!(
+        Look::of(row.cell((1, 0)).expect("a cell of the row"), &PALETTE),
+        Some(bold),
+        "a cell it was not given is left as it was"
+    );
+    assert_eq!(drawn(&row), "keys", "and no glyph is replaced by the block");
+}
+
+#[test]
 fn a_wide_glyph_leaves_no_cell_of_the_band_between_it_and_the_next_one() {
     let mut row = row_of(4);
     let area = row.area;

@@ -341,10 +341,7 @@ fn written(pty: &Pty, launch: bool) {
         false => {
             canvas
                 .draw(|frame| {
-                    let painted = view.paint(frame.area(), frame.buffer_mut());
-                    if let Some(at) = view.cursor(&painted) {
-                        frame.set_cursor_position(at);
-                    }
+                    view.paint(frame.area(), frame.buffer_mut());
                 })
                 .expect("a drawn frame");
         }
@@ -361,7 +358,8 @@ fn the_frame_the_launch_paints_is_the_frame_the_canvas_draws() {
     assert_eq!(
         launch.drawn(),
         canvas.drawn(),
-        "the cursor the view hands the canvas is placed, and the frame beside it is the frame"
+        "the launch paints the frame and asks the terminal for no cursor of its own: the frame \
+         beside it is the frame"
     );
 }
 
