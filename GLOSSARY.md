@@ -158,9 +158,9 @@ _Avoid_: Tokens, stats, progress
 
 **Layout**:
 Where one pass put each part of the frame: the bands it shared the rows into, the columns the
-transcript was given beside a rail, and the body a card was given when one was drawn. A caret is a
-read of it rather than a second count of a draft's rows, so the frame a reader was shown is the frame
-a key is answered from.
+transcript was given beside a rail, and the body a card was given when one was drawn. The band the
+block stands on is the one this pass drew, and the one a key is answered from, so the frame a reader
+was shown is the frame a key is answered from.
 _Avoid_: Geometry, arrangement, tiling, regions
 
 **Footer**:

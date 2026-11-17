@@ -1017,6 +1017,9 @@ fn painted(drawn: &str) -> Vec<Painted> {
 
 struct Sequence {
     move_to: Option<(u16, u16)>,
+    /// Whether the sequence turns the reverse face on or off, and none for a sequence that says
+    /// nothing about it.
+    reversed: Option<bool>,
     taken: usize,
 }
 
@@ -1027,6 +1030,7 @@ fn sequence(drawn: &str) -> Option<Sequence> {
         let taken = 1 + rest.chars().next().map_or(0, char::len_utf8);
         return Some(Sequence {
             move_to: None,
+            reversed: None,
             taken,
         });
     };
@@ -1039,7 +1043,16 @@ fn sequence(drawn: &str) -> Option<Sequence> {
             Some((row.parse().ok()?, column.parse().ok()?))
         })
         .flatten();
-    Some(Sequence { move_to, taken })
+    let reversed = match (last, &params[..end]) {
+        ('m', "7") => Some(true),
+        ('m', "0" | "27") => Some(false),
+        _ => None,
+    };
+    Some(Sequence {
+        move_to,
+        reversed,
+        taken,
+    })
 }
 
 /// One run of glyphs the stream wrote without the cursor leaving them. A frame paints only the cells
@@ -1153,16 +1166,33 @@ fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
     })
 }
 
-/// The cell the last frame left the caret on: typing paints one glyph per frame, so where the caret
-/// waits is how a test knows the last glyph of a draft landed.
+/// The cell the last frame drew the block in: typing paints one glyph per frame, so where the block
+/// stands is how a test knows the last glyph of a draft landed.
 fn caret_at(drawn: &str) -> Option<(u16, u16)> {
-    painted(drawn)
-        .into_iter()
-        .filter_map(|mark| match mark {
-            Painted::Moved(at, column) => Some((at, column)),
-            Painted::Glyph(_) => None,
-        })
-        .next_back()
+    let (mut at, mut block, mut reversed) = (None, None, false);
+    let mut rest = drawn;
+    while let Some(glyph) = rest.chars().next() {
+        if glyph == '\u{1b}'
+            && let Some(sequence) = sequence(rest)
+        {
+            if let Some(moved) = sequence.move_to {
+                at = Some(moved);
+            }
+            if let Some(on) = sequence.reversed {
+                reversed = on;
+            }
+            rest = &rest[sequence.taken..];
+            continue;
+        }
+        if let Some((row, column)) = at {
+            if reversed {
+                block = Some((row, column));
+            }
+            at = Some((row, column.saturating_add(pen::cell(glyph).max(1))));
+        }
+        rest = &rest[glyph.len_utf8()..];
+    }
+    block
 }
 
 #[test]

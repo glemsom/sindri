@@ -4,7 +4,7 @@
 
 use ratatui::buffer::{Buffer, Cell};
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
 use crate::ink::Look;
@@ -159,6 +159,17 @@ pub fn ground(buffer: &mut Buffer, area: Rect, style: Style) {
         cell.reset();
         cell.set_style(style);
     });
+}
+
+/// Stamps one cell in `style`, stripping every face and underline the glyph under it already wore so
+/// the cell reads back as the style alone, and keeping the glyph and the ground it sits on.
+pub fn stamp(buffer: &mut Buffer, x: u16, y: u16, style: Style) {
+    let Some(cell) = buffer.cell_mut((x, y)) else {
+        return;
+    };
+    cell.modifier = Modifier::empty();
+    cell.underline_color = Color::Reset;
+    cell.set_style(style);
 }
 
 /// Every cell of `area`, top to bottom and left to right.
