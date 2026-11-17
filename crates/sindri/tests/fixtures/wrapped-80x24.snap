@@ -19,11 +19,11 @@ wrapped at 80x24
 13 |                                                                                | plain:80
 14 |                                                                                | plain:80
 15 |                                                                                | plain:80
-16 |                                                                                | plain:80
-17 |                                                                                | plain:80
-18 |┌prompt ──────────────────────────────────────────────────────────────183 chars┐| accent+faint:70 muted:9 accent+faint:1
-19 |│› the draft is set inside the band's box, and a line of it wider than the     │| dim:3 plain:76 dim:1
-20 |│  band wraps under the gutter — 日 本 語  keeps both its columns — while a line  │| dim:3 plain:76 dim:1
-21 |│  the reader broke is one row of its own.                                     │| dim:3 plain:39 mark:1 plain:36 dim:1
+16 |┌prompt ──────────────────────────────────────────────────────────────183 chars┐| accent+faint:70 muted:9 accent+faint:1
+17 |│                                                                              │| dim:1 plain:78 dim:1
+18 |│› the draft is set inside the band's box, and a line of it wider than the     │| dim:3 plain:76 dim:1
+19 |│  band wraps under the gutter — 日 本 語  keeps both its columns — while a line  │| dim:3 plain:76 dim:1
+20 |│  the reader broke is one row of its own.                                     │| dim:3 plain:39 mark:1 plain:36 dim:1
+21 |│                                                                              │| dim:1 plain:78 dim:1
 22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
 23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7

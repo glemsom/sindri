@@ -21,9 +21,9 @@ footer at 72x24
 15 |                                                                        | plain:72
 16 |                                                                        | plain:72
 17 |                                                                        | plain:72
-18 |                                                                        | plain:72
-19 |                                                                        | plain:72
-20 |┌prompt ───────────────────────────────────────────────────────────────┐| accent+faint:72
-21 |│› what should the run do?                                             │| dim:3 mark:1 dim:22 plain:45 dim:1
+18 |┌prompt ───────────────────────────────────────────────────────────────┐| accent+faint:72
+19 |│                                                                      │| dim:1 plain:70 dim:1
+20 |│› what should the run do?                                             │| dim:3 mark:1 dim:22 plain:45 dim:1
+21 |│                                                                      │| dim:1 plain:70 dim:1
 22 |└──────────────────────────────────────────────────────────────────────┘| dim:72
 23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit                | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 plain:16

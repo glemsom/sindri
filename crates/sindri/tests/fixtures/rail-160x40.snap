@@ -37,9 +37,9 @@ rail at 160x40
 31 |                                                                                                                                                                | plain:160
 32 |                                                                                                                                                                | plain:160
 33 |                                                                                                                                                                | plain:160
-34 |                                                                                                                                                                | plain:160
-35 |                                                                                                                                                                | plain:160
-36 |┌running ────────────────────────────────────────────────────━─────────────────────────────────────────────────────────────────────────────────────────────────┐| accent:160
-37 |│› what should the run do?                                                                                                                                     │| dim:3 mark:1 dim:22 plain:133 dim:1
+34 |┌running ────────────────────────────────────────────────────━─────────────────────────────────────────────────────────────────────────────────────────────────┐| accent:160
+35 |│                                                                                                                                                              │| dim:1 plain:158 dim:1
+36 |│› what should the run do?                                                                                                                                     │| dim:3 mark:1 dim:22 plain:133 dim:1
+37 |│                                                                                                                                                              │| dim:1 plain:158 dim:1
 38 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:160
 39 |Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                                                                    | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:84

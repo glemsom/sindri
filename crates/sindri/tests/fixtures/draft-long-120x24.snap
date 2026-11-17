@@ -17,13 +17,13 @@ draft-long at 120x24
 11 |                                                                                                                        | plain:120
 12 |                                                                                                                        | plain:120
 13 |                                                                                                                        | plain:120
-14 |                                                                                                                        | plain:120
-15 |                                                                                                                        | plain:120
-16 |┌prompt ──────────────────────────────────────────────────────────────────────────────────────────────────────240 chars┐| accent+faint:110 muted:9 accent+faint:1
-17 |│  six: the stop reason                                                                                                │| dim:3 plain:116 dim:1
-18 |│  seven: the session it left                                                                                          │| dim:3 plain:116 dim:1
-19 |│  eight: the question to ask                                                                                          │| dim:3 plain:116 dim:1
-20 |│  nine: the row it keeps back                                                                                         │| dim:3 plain:27 mark:1 plain:88 dim:1
-21 |│  5 rows kept back                                                                                                    │| dim:19 plain:100 dim:1
+14 |┌prompt ──────────────────────────────────────────────────────────────────────────────────────────────────────240 chars┐| accent+faint:110 muted:9 accent+faint:1
+15 |│                                                                                                                      │| dim:1 plain:118 dim:1
+16 |│  six: the stop reason                                                                                                │| dim:3 plain:116 dim:1
+17 |│  seven: the session it left                                                                                          │| dim:3 plain:116 dim:1
+18 |│  eight: the question to ask                                                                                          │| dim:3 plain:116 dim:1
+19 |│  nine: the row it keeps back                                                                                         │| dim:3 plain:27 mark:1 plain:88 dim:1
+20 |│  5 rows kept back                                                                                                    │| dim:19 plain:100 dim:1
+21 |│                                                                                                                      │| dim:1 plain:118 dim:1
 22 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120
 23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47

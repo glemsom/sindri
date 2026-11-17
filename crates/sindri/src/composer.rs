@@ -4,13 +4,17 @@ use crate::pen;
 
 pub const MIN_ROWS: u16 = EDGE_ROWS + FOOT_ROWS + 1;
 
-pub const MAX_ROWS: u16 = 7;
+/// The band's ceiling: its edge and its foot, the two rows of air between them and the five
+/// rows of draft the window gives.
+pub const MAX_ROWS: u16 = 9;
 
-/// The band's top row is its edge and its bottom row its foot, neither of them draft, so a band of
-/// `MIN_ROWS` paints one row of draft between them.
-pub const EDGE_ROWS: u16 = 1;
+/// The band's edge row and the row of air under it, neither of them draft, so the draft starts two
+/// rows below the band's top.
+pub const EDGE_ROWS: u16 = 2;
 
-pub const FOOT_ROWS: u16 = 1;
+/// The row of air above the foot and the foot row itself, neither of them draft, so the draft ends
+/// two rows above the band's bottom.
+pub const FOOT_ROWS: u16 = 2;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum State {

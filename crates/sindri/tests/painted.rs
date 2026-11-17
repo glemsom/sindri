@@ -8,7 +8,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
-use sindri::composer::{Key, Outcome};
+use sindri::composer::{EDGE_ROWS, Key, Outcome};
 use sindri::facts::Facts;
 use sindri::ink::{Ink, Look};
 use sindri::ledger;
@@ -515,8 +515,8 @@ fn the_block_is_drawn_in_the_band_the_pass_drew_and_not_in_one_counted_again() {
 
     assert_eq!(
         caret_cell(&buffer, &palette, band),
-        Some((4, 9)),
-        "a five-row draft takes seven of the frame's twelve rows, so its last row is row nine \
+        Some((4, 8)),
+        "a five-row draft takes nine of the frame's twelve rows, so its last row is row eight \
          and the block waits one column past the gutter, inside the box"
     );
 
@@ -533,7 +533,7 @@ fn the_block_is_drawn_in_the_band_the_pass_drew_and_not_in_one_counted_again() {
 
     assert_eq!(
         (x, y),
-        (band.x + 3, band.y + 1),
+        (band.x + 3, band.y + EDGE_ROWS),
         "the empty draft's block stands in the band this pass drew, on its first draft row \
          and one column past the upright and its gutter"
     );

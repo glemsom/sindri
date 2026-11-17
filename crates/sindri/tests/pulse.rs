@@ -336,7 +336,7 @@ fn a_marker_survives_a_narrow_frame() {
             .clone()
             .pulsed(Some(Pulse::settled(&Stop::Cancelled, 5_000))),
     );
-    let rows = frame(&mut view, 24, 12);
+    let rows = frame(&mut view, 24, 14);
 
     assert!(
         rows[0].starts_with("✗ cancelled 5.0s "),

@@ -20,10 +20,10 @@ rail at 99x24
 14 |                                                                                                   | plain:99
 15 |                                                                                                   | plain:99
 16 |                                                                                                   | plain:99
-17 |                                                                                                   | plain:99
-18 |                                                                                                   | plain:99
-19 |ctx █░░░░░ · state ⠹ running · model claude-sonnet-4-5… · sandbox bwrap · branch spec/1-capability | dim:4 plain:1 dim:14 accent:9 dim:9 plain:18 dim:11 plain:5 dim:10 plain:18
-20 |┌running ────────────────────────────────────────────────────━────────────────────────────────────┐| accent:99
-21 |│› what should the run do?                                                                        │| dim:3 mark:1 dim:22 plain:72 dim:1
+17 |ctx █░░░░░ · state ⠹ running · model claude-sonnet-4-5… · sandbox bwrap · branch spec/1-capability | dim:4 plain:1 dim:14 accent:9 dim:9 plain:18 dim:11 plain:5 dim:10 plain:18
+18 |┌running ────────────────────────────────────────────────────━────────────────────────────────────┐| accent:99
+19 |│                                                                                                 │| dim:1 plain:97 dim:1
+20 |│› what should the run do?                                                                        │| dim:3 mark:1 dim:22 plain:72 dim:1
+21 |│                                                                                                 │| dim:1 plain:97 dim:1
 22 |└─────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:99
 23 |Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                       | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:23

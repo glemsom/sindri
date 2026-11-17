@@ -225,7 +225,7 @@ fn wrapped_80x24_is_a_draft_wider_than_the_band_set_under_the_gutter() {
 }
 
 #[test]
-fn typing_120x40_is_a_composer_at_its_three_row_floor() {
+fn typing_120x40_is_a_composer_at_its_five_row_floor() {
     fixture::assert_frame("typing", 120, 40);
 }
 
@@ -240,7 +240,7 @@ fn edge_live_120x40_is_that_band_with_a_run_live_in_it_and_a_head_on_its_edge() 
 }
 
 #[test]
-fn grown_120x40_is_a_composer_at_its_seven_row_ceiling() {
+fn grown_120x40_is_a_composer_at_its_nine_row_ceiling() {
     fixture::assert_frame("grown", 120, 40);
 }
 

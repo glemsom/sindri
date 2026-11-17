@@ -9,7 +9,7 @@ use ratatui::backend::TestBackend;
 
 use sindri::capability::Capabilities;
 use sindri::commands::{self, Command};
-use sindri::composer::{Key, Outcome};
+use sindri::composer::{Key, MIN_ROWS, Outcome};
 use sindri::facts::Facts;
 use sindri::keys::Mode;
 use sindri::view::{Transcript, View};
@@ -133,11 +133,12 @@ fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
          they will return to: {:?}",
         rows[last]
     );
+    let edge = last - usize::from(MIN_ROWS);
     assert!(
-        rows[last - 3].starts_with('┌') && rows[last - 1].starts_with('└'),
+        rows[edge].starts_with('┌') && rows[last - 1].starts_with('└'),
         "and so is the composer's band, its edge and its foot opening where the gutter reaches \
          them: {:?}",
-        (&rows[last - 3], &rows[last - 1])
+        (&rows[edge], &rows[last - 1])
     );
     assert!(
         rows.iter().any(|row| row.contains("╭─ /stats")),
