@@ -39,7 +39,7 @@ commands-none at 120x40
 33 |                                                                                                                        | plain:120
 34 |                                                                                                                        | plain:120
 35 |                                                                                                                        | plain:120
-36 |┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
+36 |┌prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
 37 |│› /usr/local/bin is not on the path the run is handed                                                                 │| dim:3 plain:116 dim:1
 38 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120
 39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47

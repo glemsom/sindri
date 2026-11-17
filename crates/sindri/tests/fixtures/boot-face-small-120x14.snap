@@ -13,7 +13,7 @@ boot-face-small at 120x14
 07 |     /stats     the facts the rail is too narrow to hold                                                                | plain:5 accent:11 dim:40 plain:64
 08 |                                                                                                                        | plain:120
 09 |                                                                                                                        | plain:120
-10 |┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
+10 |┌prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
 11 |│› what should the run do?                                                                                             │| dim:26 plain:93 dim:1
 12 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120
 13 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47

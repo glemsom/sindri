@@ -142,6 +142,9 @@ const FOOT_OPEN: char = '└';
 const FOOT_CLOSE: char = '┘';
 const UPRIGHT: char = '│';
 
+/// The heavier rule the edge carries while a run is live: the head travels the rule's own columns.
+const EDGE_HEAD: char = '━';
+
 /// The band inside its box: the one column an upright takes at each side is not a column of the
 /// draft, and the two are never a row's.
 fn inside(band: Rect) -> Rect {
@@ -1358,13 +1361,7 @@ impl View {
             y: band.bottom().saturating_sub(FOOT_ROWS),
             ..edge
         };
-        boxed_row(
-            buffer,
-            edge,
-            (EDGE_OPEN, EDGE_CLOSE),
-            self.composer_edge(),
-            &palette,
-        );
+        self.composer_edge_row(edge, buffer);
         boxed_row(
             buffer,
             foot,
@@ -1385,12 +1382,69 @@ impl View {
         }
     }
 
-    /// The look the composer's edge row is drawn in: the accent while the draft takes the keys, and
-    /// the dim edge while a screen is open over it.
+    /// The band's edge row: the mode word just inside the opening corner, one blank column, and the
+    /// rule running on to the far corner with a live run's head on one of its own columns. A band with
+    /// no room for the word keeps the plain rule, and so does one of a single row.
+    fn composer_edge_row(&self, row: Rect, buffer: &mut Buffer) {
+        let palette = self.capabilities.palette();
+        let look = self.composer_edge();
+        let state = self.composer.state();
+        pen::glyph(buffer, row.x, row.y, EDGE_OPEN, look, &palette);
+        pen::glyph(
+            buffer,
+            row.right().saturating_sub(1),
+            row.y,
+            EDGE_CLOSE,
+            look,
+            &palette,
+        );
+        let room = inside(row);
+        let word = state.mode();
+        let cells = pen::cells(word);
+        let named = cells.saturating_add(2) <= room.width;
+        let rule = match named {
+            true => Rect {
+                x: room.x.saturating_add(cells).saturating_add(1),
+                width: room.width.saturating_sub(cells).saturating_sub(1),
+                ..room
+            },
+            false => room,
+        };
+        if named {
+            pen::write(
+                buffer,
+                Rect {
+                    width: cells,
+                    ..room
+                },
+                &[(word, look)],
+                Clip::Edge,
+                &palette,
+            );
+            pen::glyph(buffer, rule.x.saturating_sub(1), row.y, ' ', look, &palette);
+        }
+        pen::rule(buffer, rule, HAIRLINE, look, &palette);
+        if state == State::Running && rule.width > 0 {
+            let step = self.facts.pulse().and_then(Pulse::step).unwrap_or(0);
+            let at = rule
+                .x
+                .saturating_add(u16::try_from(step % u64::from(rule.width)).unwrap_or(0));
+            pen::glyph(buffer, at, row.y, EDGE_HEAD, look, &palette);
+        }
+    }
+
+    /// The look the composer's edge row is drawn in: the accent lit while a run is live, the accent
+    /// faint while the band only waits, and the dim edge for a window nobody reads or a screen
+    /// standing over the band.
     fn composer_edge(&self) -> Look {
-        match self.stack.modal() {
-            None => self.edge(),
-            Some(_) => self.capabilities.palette().dim_edge(),
+        let palette = self.capabilities.palette();
+        if self.stack.modal().is_some() {
+            return palette.dim_edge();
+        }
+        match (self.facts.focus(), self.composer.state()) {
+            (Focus::Away, _) => palette.dim_edge(),
+            (Focus::Focused, State::Running) => palette.lit_edge(),
+            (Focus::Focused, State::Idle) => palette.accent_edge(),
         }
     }
 

@@ -343,6 +343,30 @@ fn the_accent_edge_is_the_accent_drawn_faint_and_a_terminal_with_no_colour_is_gi
 }
 
 #[test]
+fn the_lit_edge_is_the_accent_with_no_faint_face_and_a_terminal_with_no_colour_keeps_its_dim_one() {
+    assert_eq!(
+        Palette::SLOTS.lit_edge(),
+        Palette::SLOTS.dim_edge(),
+        "a reader who asked for no colour is given no light either, so the edge a live run \
+             lights is the dim one it already wears"
+    );
+    for (spelling, palette) in SPELLED {
+        assert_eq!(
+            palette.lit_edge(),
+            Look::plain(Ink::Accent),
+            "{spelling} draws the edge a live run lights in something other than the accent \
+                 with no faint face"
+        );
+        assert_ne!(
+            palette.lit_edge(),
+            palette.accent_edge(),
+            "a live edge is the accent lit where a still one is the accent faint, and a band a \
+                 reader cannot tell those apart by says nothing of whether a run is live"
+        );
+    }
+}
+
+#[test]
 fn no_two_inks_resolve_to_one_foreground_and_modifier() {
     for (spelling, palette) in [
         ("slots", Palette::SLOTS),

@@ -518,6 +518,25 @@ fn a_pasted_prompt_goes_in_at_the_cursor() {
 }
 
 #[test]
+fn the_band_s_edge_says_prompt_while_it_only_takes_the_draft_and_running_while_a_run_is_live() {
+    let mut composer = Composer::new();
+
+    assert_eq!(
+        composer.state().mode(),
+        "prompt",
+        "a band that only takes the draft says what it takes"
+    );
+
+    composer.set_state(State::Running);
+
+    assert_eq!(
+        composer.state().mode(),
+        "running",
+        "and a band a run is live in says the run, so the edge names no key the footer owns"
+    );
+}
+
+#[test]
 fn ctrl_c_during_a_run_keeps_the_draft() {
     let mut composer = holding("half a prompt");
     composer.set_state(State::Running);

@@ -9,8 +9,13 @@ pub const STEP_MS: u64 = 80;
 
 const GLYPHS: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+/// The step of the pulse `elapsed_ms` stands on: the one clock a frame's motion keeps.
+pub fn step(elapsed_ms: u64) -> u64 {
+    elapsed_ms / STEP_MS
+}
+
 pub fn pulse_glyph(elapsed_ms: u64) -> char {
-    let step = (elapsed_ms / STEP_MS) % GLYPHS.len() as u64;
+    let step = step(elapsed_ms) % GLYPHS.len() as u64;
     GLYPHS[usize::try_from(step).unwrap_or(0)]
 }
 
@@ -70,6 +75,14 @@ impl Pulse {
     pub(crate) fn stepping(&self) -> Option<char> {
         match self {
             Pulse::Live { .. } => Some(self.mark().0),
+            Pulse::Settled { .. } => None,
+        }
+    }
+
+    /// The step a live run's frame stands on, and none once it has settled.
+    pub(crate) fn step(&self) -> Option<u64> {
+        match self {
+            Pulse::Live { elapsed_ms } => Some(step(*elapsed_ms)),
             Pulse::Settled { .. } => None,
         }
     }

@@ -23,7 +23,7 @@ stats at 80x24
 17 |    │ reasoning                                                        900 │    | dim:5 plain:1 dim:10 plain:59 dim:5
 18 |    │ ──────────────────────────────────────────────────────────────────── │    | dim:5 plain:1 dim:68 plain:1 dim:5
 19 |ctx │ place                                                                │lity| dim:5 plain:1 dim:5 plain:64 dim:5
-20 |┌───│ workspace /home/glemsom/Documents/git/sindri/.worktrees/46-rail      │───┐| dim:5 plain:1 dim:10 plain:59 dim:5
+20 |┌pro│ workspace /home/glemsom/Documents/git/sindri/.worktrees/46-rail      │───┐| dim:5 plain:1 dim:10 plain:59 dim:5
 21 |│› w│ branch    spec/1-capability                                          │   │| dim:5 plain:1 dim:10 plain:59 dim:5
 22 |└───│ ⋯ 18 rows kept back                                                  │───┘| dim:5 plain:1 dim:19 plain:50 dim:5
 23 |Ente╰──────────────────────────────────────────────────────────────── Esc ─╯    | dim:70 plain+bold:3 dim:7

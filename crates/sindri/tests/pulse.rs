@@ -11,7 +11,7 @@ use sindri::facts::Facts;
 use sindri::ink::Ink;
 use sindri::ledger;
 use sindri::pen;
-use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph};
+use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph, step};
 use sindri::view::{Transcript, View};
 use sindri_core::provider::Deltas;
 use sindri_core::redact::SecretSet;
@@ -74,6 +74,79 @@ fn the_marker_steps_one_braille_glyph_every_eighty_milliseconds() {
             "and not a millisecond longer"
         );
     }
+}
+
+#[test]
+fn the_step_advances_once_every_eighty_milliseconds_and_the_glyph_is_read_off_it() {
+    assert_eq!(
+        step(0),
+        0,
+        "a step is a whole number of the 80 ms the pulse is measured in"
+    );
+    for at in 0..6u64 {
+        assert_eq!(step(at * STEP_MS), at, "step {at} begins on its own mark");
+        assert_eq!(
+            step(at * STEP_MS + STEP_MS - 1),
+            at,
+            "and holds to the last millisecond it was given"
+        );
+    }
+    assert_eq!(
+        step(4_200),
+        52,
+        "the marker and the band's head read one step, so four seconds and two tenths is the \
+             same step to both"
+    );
+}
+
+#[test]
+fn a_settled_pulse_stands_on_no_step_and_a_live_band_is_the_one_its_head_travels() {
+    let mut view = answering();
+    let edge = |view: &mut View| {
+        frame(view, 120, 12)
+            .into_iter()
+            .find(|row| row.starts_with('┌'))
+            .expect("a frame asked for a prompt holds a composer band")
+    };
+
+    view.handed(
+        view.facts()
+            .clone()
+            .running()
+            .pulsed(Some(Pulse::live(4_200))),
+    );
+    let live = edge(&mut view);
+
+    view.handed(
+        view.facts()
+            .clone()
+            .pulsed(Some(Pulse::settled(&Stop::Final, 4_200))),
+    );
+    let settled = edge(&mut view);
+
+    view.handed(
+        view.facts()
+            .clone()
+            .pulsed(Some(Pulse::settled(&Stop::Final, 12_000_000))),
+    );
+    let later = edge(&mut view);
+
+    assert_eq!(
+        live.matches('━').count(),
+        1,
+        "a live run's edge carries one head: {live:?}"
+    );
+    assert_ne!(
+        live.find('━'),
+        settled.find('━'),
+        "a settled pulse stands on no step, so the head rests where the rule starts rather \
+             than where the live frame's step left it: {settled:?}"
+    );
+    assert_eq!(
+        settled.find('━'),
+        later.find('━'),
+        "and stays there however long the settled pulse says the run ran"
+    );
 }
 
 #[test]
