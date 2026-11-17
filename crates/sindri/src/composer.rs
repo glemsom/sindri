@@ -4,17 +4,23 @@ use crate::pen;
 
 pub const MIN_ROWS: u16 = EDGE_ROWS + FOOT_ROWS + 1;
 
-/// The band's ceiling: its edge and its foot, the two rows of air between them and the five
-/// rows of draft the window gives.
-pub const MAX_ROWS: u16 = 9;
+/// The band's ceiling: its edge and its foot, the air inside each of them and the rows of draft it
+/// showed before it had any air.
+pub const MAX_ROWS: u16 = EDGE_ROWS + FOOT_ROWS + DRAFT_ROWS;
 
-/// The band's edge row and the row of air under it, neither of them draft, so the draft starts two
-/// rows below the band's top.
-pub const EDGE_ROWS: u16 = 2;
+/// The blank row a band keeps inside each end of its box, so no glyph of the draft touches the edge
+/// above it or the foot under it.
+pub const AIR_ROWS: u16 = 1;
 
-/// The row of air above the foot and the foot row itself, neither of them draft, so the draft ends
-/// two rows above the band's bottom.
-pub const FOOT_ROWS: u16 = 2;
+/// The rows a band spends above the draft: its edge row and the air under it.
+pub const EDGE_ROWS: u16 = AIR_ROWS + 1;
+
+/// The rows a band spends below the draft: the air over its foot and the foot row under it.
+pub const FOOT_ROWS: u16 = AIR_ROWS + 1;
+
+/// The rows of draft a band at its ceiling draws: the window a draft has had since before the band
+/// kept air in its ends.
+pub const DRAFT_ROWS: u16 = 5;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum State {
@@ -147,9 +153,7 @@ impl Composer {
     /// How many rows of a draft `drawn` rows long the band draws: the ceiling's window, and one row
     /// less while the row under it counts the rows kept back.
     fn visible(drawn: usize) -> u16 {
-        let room = u16::try_from(drawn)
-            .unwrap_or(u16::MAX)
-            .min(MAX_ROWS - EDGE_ROWS - FOOT_ROWS);
+        let room = u16::try_from(drawn).unwrap_or(u16::MAX).min(DRAFT_ROWS);
         match usize::from(room) < drawn {
             true => room.saturating_sub(1),
             false => room,

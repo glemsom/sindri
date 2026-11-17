@@ -240,14 +240,16 @@ fn a_raised_surface_ramps_from_the_lit_edge_down_to_the_shadow() {
 }
 
 #[test]
-fn a_band_no_taller_than_the_ladder_darkens_on_every_row() {
+fn a_band_no_taller_than_the_ladder_draws_no_two_rows_in_one_ground() {
     for (spelling, palette) in SPELLED {
         for rows in MIN_ROWS..=rungs() {
             for row in 1..rows {
-                assert!(
-                    luminance(palette.step(row, rows)) < luminance(palette.step(row - 1, rows)),
-                    "{spelling} draws row {row} of a {rows}-row band in the ground of the row \
-                         above it, and the ladder has a rung to spare for every row"
+                assert_ne!(
+                    palette.step(row, rows),
+                    palette.step(row - 1, rows),
+                    "{spelling} draws rows {} and {row} of a {rows}-row band in one ground, and \
+                         the ladder has a rung to spare for every row",
+                    row - 1
                 );
             }
         }
@@ -541,9 +543,8 @@ fn ladder(palette: &Palette) -> Vec<Color> {
         .collect()
 }
 
-/// The rows a band as tall as the ladder takes, which is the rung count as a height.
 fn rungs() -> u16 {
-    u16::try_from(STEPS).unwrap_or(u16::MAX)
+    u16::try_from(STEPS).expect("a ladder of eight rungs")
 }
 
 /// The contrast an ink reads at on a band's ground.

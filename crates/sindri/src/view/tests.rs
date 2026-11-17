@@ -11,7 +11,7 @@ use ratatui::style::Color;
 use std::path::PathBuf;
 
 use super::*;
-use crate::composer::{MAX_ROWS, MIN_ROWS, PLACEHOLDER};
+use crate::composer::{AIR_ROWS, MAX_ROWS, MIN_ROWS, PLACEHOLDER};
 use crate::ledger::Boot;
 
 use crate::capability::caps::{inked, pictured, pointing, sized};
@@ -892,12 +892,21 @@ fn every_row_between_the_edge_and_the_foot_carries_an_upright_in_the_bands_first
 }
 
 #[test]
-fn the_rows_under_the_edge_and_above_the_foot_hold_no_glyph_but_the_two_uprights() {
+fn the_draft_stands_between_a_row_of_air_at_each_end_of_the_box() {
     let (buffer, laid) = composer(Palette::TRUECOLOR, 1, 120, 40);
     let band = laid.composer;
     let air = format!("{UPRIGHT}{}{UPRIGHT}", pen::filled(band.width - 2, ' '));
+    let drafted = (band.y..band.bottom())
+        .find(|y| drawn_glyphs(&buffer, *y).contains(&format!("{SIGIL}1")))
+        .expect("the draft's one row says the one line the draft holds");
 
-    for y in [band.y + 1, band.bottom() - FOOT_ROWS] {
+    assert_eq!(
+        drafted,
+        band.y + EDGE_ROWS,
+        "the draft's row is the band's top row plus {EDGE_ROWS}, so the row under the edge is \
+             the air above it"
+    );
+    for y in [drafted - AIR_ROWS, band.bottom() - FOOT_ROWS] {
         assert_eq!(
             drawn_glyphs(&buffer, y),
             air,
@@ -906,22 +915,6 @@ fn the_rows_under_the_edge_and_above_the_foot_hold_no_glyph_but_the_two_uprights
             band.height
         );
     }
-}
-
-#[test]
-fn the_drafts_first_row_is_the_bands_top_row_plus_the_air_under_it() {
-    let (buffer, laid) = composer(Palette::TRUECOLOR, 1, 120, 40);
-    let band = laid.composer;
-    let drafted = (band.y..band.bottom())
-        .find(|y| drawn_glyphs(&buffer, *y).contains(&format!("{SIGIL}1")))
-        .expect("the draft's one row says the one line the draft holds");
-
-    assert_eq!(
-        drafted,
-        band.y + EDGE_ROWS,
-        "the draft's first row is the band's top row plus {EDGE_ROWS}, so the row under the \
-             edge is the air above it"
-    );
 }
 
 #[test]
@@ -3730,16 +3723,11 @@ fn a_boxed_card_that_reaches_the_drafts_row_holds_the_cell_the_block_would_stand
     );
     view.paste("/");
 
-    let (buffer, told) = painted_and_told(&mut view, 60, 12);
+    let (buffer, told) = painted_and_told(&mut view, 60, 14);
     let band = laid_out(&told).composer;
-    let foot = (buffer.area.y..buffer.area.bottom())
-        .find(|y| drawn_row(&buffer, *y).contains("Esc"))
-        .expect("the card's foot names the key that leaves it");
     assert!(
-        foot >= band.y + EDGE_ROWS,
-        "a card nine rows tall in a twelve row frame draws its foot at {foot}, above the \
-             draft's first row at {}, so the draft row it would stand on is the card's",
-        band.y + EDGE_ROWS
+        drawn_row(&buffer, band.y + EDGE_ROWS).contains("Esc"),
+        "a card nine rows tall in a fourteen row frame draws its foot on the draft's first row"
     );
     assert_eq!(
         caret_cell(&buffer, &palette, buffer.area),

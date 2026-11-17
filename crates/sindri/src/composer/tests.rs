@@ -160,7 +160,12 @@ fn backspace_eats_a_whole_glyph_however_many_bytes_it_took() {
 
 #[test]
 fn an_empty_draft_takes_the_bands_five_row_floor() {
-    assert_eq!(Composer::new().rows(), 5, "the shortest band is five rows");
+    assert_eq!(
+        Composer::new().rows(),
+        5,
+        "the shortest band is its edge, its foot, a row of air inside each of them and the one \
+             row the draft sits on"
+    );
     assert_eq!(
         Composer::new().visible_rows(),
         1,
@@ -168,18 +173,18 @@ fn an_empty_draft_takes_the_bands_five_row_floor() {
     );
     assert_eq!(
         holding("one line").rows(),
-        MIN_ROWS,
+        5,
         "and one line is still one row of the box"
     );
 }
 
 #[test]
 fn a_line_per_row_grows_the_box_to_its_ceiling_and_no_further() {
-    for lines in 1..=MAX_ROWS - EDGE_ROWS - FOOT_ROWS {
+    for lines in 1..=DRAFT_ROWS {
         assert_eq!(
             numbered(usize::from(lines)).rows(),
             lines + EDGE_ROWS + FOOT_ROWS,
-            "{lines} lines take the band's two rows of air and one row each"
+            "{lines} lines take the band's edge and foot, the air inside them and one row each"
         );
     }
     assert_eq!(
