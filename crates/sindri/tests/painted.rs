@@ -10,7 +10,7 @@ use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
-use sindri::ink::Ink;
+use sindri::ink::{Ink, Look};
 use sindri::ledger;
 use sindri::mark::Cell;
 use sindri::palette::Palette;
@@ -546,7 +546,7 @@ fn caret_cell(buffer: &Buffer, palette: &Palette, area: Rect) -> Option<(u16, u1
     for y in area.y..area.bottom() {
         for x in area.x..area.right() {
             let cell = buffer.cell((x, y)).expect("a cell of the area");
-            if Ink::of(cell, palette) != Some(Ink::Mark) {
+            if Look::of(cell, palette) != Some(Look::plain(Ink::Mark)) {
                 continue;
             }
             assert!(

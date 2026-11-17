@@ -146,7 +146,10 @@ A strip of rows the frame shares out — the transcript's, the composer's, the r
 stands off the tail, and the footer's — each drawn in the rows it was given and never past them. A
 queued prompt has no band of its own: it stands in the composer's, under the draft, one prompt to a
 row and the newest at the foot. What a band cannot hold it counts: the rows of a draft past the
-composer's ceiling, and the prompts of a queue past the rows it was given.
+composer's ceiling, and the prompts of a queue past the rows it was given. The draft's caret is a cell
+of the composer's band and not the terminal's own: the cell it waits in is claimed in the mark ink, so
+it reads as a block with the glyph it comes before reversed out of it, and no answer, prompt or card
+carries one.
 _Avoid_: Region, pane, panel, viewport
 
 **Draft count**:
@@ -158,9 +161,9 @@ _Avoid_: Tokens, stats, progress
 
 **Layout**:
 Where one pass put each part of the frame: the bands it shared the rows into, the columns the
-transcript was given beside a rail, and the body a card was given when one was drawn. The band the
-block stands on is the one this pass drew, and the one a key is answered from, so the frame a reader
-was shown is the frame a key is answered from.
+transcript was given beside a rail, and the body a card was given when one was drawn. A press is read
+off it rather than laid out a second time, so the frame a reader was shown is the frame a press is
+answered from.
 _Avoid_: Geometry, arrangement, tiling, regions
 
 **Footer**:

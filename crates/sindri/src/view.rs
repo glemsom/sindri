@@ -1041,19 +1041,25 @@ impl View {
         painted = Painted::none();
         self.highlight(share.transcript, buffer, drawn.span());
         self.note(&mut painted, drawn);
+        let rows = body.held();
         let held = card::paint(
             area,
             name,
             leaves,
-            body.held(),
+            rows,
             buffer,
             self.edge(self.capabilities.palette().accent_edge()),
             &self.capabilities.palette(),
         );
         painted.presses = body.paint(held, buffer, &self.capabilities.palette());
-        // A card's scrim strips the faces the band was drawn with, and the draft behind a card still
-        // takes the keys: the block is stamped over it again.
-        self.block(layout.composer, layout.queue, buffer);
+        // A card's scrim strips the faces the band was drawn with, so a carded frame stamps its block
+        // again — and never on a cell the card itself holds.
+        self.block(
+            layout.composer,
+            layout.queue,
+            Some(card::bounds(area, rows)),
+            buffer,
+        );
         layout.card = Some(held);
         painted.layout = Some(layout);
         painted
@@ -1278,7 +1284,7 @@ impl View {
             );
         }
         self.composer_inside(band, queue, buffer);
-        self.block(band, queue, buffer);
+        self.block(band, queue, None, buffer);
         self.composer_box(band, buffer);
     }
 
@@ -1529,11 +1535,18 @@ impl View {
         }
     }
 
-    /// Stamps the cell the draft's caret stands in, when this frame draws one.
-    fn block(&self, band: Rect, queue: Rect, buffer: &mut Buffer) {
+    /// Stamps the cell the draft's caret stands in, when this frame draws one and no card holds it: a
+    /// card scrims the band and grounds its own box, so a block on one of its cells would be a mark on
+    /// the card and not on the draft.
+    fn block(&self, band: Rect, queue: Rect, card: Option<Rect>, buffer: &mut Buffer) {
         let Some((x, y)) = self.caret(band, queue) else {
             return;
         };
+        if card.is_some_and(|card| {
+            (card.x..card.right()).contains(&x) && (card.y..card.bottom()).contains(&y)
+        }) {
+            return;
+        }
         pen::stamp(buffer, x, y, Ink::Mark.style(&self.capabilities.palette()));
     }
 

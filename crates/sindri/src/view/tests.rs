@@ -58,7 +58,7 @@ fn caret_cell(buffer: &Buffer, palette: &Palette, area: Rect) -> Option<(u16, u1
     for y in area.y..area.bottom() {
         for x in area.x..area.right() {
             let cell = buffer.cell((x, y)).expect("a cell of the area");
-            if Ink::of(cell, palette) != Some(Ink::Mark) {
+            if Look::of(cell, palette) != Some(Look::plain(Ink::Mark)) {
                 continue;
             }
             assert!(
@@ -3687,6 +3687,52 @@ fn a_card_leaves_the_block_standing_on_the_draft_it_dims() {
 }
 
 #[test]
+fn a_boxed_card_that_reaches_the_drafts_row_holds_the_cell_the_block_would_stand_in() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("/");
+
+    let (buffer, told) = painted_and_told(&mut view, 60, 12);
+    let band = laid_out(&told).composer;
+    assert!(
+        drawn_row(&buffer, band.y + EDGE_ROWS).contains("Esc"),
+        "a card nine rows tall in a twelve row frame draws its foot on the draft's first row"
+    );
+    assert_eq!(
+        caret_cell(&buffer, &palette, buffer.area),
+        None,
+        "so the block is no cell of the card: the band alone carries it"
+    );
+}
+
+#[test]
+fn a_bleeding_card_holds_the_whole_frame_and_leaves_no_block_standing() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("/");
+
+    let (buffer, told) = painted_and_told(&mut view, 40, 12);
+    let band = laid_out(&told).composer;
+    assert!(
+        !drawn_row(&buffer, band.y + EDGE_ROWS).contains(SIGIL),
+        "a card too narrow for a border is grounded over the whole frame, the band with it"
+    );
+    assert_eq!(
+        caret_cell(&buffer, &palette, buffer.area),
+        None,
+        "so no block of the band is left standing on it"
+    );
+}
+
+#[test]
 fn a_screen_is_drawn_with_no_block_on_the_band() {
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(
@@ -3694,7 +3740,7 @@ fn a_screen_is_drawn_with_no_block_on_the_band() {
         Facts::default().asked(),
         Transcript::none(),
     );
-    let (buffer, told) = painted_and_told(&mut view, 40, 12);
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let band = laid_out(&told).composer;
     assert!(
         caret_cell(&buffer, &palette, band).is_some(),
@@ -3702,14 +3748,14 @@ fn a_screen_is_drawn_with_no_block_on_the_band() {
     );
 
     view.key(Key::Char('?'));
-    let (buffer, told) = painted_and_told(&mut view, 40, 12);
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let band = laid_out(&told).composer;
 
     assert_eq!(
         caret_cell(&buffer, &palette, band),
         None,
         "a screen is the whole frame and the draft behind it takes no key, so no block is \
-             left standing on the band"
+         left standing on the band"
     );
 }
 

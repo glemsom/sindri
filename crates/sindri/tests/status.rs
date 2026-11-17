@@ -17,6 +17,8 @@ use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
 use rustix::termios::{Winsize, tcsetwinsize};
 use tempfile::TempDir;
 
+use sindri::pen;
+
 /// How long a sequence is given to arrive before a test calls it absent: generous, because a test that is merely
 /// slow must not read as a program that never spoke.
 const PATIENCE: Duration = Duration::from_secs(10);
@@ -292,6 +294,39 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// The column the last block the stream drew stands in: typing paints one glyph per frame, so the
+/// block that follows the last glyph is how a test knows the whole prompt has landed.
+fn block_column(stream: &str) -> Option<u16> {
+    let mut block: Option<u16> = None;
+    let mut at: Option<u16> = None;
+    let mut reversed = false;
+    let mut rest = stream;
+    while let Some(glyph) = rest.chars().next() {
+        if let Some(tail) = rest.strip_prefix("\u{1b}[")
+            && let Some(end) = tail.find(|glyph: char| ('\u{40}'..='\u{7e}').contains(&glyph))
+        {
+            match (&tail[end..=end], &tail[..end]) {
+                ("H", columns) => {
+                    at = columns
+                        .split_once(';')
+                        .and_then(|(_, column)| column.parse().ok());
+                }
+                ("m", "7") => reversed = true,
+                ("m", "0" | "27") => reversed = false,
+                _ => {}
+            }
+            rest = &tail[end + 1..];
+            continue;
+        }
+        if reversed {
+            block = at;
+        }
+        at = at.map(|column| column.saturating_add(pen::cell(glyph).max(1)));
+        rest = &rest[glyph.len_utf8()..];
+    }
+    block
+}
+
 fn sequences(stream: &str) -> Vec<&str> {
     stream
         .match_indices("\x1b]7501;")
@@ -467,9 +502,9 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
     // line break and sends nothing. No `?` in the draft either: that key opens a screen.
     pty.type_bytes(b"triage this");
     assert!(
-        drawn.wait_until(|stream| stream.contains("\u{1b}[53;14H")),
-        "the eleventh glyph is drawn in the draft row's fourteenth column, so the frame \
-         holding the whole prompt is on the screen before the return is sent: {:?}",
+        drawn.wait_until(|stream| block_column(stream) == Some(15)),
+        "eleven glyphs typed in the draft's fourth column, one column in from the band's \
+         upright, so the block waits one column past the last: {:?}",
         text(&drawn.bytes())
     );
     pty.type_bytes(b"\r");
