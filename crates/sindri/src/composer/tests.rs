@@ -206,12 +206,12 @@ fn a_line_per_row_grows_the_box_to_its_ceiling_and_no_further() {
 fn the_bands_ceiling_leaves_five_rows_for_the_draft_and_no_more() {
     assert_eq!(
         numbered(5).visible_rows(),
-        MAX_ROWS - EDGE_ROWS - FOOT_ROWS,
+        5,
         "a band at its ceiling is its edge, its foot and five rows of draft"
     );
     assert_eq!(
         numbered(9).visible_rows(),
-        MAX_ROWS - EDGE_ROWS - FOOT_ROWS - 1,
+        4,
         "and a draft past it gives one of those rows to the row that counts the rest"
     );
     assert_eq!(

@@ -142,8 +142,24 @@ const FOOT_OPEN: char = '└';
 const FOOT_CLOSE: char = '┘';
 const UPRIGHT: char = '│';
 
+/// The band inside its box: the one column an upright takes at each side is not a column of the
+/// draft, and the two are never a row's.
+fn inside(band: Rect) -> Rect {
+    Rect {
+        x: band.x.saturating_add(1),
+        width: band.width.saturating_sub(2),
+        ..band
+    }
+}
+
+/// The first row of the band the draft may not be drawn in: the queue's first row while prompts
+/// wait, and the foot's when none do.
+fn draft_end(band: Rect, queue: Rect) -> u16 {
+    queue.y.min(band.bottom().saturating_sub(FOOT_ROWS))
+}
+
 /// The sigil that opens the draft, standing in the gutter an answer is set from — `rows::INDENT`
-/// columns wide, so the reader's own words begin where the run's do.
+/// columns wide, inside the box the band closes into.
 const SIGIL: &str = "\u{203a} ";
 
 /// The name the commands card carries in its top border, in the shape `? keys` and `@ files`
@@ -933,7 +949,7 @@ impl View {
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let mut painted = Painted::none();
         pen::claim(buffer, area, self.capabilities.palette().ground(None));
-        self.composer.set_room(View::room(area.width));
+        self.composer.set_room(View::room(area));
         let mut layout = bands(
             area,
             self.composer.rows(),
@@ -1250,25 +1266,12 @@ impl View {
     /// columns the box leaves them: one column in from each upright, the gutter its sigil stands in
     /// before the words.
     fn composer_inside(&self, band: Rect, queue: Rect, buffer: &mut Buffer) {
-        let inside = Rect {
-            x: band.x.saturating_add(1),
-            width: band.width.saturating_sub(2),
-            ..band
-        };
-        let foot = band.bottom().saturating_sub(FOOT_ROWS);
         let draft = Rect {
             y: band.y.saturating_add(EDGE_ROWS),
-            height: queue
-                .y
-                .min(foot)
-                .saturating_sub(band.y.saturating_add(EDGE_ROWS)),
-            ..inside
+            height: draft_end(band, queue).saturating_sub(band.y.saturating_add(EDGE_ROWS)),
+            ..inside(band)
         };
-        let prompts = Rect {
-            x: inside.x,
-            width: inside.width,
-            ..queue
-        };
+        let prompts = inside(queue);
         let (rows, ink) = match self.composer.text().is_empty() {
             true => (vec![PLACEHOLDER], Ink::Dim),
             false => (self.composer.lines(), Ink::Plain),
@@ -1342,12 +1345,12 @@ impl View {
     /// upright's column: the rule a band of one row is drawn with, and otherwise a corner at each
     /// end of its edge and of its foot and an upright down each side between them.
     fn composer_box(&self, band: Rect, buffer: &mut Buffer) {
-        let palette = self.capabilities.palette();
         if band.height == 0 {
             return;
         }
+        let palette = self.capabilities.palette();
         let edge = Rect { height: 1, ..band };
-        if band.height <= FOOT_ROWS || band.width < 2 {
+        if band.height <= FOOT_ROWS || inside(band).width == 0 {
             pen::rule(buffer, edge, HAIRLINE, self.composer_edge(), &palette);
             return;
         }
@@ -1355,8 +1358,8 @@ impl View {
             y: band.bottom().saturating_sub(FOOT_ROWS),
             ..edge
         };
-        self.composer_row(edge, (EDGE_OPEN, EDGE_CLOSE), self.composer_edge(), buffer);
-        self.composer_row(foot, (FOOT_OPEN, FOOT_CLOSE), palette.dim_edge(), buffer);
+        boxed_row(buffer, edge, (EDGE_OPEN, EDGE_CLOSE), self.composer_edge(), &palette);
+        boxed_row(buffer, foot, (FOOT_OPEN, FOOT_CLOSE), palette.dim_edge(), &palette);
         for y in edge.y.saturating_add(1)..foot.y {
             pen::glyph(buffer, band.x, y, UPRIGHT, palette.dim_edge(), &palette);
             pen::glyph(
@@ -1368,26 +1371,6 @@ impl View {
                 &palette,
             );
         }
-    }
-
-    /// One ruled row of the box: a corner at each end and the rule between them, all in one look.
-    fn composer_row(&self, row: Rect, corners: (char, char), look: Look, buffer: &mut Buffer) {
-        let palette = self.capabilities.palette();
-        let rule = Rect {
-            x: row.x.saturating_add(1),
-            width: row.width.saturating_sub(2),
-            ..row
-        };
-        pen::glyph(buffer, row.x, row.y, corners.0, look, &palette);
-        pen::rule(buffer, rule, HAIRLINE, look, &palette);
-        pen::glyph(
-            buffer,
-            row.right().saturating_sub(1),
-            row.y,
-            corners.1,
-            look,
-            &palette,
-        );
     }
 
     /// The look the composer's edge row is drawn in: the accent while the draft takes the keys, and
@@ -1417,25 +1400,24 @@ impl View {
         if self.stack.modal().is_some() {
             return None;
         }
-        let band = painted.layout()?.composer;
+        let laid = painted.layout()?;
+        let band = laid.composer;
+        let boxed = inside(band);
         let (row, column) = self.composer.caret();
         let y = band.y.checked_add(EDGE_ROWS)?.checked_add(row)?;
         // A caret past the box's last column waits on that column, the way a terminal keeps the
         // cursor at its right margin rather than giving it up — and never on an upright.
-        let x = band
+        let x = boxed
             .x
-            .checked_add(1)?
             .checked_add(pen::cells(INDENT))?
             .checked_add(column)?
-            .min(band.right().saturating_sub(2));
-        let last = band.bottom().saturating_sub(FOOT_ROWS);
-        (band.width > 2 && y < last).then_some((x, y))
+            .min(boxed.right().saturating_sub(1));
+        (boxed.width > 0 && y < draft_end(band, laid.queue)).then_some((x, y))
     }
 
-    /// The columns the draft's words have: the band's width less the gutter an answer is set from
-    /// and the upright the box draws at either side.
-    fn room(width: u16) -> u16 {
-        width.saturating_sub(pen::cells(INDENT)).saturating_sub(2)
+    /// The columns the draft's words have: the band's inside, less the gutter an answer is set from.
+    fn room(band: Rect) -> u16 {
+        inside(band).width.saturating_sub(pen::cells(INDENT))
     }
 
     /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
@@ -1554,13 +1536,12 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> L
     let transcript = room.saturating_sub(notice);
     let notice_y = area.y.saturating_add(transcript);
     let composer_y = notice_y.saturating_add(notice);
+    let band_bottom = composer_y.saturating_add(composer);
     // A queued prompt stands inside the box, under the draft and above the foot, so the foot is the
     // band's last row and the queue's rows are the ones just above it.
     let queue_y = match queue {
-        0 => composer_y.saturating_add(composer),
-        _ => composer_y
-            .saturating_add(composer)
-            .saturating_sub(FOOT_ROWS),
+        0 => band_bottom,
+        _ => band_bottom.saturating_sub(FOOT_ROWS),
     };
     Layout {
         transcript: Rect {
@@ -1583,7 +1564,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> L
             ..area
         },
         footer: Rect {
-            y: composer_y.saturating_add(composer).saturating_add(queue),
+            y: band_bottom.saturating_add(queue),
             height: footer,
             ..area
         },
@@ -1716,6 +1697,20 @@ fn band_row(buffer: &mut Buffer, area: Rect, opens: bool, words: (&str, Ink), pa
         },
         &[(gutter, Ink::Dim), words],
         Clip::Edge,
+        palette,
+    );
+}
+
+/// One ruled row of the box: a corner at each end and the rule between them, all in one look.
+fn boxed_row(buffer: &mut Buffer, row: Rect, corners: (char, char), look: Look, palette: &Palette) {
+    pen::glyph(buffer, row.x, row.y, corners.0, look, palette);
+    pen::rule(buffer, inside(row), HAIRLINE, look, palette);
+    pen::glyph(
+        buffer,
+        row.right().saturating_sub(1),
+        row.y,
+        corners.1,
+        look,
         palette,
     );
 }

@@ -514,6 +514,36 @@ fn a_queues_rows_stand_inside_the_box_and_the_foot_is_still_the_bands_last_row()
         band.bottom(),
         "and the footer is the row under the whole band"
     );
+    assert_eq!(
+        under(&buffer, band.x, band.y),
+        palette.edge(Edge::Lit),
+        "a band holding a queue is still lit along its edge"
+    );
+    assert_eq!(
+        under(&buffer, band.x, band.bottom() - 1),
+        palette.edge(Edge::Shadow),
+        "and still shadowed along its foot, which is the row the queue does not reach"
+    );
+}
+
+#[test]
+fn a_caret_waits_above_the_queue_that_stands_under_the_draft() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().running(),
+        Transcript::none(),
+    );
+    view.enqueue(prompt("a prompt behind the draft"));
+    view.paste("a draft");
+    let (_, told) = painted_and_told(&mut view, 120, 24);
+    let laid = laid_out(&told);
+    let (_, row) = view.cursor(&told).expect("the draft's caret has a cell");
+
+    assert_eq!(
+        row,
+        laid.queue.y - 1,
+        "the caret waits on the draft's last row and never on a prompt the draft did not write"
+    );
 }
 
 #[test]

@@ -6,10 +6,10 @@ pub const MIN_ROWS: u16 = EDGE_ROWS + FOOT_ROWS + 1;
 
 pub const MAX_ROWS: u16 = 7;
 
-/// The band's top row is its edge and not draft.
+/// The band's top row is its edge and its bottom row its foot, neither of them draft, so a band of
+/// `MIN_ROWS` paints one row of draft between them.
 pub const EDGE_ROWS: u16 = 1;
 
-/// The band's bottom row is its foot and not draft.
 pub const FOOT_ROWS: u16 = 1;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
