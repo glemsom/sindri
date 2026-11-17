@@ -539,3 +539,91 @@ fn a_band_too_short_for_the_picker_draws_the_rows_that_fit_and_keeps_the_rest_ba
          the card draws: {count:?}"
     );
 }
+
+/// The band's edge row, as the glyphs it draws: the one row a frame opens with its word.
+fn edge_row(buffer: &Buffer) -> String {
+    frame_rows(buffer)
+        .into_iter()
+        .find(|row| row.starts_with("┌prompt"))
+        .unwrap_or_else(|| panic!("the frame draws no band edge row"))
+}
+
+#[test]
+fn a_paste_is_counted_the_moment_it_lands() {
+    let root = workspace(&["src/rows.rs"]);
+    let mut view = typing(root.path(), "read src/rows.rs");
+    let buffer = painted(&mut view, 120, 40);
+    let edge = edge_row(&buffer);
+
+    assert!(
+        edge.ends_with("1 file · 16 chars┐"),
+        "the edge hangs no count of the draft the reader pasted: {edge:?}"
+    );
+}
+
+#[test]
+fn a_recalled_prompt_is_counted_as_the_draft_it_becomes() {
+    let root = workspace(&["src/rows.rs"]);
+    let mut view = typing(root.path(), "read src/rows.rs");
+    let Outcome::Send(prompt) = view.key(Key::Enter) else {
+        panic!("a draft naming no command is a prompt once it is sent");
+    };
+    view.enqueue(prompt);
+
+    assert_eq!(
+        draft(&view),
+        "",
+        "the draft a reader sent is the queue's and no longer theirs"
+    );
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "`↑` recalls the prompt the queue holds"
+    );
+    let buffer = painted(&mut view, 120, 40);
+    let edge = edge_row(&buffer);
+
+    assert!(
+        edge.ends_with("1 file · 16 chars┐"),
+        "the edge counts the draft a recalled prompt becomes: {edge:?}"
+    );
+}
+
+#[test]
+fn a_row_a_card_writes_into_the_draft_is_counted_with_it() {
+    let root = workspace(&["src/rows.rs"]);
+    let mut view = typing(root.path(), "read ");
+    view.key(Key::Char('@'));
+    assert_eq!(
+        view.key(Key::Enter),
+        Outcome::Edited,
+        "the chosen path is written into the draft"
+    );
+    assert_eq!(draft(&view), "read src/rows.rs ");
+    let buffer = painted(&mut view, 120, 40);
+    let edge = edge_row(&buffer);
+
+    assert!(
+        edge.ends_with("1 file · 17 chars┐"),
+        "the edge counts the file the picker's row wrote into the draft: {edge:?}"
+    );
+
+    let mut view = typing(root.path(), "/sk");
+    assert_eq!(
+        view.key(Key::Enter),
+        Outcome::Edited,
+        "the row the commands card marks is written into the draft"
+    );
+    assert_eq!(
+        draft(&view),
+        "/skill",
+        "a row whose line names no command yet is a word of the draft"
+    );
+    let buffer = painted(&mut view, 120, 40);
+    let edge = edge_row(&buffer);
+
+    assert!(
+        edge.ends_with("6 chars┐"),
+        "the edge counts the word the commands card wrote into the draft: {edge:?}"
+    );
+}

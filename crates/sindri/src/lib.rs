@@ -1,3 +1,4 @@
+pub mod bill; // the draft's own count: the files its words name, the command it opens with, and the characters it holds
 pub mod capability; // what the terminal a frame draws on can do: its cell, its colours, its sizing, its pointer, its pictures and the face over the rail
 pub mod card; // a screen's card: its border, its name, the key that leaves, over the frame it dims
 pub mod commands; // the `/` commands: a draft line the frame answers itself
@@ -5,6 +6,7 @@ pub mod composer; // the draft a prompt is typed into, as a value rather than a 
 pub mod decode; // the bytes a key arrives as, answered as the key or the paste
 pub mod face; // the picture the binary carries: Sindri's face, measured and never said in words
 pub mod facts; // the facts a frame draws, gathered as one value and handed whole, and the screen they are drawn as
+pub mod files; // the files of a workspace, walked as `git` reads them
 pub mod graphics; // an SVG becomes the pixels a picture is drawn in
 pub mod ink; // the look a cell is drawn in, asked for by name: its ink, its faces, its underline
 pub mod kept; // the list a screen keeps: its query, its mark, the rows a query leaves, and the cap a card shows
@@ -18,7 +20,7 @@ pub mod mermaid; // a mermaid fence becomes a picture, or is refused with a reas
 pub mod models; // the names the wire serves, ranked as a query is typed into the screen
 pub mod palette; // the colours the inks, the bands and the edges are drawn in, resolved once at boot
 pub mod pen; // the one place a glyph run is written into a frame, and the one place a string's width is measured
-pub mod picker; // the files of the workspace, walked with `ignore`
+pub mod picker; // the `@` screen: the files of the workspace, narrowed by the query typed into it
 pub mod picture; // a picture an answer points at, resolved to a file inside the workspace and measured
 pub mod pictures; // the pictures a frame has placed: every source the terminal was told about
 pub mod pointer; // the pointer a frame takes: the wheel's notch and the cell a press landed on

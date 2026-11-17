@@ -36,7 +36,7 @@ queue at 120x40
 30 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
 31 |▏     row.paint(area, buffer);                                                                                          | dim:2 plain:118
 32 |▏ }                                                                                                                     | dim:2 plain:118
-33 |┌running ━─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent:120
+33 |┌running ━─────────────────────────────────────────────────────────────────────────────────────────────────────28 chars┐| accent:111 muted:8 accent:1
 34 |│› and this one while they wait                                                                                        │| dim:3 plain:116 dim:1
 35 |│› run the test that failed and read it                                                                                │| dim:39 plain:80 dim:1
 36 |│› then the fmt check                                                                                                  │| dim:21 plain:98 dim:1

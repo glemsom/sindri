@@ -15,12 +15,14 @@ use sindri_core::redact::SecretSet;
 use sindri_core::run::{Load, Loaded, Stop, Turn};
 use sindri_core::skills::{Catalog, Skill};
 
+use crate::bill::Bill;
 use crate::capability::Capabilities;
 use crate::card;
 use crate::commands::{self, Command};
 use crate::composer::{Composer, EDGE_ROWS, FOOT_ROWS, Key, Outcome, PLACEHOLDER, Prompt, State};
 use crate::face;
 use crate::facts::{Facts, Focus};
+use crate::files::Files;
 use crate::graphics::CellSize;
 use crate::ink::{Ink, Look};
 use crate::kept::{Kept, Move};
@@ -326,6 +328,8 @@ pub struct View {
     /// Never one fact at a time: a frame's screen follows from the value it holds whole.
     facts: Facts,
     mark: Option<Mark>,
+    /// The workspace's files, walked once and read by the count the edge hangs on its far corner.
+    files: Files,
     picker: Picker,
     models: Models,
     loaded: Loaded,
@@ -393,6 +397,7 @@ impl View {
             models: Models::new(),
             facts: Facts::default(),
             mark: None,
+            files: Files::default(),
             picker: Picker::default(),
             loaded: Loaded::default(),
             settings: Settings::default(),
@@ -912,6 +917,9 @@ impl View {
             false => State::Idle,
         });
         self.models = std::mem::take(&mut self.models).served_by(facts.served().cloned());
+        if self.files.root() != facts.workspace() {
+            self.files = Files::of(facts.workspace());
+        }
         self.facts = facts;
     }
 
@@ -1386,9 +1394,9 @@ impl View {
         }
     }
 
-    /// The band's edge row: its word just inside the opening corner, one blank column, and the rule
-    /// running on to the far corner with a live run's head on one of its own columns. A band with no
-    /// room for the whole word keeps the plain rule.
+    /// The band's edge row: its word just inside the opening corner, one blank column, the rule
+    /// running on to the far corner with a live run's head on one of its own columns, and the draft's
+    /// count hung there. A band with no room for a whole word or count keeps its plain rule.
     fn composer_edge_row(&self, row: Rect, buffer: &mut Buffer) {
         let palette = self.capabilities.palette();
         let look = self.composer_edge();
@@ -1397,13 +1405,9 @@ impl View {
         let word = self.edge_word();
         let cells = pen::cells(word);
         let named = cells.saturating_add(2) <= room.width;
-        let rule = match named {
-            true => Rect {
-                x: room.x.saturating_add(cells).saturating_add(1),
-                width: room.width.saturating_sub(cells).saturating_sub(1),
-                ..room
-            },
-            false => room,
+        let opening = match named {
+            true => cells.saturating_add(1),
+            false => 0,
         };
         if named {
             pen::write(
@@ -1416,8 +1420,31 @@ impl View {
                 Clip::Edge,
                 &palette,
             );
-            pen::glyph(buffer, rule.x.saturating_sub(1), row.y, ' ', look, &palette);
+            pen::glyph(
+                buffer,
+                room.x.saturating_add(cells),
+                row.y,
+                ' ',
+                look,
+                &palette,
+            );
         }
+        let count = self.draft_count();
+        let counted = pen::cells(
+            &count
+                .iter()
+                .map(|(part, _)| part.as_str())
+                .collect::<String>(),
+        );
+        let drawn = match counted > 0 && room.width > opening.saturating_add(counted) {
+            true => counted,
+            false => 0,
+        };
+        let rule = Rect {
+            x: room.x.saturating_add(opening),
+            width: room.width.saturating_sub(opening).saturating_sub(drawn),
+            ..room
+        };
         pen::rule(buffer, rule, HAIRLINE, look, &palette);
         if self.facts.live() && rule.width > 0 {
             let step = self.edge_step() % u64::from(rule.width);
@@ -1426,6 +1453,25 @@ impl View {
                 .saturating_add(pen::columns(usize::try_from(step).unwrap_or(0)));
             pen::glyph(buffer, at, row.y, EDGE_HEAD, look, &palette);
         }
+        if drawn > 0 {
+            pen::hang(buffer, room, &count, &palette);
+        }
+    }
+
+    /// The draft's count as the edge hangs it: every part of the bill in the muted ink a fact's
+    /// words are drawn in, the gap between them dim, and no span at all for a draft billing nothing.
+    fn draft_count(&self) -> Vec<(String, Ink)> {
+        let Some(bill) = Bill::of(self.composer.text(), &self.files) else {
+            return Vec::new();
+        };
+        let mut spans: Vec<(String, Ink)> = Vec::new();
+        for (index, part) in bill.parts().into_iter().enumerate() {
+            if index > 0 {
+                spans.push((String::from(GAP), Ink::Dim));
+            }
+            spans.push((part, Ink::Muted));
+        }
+        spans
     }
 
     /// The word the band's edge says: the band only takes the draft, or a run is live.
