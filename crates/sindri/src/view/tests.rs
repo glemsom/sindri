@@ -14,6 +14,7 @@ use super::*;
 use crate::composer::{MAX_ROWS, MIN_ROWS, PLACEHOLDER};
 use crate::ledger::Boot;
 
+use crate::band::SIGIL;
 use crate::capability::caps::{inked, pictured, pointing, sized};
 use crate::ink::{Face, Look};
 use crate::palette::{Band, Edge};
