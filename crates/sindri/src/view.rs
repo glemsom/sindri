@@ -21,6 +21,7 @@ use crate::capability::Capabilities;
 use crate::card;
 use crate::commands::{self, Command};
 use crate::composer::{Composer, EDGE_ROWS, FOOT_ROWS, Key, Outcome, PLACEHOLDER, Prompt, State};
+use crate::draft;
 use crate::face;
 use crate::facts::{Facts, Focus};
 use crate::files::Files;
@@ -1287,12 +1288,22 @@ impl View {
             ..inside(band)
         };
         let prompts = inside(queue);
-        let (rows, ink) = match self.composer.text().is_empty() {
-            true => (vec![PLACEHOLDER], Ink::Dim),
-            false => (self.composer.lines(), Ink::Plain),
+        let empty = self.composer.text().is_empty();
+        // The placeholder is no row of the draft, so it lights no sigil and keeps the dim ink.
+        let waited = (!empty).then(|| usize::from(self.composer.caret().0));
+        let scroll = self.composer.scroll();
+        let rows: Vec<Vec<(&str, Ink)>> = match empty {
+            true => vec![vec![(PLACEHOLDER, Ink::Dim)]],
+            false => self
+                .composer
+                .lines()
+                .into_iter()
+                .enumerate()
+                .map(|(row, line)| draft::runs(line, row == 0 && scroll == 0, &self.files))
+                .collect(),
         };
         let mut under = draft.y;
-        for (row, line) in rows.iter().enumerate() {
+        for (row, runs) in rows.iter().enumerate() {
             let Some(offset) = u16::try_from(row).ok() else {
                 break;
             };
@@ -1302,12 +1313,16 @@ impl View {
             if y >= draft.bottom() {
                 break;
             }
-            let opens = row == 0 && self.composer.scroll() == 0;
+            let gutter = match (row == 0 && scroll == 0, waited == Some(row)) {
+                (true, true) => band::Gutter::Lit,
+                (true, false) => band::Gutter::Open,
+                (false, _) => band::Gutter::Blank,
+            };
             band::row(
                 buffer,
                 Rect { y, ..draft },
-                opens,
-                &[(*line, ink)],
+                gutter,
+                runs,
                 &self.capabilities.palette(),
             );
             under = y.saturating_add(1);
@@ -1322,7 +1337,7 @@ impl View {
             band::row(
                 buffer,
                 Rect { y: under, ..draft },
-                false,
+                band::Gutter::Blank,
                 &[(&counted, Ink::Dim)],
                 &self.capabilities.palette(),
             );
@@ -1338,7 +1353,7 @@ impl View {
             band::row(
                 buffer,
                 Rect { y: at, ..prompts },
-                false,
+                band::Gutter::Blank,
                 &[(&counted, Ink::Dim)],
                 &self.capabilities.palette(),
             );
@@ -1348,7 +1363,7 @@ impl View {
             band::row(
                 buffer,
                 Rect { y: at, ..prompts },
-                true,
+                band::Gutter::Open,
                 &[(line.as_str(), Ink::Dim)],
                 &self.capabilities.palette(),
             );
