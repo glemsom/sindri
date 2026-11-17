@@ -72,15 +72,12 @@ impl Card {
     /// The card a draft opens, and `None` unless its first glyph is a slash and a name holds the word
     /// after it.
     pub fn of(draft: &str) -> Option<Card> {
-        let words = match draft.starts_with('/') {
-            true => draft.trim(),
-            false => return None,
-        };
-        match ranked(word(words)).is_empty() {
-            true => None,
-            false => Some(Card {
+        let words = draft.trim();
+        match draft.starts_with('/') && recognised(word(words)) {
+            true => Some(Card {
                 narrow: Narrow::asked(words),
             }),
+            false => None,
         }
     }
 
@@ -133,6 +130,12 @@ impl Card {
             false => format!("{}{}", chosen.name, tail(words)),
         })
     }
+}
+
+/// Whether the card holds a row for `word`: a word with no leading slash, or whose name after the
+/// slash neither a name starts nor a name holds, is no command the card knows.
+pub fn recognised(word: &str) -> bool {
+    !ranked(word).is_empty()
 }
 
 impl Kept for Card {

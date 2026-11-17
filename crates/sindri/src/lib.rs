@@ -5,6 +5,7 @@ pub mod card; // a screen's card: its border, its name, the key that leaves, ove
 pub mod commands; // the `/` commands: a draft line the frame answers itself
 pub mod composer; // the draft a prompt is typed into, as a value rather than a widget
 pub mod decode; // the bytes a key arrives as, answered as the key or the paste
+pub mod draft; // the inks one row of the draft is drawn in: the command it opens with, the files its words name, and the spans it sets in backticks
 pub mod face; // the picture the binary carries: Sindri's face, measured and never said in words
 pub mod facts; // the facts a frame draws, gathered as one value and handed whole, and the screen they are drawn as
 pub mod files; // the files of a workspace, walked as `git` reads them

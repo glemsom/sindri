@@ -112,3 +112,55 @@ fn every_name_but_the_one_that_takes_a_word_reads_back_as_a_command() {
         "a skill takes a word after it, so the bare name is not a command of its own"
     );
 }
+
+#[test]
+fn the_card_recognises_the_word_it_holds_a_row_for() {
+    for word in [
+        "/",
+        "/mod",
+        "/model",
+        "/qui",
+        "/skill:commit",
+        "/settings",
+        "/stats",
+    ] {
+        assert!(
+            recognised(word),
+            "{word:?} is a word a row of the card holds, so the card knows it"
+        );
+    }
+    for word in [
+        "model",
+        "",
+        "/skillet",
+        "/usr",
+        "/etc/hosts",
+        "//",
+        "/src/rows.rs",
+    ] {
+        assert!(
+            !recognised(word),
+            "{word:?} names no row of the card, so it is no command the card knows"
+        );
+    }
+}
+
+#[test]
+fn the_card_holds_a_draft_exactly_when_it_recognises_the_word_the_draft_opens_with() {
+    for draft in [
+        "/",
+        "/mod",
+        "/model",
+        "/model gpt-5",
+        "/skill:commit",
+        "/qui",
+        "/help ",
+        "/n",
+    ] {
+        assert_eq!(
+            recognised(word(draft)),
+            Card::of(draft).is_some(),
+            "{draft:?}: the one verdict the card and the row are both drawn from"
+        );
+    }
+}
