@@ -16,7 +16,12 @@ use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 const COLUMNS: u16 = FLOOR;
 use crate::palette::{Edge, channels};
 use crate::pen;
+use crate::plane::SEAM;
 use crate::readback::{column_of, inks, under};
+
+/// How far into the frame a seamed test stands its rail: the transcript's own columns are to its
+/// left, so the plane has room to widen across the seam.
+const LEFT: u16 = 20;
 
 /// The columns `text` draws in, which is the pen's question and not a count of its glyphs.
 fn columns(text: &str) -> usize {
@@ -52,6 +57,28 @@ fn band(width: u16, height: u16) -> Rect {
         width,
         height,
     }
+}
+
+/// The rail's band stood `LEFT` columns into the frame, with its own rows whole.
+fn stood(height: u16) -> Rect {
+    Rect {
+        x: LEFT,
+        ..band(COLUMNS, height)
+    }
+}
+
+/// The frame a stood rail is drawn in: the transcript's columns to its left, and the rail's own to
+/// the frame's right edge.
+fn framed(rail: Rect) -> Rect {
+    Rect {
+        width: rail.right(),
+        ..rail
+    }
+}
+
+/// The pixel a plane is at when it is `x` columns into its own width.
+fn column_pixel(x: u16) -> u32 {
+    u32::from(x) * CellSize::NOMINAL.width()
 }
 
 fn glyphs(buffer: &Buffer, y: u16) -> String {
@@ -227,14 +254,14 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
 }
 
 #[test]
-fn a_rail_handed_a_cell_claims_the_terminals_ground_and_draws_no_shadow_row() {
-    let area = band(COLUMNS, 8);
-    let mut buffer = Buffer::empty(area);
+fn a_ledger_handed_a_cell_is_handed_a_plane_widened_across_the_seam() {
+    let rail = stood(8);
+    let mut buffer = Buffer::empty(framed(rail));
 
     let plane = super::paint(
         &frame(),
         Rail::Ledger,
-        RailBand::of(area),
+        RailBand::of(rail),
         None,
         Some(CellSize::NOMINAL),
         &mut buffer,
@@ -242,36 +269,192 @@ fn a_rail_handed_a_cell_claims_the_terminals_ground_and_draws_no_shadow_row() {
     )
     .expect("a palette that spells its colours is handed the band's plane");
 
-    assert_eq!(plane.area(), area, "the plane covers the rail's own rect");
+    assert_eq!(
+        plane.area(),
+        Rect {
+            x: rail.x - SEAM,
+            width: rail.width + SEAM,
+            ..rail
+        },
+        "the plane begins {SEAM} columns left of the rail's first column and ends at the rail's \
+         right edge, over the rail's own rows"
+    );
     assert_eq!(
         plane.pixels().dimensions(),
         (
-            u32::from(area.width) * CellSize::NOMINAL.width(),
-            u32::from(area.height) * CellSize::NOMINAL.height()
+            u32::from(rail.width + SEAM) * CellSize::NOMINAL.width(),
+            u32::from(rail.height) * CellSize::NOMINAL.height()
         ),
         "at the pixels of the cell it is drawn on"
     );
-    let (width, height) = plane.pixels().dimensions();
+}
+
+#[test]
+fn a_ledger_stood_at_the_frames_edge_widens_by_the_columns_it_has_to_its_left() {
+    let rail = Rect {
+        x: 1,
+        ..band(COLUMNS, 8)
+    };
+    let mut buffer = Buffer::empty(framed(rail));
+
+    let plane = super::paint(
+        &frame(),
+        Rail::Ledger,
+        RailBand::of(rail),
+        None,
+        Some(CellSize::NOMINAL),
+        &mut buffer,
+        &PALETTE,
+    )
+    .expect("a palette that spells its colours is handed the band's plane");
+
     assert_eq!(
-        plane.pixels().get_pixel(0, 0).0[..3],
-        channels(PALETTE.band(Band::Rail)).expect("a band in pixels"),
-        "the plane's head pixel is the rail's own band colour"
+        plane.area(),
+        Rect {
+            x: 0,
+            width: rail.width + 1,
+            ..rail
+        },
+        "the plane takes the one column the frame has left of a rail stood at its edge, and no \
+         column of a frame it does not reach"
+    );
+}
+
+#[test]
+fn the_seam_falls_from_the_well_into_the_shadow_and_comes_back_out_over_the_rails_first_columns() {
+    let rail = stood(8);
+    let mut buffer = Buffer::empty(framed(rail));
+
+    let plane = super::paint(
+        &frame(),
+        Rail::Ledger,
+        RailBand::of(rail),
+        None,
+        Some(CellSize::NOMINAL),
+        &mut buffer,
+        &PALETTE,
+    )
+    .expect("a palette that spells its colours is handed the band's plane");
+
+    let pixels = plane.pixels();
+    let (width, height) = pixels.dimensions();
+    let well = channels(PALETTE.band(Band::Well)).expect("a well in pixels");
+    let shadow = channels(PALETTE.edge(Edge::Shadow)).expect("a shadow in pixels");
+    let head = channels(PALETTE.band(Band::Rail)).expect("a band in pixels");
+    let crease = column_pixel(SEAM);
+
+    assert_eq!(
+        pixels.get_pixel(0, 0).0[..3],
+        well,
+        "the plane's leftmost pixel is the well the transcript sits on, so the seam opens out of \
+         the transcript's own ground and not out of a line"
+    );
+    assert!(
+        pixels.get_pixel(crease / 2, 0).0[..3] != well
+            && pixels.get_pixel(crease - 1, 0).0[..3] == shadow,
+        "the columns between the well and the rail's first column fall into the shadow: {:?}",
+        pixels.get_pixel(crease / 2, 0)
     );
     assert_eq!(
-        plane.pixels().get_pixel(width - 1, height - 1).0[..3],
-        channels(PALETTE.edge(Edge::Shadow)).expect("a shadow in pixels"),
-        "and its foot is the shadow the band ends in, so the shadow row is drawn in pixels"
+        pixels.get_pixel(crease, 0).0[..3],
+        shadow,
+        "the pixel the rail's first column begins at is the shadow, so the rail comes out of the \
+         crease rather than being parted from the transcript by a line"
     );
-    for y in area.y..area.bottom() {
-        for x in area.x + 1..area.right() {
+    assert_eq!(
+        pixels.get_pixel(crease + column_pixel(SEAM) - 1, 0).0[..3],
+        head,
+        "by the {SEAM}th column of the rail's first row the plane is the rail's own band colour"
+    );
+    assert_eq!(
+        pixels.get_pixel(width - 1, height - 1).0[..3],
+        shadow,
+        "and its last row is still the shadow the band ends in, so the foot is drawn in pixels and \
+         no row of it"
+    );
+    let middle = pixels.get_pixel(width - 1, height / 2);
+    assert!(
+        middle[0] > shadow[0] && middle[0] < head[0],
+        "half way down the rail's far columns the plane is still a pixel between the two: {middle:?}"
+    );
+}
+
+#[test]
+fn a_ledger_handed_a_cell_lights_no_column_and_shadows_no_row_of_its_band() {
+    let rail = stood(8);
+    let mut buffer = Buffer::empty(framed(rail));
+
+    super::paint(
+        &frame(),
+        Rail::Ledger,
+        RailBand::of(rail),
+        None,
+        Some(CellSize::NOMINAL),
+        &mut buffer,
+        &PALETTE,
+    )
+    .expect("a palette that spells its colours is handed the band's plane");
+
+    for y in rail.y..rail.bottom() {
+        for x in rail.x..rail.right() {
             assert_eq!(
                 under(&buffer, x, y),
                 PALETTE.ground(None).bg.expect("the terminal's own ground"),
-                "row {y}, column {x} of the band is not claimed as the terminal's own ground, \
-                 so the pixels are read through a cell drawn over them"
+                "row {y}, column {x} of the band is not claimed as the terminal's own ground: a \
+                 lit column down the rail's first one or a shadow across its last is a line drawn \
+                 where the plane falls, and the seam is no line"
             );
         }
     }
+}
+
+#[test]
+fn a_strip_is_handed_a_plane_that_widens_across_no_seam() {
+    let rail = Rect {
+        x: LEFT,
+        ..band(40, 1)
+    };
+    let mut buffer = Buffer::empty(framed(rail));
+
+    let plane = super::paint(
+        &frame(),
+        Rail::Strip,
+        RailBand::of(rail),
+        None,
+        Some(CellSize::NOMINAL),
+        &mut buffer,
+        &PALETTE,
+    )
+    .expect("a palette that spells its colours is handed the band's plane");
+
+    assert_eq!(
+        plane.area(),
+        rail,
+        "a strip is one row of the rail's own columns, and its plane takes no column of the \
+         transcript's"
+    );
+    let (width, height) = plane.pixels().dimensions();
+    for y in 0..height {
+        let row = *plane.pixels().get_pixel(0, y);
+        for x in 0..width {
+            assert_eq!(
+                *plane.pixels().get_pixel(x, y),
+                row,
+                "row {y}, column {x} of the strip's plane is another colour than column 0 of it: \
+                 one row has room for the vertical fall and none for a horizontal one"
+            );
+        }
+    }
+    assert_eq!(
+        plane.pixels().get_pixel(0, 0).0[..3],
+        channels(PALETTE.band(Band::Rail)).expect("a band in pixels"),
+        "the strip's head is the rail's own band colour"
+    );
+    assert_eq!(
+        plane.pixels().get_pixel(0, height - 1).0[..3],
+        channels(PALETTE.edge(Edge::Shadow)).expect("a shadow in pixels"),
+        "and its foot is the shadow it ends in"
+    );
 }
 
 #[test]

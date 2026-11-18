@@ -155,12 +155,21 @@ _Avoid_: Region, pane, panel, viewport
 **Plane**:
 A band's ground drawn as one image placed under its cells, so a surface shades in pixels rather than
 in whole rows: the composer's carries its ramp and the glow under the caret, and the rail's carries
-the band at its head and falls continuously into the shadow at its foot. It is placed once per size,
-carries an identity of its own so one is taken away and the other stands, and is handed back with the
-pass that drew it. A terminal that places no picture is given none, and so is the rail in a palette
-that draws no colour, where the band's own rows — its flat ground and the shadow across its last
-one — are the whole of its shading.
+the band at its head and falls continuously into the shadow at its foot, reaching back over the seam
+so the rail comes out of the transcript's edge rather than being parted from it. It is placed once
+per size, carries an identity of its own so one is taken away and the other stands, and is handed
+back with the pass that drew it. A terminal that places no picture is given none, and so is the rail
+in a palette that draws no colour, where the band's own rows — its flat ground, the lit column down
+its boundary and the shadow across its last one — are the whole of its shading.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
+
+**Seam**:
+The columns where the transcript and the rail meet, and the fall the rail's plane draws across them:
+out of the transcript's well, into the shadow in the crease, and back out over the rail's first
+columns. It is no line and claims no column — the split is the one it always was, so the seam costs
+neither band a column and the words on both sides are drawn unshaded. Where no picture is placed
+there is no seam: the lit column down the rail's boundary is what that frame draws.
+_Avoid_: Border, divider, gutter, rule
 
 **Chip**:
 An inline code span, drawn in the accent ink with no band behind it and in the spacing it was written

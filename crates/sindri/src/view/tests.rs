@@ -19,6 +19,7 @@ use crate::capability::caps::{inked, pictured, pointing, sized};
 use crate::ink::{Face, Look};
 use crate::palette::{Band, Edge};
 use crate::pictures::PLACEHOLDER as PLACED;
+use crate::plane::SEAM;
 use crate::pulse::STEP_MS;
 use crate::readback::under;
 use crate::rows::SIGIL;
@@ -1089,6 +1090,95 @@ fn the_transcript_sits_in_the_well_and_the_rail_beside_it_carries_the_light() {
                 palette.edge(Edge::Shadow),
                 "column {x} of the rail's last row at {cols} columns is not the shadow under \
                      the band"
+            );
+        }
+    }
+}
+
+/// A frame whose transcript runs to the seam the rail is drawn across, on a terminal that places
+/// pictures and the face switched off or on one that places none: the two differ in the plane under
+/// their cells and in no row the rail gives a picture.
+fn seamed(draws: bool) -> View {
+    View::of(
+        match draws {
+            true => pictured().faced(false),
+            false => Capabilities::default(),
+        },
+        Facts::default().asked().railed(rail()),
+        Transcript::of(vec![Entry::Assistant {
+            turn: 1,
+            text: SecretSet::default().redact(
+                "the last words of the transcript and the first of the rail read as they read \
+                 before the seam fell between them, and no column of either is cut",
+            ),
+        }]),
+    )
+}
+
+/// The columns of the seam: the transcript's last few, where the rail's plane reaches back over
+/// them.
+fn seam_of(laid: Layout) -> Rect {
+    Rect {
+        x: laid.transcript.right() - SEAM,
+        width: SEAM,
+        ..laid.transcript
+    }
+}
+
+#[test]
+fn a_frame_that_places_a_picture_claims_the_seam_as_the_terminals_own_ground() {
+    let palette = Palette::TRUECOLOR;
+
+    let (pictured, told) = painted_and_told(&mut seamed(true), 120, 40);
+    let laid = laid_out(&told);
+    let seam = seam_of(laid);
+    for y in seam.y..seam.bottom() {
+        for x in seam.x..seam.right() {
+            assert_eq!(
+                under(&pictured, x, y),
+                palette.ground(None).bg.expect("the terminal's own ground"),
+                "row {y}, column {x} of the seam is not the ground the plane is drawn at, so the \
+                 transcript's last columns are no part of the fall toward the rail"
+            );
+        }
+    }
+
+    let (placeless, told) = painted_and_told(&mut seamed(false), 120, 40);
+    let seam = seam_of(laid_out(&told));
+    for y in seam.y..seam.bottom() {
+        for x in seam.x..seam.right() {
+            assert_eq!(
+                under(&placeless, x, y),
+                palette.band(Band::Well),
+                "row {y}, column {x} is claimed by a plane a terminal with no picture was \
+                 handed none of: where no picture is placed the transcript keeps its own ground"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_seam_draws_the_same_words_in_the_same_inks_with_a_picture_placed_and_with_none() {
+    let (pictured_frame, told) = painted_and_told(&mut seamed(true), 120, 40);
+    let (placeless, without) = painted_and_told(&mut seamed(false), 120, 40);
+    let laid = laid_out(&told);
+    let bare = laid_out(&without);
+
+    assert_eq!(
+        laid.rail, bare.rail,
+        "a terminal that places a picture is handed the rail's own rect and columns, so the seam \
+         costs the rail no column and the split is the one it always was"
+    );
+    let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+    for y in laid.transcript.y..laid.transcript.bottom() {
+        for x in seam_of(laid).x..rail.right() {
+            let with = pictured_frame.cell((x, y)).expect("a cell of the frame");
+            let not = placeless.cell((x, y)).expect("a cell of the frame");
+            assert_eq!(
+                (with.symbol(), with.fg, with.modifier),
+                (not.symbol(), not.fg, not.modifier),
+                "row {y}, column {x} is drawn differently on a terminal that places a picture, so \
+                 the shadow the plane falls in shades a word or takes a column from it"
             );
         }
     }

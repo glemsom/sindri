@@ -670,6 +670,7 @@ fn composer_plane() -> Plane {
 
 fn rail_plane() -> Plane {
     Plane::rail(
+        sindri::ledger::Rail::Ledger,
         Rect::new(6, 3, 3, 4),
         CellSize::NOMINAL,
         &Palette::TRUECOLOR,

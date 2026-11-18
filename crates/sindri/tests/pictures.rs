@@ -23,7 +23,7 @@ use sindri::markdown;
 use sindri::palette::{Band, Edge, Palette, channels};
 use sindri::picture::{self, Surface};
 use sindri::pictures::{PLACEHOLDER, Pictures};
-use sindri::plane::{Plane, PlaneId};
+use sindri::plane::{Plane, PlaneId, SEAM};
 use sindri::rows::Row;
 use sindri::view::{Transcript, View};
 use sindri_core::policy::Enforcement;
@@ -1410,11 +1410,20 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
         "the frame hands back the rail's plane beside the composer's, each under its own identity"
     );
     let band = plane_of(&painted, PlaneId::Rail);
-    assert_eq!(band.area(), rail, "the plane covers the rail's own rect");
+    assert_eq!(
+        band.area(),
+        Rect {
+            x: rail.x - SEAM,
+            width: rail.width + SEAM,
+            ..rail
+        },
+        "the plane covers the rail's own rows and columns beside the {SEAM} columns of the \
+         transcript the seam widens it across, so the rail comes out of the transcript's edge"
+    );
     assert_eq!(
         band.pixels().dimensions(),
         (
-            u32::from(rail.width) * cell().width(),
+            u32::from(band.area().width) * cell().width(),
             u32::from(rail.height) * cell().height()
         ),
         "at the pixels of the cell it is drawn on"
@@ -1422,8 +1431,9 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     let (width, height) = band.pixels().dimensions();
     assert_eq!(
         band.pixels().get_pixel(0, 0).0[..3],
-        channels(palette.band(Band::Rail)).expect("a band in pixels"),
-        "the plane's head is the rail's band colour"
+        channels(palette.band(Band::Well)).expect("a well in pixels"),
+        "the plane's head is the well its seam opens out of, and no column of the rail stands \
+         there"
     );
     assert_eq!(
         band.pixels().get_pixel(width - 1, height - 1).0[..3],
@@ -1536,7 +1546,7 @@ fn composer_plane(painted: &sindri::view::Painted) -> &Plane {
 
 /// The two frames compared cell by cell, on a terminal that places pictures and one that places
 /// none: a band the frame draws a plane under is read through its cells, so only the glyphs on it
-/// are the frame's, and every cell off both bands is the frame's whole.
+/// are the frame's, and every cell off both bands and off the seam is the frame's whole.
 fn same_cells_outside_ground(
     pictured: &Buffer,
     placeless: &Buffer,
@@ -1548,15 +1558,16 @@ fn same_cells_outside_ground(
         for x in pictured.area.x..pictured.area.right() {
             let with = &pictured[(x, y)];
             let without = &placeless[(x, y)];
-            let on_rail =
-                (rail.y..rail.bottom()).contains(&y) && (rail.x..rail.right()).contains(&x);
-            if y < pictured.area.bottom() - composer_rows - 1 && !on_rail {
+            let rows = (rail.y..rail.bottom()).contains(&y);
+            let on_rail = rows && (rail.x..rail.right()).contains(&x);
+            let on_seam = rows && (rail.x.saturating_sub(SEAM)..rail.x).contains(&x);
+            if y < pictured.area.bottom() - composer_rows - 1 && !on_rail && !on_seam {
                 assert_eq!(with, without, "outside the composer at ({x}, {y})");
-            } else if on_rail {
+            } else if on_rail || on_seam {
                 assert_eq!(
                     (with.symbol(), with.fg, with.modifier),
                     (without.symbol(), without.fg, without.modifier),
-                    "rail words at ({x}, {y})"
+                    "the words beside the seam at ({x}, {y})"
                 );
             } else {
                 assert_eq!(
