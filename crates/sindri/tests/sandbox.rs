@@ -118,7 +118,7 @@ fn a_sandbox_that_cannot_be_created_is_a_card_on_stderr_and_exit_three() {
     assert_eq!(
         output.status.code(),
         Some(3),
-        "§15's sandbox/setup failure: {err}"
+        "the sandbox/setup failure: {err}"
     );
     assert!(
         err.contains("cannot create the sandbox: bubblewrap creates an unprivileged sandbox"),
@@ -220,7 +220,7 @@ fn an_environment_variable_naming_the_escape_hatch_changes_nothing() {
     assert_eq!(
         output.status.code(),
         Some(3),
-        "the escape hatch has no environment variable (§6): {err}"
+        "the escape hatch has no environment variable: {err}"
     );
     assert!(
         err.contains("cannot create the sandbox"),

@@ -20,4 +20,4 @@ Canonical five: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-huma
 
 ### Domain docs
 
-Single-context: `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: read `GLOSSARY.md` at the repo root. See `docs/agents/domain.md` for domain documentation.

@@ -139,7 +139,7 @@ fn the_screen_offers_eight_rows_and_no_more() {
     assert_eq!(
         Picker::walk(root.path()).rows().len(),
         CAP,
-        "§12 caps the list at eight rows, however many files the workspace holds"
+        "the rule caps the list at eight rows, however many files the workspace holds"
     );
 }
 

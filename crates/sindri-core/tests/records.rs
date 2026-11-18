@@ -479,7 +479,7 @@ fn a_result_writes_the_verdict_its_call_settled_with() {
     );
     assert!(
         !written.contains("null"),
-        "a field with nothing in it is left out rather than written as `null` (§15): {written}"
+        "a field with nothing in it is left out rather than written as `null`: {written}"
     );
 }
 
@@ -1088,7 +1088,7 @@ fn every_stop_reason_writes_its_own_word_and_nothing_else() {
         assert_eq!(
             json(&session.directory().join("session.json"))["stopped"],
             json!(state.word()),
-            "the document says the word §4 says"
+            "the document says the word the rule says"
         );
     }
 }

@@ -265,7 +265,7 @@ fn no_source_file_holds_a_list_of_model_names() {
 
     assert!(
         offenders.is_empty(),
-        "§10 says served names are read off the wire and never invented, but:\n  {}",
+        "the rule says served names are read off the wire and never invented, but:\n  {}",
         offenders.join("\n  ")
     );
 }

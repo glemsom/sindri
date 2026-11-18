@@ -309,7 +309,7 @@ fn a_tab_walked_row_is_the_row_a_visit_writes() {
     assert_eq!(
         row_key(view.settings()),
         Some("route"),
-        "two Tabs are two keys down the schema, which is the second way §12 gives a reader \
+        "two Tabs are two keys down the schema, which is the second way the rule gives a reader \
          of walking the list"
     );
     let touched = entered(&mut view);

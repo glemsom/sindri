@@ -211,7 +211,7 @@ fn a_reply_cut_short_after_it_streamed_text_is_marked_as_streamed() {
     assert_eq!(failure.verdict, Verdict::Transport);
     assert!(
         failure.streamed,
-        "text had already streamed, so §4 forbids a retry"
+        "text had already streamed, so the rule forbids a retry"
     );
 }
 

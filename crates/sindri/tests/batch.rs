@@ -395,7 +395,7 @@ fn a_prompt_is_answered_on_stdout_with_exactly_one_newline() {
         .output()
         .expect("the binary should run");
 
-    assert_eq!(output.status.code(), Some(0), "an answer (§15)");
+    assert_eq!(output.status.code(), Some(0), "an answer");
     assert_eq!(
         text(&output.stdout),
         format!("{ANSWER}\n"),
@@ -408,7 +408,7 @@ fn a_prompt_is_answered_on_stdout_with_exactly_one_newline() {
     );
     assert!(
         ground.session().join("session.json").exists(),
-        "a run records the session it was (§13)"
+        "a run records the session it was"
     );
 }
 
@@ -665,7 +665,7 @@ fn a_batch_run_with_no_prompt_at_all_is_a_usage_error() {
         .output()
         .expect("the binary should run");
 
-    assert_eq!(output.status.code(), Some(2), "a usage error (§15)");
+    assert_eq!(output.status.code(), Some(2), "a usage error");
     assert!(
         output.stdout.is_empty(),
         "a refused launch writes nothing to stdout: {}",
@@ -754,7 +754,7 @@ fn a_pipe_without_a_batch_flag_is_refused() {
     pipe_words(&mut child, b"triage this\n");
     let output = child.wait_with_output().expect("the binary should finish");
 
-    assert_eq!(output.status.code(), Some(2), "§3: a pipe needs -b");
+    assert_eq!(output.status.code(), Some(2), "a pipe needs -b");
     assert!(
         output.stdout.is_empty(),
         "and nothing reaches stdout: {}",
@@ -782,11 +782,11 @@ fn a_launch_with_no_prompt_accepts_json_and_verbose_and_writes_nothing_to_stdout
     assert_eq!(
         output.status.code(),
         Some(2),
-        "off a terminal a launch with no prompt is a refusal (§3)"
+        "off a terminal a launch with no prompt is a refusal"
     );
     assert!(
         output.stdout.is_empty(),
-        "and an object a launch cannot claim is never written (§3): {}",
+        "and an object a launch cannot claim is never written: {}",
         text(&output.stdout)
     );
 }
@@ -859,7 +859,7 @@ fn verbose_puts_the_run_on_stderr_and_ends_with_the_session_guid() {
     assert_eq!(
         written.last().copied(),
         Some(guid.as_str()),
-        "the last line of -v is the session GUID (§13, §15): {err}"
+        "the last line of -v is the session GUID: {err}"
     );
     assert!(
         err.contains("claude-sonnet-4-6"),
@@ -885,7 +885,7 @@ fn a_wire_that_refuses_exits_one_and_writes_nothing_to_stdout() {
     assert_eq!(output.status.code(), Some(1), "a model or provider error");
     assert!(
         output.stdout.is_empty(),
-        "a failed run writes nothing at all to stdout (§15): {}",
+        "a failed run writes nothing at all to stdout: {}",
         text(&output.stdout)
     );
     assert!(
@@ -932,7 +932,7 @@ fn a_session_that_cannot_be_created_is_a_setup_failure() {
     assert_eq!(
         output.status.code(),
         Some(3),
-        "a sandbox or setup failure (§15): {}",
+        "a sandbox or setup failure: {}",
         text(&output.stderr)
     );
     assert!(output.stdout.is_empty(), "and nothing on stdout");
@@ -949,7 +949,7 @@ fn a_turn_cap_that_leaves_no_turn_exits_one_hundred() {
         .output()
         .expect("the binary should run");
 
-    assert_eq!(output.status.code(), Some(100), "the turn cap (§15)");
+    assert_eq!(output.status.code(), Some(100), "the turn cap");
     assert!(
         output.stdout.is_empty(),
         "the cap is not an answer, so nothing is printed as one: {}",
@@ -972,7 +972,7 @@ fn a_command_budget_of_no_time_exits_one_hundred_and_one() {
         .output()
         .expect("the binary should run");
 
-    assert_eq!(output.status.code(), Some(101), "a spent budget (§15)");
+    assert_eq!(output.status.code(), Some(101), "a spent budget");
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
 }
 
@@ -1000,7 +1000,7 @@ fn a_signal_stops_the_run_with_nothing_on_stdout() {
     assert_eq!(
         output.status.code(),
         Some(130),
-        "a cancellation with nothing on stdout (§15): {}",
+        "a cancellation with nothing on stdout: {}",
         text(&output.stderr)
     );
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
@@ -1164,7 +1164,7 @@ fn a_copilot_run_with_no_sign_in_names_the_command_that_signs_in() {
         .output()
         .expect("the binary should run");
 
-    assert_eq!(output.status.code(), Some(1), "a provider error (§15)");
+    assert_eq!(output.status.code(), Some(1), "a provider error");
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
     assert!(
         text(&output.stderr).contains("sindri auth login copilot"),

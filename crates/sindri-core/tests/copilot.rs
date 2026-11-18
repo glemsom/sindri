@@ -136,7 +136,7 @@ fn a_sign_in_shows_the_code_and_keeps_the_session_owner_only() {
     let apart = config_path(&environment(&home)).expect("a config home is named");
     assert_ne!(
         kept, apart,
-        "a sign-in is never the file an api key is read from (§10)"
+        "a sign-in is never the file an api key is read from"
     );
     assert_eq!(
         kept.parent().map(mode),

@@ -164,7 +164,7 @@ fn the_report_names_its_fields_in_the_order_a_script_reads_them() {
             "command_ms",
             "output_bytes",
         ],
-        "the field order is fixed and later fields only append (§15): {json}"
+        "the field order is fixed and later fields only append: {json}"
     );
 }
 
@@ -191,7 +191,7 @@ fn a_run_that_failed_leaves_the_answer_out_rather_than_writing_null() {
 
     assert!(
         !json.contains("null"),
-        "a field the run knows nothing about is left out, never `null` (§15): {json}"
+        "a field the run knows nothing about is left out, never `null`: {json}"
     );
     assert!(
         !keys(&json).contains(&String::from("answer")),

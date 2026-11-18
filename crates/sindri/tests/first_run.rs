@@ -84,7 +84,7 @@ fn a_key_in_the_environment_is_enough_with_no_config_file() {
     assert_eq!(
         output.status.code(),
         Some(2),
-        "configured, and launched with neither -b nor a terminal: a usage error (§3, §15)"
+        "configured, and launched with neither -b nor a terminal: a usage error"
     );
 }
 
@@ -149,7 +149,7 @@ fn a_pasted_key_is_written_owner_only_and_never_printed_back() {
     assert_eq!(
         output.status.code(),
         Some(2),
-        "the key was pasted and written, and the launch still names no prompt: a usage error (§3)"
+        "the key was pasted and written, and the launch still names no prompt: a usage error"
     );
 }
 
@@ -196,7 +196,7 @@ fn the_key_a_paste_wrote_is_read_back_without_asking_again() {
     assert_eq!(
         second.status.code(),
         Some(2),
-        "no prompt and no terminal is a usage error, whatever the key's state (§3)"
+        "no prompt and no terminal is a usage error, whatever the key's state"
     );
 }
 

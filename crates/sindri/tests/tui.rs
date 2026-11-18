@@ -973,7 +973,7 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
     assert_eq!(
         output.status.code(),
         Some(2),
-        "a terminal UI with no terminal to draw on is a usage error (§3): {}",
+        "a terminal UI with no terminal to draw on is a usage error: {}",
         text(&output.stderr)
     );
     assert!(
@@ -2009,7 +2009,7 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
     assert_eq!(
         status.code(),
         Some(130),
-        "a launch the user's word ended (§15): {:?}",
+        "a launch the user's word ended: {:?}",
         drawn.text()
     );
     assert!(
@@ -2326,7 +2326,7 @@ fn slash_model_offers_the_names_the_wire_serves_and_enter_writes_the_one_chosen(
     let written = written_model(&config, SECOND_SERVED);
     assert!(
         written.contains("# the model I like"),
-        "the save patched the one key it touched and kept the reader's comment (ADR-0009): \
+        "the save patched the one key it touched and kept the reader's comment: \
          {written}"
     );
     assert!(

@@ -149,7 +149,7 @@ fn a_prefix_more_than_one_session_carries_names_none_and_lists_them() {
     assert_eq!(
         refused.exit_code(),
         2,
-        "an id that names no one session is a usage error (§15)"
+        "an id that names no one session is a usage error"
     );
 }
 
@@ -161,11 +161,7 @@ fn a_prefix_no_session_carries_is_absent() {
 
     let refused = choose(&sessions, "0cd1-2222").expect_err("no session carries the prefix");
 
-    assert_eq!(
-        refused.exit_code(),
-        2,
-        "an absent id is a usage error too (§15)"
-    );
+    assert_eq!(refused.exit_code(), 2, "an absent id is a usage error too");
     assert!(
         refused.to_string().contains("0cd1-2222"),
         "the refusal names the id as it was typed: {refused}"

@@ -574,7 +574,7 @@ fn the_turn_cap_defaults_to_two_hundred_and_fifty_and_exits_one_hundred() {
 
     let state = run.drive(&mut Transcript::default());
 
-    assert_eq!(run.turns(), 250, "the cap is §4's own default");
+    assert_eq!(run.turns(), 250, "the cap uses its own default");
     assert_eq!(state.word(), "max_turns");
     assert_eq!(state.stop().map(Stop::exit_code), Some(100));
     assert!(
@@ -668,12 +668,7 @@ fn a_running_run_says_running_and_the_stop_set_is_five_words() {
     for (state, word, code) in &closed {
         assert_eq!(state.word(), *word);
         if let Some(stop) = state.stop() {
-            assert_eq!(
-                stop.exit_code(),
-                *code,
-                "{} maps to §15's code",
-                stop.word()
-            );
+            assert_eq!(stop.exit_code(), *code, "{} maps to the code", stop.word());
         }
     }
     assert_eq!(
@@ -953,11 +948,7 @@ fn a_sigint_stops_the_run_as_cancelled_with_nothing_on_stdout() {
 
     assert_eq!(state.word(), "cancelled");
     assert_eq!(state.stop().map(Stop::exit_code), Some(130));
-    assert_eq!(
-        run.answer(),
-        None,
-        "a cancelled run leaves stdout empty (§15)"
-    );
+    assert_eq!(run.answer(), None, "a cancelled run leaves stdout empty");
 }
 
 #[test]
@@ -1002,7 +993,7 @@ fn the_config_names_the_turn_cap_and_the_boundary_names_the_budgets() {
     assert_eq!(
         Duration::from_millis(DEFAULT_COMMAND_BUDGET_MS),
         Duration::from_secs(60 * 60),
-        "the boundary's own default is §4's hour"
+        "the boundary defaults to one hour"
     );
     assert_eq!(DEFAULT_OUTPUT_BUDGET_BYTES, 8 * 1024 * 1024);
 
@@ -1010,7 +1001,7 @@ fn the_config_names_the_turn_cap_and_the_boundary_names_the_budgets() {
     assert_eq!(
         silent.max_turns(),
         250,
-        "a silent config leaves §4's default in force"
+        "a silent config leaves the default in force"
     );
     assert_eq!(
         Limits::default(),
@@ -1507,7 +1498,7 @@ fn a_call_the_users_word_stops_is_a_cancelled_exit() {
     assert_eq!(
         acted.exit,
         Exit::Cancelled,
-        "the row a stopped call opens says the user's word stopped it (§12)"
+        "the row a stopped call opens says the user's word stopped it"
     );
 }
 
@@ -1543,7 +1534,7 @@ fn a_run_cancelled_mid_command_kills_it_and_stops_cancelled() {
     assert_eq!(
         state.stop(),
         Some(&Stop::Cancelled),
-        "the user's word stops the run the moment the command it was in ends (§4)"
+        "the user's word stops the run the moment the command it was in ends"
     );
     assert!(
         cancelled_at.elapsed() < Duration::from_secs(10),

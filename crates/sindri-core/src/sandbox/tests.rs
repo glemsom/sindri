@@ -257,7 +257,7 @@ fn the_card_is_plain_lines_a_frame_will_paint() {
              fix:   this kernel does not allow unprivileged user namespaces: enable them, or \
              run with --yolo-unsafe to run unconfined on purpose"
     );
-    assert_eq!(card.exit_code(), 3, "§15's sandbox/setup failure");
+    assert_eq!(card.exit_code(), 3, "the sandbox/setup failure");
 }
 
 #[test]

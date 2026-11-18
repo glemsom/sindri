@@ -241,7 +241,7 @@ fn no_field_of_any_entry_lets_a_secret_out() {
 
     assert!(
         leaked.is_empty(),
-        "no field of any Entry variant lets a secret out (ADR-0011):\n{}",
+        "no field of any Entry variant lets a secret out:\n{}",
         leaked.join("\n")
     );
     assert!(

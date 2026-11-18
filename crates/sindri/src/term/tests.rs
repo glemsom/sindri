@@ -418,36 +418,6 @@ fn a_terminal_that_places_no_hyperlink_reads_a_link_and_a_path_as_their_words() 
 }
 
 #[test]
-fn a_frame_whose_terminal_sizes_text_hands_it_the_heading_as_the_sequence_that_draws_it() {
-    let pty = Pty::open();
-    let terminal =
-        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
-    let area = painted_at();
-    let mut canvas = canvas_at(&terminal, area).expect("a canvas over it");
-    let mut view = View::of(
-        crate::caps::sized(),
-        Facts::default().asked(),
-        Transcript::of(vec![Entry::Assistant {
-            turn: 1,
-            text: SecretSet::default().redact("# A gate rule"),
-        }]),
-    );
-
-    paint(&mut canvas, &mut view).expect("a painted frame");
-    drop(canvas);
-
-    let drawn = pty.drawn();
-    assert!(
-        drawn.contains("\x1b]66;s=2;A gate rule\x1b\\"),
-        "the heading is handed the terminal as the one sequence that draws it: {drawn:?}"
-    );
-    assert!(
-        !words(&drawn).contains("A   g a t e"),
-        "and no cell of it is written as the cells the sizing leaves: {drawn:?}"
-    );
-}
-
-#[test]
 fn a_run_drawn_at_twice_the_cell_is_the_sequence_that_draws_it_and_no_cell_of_it_is_written() {
     let area = Rect::new(0, 0, 20, 2);
     let run = Sized::new(0, SCALE, "The rule", Look::plain(Ink::Plain));

@@ -321,7 +321,7 @@ fn a_wire_without_a_credential_is_never_asked_and_hands_back_a_hint() {
         .expect("and it says where the key comes from");
     assert!(
         hint.contains("ANTHROPIC_API_KEY"),
-        "the hint names the variable §11 reads: {hint}"
+        "the hint names the variable the rule reads: {hint}"
     );
     assert!(
         replay.requests().is_empty(),

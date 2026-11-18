@@ -189,7 +189,7 @@ fn a_cancel_is_tried_once_however_retryable_the_wire_calls_it() {
     .expect_err("a cancel is never an answer");
 
     assert_eq!(failure.verdict, Verdict::Cancelled);
-    assert_eq!(attempts, 1, "§4 forbids retrying a cancel");
+    assert_eq!(attempts, 1, "the rule forbids retrying a cancel");
     assert_eq!(pause.delays(), [Duration::ZERO]);
 }
 

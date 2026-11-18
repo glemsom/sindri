@@ -254,7 +254,7 @@ fn the_up_arrows_one_arm_is_bound_in_one_row_of_one_table() {
     assert_eq!(
         bound,
         vec![(Mode::Composer, Key::Up)],
-        "the draft's `↑` resolves in exactly one place, and §12's rule is decided there (§12)"
+        "the draft's `↑` resolves in exactly one place, and the rule is decided there"
     );
 }
 
@@ -392,7 +392,7 @@ fn ctrl_x_is_bound_in_one_mode_and_one_row() {
     assert_eq!(
         bound,
         vec![(Mode::Composer, Act::Drop)],
-        "`Ctrl-X` resolves in exactly one place, and the queue is what answers it (§12)"
+        "`Ctrl-X` resolves in exactly one place, and the queue is what answers it"
     );
 }
 

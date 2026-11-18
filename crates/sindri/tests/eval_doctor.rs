@@ -164,7 +164,7 @@ fn doctor_prints_the_bash_description_the_model_is_given_byte_for_byte() {
         let expected = registered(&ground, enforcement);
         assert!(
             printed == expected,
-            "§5: the boundary the model is told about is the boundary enforced, under \
+            "the boundary the model is told about is the boundary enforced, under \
              {flags:?}: {}\nThe description is the registered tool's own bytes and never a \
              second rendering of them.",
             diff(printed, &expected)
