@@ -66,8 +66,8 @@ pub struct Row {
     /// The picture this row stands on, when it is the first row of a block one is drawn
     /// over: the placement goes to the terminal, the row's words are what a copy takes.
     picture: Option<picture::Picture>,
-    /// The band this row sits on, when it is one row of a well: a code fence is a block of
-    /// cells, so each of its rows paints the surface under its words.
+    /// The band this row paints under its own words, where it was laid on one: the surface
+    /// reaches the cells the words leave blank.
     band: Option<Band>,
     /// The runs of this row a terminal draws at more than one cell: the row is measured by the
     /// cells they leave, and its spans say the words they are written as.
@@ -103,7 +103,7 @@ impl Row {
     }
 
     /// The same row, drawn on `band`: the surface reaches the cells its words leave blank, so a
-    /// well is one block and not a stripe behind its glyphs.
+    /// block of them is one ground and not a stripe behind its glyphs.
     pub fn banded(mut self, band: Band) -> Row {
         self.band = Some(band);
         self
