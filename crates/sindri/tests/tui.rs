@@ -2326,7 +2326,7 @@ fn slash_model_offers_the_names_the_wire_serves_and_enter_writes_the_one_chosen(
     let written = written_model(&config, SECOND_SERVED);
     assert!(
         written.contains("# the model I like"),
-        "the save patched the one key it touched and kept the reader's comment (ADR-0009): \
+        "the save patched the one key it touched and kept the reader's comment: \
          {written}"
     );
     assert!(

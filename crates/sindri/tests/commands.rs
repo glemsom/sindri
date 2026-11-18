@@ -228,7 +228,7 @@ fn model_opens_the_names_the_wire_serves_and_asks_the_wire_for_them() {
         say(&mut view, "/model"),
         Outcome::Served,
         "a frame makes no request, so the screen going up is the frame's and the asking is \
-         the terminal's (§10, ADR-0005)"
+         the terminal's"
     );
     assert_eq!(view.mode(), Mode::Models);
     assert!(
@@ -251,7 +251,7 @@ fn model_named_by_hand_sets_a_name_without_opening_a_screen() {
         say(&mut view, "/model some-name-the-wire-never-served"),
         Outcome::Model(String::from("some-name-the-wire-never-served")),
         "the name is handed to the terminal, which is the half that owns the file the one \
-         save writes (ADR-0009)"
+         save writes"
     );
     assert_eq!(
         view.mode(),

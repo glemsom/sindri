@@ -727,7 +727,7 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
         view.capabilities().pictures().rasterises("old.png"),
         0,
         "and the picture off the screen keeps the raster it never had, because a resize is not \
-         what makes a picture: the band showing it is (ADR-0008)"
+         what makes a picture: the band showing it is"
     );
 }
 
