@@ -13,14 +13,6 @@ pub(crate) fn pictured() -> Capabilities {
     )
 }
 
-/// A terminal that names Kitty and drew the block at size: pictures, large text and a pointer.
-pub(crate) fn sized() -> Capabilities {
-    probed(
-        &[("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")],
-        Answers::silent().sized(),
-    )
-}
-
 fn probed(terms: &[(&str, &str)], answers: Answers) -> Capabilities {
     let terms: BTreeMap<String, String> = terms
         .iter()
