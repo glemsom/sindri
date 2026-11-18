@@ -152,6 +152,12 @@ it reads as a block with the glyph it comes before reversed out of it, and no an
 carries one.
 _Avoid_: Region, pane, panel, viewport
 
+**Chip**:
+An inline code span, drawn in the accent ink with no band behind it and in the spacing it was written
+with. Inside a way it keeps the way's own dim line under it; inside a heading it is told from the
+heading's own words, because the chip is the accent while the heading keeps its weight.
+_Avoid_: Badge, tag, pill, inline code
+
 **Draft count**:
 What Enter would send, counted on the far corner of the composer's band: the files the draft's words
 name, the command it opens with, and the characters it holds. It is a count of the draft and never of

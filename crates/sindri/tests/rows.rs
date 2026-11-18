@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
@@ -2145,40 +2144,6 @@ fn laid(row: &Row, area: Rect) -> (Buffer, Links) {
         &mut Sizes::none(),
     );
     (buffer, links)
-}
-
-#[test]
-fn a_run_underlain_with_a_band_moves_with_the_words_it_is_set_past() {
-    let palette = Palette::TRUECOLOR;
-    let row = Row::of([(String::from("a chip"), Look::plain(Ink::Accent))])
-        .underlain(0, 6, Band::Composer)
-        .guttered("  ", Ink::Plain);
-    let area = Rect::new(0, 0, 20, 1);
-    let mut buffer = Buffer::empty(area);
-    row.paint(
-        area,
-        &mut buffer,
-        &palette,
-        &mut Links::none(),
-        &mut Sizes::none(),
-    );
-    let ground: Vec<Color> = (0..10).map(|x| buffer[(x, 0)].bg).collect();
-
-    assert_eq!(
-        ground[2..8],
-        [palette.band(Band::Composer); 6],
-        "the six cells of the run the gutter moved past are the composer band: {ground:?}"
-    );
-    assert_eq!(
-        ground[1],
-        Color::Reset,
-        "the column before the run is the ground the row was drawn on: {ground:?}"
-    );
-    assert_eq!(
-        ground[8],
-        Color::Reset,
-        "and the column after it is drawn on no band: {ground:?}"
-    );
 }
 
 #[test]

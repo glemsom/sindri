@@ -10,6 +10,7 @@ use sindri::ink::{Face, Faces, Ink, Look};
 use sindri::link::Links;
 use sindri::markdown;
 use sindri::palette::{Band, Palette};
+use sindri::pen;
 use sindri::picture::Surface;
 use sindri::rows::Row;
 use sindri::size::Sizes;
@@ -247,7 +248,7 @@ fn the_words_of_a_code_span_are_the_accent_and_never_a_reversed_face() {
     assert!(
         wears(&rows[0], "make check", Look::plain(Ink::Accent)),
         "a run of inline code is the accent and wears no face, so it is told from the prose \
-         around it by the band under it: {:?}",
+         around it by its ink alone: {:?}",
         rows[0].spans()
     );
 }
@@ -258,7 +259,7 @@ fn way_in_prose() -> Look {
     Look::plain(Ink::Accent).underlined(Ink::Dim)
 }
 
-/// The rows painted into a frame 120 columns wide, one to a row, so a test reads the cells a band
+/// The rows painted into a frame 120 columns wide, one to a row, so a test reads the cells a ground
 /// was claimed on and not only the spans the words are said in.
 fn painted(rows: &[Row], links: &mut Links) -> Buffer {
     let mut buffer = Buffer::empty(Rect::new(0, 0, 120, u16::try_from(rows.len()).unwrap()));
@@ -282,8 +283,9 @@ fn ways(rows: &[Row]) -> Links {
     links
 }
 
-/// The band painted under the cells of a frame's row `y`, column by column from `left` to `right`.
-fn banded(buffer: &Buffer, y: u16, left: u16, right: u16) -> Vec<Color> {
+/// The ground each cell of a frame's row `y` was painted on, column by column from `left` to
+/// `right`.
+fn grounded(buffer: &Buffer, y: u16, left: u16, right: u16) -> Vec<Color> {
     (left..right).map(|x| buffer[(x, y)].bg).collect()
 }
 
@@ -300,32 +302,24 @@ fn row_of(rows: &[Row], said: &str) -> u16 {
 }
 
 #[test]
-fn a_code_span_is_drawn_on_the_composer_band_and_the_words_around_it_are_not() {
+fn a_code_span_is_the_accent_ink_and_the_words_around_it_are_the_ground() {
     let rows = markdown::rows("run `make check` first", 40);
     let buffer = painted(&rows, &mut Links::none());
-    let band = Palette::TRUECOLOR.band(Band::Composer);
+
+    let inked: Vec<Color> = (4..14).map(|x| buffer[(x, 0)].fg).collect();
 
     assert_eq!(drawn(&rows), ["run make check first"]);
     assert_eq!(
-        banded(&buffer, 0, 4, 14),
-        [band; 10],
-        "the ten columns the chip was written over are drawn on the composer band: {:?}",
+        inked,
+        [Palette::TRUECOLOR.colour(Ink::Accent); 10],
+        "the ten columns the chip was written over are the accent ink and wear no face: {:?}",
         drawn(&rows)
     );
     assert_eq!(
-        buffer[(4, 0)].fg,
-        Palette::TRUECOLOR.colour(Ink::Accent),
-        "and its words are the accent, so a chip is read as the composer's own run"
-    );
-    assert_eq!(
-        banded(&buffer, 0, 0, 4),
-        [Color::Reset; 4],
-        "the prose leading up to the chip is drawn on no band"
-    );
-    assert_eq!(
-        banded(&buffer, 0, 14, 20),
-        [Color::Reset; 6],
-        "and neither is the prose after it"
+        grounded(&buffer, 0, 0, 20),
+        [Color::Reset; 20],
+        "and no cell of the row carries a ground, the chip's own ten included: {:?}",
+        drawn(&rows)
     );
 }
 
@@ -549,73 +543,76 @@ fn a_link_a_table_in_a_quote_holds_carries_its_destination_past_the_bar() {
 }
 
 #[test]
-fn a_code_span_in_a_table_cell_is_drawn_on_the_composer_band_past_the_cell_before_it() {
+fn a_code_span_in_a_table_cell_is_the_accent_past_the_cell_before_it() {
     let rows = markdown::rows("| a | b |\n| --- | --- |\n| one | `a chip` |", 40);
     let buffer = painted(&rows, &mut Links::none());
-    let band = Palette::TRUECOLOR.band(Band::Composer);
     let at = row_of(&rows, "one │ a chip");
 
     assert_eq!(
-        banded(&buffer, at, 6, 12),
-        [band; 6],
-        "the cell's chip is a band of its own, moved past the cell before it: {:?}",
+        buffer[(6, at)].fg,
+        Palette::TRUECOLOR.colour(Ink::Accent),
+        "the cell's chip opens the column past the cell before it: {:?}",
+        drawn(&rows)
+    );
+    for word in ["a", "chip"] {
+        assert!(
+            wears(&rows[usize::from(at)], word, Look::plain(Ink::Accent)),
+            "and every word of it is the accent, {word} included: {:?}",
+            rows[usize::from(at)].spans()
+        );
+    }
+    assert_eq!(
+        grounded(&buffer, at, 0, 16),
+        [Color::Reset; 16],
+        "and no cell of the row carries a ground, the chip's own six included: {:?}",
         drawn(&rows)
     );
     assert_eq!(
-        banded(&buffer, at, 0, 6),
+        grounded(&buffer, at - 1, 6, 12),
         [Color::Reset; 6],
-        "and the cell before it is the ground the table was drawn on"
-    );
-    assert_eq!(
-        banded(&buffer, at, 12, 16),
-        [Color::Reset; 4],
-        "and the row past the chip is that ground too"
-    );
-    assert_eq!(
-        banded(&buffer, at - 1, 6, 12),
-        [Color::Reset; 6],
-        "the rule over the cell is drawn on no band of the chip's"
+        "the rule over the cell is drawn on no ground of the chip's"
     );
 }
 
 #[test]
-fn a_code_span_wider_than_its_cell_wraps_at_its_own_space_and_keeps_its_band_on_both_rows() {
+fn a_code_span_wider_than_its_cell_wraps_at_its_own_space_and_no_row_carries_a_ground() {
     let rows = markdown::rows("| word |\n| --- |\n| `alpha beta gamma` |", 10);
     let buffer = painted(&rows, &mut Links::none());
-    let band = Palette::TRUECOLOR.band(Band::Composer);
     let at = row_of(&rows, "alpha beta");
 
     assert_eq!(
         drawn(&rows)[2..],
         ["alpha beta", "gamma"],
-        "a chip is wrapped at its own space and never inside a word of it"
+        "a chip is wrapped at its own space, in the spacing it was written with"
+    );
+    for (y, word) in [(at, "alpha"), (at, "beta"), (at + 1, "gamma")] {
+        assert!(
+            wears(&rows[usize::from(y)], word, Look::plain(Ink::Accent)),
+            "the chip's word {word} is the accent on the row it was written on: {:?}",
+            rows[usize::from(y)].spans()
+        );
+    }
+    assert_eq!(
+        grounded(&buffer, at, 0, 10),
+        [Color::Reset; 10],
+        "the row of the chip it wrapped on carries no ground: {:?}",
+        drawn(&rows)
     );
     assert_eq!(
-        banded(&buffer, at, 0, 10),
-        [band; 10],
-        "the row of the chip it wrapped on is banded over the cell it fills"
-    );
-    assert_eq!(
-        banded(&buffer, at + 1, 0, 5),
-        [band; 5],
-        "and the row it finished on is banded over its own words too"
-    );
-    assert_eq!(
-        banded(&buffer, at + 1, 5, 10),
-        [Color::Reset; 5],
-        "and no further than those words"
+        grounded(&buffer, at + 1, 0, 10),
+        [Color::Reset; 10],
+        "and neither does the row it finished on"
     );
 }
 
 #[test]
-fn a_code_span_that_a_table_and_a_way_both_hold_keeps_its_band_and_its_line() {
+fn a_code_span_that_a_table_and_a_way_both_hold_keeps_the_ways_line_and_no_ground() {
     let rows = markdown::rows(
         "| word |\n| --- |\n| [`gate`](https://example.test/gate) |",
         40,
     );
     let mut links = Links::none();
     let buffer = painted(&rows, &mut links);
-    let band = Palette::TRUECOLOR.band(Band::Composer);
     let at = row_of(&rows, "gate");
 
     assert_eq!(
@@ -625,9 +622,9 @@ fn a_code_span_that_a_table_and_a_way_both_hold_keeps_its_band_and_its_line() {
         drawn(&rows)
     );
     assert_eq!(
-        banded(&buffer, at, 0, 4),
-        [band; 4],
-        "and the ground it is drawn on is the chip's own: {:?}",
+        grounded(&buffer, at, 0, 4),
+        [Color::Reset; 4],
+        "and no cell of it carries a ground, the way's own line aside: {:?}",
         drawn(&rows)
     );
     assert_eq!(
@@ -635,6 +632,40 @@ fn a_code_span_that_a_table_and_a_way_both_hold_keeps_its_band_and_its_line() {
         Some("https://example.test/gate"),
         "and the cell is still a way to the destination the words were written over"
     );
+}
+
+#[test]
+fn a_code_span_in_a_heading_is_the_accent_and_the_headings_words_keep_their_weight() {
+    // The highest level is the one whose own ink the chip shares, so that is the level where a
+    // weight the chip does not wear is the whole of what tells the two apart.
+    for (said, weight) in [
+        ("# a `chip` in an h1", Look::new(Ink::Accent, Face::Bold)),
+        ("## a `chip` in an h2", Look::new(Ink::Plain, Face::Bold)),
+    ] {
+        let rows = markdown::rows(said, 40);
+        let buffer = painted(&rows, &mut Links::none());
+        let words = said.trim_start_matches('#').trim_start().replace('`', "");
+        let at = row_of(&rows, &words);
+        let row = &rows[usize::from(at)];
+
+        assert_eq!(
+            looks(row),
+            [weight, Look::plain(Ink::Accent), weight],
+            "the chip is the accent and wears no face while the heading keeps its weight: {:?}",
+            row.spans()
+        );
+        assert_eq!(
+            buffer[(2, at)].fg,
+            Palette::TRUECOLOR.colour(Ink::Accent),
+            "and it is painted as the accent ink: {words:?}"
+        );
+        let wide = pen::cells(&words);
+        assert_eq!(
+            grounded(&buffer, at, 0, wide),
+            vec![Color::Reset; usize::from(wide)],
+            "with no ground under the heading at all: {words:?}"
+        );
+    }
 }
 
 #[test]
@@ -651,15 +682,15 @@ fn a_code_span_inside_a_link_is_a_way_to_the_destination_in_its_own_look() {
         words(&rows[0])
     );
     assert_eq!(
-        banded(&buffer, 0, 9, 13),
-        [Palette::TRUECOLOR.band(Band::Composer); 4],
-        "the four columns the chip was written over are still the composer band: {}",
+        grounded(&buffer, 0, 9, 13),
+        [Color::Reset; 4],
+        "the four columns the chip was written over carry no ground: {}",
         words(&rows[0])
     );
     assert_eq!(
-        banded(&buffer, 0, 13, 18),
+        grounded(&buffer, 0, 13, 18),
         [Color::Reset; 5],
-        "the rest of the way's words are prose, and no band is drawn under them"
+        "and neither do the rest of the way's words"
     );
     assert_eq!(
         links.at(0, 9),
