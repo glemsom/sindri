@@ -16,7 +16,7 @@ use crate::ink::{Ink, Look};
 use crate::link::{Link, Links, Way};
 use crate::mark;
 use crate::markdown;
-use crate::palette::{Band, Palette};
+use crate::palette::Palette;
 use crate::pen::{self, Clip};
 use crate::picture::{self, Surface};
 use crate::pulse::Head;
@@ -66,9 +66,6 @@ pub struct Row {
     /// The picture this row stands on, when it is the first row of a block one is drawn
     /// over: the placement goes to the terminal, the row's words are what a copy takes.
     picture: Option<picture::Picture>,
-    /// The band this row paints under its own words, where it was laid on one: the surface
-    /// reaches the cells the words leave blank.
-    band: Option<Band>,
     /// The runs of this row a terminal draws at more than one cell: the row is measured by the
     /// cells they leave, and its spans say the words they are written as.
     sizes: Vec<Sized>,
@@ -90,7 +87,6 @@ impl Row {
                 .collect(),
             links: Vec::new(),
             picture: None,
-            band: None,
             sizes: Vec::new(),
         }
     }
@@ -100,17 +96,6 @@ impl Row {
     pub fn sized(mut self, run: Sized) -> Row {
         self.sizes.push(run);
         self
-    }
-
-    /// The same row, drawn on `band`: the surface reaches the cells its words leave blank, so a
-    /// block of them is one band and not a stripe behind its glyphs.
-    pub fn banded(mut self, band: Band) -> Row {
-        self.band = Some(band);
-        self
-    }
-
-    pub fn band(&self) -> Option<Band> {
-        self.band
     }
 
     pub fn pictured_over(mut self, picture: picture::Picture) -> Row {
@@ -127,7 +112,6 @@ impl Row {
             spans: Vec::new(),
             links: Vec::new(),
             picture: None,
-            band: None,
             sizes: Vec::new(),
         }
     }
@@ -161,15 +145,14 @@ impl Row {
     }
 
     /// This row moved `by` columns right: the ways it names and the cells a terminal draws at more
-    /// than one are measured from its left edge, so they move with the words while the band it
-    /// stands on and the picture placed over it stay where the row does.
+    /// than one are measured from its left edge, so they move with the words while the picture
+    /// placed over it stays where the row does.
     fn shifted(self, by: u16) -> Row {
         Row {
             spans: self.spans,
             links: self.links.iter().map(|link| link.shifted(by)).collect(),
             sizes: self.sizes.iter().map(|run| run.shifted(by)).collect(),
             picture: self.picture,
-            band: self.band,
         }
     }
 
@@ -242,9 +225,6 @@ impl Row {
         links: &mut Links,
         sizes: &mut Sizes,
     ) {
-        if let Some(band) = self.band {
-            pen::claim(buffer, area, palette.ground(Some(band)));
-        }
         pen::write(buffer, area, &self.spans, Clip::Edge, palette);
         links.lay(area.y, area.x, &self.links);
         sizes.lay(area.y, area.x, &self.sizes);

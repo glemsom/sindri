@@ -1,10 +1,10 @@
 //! Markdown laid out as the rows a transcript draws, one construct at a time: `pulldown-cmark` finds
 //! the constructs and this front end decides what each of them looks like, so a heading's weight and
-//! a code block's gutter are held here; a whole screen of them is `frames`'.
+//! a code block's gutter are held here, and one whole answer holds that no row claims a ground.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
+use ratatui::style::{Color, Style};
 use sindri::graphics::CellSize;
 use sindri::ink::{Face, Faces, Ink, Look};
 use sindri::link::Links;
@@ -262,9 +262,22 @@ fn way_in_prose() -> Look {
 /// The rows painted into a frame 120 columns wide, one to a row, so a test reads the cells a ground
 /// was claimed on and not only the spans the words are said in.
 fn painted(rows: &[Row], links: &mut Links) -> Buffer {
-    let mut buffer = Buffer::empty(Rect::new(0, 0, 120, u16::try_from(rows.len()).unwrap()));
+    painted_over(rows, links, Style::default())
+}
+
+/// The same rows painted over a frame whose every cell was first claimed in `ground`, so a test
+/// reads the cells a row leaves blank as well as the ones its words cover.
+fn painted_over(rows: &[Row], links: &mut Links, ground: Style) -> Buffer {
+    let area = Rect::new(
+        0,
+        0,
+        120,
+        u16::try_from(rows.len()).expect("a frame this short"),
+    );
+    let mut buffer = Buffer::empty(area);
+    pen::claim(&mut buffer, area, ground);
     for (at, row) in rows.iter().enumerate() {
-        let area = Rect::new(0, u16::try_from(at).unwrap(), 120, 1);
+        let area = Rect::new(0, u16::try_from(at).expect("a frame this short"), 120, 1);
         row.paint(
             area,
             &mut buffer,
@@ -1368,32 +1381,11 @@ fn a_fence_claims_no_ground_of_its_own_and_leaves_the_band_under_it_as_it_found_
         ],
         "the tag's row and the source's row are the words a fence is read from"
     );
-    let bands: Vec<Option<Band>> = rows.iter().map(Row::band).collect();
-    assert!(
-        bands.iter().all(Option::is_none),
-        "no row of a fence is laid on a band: {bands:?}"
-    );
 
     let palette = Palette::TRUECOLOR;
-    let area = Rect::new(
-        0,
-        0,
-        120,
-        u16::try_from(rows.len()).expect("a frame this short"),
-    );
     for band in Band::ALL {
-        let mut buffer = Buffer::empty(area);
-        pen::claim(&mut buffer, area, palette.ground(Some(band)));
-        for (at, row) in rows.iter().enumerate() {
-            row.paint(
-                Rect::new(0, u16::try_from(at).expect("a frame this short"), 120, 1),
-                &mut buffer,
-                &palette,
-                &mut Links::none(),
-                &mut Sizes::none(),
-            );
-        }
-        for y in 0..area.height {
+        let buffer = painted_over(&rows, &mut Links::none(), palette.ground(Some(band)));
+        for y in 0..u16::try_from(rows.len()).expect("a frame this short") {
             assert_eq!(
                 grounded(&buffer, y, 0, 120),
                 [palette.band(band); 120],
@@ -1403,6 +1395,74 @@ fn a_fence_claims_no_ground_of_its_own_and_leaves_the_band_under_it_as_it_found_
             );
         }
     }
+}
+
+#[test]
+fn a_whole_answer_claims_no_ground_of_its_own_over_a_band_or_where_none_was_claimed() {
+    let rows = markdown::rows(
+        "# A heading\n\nA chip `make check` beside 漢字.\n\n```rust\nfn main() {}\n```\n\n\
+         | construct | rendering |\n| --- | --- |\n| heading | bold |\n\n\
+         > a quote says\n\n- one\n- two",
+        120,
+    );
+    let laid = drawn(&rows);
+    for said in [
+        "A heading",
+        "A chip make check beside 漢字.",
+        "▏ rust",
+        "▏ fn main() {}",
+        "construct │ rendering",
+        "heading   │ bold",
+        "▏ a quote says",
+        "• one",
+        "• two",
+    ] {
+        assert!(
+            laid.iter().any(|row| row == said),
+            "the answer holds {said:?}, the six constructs it is whole of: {laid:?}"
+        );
+    }
+    let chip = row_of(&rows, "A chip make check beside 漢字.");
+    assert!(
+        wears(
+            &rows[usize::from(chip)],
+            "make check",
+            Look::plain(Ink::Accent)
+        ),
+        "the chip is the accent ink and not the prose around it: {:?}",
+        rows[usize::from(chip)].spans()
+    );
+
+    let palette = Palette::TRUECOLOR;
+    let banded = painted_over(
+        &rows,
+        &mut Links::none(),
+        palette.ground(Some(Band::Composer)),
+    );
+    let bare = painted_over(&rows, &mut Links::none(), palette.ground(None));
+    for y in 0..u16::try_from(rows.len()).expect("a frame this short") {
+        assert_eq!(
+            grounded(&banded, y, 0, 120),
+            [palette.band(Band::Composer); 120],
+            "every cell of row {y} of {laid:?} is still the composer band it was laid on"
+        );
+        assert_eq!(
+            grounded(&bare, y, 0, 120),
+            [Color::Reset; 120],
+            "row {y} of {laid:?} claimed a ground of its own where none was laid"
+        );
+    }
+
+    // A row that painted no word at all would leave every ground as it found it, so the glyphs are
+    // read back too: the answer's words are drawn, and only their ground is the band's.
+    let at = row_of(&rows, "A heading");
+    let said: String = (0..rows[usize::from(at)].width())
+        .map(|x| banded[(x, at)].symbol())
+        .collect();
+    assert_eq!(
+        said, "A heading",
+        "the answer's own words are painted over the band"
+    );
 }
 
 #[test]
@@ -1431,13 +1491,8 @@ fn the_sentence_saying_a_diagram_will_not_draw_is_dim_prose_and_the_source_is_pl
             .iter()
             .filter(|(said, _)| !said.trim().is_empty())
             .all(|(_, look)| *look == dim),
-        "every word of the sentence that explains the block is dim prose, and no band says it: {:?}",
+        "every word of the sentence that explains the block is the dim ink alone: {:?}",
         rows[caption].spans()
-    );
-    let bands: Vec<Option<Band>> = rows.iter().map(Row::band).collect();
-    assert!(
-        bands.iter().all(Option::is_none),
-        "no row of the block is laid on a band: {bands:?}"
     );
 }
 
