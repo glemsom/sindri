@@ -4,7 +4,12 @@
 use ratatui::layout::Rect;
 
 use crate::graphics::CellSize;
+use crate::ledger::Rail;
 use crate::palette::{Band, Edge, Palette, channels};
+
+/// The columns of the transcript the rail's plane widens across: the transcript's last, where the
+/// well falls into the shadow the rail comes back out of.
+pub const SEAM: u16 = 3;
 
 /// Which band's ground a plane is, and the identity a placement is named by: the two planes of one
 /// frame are told apart by it and by nothing else.
@@ -66,16 +71,33 @@ impl Plane {
         })
     }
 
-    /// The rail's band: the band's own colour at the head, falling continuously into the shadow at
-    /// its foot. None for an area with no rows or columns, and for a palette that draws no colour
-    /// this design can spell in a pixel, where the band's own rows are the whole of its shading.
-    pub fn rail(area: Rect, cell: CellSize, palette: &Palette) -> Option<Plane> {
+    /// The rail's band: the band's own colour at the head, falling into the shadow at its foot, and
+    /// a ledger's widened across the seam, where the well falls into the crease and the band comes
+    /// back out of it. None for an area with no rows or columns or a palette with no colour in it.
+    pub fn rail(shape: Rail, area: Rect, cell: CellSize, palette: &Palette) -> Option<Plane> {
         let head = channels(palette.band(Band::Rail))?;
         let foot = channels(palette.edge(Edge::Shadow))?;
+        let widened = match shape {
+            Rail::Ledger => SEAM.min(area.x),
+            Rail::Strip => 0,
+        };
+        let area = Rect {
+            x: area.x - widened,
+            width: area.width + widened,
+            ..area
+        };
         let (width, height) = extent(area, cell)?;
         let span = f64::from(height.saturating_sub(1).max(1));
-        let pixels =
-            image::RgbaImage::from_fn(width, height, |_, y| mix(head, foot, f64::from(y) / span));
+        let seam = match shape {
+            Rail::Ledger => Some(Seam::of(widened, cell)),
+            Rail::Strip => None,
+        };
+        let pixels = image::RgbaImage::from_fn(width, height, |x, y| {
+            let down = mix(head, foot, f64::from(y) / span);
+            let vertical = [down[0], down[1], down[2]];
+            seam.and_then(|seam| seam.across(x, vertical, palette))
+                .unwrap_or(down)
+        });
         Some(Plane {
             id: PlaneId::Rail,
             area,
@@ -110,6 +132,53 @@ fn extent(area: Rect, cell: CellSize) -> Option<(u32, u32)> {
             u32::from(area.height) * cell.height(),
         )),
     }
+}
+
+/// The seam the rail's plane widens across: the transcript's last columns, and the rail's first
+/// few, in the pixels of the cell they are drawn at.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Seam {
+    /// The pixels of the plane left of the rail's first column.
+    crease: u32,
+    /// The pixels of the rail's columns the band comes back out of the crease over.
+    out: u32,
+}
+
+impl Seam {
+    fn of(widened: u16, cell: CellSize) -> Seam {
+        Seam {
+            crease: u32::from(widened) * cell.width(),
+            out: u32::from(SEAM) * cell.width(),
+        }
+    }
+
+    /// The colour the seam is at pixel column `x` of a plane whose own vertical colour there is
+    /// `down`, and nothing for a column of the rail the vertical fall already carries.
+    fn across(&self, x: u32, down: [u8; 3], palette: &Palette) -> Option<image::Rgba<u8>> {
+        let shadow = channels(palette.edge(Edge::Shadow))?;
+        match x {
+            x if x < self.crease => Some(fall(
+                channels(palette.band(Band::Well))?,
+                shadow,
+                x,
+                self.crease - 1,
+            )),
+            x if x - self.crease < self.out => {
+                Some(fall(shadow, down, x - self.crease, self.out - 1))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// The colour `at` pixels along a ramp of `span` pixels from `head` to `foot`, its ends the ends of
+/// the ramp.
+fn fall(head: [u8; 3], foot: [u8; 3], at: u32, span: u32) -> image::Rgba<u8> {
+    let t = match span {
+        0 => 1.0,
+        span => f64::from(at.min(span)) / f64::from(span),
+    };
+    mix(head, foot, t)
 }
 
 /// The colour a plane is at `t` of the way down a ramp from `head` to `foot`.

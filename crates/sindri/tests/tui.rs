@@ -3179,7 +3179,8 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     assert_eq!(
         u32::from(left) + u32::from(columns) - 1,
         u32::from(width),
-        "over the rail's own columns, which end at the frame's right-hand edge"
+        "over the rail's own columns and the seam it widens across the transcript, which end at \
+         the frame's right-hand edge"
     );
     assert_eq!(
         rows,

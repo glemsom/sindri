@@ -30,14 +30,16 @@ pub fn paint(
     if area.width == 0 || area.height == 0 {
         return None;
     }
-    let plane = pictures.and_then(|cell| Plane::rail(area, cell, palette));
+    let plane = pictures.and_then(|cell| Plane::rail(rail, area, cell, palette));
     let ground = match plane.is_some() {
         true => None,
         false => Some(Band::Rail),
     };
     pen::claim(buffer, area, palette.ground(ground));
     if rail == Rail::Ledger {
-        elevation(buffer, area, palette, plane.is_none());
+        if plane.is_none() {
+            elevation(buffer, area, palette);
+        }
         under_the_face(band, buffer, palette);
     }
     ledger::draw(
@@ -71,22 +73,20 @@ fn under_the_face(band: RailBand, buffer: &mut Buffer, palette: &Palette) {
     }
 }
 
-/// The two ends a ledger's band carries light at: the rule down the column it meets the
-/// transcript on, which is the rail's own column and never one the transcript gave up, and — on a
-/// band no plane is drawn under — the shadow across its last row.
-fn elevation(buffer: &mut Buffer, area: Rect, palette: &Palette, shadow: bool) {
+/// The two ends a ledger's band carries light at on the band no plane is drawn under: the rule
+/// down the column it meets the transcript on, which is the rail's own column and never one the
+/// transcript gave up, and the shadow across its last row.
+fn elevation(buffer: &mut Buffer, area: Rect, palette: &Palette) {
     pen::claim(buffer, Rect { width: 1, ..area }, palette.edged(Edge::Lit));
-    if shadow {
-        pen::claim(
-            buffer,
-            Rect {
-                y: area.bottom() - 1,
-                height: 1,
-                ..area
-            },
-            palette.edged(Edge::Shadow),
-        );
-    }
+    pen::claim(
+        buffer,
+        Rect {
+            y: area.bottom() - 1,
+            height: 1,
+            ..area
+        },
+        palette.edged(Edge::Shadow),
+    );
 }
 
 #[cfg(test)]

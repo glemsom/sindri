@@ -985,6 +985,9 @@ impl View {
         let share = self.split(layout.transcript);
         layout.transcript = share.transcript;
         layout.rail = share.rail;
+        // The columns of the transcript the rail's plane is drawn under, which the transcript
+        // claims as the terminal's own ground before it writes a word on them.
+        let mut seam = None;
         if let Some((shape, band)) = share.rail {
             // A ledger carries the face wherever it is drawn, and a strip is one row of facts with
             // no band to carry one in: a terminal that places no picture, or a config that turned
@@ -1006,6 +1009,7 @@ impl View {
                 buffer,
                 &self.capabilities.palette(),
             ) {
+                seam = Some(plane.area());
                 painted.planes.push(plane);
             }
             if let (Some(picture), Some(cells)) = (&picture, band.picture) {
@@ -1017,6 +1021,7 @@ impl View {
         }
         let drawn = self.transcript(
             share.transcript,
+            seam,
             buffer,
             &mut painted.links,
             &mut painted.sizes,
@@ -1140,15 +1145,16 @@ impl View {
     fn transcript(
         &mut self,
         area: Rect,
+        seam: Option<Rect>,
         buffer: &mut Buffer,
         links: &mut Links,
         sizes: &mut Sizes,
     ) -> Drawn {
-        pen::claim(
-            buffer,
-            area,
-            self.capabilities.palette().ground(Some(Band::Well)),
-        );
+        let palette = self.capabilities.palette();
+        pen::claim(buffer, area, palette.ground(Some(Band::Well)));
+        if let Some(under) = seam.map(|seam| area.intersection(seam)) {
+            pen::claim(buffer, under, palette.ground(None));
+        }
         // A narrower band lays the same history out in more rows, and that is no row landing.
         let reflowed = self.rows.cols() != area.width;
         self.rows.resize(area.width);
