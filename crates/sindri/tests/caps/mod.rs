@@ -56,6 +56,19 @@ pub fn inked(palette: Palette) -> Capabilities {
     )
 }
 
+/// A terminal that names Kitty and was told `NO_COLOR`: it places pictures, and draws them on the
+/// reader's own slots rather than on the design's colours.
+pub fn uncoloured() -> Capabilities {
+    probed(
+        &[
+            ("TERM", "xterm-kitty"),
+            ("NO_COLOR", "1"),
+            ("COLORTERM", "truecolor"),
+        ],
+        Answers::at(CellSize::NOMINAL).sized(),
+    )
+}
+
 /// A terminal that names Kitty, with the config's face switch as given.
 pub fn faced(face: bool) -> Capabilities {
     let terms = BTreeMap::from([

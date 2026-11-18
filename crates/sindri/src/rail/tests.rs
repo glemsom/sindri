@@ -14,7 +14,7 @@ use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 /// The band a ledger test stands in: the rail at its floor, which is what the narrowest frame
 /// that holds one is handed.
 const COLUMNS: u16 = FLOOR;
-use crate::palette::Edge;
+use crate::palette::{Edge, channels};
 use crate::pen;
 use crate::readback::{column_of, inks, under};
 
@@ -34,7 +34,15 @@ fn paint(
     buffer: &mut Buffer,
     palette: &Palette,
 ) {
-    super::paint(facts, rail, RailBand::of(area), marker, buffer, palette);
+    super::paint(
+        facts,
+        rail,
+        RailBand::of(area),
+        marker,
+        None,
+        buffer,
+        palette,
+    );
 }
 
 fn band(width: u16, height: u16) -> Rect {
@@ -172,6 +180,7 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
         Rail::Ledger,
         RailBand::of(area).with_picture(19, 11),
         None,
+        None,
         &mut buffer,
         &PALETTE,
     );
@@ -215,6 +224,129 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
         "wire      anthropic",
         "so the first block stands on the row under that rule"
     );
+}
+
+#[test]
+fn a_rail_handed_a_cell_claims_the_terminals_ground_and_draws_no_shadow_row() {
+    let area = band(COLUMNS, 8);
+    let mut buffer = Buffer::empty(area);
+
+    let plane = super::paint(
+        &frame(),
+        Rail::Ledger,
+        RailBand::of(area),
+        None,
+        Some(CellSize::NOMINAL),
+        &mut buffer,
+        &PALETTE,
+    )
+    .expect("a palette that spells its colours is handed the band's plane");
+
+    assert_eq!(plane.area(), area, "the plane covers the rail's own rect");
+    assert_eq!(
+        plane.pixels().dimensions(),
+        (
+            u32::from(area.width) * CellSize::NOMINAL.width(),
+            u32::from(area.height) * CellSize::NOMINAL.height()
+        ),
+        "at the pixels of the cell it is drawn on"
+    );
+    let (width, height) = plane.pixels().dimensions();
+    assert_eq!(
+        plane.pixels().get_pixel(0, 0).0[..3],
+        channels(PALETTE.band(Band::Rail)).expect("a band in pixels"),
+        "the plane's head pixel is the rail's own band colour"
+    );
+    assert_eq!(
+        plane.pixels().get_pixel(width - 1, height - 1).0[..3],
+        channels(PALETTE.edge(Edge::Shadow)).expect("a shadow in pixels"),
+        "and its foot is the shadow the band ends in, so the shadow row is drawn in pixels"
+    );
+    for y in area.y..area.bottom() {
+        for x in area.x + 1..area.right() {
+            assert_eq!(
+                under(&buffer, x, y),
+                PALETTE.ground(None).bg.expect("the terminal's own ground"),
+                "row {y}, column {x} of the band is not claimed as the terminal's own ground, \
+                 so the pixels are read through a cell drawn over them"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_rail_handed_no_cell_draws_todays_band_and_its_shadow_row() {
+    let area = band(COLUMNS, 8);
+    let mut buffer = Buffer::empty(area);
+
+    let plane = super::paint(
+        &frame(),
+        Rail::Ledger,
+        RailBand::of(area),
+        None,
+        None,
+        &mut buffer,
+        &PALETTE,
+    );
+
+    assert!(
+        plane.is_none(),
+        "a terminal that places no picture is handed no plane for the rail"
+    );
+    for y in area.y..area.bottom() - 1 {
+        for x in area.x + 1..area.right() {
+            assert_eq!(
+                under(&buffer, x, y),
+                PALETTE.band(Band::Rail),
+                "row {y}, column {x} of the band is not the rail's own ground: the flat band is \
+                 the surface a terminal with no picture already had"
+            );
+        }
+    }
+    for x in area.x..area.right() {
+        assert_eq!(
+            under(&buffer, x, area.bottom() - 1),
+            PALETTE.edge(Edge::Shadow),
+            "column {x} of the band's last row is not the shadow across it, which no plane is \
+             drawn under"
+        );
+    }
+}
+
+#[test]
+fn a_rail_handed_a_cell_in_no_colour_draws_the_band_and_shadow_it_drew_without_one() {
+    for (shape, area) in [(Rail::Ledger, band(COLUMNS, 8)), (Rail::Strip, band(40, 1))] {
+        let mut pictured = Buffer::empty(area);
+        let mut placeless = Buffer::empty(area);
+
+        let plane = super::paint(
+            &frame(),
+            shape,
+            RailBand::of(area),
+            None,
+            Some(CellSize::NOMINAL),
+            &mut pictured,
+            &Palette::SLOTS,
+        );
+        paint(&frame(), shape, area, None, &mut placeless, &Palette::SLOTS);
+
+        assert!(
+            plane.is_none(),
+            "a palette that draws no colour is handed no plane for the {shape:?}, so the band's \
+             own rows are the whole of its shading"
+        );
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                assert_eq!(
+                    pictured[(x, y)],
+                    placeless[(x, y)],
+                    "row {y}, column {x} of the {shape:?} is not the cell the band drew with no \
+                     plane under it: the flat band and the shadow across its last row are what a \
+                     reader who asked for no colour already had"
+                );
+            }
+        }
+    }
 }
 
 #[test]

@@ -3,31 +3,41 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::ledger::{self, Facts, Rail, RailBand};
 use crate::palette::{Band, Edge, Palette};
 use crate::pen;
+use crate::plane::Plane;
 use crate::pulse::Pulse;
 
 /// The one rule the rail draws in its body: the face is closed by a line, and the blocks under it
 /// are parted by air rather than by a rule each.
 const HAIRLINE: char = '─';
 
+/// The band the rail draws, handed the cell a picture is measured at where this terminal places
+/// one: the plane the band stands on is built from it and handed back with the band it shades.
 pub fn paint(
     facts: &Facts,
     rail: Rail,
     band: RailBand,
     marker: Option<&Pulse>,
+    pictures: Option<CellSize>,
     buffer: &mut Buffer,
     palette: &Palette,
-) {
+) -> Option<Plane> {
     let area = band.area;
     if area.width == 0 || area.height == 0 {
-        return;
+        return None;
     }
-    pen::claim(buffer, area, palette.ground(Some(Band::Rail)));
+    let plane = pictures.and_then(|cell| Plane::rail(area, cell, palette));
+    let ground = match plane.is_some() {
+        true => None,
+        false => Some(Band::Rail),
+    };
+    pen::claim(buffer, area, palette.ground(ground));
     if rail == Rail::Ledger {
-        elevation(buffer, area, palette);
+        elevation(buffer, area, palette, plane.is_none());
         under_the_face(band, buffer, palette);
     }
     ledger::draw(
@@ -36,6 +46,7 @@ pub fn paint(
         buffer,
         palette,
     );
+    plane
 }
 
 /// The rule that closes a face drawn over the rail's top rows, and nothing when the band holds no
@@ -61,19 +72,21 @@ fn under_the_face(band: RailBand, buffer: &mut Buffer, palette: &Palette) {
 }
 
 /// The two ends a ledger's band carries light at: the rule down the column it meets the
-/// transcript on, which is the rail's own column and never one the transcript gave up, and the
-/// shadow under its last row.
-fn elevation(buffer: &mut Buffer, area: Rect, palette: &Palette) {
+/// transcript on, which is the rail's own column and never one the transcript gave up, and — on a
+/// band no plane is drawn under — the shadow across its last row.
+fn elevation(buffer: &mut Buffer, area: Rect, palette: &Palette, shadow: bool) {
     pen::claim(buffer, Rect { width: 1, ..area }, palette.edged(Edge::Lit));
-    pen::claim(
-        buffer,
-        Rect {
-            y: area.bottom() - 1,
-            height: 1,
-            ..area
-        },
-        palette.edged(Edge::Shadow),
-    );
+    if shadow {
+        pen::claim(
+            buffer,
+            Rect {
+                y: area.bottom() - 1,
+                height: 1,
+                ..area
+            },
+            palette.edged(Edge::Shadow),
+        );
+    }
 }
 
 #[cfg(test)]

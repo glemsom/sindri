@@ -640,39 +640,89 @@ fn a_panic_gives_the_terminal_back_before_the_guard_can() {
     );
 }
 
-#[test]
-fn a_pixel_ground_is_placed_and_deleted_on_clear() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let pixels = image::RgbaImage::from_pixel(20, 20, image::Rgba([20, 30, 40, 255]));
-    backend
-        .ground(Some(&(Rect::new(2, 3, 2, 1), pixels)))
-        .unwrap();
-    backend.ground(None).unwrap();
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-    assert!(wire.contains("_Ga=T"));
-    assert!(wire.contains("_Ga=d"));
-    assert!(wire.find("_Ga=T").unwrap() < wire.find("_Ga=d").unwrap());
+/// The bytes a backend wrote, read back between one paint and the next: a backend holds the wire
+/// it writes to, so the count a paint is measured by has to stand beside it.
+#[derive(Clone, Default)]
+struct Wire(std::rc::Rc<std::cell::RefCell<Vec<u8>>>);
+
+impl Wire {
+    fn drawn(&self) -> String {
+        String::from_utf8(self.0.borrow().clone()).expect("a printable wire")
+    }
+}
+
+impl Write for Wire {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.borrow_mut().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+/// The composer's plane at a two-cell band, and the rail's beside it: two planes a backend tells
+/// apart by the identity each is placed under, and by nothing else.
+fn composer_plane() -> Plane {
+    Plane::composer(Rect::new(2, 3, 2, 1), CellSize::NOMINAL, None).expect("a plane")
+}
+
+fn rail_plane() -> Plane {
+    Plane::rail(
+        Rect::new(6, 3, 3, 4),
+        CellSize::NOMINAL,
+        &Palette::TRUECOLOR,
+    )
+    .expect("a plane")
 }
 
 #[test]
-fn a_resized_ground_replaces_the_old_placement_and_a_moved_caret_refreshes_it() {
+fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), false);
+    let held = [composer_plane(), rail_plane()];
+    backend.planes(&held).unwrap();
+    let placed = wire.drawn().len();
+    backend.planes(&held).unwrap();
+    assert_eq!(
+        placed,
+        wire.drawn().len(),
+        "a paint that changes no band writes no bytes at all"
+    );
+    backend.planes(&held[1..]).unwrap();
+    drop(backend);
+    let wire = wire.drawn();
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        2,
+        "two planes, and each placed once: {wire:?}"
+    );
+    assert!(
+        wire.contains("_Ga=T,f=100,i=333,q=2") && wire.contains("_Ga=T,f=100,i=334,q=2"),
+        "each plane is uploaded under its own identity: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=d").count(),
+        1,
+        "the plane that left is deleted and the one that stands is not: {wire:?}"
+    );
+    assert!(
+        wire.contains("_Ga=d,d=i,i=333"),
+        "and it is deleted by the identity it was placed under: {wire:?}"
+    );
+}
+
+#[test]
+fn a_resized_plane_replaces_the_old_placement_and_a_moved_caret_refreshes_it() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
-    let first = (
-        Rect::new(2, 3, 2, 1),
-        image::RgbaImage::from_pixel(20, 20, image::Rgba([20, 30, 40, 255])),
-    );
-    let moved = (
-        first.0,
-        image::RgbaImage::from_pixel(20, 20, image::Rgba([40, 30, 20, 255])),
-    );
-    let resized = (Rect::new(1, 5, 3, 2), moved.1.clone());
-    backend.ground(Some(&first)).unwrap();
-    backend.ground(Some(&first)).unwrap();
-    backend.ground(Some(&moved)).unwrap();
-    backend.ground(Some(&resized)).unwrap();
+    let first = Plane::composer(Rect::new(2, 3, 2, 1), CellSize::NOMINAL, None).unwrap();
+    let moved = Plane::composer(Rect::new(2, 3, 2, 1), CellSize::NOMINAL, Some((3, 3))).unwrap();
+    let resized = Plane::composer(Rect::new(1, 5, 3, 2), CellSize::NOMINAL, Some((3, 3))).unwrap();
+    backend.planes(&[first]).unwrap();
+    backend.planes(&[moved]).unwrap();
+    backend.planes(&[resized]).unwrap();
     drop(backend);
     let wire = String::from_utf8(wire).unwrap();
     assert_eq!(wire.matches("_Ga=T").count(), 3);
@@ -690,30 +740,46 @@ fn a_resized_ground_replaces_the_old_placement_and_a_moved_caret_refreshes_it() 
 }
 
 #[test]
-fn a_whole_frame_clear_deletes_and_repaints_the_ground() {
+fn a_whole_frame_clear_drops_both_planes_before_it_clears_the_screen() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
-    let ground = (
-        Rect::new(2, 3, 2, 1),
-        image::RgbaImage::from_pixel(20, 20, image::Rgba([20, 30, 40, 255])),
-    );
-    backend.ground(Some(&ground)).unwrap();
+    let held = [composer_plane(), rail_plane()];
+    backend.planes(&held).unwrap();
     RatatuiBackend::clear(&mut backend).unwrap();
-    backend.ground(Some(&ground)).unwrap();
+    backend.planes(&held).unwrap();
     drop(backend);
     let wire = String::from_utf8(wire).unwrap();
-    assert_eq!(wire.matches("_Ga=T").count(), 2);
-    assert_eq!(wire.matches("_Ga=d").count(), 1);
-    assert!(wire.find("_Ga=d").unwrap() < wire.match_indices("_Ga=T").nth(1).unwrap().0);
+    assert_eq!(wire.matches("_Ga=T").count(), 4, "two planes, placed twice");
+    assert_eq!(
+        wire.matches("_Ga=d").count(),
+        2,
+        "a frame that clears drops both planes: {wire:?}"
+    );
+    let dropped = wire.rfind("_Ga=d").unwrap();
+    assert!(wire.contains("_Ga=d,d=i,i=333") && wire.contains("_Ga=d,d=i,i=334"));
+    assert!(
+        dropped < wire.match_indices("_Ga=T").nth(2).unwrap().0,
+        "and the frame after it places them again"
+    );
 }
 
 #[test]
-fn giving_the_screen_back_deletes_the_ground_before_the_shell_returns() {
+fn giving_the_screen_back_deletes_both_planes_before_the_shell_returns() {
     let _one_screen = lock(&ONE_SCREEN);
     let pty = Pty::open();
     let terminal = Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).unwrap();
     let screen = Screen::take(&terminal, false, false).unwrap();
     drop(screen);
     let drawn = pty.drawn();
-    assert!(drawn.find("_Ga=d,d=i,i=333").unwrap() < drawn.find("\x1b[?1049l").unwrap());
+    let screen_back = drawn.find("\x1b[?1049l").expect("the screen is given back");
+    for id in [333, 334] {
+        let deleted = drawn
+            .find(&format!("_Ga=d,d=i,i={id}"))
+            .unwrap_or_else(|| panic!("the plane under {id} is deleted: {drawn:?}"));
+        assert!(
+            deleted < screen_back,
+            "a plane the launch placed is deleted before the alternate screen is given back: \
+             {drawn:?}"
+        );
+    }
 }

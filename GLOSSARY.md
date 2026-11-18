@@ -152,6 +152,16 @@ it reads as a block with the glyph it comes before reversed out of it, and no an
 carries one.
 _Avoid_: Region, pane, panel, viewport
 
+**Plane**:
+A band's ground drawn as one image placed under its cells, so a surface shades in pixels rather than
+in whole rows: the composer's carries its ramp and the glow under the caret, and the rail's carries
+the band at its head and falls continuously into the shadow at its foot. It is placed once per size,
+carries an identity of its own so one is taken away and the other stands, and is handed back with the
+pass that drew it. A terminal that places no picture is given none, and so is the rail in a palette
+that draws no colour, where the band's own rows — its flat ground and the shadow across its last
+one — are the whole of its shading.
+_Avoid_: Ground (that one is where a run stands), backdrop, background, layer
+
 **Chip**:
 An inline code span, drawn in the accent ink with no band behind it and in the spacing it was written
 with. Inside a way it keeps the way's own dim line under it; inside a heading it is told from the

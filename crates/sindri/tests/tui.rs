@@ -3097,10 +3097,42 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
-/// The frame a launch opens on is drawn before any prompt and is the band's frame as much as any
-/// other: a terminal that places pictures is handed the ground from that first paint.
+/// The row and the column a placement at `at` is made at, read off the cursor move it is written
+/// after: the one thing that says where on the screen a plane is.
+fn placed_at(bytes: &[u8], at: usize) -> (u16, u16) {
+    let before = String::from_utf8_lossy(&bytes[..at]);
+    let (_, moved) = before
+        .rsplit_once("\x1b7\x1b[")
+        .expect("a plane is placed where the cursor was saved and moved to it");
+    let (row, column) = moved
+        .strip_suffix('H')
+        .and_then(|at| at.split_once(';'))
+        .expect("the placement names the row and the column it is made at");
+    (
+        row.parse().expect("a row of the terminal"),
+        column.parse().expect("a column of the terminal"),
+    )
+}
+
+/// The columns and the rows a placement at `at` covers, read off its own header.
+fn covers(bytes: &[u8], at: usize) -> (u16, u16) {
+    let header = String::from_utf8_lossy(&bytes[at..]);
+    let named = |key: &str| -> u16 {
+        header
+            .split_once(key)
+            .and_then(|(_, tail)| tail.split_once(','))
+            .expect("the placement names it before its pixels")
+            .0
+            .parse()
+            .expect("a count of cells")
+    };
+    (named("c="), named("r="))
+}
+
+/// The frame a launch opens on is drawn before any prompt and is the bands' frame as much as any
+/// other: a terminal that places pictures is handed both grounds from that first paint.
 #[test]
-fn the_first_frame_a_launch_draws_stands_on_the_ground_its_composer_band_earns() {
+fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     let ground = Ground::new();
     let wire = Wire::holding();
     let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
@@ -3117,21 +3149,43 @@ fn the_first_frame_a_launch_draws_stands_on_the_ground_its_composer_band_earns()
             drawn.text()
         )
     });
-    let before = String::from_utf8_lossy(&bytes[..placed]).into_owned();
-    let (_, at_band) = before
-        .rsplit_once("\x1b7\x1b[")
-        .expect("a ground is placed where the cursor was saved and moved to the band");
-    let row = at_band
-        .strip_suffix(";1H")
-        .expect("the placement is at the band's first column");
-    assert!(
-        !row.is_empty() && row.bytes().all(|byte| byte.is_ascii_digit()),
-        "at a row of the terminal that has one: {row:?}"
+    let (band, width) = (placed_at(&bytes, placed).0, covers(&bytes, placed).0);
+    assert_eq!(
+        placed_at(&bytes, placed).1,
+        1,
+        "the composer's plane is placed at the frame's first column, on the row {band} its band \
+         starts at"
     );
-    assert!(
-        at(&bytes[placed..], b",r=5,m=").is_some(),
+    assert_eq!(
+        covers(&bytes, placed).1,
+        5,
         "and it covers the band's five rows: {:?}",
         drawn.text()
+    );
+
+    let rail = at(&bytes, b"\x1b_Ga=T,f=100,i=334,q=2,z=-1,c=").unwrap_or_else(|| {
+        panic!(
+            "the rail's band of the boot frame is placed on a plane of its own: {:?}",
+            drawn.text()
+        )
+    });
+    assert!(
+        rail < placed,
+        "and the rail is placed before the composer's band, because the rail is drawn first"
+    );
+    let (top, left) = placed_at(&bytes, rail);
+    let (columns, rows) = covers(&bytes, rail);
+    assert_eq!(top, 1, "at the frame's first row");
+    assert_eq!(
+        u32::from(left) + u32::from(columns) - 1,
+        u32::from(width),
+        "over the rail's own columns, which end at the frame's right-hand edge"
+    );
+    assert_eq!(
+        rows,
+        band - 1,
+        "and down every row of the band it shares with the transcript, up to the row the \
+         composer's band starts at"
     );
 
     pty.type_bytes(&[0x11]);
