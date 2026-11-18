@@ -103,7 +103,7 @@ impl Row {
     }
 
     /// The same row, drawn on `band`: the surface reaches the cells its words leave blank, so a
-    /// block of them is one ground and not a stripe behind its glyphs.
+    /// block of them is one band and not a stripe behind its glyphs.
     pub fn banded(mut self, band: Band) -> Row {
         self.band = Some(band);
         self

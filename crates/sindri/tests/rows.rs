@@ -2023,8 +2023,6 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
     );
 }
 
-/// A fence that opens a live answer claims no ground of its own: its rows are laid over whatever
-/// band they stand on, the marker's own row first.
 #[test]
 fn a_fence_that_opens_a_live_answer_claims_no_ground_of_its_own() {
     let mut rows = Rows::new();

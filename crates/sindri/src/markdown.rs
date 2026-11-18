@@ -649,7 +649,6 @@ impl Room {
     /// source, nothing while it is still arriving, one sentence under the source when it did not
     /// draw — because a diagram that is simply absent cannot be told from a build that cannot draw.
     fn close_code(&mut self) {
-        // The code is cleared before the caption is laid, so the sentence under a fence is prose.
         self.flush_if_written();
         self.code = None;
         if let Some(mermaid) = self.mermaid.take() {

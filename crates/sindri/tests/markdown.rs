@@ -1366,7 +1366,7 @@ fn a_fence_claims_no_ground_of_its_own_and_leaves_the_band_under_it_as_it_found_
             "",
             "prose below",
         ],
-        "the tag's row and the source's row are drawn in the cells they were drawn in before"
+        "the tag's row and the source's row are the words a fence is read from"
     );
     let bands: Vec<Option<Band>> = rows.iter().map(Row::band).collect();
     assert!(
@@ -1406,33 +1406,32 @@ fn a_fence_claims_no_ground_of_its_own_and_leaves_the_band_under_it_as_it_found_
 }
 
 #[test]
-fn the_sentence_saying_a_diagram_will_not_draw_is_told_from_the_source_by_its_words() {
+fn the_sentence_saying_a_diagram_will_not_draw_is_dim_prose_and_the_source_is_plain_code() {
     let rows = markdown::rows("```mermaid\nnot a diagram\n```", 200);
-    let drawn_rows = drawn(&rows);
-    let caption = drawn_rows
+    let laid = drawn(&rows);
+    let caption = laid
         .iter()
         .position(|row| row.contains("could not be drawn"))
-        .unwrap_or_else(|| panic!("the row saying why the diagram did not draw: {drawn_rows:?}"));
+        .unwrap_or_else(|| panic!("the row saying why the diagram did not draw: {laid:?}"));
 
     assert_eq!(
-        drawn_rows[caption - 1],
+        laid[caption - 1],
         "▏ not a diagram",
-        "the sentence stands under the fence's own source: {drawn_rows:?}"
+        "the sentence stands under the fence's own source: {laid:?}"
     );
     assert!(
         wears(&rows[caption - 1], "not a diagram", Look::plain(Ink::Plain)),
-        "the source is code and wears the ink no prose around it wears: {:?}",
+        "the source under the sentence is the fence's, drawn plain where no syntax names it: {:?}",
         rows[caption - 1].spans()
     );
-    let inked: Vec<Ink> = rows[caption]
-        .spans()
-        .iter()
-        .filter(|(said, _)| !said.trim().is_empty())
-        .map(|(_, look)| look.ink())
-        .collect();
+    let dim = Look::plain(Ink::Dim);
     assert!(
-        inked.iter().all(|ink| *ink == Ink::Dim),
-        "every word of the sentence saying why wears the prose ink: {:?}",
+        rows[caption]
+            .spans()
+            .iter()
+            .filter(|(said, _)| !said.trim().is_empty())
+            .all(|(_, look)| *look == dim),
+        "every word of the sentence that explains the block is dim prose, and no band says it: {:?}",
         rows[caption].spans()
     );
     let bands: Vec<Option<Band>> = rows.iter().map(Row::band).collect();
