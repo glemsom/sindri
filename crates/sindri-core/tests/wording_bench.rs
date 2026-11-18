@@ -189,7 +189,7 @@ fn sections(rendered: &str) -> Vec<(&'static str, &str)> {
         .map(|(name, marker)| {
             let offset = rendered
                 .find(marker)
-                .unwrap_or_else(|| panic!("§9's {name} section opens with {marker:?}"));
+                .unwrap_or_else(|| panic!("the {name} section opens with {marker:?}"));
             (*name, offset)
         })
         .collect();
@@ -203,7 +203,7 @@ fn sections(rendered: &str) -> Vec<(&'static str, &str)> {
     );
     assert!(
         starts.windows(2).all(|pair| pair[0].1 < pair[1].1),
-        "the sections arrive in the order §9 renders them, and none of them is empty"
+        "the sections arrive in the order the rule renders them, and none of them is empty"
     );
 
     starts

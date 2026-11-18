@@ -73,7 +73,7 @@ fn the_rows_are_the_names_the_wire_served_in_the_order_it_served_them() {
         offered(&models),
         [String::from(FIRST), String::from(SECOND)],
         "the wire's own names, in its own order: the screen offers what it was served and \
-         nothing it invented (§10)"
+         nothing it invented"
     );
     assert_eq!(
         models.chosen(),
@@ -150,7 +150,7 @@ fn a_wire_that_could_not_answer_offers_its_hint_and_no_names() {
         models
             .hint()
             .is_some_and(|hint| hint.contains("ANTHROPIC_API_KEY")),
-        "and §10's hint says where a credential comes from: {:?}",
+        "and the hint says where a credential comes from: {:?}",
         models.hint()
     );
     assert_eq!(models.chosen(), None);

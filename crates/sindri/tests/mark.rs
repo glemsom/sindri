@@ -118,7 +118,7 @@ fn what_the_highlight_covers_is_byte_for_byte_what_the_copy_takes() {
     );
     assert_eq!(
         marked, taken,
-        "the cells the highlight covers are the bytes the copy hands out, which is §12's \
+        "the cells the highlight covers are the bytes the copy hands out, which is the \
          \"a drag marks exactly the cells the copy will take\" as a comparison rather than \
          a promise"
     );
@@ -148,7 +148,7 @@ fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
     assert_eq!(
         again, taken,
         "and `Ctrl-Y` copies again with no fresh selection: the mark outlives the paint \
-         that drew it (§12)"
+         that drew it"
     );
 }
 
@@ -165,7 +165,7 @@ fn ctrl_y_with_no_mark_copies_the_last_answer() {
     assert_eq!(
         taken, NEWEST,
         "with nothing marked, `Ctrl-Y` copies the newest answer whole — the line breaks \
-         the model wrote, and not the ones the band wrapped it into (§12)"
+         the model wrote, and not the ones the band wrapped it into"
     );
 }
 

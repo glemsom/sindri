@@ -122,7 +122,7 @@ fn the_answers_text_is_what_the_run_answers_with() {
     );
     assert_eq!(
         transcript.text, "Hello world",
-        "and the same text reached the front end as it landed (§4)"
+        "and the same text reached the front end as it landed"
     );
     assert_eq!(run.turns(), 1, "one ask, one turn");
 }
@@ -173,8 +173,8 @@ fn a_refused_ask_stops_the_run_in_the_one_line_safe_to_print() {
         message.to_string().contains("unknown model"),
         "the wire's own words, so a person can fix them: {message}"
     );
-    assert_eq!(run.answer(), None, "a failed run answers nothing (§15)");
-    assert_eq!(replay.requests().len(), 1, "a 400 is not retried (§4)");
+    assert_eq!(run.answer(), None, "a failed run answers nothing");
+    assert_eq!(replay.requests().len(), 1, "a 400 is not retried");
 }
 
 #[test]

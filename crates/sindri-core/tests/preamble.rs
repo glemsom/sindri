@@ -118,7 +118,7 @@ fn the_preamble_says_who_answers_what_shapes_it_and_where_it_stands() {
         .expect("an environment section");
     assert!(
         persona < principles && principles < environment,
-        "the sections arrive in the order §9 names them"
+        "the sections arrive in the order the rule names them"
     );
     assert!(
         preamble.contains("GNU/Linux"),

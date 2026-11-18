@@ -407,7 +407,7 @@ fn the_writable_set_holds_one_sorted_order_whatever_order_it_was_given_in() {
 
 #[test]
 fn a_timeout_above_the_ceiling_is_refused_naming_the_limit() {
-    assert_eq!(MAX_TIMEOUT_SECONDS, 3_600, "§4's ceiling is 3600s");
+    assert_eq!(MAX_TIMEOUT_SECONDS, 3_600, "the ceiling is 3600s");
 
     let ground = Ground::new();
     let workspace = ground.workspace();

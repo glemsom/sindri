@@ -454,7 +454,7 @@ fn an_ambiguous_prefix_is_a_usage_error_that_lists_the_candidates() {
     assert_eq!(
         refused.status.code(),
         Some(2),
-        "a prefix that names more than one session cannot be used (§15)"
+        "a prefix that names more than one session cannot be used"
     );
     assert!(
         refused.stdout.is_empty(),
@@ -481,7 +481,7 @@ fn a_prefix_no_session_carries_is_a_usage_error_that_names_it() {
     assert_eq!(
         refused.status.code(),
         Some(2),
-        "an id no session carries cannot be used either (§15)"
+        "an id no session carries cannot be used either"
     );
     assert!(
         refused.stdout.is_empty(),

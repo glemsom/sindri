@@ -973,7 +973,7 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
     assert_eq!(
         output.status.code(),
         Some(2),
-        "a terminal UI with no terminal to draw on is a usage error (§3): {}",
+        "a terminal UI with no terminal to draw on is a usage error: {}",
         text(&output.stderr)
     );
     assert!(
@@ -2009,7 +2009,7 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
     assert_eq!(
         status.code(),
         Some(130),
-        "a launch the user's word ended (§15): {:?}",
+        "a launch the user's word ended: {:?}",
         drawn.text()
     );
     assert!(

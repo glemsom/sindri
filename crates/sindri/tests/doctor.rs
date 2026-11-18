@@ -533,7 +533,7 @@ fn an_unsafe_run_is_told_so_and_has_no_sandbox_to_prove() {
     );
     assert!(
         out.contains("enforcement   unsafe"),
-        "the report says how the run would be confined, in §6's two-valued words:\n{out}"
+        "the report says how the run would be confined, in the two-valued words:\n{out}"
     );
     assert!(
         out.contains("sandbox not proved: this run asked for no sandbox"),

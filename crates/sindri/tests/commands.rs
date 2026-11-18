@@ -131,7 +131,7 @@ fn the_two_skill_spellings_are_one_line() {
     assert_eq!(
         commands::read("/skill:commit-message"),
         commands::read("/skill commit-message"),
-        "§5 says `/skill:name` and `/skill name` are the same line, so they are one value \
+        "the rule says `/skill:name` and `/skill name` are the same line, so they are one value \
          here and neither is a second place a load is decided"
     );
     assert_eq!(
@@ -159,7 +159,7 @@ fn a_model_named_by_hand_is_the_rest_of_the_line() {
         Some(Command::ModelNamed(String::from(
             "some-name-the-wire-never-served"
         ))),
-        "a name the wire never offered is still a name, and §11's key takes it whole"
+        "a name the wire never offered is still a name, and the key takes it whole"
     );
 }
 
@@ -308,7 +308,7 @@ fn new_empties_the_loaded_skill_set() {
     assert!(
         view.loaded().names().is_empty(),
         "a load is once per conversation and the conversation is the history, so clearing \
-         the history empties the set (§4): {:?}",
+         the history empties the set: {:?}",
         view.loaded().names()
     );
 }
@@ -322,7 +322,7 @@ fn a_skill_a_person_may_not_ask_for_is_not_loaded() {
         say(&mut view, "/skill:model-only"),
         Outcome::Unchanged,
         "which names a person may ask for is the catalog's decision, and this one is the \
-         model's door alone (§5)"
+         model's door alone"
     );
     assert!(view.loaded().names().is_empty());
 }
@@ -336,7 +336,7 @@ fn a_skill_the_catalog_does_not_hold_loads_nothing() {
     assert!(
         view.loaded().names().is_empty(),
         "a name in the set would answer a later model load with `already_loaded` for a body \
-         nothing ever handed over (§5)"
+         nothing ever handed over"
     );
 }
 

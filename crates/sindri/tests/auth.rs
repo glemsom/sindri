@@ -23,7 +23,7 @@ fn the_sign_in_command_offers_only_the_wire_that_signs_in() {
     assert_eq!(
         refused.status.code(),
         Some(2),
-        "a wire that holds a key instead of signing in is a usage error (§15)"
+        "a wire that holds a key instead of signing in is a usage error"
     );
     let said = text(&refused.stderr);
     assert!(
@@ -48,7 +48,7 @@ fn a_sign_in_with_nowhere_to_keep_a_session_refuses_before_it_sends() {
     );
     assert!(
         refused.stdout.is_empty(),
-        "and nothing at all reaches stdout (§15): {:?}",
+        "and nothing at all reaches stdout: {:?}",
         text(&refused.stdout)
     );
 }
