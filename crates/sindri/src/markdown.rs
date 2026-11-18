@@ -344,8 +344,8 @@ impl Room {
                     }
                 }
             },
-            // A chip keeps the spacing it was written with: the accent ink, and not a face, is what
-            // tells it from the prose it sits in.
+            // A chip is placed whole and never broken on its spaces, so the spacing it was written
+            // with is the spacing it is drawn in.
             Event::Code(text) => {
                 let look = match self.destination.is_some() {
                     true => Look::plain(Ink::Accent).underlined(UNDERLINE),
