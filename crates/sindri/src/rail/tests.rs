@@ -409,7 +409,7 @@ fn a_ledger_handed_a_cell_lights_no_column_and_shadows_no_row_of_its_band() {
 }
 
 #[test]
-fn the_strip_is_handed_the_plane_it_always_was_and_widens_across_no_seam() {
+fn a_strip_is_handed_a_plane_that_widens_across_no_seam() {
     let rail = Rect {
         x: LEFT,
         ..band(40, 1)

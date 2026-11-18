@@ -77,10 +77,11 @@ impl Plane {
     pub fn rail(shape: Rail, area: Rect, cell: CellSize, palette: &Palette) -> Option<Plane> {
         let head = channels(palette.band(Band::Rail))?;
         let foot = channels(palette.edge(Edge::Shadow))?;
-        let widened = match shape {
-            Rail::Ledger => SEAM.min(area.x),
-            Rail::Strip => 0,
+        let seam = match shape {
+            Rail::Ledger => Seam::of(SEAM.min(area.x), cell, foot, palette),
+            Rail::Strip => None,
         };
+        let widened = seam.map_or(0, Seam::widened);
         let area = Rect {
             x: area.x - widened,
             width: area.width + widened,
@@ -88,15 +89,10 @@ impl Plane {
         };
         let (width, height) = extent(area, cell)?;
         let span = f64::from(height.saturating_sub(1).max(1));
-        let seam = match shape {
-            Rail::Ledger => Some(Seam::of(widened, cell)),
-            Rail::Strip => None,
-        };
         let pixels = image::RgbaImage::from_fn(width, height, |x, y| {
             let down = mix(head, foot, f64::from(y) / span);
-            let vertical = [down[0], down[1], down[2]];
-            seam.and_then(|seam| seam.across(x, vertical, palette))
-                .unwrap_or(down)
+            let colour = seam.and_then(|seam| seam.across(x, down)).unwrap_or(down);
+            image::Rgba([colour[0], colour[1], colour[2], 255])
         });
         Some(Plane {
             id: PlaneId::Rail,
@@ -134,38 +130,40 @@ fn extent(area: Rect, cell: CellSize) -> Option<(u32, u32)> {
     }
 }
 
-/// The seam the rail's plane widens across: the transcript's last columns, and the rail's first
-/// few, in the pixels of the cell they are drawn at.
+/// The seam a ledger's plane widens across: the transcript's columns to the left of the rail's
+/// first, and the rail's first few, drawn as a fall from the well into the shadow and back out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Seam {
-    /// The pixels of the plane left of the rail's first column.
-    crease: u32,
-    /// The pixels of the rail's columns the band comes back out of the crease over.
-    out: u32,
+    widened: u16,
+    cell: CellSize,
+    well: [u8; 3],
+    shadow: [u8; 3],
 }
 
 impl Seam {
-    fn of(widened: u16, cell: CellSize) -> Seam {
-        Seam {
-            crease: u32::from(widened) * cell.width(),
-            out: u32::from(SEAM) * cell.width(),
-        }
+    /// The seam that widens a plane `widened` columns, and nothing for a palette with no well to
+    /// spell in a pixel, where there is no fall to start from.
+    fn of(widened: u16, cell: CellSize, shadow: [u8; 3], palette: &Palette) -> Option<Seam> {
+        Some(Seam {
+            widened,
+            cell,
+            well: channels(palette.band(Band::Well))?,
+            shadow,
+        })
     }
 
-    /// The colour the seam is at pixel column `x` of a plane whose own vertical colour there is
-    /// `down`, and nothing for a column of the rail the vertical fall already carries.
-    fn across(&self, x: u32, down: [u8; 3], palette: &Palette) -> Option<image::Rgba<u8>> {
-        let shadow = channels(palette.edge(Edge::Shadow))?;
+    fn widened(self) -> u16 {
+        self.widened
+    }
+
+    /// The colour the seam is at pixel column `x`, over the `down` the rail's own fall gives that
+    /// column, and nothing for a column the rail's fall is the whole of.
+    fn across(&self, x: u32, down: [u8; 3]) -> Option<[u8; 3]> {
+        let crease = u32::from(self.widened) * self.cell.width();
+        let out = u32::from(SEAM) * self.cell.width();
         match x {
-            x if x < self.crease => Some(fall(
-                channels(palette.band(Band::Well))?,
-                shadow,
-                x,
-                self.crease - 1,
-            )),
-            x if x - self.crease < self.out => {
-                Some(fall(shadow, down, x - self.crease, self.out - 1))
-            }
+            x if x < crease => Some(fall(self.well, self.shadow, x, crease - 1)),
+            x if x - crease < out => Some(fall(self.shadow, down, x - crease, out - 1)),
             _ => None,
         }
     }
@@ -173,7 +171,7 @@ impl Seam {
 
 /// The colour `at` pixels along a ramp of `span` pixels from `head` to `foot`, its ends the ends of
 /// the ramp.
-fn fall(head: [u8; 3], foot: [u8; 3], at: u32, span: u32) -> image::Rgba<u8> {
+fn fall(head: [u8; 3], foot: [u8; 3], at: u32, span: u32) -> [u8; 3] {
     let t = match span {
         0 => 1.0,
         span => f64::from(at.min(span)) / f64::from(span),
@@ -182,13 +180,12 @@ fn fall(head: [u8; 3], foot: [u8; 3], at: u32, span: u32) -> image::Rgba<u8> {
 }
 
 /// The colour a plane is at `t` of the way down a ramp from `head` to `foot`.
-fn mix(head: [u8; 3], foot: [u8; 3], t: f64) -> image::Rgba<u8> {
+fn mix(head: [u8; 3], foot: [u8; 3], t: f64) -> [u8; 3] {
     let channel =
         |head: u8, foot: u8| (f64::from(head) * (1.0 - t) + f64::from(foot) * t).round() as u8;
-    image::Rgba([
+    [
         channel(head[0], foot[0]),
         channel(head[1], foot[1]),
         channel(head[2], foot[2]),
-        255,
-    ])
+    ]
 }

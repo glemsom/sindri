@@ -73,9 +73,9 @@ fn under_the_face(band: RailBand, buffer: &mut Buffer, palette: &Palette) {
     }
 }
 
-/// The two ends a ledger's band carries light at on the band no plane is drawn under: the rule
-/// down the column it meets the transcript on, which is the rail's own column and never one the
-/// transcript gave up, and the shadow across its last row.
+/// The two ends a ledger's band carries light at on the band no plane is drawn under: the lit
+/// column it meets the transcript on, which is the rail's own column and never one the transcript
+/// gave up, and the shadow across its last row.
 fn elevation(buffer: &mut Buffer, area: Rect, palette: &Palette) {
     pen::claim(buffer, Rect { width: 1, ..area }, palette.edged(Edge::Lit));
     pen::claim(
