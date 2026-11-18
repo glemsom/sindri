@@ -55,38 +55,6 @@ enum Fold {
     Open,
 }
 
-/// A run of a row's cells drawn on a band of its own, measured from the row's left edge: a chip
-/// is a band under a span where `banded` is a band under the whole row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Underlay {
-    left: u16,
-    width: u16,
-    band: Band,
-}
-
-impl Underlay {
-    /// The same run `by` columns further right: a run is measured from the left edge of the row it
-    /// was laid on, so a row set further right moves it with the words it covers.
-    fn shifted(&self, by: u16) -> Underlay {
-        Underlay {
-            left: self.left.saturating_add(by),
-            ..*self
-        }
-    }
-
-    /// The cells this run covers of `area`, cut at the area's right edge: a run wider than the band
-    /// it is drawn in is the band's own, never a claim past it.
-    fn rect(&self, area: Rect) -> Rect {
-        let x = area.x.saturating_add(self.left);
-        Rect {
-            x,
-            y: area.y,
-            width: self.width.min(area.right().saturating_sub(x)),
-            height: 1,
-        }
-    }
-}
-
 /// One row of the transcript: never wider than the width it was laid out at, bar the
 /// one glyph that is itself wider than that whole width and that no layout can split.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,8 +72,6 @@ pub struct Row {
     /// The runs of this row a terminal draws at more than one cell: the row is measured by the
     /// cells they leave, and its spans say the words they are written as.
     sizes: Vec<Sized>,
-    /// The runs of this row's cells drawn on a band of their own, measured from its left edge.
-    underlays: Vec<Underlay>,
 }
 
 impl Row {
@@ -126,7 +92,6 @@ impl Row {
             picture: None,
             band: None,
             sizes: Vec::new(),
-            underlays: Vec::new(),
         }
     }
 
@@ -141,13 +106,6 @@ impl Row {
     /// well is one block and not a stripe behind its glyphs.
     pub fn banded(mut self, band: Band) -> Row {
         self.band = Some(band);
-        self
-    }
-
-    /// The `width` columns of this row that begin `left` columns in, drawn on `band` where `banded`
-    /// draws the whole row on one.
-    pub fn underlain(mut self, left: u16, width: u16, band: Band) -> Row {
-        self.underlays.push(Underlay { left, width, band });
         self
     }
 
@@ -171,7 +129,6 @@ impl Row {
             picture: None,
             band: None,
             sizes: Vec::new(),
-            underlays: Vec::new(),
         }
     }
 
@@ -203,9 +160,9 @@ impl Row {
         &self.spans
     }
 
-    /// This row moved `by` columns right: the ways it names, the cells a terminal draws at more than
-    /// one and the runs underlain with a band are measured from its left edge, so they move with the
-    /// words while the band it stands on and the picture placed over it stay where the row does.
+    /// This row moved `by` columns right: the ways it names and the cells a terminal draws at more
+    /// than one are measured from its left edge, so they move with the words while the band it
+    /// stands on and the picture placed over it stay where the row does.
     fn shifted(self, by: u16) -> Row {
         Row {
             spans: self.spans,
@@ -213,11 +170,6 @@ impl Row {
             sizes: self.sizes.iter().map(|run| run.shifted(by)).collect(),
             picture: self.picture,
             band: self.band,
-            underlays: self
-                .underlays
-                .iter()
-                .map(|underlay| underlay.shifted(by))
-                .collect(),
         }
     }
 
@@ -243,7 +195,6 @@ impl Row {
         row.spans.append(&mut moved.spans);
         row.links.append(&mut moved.links);
         row.sizes.append(&mut moved.sizes);
-        row.underlays.append(&mut moved.underlays);
         row
     }
 
@@ -293,13 +244,6 @@ impl Row {
     ) {
         if let Some(band) = self.band {
             pen::claim(buffer, area, palette.ground(Some(band)));
-        }
-        for underlay in &self.underlays {
-            pen::claim(
-                buffer,
-                underlay.rect(area),
-                palette.ground(Some(underlay.band)),
-            );
         }
         pen::write(buffer, area, &self.spans, Clip::Edge, palette);
         links.lay(area.y, area.x, &self.links);
