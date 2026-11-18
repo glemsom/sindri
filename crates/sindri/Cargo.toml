@@ -8,6 +8,7 @@ rust-version.workspace = true
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
 ignore = "0.4.34"
+base64 = "0.22"
 # A mermaid fence becomes an SVG in this process, with no browser to ask for a fact about a
 # glyph. `cli` and `png` stay off: this binary draws nothing itself.
 mermaid-rs-renderer = { version = "0.3.1", default-features = false }
