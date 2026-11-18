@@ -805,6 +805,30 @@ fn a_run_as_a_filter_never_asks_the_terminal_its_cell_size() {
 }
 
 #[test]
+fn first_run_without_provider_or_key_opens_the_tui() {
+    let ground = Ground::new();
+    let mut command = ground.command();
+    command
+        .env_remove("SINDRI_PROVIDER")
+        .env_remove("SINDRI_MODEL")
+        .env_remove("ANTHROPIC_API_KEY");
+    let (session, mut pty, drawn) = Session::starting(command);
+
+    assert!(
+        drawn.wait_for(b"\x1b[?1049h"),
+        "the screen opens: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(b"/settings"),
+        "the splash offers settings: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0));
+}
+
+#[test]
 fn ctrl_q_quits_and_the_screen_it_took_is_given_back() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);

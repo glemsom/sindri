@@ -49,6 +49,10 @@ fn main() -> ExitCode {
         eprintln!("{}", first_run.api_key_row());
     }
 
+    if asked.is_none() && batch::stdin_is_terminal() {
+        return tui::run(&cli, first_run.config());
+    }
+
     if first_run.config().missing().contains(&"api_key") {
         // A pipe is words to ask and never a credential: a key is pasted only at a terminal.
         if asked.is_some() && !batch::stdin_is_terminal() {
