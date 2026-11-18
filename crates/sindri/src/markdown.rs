@@ -11,7 +11,6 @@ use crate::graphics::Ceiling;
 use crate::ink::{Face, Faces, Ink, Look};
 use crate::link::Way;
 use crate::mermaid::{self, Fence};
-use crate::palette::Band;
 use crate::pen;
 use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, split_at};
@@ -651,7 +650,6 @@ impl Room {
     /// draw — because a diagram that is simply absent cannot be told from a build that cannot draw.
     fn close_code(&mut self) {
         self.flush_if_written();
-        // The fence's own rows are the well's; what is said about it under them is prose.
         self.code = None;
         if let Some(mermaid) = self.mermaid.take() {
             match mermaid::block(&mermaid.source, mermaid.fence) {
@@ -811,11 +809,7 @@ impl Room {
             );
         }
         self.line.clear();
-        // A fence is one block of cells, so the tag and every line under it paint the well.
-        self.push(match self.code.is_some() {
-            true => row.banded(Band::Well),
-            false => row,
-        });
+        self.push(row);
         if sized {
             // A scaled glyph is drawn over the row under it as well, so that row is the block's
             // own: it keeps the gutter and says nothing else, because no cell of it is the frame's.

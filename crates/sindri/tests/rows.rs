@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
@@ -2022,21 +2023,42 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
     );
 }
 
-/// A live answer's first row is the marker's and the answer's together, and a fence that opens the
-/// answer is the well's from that row on: a marker beside a tag is no hole in the panel.
 #[test]
-fn a_fence_that_opens_a_live_answer_keeps_its_well_under_the_marker() {
+fn a_fence_that_opens_a_live_answer_claims_no_ground_of_its_own() {
     let mut rows = Rows::new();
     rows.resize(40);
     let mut stream = Stream::new();
     stream.text("```rust\nfn main() {\n");
     rows.live(&stream, Some(&Pulse::live(4_200).head()));
 
-    let laid: Vec<Option<Band>> = rows.rows(0).iter().map(Row::band).collect();
+    let laid = rows.rows(0);
+    let bands: Vec<Option<Band>> = laid.iter().map(Row::band).collect();
     assert!(
-        laid.len() > 1 && laid.iter().all(|band| *band == Some(Band::Well)),
-        "the fence opens the answer, so every row of it sits in the well: {laid:?}"
+        laid.len() > 1 && bands.iter().all(Option::is_none),
+        "the fence opens the answer, and no row of it is laid on a band: {bands:?}"
     );
+
+    let palette = Palette::TRUECOLOR;
+    let well = palette.band(Band::Well);
+    for (at, row) in laid.iter().enumerate() {
+        let area = Rect::new(0, u16::try_from(at).expect("a frame this short"), 40, 1);
+        let mut buffer = Buffer::empty(area);
+        pen::claim(&mut buffer, area, palette.ground(Some(Band::Well)));
+        row.paint(
+            area,
+            &mut buffer,
+            &palette,
+            &mut Links::none(),
+            &mut Sizes::none(),
+        );
+        let kept: Vec<Color> = (0..40).map(|x| buffer[(x, area.y)].bg).collect();
+        assert_eq!(
+            kept,
+            [well; 40],
+            "row {at} of {:?} left the well under it as it found it",
+            said(&painted(row, 40))
+        );
+    }
 }
 
 #[test]

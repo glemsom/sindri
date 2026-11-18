@@ -1350,41 +1350,94 @@ fn a_heading_and_a_table_still_arriving_are_drawn_as_the_blocks_they_will_be() {
 }
 
 #[test]
-fn a_code_fence_sits_in_the_well_and_the_prose_around_it_sits_on_nothing() {
+fn a_fence_claims_no_ground_of_its_own_and_leaves_the_band_under_it_as_it_found_it() {
     let rows = markdown::rows(
         "prose above\n\n```rust\nfn main() {}\n```\n\nprose below",
         40,
     );
 
-    let bands: Vec<(String, Option<Band>)> =
-        rows.iter().map(|row| (words(row), row.band())).collect();
-
     assert_eq!(
-        bands,
-        vec![
-            (String::from("prose above"), None),
-            (String::new(), None),
-            (String::from("▏ rust"), Some(Band::Well)),
-            (String::from("▏ fn main() {}"), Some(Band::Well)),
-            (String::new(), None),
-            (String::from("prose below"), None),
+        drawn(&rows),
+        [
+            "prose above",
+            "",
+            "▏ rust",
+            "▏ fn main() {}",
+            "",
+            "prose below",
         ],
-        "the well holds the fence whole and stops at its edges"
+        "the tag's row and the source's row are the words a fence is read from"
     );
+    let bands: Vec<Option<Band>> = rows.iter().map(Row::band).collect();
+    assert!(
+        bands.iter().all(Option::is_none),
+        "no row of a fence is laid on a band: {bands:?}"
+    );
+
+    let palette = Palette::TRUECOLOR;
+    let area = Rect::new(
+        0,
+        0,
+        120,
+        u16::try_from(rows.len()).expect("a frame this short"),
+    );
+    for band in Band::ALL {
+        let mut buffer = Buffer::empty(area);
+        pen::claim(&mut buffer, area, palette.ground(Some(band)));
+        for (at, row) in rows.iter().enumerate() {
+            row.paint(
+                Rect::new(0, u16::try_from(at).expect("a frame this short"), 120, 1),
+                &mut buffer,
+                &palette,
+                &mut Links::none(),
+                &mut Sizes::none(),
+            );
+        }
+        for y in 0..area.height {
+            assert_eq!(
+                grounded(&buffer, y, 0, 120),
+                [palette.band(band); 120],
+                "a row of the fence left the ground it was laid on as it found it, {band:?} under \
+                 row {y} of {:?}",
+                drawn(&rows)
+            );
+        }
+    }
 }
 
-/// A diagram that will not draw keeps its source in the well, and the sentence saying why sits
-/// under it as prose: the well is the fence's, and not everything the block said.
 #[test]
-fn the_sentence_saying_a_diagram_will_not_draw_is_prose_and_not_code() {
+fn the_sentence_saying_a_diagram_will_not_draw_is_dim_prose_and_the_source_is_plain_code() {
     let rows = markdown::rows("```mermaid\nnot a diagram\n```", 200);
-    let under: Vec<(String, Option<Band>)> =
-        rows.iter().map(|row| (words(row), row.band())).collect();
+    let laid = drawn(&rows);
+    let caption = laid
+        .iter()
+        .position(|row| row.contains("could not be drawn"))
+        .unwrap_or_else(|| panic!("the row saying why the diagram did not draw: {laid:?}"));
 
     assert_eq!(
-        under[..3].iter().map(|(_, band)| *band).collect::<Vec<_>>(),
-        [Some(Band::Well), Some(Band::Well), None],
-        "the tag and the source are the well's, and the row under them is no code: {under:?}"
+        laid[caption - 1],
+        "▏ not a diagram",
+        "the sentence stands under the fence's own source: {laid:?}"
+    );
+    assert!(
+        wears(&rows[caption - 1], "not a diagram", Look::plain(Ink::Plain)),
+        "the source under the sentence is the fence's, drawn plain where no syntax names it: {:?}",
+        rows[caption - 1].spans()
+    );
+    let dim = Look::plain(Ink::Dim);
+    assert!(
+        rows[caption]
+            .spans()
+            .iter()
+            .filter(|(said, _)| !said.trim().is_empty())
+            .all(|(_, look)| *look == dim),
+        "every word of the sentence that explains the block is dim prose, and no band says it: {:?}",
+        rows[caption].spans()
+    );
+    let bands: Vec<Option<Band>> = rows.iter().map(Row::band).collect();
+    assert!(
+        bands.iter().all(Option::is_none),
+        "no row of the block is laid on a band: {bands:?}"
     );
 }
 
