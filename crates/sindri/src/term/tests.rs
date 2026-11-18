@@ -669,3 +669,19 @@ fn a_panic_gives_the_terminal_back_before_the_guard_can() {
         "the second give-back changes nothing"
     );
 }
+
+#[test]
+fn a_pixel_ground_is_placed_and_deleted_on_clear() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let pixels = image::RgbaImage::from_pixel(20, 20, image::Rgba([20, 30, 40, 255]));
+    backend
+        .ground(Some(&(Rect::new(2, 3, 2, 1), pixels)))
+        .unwrap();
+    backend.ground(None).unwrap();
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+    assert!(wire.contains("_Ga=T"));
+    assert!(wire.contains("_Ga=d"));
+    assert!(wire.find("_Ga=T").unwrap() < wire.find("_Ga=d").unwrap());
+}

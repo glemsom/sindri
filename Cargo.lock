@@ -2593,6 +2593,7 @@ dependencies = [
 name = "sindri"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "clap",
  "ignore",
  "image",

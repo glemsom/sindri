@@ -1323,3 +1323,31 @@ fn the_placement_covers_the_band_the_ledger_reserved_for_it_and_no_cell_outside_
         }
     }
 }
+
+#[test]
+fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(&workspace, "hello", true);
+    view.paste("forge");
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 24));
+    let painted = view.paint(buffer.area, &mut buffer);
+    let band = painted.layout().expect("a laid out frame").composer;
+    let ground = painted.ground().expect("a pixel ground");
+    assert_eq!(ground.0, band);
+    assert_eq!(ground.1.dimensions(), (800, u32::from(band.height) * 20));
+    assert!(
+        (band.y..band.bottom())
+            .any(|y| { (band.x..band.right()).any(|x| buffer[(x, y)].symbol() == "f") })
+    );
+    assert!((band.y..band.bottom()).all(|y| {
+        (band.x..band.right()).all(|x| !buffer[(x, y)].symbol().contains(PLACEHOLDER))
+    }));
+    let top = ground.1.get_pixel(400, 0);
+    let bottom = ground.1.get_pixel(400, ground.1.height() - 1);
+    assert!(top[0] > bottom[0], "the ground is lit from above");
+    assert_ne!(
+        ground.1.get_pixel(25, 30),
+        ground.1.get_pixel(400, 30),
+        "the caret glows"
+    );
+}

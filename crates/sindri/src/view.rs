@@ -226,6 +226,7 @@ pub struct Painted {
     presses: Vec<Press>,
     drawn: Drawn,
     layout: Option<Layout>,
+    ground: Option<(Rect, image::RgbaImage)>,
 }
 
 impl Painted {
@@ -237,7 +238,12 @@ impl Painted {
             presses: Vec::new(),
             drawn: Drawn::none(),
             layout: None,
+            ground: None,
         }
+    }
+
+    pub fn ground(&self) -> Option<&(Rect, image::RgbaImage)> {
+        self.ground.as_ref()
     }
 
     /// The destinations this frame named, laid on the rows it drew.
@@ -1021,6 +1027,19 @@ impl View {
         }
         self.notice_band(layout.notice, buffer);
         self.composer_band(layout.composer, layout.queue, buffer);
+        if self.capabilities.pictures().draws()
+            && layout.composer.width > 0
+            && layout.composer.height > 0
+        {
+            painted.ground = Some((
+                layout.composer,
+                pixel_ground(
+                    layout.composer,
+                    self.capabilities.cell(),
+                    self.caret(layout.composer, layout.queue),
+                ),
+            ));
+        }
         self.footer(layout.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
         // reader sees the transcript they will return to, and sees that it is out of reach.
@@ -1906,3 +1925,30 @@ fn kept(hints: &[Hint], width: u16, depth: &str) -> Vec<Hint> {
 
 #[cfg(test)]
 mod tests;
+
+fn pixel_ground(
+    band: Rect,
+    cell: crate::graphics::CellSize,
+    caret: Option<(u16, u16)>,
+) -> image::RgbaImage {
+    let width = u32::from(band.width) * cell.width();
+    let height = u32::from(band.height) * cell.height();
+    let glow =
+        caret.map(|(x, _)| (f64::from(x.saturating_sub(band.x)) + 0.5) * f64::from(cell.width()));
+    image::RgbaImage::from_fn(width, height, |x, y| {
+        let t = f64::from(y) / f64::from(height.max(1));
+        let light = glow.map_or(0.0, |center| {
+            let distance = (f64::from(x) - center) / (f64::from(cell.width()) * 8.0);
+            let depth = t / 0.65;
+            (-(distance * distance + depth * depth) * 2.0).exp() * 22.0
+        });
+        let channel =
+            |top: f64, bottom: f64| (top * (1.0 - t) + bottom * t + light).clamp(0.0, 255.0) as u8;
+        image::Rgba([
+            channel(36.0, 8.0),
+            channel(49.0, 13.0),
+            channel(63.0, 19.0),
+            255,
+        ])
+    })
+}
