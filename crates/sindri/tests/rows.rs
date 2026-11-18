@@ -2034,7 +2034,7 @@ fn a_fence_that_opens_a_live_answer_claims_no_ground_of_its_own() {
     let laid = rows.rows(0);
     assert!(
         laid.len() > 1,
-        "the fence opens the answer, and it is more rows than the marker's own"
+        "the fence opens the answer and runs past the marker's own row"
     );
 
     let palette = Palette::TRUECOLOR;
