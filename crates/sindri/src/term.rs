@@ -20,6 +20,7 @@ use rustix::termios::{
 use sindri::capability::{Asked, Question};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
+use sindri::plane::{self, Plane};
 use sindri::size::{Laid, Sizes};
 use sindri::view::{Painted, View};
 
@@ -49,8 +50,6 @@ const TAKE_POINTER: &[u8] = b"\x1b[?1000h\x1b[?1006h";
 
 /// `CSI ? 1000 l` and `CSI ? 1006 l`: the report is given up, or a shell is left sending presses.
 const GIVE_UP_POINTER: &[u8] = b"\x1b[?1000l\x1b[?1006l";
-
-const DELETE_GROUND: &[u8] = b"\x1b_Ga=d,d=i,i=333\x1b\\";
 
 pub(crate) struct Terminal {
     pub(crate) keys: File,
@@ -131,7 +130,7 @@ pub(crate) struct Backend<W: Write> {
     links: Links,
     sizes: Sizes,
     places: bool,
-    ground: Option<(ratatui::layout::Rect, image::RgbaImage)>,
+    planes: Vec<Plane>,
 }
 
 impl<W: Write> Backend<W> {
@@ -143,7 +142,7 @@ impl<W: Write> Backend<W> {
             links: Links::none(),
             sizes: Sizes::none(),
             places,
-            ground: None,
+            planes: Vec::new(),
         }
     }
 
@@ -157,24 +156,34 @@ impl<W: Write> Backend<W> {
         self.sizes.clone_from(sizes);
     }
 
-    fn ground(
-        &mut self,
-        ground: Option<&(ratatui::layout::Rect, image::RgbaImage)>,
-    ) -> io::Result<()> {
-        if self.ground.as_ref().map(|(area, pixels)| (area, pixels))
-            == ground.map(|(area, pixels)| (area, pixels))
-        {
+    /// The planes the frame about to be written places under its bands: a plane that left is
+    /// deleted by its identity, and a plane that arrived is uploaded under the one it carries.
+    fn planes(&mut self, planes: &[Plane]) -> io::Result<()> {
+        if self.planes == planes {
             return Ok(());
         }
-        if self.ground.is_some() {
-            self.screen.write_all(DELETE_GROUND)?;
+        for held in &self.planes {
+            if !planes.contains(held) {
+                self.screen.write_all(&plane::delete(held.id()))?;
+            }
         }
-        self.ground = ground.cloned();
-        let Some((area, pixels)) = ground else {
-            return Ok(());
-        };
+        for plane in planes {
+            if !self.planes.contains(plane) {
+                self.upload(plane)?;
+            }
+        }
+        self.planes.clear();
+        self.planes.extend_from_slice(planes);
+        Ok(())
+    }
+
+    /// One plane sent as the picture a terminal keeps under a band: the pixels as a PNG, in the
+    /// chunks the protocol allows, under the identity, the rect and the depth the placement is made
+    /// of.
+    fn upload(&mut self, plane: &Plane) -> io::Result<()> {
+        let area = plane.area();
         let mut png = Vec::new();
-        image::DynamicImage::ImageRgba8(pixels.clone())
+        image::DynamicImage::ImageRgba8(plane.pixels().clone())
             .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
             .map_err(io::Error::other)?;
         let encoded = base64::engine::general_purpose::STANDARD.encode(png);
@@ -188,8 +197,10 @@ impl<W: Write> Backend<W> {
             if index == 0 {
                 write!(
                     self.screen,
-                    "\x1b_Ga=T,f=100,i=333,q=2,z=-1,c={},r={},m={more};",
-                    area.width, area.height
+                    "\x1b_Ga=T,f=100,i={},q=2,z=-1,c={},r={},m={more};",
+                    plane.id(),
+                    area.width,
+                    area.height
                 )?;
             } else {
                 write!(self.screen, "\x1b_Gm={more};")?;
@@ -309,8 +320,9 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     }
 
     fn clear(&mut self) -> io::Result<()> {
-        self.ground = None;
-        self.screen.write_all(DELETE_GROUND)?;
+        for plane in std::mem::take(&mut self.planes) {
+            self.screen.write_all(&plane::delete(plane.id()))?;
+        }
         self.screen.clear()
     }
 
@@ -364,7 +376,7 @@ pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<Pain
     let painted = view.paint(area, canvas.current_buffer_mut());
     canvas.backend_mut().links(painted.links());
     canvas.backend_mut().sizes(painted.sizes());
-    canvas.backend_mut().ground(painted.ground())?;
+    canvas.backend_mut().planes(painted.planes())?;
     canvas.draw(|_| {})?;
     Ok(painted)
 }
@@ -387,7 +399,10 @@ impl Restore {
     /// that follows — a panic message included — is drawn on a screen about to be somebody else's,
     /// and then the state raw mode replaced is restored.
     fn put_back(self) {
-        let mut giving = DELETE_GROUND.to_vec();
+        let mut giving = Vec::new();
+        for id in Plane::IDS {
+            giving.extend(plane::delete(id));
+        }
         giving.extend_from_slice(GIVE_BACK_SCREEN);
         if self.window {
             giving.extend_from_slice(GIVE_UP_FOCUS);

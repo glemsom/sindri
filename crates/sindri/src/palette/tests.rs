@@ -621,3 +621,37 @@ fn a_cell_is_read_back_by_its_foreground_and_never_its_background() {
         }
     }
 }
+
+#[test]
+fn a_colour_is_spelled_in_the_channels_a_pixel_is_drawn_in_and_a_slots_colour_in_none() {
+    assert_eq!(
+        channels(Color::Rgb(19, 27, 37)),
+        Some([19, 27, 37]),
+        "a colour the design names is already the channels a pixel is drawn in"
+    );
+    assert_eq!(
+        channels(Color::Indexed(196)),
+        Some([255, 0, 0]),
+        "and the cube's index is the three steps of its axis"
+    );
+    assert_eq!(
+        channels(Color::Indexed(235)),
+        Some([38, 38, 38]),
+        "a grey is the ladder the design leans on where it has no twenty-four-bit colour"
+    );
+    for slots in [
+        Color::Reset,
+        Color::Indexed(0),
+        Color::Indexed(15),
+        Color::Black,
+        Color::Cyan,
+        Color::DarkGray,
+    ] {
+        assert_eq!(
+            channels(slots),
+            None,
+            "{slots:?} is a colour the reader's own terminal holds, and no pixel of this design \
+             is drawn in it"
+        );
+    }
+}

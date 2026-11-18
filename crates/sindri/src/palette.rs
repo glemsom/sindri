@@ -290,6 +290,25 @@ impl Edge {
     pub const ALL: [Edge; 2] = [Edge::Lit, Edge::Shadow];
 }
 
+/// The channels a colour is spelled in, and nothing for a colour the terminal draws in a slot of
+/// the reader's own: the sixteen slots and `Reset` have none this design can put in a pixel.
+pub fn channels(colour: Color) -> Option<[u8; 3]> {
+    match colour {
+        Color::Rgb(red, green, blue) => Some([red, green, blue]),
+        Color::Indexed(at @ 16..=231) => {
+            let at = at - 16;
+            let step = [0, 95, 135, 175, 215, 255];
+            Some([
+                step[usize::from(at / 36)],
+                step[usize::from(at % 36 / 6)],
+                step[usize::from(at % 6)],
+            ])
+        }
+        Color::Indexed(at @ 232..=255) => Some([8 + 10 * (at - 232); 3]),
+        _ => None,
+    }
+}
+
 /// The step of the ramp the `row`th of `rows` rows lands on: the lit rung on its top row and the
 /// shadow on its last, never more than one rung between neighbours, so a band taller than the
 /// ladder repeats a rung rather than leaving one out. A surface of one row is drawn lit.

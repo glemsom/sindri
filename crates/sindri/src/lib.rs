@@ -25,6 +25,7 @@ pub mod pen; // the one place a glyph run is written into a frame, and the one p
 pub mod picker; // the `@` screen: the files of the workspace, narrowed by the query typed into it
 pub mod picture; // a picture an answer points at, resolved to a file inside the workspace and measured
 pub mod pictures; // the pictures a frame has placed: every source the terminal was told about
+pub mod plane; // the images a frame places under its bands: the pixels of a band, and the bytes a delete says
 pub mod pointer; // the pointer a frame takes: the wheel's notch and the cell a press landed on
 pub mod pulse; // the marker at the head of the newest answer: the braille glyph a live run turns
 pub mod queue; // the prompts typed while a run is live, waiting under the draft in the order

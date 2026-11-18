@@ -20,8 +20,10 @@ use sindri::graphics::{Ceiling, CellSize};
 use sindri::ledger::{self, Boot, Ctx, Facts, Rail};
 use sindri::mark::Cell;
 use sindri::markdown;
+use sindri::palette::{Band, Edge, Palette, channels};
 use sindri::picture::{self, Surface};
 use sindri::pictures::{PLACEHOLDER, Pictures};
+use sindri::plane::Plane;
 use sindri::rows::Row;
 use sindri::view::{Transcript, View};
 use sindri_core::policy::Enforcement;
@@ -511,6 +513,16 @@ fn shared_band(cols: u16, rows: u16) -> Rect {
         y: 0,
         width: cols,
         height: rows - 3,
+    }
+}
+
+/// The one row a frame narrower than the ledger's floor draws its strip in: the last row of the
+/// band it shares with the transcript.
+fn strip_band(cols: u16, rows: u16) -> Rect {
+    Rect {
+        y: shared_band(cols, rows).bottom() - 1,
+        height: 1,
+        ..shared_band(cols, rows)
     }
 }
 
@@ -1075,7 +1087,7 @@ fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
             pictured_rows(&with).is_empty(),
             "a {cols}-column frame draws one row of facts and no face: it has no band to reserve"
         );
-        same_cells_outside_ground(&with, &without, 8);
+        same_cells_outside_ground(&with, &without, strip_band(cols, 24), 8);
     }
 }
 
@@ -1098,7 +1110,7 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
             "the facts stand from the rail's first row, and the row under them is the second \
              fact: no band is reserved for a face that is not drawn, and no rule closes one"
         );
-        same_cells_outside_ground(&off, &placeless, 8);
+        same_cells_outside_ground(&off, &placeless, rail, 8);
 
         let mut back_on = railed(true, true);
         let back_on = painted_at(&mut back_on, (cols, 40));
@@ -1201,7 +1213,7 @@ fn a_splash_screen_the_face_is_turned_off_for_is_the_one_a_placeless_terminal_dr
         "the facts stand from the rail's first row: no band is reserved for a face that is not \
          drawn, and no rule closes one"
     );
-    same_cells_outside_ground(&off, &without, 5);
+    same_cells_outside_ground(&off, &without, rail, 5);
 }
 
 #[test]
@@ -1320,9 +1332,12 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 24));
     let painted = view.paint(buffer.area, &mut buffer);
     let band = painted.layout().expect("a laid out frame").composer;
-    let ground = painted.ground().expect("a pixel ground");
-    assert_eq!(ground.0, band);
-    assert_eq!(ground.1.dimensions(), (800, u32::from(band.height) * 20));
+    let ground = composer_plane(&painted);
+    assert_eq!(ground.area(), band);
+    assert_eq!(
+        ground.pixels().dimensions(),
+        (800, u32::from(band.height) * 20)
+    );
     assert!(
         (band.y..band.bottom())
             .any(|y| { (band.x..band.right()).any(|x| buffer[(x, y)].symbol() == "f") })
@@ -1330,12 +1345,12 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     assert!((band.y..band.bottom()).all(|y| {
         (band.x..band.right()).all(|x| !buffer[(x, y)].symbol().contains(PLACEHOLDER))
     }));
-    let top = ground.1.get_pixel(400, 0);
-    let bottom = ground.1.get_pixel(400, ground.1.height() - 1);
+    let top = ground.pixels().get_pixel(400, 0);
+    let bottom = ground.pixels().get_pixel(400, ground.pixels().height() - 1);
     assert!(top[0] > bottom[0], "the ground is lit from above");
     assert_ne!(
-        ground.1.get_pixel(25, 30),
-        ground.1.get_pixel(400, 30),
+        ground.pixels().get_pixel(25, 30),
+        ground.pixels().get_pixel(400, 30),
         "the caret glows"
     );
 }
@@ -1347,13 +1362,14 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
     let mut cells = Buffer::empty(area);
     let painted = launching.paint(area, &mut cells);
     let band = painted.layout().expect("a laid out frame").composer;
-    let ground = painted.ground().expect(
-        "the band of the frame a launch opens on is the band every later frame draws: a \
-         terminal that places pictures is handed its ground from that first paint",
-    );
-    assert_eq!(ground.0, band, "the placement covers the band's own rect");
+    let ground = composer_plane(&painted);
     assert_eq!(
-        ground.1.dimensions(),
+        ground.area(),
+        band,
+        "the placement covers the band's own rect"
+    );
+    assert_eq!(
+        ground.pixels().dimensions(),
         (u32::from(band.width) * 10, u32::from(band.height) * 20),
         "at the pixels of the cell it is drawn on"
     );
@@ -1370,7 +1386,98 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
 }
 
 #[test]
-fn a_terminal_without_pictures_keeps_the_cell_ramp_and_no_pixel_ground() {
+fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
+    let mut view = railed(true, false);
+    let area = Rect::new(0, 0, 120, 40);
+    let mut cells = Buffer::empty(area);
+    let painted = view.paint(area, &mut cells);
+    let rail = painted
+        .layout()
+        .expect("a laid out frame")
+        .rail
+        .expect("a rail")
+        .1
+        .area;
+    let palette = view.capabilities().palette();
+
+    assert_eq!(
+        painted.planes().iter().map(Plane::id).collect::<Vec<u32>>(),
+        vec![Plane::RAIL, Plane::COMPOSER],
+        "the frame hands back the rail's plane beside the composer's, each under its own identity"
+    );
+    let band = plane_of(&painted, Plane::RAIL);
+    assert_eq!(band.area(), rail, "the plane covers the rail's own rect");
+    assert_eq!(
+        band.pixels().dimensions(),
+        (
+            u32::from(rail.width) * cell().width(),
+            u32::from(rail.height) * cell().height()
+        ),
+        "at the pixels of the cell it is drawn on"
+    );
+    let (width, height) = band.pixels().dimensions();
+    assert_eq!(
+        band.pixels().get_pixel(0, 0).0[..3],
+        channels(palette.band(Band::Rail)).expect("a band in pixels"),
+        "the plane's head is the rail's band colour"
+    );
+    assert_eq!(
+        band.pixels().get_pixel(width - 1, height - 1).0[..3],
+        channels(palette.edge(Edge::Shadow)).expect("a shadow in pixels"),
+        "and its foot is the shadow colour, so the band falls into it in pixels rather than \
+         into a hard dark row"
+    );
+    let middle = band.pixels().get_pixel(width - 1, height / 2);
+    assert!(
+        middle[0] > channels(palette.edge(Edge::Shadow)).expect("a shadow")[0]
+            && middle[0] < channels(palette.band(Band::Rail)).expect("a band")[0],
+        "and half way down it is a pixel between the two, and no whole cell of either: {middle:?}"
+    );
+    for y in rail.y..rail.bottom() {
+        assert!(
+            !rail_row(&cells, rail, y).contains(PLACEHOLDER),
+            "row {y} of the rail's band is drawn by the plane the cells stand on, and no cell of \
+             it is replaced by the placeholder glyph"
+        );
+    }
+}
+
+#[test]
+fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
+    let mut view = View::of(
+        caps::uncoloured(),
+        sindri::facts::Facts::default()
+            .asked()
+            .railed(railed_facts()),
+        Transcript::none(),
+    );
+    let area = Rect::new(0, 0, 120, 40);
+    let mut cells = Buffer::empty(area);
+    let painted = view.paint(area, &mut cells);
+    assert_eq!(
+        view.capabilities().palette(),
+        Palette::SLOTS,
+        "a terminal told NO_COLOR draws the reader's own slots"
+    );
+    assert!(
+        painted
+            .planes()
+            .iter()
+            .all(|plane| plane.id() != Plane::RAIL),
+        "a palette that draws no colour is handed no plane over the rail: its band is the flat \
+         band it already had"
+    );
+    assert!(
+        painted
+            .planes()
+            .iter()
+            .any(|plane| plane.id() == Plane::COMPOSER),
+        "and the composer's plane is what it always was, drawn in pixels of the design's own"
+    );
+}
+
+#[test]
+fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane() {
     let (_root, workspace) = workspace(10, 20);
     let mut plain = frame(&workspace, "hello", false);
     let mut pictured = frame(&workspace, "hello", true);
@@ -1379,7 +1486,11 @@ fn a_terminal_without_pictures_keeps_the_cell_ramp_and_no_pixel_ground() {
     let mut picture_cells = Buffer::empty(area);
     let plain_frame = plain.paint(area, &mut plain_cells);
     let picture_frame = pictured.paint(area, &mut picture_cells);
-    assert!(plain_frame.ground().is_none());
+    assert!(
+        plain_frame.planes().is_empty(),
+        "a terminal that places no picture is handed no plane at all: {:?}",
+        plain_frame.planes()
+    );
     let band = plain_frame.layout().unwrap().composer;
     assert_eq!(band, picture_frame.layout().unwrap().composer);
     let palette = plain.capabilities().palette();
@@ -1394,14 +1505,51 @@ fn a_terminal_without_pictures_keeps_the_cell_ramp_and_no_pixel_ground() {
     }
 }
 
-fn same_cells_outside_ground(pictured: &Buffer, placeless: &Buffer, composer_rows: u16) {
+/// The plane a frame hands back under `id`: a frame hands back more than one, and each is asked
+/// for by the identity it is placed under.
+fn plane_of(painted: &sindri::view::Painted, id: u32) -> &Plane {
+    painted
+        .planes()
+        .iter()
+        .find(|plane| plane.id() == id)
+        .unwrap_or_else(|| {
+            panic!(
+                "the frame hands back no plane under {id}, and a terminal that places pictures is \
+             handed its planes from every paint: {:?}",
+                painted.planes().iter().map(Plane::id).collect::<Vec<u32>>()
+            )
+        })
+}
+
+/// The composer's plane, which is the one plane a frame's band has always carried.
+fn composer_plane(painted: &sindri::view::Painted) -> &Plane {
+    plane_of(painted, Plane::COMPOSER)
+}
+
+/// The two frames compared cell by cell, on a terminal that places pictures and one that places
+/// none: a band the frame draws a plane under is read through its cells, so only the glyphs on it
+/// are the frame's, and every cell off both bands is the frame's whole.
+fn same_cells_outside_ground(
+    pictured: &Buffer,
+    placeless: &Buffer,
+    rail: Rect,
+    composer_rows: u16,
+) {
     assert_eq!(pictured.area, placeless.area);
     for y in pictured.area.y..pictured.area.bottom() {
         for x in pictured.area.x..pictured.area.right() {
             let with = &pictured[(x, y)];
             let without = &placeless[(x, y)];
-            if y < pictured.area.bottom() - composer_rows - 1 {
+            let on_rail =
+                (rail.y..rail.bottom()).contains(&y) && (rail.x..rail.right()).contains(&x);
+            if y < pictured.area.bottom() - composer_rows - 1 && !on_rail {
                 assert_eq!(with, without, "outside the composer at ({x}, {y})");
+            } else if on_rail {
+                assert_eq!(
+                    (with.symbol(), with.fg, with.modifier),
+                    (without.symbol(), without.fg, without.modifier),
+                    "rail words at ({x}, {y})"
+                );
             } else {
                 assert_eq!(
                     with.symbol(),
