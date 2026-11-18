@@ -685,3 +685,65 @@ fn a_pixel_ground_is_placed_and_deleted_on_clear() {
     assert!(wire.contains("_Ga=d"));
     assert!(wire.find("_Ga=T").unwrap() < wire.find("_Ga=d").unwrap());
 }
+
+#[test]
+fn a_resized_ground_replaces_the_old_placement_and_a_moved_caret_refreshes_it() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let first = (
+        Rect::new(2, 3, 2, 1),
+        image::RgbaImage::from_pixel(20, 20, image::Rgba([20, 30, 40, 255])),
+    );
+    let moved = (
+        first.0,
+        image::RgbaImage::from_pixel(20, 20, image::Rgba([40, 30, 20, 255])),
+    );
+    let resized = (Rect::new(1, 5, 3, 2), moved.1.clone());
+    backend.ground(Some(&first)).unwrap();
+    backend.ground(Some(&first)).unwrap();
+    backend.ground(Some(&moved)).unwrap();
+    backend.ground(Some(&resized)).unwrap();
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+    assert_eq!(wire.matches("_Ga=T").count(), 3);
+    assert_eq!(wire.matches("_Ga=d").count(), 2);
+    let first_delete = wire.find("_Ga=d").unwrap();
+    let second_upload = wire.match_indices("_Ga=T").nth(1).unwrap().0;
+    let second_delete = wire.match_indices("_Ga=d").nth(1).unwrap().0;
+    let third_upload = wire.match_indices("_Ga=T").nth(2).unwrap().0;
+    assert!(
+        first_delete < second_upload
+            && second_upload < second_delete
+            && second_delete < third_upload
+    );
+    assert!(wire.contains("\x1b[6;2H"));
+}
+
+#[test]
+fn a_whole_frame_clear_deletes_and_repaints_the_ground() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let ground = (
+        Rect::new(2, 3, 2, 1),
+        image::RgbaImage::from_pixel(20, 20, image::Rgba([20, 30, 40, 255])),
+    );
+    backend.ground(Some(&ground)).unwrap();
+    RatatuiBackend::clear(&mut backend).unwrap();
+    backend.ground(Some(&ground)).unwrap();
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+    assert_eq!(wire.matches("_Ga=T").count(), 2);
+    assert_eq!(wire.matches("_Ga=d").count(), 1);
+    assert!(wire.find("_Ga=d").unwrap() < wire.match_indices("_Ga=T").nth(1).unwrap().0);
+}
+
+#[test]
+fn giving_the_screen_back_deletes_the_ground_before_the_shell_returns() {
+    let _one_screen = lock(&ONE_SCREEN);
+    let pty = Pty::open();
+    let terminal = Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).unwrap();
+    let screen = Screen::take(&terminal, false, false).unwrap();
+    drop(screen);
+    let drawn = pty.drawn();
+    assert!(drawn.find("_Ga=d,d=i,i=333").unwrap() < drawn.find("\x1b[?1049l").unwrap());
+}

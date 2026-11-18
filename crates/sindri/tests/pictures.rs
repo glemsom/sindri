@@ -1075,11 +1075,7 @@ fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
             pictured_rows(&with).is_empty(),
             "a {cols}-column frame draws one row of facts and no face: it has no band to reserve"
         );
-        assert_eq!(
-            with, without,
-            "and the strip a terminal that places pictures draws is the row every terminal is \
-             drawn, cell for cell"
-        );
+        same_cells_outside_ground(&with, &without, 8);
     }
 }
 
@@ -1102,11 +1098,7 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
             "the facts stand from the rail's first row, and the row under them is the second \
              fact: no band is reserved for a face that is not drawn, and no rule closes one"
         );
-        assert_eq!(
-            off, placeless,
-            "and every cell of the {cols}-column frame is the one a terminal that places no \
-             picture draws"
-        );
+        same_cells_outside_ground(&off, &placeless, 8);
 
         let mut back_on = railed(true, true);
         let back_on = painted_at(&mut back_on, (cols, 40));
@@ -1350,4 +1342,48 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
         ground.1.get_pixel(400, 30),
         "the caret glows"
     );
+}
+
+#[test]
+fn a_terminal_without_pictures_keeps_the_cell_ramp_and_no_pixel_ground() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut plain = frame(&workspace, "hello", false);
+    let mut pictured = frame(&workspace, "hello", true);
+    let area = Rect::new(0, 0, 80, 24);
+    let mut plain_cells = Buffer::empty(area);
+    let mut picture_cells = Buffer::empty(area);
+    let plain_frame = plain.paint(area, &mut plain_cells);
+    let picture_frame = pictured.paint(area, &mut picture_cells);
+    assert!(plain_frame.ground().is_none());
+    let band = plain_frame.layout().unwrap().composer;
+    assert_eq!(band, picture_frame.layout().unwrap().composer);
+    let palette = plain.capabilities().palette();
+    for row in 0..band.height {
+        let x = band.x + band.width / 2;
+        let y = band.y + row;
+        assert_eq!(
+            plain_cells[(x, y)].bg,
+            palette.raised(row, band.height).bg.unwrap()
+        );
+        assert_eq!(picture_cells[(x, y)].bg, palette.ground(None).bg.unwrap());
+    }
+}
+
+fn same_cells_outside_ground(pictured: &Buffer, placeless: &Buffer, composer_rows: u16) {
+    assert_eq!(pictured.area, placeless.area);
+    for y in pictured.area.y..pictured.area.bottom() {
+        for x in pictured.area.x..pictured.area.right() {
+            let with = &pictured[(x, y)];
+            let without = &placeless[(x, y)];
+            if y < pictured.area.bottom() - composer_rows - 1 {
+                assert_eq!(with, without, "outside the composer at ({x}, {y})");
+            } else {
+                assert_eq!(
+                    with.symbol(),
+                    without.symbol(),
+                    "composer words at ({x}, {y})"
+                );
+            }
+        }
+    }
 }

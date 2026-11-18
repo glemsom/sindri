@@ -50,6 +50,8 @@ const TAKE_POINTER: &[u8] = b"\x1b[?1000h\x1b[?1006h";
 /// `CSI ? 1000 l` and `CSI ? 1006 l`: the report is given up, or a shell is left sending presses.
 const GIVE_UP_POINTER: &[u8] = b"\x1b[?1000l\x1b[?1006l";
 
+const DELETE_GROUND: &[u8] = b"\x1b_Ga=d,d=i,i=333\x1b\\";
+
 pub(crate) struct Terminal {
     pub(crate) keys: File,
     pub(crate) screen: File,
@@ -129,7 +131,7 @@ pub(crate) struct Backend<W: Write> {
     links: Links,
     sizes: Sizes,
     places: bool,
-    ground: Option<ratatui::layout::Rect>,
+    ground: Option<(ratatui::layout::Rect, image::RgbaImage)>,
 }
 
 impl<W: Write> Backend<W> {
@@ -159,13 +161,15 @@ impl<W: Write> Backend<W> {
         &mut self,
         ground: Option<&(ratatui::layout::Rect, image::RgbaImage)>,
     ) -> io::Result<()> {
-        if self.ground == ground.map(|(area, _)| *area) {
+        if self.ground.as_ref().map(|(area, pixels)| (area, pixels))
+            == ground.map(|(area, pixels)| (area, pixels))
+        {
             return Ok(());
         }
         if self.ground.is_some() {
-            self.screen.write_all(b"\x1b_Ga=d,d=i,i=333\x1b\\")?;
+            self.screen.write_all(DELETE_GROUND)?;
         }
-        self.ground = ground.map(|(area, _)| *area);
+        self.ground = ground.cloned();
         let Some((area, pixels)) = ground else {
             return Ok(());
         };
@@ -306,7 +310,7 @@ impl<W: Write> RatatuiBackend for Backend<W> {
 
     fn clear(&mut self) -> io::Result<()> {
         self.ground = None;
-        self.screen.write_all(b"\x1b_Ga=d,d=i,i=333\x1b\\")?;
+        self.screen.write_all(DELETE_GROUND)?;
         self.screen.clear()
     }
 
@@ -383,7 +387,7 @@ impl Restore {
     /// that follows — a panic message included — is drawn on a screen about to be somebody else's,
     /// and then the state raw mode replaced is restored.
     fn put_back(self) {
-        let mut giving = b"\x1b_Ga=d,d=i,i=333\x1b\\".to_vec();
+        let mut giving = DELETE_GROUND.to_vec();
         giving.extend_from_slice(GIVE_BACK_SCREEN);
         if self.window {
             giving.extend_from_slice(GIVE_UP_FOCUS);

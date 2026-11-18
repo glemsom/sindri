@@ -1028,6 +1028,7 @@ impl View {
         self.notice_band(layout.notice, buffer);
         self.composer_band(layout.composer, layout.queue, buffer);
         if self.capabilities.pictures().draws()
+            && !self.facts.splash()
             && layout.composer.width > 0
             && layout.composer.height > 0
         {
@@ -1291,16 +1292,20 @@ impl View {
     /// shadow under its bottom, and the ground ramping between them — one claim per row, so no cell
     /// loses the ink it was written in.
     fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) {
-        for row in 0..band.height {
-            pen::claim(
-                buffer,
-                Rect {
-                    y: band.y.saturating_add(row),
-                    height: 1,
-                    ..band
-                },
-                self.capabilities.palette().raised(row, band.height),
-            );
+        if self.capabilities.pictures().draws() && !self.facts.splash() {
+            pen::claim(buffer, band, self.capabilities.palette().ground(None));
+        } else {
+            for row in 0..band.height {
+                pen::claim(
+                    buffer,
+                    Rect {
+                        y: band.y.saturating_add(row),
+                        height: 1,
+                        ..band
+                    },
+                    self.capabilities.palette().raised(row, band.height),
+                );
+            }
         }
         self.composer_inside(band, queue, buffer);
         self.block(band, queue, None, buffer);

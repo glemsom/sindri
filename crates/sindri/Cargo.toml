@@ -8,6 +8,7 @@ rust-version.workspace = true
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
 ignore = "0.4.34"
+base64 = "0.22"
 # A mermaid fence becomes an SVG in this process, with no browser to ask for a fact about a
 # glyph. `cli` and `png` stay off: this binary draws nothing itself.
 mermaid-rs-renderer = { version = "0.3.1", default-features = false }
@@ -18,7 +19,6 @@ resvg = "0.47"
 tiny-skia = "0.12"
 # The two formats a workspace picture is written in, named here: a decoder the build does not
 # carry turns a file into a refusal.
-base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # A picture becomes the Kitty protocol's unicode placeholders, transmitted once per size and
 # written as cells after that, which is what keeps a scroll from sending it again.
