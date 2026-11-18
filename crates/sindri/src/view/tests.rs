@@ -6,6 +6,7 @@ use sindri_core::policy::Enforcement;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::Exit;
 
+use ratatui::layout::Position;
 use ratatui::style::Color;
 
 use std::path::PathBuf;
@@ -1514,14 +1515,43 @@ fn no_cell_of_the_band_a_launch_opens_on_is_a_picture() {
 
 #[test]
 fn a_frame_too_narrow_for_a_rail_is_every_cell_a_terminal_that_places_no_picture_draws() {
-    let (pictured, _) = splash_frame(30, 24, true);
-    let (placeless, _) = splash_frame(30, 24, false);
+    let launch = |draws: bool| {
+        let mut view = View::of(
+            match draws {
+                true => pictured(),
+                false => Capabilities::default(),
+            },
+            Facts::boot(boot(), None),
+            Transcript::none(),
+        );
+        let mut buffer = Buffer::empty(screen(30, 24));
+        let told = view.paint(buffer.area, &mut buffer);
+        (buffer, laid_out(&told).composer)
+    };
+    let (pictured, band) = launch(true);
+    let (placeless, _) = launch(false);
+    let area = pictured.area;
 
-    assert_eq!(
-        pictured, placeless,
-        "at 30 by 24 the frame is the splash screen and no rail beside it, so every cell of it \
-             is the one a terminal that places no picture draws"
-    );
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            let (with, without) = (&pictured[(x, y)], &placeless[(x, y)]);
+            match band.contains(Position::new(x, y)) {
+                // The band is the one surface a picture is drawn under, so the two terminals
+                // differ there in the ink behind a word and in no word.
+                true => assert_eq!(
+                    with.symbol(),
+                    without.symbol(),
+                    "the band's words at ({x}, {y}) are the words a terminal that places no \
+                     picture draws"
+                ),
+                false => assert_eq!(
+                    with, without,
+                    "at 30 by 24 the frame is the splash screen and no rail beside it, so the \
+                     cell at ({x}, {y}) is the one a terminal that places no picture draws"
+                ),
+            }
+        }
+    }
 }
 
 #[test]

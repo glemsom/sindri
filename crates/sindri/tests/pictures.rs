@@ -1201,11 +1201,7 @@ fn a_splash_screen_the_face_is_turned_off_for_is_the_one_a_placeless_terminal_dr
         "the facts stand from the rail's first row: no band is reserved for a face that is not \
          drawn, and no rule closes one"
     );
-    assert_eq!(
-        off, without,
-        "and every cell of the 120-column splash frame is the one a terminal that places no \
-         picture draws"
-    );
+    same_cells_outside_ground(&off, &without, 5);
 }
 
 #[test]
@@ -1342,6 +1338,35 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
         ground.1.get_pixel(400, 30),
         "the caret glows"
     );
+}
+
+#[test]
+fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
+    let mut launching = splash(true);
+    let area = Rect::new(0, 0, 120, 40);
+    let mut cells = Buffer::empty(area);
+    let painted = launching.paint(area, &mut cells);
+    let band = painted.layout().expect("a laid out frame").composer;
+    let ground = painted.ground().expect(
+        "the band of the frame a launch opens on is the band every later frame draws: a \
+         terminal that places pictures is handed its ground from that first paint",
+    );
+    assert_eq!(ground.0, band, "the placement covers the band's own rect");
+    assert_eq!(
+        ground.1.dimensions(),
+        (u32::from(band.width) * 10, u32::from(band.height) * 20),
+        "at the pixels of the cell it is drawn on"
+    );
+    let palette = launching.capabilities().palette();
+    for row in 0..band.height {
+        let (x, y) = (band.x + band.width / 2, band.y + row);
+        assert_eq!(
+            cells[(x, y)].bg,
+            palette.ground(None).bg.unwrap(),
+            "row {row} of the band is claimed as the ground the pixels are, and not ramped \
+             cell by cell over it"
+        );
+    }
 }
 
 #[test]

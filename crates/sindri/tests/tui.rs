@@ -3096,3 +3096,44 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
     pty.type_bytes(&[0x11]);
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
+
+/// The frame a launch opens on is drawn before any prompt and is the band's frame as much as any
+/// other: a terminal that places pictures is handed the ground from that first paint.
+#[test]
+fn the_first_frame_a_launch_draws_stands_on_the_ground_its_composer_band_earns() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    let bytes = drawn.bytes();
+    let placed = at(&bytes, b"\x1b_Ga=T,f=100,i=333,q=2,z=-1,c=").unwrap_or_else(|| {
+        panic!(
+            "the band of the boot frame is placed on a ground of its own cells: {:?}",
+            drawn.text()
+        )
+    });
+    let before = String::from_utf8_lossy(&bytes[..placed]).into_owned();
+    let (_, at_band) = before
+        .rsplit_once("\x1b7\x1b[")
+        .expect("a ground is placed where the cursor was saved and moved to the band");
+    let row = at_band
+        .strip_suffix(";1H")
+        .expect("the placement is at the band's first column");
+    assert!(
+        !row.is_empty() && row.bytes().all(|byte| byte.is_ascii_digit()),
+        "at a row of the terminal that has one: {row:?}"
+    );
+    assert!(
+        at(&bytes[placed..], b",r=5,m=").is_some(),
+        "and it covers the band's five rows: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}

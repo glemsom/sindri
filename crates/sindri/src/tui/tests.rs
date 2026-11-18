@@ -2,9 +2,10 @@
 //! own: a copy written down the wire, a settings visit whose value is saved or refused, a run that
 //! cannot start leaving its row, a focus report, and a key typed before the first frame.
 
+use std::io::Read;
 use std::os::fd::AsFd;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 
@@ -98,6 +99,10 @@ struct Stage {
     pty: Pty,
     terminal: Terminal,
     cli: Cli,
+    /// What the terminal has been handed so far, read off the master by a thread of this stage's
+    /// own: a frame of a terminal that places pictures carries one, and the few kilobytes a
+    /// terminal nobody reads will hold stop the paint that writes it.
+    drawn: Arc<Mutex<Vec<u8>>>,
 }
 
 impl Stage {
@@ -105,10 +110,29 @@ impl Stage {
         let pty = Pty::open();
         let terminal =
             Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+        let drawn = Arc::new(Mutex::new(Vec::new()));
+        let landing = Arc::clone(&drawn);
+        let mut master = pty
+            .master
+            .try_clone()
+            .expect("a second handle on the terminal");
+        std::thread::spawn(move || {
+            let mut buffer = [0u8; 4096];
+            while let Ok(count) = master.read(&mut buffer) {
+                if count == 0 {
+                    return;
+                }
+                landing
+                    .lock()
+                    .expect("the frame")
+                    .extend_from_slice(&buffer[..count]);
+            }
+        });
         Stage {
             pty,
             terminal,
             cli: Cli::parse_from(["sindri"]),
+            drawn,
         }
     }
 
@@ -142,9 +166,19 @@ impl Stage {
         self.told_in(view, config, environment, true)
     }
 
-    /// Every byte this terminal has been handed, and nothing it says next.
+    /// Every byte this terminal has been handed, once it has gone quiet: a frame is several
+    /// writes, and the last of them lands no later than the terminal says nothing more.
     fn drawn(&self) -> String {
-        self.pty.drawn()
+        let mut waited = self.drawn.lock().expect("the frame").len();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            let now = self.drawn.lock().expect("the frame").len();
+            if now == waited {
+                return String::from_utf8_lossy(&self.drawn.lock().expect("the frame"))
+                    .into_owned();
+            }
+            waited = now;
+        }
     }
 
     fn told_in<'a>(
