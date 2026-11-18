@@ -23,7 +23,7 @@ use sindri::markdown;
 use sindri::palette::{Band, Edge, Palette, channels};
 use sindri::picture::{self, Surface};
 use sindri::pictures::{PLACEHOLDER, Pictures};
-use sindri::plane::Plane;
+use sindri::plane::{Plane, PlaneId};
 use sindri::rows::Row;
 use sindri::view::{Transcript, View};
 use sindri_core::policy::Enforcement;
@@ -1401,11 +1401,15 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     let palette = view.capabilities().palette();
 
     assert_eq!(
-        painted.planes().iter().map(Plane::id).collect::<Vec<u32>>(),
-        vec![Plane::RAIL, Plane::COMPOSER],
+        painted
+            .planes()
+            .iter()
+            .map(Plane::id)
+            .collect::<Vec<PlaneId>>(),
+        vec![PlaneId::Rail, PlaneId::Composer],
         "the frame hands back the rail's plane beside the composer's, each under its own identity"
     );
-    let band = plane_of(&painted, Plane::RAIL);
+    let band = plane_of(&painted, PlaneId::Rail);
     assert_eq!(band.area(), rail, "the plane covers the rail's own rect");
     assert_eq!(
         band.pixels().dimensions(),
@@ -1463,7 +1467,7 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
         painted
             .planes()
             .iter()
-            .all(|plane| plane.id() != Plane::RAIL),
+            .all(|plane| plane.id() != PlaneId::Rail),
         "a palette that draws no colour is handed no plane over the rail: its band is the flat \
          band it already had"
     );
@@ -1471,7 +1475,7 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
         painted
             .planes()
             .iter()
-            .any(|plane| plane.id() == Plane::COMPOSER),
+            .any(|plane| plane.id() == PlaneId::Composer),
         "and the composer's plane is what it always was, drawn in pixels of the design's own"
     );
 }
@@ -1507,23 +1511,27 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
 
 /// The plane a frame hands back under `id`: a frame hands back more than one, and each is asked
 /// for by the identity it is placed under.
-fn plane_of(painted: &sindri::view::Painted, id: u32) -> &Plane {
+fn plane_of(painted: &sindri::view::Painted, id: PlaneId) -> &Plane {
     painted
         .planes()
         .iter()
         .find(|plane| plane.id() == id)
         .unwrap_or_else(|| {
             panic!(
-                "the frame hands back no plane under {id}, and a terminal that places pictures is \
+                "the frame hands back no plane under {id:?}, and a terminal that places pictures is \
              handed its planes from every paint: {:?}",
-                painted.planes().iter().map(Plane::id).collect::<Vec<u32>>()
+                painted
+                    .planes()
+                    .iter()
+                    .map(Plane::id)
+                    .collect::<Vec<PlaneId>>()
             )
         })
 }
 
 /// The composer's plane, which is the one plane a frame's band has always carried.
 fn composer_plane(painted: &sindri::view::Painted) -> &Plane {
-    plane_of(painted, Plane::COMPOSER)
+    plane_of(painted, PlaneId::Composer)
 }
 
 /// The two frames compared cell by cell, on a terminal that places pictures and one that places

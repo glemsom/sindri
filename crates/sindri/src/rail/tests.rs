@@ -314,6 +314,42 @@ fn a_rail_handed_no_cell_draws_todays_band_and_its_shadow_row() {
 }
 
 #[test]
+fn a_rail_handed_a_cell_in_no_colour_draws_the_band_and_shadow_it_drew_without_one() {
+    for (shape, area) in [(Rail::Ledger, band(COLUMNS, 8)), (Rail::Strip, band(40, 1))] {
+        let mut pictured = Buffer::empty(area);
+        let mut placeless = Buffer::empty(area);
+
+        let plane = super::paint(
+            &frame(),
+            shape,
+            RailBand::of(area),
+            None,
+            Some(CellSize::NOMINAL),
+            &mut pictured,
+            &Palette::SLOTS,
+        );
+        paint(&frame(), shape, area, None, &mut placeless, &Palette::SLOTS);
+
+        assert!(
+            plane.is_none(),
+            "a palette that draws no colour is handed no plane for the {shape:?}, so the band's \
+             own rows are the whole of its shading"
+        );
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                assert_eq!(
+                    pictured[(x, y)],
+                    placeless[(x, y)],
+                    "row {y}, column {x} of the {shape:?} is not the cell the band drew with no \
+                     plane under it: the flat band and the shadow across its last row are what a \
+                     reader who asked for no colour already had"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn the_strip_is_one_row_of_the_rails_ground_and_draws_no_elevation() {
     for width in [40, 80, 99] {
         let area = band(width, 1);

@@ -15,8 +15,8 @@ use crate::pulse::Pulse;
 /// are parted by air rather than by a rule each.
 const HAIRLINE: char = '─';
 
-/// The band the rail draws, handed the cell a picture is measured at where one is placed: the
-/// plane it is drawn on is built here, because the band's shading is the rail's own.
+/// The band the rail draws, handed the cell a picture is measured at where this terminal places
+/// one: the plane the band stands on is built from it and handed back with the band it shades.
 pub fn paint(
     facts: &Facts,
     rail: Rail,
@@ -31,14 +31,11 @@ pub fn paint(
         return None;
     }
     let plane = pictures.and_then(|cell| Plane::rail(area, cell, palette));
-    pen::claim(
-        buffer,
-        area,
-        match plane {
-            Some(_) => palette.ground(None),
-            None => palette.ground(Some(Band::Rail)),
-        },
-    );
+    let ground = match plane.is_some() {
+        true => None,
+        false => Some(Band::Rail),
+    };
+    pen::claim(buffer, area, palette.ground(ground));
     if rail == Rail::Ledger {
         elevation(buffer, area, palette, plane.is_none());
         under_the_face(band, buffer, palette);

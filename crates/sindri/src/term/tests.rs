@@ -698,7 +698,10 @@ fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
         2,
         "two planes, and each placed once: {wire:?}"
     );
-    assert!(wire.contains("i=333") && wire.contains("i=334"));
+    assert!(
+        wire.contains("_Ga=T,f=100,i=333,q=2") && wire.contains("_Ga=T,f=100,i=334,q=2"),
+        "each plane is uploaded under its own identity: {wire:?}"
+    );
     assert_eq!(
         wire.matches("_Ga=d").count(),
         1,
@@ -769,10 +772,10 @@ fn giving_the_screen_back_deletes_both_planes_before_the_shell_returns() {
     drop(screen);
     let drawn = pty.drawn();
     let screen_back = drawn.find("\x1b[?1049l").expect("the screen is given back");
-    for id in Plane::IDS {
+    for id in [333, 334] {
         let deleted = drawn
             .find(&format!("_Ga=d,d=i,i={id}"))
-            .unwrap_or_else(|| panic!("plane {id} is deleted: {drawn:?}"));
+            .unwrap_or_else(|| panic!("the plane under {id} is deleted: {drawn:?}"));
         assert!(
             deleted < screen_back,
             "a plane the launch placed is deleted before the alternate screen is given back: \

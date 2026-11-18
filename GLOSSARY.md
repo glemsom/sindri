@@ -157,8 +157,9 @@ A band's ground drawn as one image placed under its cells, so a surface shades i
 in whole rows: the composer's carries its ramp and the glow under the caret, and the rail's carries
 the band at its head and falls continuously into the shadow at its foot. It is placed once per size,
 carries an identity of its own so one is taken away and the other stands, and is handed back with the
-pass that drew it; a terminal that places no picture, and a palette that draws no colour, is given
-none and keeps the band's own cells.
+pass that drew it. A terminal that places no picture is given none, and so is the rail in a palette
+that draws no colour, where the band's own rows — its flat ground and the shadow across its last
+one — are the whole of its shading.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 
 **Chip**:

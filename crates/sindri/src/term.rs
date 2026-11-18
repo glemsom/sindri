@@ -20,7 +20,7 @@ use rustix::termios::{
 use sindri::capability::{Asked, Question};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
-use sindri::plane::{self, Plane};
+use sindri::plane::{self, Plane, PlaneId};
 use sindri::size::{Laid, Sizes};
 use sindri::view::{Painted, View};
 
@@ -172,8 +172,7 @@ impl<W: Write> Backend<W> {
                 self.upload(plane)?;
             }
         }
-        self.planes.clear();
-        self.planes.extend_from_slice(planes);
+        self.planes = planes.to_vec();
         Ok(())
     }
 
@@ -198,7 +197,7 @@ impl<W: Write> Backend<W> {
                 write!(
                     self.screen,
                     "\x1b_Ga=T,f=100,i={},q=2,z=-1,c={},r={},m={more};",
-                    plane.id(),
+                    plane.id().image(),
                     area.width,
                     area.height
                 )?;
@@ -400,7 +399,7 @@ impl Restore {
     /// and then the state raw mode replaced is restored.
     fn put_back(self) {
         let mut giving = Vec::new();
-        for id in Plane::IDS {
+        for id in PlaneId::ALL {
             giving.extend(plane::delete(id));
         }
         giving.extend_from_slice(GIVE_BACK_SCREEN);
