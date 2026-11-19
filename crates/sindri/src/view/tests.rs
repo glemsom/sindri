@@ -2965,15 +2965,17 @@ fn an_answer_that_opens_its_row_under_a_thought_leaves_the_frame_at_the_tail() {
 }
 
 #[test]
-fn a_thought_that_opens_its_row_leaves_the_frame_at_the_tail() {
+fn a_thought_that_opens_its_row_moves_the_frame_by_no_row() {
     let mut view = scrolled_back();
+    let back = view.scroll();
 
     view.reasoning("the first word of a thought");
 
     assert_eq!(
         view.scroll(),
-        Scroll::Tail,
-        "the run's first reasoning is a new entry as its answer is"
+        back,
+        "a thought that opens a new entry is a row the run lands below the reader, and no \
+             hand on the frame they are reading back with"
     );
 }
 
