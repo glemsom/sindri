@@ -1425,7 +1425,10 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     }));
     let top = ground.pixels().get_pixel(400, 0);
     let bottom = ground.pixels().get_pixel(400, ground.pixels().height() - 1);
-    assert!(top[0] > bottom[0], "the ground is lit from above");
+    assert!(
+        top[0] < bottom[0],
+        "the ground rises out of the well it starts at, darker than the foot it comes down to"
+    );
     assert_ne!(
         ground.pixels().get_pixel(25, 30),
         ground.pixels().get_pixel(400, 30),
@@ -1479,23 +1482,29 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
     let band = painted.layout().expect("a laid out frame").composer;
     let ground = composer_plane(&painted);
     let (width, height) = ground.pixels().dimensions();
+    let well = channels(palette.band(Band::Well)).expect("the band's well in pixels");
     let head = channels(palette.step(0, band.height)).expect("the band's head in pixels");
     let foot = channels(palette.step(band.height - 1, band.height)).expect("its foot in pixels");
     assert_eq!(
-        (head, foot),
-        ([48, 48, 48], [38, 38, 38]),
-        "the band this palette spells runs from the grey of the composer's tone down to the \
-             rail's own"
+        (well, head, foot),
+        ([28, 28, 28], [48, 48, 48], [38, 38, 38]),
+        "the band this palette spells rises out of the well's grey and runs down from the grey of \
+             the composer's tone to the rail's own"
     );
     assert_eq!(
         ground.pixels().get_pixel(width - 1, 0).0[..3],
+        well,
+        "the plane's top row is the well the palette's raised band rises out of"
+    );
+    assert_eq!(
+        ground.pixels().get_pixel(width - 1, cell().height()).0[..3],
         head,
-        "the plane's top row is the head the palette's raised band rises to"
+        "one cell down the rise it is the head the raised band rises to"
     );
     assert_ne!(
         ground.pixels().get_pixel(width - 1, 0).0[..3],
-        [25, 35, 47],
-        "and not the head of the design's truecolour band"
+        [14, 21, 29],
+        "and not the well of the design's truecolour band"
     );
     for y in 0..height {
         let pixel = ground.pixels().get_pixel(width - 1, y);
@@ -1533,13 +1542,19 @@ fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
         ),
         "the plane covers the band's own rect, at the pixels of the cell it is drawn on"
     );
-    let (head, foot) = ([25, 35, 47], [19, 27, 37]);
+    let (well, head, foot) = ([14, 21, 29], [25, 35, 47], [19, 27, 37]);
     let column = width - 1;
     let top = ground.pixels().get_pixel(column, 0).0;
     assert_eq!(
         top[..3],
+        well,
+        "the plane's top row is the well the design's raised band rises out of"
+    );
+    let risen = ground.pixels().get_pixel(column, cell().height()).0;
+    assert_eq!(
+        risen[..3],
         head,
-        "the plane's top row is the head the design's raised band rises to"
+        "and one cell down the rise it is the head the raised band rises to"
     );
     let bottom = ground.pixels().get_pixel(column, height - 1).0;
     for at in 0..3 {
@@ -1552,8 +1567,109 @@ fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
     let mid = ground.pixels().get_pixel(column, height / 2).0;
     for at in 0..3 {
         assert!(
-            mid[at] > bottom[at] && mid[at] < top[at],
-            "and half way down the plane is a pixel strictly between the two ends: {mid:?}"
+            mid[at] > bottom[at] && mid[at] < head[at],
+            "and half way down the plane is a pixel strictly between the two ends of the fall: \
+             {mid:?}"
+        );
+    }
+}
+
+#[test]
+fn the_bands_ground_rises_out_of_the_well_over_its_first_cell() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(caps::at(cell()), &workspace, "hello");
+    let area = Rect::new(0, 0, 80, 24);
+    let mut cells = Buffer::empty(area);
+    let painted = view.paint(area, &mut cells);
+    let palette = view.capabilities().palette();
+    let band = painted.layout().expect("a laid out frame").composer;
+    let ground = composer_plane(&painted);
+    let (width, height) = ground.pixels().dimensions();
+    let column = width - 1;
+    assert_eq!(
+        ground.pixels().get_pixel(column, 0).0[..3],
+        channels(palette.band(Band::Well)).expect("the well in pixels"),
+        "the plane's topmost pixel row is the well the transcript's band stands on, and no longer \
+         the band's head"
+    );
+    assert_eq!(
+        ground.pixels().get_pixel(column, cell().height()).0[..3],
+        channels(palette.step(0, band.height)).expect("the band's head in pixels"),
+        "and one cell down the rise has come out at the band's head"
+    );
+    let bottom = ground.pixels().get_pixel(column, height - 1).0;
+    let foot = channels(palette.step(band.height - 1, band.height)).expect("the band's foot");
+    for at in 0..3 {
+        assert!(
+            bottom[at].abs_diff(foot[at]) <= 1,
+            "and the last row {bottom:?} is still the foot {foot:?} the band comes down to, to the \
+             pixel the plane samples it at"
+        );
+    }
+}
+
+#[test]
+fn the_rise_out_of_the_well_eases_into_the_bands_head() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(caps::at(cell()), &workspace, "hello");
+    let area = Rect::new(0, 0, 80, 24);
+    let mut cells = Buffer::empty(area);
+    let painted = view.paint(area, &mut cells);
+    let palette = view.capabilities().palette();
+    let band = painted.layout().expect("a laid out frame").composer;
+    let ground = composer_plane(&painted);
+    let (width, _height) = ground.pixels().dimensions();
+    let well = channels(palette.band(Band::Well)).expect("the well in pixels");
+    let head = channels(palette.step(0, band.height)).expect("the band's head in pixels");
+    let rise = cell().height();
+    let at = |y| {
+        let pixel = ground.pixels().get_pixel(width - 1, y);
+        [pixel[0], pixel[1], pixel[2]]
+    };
+    assert_eq!(at(0), well, "the rise starts where the transcript stands");
+    assert_eq!(at(rise), head, "and is done by the row under the edge");
+    for y in 1..=rise {
+        let (above, row) = (at(y - 1), at(y));
+        for channel in 0..3 {
+            let step = head[channel].abs_diff(well[channel]);
+            assert!(
+                row[channel].abs_diff(above[channel]) < step,
+                "channel {channel} of pixel row {y} is the whole well to head step {step} from the \
+                 row above it: {row:?} against {above:?}"
+            );
+            assert!(
+                row[channel].abs_diff(head[channel]) <= above[channel].abs_diff(head[channel]),
+                "channel {channel} of pixel row {y} is further from the head than the row above \
+                 it: {row:?} against {above:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_carets_glow_carries_across_the_rise_out_of_the_well() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(caps::at(cell()), &workspace, "hello");
+    view.paste("forge");
+    let area = Rect::new(0, 0, 80, 24);
+    let mut cells = Buffer::empty(area);
+    let painted = view.paint(area, &mut cells);
+    let band = painted.layout().expect("a laid out frame").composer;
+    let caret = (band.y..band.bottom())
+        .flat_map(|y| (band.x..band.right()).map(move |x| (x, y)))
+        .find(|(x, y)| cells[(*x, *y)].modifier.contains(Modifier::REVERSED))
+        .expect("the caret's block stands in the band");
+    let ground = composer_plane(&painted);
+    let (width, _height) = ground.pixels().dimensions();
+    let row = cell().height() / 2;
+    let at = u32::from(caret.0 - band.x) * cell().width() + cell().width() / 2;
+    let lit = ground.pixels().get_pixel(at, row);
+    let far = ground.pixels().get_pixel(width - 1, row);
+    for channel in 0..3 {
+        assert!(
+            lit[channel] > far[channel],
+            "channel {channel} of pixel row {row} inside the rise is no lighter under the caret \
+             than the band's far side: {lit:?} against {far:?}"
         );
     }
 }

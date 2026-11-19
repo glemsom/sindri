@@ -41,9 +41,9 @@ pub struct Plane {
 }
 
 impl Plane {
-    /// The composer's band: its head, the rung above the rail's tone, falling into the rail's own
-    /// tone over its height, with the glow under the column the caret waits in. None for an area
-    /// with no rows or columns or a palette with no colour in it.
+    /// The composer's band: its first cell rising out of the well into its head, the rung above the
+    /// rail's tone, which falls into the rail's own tone over the height left, with the glow under
+    /// the caret's column. None for an area with no rows or no columns, or no colour in a pixel.
     pub fn composer(
         area: Rect,
         cell: CellSize,
@@ -53,22 +53,30 @@ impl Plane {
         let (width, height) = extent(area, cell)?;
         let head = channels(palette.step(0, area.height))?;
         let foot = channels(palette.step(area.height - 1, area.height))?;
+        let well = channels(palette.band(Band::Well))?;
+        let rise = cell.height().min(height - 1).max(1);
+        let body = height - rise;
         let glow = caret
             .map(|(x, _)| (f64::from(x.saturating_sub(area.x)) + 0.5) * f64::from(cell.width()));
         let pixels = image::RgbaImage::from_fn(width, height, |x, y| {
-            let t = f64::from(y) / f64::from(height.max(1));
+            let down = f64::from(y) / f64::from(height.max(1));
+            let raised = match y < rise {
+                true => {
+                    let left = 1.0 - f64::from(y) / f64::from(rise);
+                    mix(well, head, 1.0 - left * left)
+                }
+                false => mix(head, foot, f64::from(y - rise) / f64::from(body.max(1))),
+            };
             let light = glow.map_or(0.0, |center| {
                 let distance = (f64::from(x) - center) / (f64::from(cell.width()) * 8.0);
-                let depth = t / 0.65;
+                let depth = down / 0.65;
                 (-(distance * distance + depth * depth) * 2.0).exp() * 22.0
             });
-            let channel = |top: u8, bottom: u8| {
-                (f64::from(top) * (1.0 - t) + f64::from(bottom) * t + light).clamp(0.0, 255.0) as u8
-            };
+            let channel = |at: u8| (f64::from(at) + light).clamp(0.0, 255.0) as u8;
             image::Rgba([
-                channel(head[0], foot[0]),
-                channel(head[1], foot[1]),
-                channel(head[2], foot[2]),
+                channel(raised[0]),
+                channel(raised[1]),
+                channel(raised[2]),
                 255,
             ])
         });
