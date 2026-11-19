@@ -4,7 +4,7 @@
 
 use ratatui::buffer::{Buffer, Cell};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
 use crate::ink::Look;
@@ -157,16 +157,6 @@ pub fn wash(buffer: &mut Buffer, area: Rect, style: Style) {
 pub fn ground(buffer: &mut Buffer, area: Rect, style: Style) {
     each(area, buffer, |cell| {
         cell.reset();
-        cell.set_style(style);
-    });
-}
-
-/// Stamps one cell in `style`, stripping every face and underline the glyph under it already wore so
-/// the cell reads back as the style alone, and keeping the glyph and the ground it sits on.
-pub fn stamp(buffer: &mut Buffer, x: u16, y: u16, style: Style) {
-    each(Rect::new(x, y, 1, 1), buffer, |cell| {
-        cell.modifier = Modifier::empty();
-        cell.underline_color = Color::Reset;
         cell.set_style(style);
     });
 }

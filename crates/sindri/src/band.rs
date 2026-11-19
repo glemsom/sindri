@@ -17,12 +17,6 @@ pub enum Gutter {
     Blank,
 }
 
-/// The column of the gutter's blank cell, counted from the band's first column inside its box: a
-/// draft holding nothing waits there, so no glyph of the placeholder is reversed out of its block.
-pub fn blank() -> u16 {
-    pen::cells(SIGIL).saturating_sub(1)
-}
-
 /// Writes one row of the composer's band: the gutter it opens with, then each run in order in the ink
 /// it carries, cut at the row's edge.
 pub fn row(
