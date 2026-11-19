@@ -20,10 +20,10 @@ stats at 80x24
 14 |    │ output                                                          3.1k │    | dim:5 plain:1 dim:10 plain:59 dim:5
 15 |    │ total                                                          51.3k │    | dim:5 plain:1 dim:10 plain:59 dim:5
 16 |    │ cached                                                           12k │    | dim:5 plain:1 dim:10 plain:59 dim:5
-17 |ctx │ reasoning                                                        900 │lity| dim:5 plain:1 dim:10 plain:59 dim:5
-18 |┌pro│ ──────────────────────────────────────────────────────────────────── │───┐| dim:5 plain:1 dim:68 plain:1 dim:5
-19 |│   │ place                                                                │   │| dim:5 plain:1 dim:5 plain:64 dim:5
-20 |│› w│ workspace /home/glemsom/Documents/git/sindri/.worktrees/46-rail      │   │| dim:5 plain:1 dim:10 plain:59 dim:5
-21 |│   │ branch    spec/1-capability                                          │   │| dim:5 plain:1 dim:10 plain:59 dim:5
+17 |    │ reasoning                                                        900 │    | dim:5 plain:1 dim:10 plain:59 dim:5
+18 |    │ ──────────────────────────────────────────────────────────────────── │    | dim:5 plain:1 dim:68 plain:1 dim:5
+19 |ctx │ place                                                                │lity| dim:5 plain:1 dim:5 plain:64 dim:5
+20 |┌pro│ workspace /home/glemsom/Documents/git/sindri/.worktrees/46-rail      │───┐| dim:5 plain:1 dim:10 plain:59 dim:5
+21 |│› w│ branch    spec/1-capability                                          │   │| dim:5 plain:1 dim:10 plain:59 dim:5
 22 |└───│ ⋯ 18 rows kept back                                                  │───┘| dim:5 plain:1 dim:19 plain:50 dim:5
 23 |Ente╰──────────────────────────────────────────────────────────────── Esc ─╯    | dim:70 plain+bold:3 dim:7

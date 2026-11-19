@@ -8,7 +8,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
-use sindri::composer::{EDGE_ROWS, Key, Outcome};
+use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::ink::{Ink, Look};
 use sindri::ledger;
@@ -533,9 +533,9 @@ fn the_block_is_drawn_in_the_band_the_pass_drew_and_not_in_one_counted_again() {
 
     assert_eq!(
         (x, y),
-        (band.x + 3, band.y + EDGE_ROWS),
+        (band.x + 2, band.y + 1),
         "the empty draft's block stands in the band this pass drew, on its first draft row \
-         and one column past the upright and its gutter"
+         and on the blank cell of the gutter"
     );
 }
 

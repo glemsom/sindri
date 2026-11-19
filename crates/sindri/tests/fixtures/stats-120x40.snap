@@ -37,9 +37,9 @@ stats at 120x40
 31 |                        │ sandbox   bubblewrap                                                 │                        | dim:25 plain:1 dim:10 plain:59 dim:25
 32 |                        │ ──────────────────────────────────────────────────────────────────── │                        | dim:25 plain:1 dim:68 plain:1 dim:25
 33 |                        │ skills                                                               │                        | dim:25 plain:1 dim:6 plain:63 dim:25
-34 |┌prompt ────────────────│ bash                                                                 │───────────────────────┐| dim:25 plain:70 dim:25
-35 |│                       │ records                                                              │                       │| dim:25 plain:70 dim:25
-36 |│› what should the run d│ ──────────────────────────────────────────────────────────────────── │                       │| dim:25 plain:1 dim:68 plain:1 dim:25
-37 |│                       │ session                                                              │                       │| dim:25 plain:1 dim:7 plain:62 dim:25
+34 |                        │ bash                                                                 │                        | dim:25 plain:70 dim:25
+35 |                        │ records                                                              │                        | dim:25 plain:70 dim:25
+36 |┌prompt ────────────────│ ──────────────────────────────────────────────────────────────────── │───────────────────────┐| dim:25 plain:1 dim:68 plain:1 dim:25
+37 |│› what should the run d│ session                                                              │                       │| dim:25 plain:1 dim:7 plain:62 dim:25
 38 |└───────────────────────│ ⋯ 2 rows kept back                                                   │───────────────────────┘| dim:25 plain:1 dim:18 plain:51 dim:25
 39 |Enter send · / commands ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
