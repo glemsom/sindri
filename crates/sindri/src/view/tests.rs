@@ -2930,20 +2930,22 @@ fn a_frame_too_short_for_the_row_gives_it_up_before_the_transcript_loses_its_las
 }
 
 #[test]
-fn a_new_entry_leaves_the_frame_at_the_tail() {
+fn a_new_entry_moves_the_frame_by_no_row() {
     let mut view = scrolled_back();
+    let back = view.scroll();
 
     view.text("the first word of an answer");
 
     assert_eq!(
         view.scroll(),
-        Scroll::Tail,
-        "an answer that opens its row puts the frame back at the tail without being asked"
+        back,
+        "an answer that opens its row is a row the run lands, so the frame is left where the \
+             reader put it"
     );
 }
 
 #[test]
-fn an_answer_that_opens_its_row_under_a_thought_leaves_the_frame_at_the_tail() {
+fn an_answer_that_opens_its_row_under_a_thought_moves_the_frame_by_no_row() {
     let mut view = turns(100);
     view.reasoning("a thought the run says first");
     painted(&mut view, 120, 40);
@@ -2953,14 +2955,15 @@ fn an_answer_that_opens_its_row_under_a_thought_leaves_the_frame_at_the_tail() {
         Scroll::Tail,
         "the frame under this test stands off the tail"
     );
+    let back = view.scroll();
 
     view.text("and the answer it introduces");
 
     assert_eq!(
         view.scroll(),
-        Scroll::Tail,
-        "an answer opens a row of its own under the thought, so it is a new entry as the \
-             run's first word is"
+        back,
+        "an answer opens a row of its own under the thought, and that row lands below the \
+             frame as every other row does"
     );
 }
 
