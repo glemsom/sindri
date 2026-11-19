@@ -323,8 +323,8 @@ fn a_run_wider_than_the_row_it_was_laid_on_carries_nothing_to_the_row_below() {
     );
 }
 
-/// A frame written through `paint`, and the same frame written through the canvas's own draw:
-/// what the launch paints is what a reader would have seen from the library it draws through.
+/// A frame written through `paint`, and the same frame written through the canvas's own draw with
+/// the cell the pass names placed by hand: the launch adds no byte of its own to the frame it paints.
 fn written(pty: &Pty, launch: bool) {
     let terminal =
         Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
@@ -366,18 +366,6 @@ fn the_frame_the_launch_paints_is_the_frame_the_canvas_draws() {
     );
 }
 
-/// Every sequence of `drawn` read from its `CSI` to the byte that ends it.
-fn csi(drawn: &str) -> Vec<&str> {
-    drawn
-        .match_indices("\u{1b}[")
-        .filter_map(|(at, _)| {
-            let params = &drawn[at + 2..];
-            let end = params.find(|glyph: char| ('\u{40}'..='\u{7e}').contains(&glyph))?;
-            Some(&drawn[at..at + 2 + end + 1])
-        })
-        .collect()
-}
-
 #[test]
 fn the_launch_places_the_cursors_cell_after_the_frames_cells() {
     let pty = Pty::open();
@@ -411,14 +399,6 @@ fn the_launch_places_the_cursors_cell_after_the_frames_cells() {
         drawn.ends_with(&placement),
         "the placement is the last thing written, so it lands on the frame just painted and \
          never on a stale one: {drawn:?}"
-    );
-    assert!(
-        !csi(&drawn).iter().any(|sequence| sequence.ends_with('q')),
-        "no cursor shape is asked for, so a reader sees the shape they chose: {drawn:?}"
-    );
-    assert!(
-        !drawn.contains("\u{1b}]12;"),
-        "and no cursor colour is asked for either: {drawn:?}"
     );
 }
 

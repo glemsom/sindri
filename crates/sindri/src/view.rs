@@ -245,7 +245,7 @@ impl Painted {
         }
     }
 
-    /// The cell this frame places the terminal's cursor in, and none for a frame that places none.
+    /// The cell this frame places the terminal's cursor in.
     pub fn caret(&self) -> Option<Position> {
         self.caret
     }
@@ -1578,7 +1578,7 @@ impl View {
         }
     }
 
-    /// Stamps the cell the draft's caret stands in, when this frame draws one.
+    /// Stamps the mark ink on the cell the draft's caret stands in.
     fn block(&self, band: Rect, queue: Rect, card: Option<Rect>, buffer: &mut Buffer) {
         let Some((x, y)) = self.caret_cell(band, queue, card) else {
             return;
@@ -1586,9 +1586,8 @@ impl View {
         pen::stamp(buffer, x, y, Ink::Mark.style(&self.capabilities.palette()));
     }
 
-    /// The cell the draft's caret stands in, when this frame draws one and no card holds it: a card
-    /// scrims the band and grounds its own box, so a caret on one of its cells would be on the card
-    /// and not on the draft.
+    /// That cell, unless a card holds it: a card scrims the band and grounds its own box, so a caret
+    /// on one of its cells would be on the card and not on the draft.
     fn caret_cell(&self, band: Rect, queue: Rect, card: Option<Rect>) -> Option<(u16, u16)> {
         let (x, y) = self.caret(band, queue)?;
         match card.is_some_and(|card| {

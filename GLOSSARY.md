@@ -149,8 +149,9 @@ row and the newest at the foot. What a band cannot hold it counts: the rows of a
 composer's ceiling, and the prompts of a queue past the rows it was given. The draft's caret is a
 cell of the composer's band: the cell it waits in is claimed in the mark ink, so it reads as a block
 with the glyph it comes before reversed out of it, and no answer, prompt or card carries one. A
-launch places the terminal's own cursor in that same cell, so two carets share it, and the shape,
-colour and blink of the one a reader sees are the reader's own settings and never a frame's to say.
+launch places the terminal's own cursor in that same cell wherever a reader can type there, so two
+carets share it, and the shape, colour and blink of the one a reader sees are the reader's own
+settings and never a frame's to say.
 _Avoid_: Region, pane, panel, viewport
 
 **Plane**:

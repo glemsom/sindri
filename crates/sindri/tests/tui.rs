@@ -1334,7 +1334,7 @@ fn the_launch_places_the_terminals_own_caret_on_the_blocks_cell() {
 }
 
 #[test]
-fn the_placed_caret_follows_a_typed_glyph_an_erasure_and_a_move() {
+fn a_typed_glyph_and_an_erasure_move_the_placed_caret() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);
 
@@ -1356,22 +1356,86 @@ fn the_placed_caret_follows_a_typed_glyph_an_erasure_and_a_move() {
         "an erased glyph takes the caret back with it: {:?}",
         drawn.text()
     );
-    let erased = drawn.text();
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn a_move_along_the_draft_moves_the_placed_caret_and_no_glyph() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"abc");
+    assert!(
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 4)),
+        "three glyphs typed wait the caret one column past the last: {:?}",
+        drawn.text()
+    );
+    let typed = drawn.text();
 
     pty.type_bytes(b"\x1b[D");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 2)),
-        "and a move along the draft takes it back again, over a glyph that stays where it was: \
-         {:?}",
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 3)),
+        "a step back along the draft takes the caret back over a glyph: {:?}",
         drawn.text()
     );
-    let moved = drawn.text();
     assert_eq!(
-        picture(&moved),
-        picture(&erased),
-        "no glyph of the frame changed: the caret moved and the draft did not"
+        picture(&drawn.text()),
+        picture(&typed),
+        "and no glyph of the frame changed: the caret moved and the draft did not"
     );
 
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn a_screen_over_the_band_places_no_caret_and_hides_the_terminals_own() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"?");
+    assert!(
+        drawn.wait_until(|frame| showing(frame, "Backspace")),
+        "the keys screen is drawn over the band: {:?}",
+        drawn.text()
+    );
+
+    let frame = drawn.text();
+    assert!(
+        frame.ends_with("\u{1b}[?25l"),
+        "a screen takes the keys the draft behind it does not, so the frame places no caret and \
+         the terminal's own is hidden rather than left standing on a cell nobody can type in: \
+         {frame:?}"
+    );
+
+    pty.type_bytes(b"\x1b");
+    assert!(
+        drawn.wait_until(|frame| !showing(frame, "Backspace")),
+        "Esc gives the frame back: {:?}",
+        drawn.text()
+    );
     pty.type_bytes(&[0x11]);
     assert_eq!(
         session.wait().code(),

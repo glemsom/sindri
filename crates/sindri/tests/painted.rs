@@ -649,10 +649,50 @@ fn a_pass_hands_back_the_cell_the_draft_caret_waits_in() {
         Some(Position::new(4, 8)),
         "and that row eight, column four is the cell the pass places the cursor in"
     );
+
+    let mut empty = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    let (buffer, told) = painted_and_told(&mut empty, 40, 12);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    let block =
+        caret_cell(&buffer, &palette, laid.composer).expect("the empty draft's block is drawn");
+    assert_eq!(
+        told.caret(),
+        Some(Position::new(block.0, block.1)),
+        "and a draft holding nothing places the cursor on the blank cell its block stands on"
+    );
 }
 
 #[test]
-fn a_pass_under_a_card_hands_back_no_caret() {
+fn a_pass_counts_a_wide_glyph_as_two_columns_of_caret() {
+    let caret_of = |draft: &str| {
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        );
+        view.paste(draft);
+        painted_and_told(&mut view, 40, 12)
+            .1
+            .caret()
+            .expect("a draft takes the keys, so the pass places the cursor in it")
+    };
+
+    assert_eq!(
+        caret_of("日本").x - caret_of("ab").x,
+        2,
+        "two wide glyphs take four columns where two narrow ones take two, so the caret waits \
+         two columns further past them"
+    );
+}
+
+#[test]
+fn a_pass_where_a_reader_types_no_draft_hands_back_no_caret() {
     let palette = Palette::TRUECOLOR;
     let mut commands = View::of(
         Capabilities::default(),
@@ -686,23 +726,30 @@ fn a_pass_under_a_card_hands_back_no_caret() {
     assert_eq!(
         told.caret(),
         None,
-        "and a screen over the band places no cursor either, because no key reaches that draft"
+        "and neither does a screen held over the band, because no key reaches that draft"
     );
+}
 
-    let mut empty = View::of(
+#[test]
+fn a_card_that_leaves_the_carets_cell_leaves_the_cursor_there() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::none(),
     );
-    let (buffer, told) = painted_and_told(&mut empty, 40, 12);
+    view.key(Key::Char('/'));
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let laid = told
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
-    let block =
-        caret_cell(&buffer, &palette, laid.composer).expect("the empty draft's block is drawn");
+    assert!(laid.card.is_some(), "the commands card is drawn: {laid:?}");
+    let block = caret_cell(&buffer, &palette, laid.composer)
+        .expect("a card that never reaches the band leaves its block standing");
+
     assert_eq!(
         told.caret(),
         Some(Position::new(block.0, block.1)),
-        "an empty draft with no screen hands back the blank cell its block stands on"
+        "so the cell the block stands in is the one the cursor is placed in: {block:?}"
     );
 }
