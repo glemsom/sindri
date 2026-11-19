@@ -2851,9 +2851,49 @@ fn a_row_that_lands_while_the_reader_is_scrolled_back_holds_the_window_still() {
     let (now, _) = notice_of(&after);
     assert_eq!(
         now.trim_end(),
-        "38 rows back \u{b7} End follows the run",
-        "the two rows the answer landed are added to the count of rows back: the frame \
-             holds the rows it was reading rather than sliding with the tail"
+        "38 rows back \u{b7} 2 rows landed \u{b7} End follows the run",
+        "the two rows the answer landed are added to the count of rows back and counted as \
+             landed below the frame: it holds the rows it was reading rather than sliding with \
+             the tail"
+    );
+}
+
+#[test]
+fn the_notice_counts_the_rows_that_landed_below_a_frame_off_the_tail() {
+    let mut view = turns(100);
+    view.text("a first word of an answer");
+    painted(&mut view, 120, 40);
+    view.key(Key::PageUp);
+    painted(&mut view, 120, 40);
+
+    view.text(&pen::filled(200, 'x'));
+    let landed = painted(&mut view, 120, 40);
+
+    let (drawn, _) = notice_of(&landed);
+    assert_eq!(
+        drawn.trim_end(),
+        "38 rows back \u{b7} 2 rows landed \u{b7} End follows the run",
+        "the row says how far back the frame stands, how many rows have landed below it \
+             since, and the key that follows the run"
+    );
+}
+
+#[test]
+fn one_row_that_landed_is_said_in_the_singular() {
+    let mut view = turns(100);
+    view.text("a first word of an answer");
+    painted(&mut view, 120, 40);
+    view.key(Key::PageUp);
+    painted(&mut view, 120, 40);
+
+    view.text(&pen::filled(110, 'x'));
+    let landed = painted(&mut view, 120, 40);
+
+    let (drawn, _) = notice_of(&landed);
+    assert_eq!(
+        drawn.trim_end(),
+        "37 rows back \u{b7} 1 row landed \u{b7} End follows the run",
+        "one row that landed is a count of one row, and not of one rows"
     );
 }
 
