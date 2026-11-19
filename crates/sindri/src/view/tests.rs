@@ -3050,6 +3050,64 @@ fn a_thought_that_opens_its_row_moves_the_frame_by_no_row() {
 }
 
 #[test]
+fn end_hands_the_frame_back_to_the_tail_and_it_follows_the_run_from_there() {
+    let mut view = turns(100);
+    view.text("a first word of an answer");
+    painted(&mut view, 120, 40);
+    view.key(Key::PageUp);
+    painted(&mut view, 120, 40);
+    assert_ne!(
+        view.scroll(),
+        Scroll::Tail,
+        "the frame under this test stands off the tail to begin with"
+    );
+
+    assert_eq!(
+        view.key(Key::End),
+        Outcome::Edited,
+        "End off the tail is the run's tail"
+    );
+    assert_eq!(
+        view.scroll(),
+        Scroll::Tail,
+        "which is the frame handed back to the tail"
+    );
+    painted(&mut view, 120, 40);
+
+    view.text(&pen::filled(200, 'x'));
+    let tail = painted(&mut view, 120, 40);
+
+    assert_eq!(
+        view.scroll(),
+        Scroll::Tail,
+        "and a frame at the tail follows the run: the rows that land are drawn, not counted"
+    );
+    assert!(
+        holds(&tail, &pen::filled(10, 'x')),
+        "so a fragment that lands after End is drawn at the tail: {:?}",
+        frame_rows(&tail)
+    );
+    assert!(
+        !holds(&tail, "rows back") && !holds(&tail, "landed"),
+        "and the row saying where the frame stood goes with its place off the tail"
+    );
+
+    assert_eq!(
+        view.key(Key::PageUp),
+        Outcome::Edited,
+        "a page back stands off the tail again"
+    );
+    let back = painted(&mut view, 120, 40);
+    let (drawn, _) = notice_of(&back);
+    assert_eq!(
+        drawn.trim_end(),
+        "36 rows back \u{b7} End follows the run",
+        "and a frame that stands off the tail again counts the rows landing below it from \
+             there, and none of the rows that landed before"
+    );
+}
+
+#[test]
 fn a_sent_prompt_leaves_the_frame_at_the_tail() {
     let mut view = scrolled_back();
 
