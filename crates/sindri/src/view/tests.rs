@@ -3108,6 +3108,29 @@ fn end_hands_the_frame_back_to_the_tail_and_it_follows_the_run_from_there() {
 }
 
 #[test]
+fn a_frame_at_the_tail_draws_the_row_every_fragment_lands_on() {
+    let mut view = turns(100);
+    let mut said = String::new();
+    for word in ["one ", "two ", "three"] {
+        said.push_str(word);
+        view.text(word);
+        let buffer = painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "a frame at the tail is a frame that follows the run"
+        );
+        assert!(
+            holds(&buffer, said.trim_end()),
+            "so every row the run lands is drawn in it, `{}` and all: {:?}",
+            said.trim_end(),
+            frame_rows(&buffer)
+        );
+    }
+}
+
+#[test]
 fn a_sent_prompt_leaves_the_frame_at_the_tail() {
     let mut view = scrolled_back();
 
