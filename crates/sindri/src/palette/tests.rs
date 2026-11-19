@@ -215,146 +215,104 @@ fn the_lit_edge_stands_above_every_band_and_the_shadow_below() {
 }
 
 #[test]
-fn a_raised_surface_ramps_from_the_lit_edge_down_to_the_shadow() {
+fn a_raised_band_runs_from_the_rung_above_the_rail_down_to_the_rail_itself() {
     for (spelling, palette) in SPELLED {
         for rows in MIN_ROWS..=MAX_ROWS {
             assert_eq!(
                 palette.step(0, rows),
-                palette.edge(Edge::Lit),
-                "{spelling} draws no lit edge along the top of a raised band of {rows} rows"
+                palette.band(Band::Composer),
+                "{spelling} draws the top row of a raised band of {rows} rows on a rung other \
+                     than the one above the rail's own tone"
             );
             assert_eq!(
                 palette.step(rows - 1, rows),
-                palette.edge(Edge::Shadow),
-                "{spelling} leaves no shadow under a raised band of {rows} rows"
-            );
-            for row in 1..rows {
-                assert!(
-                    luminance(palette.step(row, rows)) <= luminance(palette.step(row - 1, rows)),
-                    "{spelling} draws row {row} of a raised band of {rows} rows brighter than \
-                         the row above it, so the surface ramps away from its own shadow"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn a_band_no_taller_than_the_ladder_draws_no_two_rows_in_one_ground() {
-    for (spelling, palette) in SPELLED {
-        for rows in MIN_ROWS..=rungs() {
-            for row in 1..rows {
-                assert_ne!(
-                    palette.step(row, rows),
-                    palette.step(row - 1, rows),
-                    "{spelling} draws rows {} and {row} of a {rows}-row band in one ground, and \
-                         the ladder has a rung to spare for every row",
-                    row - 1
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn the_ladder_is_eight_rungs_in_every_palette_that_draws_one() {
-    assert_eq!(
-        STEPS, 8,
-        "a ladder is one rung short of the tallest band of nine rows"
-    );
-    for (spelling, palette) in SPELLED {
-        let rungs = ladder(&palette);
-        for at in 1..rungs.len() {
-            assert!(
-                !rungs[..at].contains(&rungs[at]),
-                "{spelling} draws rung {at} of its ladder in the colour of a rung above it, so \
-                     two of the eight are one"
+                palette.band(Band::Rail),
+                "{spelling} draws the last row of a raised band of {rows} rows on a tone other \
+                     than the rail's own"
             );
         }
     }
 }
 
 #[test]
-fn a_band_at_its_ceiling_repeats_one_rung_and_leaves_none_out() {
-    assert_eq!(
-        MAX_ROWS,
-        rungs() + 1,
-        "the ceiling is one row taller than the ladder"
-    );
-    for (spelling, palette) in SPELLED {
-        let rungs = ladder(&palette);
-        let drawn: Vec<usize> = (0..MAX_ROWS)
-            .map(|row| {
-                let step = palette.step(row, MAX_ROWS);
-                let rung = rungs.iter().position(|rung| *rung == step);
-                rung.unwrap_or_else(|| {
-                    panic!(
-                        "{spelling} draws row {row} of a {MAX_ROWS}-row band on no rung of its \
-                             ladder"
-                    )
-                })
-            })
-            .collect();
-
-        assert_eq!(
-            drawn.first().copied(),
-            Some(0),
-            "{spelling} draws no lit edge along the top of a band at its ceiling"
-        );
-        assert_eq!(
-            drawn.last().copied(),
-            Some(rungs.len() - 1),
-            "{spelling} leaves the shadow off the foot of a band at its ceiling"
-        );
-        for (row, pair) in drawn.windows(2).enumerate() {
-            assert!(
-                pair[1] == pair[0] || pair[1] == pair[0] + 1,
-                "{spelling} jumps from rung {} to rung {} between rows {row} and {}, so the \
-                     band's face is no ladder",
-                pair[0],
-                pair[1],
-                row + 1
-            );
-        }
-        assert_eq!(
-            drawn.windows(2).filter(|pair| pair[0] == pair[1]).count(),
-            1,
-            "{spelling} gives a band at its ceiling one rung too few for its rows, so it repeats \
-                 more than the one rung its height leaves it"
-        );
-    }
-}
-
-#[test]
-fn a_five_row_band_is_the_lit_edge_its_own_ground_and_the_shadow() {
-    for (spelling, palette) in SPELLED {
-        assert_eq!(
-            palette.step(0, MIN_ROWS),
-            palette.edge(Edge::Lit),
-            "{spelling} lights no edge along the top of a band at its floor"
-        );
-        assert_eq!(
-            palette.step(MIN_ROWS / 2, MIN_ROWS),
-            palette.band(Band::Composer),
-            "{spelling} gives a raised band at its floor no composer ground to draw its face \
-                 on, and its middle row is the row the draft is drawn on"
-        );
-        assert_eq!(
-            palette.step(MIN_ROWS - 1, MIN_ROWS),
-            palette.edge(Edge::Shadow),
-            "{spelling} leaves no shadow under a band at its floor"
-        );
-    }
-}
-
-#[test]
-fn a_surface_with_one_row_has_no_room_for_both_ends_and_is_drawn_lit() {
+fn a_one_row_band_has_no_room_for_both_ends_and_is_drawn_as_its_head() {
     for (spelling, palette) in SPELLED {
         assert_eq!(
             palette.step(0, 1),
-            palette.edge(Edge::Lit),
-            "{spelling} lights no one-row band, and a shadow would leave it no top at all"
+            palette.band(Band::Composer),
+            "{spelling} draws a one-row band on anything but its head, and the one row is all \
+                 the band has to say it is raised"
         );
+    }
+}
+
+#[test]
+fn a_raised_bands_rows_never_climb_and_never_leave_its_two_ends() {
+    for (spelling, palette) in SPELLED {
+        let head = luminance(palette.band(Band::Composer));
+        let foot = luminance(palette.band(Band::Rail));
+        for rows in MIN_ROWS..=MAX_ROWS {
+            for row in 0..rows {
+                let ground = luminance(palette.step(row, rows));
+                assert!(
+                    (foot..=head).contains(&ground),
+                    "{spelling} draws row {row} of a raised band of {rows} rows at {ground}, \
+                         outside the two ends {foot} and {head} the band is shaded between"
+                );
+                if row > 0 {
+                    assert!(
+                        ground <= luminance(palette.step(row - 1, rows)),
+                        "{spelling} draws row {row} of a raised band of {rows} rows brighter \
+                             than the row above it, so the surface climbs away from its foot"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_truecolour_band_up_to_its_ceiling_draws_no_two_rows_in_one_ground() {
+    for rows in MIN_ROWS..=MAX_ROWS {
+        for row in 1..rows {
+            assert_ne!(
+                Palette::TRUECOLOR.step(row, rows),
+                Palette::TRUECOLOR.step(row - 1, rows),
+                "truecolour draws rows {} and {row} of a {rows}-row band in one ground, and \
+                     the design has a shade to spare for every row up to the ceiling",
+                row - 1
+            );
+        }
+    }
+}
+
+#[test]
+fn an_ansi_band_draws_only_the_greys_its_window_holds() {
+    for rows in MIN_ROWS..=MAX_ROWS {
+        for row in 0..rows {
+            assert!(
+                matches!(Palette::ANSI.step(row, rows), Color::Indexed(235 | 236)),
+                "ansi draws row {row} of a {rows}-row band in {:?}, outside the two greys the \
+                     rail's tone and the rung above it leave between them",
+                Palette::ANSI.step(row, rows)
+            );
+        }
+    }
+}
+
+#[test]
+fn no_row_of_a_raised_band_is_darker_than_the_well() {
+    for (spelling, palette) in SPELLED {
+        let well = luminance(palette.band(Band::Well));
+        for rows in MIN_ROWS..=MAX_ROWS {
+            for row in 0..rows {
+                assert!(
+                    luminance(palette.step(row, rows)) >= well,
+                    "{spelling} draws row {row} of a raised band of {rows} rows under the well, \
+                         so the band sits sunken and not raised"
+                );
+            }
+        }
     }
 }
 
@@ -534,17 +492,6 @@ fn the_ladder_keeps_the_steps_it_had() {
             );
         }
     }
-}
-
-/// The rungs of a palette's ladder, top to bottom: a band of `STEPS` rows draws one on each row.
-fn ladder(palette: &Palette) -> Vec<Color> {
-    (0..rungs())
-        .map(|rung| palette.step(rung, rungs()))
-        .collect()
-}
-
-fn rungs() -> u16 {
-    u16::try_from(STEPS).expect("a ladder of eight rungs")
 }
 
 /// The contrast an ink reads at on a band's ground.

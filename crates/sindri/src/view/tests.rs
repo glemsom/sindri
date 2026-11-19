@@ -152,7 +152,7 @@ fn head_at(buffer: &Buffer, band: Rect) -> u16 {
 }
 
 #[test]
-fn the_composer_is_lit_along_its_top_and_shadowed_under_its_bottom() {
+fn the_composer_is_drawn_from_its_head_down_to_the_rails_own_tone() {
     let palette = Palette::TRUECOLOR;
     for lines in 1..=5 {
         for (cols, rows) in [(120, 40), (60, 24)] {
@@ -164,7 +164,7 @@ fn the_composer_is_lit_along_its_top_and_shadowed_under_its_bottom() {
                     assert_eq!(
                         under(&buffer, x, band.y + row),
                         palette.step(row, band.height),
-                        "row {row} of the {} at {cols}x{rows} sits on no step of the ramp, \
+                        "row {row} of the {} at {cols}x{rows} sits on no shade of the band, \
                              so the band is not one raised surface",
                         band.height
                     );
@@ -172,14 +172,15 @@ fn the_composer_is_lit_along_its_top_and_shadowed_under_its_bottom() {
             }
             assert_eq!(
                 under(&buffer, band.x, band.y),
-                palette.edge(Edge::Lit),
-                "the top row of the {} at {cols}x{rows} is not the lit edge",
+                palette.band(Band::Composer),
+                "the top row of the {} at {cols}x{rows} is not the head the band rises to",
                 band.height
             );
             assert_eq!(
                 under(&buffer, band.x, band.bottom() - 1),
-                palette.edge(Edge::Shadow),
-                "the bottom row of the {} at {cols}x{rows} is not the shadow",
+                palette.band(Band::Rail),
+                "the bottom row of the {} at {cols}x{rows} is not the rail's own tone, so the \
+                     band is parted from the surface it stands on",
                 band.height
             );
         }
@@ -209,17 +210,13 @@ fn the_composer_that_takes_the_keys_lights_its_edge_row_with_the_accent() {
 }
 
 #[test]
-fn the_band_is_lit_along_its_top_and_shadowed_under_its_last_row() {
+fn no_row_of_the_composer_band_is_drawn_on_an_edge() {
     let palette = Palette::TRUECOLOR;
     for lines in [1, 5] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
-        let rows_in = |edge: Edge| -> Vec<u16> {
-            (band.y..band.bottom())
-                .filter(|y| {
-                    (band.x..band.right()).all(|x| under(&buffer, x, *y) == palette.edge(edge))
-                })
-                .collect()
+        let on_edge = |edge: Edge, y: u16| {
+            (band.x..band.right()).all(|x| under(&buffer, x, y) == palette.edge(edge))
         };
 
         assert_eq!(
@@ -229,16 +226,18 @@ fn the_band_is_lit_along_its_top_and_shadowed_under_its_last_row() {
                  the heights a band takes",
             band.height
         );
+        for edge in Edge::ALL {
+            assert!(
+                (band.y..band.bottom()).all(|y| !on_edge(edge, y)),
+                "a {} band is drawn on its {edge:?} edge, and an edge is the light a boundary \
+                     is raised out of or the shadow it is set down into, never a row of the band",
+                band.height
+            );
+        }
         assert_eq!(
-            rows_in(Edge::Lit).first().copied(),
-            Some(band.y),
-            "a {} band leaves its top row unlit, so it rises out of no ground",
-            band.height
-        );
-        assert_eq!(
-            rows_in(Edge::Shadow),
-            [band.bottom() - 1],
-            "a {} band is shadowed on a row other than its last",
+            under(&buffer, band.x, band.bottom() - 1),
+            palette.band(Band::Rail),
+            "a {} band comes down to a tone other than the rail's own",
             band.height
         );
         for y in band.y..band.bottom() {
@@ -431,7 +430,7 @@ fn a_frame_with_no_colour_draws_the_composer_as_a_flat_band() {
 }
 
 #[test]
-fn a_frame_with_one_row_to_give_the_composer_draws_it_lit() {
+fn a_frame_with_one_row_to_give_the_composer_draws_it_as_its_head() {
     let palette = Palette::TRUECOLOR;
     let (buffer, laid) = composer(palette, 1, 60, 2);
     let band = laid.composer;
@@ -439,9 +438,9 @@ fn a_frame_with_one_row_to_give_the_composer_draws_it_lit() {
     assert_eq!(band.height, 1, "a two-row frame gives the composer one row");
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.edge(Edge::Lit),
-        "one row has no room for both ends, so it is drawn lit and never on the frame's own \
-             ground"
+        palette.band(Band::Composer),
+        "one row has no room for both ends, so it is drawn as the head and never on the frame's \
+             own ground"
     );
 }
 
@@ -453,13 +452,13 @@ fn sixty_columns_show_the_raised_band_and_lose_no_hint_from_the_footer() {
 
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.edge(Edge::Lit),
-        "a sixty-column frame draws no lit edge along the top of the composer"
+        palette.band(Band::Composer),
+        "a sixty-column frame draws no head on the composer's top row"
     );
     assert_eq!(
         under(&buffer, band.x, band.bottom() - 1),
-        palette.edge(Edge::Shadow),
-        "a sixty-column frame leaves no shadow under the composer"
+        palette.band(Band::Rail),
+        "a sixty-column frame leaves the composer's foot above the rail's own tone"
     );
     assert_eq!(
         drawn_row(&buffer, laid.footer.y).trim_end(),
@@ -983,13 +982,13 @@ fn a_queues_rows_stand_inside_the_box_and_the_foot_is_still_the_bands_last_row()
     );
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.edge(Edge::Lit),
-        "a band holding a queue is still lit along its edge"
+        palette.band(Band::Composer),
+        "a band holding a queue still rises to its head"
     );
     assert_eq!(
         under(&buffer, band.x, band.bottom() - 1),
-        palette.edge(Edge::Shadow),
-        "and still shadowed along its foot, which is the row the queue does not reach"
+        palette.band(Band::Rail),
+        "and still comes down to the rail's own tone, which is the row the queue does not reach"
     );
 }
 
@@ -1667,7 +1666,6 @@ fn a_splash_screen_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
 
 #[test]
 fn eighty_columns_draw_the_splash_screen_whole_and_no_rail_beside_it() {
-    let palette = Palette::TRUECOLOR;
     let wide = block(&splash(120, 24));
     let narrow = block(&splash(80, 24));
     assert_eq!(
@@ -1683,17 +1681,9 @@ fn eighty_columns_draw_the_splash_screen_whole_and_no_rail_beside_it() {
         Transcript::none(),
     );
     let mut buffer = Buffer::empty(area);
-    view.paint(area, &mut buffer);
-    let on_rail = (area.y..area.bottom())
-        .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
-        .filter(|(x, y)| {
-            buffer
-                .cell((*x, *y))
-                .is_some_and(|cell| cell.bg == palette.band(Band::Rail))
-        })
-        .count();
-    assert_eq!(
-        on_rail, 0,
+    let painted = view.paint(area, &mut buffer);
+    assert!(
+        painted.layout().expect("a laid out frame").rail.is_none(),
         "the boot screen is a splash screen and no rail: a strip is a live run's one row, and \
              no run is live at the splash screen"
     );

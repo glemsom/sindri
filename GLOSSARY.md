@@ -154,8 +154,8 @@ _Avoid_: Region, pane, panel, viewport
 
 **Plane**:
 A band's ground drawn as one image placed under its cells, so a surface shades in pixels rather than
-in whole rows: the composer's runs from the head the palette's own ladder gives it into that ladder's
-foot, with the glow under the caret, and the rail's carries the band at its head and falls
+in whole rows: the composer's runs from the head a raised band is drawn with into the rail's own
+tone, with the glow under the caret, and the rail's carries the band at its head and falls
 continuously into the shadow at its foot, reaching back over the seam so the rail comes out of the
 transcript's edge rather than being parted from it. It is placed once per size, carries an identity
 of its own so one is taken away and the other stands, and is handed back with the pass that drew it.
