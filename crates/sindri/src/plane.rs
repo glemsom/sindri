@@ -9,7 +9,7 @@ use crate::palette::{Band, Edge, Palette, channels};
 
 /// The columns of the transcript the rail's plane widens across: the transcript's last, where the
 /// well falls into the shadow the rail comes back out of.
-pub const SEAM: u16 = 3;
+pub const SEAM: u16 = 6;
 
 /// Which band's ground a plane is, and the identity a placement is named by: the two planes of one
 /// frame are told apart by it and by nothing else.
