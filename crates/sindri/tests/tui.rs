@@ -1055,22 +1055,33 @@ struct Sequence {
     taken: usize,
 }
 
+/// How much of a sequence a terminal swallows and paints no cell of: an `OSC`, `DCS`, `APC`, `PM` or
+/// `SOS` hands over words of its own, closing on `ST` and for `OSC` alone on `BEL`. One still open is
+/// held to the end of what was drawn, so a document read in halves puts no word in a row.
+fn swallowed(rest: &str) -> Option<usize> {
+    let introducer = rest.chars().next()?;
+    let bel = introducer == ']';
+    if !bel && !matches!(introducer, 'P' | '_' | '^' | 'X') {
+        return None;
+    }
+    let words = &rest[introducer.len_utf8()..];
+    let opened = introducer.len_utf8();
+    let closing = words.find(|glyph: char| glyph == '\u{1b}' || (bel && glyph == '\u{7}'));
+    Some(match closing {
+        Some(at) if words[at..].starts_with('\u{7}') => opened + at + 1,
+        Some(at) if words[at..].starts_with("\u{1b}\\") => opened + at + 2,
+        _ => opened + words.len(),
+    })
+}
+
 fn sequence(drawn: &str) -> Option<Sequence> {
     let rest = drawn.strip_prefix('\u{1b}')?;
     let Some(params) = rest.strip_prefix('[') else {
-        if let Some(words) = rest.strip_prefix(']') {
-            // A sequence that hands words to the terminal paints no cell: it runs from `ESC ]` to
-            // its `ST` or `BEL`, so no glyph of the document it carries is read as the screen's.
-            let at = words.find(['\u{7}', '\u{1b}'])?;
-            let close = match words.as_bytes()[at..] {
-                [b'\x07', ..] => 1,
-                [b'\x1b', b'\\', ..] => 2,
-                _ => return None,
-            };
+        if let Some(taken) = swallowed(rest) {
             return Some(Sequence {
                 move_to: None,
                 reversed: None,
-                taken: 2 + at + close,
+                taken: taken + 1,
             });
         }
         // `ESC O A` and the single-shift keys: no move, and as long as its last byte.
@@ -3216,34 +3227,34 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
+/// The rail's rows as the failing runs read them: the session's temp beside the session's row, and
+/// the turns the launch had counted.
+fn rail_picture() -> BTreeMap<u16, String> {
+    BTreeMap::from([
+        (1, String::from("temp  41b0c336/tmp")),
+        (3, String::from("turns  2 / 250")),
+    ])
+}
+
 #[test]
-fn a_status_document_written_between_two_painted_rows_puts_no_word_of_its_payload_in_the_picture() {
+fn a_status_document_told_after_a_rail_row_puts_no_word_of_it_in_that_row() {
     let document = "\u{1b}]7501;{\"phase\":\"done\",\"message\":\"12 files read\"}\u{1b}\\";
-    let drawn = format!("\u{1b}[1;1Htemp  41b0c336/tmp{document}\u{1b}[3;1Hturns  2 / 250");
+    let drawn = format!("\u{1b}[1;1Htemp  41b0c336/tmp\u{1b}[3;1Hturns  2 / 250{document}");
     assert_eq!(
         picture(&drawn),
-        BTreeMap::from([
-            (1, "temp  41b0c336/tmp".to_string()),
-            (3, "turns  2 / 250".to_string()),
-        ]),
-        "a status document is one sequence and stands in no cell: the rows on either side of it \
-         are the picture, and none of the words it hands the terminal are read into the rail: \
-         {drawn:?}"
+        rail_picture(),
+        "the frame that painted the turns and told a status document after them reads as the rows \
+         it painted: the document is the terminal's and tails no row of the rail {drawn:?}"
     );
 }
 
 #[test]
 fn every_document_a_frame_hands_its_terminal_stands_in_no_cell_of_the_picture() {
-    let before = "\u{1b}[1;1Htemp  41b0c336/tmp";
-    let after = "\u{1b}[3;1Hturns  2 / 250";
-    let rows = BTreeMap::from([
-        (1, "temp  41b0c336/tmp".to_string()),
-        (3, "turns  2 / 250".to_string()),
-    ]);
+    let rows = rail_picture();
     for (shape, document) in [
         ("a title", "\u{1b}]2;forge \u{2014} done\u{1b}\\"),
         ("a progress mark", "\u{1b}]9;4;3\u{1b}\\"),
-        ("a mark cleared", "\u{1b}]9;4;0\u{1b}\\"),
+        ("a mark taken away", "\u{1b}]9;4;0\u{1b}\\"),
         ("a notification", "\u{1b}]9;four files moved\u{7}"),
         ("a clipboard copy", "\u{1b}]52;c;Zm9yZ2U=\u{1b}\\"),
         (
@@ -3251,14 +3262,26 @@ fn every_document_a_frame_hands_its_terminal_stands_in_no_cell_of_the_picture() 
             "\u{1b}]8;;https://example.com/forge\u{1b}\\",
         ),
         ("a link closed", "\u{1b}]8;;\u{1b}\\"),
-        ("a sized run", "\u{1b}]66;s=2;The fence rule\u{1b}\\"),
+        ("a sized heading", "\u{1b}]66;s=2;The fence rule\u{1b}\\"),
+        ("a placement", "\u{1b}_Ga=T,f=100,i=333,q=2;QUJD\u{1b}\\"),
     ] {
-        let drawn = format!("{before}{document}{after}");
+        let drawn = format!("\u{1b}[1;1Htemp  41b0c336/tmp{document}\u{1b}[3;1Hturns  2 / 250");
         assert_eq!(
             picture(&drawn),
             rows,
-            "a frame hands its terminal {shape} between two painted rows, and the document is \
-             the terminal's and not the screen's: no word of it stands in a rail {drawn:?}"
+            "a frame hands its terminal {shape} between two painted rows, and the words of it are \
+             the terminal's: no one of them stands in a rail {drawn:?}"
         );
     }
+}
+
+#[test]
+fn a_document_a_frame_was_read_in_the_middle_of_paints_no_cell_of_its_words() {
+    let drawn = "\u{1b}[1;1Htemp  41b0c336/tmp\u{1b}[3;1Hturns  2 / 250\u{1b}]7501;{\"phase\":\"do";
+    assert_eq!(
+        picture(&drawn),
+        rail_picture(),
+        "a frame is read as fast as it is drawn and a document can arrive in halves: a terminal \
+         holds one it is still reading and paints none of its words {drawn:?}"
+    );
 }
