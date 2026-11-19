@@ -90,7 +90,8 @@ impl Picture {
 
     /// The pixels of this picture at the cells it was measured into, or nothing when what it was
     /// measured from cannot be decoded: a file gone, or bytes that are not a picture. A raster is
-    /// scaled by a filter that averages rather than drops, because nearest loses whole letters.
+    /// scaled by a filter that averages rather than drops, because nearest loses whole letters, and
+    /// its plate is taken away; a drawing is rasterised with the alpha it was rendered with.
     pub fn rasterise(&self, cell: CellSize) -> Option<image::RgbaImage> {
         let (width, height) = self.pixels(cell);
         let drawing = match &self.drawn {
@@ -254,13 +255,18 @@ fn header(bytes: &[u8]) -> Result<(u32, u32), Refusal> {
     reader.into_dimensions().map_err(Refusal::unreadable)
 }
 
-/// An alpha this faint is the wash an editor leaves over the picture's rectangle rather than
-/// light of the picture, so it is dropped where the band must show through.
+/// An alpha this faint is the plate a picture is made on rather than light of the picture, so it is
+/// dropped and the band under the picture shows through.
 const FLOOR: u8 = 16;
 
-/// A raster at the pixels of the footprint it was measured into, its alpha carried to nothing at
-/// that footprint's edge so the band beneath it reads as one plane rather than as a rectangle.
-/// Only the alpha is shaped: the colour decodes as the file held it.
+/// The most of an axis a picture's alpha fades over, as a share of it: a picture only a few cells
+/// wide keeps a middle with light in it.
+const SHARE: u32 = 4;
+
+/// A raster at the pixels of the footprint it was measured into, with the plate it was made on
+/// taken away and its alpha carried to nothing at that footprint's edge, so the band beneath it
+/// reads as one plane rather than as a rectangle. Only the alpha is shaped: the colour decodes as
+/// the file held it.
 fn raster(
     picture: image::DynamicImage,
     (width, height): (u32, u32),
@@ -269,37 +275,40 @@ fn raster(
     let mut pixels = picture
         .resize_exact(width, height, image::imageops::FilterType::Triangle)
         .to_rgba8();
-    shaped(&mut pixels, cell);
+    feathered(&mut pixels, cell);
     pixels
 }
 
-/// The pixels' alpha floored, then feathered to nothing across the outermost pixel of each axis
-/// and back to whole one span in.
-fn shaped(pixels: &mut image::RgbaImage, cell: CellSize) {
+/// The pixels of a decoded raster with their plate floored away and what is left of their alpha
+/// fading out toward the footprint's edge, so the band under a picture shows through wherever the
+/// picture has no light to give.
+fn feathered(pixels: &mut image::RgbaImage, cell: CellSize) {
     let (width, height) = pixels.dimensions();
-    let across = span(width, cell.width());
-    let down = span(height, cell.height());
+    let across = feather(cell.width(), width);
+    let down = feather(cell.height(), height);
     for (x, y, pixel) in pixels.enumerate_pixels_mut() {
         let light = pixel[3];
-        pixel[3] = if light < FLOOR {
-            0
-        } else {
-            let feather = ramp(x, width, across) * ramp(y, height, down);
-            (f32::from(light) * feather).round() as u8
+        pixel[3] = match light < FLOOR {
+            true => 0,
+            false => {
+                (f32::from(light) * fade(x, width, across) * fade(y, height, down)).round() as u8
+            }
         };
     }
 }
 
-/// How far the feather reaches in from an edge: one cell, or a quarter of the footprint when the
-/// footprint is narrower than a cell, and never nothing.
-fn span(extent: u32, cell: u32) -> u32 {
-    cell.min(extent / 4).max(1)
+/// How far in from an edge a picture's alpha fades: a `cell` of it, and never more than a [`SHARE`]
+/// of `extent`, so nothing is drawn at all only where there is nothing to fade.
+fn feather(cell: u32, extent: u32) -> u32 {
+    cell.min(extent / SHARE).max(1)
 }
 
-/// How much of a pixel's alpha survives at `at` along an axis `extent` long: none on the outermost
-/// pixel, whole by `reach` pixels in, and linear between.
-fn ramp(at: u32, extent: u32, reach: u32) -> f32 {
-    at.min(extent - 1 - at).min(reach) as f32 / reach as f32
+/// How much of a pixel's alpha survives `at` along an axis `extent` long: none of it on the
+/// outermost pixel, all of it `span` pixels in, and a linear fall between.
+fn fade(at: u32, extent: u32, span: u32) -> f32 {
+    at.min(extent.saturating_sub(1).saturating_sub(at))
+        .min(span) as f32
+        / span as f32
 }
 
 fn measured(svg: &str) -> Result<(u32, u32), Refusal> {
