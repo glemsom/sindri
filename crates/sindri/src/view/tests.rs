@@ -2858,6 +2858,33 @@ fn a_row_that_lands_while_the_reader_is_scrolled_back_holds_the_window_still() {
 }
 
 #[test]
+fn a_new_entry_that_lands_below_the_reader_holds_every_row_of_the_band_still() {
+    let mut view = turns(100);
+    view.reasoning("a thought the run says first");
+    painted(&mut view, 120, 40);
+    view.key(Key::PageUp);
+    let (before, told) = painted_and_told(&mut view, 120, 40);
+    assert_ne!(
+        view.scroll(),
+        Scroll::Tail,
+        "the frame under this test stands off the tail to begin with"
+    );
+
+    view.reasoning(&pen::filled(200, 'x'));
+    view.text("and the answer it opens");
+    let after = painted(&mut view, 120, 40);
+
+    for y in 0..told.drawn().band() {
+        assert_eq!(
+            drawn_row(&after, y),
+            drawn_row(&before, y),
+            "the row the reader is reading stands on the band row it stood on, though the \
+                 run opened two entries below it: row {y} moved"
+        );
+    }
+}
+
+#[test]
 fn a_band_that_lays_the_history_out_again_does_not_move_the_reader_off_their_rows() {
     let mut view = View::of(
         Capabilities::default(),
