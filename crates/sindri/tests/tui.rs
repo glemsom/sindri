@@ -1296,9 +1296,9 @@ fn a_bracketed_paste_arrives_as_one_draft_with_its_line_breaks_kept() {
     );
     assert_eq!(
         composer_rows(&drawn.text()),
-        Some(5),
-        "the composer starts at its five-row floor, its edge, its foot and the two rows of \
-         air between them counted: {:?}",
+        Some(3),
+        "the composer starts at its three-row floor: the rule, the row the draft sits on \
+         and the foot: {:?}",
         drawn.text()
     );
 
@@ -1413,8 +1413,8 @@ fn a_key_the_protocol_reports_by_name_is_the_key_the_terminal_speaks() {
 
     assert!(
         drawn.wait_until(|frame| {
-            composer_rows(frame) == Some(5)
-                && caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 1)
+            composer_rows(frame) == Some(3)
+                && caret_at(frame).is_some_and(|(_, column)| column == GUTTER)
         }),
         "the reported Ctrl-C cleared the draft the byte would have cleared: {:?}",
         drawn.text()
@@ -1515,7 +1515,7 @@ fn enter_takes_the_draft_out_of_the_composer() {
     pty.type_bytes(b"\r");
 
     assert!(
-        drawn.wait_until(|frame| composer_rows(frame) == Some(5)),
+        drawn.wait_until(|frame| composer_rows(frame) == Some(3)),
         "the draft left the composer and the band is back at its floor: {:?}",
         drawn.text()
     );
@@ -1551,7 +1551,7 @@ fn ctrl_c_when_idle_clears_the_draft_and_leaves_the_launch_running() {
     pty.type_bytes(&[0x03]);
 
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
         "Ctrl-C cleared the draft: {:?}",
         drawn.text()
     );
@@ -1758,7 +1758,7 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
 
     pty.type_bytes(&[0x03]);
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
         "the run ended, so Ctrl-C is the idle key and clears the draft: {:?}",
         drawn.text()
     );
@@ -2115,7 +2115,7 @@ fn queue(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
 
     pty.type_bytes(b"\r");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
         "{prompt:?} left the box for the queue: {:?}",
         drawn.text()
     );
@@ -2149,9 +2149,9 @@ fn enter_during_a_run_keeps_the_prompt_in_the_composer_under_the_draft() {
     );
     assert_eq!(
         composer_rows(&frame),
-        Some(6),
-        "and it is a row of the composer's own band: the draft's, the prompt's, a row of air \
-             either side of them and the box's own edge and foot, and no row more"
+        Some(4),
+        "and it is a row of the composer's own band: the draft's, the prompt's and the box's \
+             own rule and foot, with no row of air either side of a draft that sits on one row"
     );
 
     wire.release();
@@ -2801,7 +2801,7 @@ fn slash_new_clears_the_frame_and_leaves_the_session_it_holds_alone() {
 
     command(&mut pty, &drawn, "/new");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
         "the command line left the composer, so it was answered rather than queued: {:?}",
         drawn.text()
     );
@@ -2993,7 +2993,7 @@ fn slash_new_empties_what_the_next_prompt_is_asked_with() {
 
     command(&mut pty, &drawn, "/new");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
         "the command line left the composer, so it was answered before a key followed it: {:?}",
         drawn.text()
     );
@@ -3100,7 +3100,7 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
     );
     pty.type_bytes(&[0x03]);
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
+        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
         "the run ended, so Ctrl-C is the idle key and clears the proof from the draft: {:?}",
         drawn.text()
     );
@@ -3186,8 +3186,8 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     );
     assert_eq!(
         covers(&bytes, placed).1,
-        5,
-        "and it covers the band's five rows: {:?}",
+        3,
+        "and it covers the band's three rows: {:?}",
         drawn.text()
     );
 

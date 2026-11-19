@@ -2,25 +2,30 @@ use sindri_core::config::Touched;
 
 use crate::pen;
 
-pub const MIN_ROWS: u16 = EDGE_ROWS + FOOT_ROWS + 1;
+/// The band's floor: its rule, the one row a draft of a single line sits on, and its foot.
+pub const MIN_ROWS: u16 = 3;
 
-/// The band's ceiling: its edge and its foot, the air inside each of them and the rows of draft it
+/// The band's ceiling: its rule and its foot, the air inside each of them and the rows of draft it
 /// showed before it had any air.
-pub const MAX_ROWS: u16 = EDGE_ROWS + FOOT_ROWS + DRAFT_ROWS;
+pub const MAX_ROWS: u16 = DRAFT_ROWS + 2 * (AIR_ROWS + 1);
 
-/// The blank row a band keeps inside each end of its box, so no glyph of the draft touches the edge
-/// above it or the foot under it.
+/// The blank row a band keeps inside each end of its box once the draft wraps, so no glyph of a
+/// draft of many rows touches the rule above it or the foot under it.
 pub const AIR_ROWS: u16 = 1;
-
-/// The rows a band spends above the draft: its edge row and the air under it.
-pub const EDGE_ROWS: u16 = AIR_ROWS + 1;
-
-/// The rows a band spends below the draft: the air over its foot and the foot row under it.
-pub const FOOT_ROWS: u16 = AIR_ROWS + 1;
 
 /// The rows of draft a band at its ceiling draws: the window a draft has had since before the band
 /// kept air in its ends.
 pub const DRAFT_ROWS: u16 = 5;
+
+/// The rows a band spends on its two ends — its rule above the draft's rows and its foot below them
+/// — by the height the draft is drawn at.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ends {
+    /// The rule, and the air under it once the draft wraps.
+    pub above: u16,
+    /// The air over the foot once the draft wraps, and the foot.
+    pub below: u16,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum State {
@@ -137,6 +142,23 @@ impl Composer {
         self.laid().1
     }
 
+    /// The rows the band spends above and below its draft.
+    pub fn ends(&self) -> Ends {
+        Composer::ends_at(self.drawn().len())
+    }
+
+    /// The ends a draft of `drawn` rows takes: the rule and the foot alone while it sits on one row,
+    /// and a row of air inside each of them once it wraps.
+    fn ends_at(drawn: usize) -> Ends {
+        match drawn > 1 {
+            true => Ends {
+                above: 1 + AIR_ROWS,
+                below: 1 + AIR_ROWS,
+            },
+            false => Ends { above: 1, below: 1 },
+        }
+    }
+
     /// The rows of the draft the band draws: the ceiling's window, less the row under it that
     /// counts the rows kept back while any are.
     pub fn visible_rows(&self) -> u16 {
@@ -193,13 +215,14 @@ impl Composer {
     }
 
     /// The draft as the band draws it: the rows its words wrap into, the rows the band takes for
-    /// them with its edge and foot counted, and the first of them the scroll reaches.
+    /// them with its ends counted, and the first of them the scroll reaches.
     fn laid(&self) -> (Vec<Row>, u16, usize) {
         let drawn = self.drawn();
+        let ends = Composer::ends_at(drawn.len());
         let rows = u16::try_from(drawn.len())
             .unwrap_or(u16::MAX)
-            .saturating_add(EDGE_ROWS)
-            .saturating_add(FOOT_ROWS)
+            .saturating_add(ends.above)
+            .saturating_add(ends.below)
             .clamp(MIN_ROWS, MAX_ROWS);
         let visible = usize::from(Composer::visible(drawn.len()));
         let first = self.scroll.min(drawn.len().saturating_sub(visible));

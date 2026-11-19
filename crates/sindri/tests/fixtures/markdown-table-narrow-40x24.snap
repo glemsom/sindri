@@ -21,9 +21,9 @@ markdown-table-narrow at 40x24
 15 |                                        | plain:40
 16 |                                        | plain:40
 17 |                                        | plain:40
-18 |┌prompt ───────────────────────────────┐| accent+faint:40
-19 |│                                      │| dim:1 plain:38 dim:1
-20 |│› what should the run do?             │| dim:3 mark:1 dim:22 plain:13 dim:1
-21 |│                                      │| dim:1 plain:38 dim:1
+18 |                                        | plain:40
+19 |                                        | plain:40
+20 |┌prompt ───────────────────────────────┐| accent+faint:40
+21 |│› what should the run do?             │| dim:2 mark:1 dim:23 plain:13 dim:1
 22 |└──────────────────────────────────────┘| dim:40
 23 |Enter send · / commands · @ files       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 plain:7

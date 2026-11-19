@@ -159,32 +159,58 @@ fn backspace_eats_a_whole_glyph_however_many_bytes_it_took() {
 }
 
 #[test]
-fn an_empty_draft_takes_the_bands_five_row_floor() {
+fn a_draft_of_one_row_takes_the_bands_three_row_floor_and_hands_the_frame_two_rows_back() {
+    assert_eq!(
+        Composer::new().ends(),
+        Ends { above: 1, below: 1 },
+        "a band holding no draft spends its rule above it and its foot under it"
+    );
+    assert_eq!(
+        holding("one line").ends(),
+        Ends { above: 1, below: 1 },
+        "and a draft of one row spends no air inside either end"
+    );
     assert_eq!(
         Composer::new().rows(),
-        5,
-        "the shortest band is its edge, its foot, a row of air inside each of them and the one \
-             row the draft sits on"
+        MIN_ROWS,
+        "so the shortest band is the rule, the row the draft sits on and the foot"
+    );
+    assert_eq!(
+        holding("one line").rows(),
+        MIN_ROWS,
+        "and one line is that same three rows, two rows the frame had before"
     );
     assert_eq!(
         Composer::new().visible_rows(),
         1,
-        "one row of draft between the air under the edge and the air above the foot"
+        "the one row of draft the band keeps between its rule and its foot"
+    );
+}
+
+#[test]
+fn a_draft_that_wraps_to_a_second_row_brings_both_air_rows_back() {
+    let wrapped = holding("one\ntwo");
+
+    assert_eq!(
+        wrapped.ends(),
+        Ends { above: 2, below: 2 },
+        "a draft on two rows keeps a row of air inside each end of the box"
     );
     assert_eq!(
-        holding("one line").rows(),
-        5,
-        "and one line is still one row of the box"
+        wrapped.rows(),
+        6,
+        "so the band is its two rows of draft, a row of air either side and the rule and foot"
     );
 }
 
 #[test]
 fn a_line_per_row_grows_the_box_to_its_ceiling_and_no_further() {
-    for lines in 1..=DRAFT_ROWS {
+    for (lines, rows) in [(1, 3), (2, 6), (3, 7), (4, 8), (5, 9)] {
         assert_eq!(
-            numbered(usize::from(lines)).rows(),
-            lines + EDGE_ROWS + FOOT_ROWS,
-            "{lines} lines take the band's edge and foot, the air inside them and one row each"
+            numbered(lines).rows(),
+            rows,
+            "{lines} lines take the band's rule and foot, and the air inside them once the \
+                 draft wraps past one row"
         );
     }
     assert_eq!(

@@ -20,7 +20,7 @@ use crate::bill::Bill;
 use crate::capability::Capabilities;
 use crate::card;
 use crate::commands::{self, Command};
-use crate::composer::{Composer, EDGE_ROWS, FOOT_ROWS, Key, Outcome, PLACEHOLDER, Prompt, State};
+use crate::composer::{Composer, Ends, Key, Outcome, PLACEHOLDER, Prompt, State};
 use crate::draft;
 use crate::face;
 use crate::facts::{Facts, Focus};
@@ -165,9 +165,9 @@ fn inside(band: Rect) -> Rect {
 }
 
 /// The first row of the band the draft may not be drawn in: the queue's first row while prompts
-/// wait, and the foot's when none do.
-fn draft_end(band: Rect, queue: Rect) -> u16 {
-    queue.y.min(band.bottom().saturating_sub(FOOT_ROWS))
+/// wait, and the rows the band keeps under the draft when none do.
+fn draft_end(band: Rect, queue: Rect, below: u16) -> u16 {
+    queue.y.min(band.bottom().saturating_sub(below))
 }
 
 /// The name the commands card carries in its top border, in the shape `? keys` and `@ files`
@@ -978,6 +978,7 @@ impl View {
             area,
             self.composer.rows(),
             self.queue.rows(),
+            self.composer.ends(),
             self.notice_rows(),
         );
         // The rail's share is taken from the transcript's band before the transcript is laid out
@@ -1323,9 +1324,11 @@ impl View {
     /// columns the box leaves them: one column in from each upright, the gutter its sigil stands in
     /// before the words.
     fn composer_inside(&self, band: Rect, queue: Rect, buffer: &mut Buffer) {
+        let ends = self.composer.ends();
+        let top = band.y.saturating_add(ends.above);
         let draft = Rect {
-            y: band.y.saturating_add(EDGE_ROWS),
-            height: draft_end(band, queue).saturating_sub(band.y.saturating_add(EDGE_ROWS)),
+            y: top,
+            height: draft_end(band, queue, ends.below).saturating_sub(top),
             ..inside(band)
         };
         let prompts = inside(queue);
@@ -1588,16 +1591,20 @@ impl View {
             return None;
         }
         let boxed = inside(band);
+        let ends = self.composer.ends();
         let (row, column) = self.composer.caret();
-        let y = band.y.checked_add(EDGE_ROWS)?.checked_add(row)?;
+        let y = band.y.checked_add(ends.above)?.checked_add(row)?;
+        let column = match self.composer.text().is_empty() {
+            true => band::blank(),
+            false => pen::cells(INDENT).saturating_add(column),
+        };
         // A caret past the box's last column waits on that column, the way a terminal keeps the
         // cursor at its right margin rather than giving it up — and never on an upright.
         let x = boxed
             .x
-            .checked_add(pen::cells(INDENT))?
             .checked_add(column)?
             .min(boxed.right().saturating_sub(1));
-        (boxed.width > 0 && y < draft_end(band, queue)).then_some((x, y))
+        (boxed.width > 0 && y < draft_end(band, queue, ends.below)).then_some((x, y))
     }
 
     /// The columns the draft's words have: the band's inside, less the gutter an answer is set from.
@@ -1711,7 +1718,7 @@ fn place(
     pictures.place(picture, cell, block, buffer);
 }
 
-fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> Layout {
+fn bands(area: Rect, composer_rows: u16, queue_rows: u16, ends: Ends, notice_rows: u16) -> Layout {
     let footer = area.height.min(1);
     let above = area.height.saturating_sub(footer);
     let composer = composer_rows.min(above);
@@ -1726,7 +1733,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, notice_rows: u16) -> L
     // band's last row and the queue's rows are the ones just above it.
     let queue_y = match queue {
         0 => band_bottom,
-        _ => band_bottom.saturating_sub(FOOT_ROWS),
+        _ => band_bottom.saturating_sub(ends.below),
     };
     Layout {
         transcript: Rect {
