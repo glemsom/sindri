@@ -338,6 +338,8 @@ struct ReadMark {
 pub struct View {
     rows: Rows,
     scroll: Scroll,
+    /// The rows that have landed below a frame standing off the tail since it left it.
+    landed: u32,
     /// What the last paint pass drew: what a page, a copy and a fold read rather than laying the
     /// transcript out a second time.
     drawn: Drawn,
@@ -412,6 +414,7 @@ impl View {
         let mut view = View {
             rows,
             scroll,
+            landed: 0,
             drawn: Drawn::none(),
             composer: Composer::new(),
             stream: Stream::new(),
@@ -1221,6 +1224,12 @@ impl View {
             Some(seen) if !reflowed => total.saturating_sub(seen),
             _ => 0,
         };
+        // And the rows a reader standing off the tail has had land below them are counted there:
+        // a frame back at the tail has nothing below it to count.
+        self.landed = match self.scroll.is_tail() {
+            true => 0,
+            false => self.landed.saturating_add(grown),
+        };
         let back = match self.scroll.is_tail() {
             true => 0,
             false => self
@@ -1325,6 +1334,16 @@ impl View {
         }
     }
 
+    /// How many rows have landed below a frame off the tail, in words: a frame with none below it
+    /// says nothing about them.
+    fn landed_rows(&self) -> Option<String> {
+        match self.landed {
+            0 => None,
+            1 => Some(String::from("1 row landed")),
+            rows => Some(format!("{rows} rows landed")),
+        }
+    }
+
     /// The row is whole or it is not drawn, as a hint is: a frame too narrow for the words leaves
     /// the cells blank rather than cutting the sentence that says where the reader stands.
     fn notice_band(&self, area: Rect, buffer: &mut Buffer) {
@@ -1336,7 +1355,12 @@ impl View {
         if area.height == 0 {
             return;
         }
-        let mut spans: Vec<(&str, Look)> = vec![(count.as_str(), keys::MEANING), (GAP, SEPARATOR)];
+        let landed = self.landed_rows();
+        let mut spans: Vec<(&str, Look)> = vec![(count.as_str(), keys::MEANING)];
+        if let Some(said) = landed.as_deref() {
+            spans.extend([(GAP, SEPARATOR), (said, keys::MEANING)]);
+        }
+        spans.extend([(GAP, SEPARATOR)]);
         spans.extend(keyed("End", "follows the run"));
         whole_row(buffer, area, area.y, &spans, &self.capabilities.palette());
     }
