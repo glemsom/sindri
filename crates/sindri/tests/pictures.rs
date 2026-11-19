@@ -1484,8 +1484,8 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
     assert_eq!(
         (head, foot),
         ([48, 48, 48], [38, 38, 38]),
-        "the band this palette spells runs from the grey one rung above the rail's tone down to \
-             that tone"
+        "the band this palette spells runs from the grey of the composer's tone down to the \
+             rail's own"
     );
     assert_eq!(
         ground.pixels().get_pixel(width - 1, 0).0[..3],
@@ -1516,7 +1516,7 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
 }
 
 #[test]
-fn a_truecolour_frames_band_is_drawn_at_the_pixels_it_was_drawn_at() {
+fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let area = Rect::new(0, 0, 80, 24);

@@ -9,7 +9,7 @@ use crate::ink::{Face, Faces, Ink, Look};
 pub struct Palette {
     inks: Inks,
     bands: Bands,
-    edges: Edges,
+    ends: Ends,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,10 +30,10 @@ struct Bands {
     well: Color,
 }
 
-/// The two ends a boundary's light is drawn at: the lit end a surface is raised out of and the
-/// shadow it is set down into, and no ink of its own.
+/// The two ends a boundary is drawn at: the lit column a band meets the frame on and the shadow
+/// across its last row, and no ink of its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Edges {
+struct Ends {
     lit: Color,
     shadow: Color,
 }
@@ -56,7 +56,7 @@ impl Palette {
             composer: Color::Reset,
             well: Color::Reset,
         },
-        edges: Edges {
+        ends: Ends {
             lit: Color::Reset,
             shadow: Color::Reset,
         },
@@ -78,7 +78,7 @@ impl Palette {
             composer: Color::Indexed(236),
             well: Color::Indexed(234),
         },
-        edges: Edges {
+        ends: Ends {
             lit: Color::Indexed(239),
             shadow: Color::Indexed(232),
         },
@@ -100,7 +100,7 @@ impl Palette {
             composer: Color::Rgb(25, 35, 47),
             well: Color::Rgb(14, 21, 29),
         },
-        edges: Edges {
+        ends: Ends {
             lit: Color::Rgb(36, 49, 63),
             shadow: Color::Rgb(8, 13, 19),
         },
@@ -184,21 +184,20 @@ impl Palette {
         self.edge(Edge::Lit) != Color::Reset
     }
 
-    /// The colour one end of a boundary's light is drawn in: the lit end a surface stands raised out
-    /// of and the shadow it is set down into, at the value the rail has always been drawn at.
+    /// The colour an edge is drawn in: the lit end at its lightest, the shadow at its darkest.
     pub fn edge(&self, edge: Edge) -> Color {
         match edge {
-            Edge::Lit => self.edges.lit,
-            Edge::Shadow => self.edges.shadow,
+            Edge::Lit => self.ends.lit,
+            Edge::Shadow => self.ends.shadow,
         }
     }
 
-    /// The ground the `row`th row of a raised surface `rows` rows tall sits on: its head is the rung
-    /// one above the rail's own tone and its foot is that tone, and the rows between the two are
-    /// shaded from one end to the other.
+    /// The ground the `row`th row of a raised surface `rows` rows tall sits on: its head is the
+    /// composer's tone, the depth above the rail's, and its foot is the rail's own, with the rows
+    /// between shaded from one end to the other.
     pub fn step(&self, row: u16, rows: u16) -> Color {
         let span = rows.saturating_sub(1);
-        shade(self.bands.composer, self.bands.rail, row.min(span), span)
+        shade(self.bands.composer, self.bands.rail, row, span)
     }
 
     pub fn band(&self, band: Band) -> Color {
@@ -296,15 +295,13 @@ pub fn channels(colour: Color) -> Option<[u8; 3]> {
 }
 
 /// The shade `at` of `span` from `head` to `foot`, in the spelling both ends share: two `Rgb` ends
-/// mix per channel, two `Indexed` ends mix their indices, and ends with no shade to spell are drawn
-/// as the head.
+/// mix per channel and two `Indexed` ends mix their slots, which ascend with the grey they are, and
+/// ends with no shade between them are drawn as the head.
 fn shade(head: Color, foot: Color, at: u16, span: u16) -> Color {
+    let (at, span) = (u32::from(at.min(span)), u32::from(span));
     let between = |head: u8, foot: u8| match span {
         0 => head,
-        span => {
-            let (at, span) = (u32::from(at.min(span)), u32::from(span));
-            ((u32::from(head) * (span - at) + u32::from(foot) * at + span / 2) / span) as u8
-        }
+        span => ((u32::from(head) * (span - at) + u32::from(foot) * at + span / 2) / span) as u8,
     };
     match (head, foot) {
         (Color::Rgb(red, green, blue), Color::Rgb(foot_red, foot_green, foot_blue)) => Color::Rgb(

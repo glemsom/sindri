@@ -215,14 +215,14 @@ fn the_lit_edge_stands_above_every_band_and_the_shadow_below() {
 }
 
 #[test]
-fn a_raised_band_runs_from_the_rung_above_the_rail_down_to_the_rail_itself() {
+fn a_raised_band_runs_from_the_composers_tone_down_to_the_rails_own() {
     for (spelling, palette) in SPELLED {
         for rows in MIN_ROWS..=MAX_ROWS {
             assert_eq!(
                 palette.step(0, rows),
                 palette.band(Band::Composer),
-                "{spelling} draws the top row of a raised band of {rows} rows on a rung other \
-                     than the one above the rail's own tone"
+                "{spelling} draws the top row of a raised band of {rows} rows on a tone other \
+                     than the composer's, the depth above the rail's"
             );
             assert_eq!(
                 palette.step(rows - 1, rows),
@@ -287,13 +287,13 @@ fn a_truecolour_band_up_to_its_ceiling_draws_no_two_rows_in_one_ground() {
 }
 
 #[test]
-fn an_ansi_band_draws_only_the_greys_its_window_holds() {
+fn an_ansi_band_has_only_the_two_greys_its_two_ends_leave_it() {
     for rows in MIN_ROWS..=MAX_ROWS {
         for row in 0..rows {
             assert!(
                 matches!(Palette::ANSI.step(row, rows), Color::Indexed(235 | 236)),
                 "ansi draws row {row} of a {rows}-row band in {:?}, outside the two greys the \
-                     rail's tone and the rung above it leave between them",
+                     rail's tone and the composer's leave between them",
                 Palette::ANSI.step(row, rows)
             );
         }
