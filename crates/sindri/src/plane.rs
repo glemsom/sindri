@@ -41,9 +41,9 @@ pub struct Plane {
 }
 
 impl Plane {
-    /// The composer's band: the ladder's head falling into its foot over its height, with the glow
-    /// under the column the caret waits in. None for an area with no rows or columns or a palette
-    /// with no colour in it.
+    /// The composer's band: its head, the rung above the rail's tone, falling into the rail's own
+    /// tone over its height, with the glow under the column the caret waits in. None for an area
+    /// with no rows or columns or a palette with no colour in it.
     pub fn composer(
         area: Rect,
         cell: CellSize,

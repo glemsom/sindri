@@ -1479,22 +1479,23 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
     let band = painted.layout().expect("a laid out frame").composer;
     let ground = composer_plane(&painted);
     let (width, height) = ground.pixels().dimensions();
-    let head = channels(palette.step(0, band.height)).expect("the ladder's head in pixels");
+    let head = channels(palette.step(0, band.height)).expect("the band's head in pixels");
     let foot = channels(palette.step(band.height - 1, band.height)).expect("its foot in pixels");
     assert_eq!(
         (head, foot),
-        ([78, 78, 78], [8, 8, 8]),
-        "the ladder this palette spells the band with runs from its lightest grey to its darkest"
+        ([48, 48, 48], [38, 38, 38]),
+        "the band this palette spells runs from the grey of the composer's tone down to the \
+             rail's own"
     );
     assert_eq!(
         ground.pixels().get_pixel(width - 1, 0).0[..3],
         head,
-        "the plane's top row is the head the palette's own ladder gives the band"
+        "the plane's top row is the head the palette's raised band rises to"
     );
     assert_ne!(
         ground.pixels().get_pixel(width - 1, 0).0[..3],
-        [36, 49, 63],
-        "and not the head of the design's truecolour ramp"
+        [25, 35, 47],
+        "and not the head of the design's truecolour band"
     );
     for y in 0..height {
         let pixel = ground.pixels().get_pixel(width - 1, y);
@@ -1508,14 +1509,14 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
     for at in 0..3 {
         assert!(
             bottom[at].abs_diff(foot[at]) < bottom[at].abs_diff(head[at]),
-            "the plane's bottom row {bottom:?} is nearer the ladder's foot {foot:?} than its head \
+            "the plane's bottom row {bottom:?} is nearer the band's foot {foot:?} than its head \
              {head:?}"
         );
     }
 }
 
 #[test]
-fn a_truecolour_frames_band_is_drawn_at_the_pixels_it_was_drawn_at() {
+fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let area = Rect::new(0, 0, 80, 24);
@@ -1532,20 +1533,20 @@ fn a_truecolour_frames_band_is_drawn_at_the_pixels_it_was_drawn_at() {
         ),
         "the plane covers the band's own rect, at the pixels of the cell it is drawn on"
     );
-    let (head, foot) = ([36, 49, 63], [8, 13, 19]);
+    let (head, foot) = ([25, 35, 47], [19, 27, 37]);
     let column = width - 1;
     let top = ground.pixels().get_pixel(column, 0).0;
     assert_eq!(
         top[..3],
         head,
-        "the plane's top row is the head the design's ramp has always spelled"
+        "the plane's top row is the head the design's raised band rises to"
     );
     let bottom = ground.pixels().get_pixel(column, height - 1).0;
     for at in 0..3 {
         assert!(
             bottom[at].abs_diff(foot[at]) <= 1,
-            "the plane's bottom row {bottom:?} is the foot {foot:?} the design's ramp has always \
-             ended on, to the pixel a ramp samples it at"
+            "the plane's bottom row {bottom:?} is the foot {foot:?} the band comes down to, to \
+             the pixel the plane samples it at"
         );
     }
     let mid = ground.pixels().get_pixel(column, height / 2).0;
@@ -1580,12 +1581,20 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
         let further = ground.pixels().get_pixel((at + step).min(width - 1), row);
         for channel in 0..3 {
             assert!(
-                lit[channel] > further[channel],
-                "pixel channel {channel} of the cell the caret waits in is lighter than the one \
+                lit[channel] >= further[channel],
+                "pixel channel {channel} of the cell the caret waits in is darker than the one \
                  {step} pixels from it: {lit:?} against {further:?}"
             );
         }
         step += cell().width();
+    }
+    let far = ground.pixels().get_pixel(width - 1, row);
+    for channel in 0..3 {
+        assert!(
+            lit[channel] > far[channel],
+            "pixel channel {channel} of the cell the caret waits in is no lighter than the band's \
+             far side: {lit:?} against {far:?}"
+        );
     }
 }
 

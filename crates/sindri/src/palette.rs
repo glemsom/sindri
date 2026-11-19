@@ -9,7 +9,7 @@ use crate::ink::{Face, Faces, Ink, Look};
 pub struct Palette {
     inks: Inks,
     bands: Bands,
-    ramp: Ramp,
+    ends: Ends,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,17 +30,13 @@ struct Bands {
     well: Color,
 }
 
-/// The grounds a raised surface's face is drawn in, one per row from the lit edge along its top to
-/// the shadow under its bottom: every height a band takes is drawn from this one ladder, so the band
-/// reads as one raised surface.
+/// The two ends a boundary is drawn at: the lit column a band meets the frame on and the shadow
+/// across its last row, and no ink of its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Ramp {
-    steps: [Color; STEPS],
+struct Ends {
+    lit: Color,
+    shadow: Color,
 }
-
-/// The rungs of the ladder, one short of the tallest band: a band at its ceiling repeats a rung
-/// rather than leaving one of them out.
-const STEPS: usize = 8;
 
 impl Palette {
     /// The terminal's own six slots, no background and no edge: what a reader who asked for no
@@ -60,8 +56,9 @@ impl Palette {
             composer: Color::Reset,
             well: Color::Reset,
         },
-        ramp: Ramp {
-            steps: [Color::Reset; STEPS],
+        ends: Ends {
+            lit: Color::Reset,
+            shadow: Color::Reset,
         },
     };
 
@@ -81,17 +78,9 @@ impl Palette {
             composer: Color::Indexed(236),
             well: Color::Indexed(234),
         },
-        ramp: Ramp {
-            steps: [
-                Color::Indexed(239),
-                Color::Indexed(238),
-                Color::Indexed(237),
-                Color::Indexed(236),
-                Color::Indexed(235),
-                Color::Indexed(234),
-                Color::Indexed(233),
-                Color::Indexed(232),
-            ],
+        ends: Ends {
+            lit: Color::Indexed(239),
+            shadow: Color::Indexed(232),
         },
     };
 
@@ -111,17 +100,9 @@ impl Palette {
             composer: Color::Rgb(25, 35, 47),
             well: Color::Rgb(14, 21, 29),
         },
-        ramp: Ramp {
-            steps: [
-                Color::Rgb(36, 49, 63),
-                Color::Rgb(30, 42, 55),
-                Color::Rgb(28, 39, 51),
-                Color::Rgb(25, 35, 47),
-                Color::Rgb(19, 27, 37),
-                Color::Rgb(14, 21, 29),
-                Color::Rgb(11, 17, 24),
-                Color::Rgb(8, 13, 19),
-            ],
+        ends: Ends {
+            lit: Color::Rgb(36, 49, 63),
+            shadow: Color::Rgb(8, 13, 19),
         },
     };
 
@@ -155,14 +136,14 @@ impl Palette {
         self.paint(band.map_or(Color::Reset, |band| self.band(band)))
     }
 
-    /// The style a row of a raised surface is claimed in: the plain ink over the ground the ramp
-    /// gives that row, so the ink written on it is the ink it was written in.
+    /// The style a row of a raised surface is claimed in: the plain ink over the ground `step` gives
+    /// that row, so the ink written on it is the ink it was written in.
     pub fn raised(&self, row: u16, rows: u16) -> Style {
         self.paint(self.step(row, rows))
     }
 
-    /// The style a cell of one end of the ramp is claimed in: the plain ink over that edge, so a
-    /// cell on an edge still reads back as the ink it is written in.
+    /// The style a cell of one end of a boundary's light is claimed in: the plain ink over that
+    /// edge, so a cell on an edge still reads back as the ink it is written in.
     pub fn edged(&self, edge: Edge) -> Style {
         self.paint(self.edge(edge))
     }
@@ -203,16 +184,20 @@ impl Palette {
         self.edge(Edge::Lit) != Color::Reset
     }
 
+    /// The colour an edge is drawn in: the lit end at its lightest, the shadow at its darkest.
     pub fn edge(&self, edge: Edge) -> Color {
         match edge {
-            Edge::Lit => self.ramp.steps[0],
-            Edge::Shadow => self.ramp.steps[STEPS - 1],
+            Edge::Lit => self.ends.lit,
+            Edge::Shadow => self.ends.shadow,
         }
     }
 
-    /// The ground the `row`th row of a raised surface `rows` rows tall sits on.
+    /// The ground the `row`th row of a raised surface `rows` rows tall sits on: its head is the
+    /// composer's tone, the depth above the rail's, and its foot is the rail's own, with the rows
+    /// between shaded from one end to the other.
     pub fn step(&self, row: u16, rows: u16) -> Color {
-        self.ramp.steps[step_at(row, rows)]
+        let span = rows.saturating_sub(1);
+        shade(self.bands.composer, self.bands.rail, row, span)
     }
 
     pub fn band(&self, band: Band) -> Color {
@@ -309,14 +294,23 @@ pub fn channels(colour: Color) -> Option<[u8; 3]> {
     }
 }
 
-/// The step of the ramp the `row`th of `rows` rows lands on: the lit rung on its top row and the
-/// shadow on its last, never more than one rung between neighbours, so a band taller than the
-/// ladder repeats a rung rather than leaving one out. A surface of one row is drawn lit.
-fn step_at(row: u16, rows: u16) -> usize {
-    let span = usize::from(rows.saturating_sub(1));
-    match span {
-        0 => 0,
-        span => usize::from(row.min(rows - 1)) * (STEPS - 1) / span,
+/// The shade `at` of `span` from `head` to `foot`, in the spelling both ends share: two `Rgb` ends
+/// mix per channel and two `Indexed` ends mix their slots, which ascend with the grey they are, and
+/// ends with no shade between them are drawn as the head.
+fn shade(head: Color, foot: Color, at: u16, span: u16) -> Color {
+    let (at, span) = (u32::from(at.min(span)), u32::from(span));
+    let between = |head: u8, foot: u8| match span {
+        0 => head,
+        span => ((u32::from(head) * (span - at) + u32::from(foot) * at + span / 2) / span) as u8,
+    };
+    match (head, foot) {
+        (Color::Rgb(red, green, blue), Color::Rgb(foot_red, foot_green, foot_blue)) => Color::Rgb(
+            between(red, foot_red),
+            between(green, foot_green),
+            between(blue, foot_blue),
+        ),
+        (Color::Indexed(head), Color::Indexed(foot)) => Color::Indexed(between(head, foot)),
+        _ => head,
     }
 }
 

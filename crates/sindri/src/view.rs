@@ -1288,7 +1288,7 @@ impl View {
     }
 
     /// The composer's band drawn, and the plane it stands on where this terminal places one and the
-    /// palette spells a pixel: its rows ramp between the edge and the shadow beneath them cell by
+    /// palette spells a pixel: its rows are shaded from its head down to the rail's own tone, cell by
     /// cell where no plane stands under them, one claim per row, so no cell loses its own ink.
     fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) -> Option<Plane> {
         let palette = self.capabilities.palette();
