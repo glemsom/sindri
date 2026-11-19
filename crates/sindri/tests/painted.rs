@@ -8,12 +8,13 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 
 use sindri::capability::Capabilities;
-use sindri::composer::{Key, Outcome};
+use sindri::composer::{Key, Outcome, PLACEHOLDER};
 use sindri::facts::Facts;
 use sindri::ink::{Ink, Look};
 use sindri::ledger;
 use sindri::mark::Cell;
 use sindri::palette::Palette;
+use sindri::pen;
 use sindri::pointer::Pointer;
 use sindri::rows::Scroll;
 use sindri::view::{Painted, Transcript, View};
@@ -527,9 +528,9 @@ fn the_caret_is_placed_in_the_band_the_pass_drew_and_not_in_one_counted_again() 
 
     assert_eq!(
         told.caret(),
-        Some(Position::new(band.x + 2, band.y + 1)),
+        Some(Position::new(band.x + 3, band.y + 1)),
         "the empty draft's caret is placed in the band this pass drew, on its first draft row \
-         and on the blank cell of the gutter"
+         and on the first glyph cell of the placeholder"
     );
 }
 
@@ -574,29 +575,22 @@ fn a_frame_with_no_card_keeps_the_caret_placed_in_the_band_the_pass_handed_back(
     );
 }
 
-/// The one cell of `area` that reads back as the mark: the block the draft's caret stands in, as the
-/// frame draws it rather than as the view counts it.
-fn caret_cell(buffer: &Buffer, palette: &Palette, area: Rect) -> Option<(u16, u16)> {
-    let mut found = None;
+/// Every cell of `area` the frame draws in the mark ink, read off the cells a reader is shown.
+fn mark_cells(buffer: &Buffer, palette: &Palette, area: Rect) -> Vec<(u16, u16)> {
+    let mut found = Vec::new();
     for y in area.y..area.bottom() {
         for x in area.x..area.right() {
             let cell = buffer.cell((x, y)).expect("a cell of the area");
-            if Look::of(cell, palette) != Some(Look::plain(Ink::Mark)) {
-                continue;
+            if Look::of(cell, palette) == Some(Look::plain(Ink::Mark)) {
+                found.push((x, y));
             }
-            assert!(
-                found.is_none(),
-                "{area:?} carries one block and not two: {:?} and ({x}, {y})",
-                found
-            );
-            found = Some((x, y));
         }
     }
     found
 }
 
 #[test]
-fn the_cell_the_draft_caret_waits_in_is_the_cell_the_pass_places_the_cursor_in() {
+fn a_typed_drafts_band_carries_no_cell_drawn_in_the_mark() {
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(
         Capabilities::default(),
@@ -608,52 +602,61 @@ fn the_cell_the_draft_caret_waits_in_is_the_cell_the_pass_places_the_cursor_in()
     let laid = told
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
-    let block = caret_cell(&buffer, &palette, laid.composer)
-        .expect("a draft takes the keys, so its block is drawn");
 
     assert_eq!(
-        told.caret(),
-        Some(Position::new(block.0, block.1)),
-        "the cell the pass places the terminal's cursor in is the one it stamped the block \
-         in: {block:?}"
+        mark_cells(&buffer, &palette, laid.composer),
+        Vec::new(),
+        "the caret a reader sees is the terminal's own cursor, so no cell of the band a typed \
+         draft stands in is stamped for it"
     );
+}
 
-    let mut rows = View::of(
+#[test]
+fn the_pass_places_the_cursor_one_column_past_the_last_glyph_of_the_last_row() {
+    let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::none(),
     );
-    rows.paste("1\n2\n3\n4\n5");
-    let (buffer, told) = painted_and_told(&mut rows, 40, 12);
-    let laid = told
-        .layout()
-        .expect("a pass that drew a frame hands back the frame it laid out");
-    assert_eq!(
-        caret_cell(&buffer, &palette, laid.composer),
-        Some((4, 8)),
-        "a five-row draft is drawn with its block one column past the gutter of its last row"
-    );
+    view.paste("1\n2\n3\n4\n5");
+    let (_, told) = painted_and_told(&mut view, 40, 12);
+
     assert_eq!(
         told.caret(),
         Some(Position::new(4, 8)),
-        "and that row eight, column four is the cell the pass places the cursor in"
+        "the fifth row of a five-row draft is row eight of the frame, and its one glyph takes \
+         column three, so the cursor waits on column four"
     );
+}
 
-    let mut empty = View::of(
+#[test]
+fn an_empty_draft_draws_its_placeholder_whole_in_the_dim_ink_and_none_of_it_in_the_mark() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::none(),
     );
-    let (buffer, told) = painted_and_told(&mut empty, 40, 12);
+    let (buffer, told) = painted_and_told(&mut view, 40, 12);
     let laid = told
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
-    let block =
-        caret_cell(&buffer, &palette, laid.composer).expect("the empty draft's block is drawn");
+    let (row, column) = drawn_at(&buffer, PLACEHOLDER);
+
+    for x in column..column + pen::cells(PLACEHOLDER) {
+        assert_eq!(
+            Look::of(
+                buffer.cell((x, row)).expect("a cell of the placeholder"),
+                &palette
+            ),
+            Some(Look::plain(Ink::Dim)),
+            "column {x} of the placeholder is not the plain dim ink, so a cell of it is drawn over"
+        );
+    }
     assert_eq!(
-        told.caret(),
-        Some(Position::new(block.0, block.1)),
-        "and a draft holding nothing places the cursor on the blank cell its block stands on"
+        mark_cells(&buffer, &palette, laid.composer),
+        Vec::new(),
+        "and no cell of the band the placeholder stands in is stamped for the caret"
     );
 }
 
@@ -726,13 +729,20 @@ fn a_card_that_leaves_the_carets_cell_leaves_the_cursor_in_that_same_cell() {
     let laid = told
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
-    assert!(laid.card.is_some(), "the commands card is drawn: {laid:?}");
-    let block = caret_cell(&buffer, &palette, laid.composer)
-        .expect("a card that never reaches the band leaves its block standing");
+    let card = laid
+        .card
+        .expect("the commands card is drawn, and the pass says where its body went");
+    let cursor = told
+        .caret()
+        .expect("a card that never reaches the caret's cell leaves the cursor where it was");
 
+    assert!(
+        !card.contains(Position::new(cursor.x, cursor.y)),
+        "the cursor is placed in a cell the card leaves to the band: {cursor:?}"
+    );
     assert_eq!(
-        told.caret(),
-        Some(Position::new(block.0, block.1)),
-        "so the cell the block stands in is the one the cursor is placed in: {block:?}"
+        mark_cells(&buffer, &palette, laid.composer),
+        Vec::new(),
+        "and the band is stamped in no cell of it, so the cursor is the whole of the caret"
     );
 }

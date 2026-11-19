@@ -22,7 +22,7 @@ draft-long at 120x24
 16 |│  six: the stop reason                                                                                                │| dim:3 plain:116 dim:1
 17 |│  seven: the session it left                                                                                          │| dim:3 plain:116 dim:1
 18 |│  eight: the question to ask                                                                                          │| dim:3 plain:116 dim:1
-19 |│  nine: the row it keeps back                                                                                         │| dim:3 plain:27 mark:1 plain:88 dim:1
+19 |│  nine: the row it keeps back                                                                                         │| dim:3 plain:116 dim:1
 20 |│  5 rows kept back                                                                                                    │| dim:19 plain:100 dim:1
 21 |│                                                                                                                      │| dim:1 plain:118 dim:1
 22 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120

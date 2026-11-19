@@ -20,7 +20,7 @@ queue-long at 120x24
 14 |▏     row.paint(area, buffer);                                              session   9f2c7a41                          | dim:2 plain:74 dim:10 plain:34
 15 |▏ }                                                                         +2 more                                     | dim:2 plain:74 muted:7 plain:37
 16 |┌running ━─────────────────────────────────────────────────────────────────────────────────────────────────────28 chars┐| accent:111 muted:8 accent:1
-17 |│› and this one while they wait                                                                                        │| dim:1 accent:2 plain:28 mark:1 plain:87 dim:1
+17 |│› and this one while they wait                                                                                        │| dim:1 accent:2 plain:116 dim:1
 18 |│  4 more queued                                                                                                       │| dim:16 plain:103 dim:1
 19 |│› then the row that counts it                                                                                         │| dim:30 plain:89 dim:1
 20 |│› then the caret that stays inside it                                                                                 │| dim:38 plain:81 dim:1

@@ -53,22 +53,15 @@ fn look_at(buffer: &Buffer, palette: &Palette, x: u16, y: u16) -> Look {
         .unwrap_or_else(|| panic!("row {y}, column {x} reads back as no look"))
 }
 
-/// The one cell of `area` that reads back as the mark: the block the draft's caret stands in, as the
-/// frame draws it rather than as the view counts it.
-fn caret_cell(buffer: &Buffer, palette: &Palette, area: Rect) -> Option<(u16, u16)> {
-    let mut found = None;
+/// Every cell of `area` the frame draws in the mark ink, read off the cells a reader is shown.
+fn mark_cells(buffer: &Buffer, palette: &Palette, area: Rect) -> Vec<(u16, u16)> {
+    let mut found = Vec::new();
     for y in area.y..area.bottom() {
         for x in area.x..area.right() {
             let cell = buffer.cell((x, y)).expect("a cell of the area");
-            if Look::of(cell, palette) != Some(Look::plain(Ink::Mark)) {
-                continue;
+            if Look::of(cell, palette) == Some(Look::plain(Ink::Mark)) {
+                found.push((x, y));
             }
-            assert!(
-                found.is_none(),
-                "{area:?} carries one block and not two: {:?} and ({x}, {y})",
-                found
-            );
-            found = Some((x, y));
         }
     }
     found
@@ -4216,40 +4209,32 @@ fn an_empty_drafts_placeholder_is_drawn_whole_with_no_cell_of_it_reversed() {
 
     let (buffer, told) = painted_and_told(&mut view, 120, 24);
     let band = laid_out(&told).composer;
-    let (x, y) = caret_cell(&buffer, &palette, band).expect("an empty draft's caret has a cell");
+    let (x, y) = caret_of(&told).expect("an empty draft takes the keys, so the caret is placed");
     let (words, at) = place_of(&buffer, PLACEHOLDER);
 
-    assert_eq!(
-        y,
-        band.y + ends(&view).above,
-        "the caret waits on the first row of the draft"
-    );
-    assert_eq!(
-        x,
-        band.x + pen::cells(INDENT),
-        "and on the blank cell of the gutter, one column short of where the words start"
-    );
-    assert_eq!(
-        x + 1,
-        at,
-        "so the block stands beside the placeholder and never over it: {words:?}"
-    );
     for cell in at..at + pen::cells(PLACEHOLDER) {
         assert_eq!(
             look_at(&buffer, &palette, cell, y),
             Look::plain(Ink::Dim),
-            "column {cell} of the placeholder is not the dim ink, so a cell of it is drawn over"
+            "column {cell} of the placeholder is not the plain dim ink, so a cell of it is drawn over"
         );
     }
     assert_eq!(
-        look_at(&buffer, &palette, x, y),
-        Look::plain(Ink::Mark),
-        "the cell reads back as the mark alone, so it is a block on the band rather than a bar"
+        (x, y),
+        (at, band.y + ends(&view).above),
+        "the cursor waits on the first glyph cell of the placeholder, on the first row of the \
+         draft: {words:?}"
     );
     assert_eq!(
         under(&buffer, x, y),
         palette.step(ends(&view).above, band.height),
-        "and it keeps the ground the row it stands on is ramped in"
+        "and that cell keeps the ground the row it stands on is ramped in"
+    );
+    assert_eq!(
+        mark_cells(&buffer, &palette, band),
+        Vec::new(),
+        "no cell of the composer's band is claimed in the mark ink, so the placeholder is drawn \
+         whole"
     );
 }
 

@@ -1676,7 +1676,7 @@ fn a_key_the_protocol_reports_by_name_is_the_key_the_terminal_speaks() {
     assert!(
         drawn.wait_until(|frame| {
             composer_rows(frame) == Some(3)
-                && placed(frame).is_some_and(|(_, column)| column == GUTTER)
+                && placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)
         }),
         "the reported Ctrl-C cleared the draft the byte would have cleared: {:?}",
         drawn.text()
@@ -1813,7 +1813,7 @@ fn ctrl_c_when_idle_clears_the_draft_and_leaves_the_launch_running() {
     pty.type_bytes(&[0x03]);
 
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
         "Ctrl-C cleared the draft: {:?}",
         drawn.text()
     );
@@ -2020,7 +2020,7 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
 
     pty.type_bytes(&[0x03]);
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
         "the run ended, so Ctrl-C is the idle key and clears the draft: {:?}",
         drawn.text()
     );
@@ -2382,7 +2382,7 @@ fn queue(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
 
     pty.type_bytes(b"\r");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
         "{prompt:?} left the box for the queue: {:?}",
         drawn.text()
     );
@@ -3068,7 +3068,7 @@ fn slash_new_clears_the_frame_and_leaves_the_session_it_holds_alone() {
 
     command(&mut pty, &drawn, "/new");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
         "the command line left the composer, so it was answered rather than queued: {:?}",
         drawn.text()
     );
@@ -3260,7 +3260,7 @@ fn slash_new_empties_what_the_next_prompt_is_asked_with() {
 
     command(&mut pty, &drawn, "/new");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
         "the command line left the composer, so it was answered before a key followed it: {:?}",
         drawn.text()
     );
@@ -3367,7 +3367,7 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
     );
     pty.type_bytes(&[0x03]);
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
         "the run ended, so Ctrl-C is the idle key and clears the proof from the draft: {:?}",
         drawn.text()
     );
