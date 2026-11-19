@@ -17,8 +17,6 @@ use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
 use rustix::termios::{Winsize, tcsetwinsize};
 use tempfile::TempDir;
 
-use sindri::pen;
-
 /// How long a sequence is given to arrive before a test calls it absent: generous, because a test that is merely
 /// slow must not read as a program that never spoke.
 const PATIENCE: Duration = Duration::from_secs(10);
@@ -294,37 +292,33 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// The column the last block the stream drew stands in: typing paints one glyph per frame, so the
-/// block that follows the last glyph is how a test knows the whole prompt has landed.
-fn block_column(stream: &str) -> Option<u16> {
-    let mut block: Option<u16> = None;
-    let mut at: Option<u16> = None;
-    let mut reversed = false;
+/// The column the last frame placed the terminal's own cursor in: typing paints one glyph per frame,
+/// so the cursor a frame shows and then moves is how a test knows a whole prompt has landed.
+fn placed_column(stream: &str) -> Option<u16> {
+    let (mut shown, mut placed) = (false, None);
     let mut rest = stream;
     while let Some(glyph) = rest.chars().next() {
         if let Some(tail) = rest.strip_prefix("\u{1b}[")
             && let Some(end) = tail.find(|glyph: char| ('\u{40}'..='\u{7e}').contains(&glyph))
         {
             match (&tail[end..=end], &tail[..end]) {
-                ("H", columns) => {
-                    at = columns
+                ("h", "?25") => shown = true,
+                ("H", columns) if shown => {
+                    placed = columns
                         .split_once(';')
                         .and_then(|(_, column)| column.parse().ok());
+                    shown = false;
                 }
-                ("m", "7") => reversed = true,
-                ("m", "0" | "27") => reversed = false,
+                ("H", _) | ("l", "?25") => shown = false,
                 _ => {}
             }
             rest = &tail[end + 1..];
             continue;
         }
-        if reversed {
-            block = at;
-        }
-        at = at.map(|column| column.saturating_add(pen::cell(glyph).max(1)));
+        shown = false;
         rest = &rest[glyph.len_utf8()..];
     }
-    block
+    placed
 }
 
 fn sequences(stream: &str) -> Vec<&str> {
@@ -502,9 +496,9 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
     // line break and sends nothing. No `?` in the draft either: that key opens a screen.
     pty.type_bytes(b"triage this");
     assert!(
-        drawn.wait_until(|stream| block_column(stream) == Some(15)),
+        drawn.wait_until(|stream| placed_column(stream) == Some(15)),
         "eleven glyphs typed in the draft's fourth column, one column in from the band's \
-         upright, so the block waits one column past the last: {:?}",
+         upright, so the terminal's cursor is placed one column past the last: {:?}",
         text(&drawn.bytes())
     );
     pty.type_bytes(b"\r");

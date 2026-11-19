@@ -1020,9 +1020,6 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
 enum Painted {
     Moved(u16, u16),
     Glyph(char),
-    /// The reverse face turned on or off, which is the one face a frame draws that a run of glyphs
-    /// cannot say: the block the draft's caret stands in.
-    Reversed(bool),
     /// The terminal's own cursor shown or hidden, which is the mark a placing frame leaves.
     Shown(bool),
 }
@@ -1036,9 +1033,6 @@ fn painted(drawn: &str) -> Vec<Painted> {
         {
             if let Some((row, column)) = sequence.move_to {
                 painted.push(Painted::Moved(row, column));
-            }
-            if let Some(on) = sequence.reversed {
-                painted.push(Painted::Reversed(on));
             }
             if let Some(shown) = sequence.shown {
                 painted.push(Painted::Shown(shown));
@@ -1054,9 +1048,6 @@ fn painted(drawn: &str) -> Vec<Painted> {
 
 struct Sequence {
     move_to: Option<(u16, u16)>,
-    /// Whether the sequence turns the reverse face on or off, and none for a sequence that says
-    /// nothing about it.
-    reversed: Option<bool>,
     /// Whether the sequence shows the terminal's own cursor or hides it, and none for a sequence
     /// that says nothing about it.
     shown: Option<bool>,
@@ -1088,7 +1079,6 @@ fn sequence(drawn: &str) -> Option<Sequence> {
         if let Some(taken) = swallowed(rest) {
             return Some(Sequence {
                 move_to: None,
-                reversed: None,
                 shown: None,
                 taken: taken + 1,
             });
@@ -1097,7 +1087,6 @@ fn sequence(drawn: &str) -> Option<Sequence> {
         let taken = 1 + rest.chars().next().map_or(0, char::len_utf8);
         return Some(Sequence {
             move_to: None,
-            reversed: None,
             shown: None,
             taken,
         });
@@ -1111,11 +1100,6 @@ fn sequence(drawn: &str) -> Option<Sequence> {
             Some((row.parse().ok()?, column.parse().ok()?))
         })
         .flatten();
-    let reversed = match (last, &params[..end]) {
-        ('m', "7") => Some(true),
-        ('m', "0" | "27") => Some(false),
-        _ => None,
-    };
     let shown = match (last, &params[..end]) {
         ('h', "?25") => Some(true),
         ('l', "?25") => Some(false),
@@ -1123,7 +1107,6 @@ fn sequence(drawn: &str) -> Option<Sequence> {
     };
     Some(Sequence {
         move_to,
-        reversed,
         shown,
         taken,
     })
@@ -1160,7 +1143,7 @@ fn runs(drawn: &str) -> Vec<Run> {
                 moved = false;
                 column = column.saturating_add(1);
             }
-            Painted::Reversed(_) | Painted::Shown(_) => {}
+            Painted::Shown(_) => {}
         }
     }
     runs
@@ -1241,28 +1224,6 @@ fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
     })
 }
 
-/// The cell the last frame drew the block in: typing paints one glyph per frame, so where the block
-/// stands is how a test knows the last glyph of a draft landed.
-fn caret_at(drawn: &str) -> Option<(u16, u16)> {
-    let (mut at, mut block, mut reversed) = (None, None, false);
-    for mark in painted(drawn) {
-        match mark {
-            Painted::Moved(row, column) => at = Some((row, column)),
-            Painted::Glyph(glyph) => {
-                if let Some((row, column)) = at {
-                    if reversed {
-                        block = Some((row, column));
-                    }
-                    at = Some((row, column.saturating_add(pen::cell(glyph).max(1))));
-                }
-            }
-            Painted::Reversed(on) => reversed = on,
-            Painted::Shown(_) => {}
-        }
-    }
-    block
-}
-
 /// The cell the last frame placed the terminal's own cursor in: a show, and then the move that
 /// follows it with no glyph painted between them, which is how a frame that places a cursor ends.
 fn placed(drawn: &str) -> Option<(u16, u16)> {
@@ -1275,7 +1236,7 @@ fn placed(drawn: &str) -> Option<(u16, u16)> {
                 shown = false;
             }
             Painted::Moved(..) => {}
-            Painted::Glyph(_) | Painted::Reversed(_) => shown = false,
+            Painted::Glyph(_) => shown = false,
         }
     }
     placed
@@ -1293,7 +1254,7 @@ fn asked_a_cursor(drawn: &str) -> bool {
 }
 
 #[test]
-fn the_launch_places_the_terminals_own_caret_on_the_blocks_cell() {
+fn the_launch_places_the_terminals_own_caret_on_the_cell_the_draft_waits_in() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);
 
@@ -1304,20 +1265,25 @@ fn the_launch_places_the_terminals_own_caret_on_the_blocks_cell() {
     );
     pty.type_bytes(b"a draft");
     assert!(
-        drawn.wait_until(|frame| frame.contains("chars")),
-        "the typed glyphs are counted on the band's edge: {:?}",
+        drawn.wait_until(|frame| {
+            picture(frame)
+                .values()
+                .any(|glyphs| glyphs.contains("a draft"))
+        }),
+        "the typed glyphs are drawn in the band: {:?}",
         drawn.text()
     );
     let frame = drawn.text();
-    let block = caret_at(&frame);
-    assert!(
-        block.is_some(),
-        "the band still draws its block for this cell: {frame:?}"
-    );
+    let row = picture(&frame)
+        .into_iter()
+        .find(|(_, glyphs)| glyphs.contains("a draft"))
+        .map(|(row, _)| row)
+        .expect("the draft's glyphs are drawn on its row");
     assert_eq!(
         placed(&frame),
-        block,
-        "the terminal's own caret is placed in the cell the block stands in: {frame:?}"
+        Some((row, GUTTER + 8)),
+        "the terminal's own caret is placed one column past the seven glyphs typed, on the \
+         draft's own row: {frame:?}"
     );
     assert!(
         !asked_a_cursor(&frame),
@@ -1692,7 +1658,7 @@ fn a_key_the_protocol_reports_by_name_is_the_key_the_terminal_speaks() {
 
     pty.type_bytes(b"abc");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 4)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 4)),
         "three glyphs typed, so the caret waits one column past the last: {:?}",
         drawn.text()
     );
@@ -1710,7 +1676,7 @@ fn a_key_the_protocol_reports_by_name_is_the_key_the_terminal_speaks() {
     assert!(
         drawn.wait_until(|frame| {
             composer_rows(frame) == Some(3)
-                && caret_at(frame).is_some_and(|(_, column)| column == GUTTER)
+                && placed(frame).is_some_and(|(_, column)| column == GUTTER)
         }),
         "the reported Ctrl-C cleared the draft the byte would have cleared: {:?}",
         drawn.text()
@@ -1839,7 +1805,7 @@ fn ctrl_c_when_idle_clears_the_draft_and_leaves_the_launch_running() {
     );
     pty.type_bytes(b"a draft nobody sent");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 20 + GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == 20 + GUTTER)),
         "nineteen glyphs typed, so the caret waits one column past the last: {:?}",
         drawn.text()
     );
@@ -1847,7 +1813,7 @@ fn ctrl_c_when_idle_clears_the_draft_and_leaves_the_launch_running() {
     pty.type_bytes(&[0x03]);
 
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
         "Ctrl-C cleared the draft: {:?}",
         drawn.text()
     );
@@ -1979,7 +1945,7 @@ fn ask_words(pty: &mut Pty, drawn: &Drawn, wire: &Wire, words: &str) {
     pty.type_bytes(words.as_bytes());
     let typed = pen::cells(words) + 1 + GUTTER;
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == typed)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == typed)),
         "{words:?} typed, so the caret waits one column past its last glyph: {:?}",
         drawn.text()
     );
@@ -2018,7 +1984,7 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
 
     pty.type_bytes(b"a second thought");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 17 + GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == 17 + GUTTER)),
         "sixteen glyphs of a new draft, and the caret one column past them: {:?}",
         drawn.text()
     );
@@ -2027,7 +1993,7 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
 
     thread::sleep(Duration::from_millis(300));
     assert!(
-        caret_at(&drawn.text()).is_some_and(|(_, column)| column == 17 + GUTTER),
+        placed(&drawn.text()).is_some_and(|(_, column)| column == 17 + GUTTER),
         "the draft a cancel found is still in the composer: {:?}",
         drawn.text()
     );
@@ -2054,7 +2020,7 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
 
     pty.type_bytes(&[0x03]);
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
         "the run ended, so Ctrl-C is the idle key and clears the draft: {:?}",
         drawn.text()
     );
@@ -2409,14 +2375,14 @@ fn queue(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
     pty.type_bytes(prompt.as_bytes());
     let typed = pen::cells(prompt) + 1 + GUTTER;
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == typed)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == typed)),
         "{prompt:?} is in the box, the caret one column past its last glyph: {:?}",
         drawn.text()
     );
 
     pty.type_bytes(b"\r");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
         "{prompt:?} left the box for the queue: {:?}",
         drawn.text()
     );
@@ -2444,7 +2410,7 @@ fn enter_during_a_run_keeps_the_prompt_in_the_composer_under_the_draft() {
         .map(|(row, _)| row);
     assert!(
         waited
-            .zip(caret_at(&frame))
+            .zip(placed(&frame))
             .is_some_and(|(waited, (caret, _))| waited > caret),
         "the frame draws the prompt waiting under the row the caret waits on: {frame:?}"
     );
@@ -2523,7 +2489,7 @@ fn ctrl_x_drops_the_newest_prompt_the_queue_holds() {
     pty.type_bytes(&[0x18]);
     pty.type_bytes(b"x");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 2)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 2)),
         "the glyph typed after Ctrl-X is in the draft, so the drop has happened: {:?}",
         drawn.text()
     );
@@ -2565,7 +2531,7 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
 
     pty.type_bytes(b"\x1b[A");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == 11 + GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == 11 + GUTTER)),
         "the recalled prompt is the whole draft again: {:?}",
         drawn.text()
     );
@@ -2597,7 +2563,7 @@ fn command(pty: &mut Pty, drawn: &Drawn, line: &str) {
     pty.type_bytes(line.as_bytes());
     let column = pen::cells(line) + 1 + GUTTER;
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, at)| at == column)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, at)| at == column)),
         "the command line is the draft before it is sent, so the caret waits one column \
          past its last glyph: {:?}",
         drawn.text()
@@ -3102,7 +3068,7 @@ fn slash_new_clears_the_frame_and_leaves_the_session_it_holds_alone() {
 
     command(&mut pty, &drawn, "/new");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
         "the command line left the composer, so it was answered rather than queued: {:?}",
         drawn.text()
     );
@@ -3294,7 +3260,7 @@ fn slash_new_empties_what_the_next_prompt_is_asked_with() {
 
     command(&mut pty, &drawn, "/new");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
         "the command line left the composer, so it was answered before a key followed it: {:?}",
         drawn.text()
     );
@@ -3389,7 +3355,7 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
     // the cancel was answered, because the loop answers one key before the next.
     pty.type_bytes(b"x");
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER + 2)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 2)),
         "the cancel was answered, so the draft has the glyph typed after it: {:?}",
         drawn.text()
     );
@@ -3401,7 +3367,7 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
     );
     pty.type_bytes(&[0x03]);
     assert!(
-        drawn.wait_until(|frame| caret_at(frame).is_some_and(|(_, column)| column == GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER)),
         "the run ended, so Ctrl-C is the idle key and clears the proof from the draft: {:?}",
         drawn.text()
     );

@@ -1,5 +1,5 @@
-//! What a golden frame cannot hold: the cell the draft's block stands in, which a fixture names by
-//! ink and never by position, and the bands under the cells, which a fixture cannot read at all.
+//! What a golden frame cannot hold: the cell the draft's caret waits in, which a frame's cells name by
+//! ink and the pass by a position, and the bands under the cells, which a fixture cannot read at all.
 
 use sindri_core::policy::Enforcement;
 
@@ -72,6 +72,11 @@ fn caret_cell(buffer: &Buffer, palette: &Palette, area: Rect) -> Option<(u16, u1
         }
     }
     found
+}
+
+/// The cell the pass placed the terminal's cursor in, counted as the frame's cells are.
+fn caret_of(painted: &Painted) -> Option<(u16, u16)> {
+    painted.caret().map(|at| (at.x, at.y))
 }
 
 /// The frame a pass laid out, read off the value it handed back.
@@ -1100,8 +1105,7 @@ fn a_queues_rows_stand_inside_the_box_and_the_foot_is_still_the_bands_last_row()
 }
 
 #[test]
-fn the_block_waits_above_the_queue_that_stands_under_the_draft() {
-    let palette = Palette::TRUECOLOR;
+fn the_caret_is_placed_above_the_queue_that_stands_under_the_draft() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().running(),
@@ -1109,15 +1113,14 @@ fn the_block_waits_above_the_queue_that_stands_under_the_draft() {
     );
     view.enqueue(prompt("a prompt behind the draft"));
     view.paste("a draft");
-    let (buffer, told) = painted_and_told(&mut view, 120, 24);
+    let (_, told) = painted_and_told(&mut view, 120, 24);
     let laid = laid_out(&told);
-    let (_, row) =
-        caret_cell(&buffer, &palette, laid.composer).expect("the draft's caret has a cell");
+    let (_, row) = caret_of(&told).expect("the draft's caret has a cell");
 
     assert_eq!(
         row,
         laid.queue.y - 1,
-        "the block waits on the draft's last row and never on a prompt the draft did not write"
+        "the caret is placed on the draft's last row and never on a prompt the draft did not write"
     );
 }
 
@@ -3223,16 +3226,14 @@ fn every_hint_names_a_key_the_composer_answers_or_a_glyph_that_opens_the_command
 }
 
 #[test]
-fn the_block_stands_on_the_carets_row_of_the_draft() {
-    let palette = Palette::TRUECOLOR;
+fn the_caret_is_placed_on_the_carets_row_of_the_draft() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::none(),
     );
     view.paste("first line\nsecond line");
-    let (buffer, told) = painted_and_told(&mut view, 40, 12);
-    let band = laid_out(&told).composer;
+    let (_, told) = painted_and_told(&mut view, 40, 12);
 
     assert_eq!(
         view.composer().rows(),
@@ -3240,9 +3241,9 @@ fn the_block_stands_on_the_carets_row_of_the_draft() {
         "two lines of draft between the band's two rows of air"
     );
     assert_eq!(
-        caret_cell(&buffer, &palette, band),
+        caret_of(&told),
         Some((14, 8)),
-        "the block's column is the one the caret takes in the draft, and the draft is set \
+        "the caret is placed in the column it takes in the draft, and the draft is set \
              two columns in from the upright"
     );
 }
@@ -3780,12 +3781,12 @@ fn a_draft_past_the_ceiling_says_how_many_rows_it_keeps_back_and_keeps_the_caret
         Look::plain(Ink::Dim),
         "the count is the dim ink"
     );
-    let (_, y) = caret_cell(&buffer, &palette, band).expect("a block is drawn for a long draft");
+    let (_, y) = caret_of(&told).expect("a caret is placed for a long draft");
     assert_eq!(
         y,
         band.bottom() - ends(&view).below - 2,
-        "and the block waits on the last row the band draws the draft in: above the row that \
-             counts the rest and above the foot"
+        "and the caret is placed on the last row the band draws the draft in: above the row \
+             that counts the rest and above the foot"
     );
 }
 
@@ -3880,9 +3881,9 @@ fn a_card_covers_the_composer_and_leaves_it_readable_and_out_of_reach() {
              they will return to"
     );
     assert_eq!(
-        caret_cell(&buffer, &palette, band),
+        caret_of(&told),
         None,
-        "and no block waits in a band that takes no key"
+        "and no caret is placed in a band that takes no key"
     );
 }
 
@@ -3910,7 +3911,7 @@ fn a_query_wider_than_the_body_is_cut_at_its_edge_and_not_dropped() {
 }
 
 #[test]
-fn a_card_leaves_the_block_standing_on_the_draft_it_dims() {
+fn a_card_leaves_the_caret_placed_on_the_draft_it_dims() {
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(
         Capabilities::default(),
@@ -3921,13 +3922,12 @@ fn a_card_leaves_the_block_standing_on_the_draft_it_dims() {
 
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let band = laid_out(&told).composer;
-    let (x, y) = caret_cell(&buffer, &palette, band)
-        .expect("a card scrims the band and leaves the block standing on it");
+    let (x, y) = caret_of(&told).expect("a card scrims the band and leaves the caret placed on it");
 
     assert_eq!(
         y,
         band.y + ends(&view).above,
-        "the block stands on the band's first draft row"
+        "the caret is placed on the band's first draft row"
     );
     assert_eq!(
         look_at(&buffer, &palette, x - 1, y),
@@ -3937,8 +3937,7 @@ fn a_card_leaves_the_block_standing_on_the_draft_it_dims() {
 }
 
 #[test]
-fn a_boxed_card_that_reaches_the_drafts_row_holds_the_cell_the_block_would_stand_in() {
-    let palette = Palette::TRUECOLOR;
+fn a_boxed_card_that_reaches_the_drafts_row_holds_the_cell_the_caret_would_be_placed_in() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -3953,15 +3952,14 @@ fn a_boxed_card_that_reaches_the_drafts_row_holds_the_cell_the_block_would_stand
         "a card nine rows tall in a thirteen row frame draws its foot on the draft's first row"
     );
     assert_eq!(
-        caret_cell(&buffer, &palette, buffer.area),
+        caret_of(&told),
         None,
-        "so the block is no cell of the card: the band alone carries it"
+        "so no cell of the card is the cell the caret is placed in: the band alone carries it"
     );
 }
 
 #[test]
-fn a_bleeding_card_holds_the_whole_frame_and_leaves_no_block_standing() {
-    let palette = Palette::TRUECOLOR;
+fn a_bleeding_card_holds_the_whole_frame_and_places_no_caret() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -3976,83 +3974,77 @@ fn a_bleeding_card_holds_the_whole_frame_and_leaves_no_block_standing() {
         "a card too narrow for a border is grounded over the whole frame, the band with it"
     );
     assert_eq!(
-        caret_cell(&buffer, &palette, buffer.area),
+        caret_of(&told),
         None,
-        "so no block of the band is left standing on it"
+        "so the caret of the band is placed on none of its cells"
     );
 }
 
 #[test]
-fn a_screen_is_drawn_with_no_block_on_the_band() {
-    let palette = Palette::TRUECOLOR;
+fn a_screen_is_drawn_with_no_caret_placed_on_the_band() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::none(),
     );
-    let (buffer, told) = painted_and_told(&mut view, 120, 40);
-    let band = laid_out(&told).composer;
+    let (_, told) = painted_and_told(&mut view, 120, 40);
     assert!(
-        caret_cell(&buffer, &palette, band).is_some(),
+        caret_of(&told).is_some(),
         "the empty draft's caret has a cell before the screen opens"
     );
 
     view.key(Key::Char('?'));
-    let (buffer, told) = painted_and_told(&mut view, 120, 40);
-    let band = laid_out(&told).composer;
+    let (_, told) = painted_and_told(&mut view, 120, 40);
 
     assert_eq!(
-        caret_cell(&buffer, &palette, band),
+        caret_of(&told),
         None,
-        "a screen is the whole frame and the draft behind it takes no key, so no block is \
-         left standing on the band"
+        "a screen is the whole frame and the draft behind it takes no key, so no caret is \
+         placed on the band"
     );
 }
 
 #[test]
-fn a_draft_holding_a_wide_glyph_puts_the_block_in_the_column_the_glyph_occupies() {
+fn a_draft_holding_a_wide_glyph_places_the_caret_in_the_column_the_glyph_occupies() {
     assert_eq!(
-        caret_at("日本", 40, 12),
+        placed_at("日本", 40, 12),
         Some((7, 9)),
-        "two wide glyphs take four columns, so the block waits in the fourth column after \
+        "two wide glyphs take four columns, so the caret is placed in the fourth column after \
              the gutter, one column in from the band's upright"
     );
 }
 
-/// Where a frame `cols` by `rows` wide paints the block, read off the cells rather than off the
+/// Where a frame `cols` by `rows` wide places the caret, read off the pass rather than off the
 /// view: the band's rows are a fact about the width, so nothing is asked before it is painted.
-fn caret_at(draft: &str, cols: u16, rows: u16) -> Option<(u16, u16)> {
-    let palette = Palette::TRUECOLOR;
+fn placed_at(draft: &str, cols: u16, rows: u16) -> Option<(u16, u16)> {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::none(),
     );
     view.paste(draft);
-    let (buffer, told) = painted_and_told(&mut view, cols, rows);
-    caret_cell(&buffer, &palette, laid_out(&told).composer)
+    caret_of(&painted_and_told(&mut view, cols, rows).1)
 }
 
 #[test]
-fn the_block_follows_the_draft_onto_the_row_the_wrap_gave_it() {
+fn the_caret_follows_the_draft_onto_the_row_the_wrap_gave_it() {
     let asking = pen::filled(60, 'x');
 
     assert_eq!(
-        caret_at(&asking, 40, 12),
+        placed_at(&asking, 40, 12),
         Some((27, 8)),
-        "a thirty-six column room holds thirty-six glyphs of a draft of sixty, so the block \
-             waits twenty-four columns into the band's second row rather than off the frame"
+        "a thirty-six column room holds thirty-six glyphs of a draft of sixty, so the caret is \
+             placed twenty-four columns into the band's second row rather than off the frame"
     );
     assert_eq!(
-        caret_at(&asking, 80, 12),
+        placed_at(&asking, 80, 12),
         Some((63, 9)),
         "and a frame wide enough to hold the draft shows it on the one row it takes"
     );
 }
 
 #[test]
-fn a_block_at_the_end_of_a_full_row_waits_in_the_last_column_inside_the_box() {
-    let palette = Palette::TRUECOLOR;
+fn a_caret_at_the_end_of_a_full_row_is_placed_in_the_last_column_inside_the_box() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -4063,23 +4055,22 @@ fn a_block_at_the_end_of_a_full_row_waits_in_the_last_column_inside_the_box() {
 
     let (buffer, told) = painted_and_told(&mut view, 40, 12);
     let band = laid_out(&told).composer;
-    let (column, row) = caret_cell(&buffer, &palette, band)
-        .expect("a block is drawn for a draft that fills the box");
+    let (column, row) = caret_of(&told).expect("a caret is placed for a draft that fills the box");
 
     assert_eq!(
         column,
         band.right() - 2,
         "a draft that fills the row's {room} columns leaves the caret no column after it, so \
-             its block waits in the last one inside the box rather than on the upright"
+             it is placed in the last one inside the box rather than on the upright"
     );
     assert_eq!(
         buffer.cell((column + 1, row)).map(|cell| cell.symbol()),
         Some("\u{2502}"),
-        "and the column after the block is the band's right upright"
+        "and the column after the caret is the band's right upright"
     );
     assert!(
         row < band.bottom() - ends(&view).below,
-        "the block waits on a row inside the box and never on the foot"
+        "the caret is placed on a row inside the box and never on the foot"
     );
 }
 
@@ -4263,8 +4254,7 @@ fn an_empty_drafts_placeholder_is_drawn_whole_with_no_cell_of_it_reversed() {
 }
 
 #[test]
-fn the_block_stands_before_the_glyph_the_caret_comes_before_and_moves_with_every_key() {
-    let palette = Palette::TRUECOLOR;
+fn the_caret_is_placed_before_the_glyph_it_comes_before_and_moves_with_every_key() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -4272,14 +4262,13 @@ fn the_block_stands_before_the_glyph_the_caret_comes_before_and_moves_with_every
     );
     view.paste("one\ntwo");
 
-    let block = |view: &mut View| -> (u16, u16, String) {
+    let placed = |view: &mut View| -> (u16, u16, String) {
         let (buffer, told) = painted_and_told(view, 120, 24);
         let band = laid_out(&told).composer;
-        let (x, y) =
-            caret_cell(&buffer, &palette, band).expect("a draft that takes the keys has a block");
+        let (x, y) = caret_of(&told).expect("a draft that takes the keys places the caret");
         let glyph = buffer
             .cell((x, y))
-            .expect("a cell of the block")
+            .expect("a cell of the caret")
             .symbol()
             .to_owned();
         let above = ends(view).above;
@@ -4288,39 +4277,38 @@ fn the_block_stands_before_the_glyph_the_caret_comes_before_and_moves_with_every
     let column = pen::cells(INDENT);
 
     assert_eq!(
-        block(&mut view),
+        placed(&mut view),
         (column + 3, 1, String::from(" ")),
-        "the block stands one column past the last glyph of the row the caret waits at the end of"
+        "the caret is placed one column past the last glyph of the row it waits at the end of"
     );
     view.key(Key::Left);
     assert_eq!(
-        block(&mut view),
+        placed(&mut view),
         (column + 2, 1, String::from("o")),
-        "a key that takes the caret back carries the block over the glyph it now comes before"
+        "a key that takes the caret back places it over the glyph it now comes before"
     );
     view.key(Key::Up);
     assert_eq!(
-        block(&mut view),
+        placed(&mut view),
         (column + 2, 0, String::from("e")),
-        "and a key that takes it up a row carries it to the glyph that stands there"
+        "and a key that takes it up a row places it on the glyph that stands there"
     );
     view.key(Key::Char('X'));
     assert_eq!(
-        block(&mut view),
+        placed(&mut view),
         (column + 3, 0, String::from("e")),
-        "a glyph typed in front of the block leaves it before the glyph it held"
+        "a glyph typed in front of the caret leaves it before the glyph it held"
     );
     view.key(Key::Newline);
     assert_eq!(
-        block(&mut view),
+        placed(&mut view),
         (column, 1, String::from("e")),
-        "and the row a newline gives the draft opens with the block on its first column"
+        "and the row a newline gives the draft opens with the caret placed on its first column"
     );
 }
 
 #[test]
-fn the_band_alone_carries_the_block_and_no_answer_or_prompt_does() {
-    let palette = Palette::TRUECOLOR;
+fn the_band_alone_places_the_caret_and_no_answer_or_prompt_does() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().running(),
@@ -4329,22 +4317,21 @@ fn the_band_alone_carries_the_block_and_no_answer_or_prompt_does() {
     view.enqueue(prompt("a prompt behind the draft"));
     view.paste("a draft");
 
-    let (buffer, told) = painted_and_told(&mut view, 120, 24);
+    let (_, told) = painted_and_told(&mut view, 120, 24);
     let laid = laid_out(&told);
-    let (_, row) = caret_cell(&buffer, &palette, buffer.area).expect("the draft's caret is drawn");
+    let (x, row) = caret_of(&told).expect("the draft's caret is placed");
+    let at = Position::new(x, row);
 
     assert!(
         (laid.composer.y + ends(&view).above..laid.queue.y).contains(&row),
-        "the block stands on a row of the draft, above the prompts that wait under it: row {row}"
+        "the caret is placed on a row of the draft, above the prompts that wait under it: row {row}"
     );
-    assert_eq!(
-        caret_cell(&buffer, &palette, laid.queue),
-        None,
-        "no prompt that waits behind the draft carries a block"
+    assert!(
+        !laid.queue.contains(at),
+        "no prompt that waits behind the draft has the caret placed on it: {at:?}"
     );
-    assert_eq!(
-        caret_cell(&buffer, &palette, laid.transcript),
-        None,
-        "and no answer or turn of the transcript carries one"
+    assert!(
+        !laid.transcript.contains(at),
+        "and no answer or turn of the transcript does: {at:?}"
     );
 }
