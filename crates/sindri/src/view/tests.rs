@@ -3930,6 +3930,172 @@ fn a_card_leaves_the_caret_placed_on_the_draft_it_dims() {
 }
 
 #[test]
+fn a_card_that_takes_a_query_places_the_caret_past_the_last_glyph_typed_at_it() {
+    let (mut view, _workspace) = picking();
+    for glyph in ['a', 'l', 'p'] {
+        view.key(Key::Char(glyph));
+    }
+
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let (drawn, column) = place_of(&buffer, "query: ");
+    let body = card_body(&told);
+    let (x, y) =
+        caret_of(&told).expect("the picker takes the glyphs typed at it, so it places one");
+
+    assert_eq!(
+        y, body.y,
+        "the caret waits on the card's first body row, which is the row the query is typed at: \
+             {drawn:?}"
+    );
+    assert_eq!(
+        x,
+        column + pen::cells("query: ") + 3,
+        "and one column past the three glyphs the reader typed after the words `query: `: \
+             {drawn:?}"
+    );
+    assert!(
+        body.contains(Position::new(x, y)),
+        "the cell it waits in is inside the body the card handed the screen, at ({x}, {y}) of \
+             {body:?}"
+    );
+}
+
+#[test]
+fn the_models_card_places_the_caret_the_same_way() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("/model");
+    assert_eq!(
+        view.key(Key::Enter),
+        Outcome::Served,
+        "`/model` opens the screen that lists the names the wire serves"
+    );
+
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let (drawn, column) = place_of(&buffer, "query: ");
+    let body = card_body(&told);
+    let (x, y) = caret_of(&told).expect("the models screen takes the glyphs typed at it");
+
+    assert_eq!(
+        y, body.y,
+        "the caret waits on the drawn query row, which is the card's first body row: {drawn:?}"
+    );
+    assert_eq!(
+        x,
+        column + pen::cells("query: "),
+        "and one column past the words `query: `, where the next glyph would be typed: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_typed_glyph_moves_the_cards_caret_one_column_and_an_erasure_one_back() {
+    let (mut view, _workspace) = picking();
+    let (_, waiting) = painted_and_told(&mut view, 120, 40);
+    let (x, y) = caret_of(&waiting).expect("the picker takes the glyphs typed at it");
+
+    view.key(Key::Char('a'));
+    let (_, typed) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        caret_of(&typed),
+        Some((x + 1, y)),
+        "a glyph typed at the query waits the caret one column on"
+    );
+
+    view.key(Key::Backspace);
+    let (_, erased) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        caret_of(&erased),
+        Some((x, y)),
+        "and erasing it takes the caret one column back, with no glyph left under it"
+    );
+}
+
+#[test]
+fn a_query_cut_at_the_cards_edge_keeps_the_caret_on_the_bodys_last_column() {
+    let palette = Palette::TRUECOLOR;
+    let (mut view, _workspace) = picking();
+    for _ in 0..60 {
+        view.key(Key::Char('x'));
+    }
+
+    let (buffer, told) = painted_and_told(&mut view, 40, 12);
+    let body = card_body(&told);
+    let (x, y) = caret_of(&told).expect("the card takes the glyphs typed at it");
+
+    assert_eq!(
+        (x, y),
+        (body.right() - 1, body.y),
+        "a query wider than the body is cut at its last column, so the caret keeps to that \
+             column rather than waiting on one the body does not hold: {body:?}"
+    );
+    assert_eq!(
+        look_at(&buffer, &palette, x, y),
+        Look::plain(Ink::Muted),
+        "and the cell it waits in holds a glyph the reader typed, not a border of the card"
+    );
+}
+
+#[test]
+fn closing_the_card_hands_the_caret_back_to_the_draft_it_holds() {
+    let workspace = tempfile::tempdir().expect("a temp workspace");
+    let mut view = View::of(
+        pointing(),
+        Facts::default()
+            .asked()
+            .working(workspace.path().to_path_buf(), None),
+        Transcript::none(),
+    );
+    let (_, banded) = painted_and_told(&mut view, 120, 40);
+    let waited = caret_of(&banded).expect("the band holds a draft, and the draft places the caret");
+
+    assert_eq!(
+        view.key(Key::Char('@')),
+        Outcome::Edited,
+        "`@` opens the picker over the band"
+    );
+    let (_, carded) = painted_and_told(&mut view, 120, 40);
+    assert_ne!(
+        caret_of(&carded),
+        Some(waited),
+        "the card takes the caret while it stands, because it is the card that takes the keys"
+    );
+
+    assert_eq!(
+        view.key(Key::Escape),
+        Outcome::Edited,
+        "Esc gives the frame back to the band"
+    );
+    let (_, returned) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        caret_of(&returned),
+        Some(waited),
+        "and hands the caret back to the draft the band holds, in the cell it waited in before"
+    );
+}
+
+#[test]
+fn the_cells_of_a_card_that_takes_a_query_name_no_caret() {
+    let palette = Palette::TRUECOLOR;
+    let (mut view, _workspace) = picking();
+    view.key(Key::Char('r'));
+
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    assert!(
+        caret_of(&told).is_some(),
+        "the card places the caret past the glyph typed at it"
+    );
+    assert_eq!(
+        mark_cells(&buffer, &palette, card_body(&told)),
+        Vec::new(),
+        "and no cell of the card is drawn as a caret: the terminal's own cursor is the caret, \
+             and a frame names it by a position rather than by an ink"
+    );
+}
+
+#[test]
 fn a_boxed_card_that_reaches_the_drafts_row_holds_the_cell_the_caret_would_be_placed_in() {
     let mut view = View::of(
         Capabilities::default(),

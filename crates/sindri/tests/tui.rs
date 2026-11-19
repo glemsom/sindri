@@ -1411,6 +1411,74 @@ fn a_screen_over_the_band_places_no_caret_and_hides_the_terminals_own() {
 }
 
 #[test]
+fn a_card_that_takes_a_query_places_the_caret_past_the_glyphs_typed_at_it() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    let booted = placed(&drawn.text()).expect("the draft waits its caret at the boot frame");
+
+    pty.type_bytes(b"@");
+    assert!(
+        drawn.wait_until(|frame| showing(frame, "query: ")),
+        "the `@` card is drawn over the band: {:?}",
+        drawn.text()
+    );
+    let opened = drawn.text();
+    let query = row_of(&opened, "query: ").expect("the card draws the row its query is typed at");
+    let (row, column) = placed(&opened).expect("a card that takes a query places the caret in it");
+    let words = runs(&opened)
+        .into_iter()
+        .find(|run| run.glyphs.contains("query: "))
+        .expect("the card draws the words its query is typed after");
+    let at = words
+        .glyphs
+        .find("query: ")
+        .expect("the words open the run they are drawn in");
+    assert_eq!(
+        (row, column),
+        (
+            words.row,
+            words.column + pen::cells(&words.glyphs[..at]) + pen::cells("query: ")
+        ),
+        "the caret waits on the row the query is typed at, one column past the words `query: `: \
+         {opened:?}"
+    );
+
+    pty.type_bytes(b"rs");
+    assert!(
+        drawn.wait_until(|frame| placed(frame) == Some((query, column + 2))),
+        "two glyphs typed wait the caret two columns on, on that same row: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x7f]);
+    assert!(
+        drawn.wait_until(|frame| placed(frame) == Some((query, column + 1))),
+        "an erased glyph takes it one column back: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\x1b");
+    assert!(
+        drawn.wait_until(|frame| placed(frame) == Some(booted)),
+        "Esc closes the card and hands the caret back to the draft's own row: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
 fn the_placed_caret_follows_the_row_the_draft_window_scrolls_to() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);
