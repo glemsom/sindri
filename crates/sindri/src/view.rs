@@ -6,7 +6,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use sindri_core::config::{Config, Touched};
 use sindri_core::conversation::Conversation;
 use sindri_core::provider::Deltas;
@@ -217,9 +217,9 @@ impl Drawn {
     }
 }
 
-/// What one paint pass tells the terminal and what it drew: where it laid the frame out, the
-/// destinations the frame names, the runs it draws at more than one cell, the rows a press chooses,
-/// and the transcript's own record. No cell carries any of it.
+/// What one paint pass tells the terminal and what it drew: where it laid the frame out, the cell
+/// it places the terminal's cursor in, the destinations the frame names, the runs it draws at more
+/// than one cell, the rows a press chooses, and the transcript's own record. No cell carries any.
 #[derive(Debug)]
 pub struct Painted {
     links: Links,
@@ -228,6 +228,7 @@ pub struct Painted {
     drawn: Drawn,
     layout: Option<Layout>,
     planes: Vec<Plane>,
+    caret: Option<Position>,
 }
 
 impl Painted {
@@ -240,7 +241,13 @@ impl Painted {
             drawn: Drawn::none(),
             layout: None,
             planes: Vec::new(),
+            caret: None,
         }
+    }
+
+    /// The cell this frame places the terminal's cursor in.
+    pub fn caret(&self) -> Option<Position> {
+        self.caret
     }
 
     /// The planes this frame places under its bands, each carrying the identity it is held by.
@@ -1052,6 +1059,9 @@ impl View {
                 .settle(share.transcript, buffer, &self.capabilities.palette());
             self.highlight(share.transcript, buffer, drawn.span());
             self.note(&mut painted, drawn);
+            painted.caret = self
+                .caret_cell(layout.composer, layout.queue, None)
+                .map(|(x, y)| Position::new(x, y));
             painted.layout = Some(layout);
             return painted;
         };
@@ -1061,6 +1071,7 @@ impl View {
         self.highlight(share.transcript, buffer, drawn.span());
         self.note(&mut painted, drawn);
         let rows = body.held();
+        let bounds = card::bounds(area, rows);
         let held = card::paint(
             area,
             name,
@@ -1073,12 +1084,10 @@ impl View {
         painted.presses = body.paint(held, buffer, &self.capabilities.palette());
         // A card's scrim strips the faces the band was drawn with, so a carded frame stamps its block
         // again — and never on a cell the card itself holds.
-        self.block(
-            layout.composer,
-            layout.queue,
-            Some(card::bounds(area, rows)),
-            buffer,
-        );
+        self.block(layout.composer, layout.queue, Some(bounds), buffer);
+        painted.caret = self
+            .caret_cell(layout.composer, layout.queue, Some(bounds))
+            .map(|(x, y)| Position::new(x, y));
         layout.card = Some(held);
         painted.layout = Some(layout);
         painted
@@ -1569,19 +1578,24 @@ impl View {
         }
     }
 
-    /// Stamps the cell the draft's caret stands in, when this frame draws one and no card holds it: a
-    /// card scrims the band and grounds its own box, so a block on one of its cells would be a mark on
-    /// the card and not on the draft.
+    /// Stamps the mark ink on the cell the draft's caret stands in.
     fn block(&self, band: Rect, queue: Rect, card: Option<Rect>, buffer: &mut Buffer) {
-        let Some((x, y)) = self.caret(band, queue) else {
+        let Some((x, y)) = self.caret_cell(band, queue, card) else {
             return;
         };
-        if card.is_some_and(|card| {
+        pen::stamp(buffer, x, y, Ink::Mark.style(&self.capabilities.palette()));
+    }
+
+    /// That cell, unless a card holds it: a card scrims the band and grounds its own box, so a caret
+    /// on one of its cells would be on the card and not on the draft.
+    fn caret_cell(&self, band: Rect, queue: Rect, card: Option<Rect>) -> Option<(u16, u16)> {
+        let (x, y) = self.caret(band, queue)?;
+        match card.is_some_and(|card| {
             (card.x..card.right()).contains(&x) && (card.y..card.bottom()).contains(&y)
         }) {
-            return;
+            true => None,
+            false => Some((x, y)),
         }
-        pen::stamp(buffer, x, y, Ink::Mark.style(&self.capabilities.palette()));
     }
 
     /// The cell the draft's caret stands in, and nothing while a screen stands over the band: the

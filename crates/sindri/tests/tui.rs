@@ -1023,6 +1023,8 @@ enum Painted {
     /// The reverse face turned on or off, which is the one face a frame draws that a run of glyphs
     /// cannot say: the block the draft's caret stands in.
     Reversed(bool),
+    /// The terminal's own cursor shown or hidden, which is the mark a placing frame leaves.
+    Shown(bool),
 }
 
 fn painted(drawn: &str) -> Vec<Painted> {
@@ -1038,6 +1040,9 @@ fn painted(drawn: &str) -> Vec<Painted> {
             if let Some(on) = sequence.reversed {
                 painted.push(Painted::Reversed(on));
             }
+            if let Some(shown) = sequence.shown {
+                painted.push(Painted::Shown(shown));
+            }
             rest = &rest[sequence.taken..];
             continue;
         }
@@ -1052,6 +1057,9 @@ struct Sequence {
     /// Whether the sequence turns the reverse face on or off, and none for a sequence that says
     /// nothing about it.
     reversed: Option<bool>,
+    /// Whether the sequence shows the terminal's own cursor or hides it, and none for a sequence
+    /// that says nothing about it.
+    shown: Option<bool>,
     taken: usize,
 }
 
@@ -1081,6 +1089,7 @@ fn sequence(drawn: &str) -> Option<Sequence> {
             return Some(Sequence {
                 move_to: None,
                 reversed: None,
+                shown: None,
                 taken: taken + 1,
             });
         }
@@ -1089,6 +1098,7 @@ fn sequence(drawn: &str) -> Option<Sequence> {
         return Some(Sequence {
             move_to: None,
             reversed: None,
+            shown: None,
             taken,
         });
     };
@@ -1106,9 +1116,15 @@ fn sequence(drawn: &str) -> Option<Sequence> {
         ('m', "0" | "27") => Some(false),
         _ => None,
     };
+    let shown = match (last, &params[..end]) {
+        ('h', "?25") => Some(true),
+        ('l', "?25") => Some(false),
+        _ => None,
+    };
     Some(Sequence {
         move_to,
         reversed,
+        shown,
         taken,
     })
 }
@@ -1144,7 +1160,7 @@ fn runs(drawn: &str) -> Vec<Run> {
                 moved = false;
                 column = column.saturating_add(1);
             }
-            Painted::Reversed(_) => {}
+            Painted::Reversed(_) | Painted::Shown(_) => {}
         }
     }
     runs
@@ -1241,13 +1257,43 @@ fn caret_at(drawn: &str) -> Option<(u16, u16)> {
                 }
             }
             Painted::Reversed(on) => reversed = on,
+            Painted::Shown(_) => {}
         }
     }
     block
 }
 
+/// The cell the last frame placed the terminal's own cursor in: a show, and then the move that
+/// follows it with no glyph painted between them, which is how a frame that places a cursor ends.
+fn placed(drawn: &str) -> Option<(u16, u16)> {
+    let (mut shown, mut placed) = (false, None);
+    for mark in painted(drawn) {
+        match mark {
+            Painted::Shown(on) => shown = on,
+            Painted::Moved(row, column) if shown => {
+                placed = Some((row, column));
+                shown = false;
+            }
+            Painted::Moved(..) => {}
+            Painted::Glyph(_) | Painted::Reversed(_) => shown = false,
+        }
+    }
+    placed
+}
+
+/// Whether the bytes ask the terminal for a cursor shape or a cursor colour: the one thing a launch
+/// never says, because the shape and the colour of its cursor are the reader's to choose.
+fn asked_a_cursor(drawn: &str) -> bool {
+    drawn.contains("\u{1b}]12;")
+        || drawn.match_indices("\u{1b}[").any(|(at, _)| {
+            let params = &drawn[at + 2..];
+            let end = params.find(|glyph: char| ('\u{40}'..='\u{7e}').contains(&glyph));
+            end.is_some_and(|end| params.as_bytes()[end] == b'q')
+        })
+}
+
 #[test]
-fn the_launch_hides_the_terminals_own_caret_and_never_asks_for_it() {
+fn the_launch_places_the_terminals_own_caret_on_the_blocks_cell() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);
 
@@ -1263,17 +1309,20 @@ fn the_launch_hides_the_terminals_own_caret_and_never_asks_for_it() {
         drawn.text()
     );
     let frame = drawn.text();
+    let block = caret_at(&frame);
     assert!(
-        frame.contains("\u{1b}[?25l"),
-        "the terminal's own caret is hidden for the whole launch: {frame:?}"
+        block.is_some(),
+        "the band still draws its block for this cell: {frame:?}"
+    );
+    assert_eq!(
+        placed(&frame),
+        block,
+        "the terminal's own caret is placed in the cell the block stands in: {frame:?}"
     );
     assert!(
-        !frame.contains("\u{1b}[?25h"),
-        "and never shown again to stand beside the block: {frame:?}"
-    );
-    assert!(
-        caret_at(&frame).is_some(),
-        "because the cell it would stand in is the band's block: {frame:?}"
+        !asked_a_cursor(&frame),
+        "and the launch asks for no shape and no colour, so the reader's own cursor is what they \
+         see: {frame:?}"
     );
 
     pty.type_bytes(&[0x11]);
@@ -1281,6 +1330,253 @@ fn the_launch_hides_the_terminals_own_caret_and_never_asks_for_it() {
         session.wait().code(),
         Some(0),
         "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn a_typed_glyph_and_an_erasure_move_the_placed_caret() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"abc");
+    assert!(
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 4)),
+        "three glyphs typed wait the caret one column past the last: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(&[0x7f]);
+    assert!(
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 3)),
+        "an erased glyph takes the caret back with it: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn a_move_along_the_draft_moves_the_placed_caret_and_no_glyph() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"abc");
+    assert!(
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 4)),
+        "three glyphs typed wait the caret one column past the last: {:?}",
+        drawn.text()
+    );
+    let typed = drawn.text();
+
+    pty.type_bytes(b"\x1b[D");
+    assert!(
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 3)),
+        "a step back along the draft takes the caret back over a glyph: {:?}",
+        drawn.text()
+    );
+    assert_eq!(
+        picture(&drawn.text()),
+        picture(&typed),
+        "and no glyph of the frame changed: the caret moved and the draft did not"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn a_screen_over_the_band_places_no_caret_and_hides_the_terminals_own() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"?");
+    assert!(
+        drawn.wait_until(|frame| showing(frame, "Backspace")),
+        "the keys screen is drawn over the band: {:?}",
+        drawn.text()
+    );
+
+    let frame = drawn.text();
+    assert!(
+        frame.ends_with("\u{1b}[?25l"),
+        "a screen takes the keys the draft behind it does not, so the frame places no caret and \
+         the terminal's own is hidden rather than left standing on a cell nobody can type in: \
+         {frame:?}"
+    );
+
+    pty.type_bytes(b"\x1b");
+    assert!(
+        drawn.wait_until(|frame| !showing(frame, "Backspace")),
+        "Esc gives the frame back: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn the_placed_caret_follows_the_row_the_draft_window_scrolls_to() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    let draft = "line one\rline two\rline three\rline four\rline five\rline six\rline seven\r\
+                 line eight\rline nine";
+    pty.type_bytes(format!("\u{1b}[200~{draft}\u{1b}[201~").as_bytes());
+
+    assert!(
+        drawn.wait_until(|frame| {
+            placed(frame).is_some_and(|(row, _)| row_of(frame, "line nine") == Some(row))
+        }),
+        "nine lines of draft are more rows than the band draws, so its window scrolls to the \
+         row the caret waits on: {:?}",
+        drawn.text()
+    );
+    let frame = drawn.text();
+    let last = runs(&frame)
+        .into_iter()
+        .rfind(|run| run.glyphs.contains("line nine"))
+        .expect("the last line of the draft is drawn");
+    let words = pen::cells(
+        &last.glyphs[..last
+            .glyphs
+            .find("line nine")
+            .expect("the words of the last line")],
+    );
+    assert_eq!(
+        placed(&frame),
+        Some((last.row, last.column + words + 9)),
+        "and the caret stands one column past the words of that last line, on the row they are \
+         drawn on: {frame:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn a_caret_at_the_boxes_right_margin_waits_on_that_column() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    let edge = runs(&drawn.text())
+        .into_iter()
+        .find(|run| run.glyphs.starts_with('\u{250c}'))
+        .expect("the box's edge is drawn on the boot frame");
+    let upright =
+        edge.column + u16::try_from(edge.glyphs.chars().count()).expect("a count of glyphs") - 1;
+    // A draft as wide as the box's room: the box less its two uprights and the two cells the gutter
+    // is set from.
+    let room = upright - pen::cells("  ") - 2;
+    let draft = format!("\u{1b}[200~{}\u{1b}[201~", "x".repeat(usize::from(room)));
+    pty.type_bytes(draft.as_bytes());
+
+    assert!(
+        drawn.wait_until(|frame| picture(frame)
+            .values()
+            .any(|row| row.matches('x').count() == usize::from(room))),
+        "the whole draft reached one row of the frame: {:?}",
+        drawn.text()
+    );
+    let frame = drawn.text();
+    assert_eq!(
+        placed(&frame).map(|(_, column)| column),
+        Some(upright - 1),
+        "a caret past the box's last column waits on the column just inside the right upright, \
+         which is drawn at {upright}: {frame:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+/// Whether the screen is given back with the terminal's own cursor shown on the way out: the paste
+/// report given up, then the cursor, and the screen left last, which is the order a shell reads.
+fn gave_back_showing_the_cursor(bytes: &[u8]) -> bool {
+    let given = bytes
+        .windows(b"\x1b[?2004l".len())
+        .rposition(|window| window == b"\x1b[?2004l");
+    given.is_some_and(|given| {
+        let tail = &bytes[given..];
+        matches!(
+            (at(tail, b"\x1b[?25h"), at(tail, b"\x1b[?1049l")),
+            (Some(shown), Some(screen)) if shown < screen
+        )
+    })
+}
+
+#[test]
+fn a_quit_gives_the_terminal_back_with_the_cursor_shown() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+    assert!(
+        drawn.wait_for(b"\x1b[?1049l"),
+        "the screen is given back: {:?}",
+        drawn.text()
+    );
+    assert!(
+        gave_back_showing_the_cursor(&drawn.bytes()),
+        "and the cursor is shown before the screen goes, so a shell is handed a caret it can \
+         see: {:?}",
+        drawn.text()
     );
 }
 
@@ -2067,6 +2363,11 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
     assert!(
         drawn.wait_for(b"\x1b[?1049l"),
         "the alternate screen is given back on a signal as it is on a panic: {:?}",
+        drawn.text()
+    );
+    assert!(
+        gave_back_showing_the_cursor(&drawn.bytes()),
+        "with the cursor shown, a signal's way out as a quit's: {:?}",
         drawn.text()
     );
     assert!(

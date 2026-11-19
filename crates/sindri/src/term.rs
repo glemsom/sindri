@@ -369,6 +369,7 @@ pub(crate) fn canvas_at(
 
 /// Paints the frame the view holds now. The buffer is painted first, because the ways a frame names
 /// are known only after it is painted and the backend must hold them before the frame is written.
+/// The cursor is placed last, so the cell it lands in is the one this frame drew.
 pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<Painted> {
     canvas.autoresize()?;
     let area = canvas.current_buffer_mut().area;
@@ -376,7 +377,12 @@ pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<Pain
     canvas.backend_mut().links(painted.links());
     canvas.backend_mut().sizes(painted.sizes());
     canvas.backend_mut().planes(painted.planes())?;
-    canvas.draw(|_| {})?;
+    let caret = painted.caret();
+    canvas.draw(|frame| {
+        if let Some(caret) = caret {
+            frame.set_cursor_position(caret);
+        }
+    })?;
     Ok(painted)
 }
 
