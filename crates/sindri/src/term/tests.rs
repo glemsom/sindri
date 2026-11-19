@@ -341,7 +341,10 @@ fn written(pty: &Pty, launch: bool) {
         false => {
             canvas
                 .draw(|frame| {
-                    view.paint(frame.area(), frame.buffer_mut());
+                    let told = view.paint(frame.area(), frame.buffer_mut());
+                    if let Some(caret) = told.caret() {
+                        frame.set_cursor_position(caret);
+                    }
                 })
                 .expect("a drawn frame");
         }
@@ -360,6 +363,62 @@ fn the_frame_the_launch_paints_is_the_frame_the_canvas_draws() {
         canvas.drawn(),
         "the launch paints the frame and asks the terminal for no cursor of its own: the frame \
          beside it is the frame"
+    );
+}
+
+/// Every sequence of `drawn` read from its `CSI` to the byte that ends it.
+fn csi(drawn: &str) -> Vec<&str> {
+    drawn
+        .match_indices("\u{1b}[")
+        .filter_map(|(at, _)| {
+            let params = &drawn[at + 2..];
+            let end = params.find(|glyph: char| ('\u{40}'..='\u{7e}').contains(&glyph))?;
+            Some(&drawn[at..at + 2 + end + 1])
+        })
+        .collect()
+}
+
+#[test]
+fn the_launch_places_the_cursors_cell_after_the_frames_cells() {
+    let pty = Pty::open();
+    let terminal =
+        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
+    let mut canvas = canvas_at(&terminal, painted_at()).expect("a canvas over it");
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default(),
+        Transcript::none(),
+    );
+    view.paste("a draft of mine");
+
+    let painted = paint(&mut canvas, &mut view).expect("a painted frame");
+    let drawn = pty.drawn();
+    let caret = painted
+        .caret()
+        .expect("a draft takes the keys, so the frame names a cell to place the cursor in");
+    // The terminal counts cells from one, and the pass counts them from none.
+    let placement = format!("\u{1b}[{};{}H", caret.y + 1, caret.x + 1);
+
+    assert!(
+        drawn.contains("\u{1b}[?25h"),
+        "the cursor is shown before it is placed, or the cell is one nobody sees: {drawn:?}"
+    );
+    assert!(
+        drawn.find("\u{1b}[?25h") < drawn.rfind(&placement),
+        "the show comes first, and then the move: {drawn:?}"
+    );
+    assert!(
+        drawn.ends_with(&placement),
+        "the placement is the last thing written, so it lands on the frame just painted and \
+         never on a stale one: {drawn:?}"
+    );
+    assert!(
+        !csi(&drawn).iter().any(|sequence| sequence.ends_with('q')),
+        "no cursor shape is asked for, so a reader sees the shape they chose: {drawn:?}"
+    );
+    assert!(
+        !drawn.contains("\u{1b}]12;"),
+        "and no cursor colour is asked for either: {drawn:?}"
     );
 }
 
@@ -620,6 +679,10 @@ fn a_panic_gives_the_terminal_back_before_the_guard_can() {
     assert!(
         drawn.contains(std::str::from_utf8(GIVE_BACK_SCREEN).expect("a printable sequence")),
         "the alternate screen was given back while the guard was still alive: {drawn:?}"
+    );
+    assert!(
+        drawn.contains("\u{1b}[?25h"),
+        "and the cursor is shown, so the shell gets a caret it can see: {drawn:?}"
     );
     assert!(
         drawn

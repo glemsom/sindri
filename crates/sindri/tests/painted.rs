@@ -5,7 +5,7 @@
 mod caps; // the terminals these frames are drawn on
 
 use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
@@ -603,5 +603,106 @@ fn a_frame_with_no_card_keeps_the_block_in_the_band_the_pass_handed_back() {
         caret_cell(&buffer, &palette, laid.composer),
         None,
         "and a screen is the whole frame with no draft in it, so no block is drawn there"
+    );
+}
+
+#[test]
+fn a_pass_hands_back_the_cell_the_draft_caret_waits_in() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("a draft of mine");
+    let (buffer, told) = painted_and_told(&mut view, 40, 12);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    let block = caret_cell(&buffer, &palette, laid.composer)
+        .expect("a draft takes the keys, so its block is drawn");
+
+    assert_eq!(
+        told.caret(),
+        Some(Position::new(block.0, block.1)),
+        "the cell the pass places the terminal's cursor in is the one it stamped the block \
+         in: {block:?}"
+    );
+
+    let mut rows = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    rows.paste("1\n2\n3\n4\n5");
+    let (buffer, told) = painted_and_told(&mut rows, 40, 12);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    assert_eq!(
+        caret_cell(&buffer, &palette, laid.composer),
+        Some((4, 8)),
+        "a five-row draft is drawn with its block one column past the gutter of its last row"
+    );
+    assert_eq!(
+        told.caret(),
+        Some(Position::new(4, 8)),
+        "and that row eight, column four is the cell the pass places the cursor in"
+    );
+}
+
+#[test]
+fn a_pass_under_a_card_hands_back_no_caret() {
+    let palette = Palette::TRUECOLOR;
+    let mut commands = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    commands.key(Key::Char('/'));
+    let (buffer, told) = painted_and_told(&mut commands, 60, 13);
+    let laid = told
+        .layout()
+        .expect("a pass under a card still laid the frame the card stands over");
+    assert!(laid.card.is_some(), "the commands card is drawn: {laid:?}");
+    assert_eq!(
+        caret_cell(&buffer, &palette, laid.composer),
+        None,
+        "and the card scrims the band, so no block is drawn in it"
+    );
+    assert_eq!(
+        told.caret(),
+        None,
+        "a cell a card holds is no cell the terminal's cursor is placed in"
+    );
+
+    let mut screen = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    screen.key(Key::Char('?'));
+    let (_, told) = painted_and_told(&mut screen, 120, 40);
+    assert_eq!(
+        told.caret(),
+        None,
+        "and a screen over the band places no cursor either, because no key reaches that draft"
+    );
+
+    let mut empty = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    let (buffer, told) = painted_and_told(&mut empty, 40, 12);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    let block =
+        caret_cell(&buffer, &palette, laid.composer).expect("the empty draft's block is drawn");
+    assert_eq!(
+        told.caret(),
+        Some(Position::new(block.0, block.1)),
+        "an empty draft with no screen hands back the blank cell its block stands on"
     );
 }
