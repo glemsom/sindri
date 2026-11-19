@@ -1,5 +1,5 @@
-//! What a golden frame cannot hold: the cell the draft's block stands in, which a fixture names by
-//! ink and never by position, and the bands under the cells, which a fixture cannot read at all.
+//! What a golden frame cannot hold: the cell the draft's caret waits in, which a frame's cells name by
+//! ink and the pass by a position, and the bands under the cells, which a fixture cannot read at all.
 
 use sindri_core::policy::Enforcement;
 

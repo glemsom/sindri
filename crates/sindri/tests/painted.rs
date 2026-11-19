@@ -533,32 +533,6 @@ fn the_caret_is_placed_in_the_band_the_pass_drew_and_not_in_one_counted_again() 
     );
 }
 
-/// The one cell of `area` that reads back as the mark: the block the draft's caret stands in, as the
-/// frame draws it rather than as the view counts it.
-fn caret_cell(buffer: &Buffer, palette: &Palette, area: Rect) -> Option<(u16, u16)> {
-    let mut found = None;
-    for y in area.y..area.bottom() {
-        for x in area.x..area.right() {
-            let cell = buffer.cell((x, y)).expect("a cell of the area");
-            if Look::of(cell, palette) != Some(Look::plain(Ink::Mark)) {
-                continue;
-            }
-            assert!(
-                found.is_none(),
-                "{area:?} carries one block and not two: {:?} and ({x}, {y})",
-                found
-            );
-            found = Some((x, y));
-        }
-    }
-    found
-}
-
-/// Whether `cell` is one the band `band` holds: a block is never a cell outside it.
-fn holds_cell(band: Rect, (x, y): (u16, u16)) -> bool {
-    (band.x..band.right()).contains(&x) && (band.y..band.bottom()).contains(&y)
-}
-
 #[test]
 fn a_frame_with_no_card_keeps_the_caret_placed_in_the_band_the_pass_handed_back() {
     let mut plain = View::of(
@@ -574,10 +548,9 @@ fn a_frame_with_no_card_keeps_the_caret_placed_in_the_band_the_pass_handed_back(
     assert_eq!(laid.card, None, "a draft alone draws no card: {laid:?}");
     let caret = told
         .caret()
-        .map(|at| (at.x, at.y))
         .expect("a draft takes the keys, so the pass places the caret in it");
     assert!(
-        holds_cell(laid.composer, caret),
+        laid.composer.contains(caret),
         "a frame with no card places the caret in the composer's band the pass handed back: \
          {caret:?} in {:?}",
         laid.composer
@@ -599,6 +572,27 @@ fn a_frame_with_no_card_keeps_the_caret_placed_in_the_band_the_pass_handed_back(
         None,
         "and a screen is the whole frame with no draft in it, so no caret is placed there"
     );
+}
+
+/// The one cell of `area` that reads back as the mark: the block the draft's caret stands in, as the
+/// frame draws it rather than as the view counts it.
+fn caret_cell(buffer: &Buffer, palette: &Palette, area: Rect) -> Option<(u16, u16)> {
+    let mut found = None;
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            let cell = buffer.cell((x, y)).expect("a cell of the area");
+            if Look::of(cell, palette) != Some(Look::plain(Ink::Mark)) {
+                continue;
+            }
+            assert!(
+                found.is_none(),
+                "{area:?} carries one block and not two: {:?} and ({x}, {y})",
+                found
+            );
+            found = Some((x, y));
+        }
+    }
+    found
 }
 
 #[test]
