@@ -206,11 +206,12 @@ impl Deltas for Quiet {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
-/// A front end that keeps the newest document it is handed, which is what a launch's own record
-/// says once a run has stopped.
+/// A front end that keeps the newest document and transcript it is handed, which is what a launch's
+/// own record says once a run has stopped.
 #[derive(Default)]
 struct Kept {
     document: Option<SessionDocument>,
+    transcript: Vec<Entry>,
 }
 
 impl Turns for Kept {
@@ -218,6 +219,7 @@ impl Turns for Kept {
 
     fn facts(&mut self, handed: Handed<'_>) {
         self.document = Some(handed.document.clone());
+        self.transcript = handed.transcript.to_vec();
     }
 }
 
@@ -278,6 +280,41 @@ fn a_launch_records_the_wire_the_model_and_the_boundary_it_runs() {
         figure.session.join("session.json").exists(),
         "the record the launch wrote is in the session it named"
     );
+}
+
+#[test]
+fn a_launch_hands_the_transcript_its_record_wrote() {
+    let homes = Homes::new();
+    let mut launch = Launch::open(
+        &homes.machine(),
+        &naming_wire(closed_wire()),
+        Enforcement::Unsafe,
+        FrontEnd::Terminal,
+    )
+    .ok()
+    .expect("a config naming a wire, a model and a key names a run");
+    let figure = launch.figure();
+
+    let mut kept = Kept::default();
+    match launch.drive("triage this", &[], &mut Quiet, &mut kept, Cancel::new()) {
+        Ok(_) => {}
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    }
+
+    let written = read_transcript(&figure.session).expect("the record the launch wrote");
+    assert_eq!(
+        serde_json::to_value(&kept.transcript).expect("a transcript is JSON"),
+        serde_json::to_value(written.entries()).expect("a transcript is JSON"),
+        "the transcript a launch hands is the one its record wrote"
+    );
+    let (Some(Entry::Prompt { .. }), Some(Entry::Stop { .. })) =
+        (kept.transcript.first(), kept.transcript.last())
+    else {
+        panic!(
+            "the transcript opens with the prompt it was asked and closes with the stop: {:?}",
+            kept.transcript
+        );
+    };
 }
 
 #[test]

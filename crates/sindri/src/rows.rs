@@ -239,7 +239,7 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
 /// is a way only where that judgement holds it openable, and a frame handed none lays every path as
 /// the words it was written as.
 pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Ground>) -> Vec<Row> {
-    laid(entry, cols, surface, ground, Fold::Closed).0
+    laid(entry, cols, surface, ground, Fold::Closed, None).0
 }
 
 /// The rows of one entry in the fold it is drawn as, and how many rows of it that fold keeps back:
@@ -250,6 +250,7 @@ fn laid(
     surface: &Surface,
     ground: Option<&Ground>,
     fold: Fold,
+    head: Option<&Head>,
 ) -> (Vec<Row>, Option<usize>) {
     let cols = cols.max(1);
     match entry {
@@ -285,7 +286,7 @@ fn laid(
             cols,
             fold,
         ),
-        Entry::Assistant { text, .. } => (answer_on(&text.to_string(), cols, None, surface), None),
+        Entry::Assistant { text, .. } => (answer_on(&text.to_string(), cols, head, surface), None),
         Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
         Entry::Prompt { text } => (asked(&text.to_string(), cols), None),
         Entry::Stop { stop } => (stopped(stop, cols), None),
@@ -532,8 +533,8 @@ fn answered(
         },
     ) = (call, result)
     else {
-        let (mut rows, _) = laid(call, cols, surface, ground, fold);
-        let (under, kept) = laid(result, cols, surface, ground, fold);
+        let (mut rows, _) = laid(call, cols, surface, ground, fold, None);
+        let (under, kept) = laid(result, cols, surface, ground, fold, None);
         rows.extend(under);
         return (rows, kept);
     };
@@ -773,6 +774,9 @@ pub struct Rows {
     /// Whether the stop this cache holds last is the one the turn in flight ended, which stands above
     /// it, and never the stop a run before it left.
     ended: bool,
+    /// The marker the newest answer the record holds wears, and none while the frame's marker heads
+    /// a turn in flight or a row of its own.
+    head: Option<Head>,
 }
 
 #[derive(Clone, Debug)]
@@ -809,11 +813,57 @@ impl Rows {
     /// Holds the stop a run ended on at the transcript's end: the words that run last said are theirs
     /// to keep above it, so the reason a run stopped is the last word of the run it ended.
     pub(crate) fn stopped(&mut self, stop: Stop) {
-        self.push(Entry::Stop { stop });
+        // The record draws the stop it wrote, so a stop the band already holds is that stop drawn
+        // once, and never another under it.
+        let drawn = self
+            .held
+            .iter()
+            .rev()
+            .find_map(|held| match &held.what {
+                What::Fact(entry) => Some(entry),
+                What::Live { .. } => None,
+            })
+            .is_some_and(|entry| matches!(entry, Entry::Stop { stop: drawn } if *drawn == stop));
+        if !drawn {
+            self.push(Entry::Stop { stop });
+        }
         self.ended = true;
     }
 
+    /// Lays `head` over the newest answer the record holds, and drops that answer's rows where it
+    /// moved: a marker that moved is laid again where it now stands. Nothing else wears it.
+    pub fn heading(&mut self, head: Option<Head>) {
+        if self.head == head {
+            return;
+        }
+        self.head = head;
+        if let Some(at) = self.newest_answer() {
+            self.held[at].rows = None;
+        }
+    }
+
+    /// The newest answer the record holds: the one entry a marker with no run in flight heads.
+    fn newest_answer(&self) -> Option<usize> {
+        self.held
+            .iter()
+            .rposition(|held| matches!(held.what, What::Fact(Entry::Assistant { .. })))
+    }
+
+    /// Whether the record holds an answer, which is the one row a marker with no run in flight can
+    /// head.
+    pub(crate) fn holds_answer(&self) -> bool {
+        self.newest_answer().is_some()
+    }
+
     pub fn push(&mut self, entry: Entry) {
+        // A newer answer takes the marker from the one that wore it, so that one is laid again
+        // without it: two answers never wear one marker.
+        if self.head.is_some()
+            && matches!(entry, Entry::Assistant { .. })
+            && let Some(at) = self.newest_answer()
+        {
+            self.held[at].rows = None;
+        }
         if let Entry::Result { turn, id, .. } = &entry
             && let Some(at) = self.pending(*turn, id.as_ref())
         {
@@ -985,7 +1035,13 @@ impl Rows {
         let held = &self.held[at];
         if held.rows.is_none() {
             let laid = match (&held.what, held.result.as_ref()) {
-                (What::Fact(entry), None) => Some(laid(entry, cols, surface, ground, held.fold)),
+                (What::Fact(entry), None) => {
+                    let head = match self.newest_answer() == Some(at) {
+                        true => self.head.as_ref(),
+                        false => None,
+                    };
+                    Some(laid(entry, cols, surface, ground, held.fold, head))
+                }
                 (What::Fact(call), Some(result)) => {
                     Some(answered(call, result, cols, surface, ground, held.fold))
                 }

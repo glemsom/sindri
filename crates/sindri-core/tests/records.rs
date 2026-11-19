@@ -327,6 +327,47 @@ fn the_prompt_the_run_was_asked_is_the_first_entry_of_its_transcript() {
 }
 
 #[test]
+fn a_record_keeps_the_entries_it_writes_in_its_transcript() {
+    let ground = Ground::new().holding("hunter2");
+    let session = ground.session();
+    let mut record = ground.record(&session);
+
+    record
+        .asked("the key is hunter2, so triage this")
+        .expect("a prompt is recorded");
+    record
+        .wrote(&Turn::answered(
+            1,
+            "the key is hunter2, so triage this",
+            "one file.",
+        ))
+        .expect("a turn is written whole");
+    record
+        .stopped(&State::Stopped(Stop::Final))
+        .expect("the stop is recorded");
+
+    // Compared as written, because a `Redacted` keeps the set it was made with and a reader of the
+    // file does not restore one.
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    assert_eq!(
+        serde_json::to_value(record.transcript()).expect("a transcript is JSON"),
+        serde_json::to_value(transcript.entries()).expect("a transcript is JSON"),
+        "the entries a record keeps are the ones it wrote"
+    );
+    let Some(Entry::Prompt { text }) = record.transcript().first() else {
+        panic!(
+            "the entries open with the prompt the run was asked: {:?}",
+            record.transcript()
+        );
+    };
+    assert_eq!(
+        text.to_string(),
+        format!("the key is {MASK}, so triage this"),
+        "and the words it keeps are masked as every other fact is"
+    );
+}
+
+#[test]
 fn every_turn_written_moves_the_turn_count_the_document_keeps() {
     let ground = Ground::new();
     let session = ground.session();

@@ -16,7 +16,7 @@ use crate::provider::copilot::Signing;
 use crate::provider::endpoint::Endpoint;
 use crate::provider::served::Listing;
 use crate::provider::{Ask, Client, Deltas, Route, Usage};
-use crate::records::{Facts, Record, SessionDocument};
+use crate::records::{Entry, Facts, Record, SessionDocument};
 use crate::run::{Cancel, Limits, Run, Shell, Turn};
 use crate::sandbox::{self, Proof};
 use crate::session::{self, Session};
@@ -334,10 +334,12 @@ impl Launch {
 }
 
 /// What a launch hands whoever drives it when its record moves: the session it writes, the document
-/// it holds, and the size the newest report measured against the window the reader named.
+/// and transcript it holds, and the size the newest report measured against the window the reader
+/// named.
 pub struct Handed<'a> {
     pub session: &'a Session,
     pub document: &'a SessionDocument,
+    pub transcript: &'a [Entry],
     pub measured: Usage,
     pub window: Option<u64>,
 }
@@ -361,6 +363,7 @@ fn hand(turns: &mut dyn Turns, launch: &Launch) {
     turns.facts(Handed {
         session: &launch.session,
         document: launch.record.document(),
+        transcript: launch.record.transcript(),
         measured: launch.measured,
         window: launch.context_window,
     });

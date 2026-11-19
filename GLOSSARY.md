@@ -291,5 +291,6 @@ context.
 
 **Transcript**: The record a frame draws — the entries a launch has written — with the row the reader
 stands at in it. One of the three values a frame is built from, beside **terminal capabilities**
-and the **frame facts** it draws: a launch hands over the tail and a reader moves the row.
+and the **frame facts** it draws: a launch hands over the tail, every entry the record writes after
+it is handed with those facts and drawn once, and a reader moves the row.
 _Avoid_: Log, scrollback, history (that one is a run's own turns)
