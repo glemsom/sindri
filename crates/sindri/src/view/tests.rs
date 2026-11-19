@@ -3523,7 +3523,7 @@ fn a_band_that_leaves_a_row_no_gutter_keeps_its_word_and_gives_up_the_thumb() {
 
 /// Whether any row of the frame holds `said`.
 fn holds(buffer: &Buffer, said: &str) -> bool {
-    (buffer.area.y..buffer.area.bottom()).any(|y| drawn_row(buffer, y).contains(said))
+    !rows_holding(buffer, said).is_empty()
 }
 
 #[test]
@@ -4647,7 +4647,7 @@ fn the_band_draws_each_exchange_the_record_holds() {
     }
 }
 
-/// How many rows of the frame `said` is drawn in.
+/// The rows of the frame `said` is drawn in.
 fn rows_holding(buffer: &Buffer, said: &str) -> Vec<String> {
     frame_rows(buffer)
         .into_iter()
@@ -5146,5 +5146,148 @@ fn the_band_scrolls_the_whole_conversation_the_record_holds() {
     assert!(
         notice.starts_with(&format!("{} rows back", view.scroll().back())),
         "the row above the composer counts the page off the whole conversation: {notice:?}"
+    );
+}
+
+#[test]
+fn a_run_that_ended_on_no_words_keeps_the_marker_on_a_row_of_its_own() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.handed(
+        Facts::default()
+            .asked()
+            .recorded(&document(GUID))
+            .transcribed(vec![
+                Entry::Prompt {
+                    text: SecretSet::default().redact("triage this"),
+                },
+                Entry::Assistant {
+                    turn: 1,
+                    text: SecretSet::default().redact(""),
+                },
+                Entry::Stop {
+                    stop: Stop::MaxTurns,
+                },
+            ])
+            .pulsed(Some(Pulse::settled(&Stop::MaxTurns, 5_000))),
+    );
+    let drawn = painted(&mut view, 100, 30);
+
+    assert!(
+        holds(&drawn, "✗ max_turns 5.0s"),
+        "an answer of no words takes no row to head, so the marker is given one of its own rather \
+         than drawn nowhere: {:?}",
+        frame_rows(&drawn)
+    );
+}
+
+#[test]
+fn an_answer_the_record_gained_takes_the_marker_from_the_one_before_it() {
+    let exchange = |answered: &str| {
+        Facts::default()
+            .asked()
+            .recorded(&document(GUID))
+            .transcribed(vec![Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact(answered),
+            }])
+            .pulsed(Some(Pulse::settled(&Stop::Final, 9_400)))
+    };
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.handed(exchange("the answer the record held first"));
+    painted(&mut view, 100, 30);
+
+    view.handed(
+        Facts::default()
+            .asked()
+            .recorded(&document(GUID))
+            .transcribed(vec![
+                Entry::Assistant {
+                    turn: 1,
+                    text: SecretSet::default().redact("the answer the record held first"),
+                },
+                Entry::Assistant {
+                    turn: 2,
+                    text: SecretSet::default().redact("the answer it holds now"),
+                },
+            ])
+            .pulsed(Some(Pulse::settled(&Stop::Final, 9_400))),
+    );
+    let drawn = painted(&mut view, 100, 30);
+
+    let older = rows_holding(&drawn, "the answer the record held first");
+    assert_eq!(
+        older.len(),
+        1,
+        "the answer that wore the marker is drawn once: {:?}",
+        frame_rows(&drawn)
+    );
+    assert!(
+        older[0].starts_with("  the answer"),
+        "and keeps the answer's own gutter, unmarked: {older:?}"
+    );
+    assert!(
+        holds(&drawn, "✓ 9.4s the answer it holds now"),
+        "and the answer the record gained wears it: {:?}",
+        frame_rows(&drawn)
+    );
+}
+
+#[test]
+fn a_word_a_run_says_after_slash_new_is_drawn_and_the_rows_it_superseded_are_not() {
+    let prompt = Entry::Prompt {
+        text: SecretSet::default().redact("the prompt the command superseded"),
+    };
+    let superseded = Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact("the answer the command superseded"),
+    };
+    let words = Entry::Assistant {
+        turn: 2,
+        text: SecretSet::default().redact("the answer the run said after it"),
+    };
+    let run = |entries: Vec<Entry>| {
+        Facts::default()
+            .asked()
+            .running()
+            .recorded(&document(GUID))
+            .transcribed(entries)
+    };
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.handed(run(vec![prompt.clone(), superseded.clone()]));
+    assert!(
+        holds(
+            &painted(&mut view, 100, 30),
+            "the answer the command superseded"
+        ),
+        "the band draws the record it was handed"
+    );
+
+    view.paste("/new");
+    assert_eq!(view.key(Key::Enter), Outcome::Edited, "`/new` is a frame");
+
+    view.handed(run(vec![prompt, superseded, words]));
+    let drawn = painted(&mut view, 100, 30);
+
+    assert!(
+        !holds(&drawn, "the answer the command superseded"),
+        "the rows the record already held are gone for good: {:?}",
+        frame_rows(&drawn)
+    );
+    assert!(
+        holds(&drawn, "the answer the run said after it"),
+        "and the word the run in flight says after it is the new band's: {:?}",
+        frame_rows(&drawn)
     );
 }

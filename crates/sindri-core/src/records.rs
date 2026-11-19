@@ -157,8 +157,8 @@ impl Record {
         &self.document
     }
 
-    /// The entries this record has written, in the order it wrote them: the transcript it wrote,
-    /// readable without the file.
+    /// The entries this record has written, in the order it wrote them: the transcript, readable
+    /// without the file.
     pub fn transcript(&self) -> &[Entry] {
         &self.entries
     }

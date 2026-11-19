@@ -842,7 +842,7 @@ impl Rows {
         }
     }
 
-    /// The newest answer the record holds: the entry a frame with no run in flight heads.
+    /// The newest answer the record holds: the one entry a marker with no run in flight heads.
     fn newest_answer(&self) -> Option<usize> {
         self.held
             .iter()
@@ -856,6 +856,14 @@ impl Rows {
     }
 
     pub fn push(&mut self, entry: Entry) {
+        // A newer answer takes the marker from the one that wore it, so that one is laid again
+        // without it: two answers never wear one marker.
+        if self.head.is_some()
+            && matches!(entry, Entry::Assistant { .. })
+            && let Some(at) = self.newest_answer()
+        {
+            self.held[at].rows = None;
+        }
         if let Entry::Result { turn, id, .. } = &entry
             && let Some(at) = self.pending(*turn, id.as_ref())
         {

@@ -326,9 +326,10 @@ impl Cards {
 }
 
 /// How far into the record's transcript a frame has read, and the session whose record it read it
-/// from: a record of another session is read from its first entry.
+/// from: `entries` is how many of them it has read, and a record of another session is read from
+/// its first.
 #[derive(Clone, Debug, Default)]
-struct Read {
+struct ReadMark {
     session: Option<String>,
     entries: usize,
 }
@@ -348,9 +349,9 @@ pub struct View {
     stack: Stack,
     /// Never one fact at a time: a frame's screen follows from the value it holds whole.
     facts: Facts,
-    /// How much of the record's transcript this frame has drawn, so the entries a pass owes it are
+    /// How far into the record's transcript this frame has read, so the entries a pass owes it are
     /// the entries after that mark and no row is drawn twice.
-    read: Read,
+    read: ReadMark,
     mark: Option<Mark>,
     /// The workspace's files, walked once and read by the count the edge hangs on its far corner.
     files: Files,
@@ -420,7 +421,7 @@ impl View {
             stack: Stack::default(),
             models: Models::new(),
             facts: Facts::default(),
-            read: Read::default(),
+            read: ReadMark::default(),
             mark: None,
             files: Files::default(),
             picker: Picker::default(),
@@ -1214,17 +1215,12 @@ impl View {
         // newest answer the record holds once the run is over — a band holding none gets a row.
         let head = self.facts.pulse().map(Pulse::head);
         let own = self.facts.live() || self.stream.says_answer() || !self.rows.holds_answer();
-        self.rows.heading(match own {
-            true => None,
-            false => head.clone(),
-        });
-        self.rows.live(
-            &self.stream,
-            match own {
-                true => head.as_ref(),
-                false => None,
-            },
-        );
+        let (recorded, streamed) = match own {
+            true => (None, head),
+            false => (head, None),
+        };
+        self.rows.heading(recorded);
+        self.rows.live(&self.stream, streamed.as_ref());
         let total = self.rows.height();
         // A window measured from the tail follows a run that grows; one the reader took back keeps
         // the rows it holds, so a row that lands is given back to the count rather than rolled
