@@ -1707,7 +1707,6 @@ impl Deltas for View {
     }
 
     fn reasoning(&mut self, fragment: &str) {
-        self.follows(Said::Reasoning, fragment);
         self.stream.reasoning(fragment);
     }
 }
