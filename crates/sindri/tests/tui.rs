@@ -3279,7 +3279,7 @@ fn every_document_a_frame_hands_its_terminal_stands_in_no_cell_of_the_picture() 
 fn a_document_a_frame_was_read_in_the_middle_of_paints_no_cell_of_its_words() {
     let drawn = "\u{1b}[1;1Htemp  41b0c336/tmp\u{1b}[3;1Hturns  2 / 250\u{1b}]7501;{\"phase\":\"do";
     assert_eq!(
-        picture(&drawn),
+        picture(drawn),
         rail_picture(),
         "a frame is read as fast as it is drawn and a document can arrive in halves: a terminal \
          holds one it is still reading and paints none of its words {drawn:?}"
