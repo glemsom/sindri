@@ -11,6 +11,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Modifier;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
@@ -456,6 +457,21 @@ fn frame(workspace: &Path, text: &str, draws: bool) -> View {
         Transcript::of(vec![Entry::Assistant {
             turn: 1,
             text: SecretSet::default().redact(text),
+        }]),
+    )
+}
+
+/// The same frame drawn on `caps`: one line of transcript over a workspace to measure, so what a
+/// terminal of its own colours is handed for the band is the whole of what the test reads.
+fn inked(caps: Capabilities, workspace: &Path) -> View {
+    View::of(
+        caps,
+        sindri::facts::Facts::default()
+            .asked()
+            .working(workspace.to_path_buf(), None),
+        Transcript::of(vec![Entry::Assistant {
+            turn: 1,
+            text: SecretSet::default().redact("hello"),
         }]),
     )
 }
@@ -1462,6 +1478,134 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
 }
 
 #[test]
+fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = inked(caps::greys(), &workspace);
+    let area = Rect::new(0, 0, 80, 24);
+    let mut cells = Buffer::empty(area);
+    let painted = view.paint(area, &mut cells);
+    let palette = view.capabilities().palette();
+    assert_eq!(
+        palette,
+        Palette::ANSI,
+        "a terminal that names no twenty-four-bit colour draws the design in its greys"
+    );
+    let band = painted.layout().expect("a laid out frame").composer;
+    let ground = composer_plane(&painted);
+    let (width, height) = ground.pixels().dimensions();
+    let head = channels(palette.step(0, band.height)).expect("the ladder's head in pixels");
+    let foot = channels(palette.step(band.height - 1, band.height)).expect("its foot in pixels");
+    assert_eq!(
+        head,
+        [78, 78, 78],
+        "the ladder this palette spells the band's head with is a grey"
+    );
+    assert_eq!(
+        ground.pixels().get_pixel(width - 1, 0).0[..3],
+        head,
+        "the plane's top row is the head the palette's own ladder gives the band"
+    );
+    assert_ne!(
+        ground.pixels().get_pixel(width - 1, 0).0[..3],
+        [36, 49, 63],
+        "and not the head of the design's truecolour ramp"
+    );
+    for y in 0..height {
+        let pixel = ground.pixels().get_pixel(width - 1, y);
+        assert_eq!(
+            (pixel[0], pixel[1], pixel[2]),
+            (pixel[1], pixel[1], pixel[1]),
+            "the plane's last column is grey at pixel row {y}, far from the caret's glow"
+        );
+    }
+    let bottom = ground.pixels().get_pixel(width - 1, height - 1);
+    for at in 0..3 {
+        assert!(
+            bottom[at].abs_diff(foot[at]) < bottom[at].abs_diff(head[at]),
+            "the plane's bottom row {bottom:?} is nearer the ladder's foot {foot:?} than its head \
+             {head:?}"
+        );
+    }
+}
+
+#[test]
+fn a_truecolour_frames_band_is_drawn_at_the_pixels_it_was_drawn_at() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(&workspace, "hello", true);
+    let area = Rect::new(0, 0, 80, 24);
+    let mut cells = Buffer::empty(area);
+    let painted = view.paint(area, &mut cells);
+    let band = painted.layout().expect("a laid out frame").composer;
+    let palette = view.capabilities().palette();
+    let ground = composer_plane(&painted);
+    let (width, height) = ground.pixels().dimensions();
+    assert_eq!(
+        (width, height),
+        (
+            u32::from(band.width) * cell().width(),
+            u32::from(band.height) * cell().height()
+        ),
+        "the plane covers the band's own rect, at the pixels of the cell it is drawn on"
+    );
+    let column = width - 1;
+    let head = ground.pixels().get_pixel(column, 0).0;
+    assert_eq!(
+        head[..3],
+        [36, 49, 63],
+        "the plane's top row is the head the design's ramp has always spelled"
+    );
+    let foot = channels(palette.edge(Edge::Shadow)).expect("a shadow in pixels");
+    let bottom = ground.pixels().get_pixel(column, height - 1).0;
+    for at in 0..3 {
+        assert!(
+            bottom[at].abs_diff(foot[at]) <= 1,
+            "the plane's bottom row {bottom:?} is the foot {foot:?} the design's ramp has always \
+             ended on, to the pixel a ramp samples it at"
+        );
+    }
+    let mid = ground.pixels().get_pixel(column, height / 2).0;
+    for at in 0..3 {
+        assert!(
+            mid[at] > bottom[at] && mid[at] < head[at],
+            "and half way down the plane is a pixel strictly between the two ends: {mid:?}"
+        );
+    }
+}
+
+#[test]
+fn the_bands_glow_still_falls_off_under_the_caret() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(&workspace, "hello", true);
+    view.paste("forge");
+    let area = Rect::new(0, 0, 80, 24);
+    let mut cells = Buffer::empty(area);
+    let painted = view.paint(area, &mut cells);
+    let band = painted.layout().expect("a laid out frame").composer;
+    let caret = (band.y..band.bottom())
+        .flat_map(|y| (band.x..band.right()).map(move |x| (x, y)))
+        .find(|(x, y)| cells[(*x, *y)].modifier.contains(Modifier::REVERSED))
+        .expect("the caret's block stands in the band");
+    let ground = composer_plane(&painted);
+    let (width, height) = ground.pixels().dimensions();
+    let row = height / 10;
+    let near = ground
+        .pixels()
+        .get_pixel(
+            u32::from(caret.0 - band.x) * cell().width() + cell().width() / 2,
+            row,
+        )
+        .0;
+    let far = ground.pixels().get_pixel(width - 1, row).0;
+    for at in 0..3 {
+        assert!(
+            near[at] > far[at],
+            "pixel channel {at} of the cell the caret waits in is lighter than a cell far from \
+             it: {near:?} against {far:?}"
+        );
+    }
+}
+
+#[test]
 fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     let mut view = railed(true, false);
     let area = Rect::new(0, 0, 120, 40);
@@ -1557,13 +1701,39 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
         "a palette that draws no colour is handed no plane over the rail: its band is the flat \
          band it already had"
     );
+}
+
+#[test]
+fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_composer() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = inked(caps::uncoloured(), &workspace);
+    let area = Rect::new(0, 0, 80, 24);
+    let mut cells = Buffer::empty(area);
+    let painted = view.paint(area, &mut cells);
+    let palette = view.capabilities().palette();
+    assert_eq!(
+        palette,
+        Palette::SLOTS,
+        "a terminal told NO_COLOR draws the reader's own slots"
+    );
     assert!(
         painted
             .planes()
             .iter()
-            .any(|plane| plane.id() == PlaneId::Composer),
-        "and the composer's plane is what it always was, drawn in pixels of the design's own"
+            .all(|plane| plane.id() != PlaneId::Composer),
+        "a palette that draws no colour is handed no plane over the composer: the band drawn in \
+         its place is the flat one the frame already had"
     );
+    let band = painted.layout().expect("a laid out frame").composer;
+    for row in 0..band.height {
+        let (x, y) = (band.x + band.width / 2, band.y + row);
+        assert_eq!(
+            cells[(x, y)].bg,
+            palette.raised(row, band.height).bg.unwrap(),
+            "row {row} of the band stands on the ramp the cells are drawn in, and on no ground a \
+             plane was claimed over"
+        );
+    }
 }
 
 #[test]

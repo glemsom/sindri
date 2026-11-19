@@ -1036,14 +1036,7 @@ impl View {
             );
         }
         self.notice_band(layout.notice, buffer);
-        self.composer_band(layout.composer, layout.queue, buffer);
-        if self.capabilities.pictures().draws()
-            && let Some(plane) = Plane::composer(
-                layout.composer,
-                self.capabilities.cell(),
-                self.caret(layout.composer, layout.queue),
-            )
-        {
+        if let Some(plane) = self.composer_band(layout.composer, layout.queue, buffer) {
             painted.planes.push(plane);
         }
         self.footer(layout.footer, buffer);
@@ -1294,28 +1287,36 @@ impl View {
         whole_row(buffer, area, area.y, &spans, &self.capabilities.palette());
     }
 
-    /// The composer is a raised surface and not a flat band: the lit edge along its top row, the
-    /// shadow under its bottom, and the ground ramping between them — one claim per row, so no cell
-    /// loses the ink it was written in.
-    fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) {
-        if self.capabilities.pictures().draws() {
-            pen::claim(buffer, band, self.capabilities.palette().ground(None));
-        } else {
-            for row in 0..band.height {
-                pen::claim(
-                    buffer,
-                    Rect {
-                        y: band.y.saturating_add(row),
-                        height: 1,
-                        ..band
-                    },
-                    self.capabilities.palette().raised(row, band.height),
-                );
+    /// The composer's band drawn, and the plane it stands on where this terminal places one and the
+    /// palette spells a pixel: its rows ramp between the edge and the shadow beneath them cell by
+    /// cell where no plane stands under them, one claim per row, so no cell loses its own ink.
+    fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) -> Option<Plane> {
+        let palette = self.capabilities.palette();
+        let plane = self
+            .capabilities
+            .pictures()
+            .cell()
+            .and_then(|cell| Plane::composer(band, cell, self.caret(band, queue), &palette));
+        match plane.is_some() {
+            true => pen::claim(buffer, band, palette.ground(None)),
+            false => {
+                for row in 0..band.height {
+                    pen::claim(
+                        buffer,
+                        Rect {
+                            y: band.y.saturating_add(row),
+                            height: 1,
+                            ..band
+                        },
+                        palette.raised(row, band.height),
+                    );
+                }
             }
         }
         self.composer_inside(band, queue, buffer);
         self.block(band, queue, None, buffer);
         self.composer_box(band, buffer);
+        plane
     }
 
     /// The draft, its placeholder, the rows it keeps back and the queue's prompts, all drawn in the
