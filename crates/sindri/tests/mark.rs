@@ -63,8 +63,7 @@ fn painted(view: &mut View) -> (Buffer, Layout) {
     (completed.buffer.clone(), laid)
 }
 
-/// The cells the highlight covers, read off the rows the transcript was given: the block the draft's
-/// caret stands in reads back as the mark too, and it is no cell of a mark run.
+/// The cells the highlight covers, read off the rows the transcript was given.
 fn highlighted(buffer: &Buffer, palette: &Palette, area: Rect) -> String {
     let mut rows: Vec<String> = Vec::new();
     for y in area.y..area.bottom() {

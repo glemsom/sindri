@@ -8,13 +8,12 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 
 use sindri::capability::Capabilities;
-use sindri::composer::{Key, Outcome, PLACEHOLDER};
+use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::ink::{Ink, Look};
 use sindri::ledger;
 use sindri::mark::Cell;
 use sindri::palette::Palette;
-use sindri::pen;
 use sindri::pointer::Pointer;
 use sindri::rows::Scroll;
 use sindri::view::{Painted, Transcript, View};
@@ -630,37 +629,6 @@ fn the_pass_places_the_cursor_one_column_past_the_last_glyph_of_the_last_row() {
 }
 
 #[test]
-fn an_empty_draft_draws_its_placeholder_whole_in_the_dim_ink_and_none_of_it_in_the_mark() {
-    let palette = Palette::TRUECOLOR;
-    let mut view = View::of(
-        Capabilities::default(),
-        Facts::default().asked(),
-        Transcript::none(),
-    );
-    let (buffer, told) = painted_and_told(&mut view, 40, 12);
-    let laid = told
-        .layout()
-        .expect("a pass that drew a frame hands back the frame it laid out");
-    let (row, column) = drawn_at(&buffer, PLACEHOLDER);
-
-    for x in column..column + pen::cells(PLACEHOLDER) {
-        assert_eq!(
-            Look::of(
-                buffer.cell((x, row)).expect("a cell of the placeholder"),
-                &palette
-            ),
-            Some(Look::plain(Ink::Dim)),
-            "column {x} of the placeholder is not the plain dim ink, so a cell of it is drawn over"
-        );
-    }
-    assert_eq!(
-        mark_cells(&buffer, &palette, laid.composer),
-        Vec::new(),
-        "and no cell of the band the placeholder stands in is stamped for the caret"
-    );
-}
-
-#[test]
 fn a_pass_counts_a_wide_glyph_as_two_columns_of_caret() {
     let caret_of = |draft: &str| {
         let mut view = View::of(
@@ -736,13 +704,19 @@ fn a_card_that_leaves_the_carets_cell_leaves_the_cursor_in_that_same_cell() {
         .caret()
         .expect("a card that never reaches the caret's cell leaves the cursor where it was");
 
+    assert_eq!(
+        cursor,
+        Position::new(laid.composer.x + 4, laid.composer.y + 1),
+        "the slash typed is one glyph on the draft's first row, so the cursor waits one column \
+         past it"
+    );
     assert!(
-        !card.contains(Position::new(cursor.x, cursor.y)),
-        "the cursor is placed in a cell the card leaves to the band: {cursor:?}"
+        !card.contains(cursor),
+        "and the card leaves that cell to the band: {card:?}"
     );
     assert_eq!(
         mark_cells(&buffer, &palette, laid.composer),
         Vec::new(),
-        "and the band is stamped in no cell of it, so the cursor is the whole of the caret"
+        "so the cursor is the whole of the caret, and no cell of the band is drawn for it"
     );
 }

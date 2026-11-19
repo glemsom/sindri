@@ -146,9 +146,9 @@ A strip of rows the frame shares out — the transcript's, the composer's, the r
 stands off the tail, and the footer's — each drawn in the rows it was given and never past them. A
 queued prompt has no band of its own: it stands in the composer's, under the draft, one prompt to a
 row and the newest at the foot. What a band cannot hold it counts: the rows of a draft past the
-composer's ceiling, and the prompts of a queue past the rows it was given. The draft's caret is the
-terminal's own **caret**, placed in the cell the draft waits in, and no cell of the band is stamped
-for it: no answer, prompt or card carries one.
+composer's ceiling, and the prompts of a queue past the rows it was given. The draft's **caret** is
+no cell of the band: it is placed in the cell the draft waits in wherever a reader can type there,
+and no answer, prompt or card carries one.
 _Avoid_: Region, pane, panel, viewport
 
 **Plane**:
@@ -267,9 +267,9 @@ _Avoid_: Mouse, cursor (that one is the terminal's own), hover
 
 **Caret**:
 The terminal's own cursor, and never a cell of a frame: placed in the cell the draft waits in
-wherever a reader can type there, and nowhere while a screen stands over the band or on a cell a
+wherever a reader can type there, nowhere while a screen stands over the band, and never on a cell a
 card holds. Its shape, colour and blink are the reader's own settings, and no frame says them.
-_Avoid_: Block (that one was a cell of the band), terminal cursor, cursor blink
+_Avoid_: Block (a caret is no cell), insertion point
 
 **Terminal capabilities**:
 What the terminal a frame draws on can do — the cell it measures a picture against, the colours it
