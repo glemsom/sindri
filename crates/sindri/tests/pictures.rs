@@ -66,12 +66,12 @@ fn boundary_is_clear(drawn: &RgbaImage) -> bool {
     top_and_bottom && sides
 }
 
-/// The alpha from which a pixel is the figure the picture draws rather than the plate under it.
+/// The alpha at which a pixel is the head a picture draws rather than the glow it gives off.
 const HEAD: u8 = 64;
 
-/// The columns and rows the head stands at: its left, top, right and bottom, or nothing at all
-/// when the picture lights no figure of its own.
-fn head(drawn: &RgbaImage) -> Option<(u32, u32, u32, u32)> {
+/// The columns and rows the head of `drawn` stands at, or nothing where the picture lights no
+/// figure of its own.
+fn head(drawn: &RgbaImage) -> Option<Rect> {
     let (width, height) = drawn.dimensions();
     let mut bounds: Option<(u32, u32, u32, u32)> = None;
     for y in 0..height {
@@ -87,7 +87,39 @@ fn head(drawn: &RgbaImage) -> Option<(u32, u32, u32, u32)> {
             });
         }
     }
-    bounds
+    bounds.map(|(left, top, right, bottom)| {
+        Rect::new(
+            left as u16,
+            top as u16,
+            (right - left + 1) as u16,
+            (bottom - top + 1) as u16,
+        )
+    })
+}
+
+/// Whether `pixel` is the flat blue a picture was laid on: its blue at the top, red and green far
+/// under it.
+fn field(pixel: &Rgba<u8>) -> bool {
+    pixel[2] >= 250 && pixel[0] <= 64 && pixel[1] <= 64
+}
+
+/// Whether every pixel of `drawn` more than a cell from `head` carries no light at all: the glow a
+/// head gives off reaches a cell past its edge, and the margin past that is the band's plane.
+fn margins_clear(drawn: &RgbaImage, head: Rect, cell: CellSize) -> bool {
+    let (width, height) = drawn.dimensions();
+    let across = cell.width() as u16;
+    let down = cell.height() as u16;
+    let grown = Rect::new(
+        head.x.saturating_sub(across),
+        head.y.saturating_sub(down),
+        head.width.saturating_add(across * 2),
+        head.height.saturating_add(down * 2),
+    );
+    (0..width).all(|x| {
+        (0..height).all(|y| {
+            grown.contains(Position::new(x as u16, y as u16)) || drawn.get_pixel(x, y)[3] == 0
+        })
+    })
 }
 
 #[test]
@@ -162,58 +194,50 @@ fn a_decoded_picture_is_transparent_on_every_side_of_its_footprint() {
 }
 
 #[test]
-fn a_face_made_into_the_footprint_the_rail_gives_it_carries_its_light_in_the_head_alone() {
-    let rail = face::over_rail(Rail::columns(SCREEN.0), &carried(true))
-        .expect("a terminal that places pictures is given the face");
-    let whole = face::measure(Ceiling::across(80), &carried(true))
-        .expect("a terminal that places pictures is given the face");
+fn a_face_cut_for_the_rail_carries_no_field_under_the_head() {
+    let shipped = image::load_from_memory(include_bytes!("../face.png"))
+        .expect("the face travels in the binary, so it decodes")
+        .to_rgba8();
 
-    for measured in [rail, whole] {
-        let drawn = measured
-            .rasterise(cell())
-            .expect("the face travels in the binary, so it decodes");
-        let (width, height) = drawn.dimensions();
-        let (left, top, right, bottom) =
-            head(&drawn).expect("the picture still keeps light inside the head");
+    assert_eq!(
+        shipped.dimensions(),
+        (795, 989),
+        "the face keeps the extent it was cut at, so the rail reserves the footprint it reserved \
+         before and the face draws at the size it drew at"
+    );
+    let head = head(&shipped).expect("the picture still keeps light inside the head");
 
-        for y in 0..height {
-            for x in 0..width {
-                if drawn.get_pixel(x, y)[3] == 0 {
-                    continue;
-                }
-                assert!(
-                    x + cell().width() >= left
-                        && x <= right + cell().width()
-                        && y + cell().height() >= top
-                        && y <= bottom + cell().height(),
-                    "the light at column {x} of row {y} stands more than a cell outside the head, \
-                     and a glow is a glow rather than the field the picture was cut from"
-                );
-            }
-        }
-
-        for y in 0..top.saturating_sub(cell().height()) {
-            for x in 0..width {
-                assert!(
-                    drawn.get_pixel(x, y)[3] == 0,
-                    "the row above the head carries light at column {x}, and the band plane is \
-                     what the frame has there"
-                );
-            }
-        }
-
-        let below = right + cell().width() + 1..width;
-        let beside = (0..left.saturating_sub(cell().width())).chain(below);
-        for x in beside {
-            for y in 0..height {
-                assert!(
-                    drawn.get_pixel(x, y)[3] == 0,
-                    "the column beside the head carries light at row {y}, and the band plane is \
-                     what the frame has there"
-                );
-            }
-        }
+    for (x, y, pixel) in shipped.enumerate_pixels() {
+        assert!(
+            pixel[3] == 0 || !field(pixel),
+            "the pixel at column {x} of row {y} is the flat blue the picture was laid on, and it \
+             keeps alpha {} of it: made into the pixels of its footprint, the whole block would \
+             read a shade bluer than the band around it",
+            pixel[3]
+        );
     }
+    assert!(
+        margins_clear(&shipped, head, cell()),
+        "the rows above the head and the columns beside it carry light, and the band's plane is \
+         what stands there"
+    );
+}
+
+#[test]
+fn a_face_made_into_the_footprint_the_rail_gives_it_carries_its_light_in_the_head_alone() {
+    let measured = face::over_rail(Rail::columns(SCREEN.0), &carried(true))
+        .expect("a terminal that places pictures is given the face");
+    let drawn = measured
+        .rasterise(cell())
+        .expect("the face travels in the binary, so it decodes");
+    let (cols, rows) = (measured.cols(), measured.rows());
+    let head = head(&drawn).expect("the picture still keeps light inside the head");
+
+    assert!(
+        margins_clear(&drawn, head, cell()),
+        "the face drawn over {cols} by {rows} cells carries light more than a cell outside the \
+         head, in the margin the field filled: the band's plane is what the frame has there"
+    );
 }
 
 #[test]
