@@ -3960,8 +3960,8 @@ fn a_card_that_takes_a_query_places_the_caret_past_the_last_glyph_typed_at_it() 
     );
 }
 
-#[test]
-fn the_models_card_places_the_caret_the_same_way() {
+/// The `/model` screen open over an empty frame: the other card whose list has a query.
+fn model_card() -> View {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -3973,8 +3973,12 @@ fn the_models_card_places_the_caret_the_same_way() {
         Outcome::Served,
         "`/model` opens the screen that lists the names the wire serves"
     );
+    view
+}
 
-    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+#[test]
+fn the_models_card_places_the_caret_the_same_way() {
+    let (buffer, told) = painted_and_told(&mut model_card(), 120, 40);
     let (drawn, column) = place_of(&buffer, "query: ");
     let body = card_body(&told);
     let (x, y) = caret_of(&told).expect("the models screen takes the glyphs typed at it");
@@ -3991,25 +3995,77 @@ fn the_models_card_places_the_caret_the_same_way() {
 }
 
 #[test]
-fn a_typed_glyph_moves_the_cards_caret_one_column_and_an_erasure_one_back() {
-    let (mut view, _workspace) = picking();
-    let (_, waiting) = painted_and_told(&mut view, 120, 40);
-    let (x, y) = caret_of(&waiting).expect("the picker takes the glyphs typed at it");
+fn a_typed_glyph_moves_the_caret_of_every_card_whose_list_has_a_query() {
+    let (picker, _workspace) = picking();
+    for (screen, mut view) in [("the picker", picker), ("the models screen", model_card())] {
+        let (_, queried) = painted_and_told(&mut view, 120, 40);
+        let (x, y) =
+            caret_of(&queried).unwrap_or_else(|| panic!("{screen} takes the glyphs typed at it"));
 
-    view.key(Key::Char('a'));
-    let (_, typed) = painted_and_told(&mut view, 120, 40);
+        view.key(Key::Char('a'));
+        let (_, typed) = painted_and_told(&mut view, 120, 40);
+        assert_eq!(
+            caret_of(&typed),
+            Some((x + 1, y)),
+            "a glyph typed at the query of {screen} waits the caret one column on"
+        );
+
+        view.key(Key::Backspace);
+        let (_, erased) = painted_and_told(&mut view, 120, 40);
+        assert_eq!(
+            caret_of(&erased),
+            Some((x, y)),
+            "and erasing it takes the caret of {screen} one column back, with no glyph left \
+             under it"
+        );
+    }
+}
+
+#[test]
+fn a_card_that_takes_no_key_places_no_caret() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("/stats");
     assert_eq!(
-        caret_of(&typed),
-        Some((x + 1, y)),
-        "a glyph typed at the query waits the caret one column on"
+        view.key(Key::Enter),
+        Outcome::Edited,
+        "`/stats` opens the ledger, which lays its facts out whole"
     );
 
-    view.key(Key::Backspace);
-    let (_, erased) = painted_and_told(&mut view, 120, 40);
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert!(
+        told.layout().is_some_and(|laid| laid.card.is_some()),
+        "the ledger is drawn on a card of its own"
+    );
     assert_eq!(
-        caret_of(&erased),
-        Some((x, y)),
-        "and erasing it takes the caret one column back, with no glyph left under it"
+        caret_of(&told),
+        None,
+        "no key is typed at it and no row of it waits, so the card places no caret"
+    );
+}
+
+#[test]
+fn a_card_that_types_a_value_with_no_query_row_places_no_caret() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.open_settings(&Config::default());
+
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert!(
+        told.layout().is_some_and(|laid| laid.card.is_some()),
+        "the settings screen is drawn on a card"
+    );
+    assert_eq!(
+        caret_of(&told),
+        None,
+        "its glyphs land in the value of the row the reader is on and in no query row, so the \
+         card places no caret"
     );
 }
 

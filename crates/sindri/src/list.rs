@@ -10,7 +10,7 @@ use crate::rows::wrap;
 const GAP: u16 = 2;
 
 /// The words a list's query is typed after.
-const QUERY: &str = "query: ";
+pub const QUERY: &str = "query: ";
 
 /// The glyph before the row a reader is on, in every list a card draws: one mark, because every
 /// screen that lists says the same thing with it.
@@ -57,8 +57,8 @@ impl ScreenRow {
         }
     }
 
-    /// The same row, waiting for the glyphs typed at it `column` columns in from its first cell.
-    pub fn waiting(self, column: u16) -> ScreenRow {
+    /// The same row, holding the cell the caret waits in `column` cells in from its first one.
+    pub fn holding(self, column: u16) -> ScreenRow {
         ScreenRow {
             caret: Some(column),
             ..self
@@ -215,14 +215,12 @@ impl List<'_> {
     pub fn rows(&self) -> Vec<ScreenRow> {
         let mut rows = Vec::new();
         if let Some(typed) = self.query {
-            let column = pen::cells(QUERY) + pen::cells(typed);
-            rows.push(
-                ScreenRow::cut(vec![
-                    (QUERY.to_owned(), Look::plain(Ink::Dim)),
-                    (typed.to_owned(), Look::plain(Ink::Muted)),
-                ])
-                .waiting(column),
-            );
+            let spans = vec![
+                (QUERY.to_owned(), Look::plain(Ink::Dim)),
+                (typed.to_owned(), Look::plain(Ink::Muted)),
+            ];
+            let column = pen::width(&spans);
+            rows.push(ScreenRow::cut(spans).holding(column));
         }
         if let Some(words) = self.said {
             rows.push(whole(words, Look::plain(Ink::Dim)));

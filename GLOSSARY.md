@@ -148,7 +148,7 @@ queued prompt has no band of its own: it stands in the composer's, under the dra
 row and the newest at the foot. What a band cannot hold it counts: the rows of a draft past the
 composer's ceiling, and the prompts of a queue past the rows it was given. The **caret** is no cell
 of a band: it is placed in the cell the draft waits in wherever a reader can type there, and in the
-query row of a card that takes a glyph. No answer and no prompt carries one.
+query row of a card that draws one. No answer and no prompt carries one.
 _Avoid_: Region, pane, panel, viewport
 
 **Plane**:
@@ -267,10 +267,10 @@ _Avoid_: Mouse, cursor (that one is the terminal's own), hover
 
 **Caret**:
 The terminal's own cursor, and never a cell of a frame: placed in the cell the draft waits in
-wherever a reader can type there, and in the query row of a card that takes a glyph, past the last
-glyph typed at it and kept to the last column of the card's body where the query is cut there.
-Nowhere while a screen that takes no glyph stands over the band. Its shape, colour and blink are the
-reader's own settings, and no frame says them.
+wherever a reader can type there, and in the query row of a card that draws one, past the last glyph
+typed at it and kept to the last column of the card's body where the query is cut there. A card that
+draws no query row places none. Its shape, colour and blink are the reader's own settings, and no
+frame says them.
 _Avoid_: Block (a caret is no cell), insertion point
 
 **Terminal capabilities**:

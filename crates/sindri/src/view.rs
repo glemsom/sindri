@@ -1082,11 +1082,10 @@ impl View {
             &self.capabilities.palette(),
         );
         painted.presses = body.paint(held, buffer, &self.capabilities.palette());
-        painted.caret = match self.stack.modal() {
-            Some(_) => body.caret(held),
-            None => self.caret(layout.composer, layout.queue, Some(bounds)),
-        }
-        .map(|(x, y)| Position::new(x, y));
+        painted.caret = body
+            .caret(held)
+            .or_else(|| self.caret(layout.composer, layout.queue, Some(bounds)))
+            .map(|(x, y)| Position::new(x, y));
         layout.card = Some(held);
         painted.layout = Some(layout);
         painted
@@ -1579,7 +1578,7 @@ impl View {
 
     /// The cell the draft's caret stands in: none while a screen stands over the band, because the
     /// draft behind it takes no key, and none on a cell the card a draft opens holds. A screen's own
-    /// caret is the body's to place, and the composer's plane asks this for its glow alone.
+    /// caret is its body's to place; a frame with no card, and the composer's plane's glow, ask this.
     fn caret(&self, band: Rect, queue: Rect, card: Option<Rect>) -> Option<(u16, u16)> {
         if self.stack.modal().is_some() {
             return None;
