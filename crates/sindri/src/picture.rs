@@ -295,8 +295,8 @@ fn feathered(pixels: &mut image::RgbaImage, cell: CellSize) {
     }
 }
 
-/// How far in from an edge a picture's alpha fades: a `cell` of it, and never more than a [`SHARE`]
-/// of `extent`, so nothing is drawn at all only where there is nothing to fade.
+/// How far in from an edge a picture's alpha fades: a `cell` of it, never more than a [`SHARE`] of
+/// `extent`, and never less than the one pixel that carries a footprint's edge to nothing.
 fn feather(cell: u32, extent: u32) -> u32 {
     cell.min(extent / SHARE).max(1)
 }
@@ -304,9 +304,8 @@ fn feather(cell: u32, extent: u32) -> u32 {
 /// How much of a pixel's alpha survives `at` along an axis `extent` long: none of it on the
 /// outermost pixel, all of it `span` pixels in, and a linear fall between.
 fn fade(at: u32, extent: u32, span: u32) -> f32 {
-    at.min(extent.saturating_sub(1).saturating_sub(at))
-        .min(span) as f32
-        / span as f32
+    let distance = at.min(extent.saturating_sub(1).saturating_sub(at));
+    distance.min(span) as f32 / span as f32
 }
 
 fn measured(svg: &str) -> Result<(u32, u32), Refusal> {
