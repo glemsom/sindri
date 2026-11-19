@@ -96,11 +96,14 @@ impl Picture {
         let drawing = match &self.drawn {
             Drawn::Drawing(svg) => svg.clone(),
             Drawn::File(path) if is_svg(path) => std::fs::read_to_string(path).ok()?,
-            Drawn::File(path) => return Some(raster(image::open(path).ok()?, (width, height))),
+            Drawn::File(path) => {
+                return Some(raster(image::open(path).ok()?, (width, height), cell));
+            }
             Drawn::Carried(bytes) => {
                 return Some(raster(
                     image::load_from_memory(bytes).ok()?,
                     (width, height),
+                    cell,
                 ));
             }
         };
@@ -251,11 +254,52 @@ fn header(bytes: &[u8]) -> Result<(u32, u32), Refusal> {
     reader.into_dimensions().map_err(Refusal::unreadable)
 }
 
-/// A raster at the pixels of the footprint it was measured into.
-fn raster(picture: image::DynamicImage, (width, height): (u32, u32)) -> image::RgbaImage {
-    picture
+/// An alpha this faint is the wash an editor leaves over the picture's rectangle rather than
+/// light of the picture, so it is dropped where the band must show through.
+const FLOOR: u8 = 16;
+
+/// A raster at the pixels of the footprint it was measured into, its alpha carried to nothing at
+/// that footprint's edge so the band beneath it reads as one plane rather than as a rectangle.
+/// Only the alpha is shaped: the colour decodes as the file held it.
+fn raster(
+    picture: image::DynamicImage,
+    (width, height): (u32, u32),
+    cell: CellSize,
+) -> image::RgbaImage {
+    let mut pixels = picture
         .resize_exact(width, height, image::imageops::FilterType::Triangle)
-        .to_rgba8()
+        .to_rgba8();
+    shaped(&mut pixels, cell);
+    pixels
+}
+
+/// The pixels' alpha floored, then feathered to nothing across the outermost pixel of each axis
+/// and back to whole one span in.
+fn shaped(pixels: &mut image::RgbaImage, cell: CellSize) {
+    let (width, height) = pixels.dimensions();
+    let across = span(width, cell.width());
+    let down = span(height, cell.height());
+    for (x, y, pixel) in pixels.enumerate_pixels_mut() {
+        let light = pixel[3];
+        pixel[3] = if light < FLOOR {
+            0
+        } else {
+            let feather = ramp(x, width, across) * ramp(y, height, down);
+            (f32::from(light) * feather).round() as u8
+        };
+    }
+}
+
+/// How far the feather reaches in from an edge: one cell, or a quarter of the footprint when the
+/// footprint is narrower than a cell, and never nothing.
+fn span(extent: u32, cell: u32) -> u32 {
+    cell.min(extent / 4).max(1)
+}
+
+/// How much of a pixel's alpha survives at `at` along an axis `extent` long: none on the outermost
+/// pixel, whole by `reach` pixels in, and linear between.
+fn ramp(at: u32, extent: u32, reach: u32) -> f32 {
+    at.min(extent - 1 - at).min(reach) as f32 / reach as f32
 }
 
 fn measured(svg: &str) -> Result<(u32, u32), Refusal> {
