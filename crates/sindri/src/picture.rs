@@ -90,17 +90,20 @@ impl Picture {
 
     /// The pixels of this picture at the cells it was measured into, or nothing when what it was
     /// measured from cannot be decoded: a file gone, or bytes that are not a picture. A raster is
-    /// scaled by a filter that averages rather than drops, because nearest loses whole letters.
+    /// averaged rather than dropped, because nearest loses letters, and it loses its plate.
     pub fn rasterise(&self, cell: CellSize) -> Option<image::RgbaImage> {
         let (width, height) = self.pixels(cell);
         let drawing = match &self.drawn {
             Drawn::Drawing(svg) => svg.clone(),
             Drawn::File(path) if is_svg(path) => std::fs::read_to_string(path).ok()?,
-            Drawn::File(path) => return Some(raster(image::open(path).ok()?, (width, height))),
+            Drawn::File(path) => {
+                return Some(raster(image::open(path).ok()?, (width, height), cell));
+            }
             Drawn::Carried(bytes) => {
                 return Some(raster(
                     image::load_from_memory(bytes).ok()?,
                     (width, height),
+                    cell,
                 ));
             }
         };
@@ -251,11 +254,58 @@ fn header(bytes: &[u8]) -> Result<(u32, u32), Refusal> {
     reader.into_dimensions().map_err(Refusal::unreadable)
 }
 
-/// A raster at the pixels of the footprint it was measured into.
-fn raster(picture: image::DynamicImage, (width, height): (u32, u32)) -> image::RgbaImage {
-    picture
+/// An alpha this faint is the plate a picture is made on rather than light of the picture, so it is
+/// dropped and the band under the picture shows through.
+const FLOOR: u8 = 16;
+
+/// The most of an axis a picture's alpha fades over, as a share of it: a picture only a few cells
+/// wide keeps a middle with light in it.
+const SHARE: u32 = 4;
+
+/// A raster at the pixels of the footprint it was measured into, losing its plate and carrying its
+/// alpha to nothing at that footprint's edge so the band beneath reads as one plane. Only the alpha
+/// is shaped: the colour decodes as the file held it.
+fn raster(
+    picture: image::DynamicImage,
+    (width, height): (u32, u32),
+    cell: CellSize,
+) -> image::RgbaImage {
+    let mut pixels = picture
         .resize_exact(width, height, image::imageops::FilterType::Triangle)
-        .to_rgba8()
+        .to_rgba8();
+    feathered(&mut pixels, cell);
+    pixels
+}
+
+/// The pixels of a decoded raster with their plate floored away and what is left of their alpha
+/// fading out toward the footprint's edge, so the band under a picture shows through wherever the
+/// picture has no light to give.
+fn feathered(pixels: &mut image::RgbaImage, cell: CellSize) {
+    let (width, height) = pixels.dimensions();
+    let across = feather(cell.width(), width);
+    let down = feather(cell.height(), height);
+    for (x, y, pixel) in pixels.enumerate_pixels_mut() {
+        let light = pixel[3];
+        pixel[3] = match light < FLOOR {
+            true => 0,
+            false => {
+                (f32::from(light) * fade(x, width, across) * fade(y, height, down)).round() as u8
+            }
+        };
+    }
+}
+
+/// How far in from an edge a picture's alpha fades: a `cell` of it, never more than a [`SHARE`] of
+/// `extent`, and never less than the one pixel that carries a footprint's edge to nothing.
+fn feather(cell: u32, extent: u32) -> u32 {
+    cell.min(extent / SHARE).max(1)
+}
+
+/// How much of a pixel's alpha survives `at` along an axis `extent` long: none of it on the
+/// outermost pixel, all of it `span` pixels in, and a linear fall between.
+fn fade(at: u32, extent: u32, span: u32) -> f32 {
+    let distance = at.min(extent.saturating_sub(1).saturating_sub(at));
+    distance.min(span) as f32 / span as f32
 }
 
 fn measured(svg: &str) -> Result<(u32, u32), Refusal> {

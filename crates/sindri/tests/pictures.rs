@@ -54,6 +54,17 @@ fn carried(draws: bool) -> Surface {
     Surface::of(None, cell(), draws, false)
 }
 
+/// Whether every alpha on the boundary of `drawn` is nothing, which is where its footprint is
+/// decided: a pixel left there is the plate the band used to read as.
+fn boundary_is_clear(drawn: &RgbaImage) -> bool {
+    let (width, height) = drawn.dimensions();
+    let top_and_bottom =
+        (0..width).all(|x| drawn.get_pixel(x, 0)[3] == 0 && drawn.get_pixel(x, height - 1)[3] == 0);
+    let sides =
+        (0..height).all(|y| drawn.get_pixel(0, y)[3] == 0 && drawn.get_pixel(width - 1, y)[3] == 0);
+    top_and_bottom && sides
+}
+
 #[test]
 fn a_face_that_travels_in_the_binary_is_measured_from_its_own_header() {
     let measured = face::measure(Ceiling::across(80), &carried(true))
@@ -97,6 +108,71 @@ fn a_face_too_tall_for_its_band_gives_way_on_rows_and_never_on_shape() {
         (shape - 795.0 / 989.0).abs() < 0.1,
         "and what is drawn keeps the face's shape of {}, not the band's: {shape}",
         795.0 / 989.0
+    );
+}
+
+#[test]
+fn a_decoded_picture_is_transparent_on_every_side_of_its_footprint() {
+    let measured = face::measure(Ceiling::new(40, 12), &carried(true))
+        .expect("a terminal that places pictures is given the face");
+    let (width, height) = measured.pixels(cell());
+
+    let face = measured
+        .rasterise(cell())
+        .expect("the face travels in the binary, so it decodes");
+
+    assert_eq!(
+        face.dimensions(),
+        (width, height),
+        "the pixels of the picture are still the footprint it was measured into"
+    );
+    assert!(
+        boundary_is_clear(&face),
+        "no pixel on the boundary of the footprint keeps any alpha"
+    );
+    assert!(
+        face.pixels().any(|pixel| pixel[3] > 0),
+        "and the picture still carries light inside that boundary"
+    );
+}
+
+#[test]
+fn a_picture_loses_the_plate_it_was_made_on_and_keeps_the_light_it_carries() {
+    let root = tempfile::tempdir().expect("a directory to stand in");
+    let shape = (400, 200);
+    let mut lit = RgbaImage::from_pixel(shape.0, shape.1, Rgba([120, 80, 200, 5]));
+    for y in 60..140 {
+        for x in 100..300 {
+            lit.put_pixel(x, y, Rgba([120, 80, 200, 200]));
+        }
+    }
+    lit.save(root.path().join("shot.png"))
+        .expect("a picture on disk");
+
+    let measured = picture::measure("shot.png", Ceiling::across(80), &surface(root.path()))
+        .expect("a picture inside the workspace is one the reader may point at");
+    let drawn = measured
+        .rasterise(cell())
+        .expect("a png inside the workspace decodes");
+
+    assert_eq!(
+        drawn.dimensions(),
+        shape,
+        "a picture already at the pixels of its footprint is not scaled"
+    );
+    assert_eq!(
+        drawn.get_pixel(200, 100)[3],
+        200,
+        "the light of the block is exactly what the file held, however faint the plate beside it"
+    );
+    assert_eq!(
+        drawn.get_pixel(20, 20)[3],
+        0,
+        "and the plate of alpha 5 is floored away wherever it lies"
+    );
+    assert!(
+        boundary_is_clear(&drawn),
+        "so the band shows through all four sides of the footprint"
     );
 }
 
