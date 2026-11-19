@@ -62,8 +62,8 @@ impl Plane {
                 let depth = t / 0.65;
                 (-(distance * distance + depth * depth) * 2.0).exp() * 22.0
             });
-            let channel = |head: u8, foot: u8| {
-                (f64::from(head) * (1.0 - t) + f64::from(foot) * t + light).clamp(0.0, 255.0) as u8
+            let channel = |top: u8, bottom: u8| {
+                (f64::from(top) * (1.0 - t) + f64::from(bottom) * t + light).clamp(0.0, 255.0) as u8
             };
             image::Rgba([
                 channel(head[0], foot[0]),
