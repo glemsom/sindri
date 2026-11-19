@@ -90,8 +90,7 @@ impl Picture {
 
     /// The pixels of this picture at the cells it was measured into, or nothing when what it was
     /// measured from cannot be decoded: a file gone, or bytes that are not a picture. A raster is
-    /// scaled by a filter that averages rather than drops, because nearest loses whole letters, and
-    /// its plate is taken away; a drawing is rasterised with the alpha it was rendered with.
+    /// averaged rather than dropped, because nearest loses letters, and it loses its plate.
     pub fn rasterise(&self, cell: CellSize) -> Option<image::RgbaImage> {
         let (width, height) = self.pixels(cell);
         let drawing = match &self.drawn {
@@ -263,10 +262,9 @@ const FLOOR: u8 = 16;
 /// wide keeps a middle with light in it.
 const SHARE: u32 = 4;
 
-/// A raster at the pixels of the footprint it was measured into, with the plate it was made on
-/// taken away and its alpha carried to nothing at that footprint's edge, so the band beneath it
-/// reads as one plane rather than as a rectangle. Only the alpha is shaped: the colour decodes as
-/// the file held it.
+/// A raster at the pixels of the footprint it was measured into, losing its plate and carrying its
+/// alpha to nothing at that footprint's edge so the band beneath reads as one plane. Only the alpha
+/// is shaped: the colour decodes as the file held it.
 fn raster(
     picture: image::DynamicImage,
     (width, height): (u32, u32),
