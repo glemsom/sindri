@@ -111,6 +111,7 @@ pub struct Record {
     document: SessionDocument,
     secrets: SecretSet,
     transcript: File,
+    entries: Vec<Entry>,
     statuses: File,
     turns_before: u32,
 }
@@ -142,6 +143,7 @@ impl Record {
             document,
             secrets: facts.secrets.clone(),
             transcript,
+            entries: Vec::new(),
             statuses,
             turns_before: 0,
         };
@@ -153,6 +155,12 @@ impl Record {
     }
     pub fn document(&self) -> &SessionDocument {
         &self.document
+    }
+
+    /// The entries this record has written, in the order it wrote them: the transcript it wrote,
+    /// readable without the file.
+    pub fn transcript(&self) -> &[Entry] {
+        &self.entries
     }
     /// A run joins the session this record keeps: the session is in flight again, and the end the
     /// run before it reached is not this one's. Its turns are numbered after those the session
@@ -245,7 +253,9 @@ impl Record {
     }
     fn append(&mut self, entry: Entry) -> Result<(), RecordError> {
         let path = self.session.directory().join(TRANSCRIPT);
-        write_line(&mut self.transcript, &path, &entry)
+        write_line(&mut self.transcript, &path, &entry)?;
+        self.entries.push(entry);
+        Ok(())
     }
     pub fn finish(&mut self) -> Result<(), SessionError> {
         self.session.finish()

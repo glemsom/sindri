@@ -565,9 +565,17 @@ impl<'a> Loop<'a> {
                     self.view.handed(self.view.facts().clone().railed(rail));
                     painted = true;
                 }
-                Report::Record(document) => {
-                    self.view
-                        .handed(self.view.facts().clone().recorded(&document));
+                Report::Record {
+                    document,
+                    transcript,
+                } => {
+                    self.view.handed(
+                        self.view
+                            .facts()
+                            .clone()
+                            .recorded(&document)
+                            .transcribed(transcript),
+                    );
                     painted = true;
                 }
                 // No cell: the transcript already drew the turn it keeps.

@@ -12,7 +12,7 @@ use sindri_core::config::Config;
 use sindri_core::launch::{Handed, Launch, Machine, Turns, served};
 use sindri_core::provider::Deltas;
 use sindri_core::provider::served::Listing;
-use sindri_core::records::{SessionDocument, Told};
+use sindri_core::records::{Entry, SessionDocument, Told};
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Cancel, Stop, Turn};
 
@@ -125,7 +125,10 @@ pub(crate) enum Report {
     Reasoning(String),
     Told(Told),
     Facts(Facts),
-    Record(SessionDocument),
+    Record {
+        document: SessionDocument,
+        transcript: Vec<Entry>,
+    },
     Kept(Turn),
     Stopped {
         stop: Stop,
@@ -173,7 +176,10 @@ impl Turns for Reports {
         self.push(Report::Facts(
             Facts::of(handed.session, handed.document).measured(&handed.measured, handed.window),
         ));
-        self.push(Report::Record(handed.document.clone()));
+        self.push(Report::Record {
+            document: handed.document.clone(),
+            transcript: handed.transcript.to_vec(),
+        });
     }
 
     fn kept(&mut self, kept: &Turn) {

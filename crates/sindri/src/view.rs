@@ -325,6 +325,14 @@ impl Cards {
     }
 }
 
+/// How far into the record's transcript a frame has read, and the session whose record it read it
+/// from: a record of another session is read from its first entry.
+#[derive(Clone, Debug, Default)]
+struct Read {
+    session: Option<String>,
+    entries: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct View {
     rows: Rows,
@@ -340,6 +348,9 @@ pub struct View {
     stack: Stack,
     /// Never one fact at a time: a frame's screen follows from the value it holds whole.
     facts: Facts,
+    /// How much of the record's transcript this frame has drawn, so the entries a pass owes it are
+    /// the entries after that mark and no row is drawn twice.
+    read: Read,
     mark: Option<Mark>,
     /// The workspace's files, walked once and read by the count the edge hangs on its far corner.
     files: Files,
@@ -409,6 +420,7 @@ impl View {
             stack: Stack::default(),
             models: Models::new(),
             facts: Facts::default(),
+            read: Read::default(),
             mark: None,
             files: Files::default(),
             picker: Picker::default(),
@@ -694,6 +706,9 @@ impl View {
     /// stopped: it reaches its own stop reason, and joins nothing.
     fn start_over(&mut self) -> Outcome {
         self.rows = Rows::new();
+        // The words the record already holds are the conversation `/new` emptied, so the mark moves
+        // to the document's end and no row of them comes back.
+        self.read.entries = self.facts.transcript().map_or(0, <[Entry]>::len);
         self.scroll = Scroll::Tail;
         self.stream = Stream::new();
         self.facts = self.facts.clone().pulsed(None);
@@ -937,6 +952,37 @@ impl View {
             self.files = Files::of(facts.workspace());
         }
         self.facts = facts;
+        self.read_record();
+    }
+
+    /// Draws the entries the record's transcript holds that this frame has not drawn yet: the words
+    /// a record wrote are the band's from then on, whatever the run in flight says after them, and
+    /// the splash screen goes with the first of them.
+    fn read_record(&mut self) {
+        let (Some(record), Some(transcript)) = (self.facts.record(), self.facts.transcript())
+        else {
+            return;
+        };
+        // A record of another session is a transcript of its own, read from its first entry and
+        // drawn under the rows already here rather than over them.
+        let session = record.session.clone();
+        let from = match self.read.session.as_deref() == Some(session.as_str()) {
+            true => self.read.entries,
+            false => 0,
+        };
+        let fresh = transcript[from..].to_vec();
+        self.read.session = Some(session);
+        self.read.entries = transcript.len();
+        if fresh.is_empty() {
+            return;
+        }
+        // The words the stream was drawing are rows once the record holds them: one word in one row.
+        self.rows.retire();
+        self.stream = Stream::new();
+        for entry in fresh {
+            self.rows.push(entry);
+        }
+        self.facts = self.facts.clone().asked();
     }
 
     pub fn facts(&self) -> &Facts {
@@ -1163,10 +1209,22 @@ impl View {
         // surface reaches the cache before a window is measured.
         self.rows.retune(self.surface());
         self.rows.stand(self.facts.ground());
-        // Laid into the rows it heads rather than painted over them: the answer's first row is
-        // wrapped around it, and the prose it introduces is never cut by the mark.
+        // Laid into the rows it heads, so the prose the marker introduces is never cut by it. It
+        // heads the turn in flight's answer while that has said a word or the run is live, and the
+        // newest answer the record holds once the run is over — a band holding none gets a row.
         let head = self.facts.pulse().map(Pulse::head);
-        self.rows.live(&self.stream, head.as_ref());
+        let own = self.facts.live() || self.stream.says_answer() || !self.rows.holds_answer();
+        self.rows.heading(match own {
+            true => None,
+            false => head.clone(),
+        });
+        self.rows.live(
+            &self.stream,
+            match own {
+                true => head.as_ref(),
+                false => None,
+            },
+        );
         let total = self.rows.height();
         // A window measured from the tail follows a run that grows; one the reader took back keeps
         // the rows it holds, so a row that lands is given back to the count rather than rolled

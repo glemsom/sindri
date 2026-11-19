@@ -3,10 +3,11 @@
 //! whole, beside the screen those facts are drawn as.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use sindri_core::open::Ground;
 use sindri_core::provider::served::Listing;
-use sindri_core::records::SessionDocument;
+use sindri_core::records::{Entry, SessionDocument};
 
 use crate::ledger::{self, Boot};
 use crate::pulse::Pulse;
@@ -22,6 +23,7 @@ pub struct Facts {
     home: Option<PathBuf>,
     served: Option<Listing>,
     record: Option<SessionDocument>,
+    transcript: Option<Arc<[Entry]>>,
     pulse: Option<Pulse>,
     live: bool,
     focus: Focus,
@@ -47,6 +49,7 @@ impl Default for Facts {
             home: None,
             served: None,
             record: None,
+            transcript: None,
             pulse: None,
             live: false,
             focus: Focus::Focused,
@@ -93,6 +96,13 @@ impl Facts {
 
     pub fn recorded(mut self, document: &SessionDocument) -> Facts {
         self.record = Some(document.clone());
+        self
+    }
+
+    /// The same value with the entries the record it names has written: a band draws the whole
+    /// conversation, not the run in flight alone.
+    pub fn transcribed(mut self, entries: Vec<Entry>) -> Facts {
+        self.transcript = Some(Arc::from(entries));
         self
     }
 
@@ -164,6 +174,10 @@ impl Facts {
 
     pub fn record(&self) -> Option<&SessionDocument> {
         self.record.as_ref()
+    }
+
+    pub fn transcript(&self) -> Option<&[Entry]> {
+        self.transcript.as_deref()
     }
 
     pub fn pulse(&self) -> Option<&Pulse> {
