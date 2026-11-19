@@ -2,13 +2,12 @@
 //! each run of cells from the left edge, so a row of blanks keeps its width in a file an editor may
 //! touch. The files are `.snap` because `insta` compares and blesses them and takes no other extension.
 
-use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
@@ -20,7 +19,7 @@ use sindri::pen::{self, Clip};
 use sindri::pictures::PLACEHOLDER;
 use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
-use sindri::view::{Painted, Transcript, View};
+use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::open::Ground;
 use sindri_core::policy::{Boundary, Enforcement, PolicyRecord};
@@ -64,8 +63,6 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
     insta::with_settings!({ snapshot_path => FIXTURES, prepend_module_to_snapshot => false }, {
         insta::assert_snapshot!(fixture.as_str(), drawn);
     });
-
-    frame.assert_caret(&fixture);
 
     // The line `make check` ends on, written on a line of its own: libtest has left the
     // test's name unterminated on the terminal while this test ran.
@@ -1149,9 +1146,7 @@ fn answer(turn: u32, text: &str) -> Entry {
 pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
     let fixture = format!("{name}-{cols}x{rows}");
     let taken = painted(name, cols, rows, Capabilities::default().reporting(true));
-    taken.assert_caret(&fixture);
     let none = painted(name, cols, rows, Capabilities::default().reporting(false));
-    none.assert_caret(&fixture);
 
     assert_eq!(
         taken.text(name),
@@ -1162,31 +1157,15 @@ pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
     println!("\ncheck: frame {fixture} pointer ... ok");
 }
 
-/// A frame painted on a headless screen: the cells it left, the palette it was drawn in, and what
-/// the pass told the terminal of the cursor it placed.
+/// A frame painted on a headless screen: the cells it left, and the palette it was drawn in.
 struct Frame {
     cells: Buffer,
     palette: Palette,
-    told: Painted,
 }
 
 impl Frame {
     fn text(&self, name: &str) -> String {
         text(name, &self.palette, &self.cells)
-    }
-
-    /// Holds what the frame's cells name as its caret against the cell the pass placed the terminal's
-    /// cursor in: a golden frame holds none of its cells' positions, so the two must be read apart.
-    fn assert_caret(&self, fixture: &str) {
-        let band = self
-            .told
-            .layout()
-            .expect("a pass that drew a frame hands back the frame it laid out")
-            .composer;
-        let named = named_caret(&self.cells, &self.palette, band);
-        if let Err(disagreed) = carets_agree(named, self.told.caret()) {
-            panic!("frame {fixture}: {disagreed}");
-        }
     }
 }
 
@@ -1196,55 +1175,14 @@ fn painted(name: &str, cols: u16, rows: u16, capabilities: Capabilities) -> Fram
     let palette = view.capabilities().palette();
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
-    let mut told = Painted::none();
     let completed = terminal
         .draw(|frame| {
-            told = view.paint(frame.area(), frame.buffer_mut());
+            view.paint(frame.area(), frame.buffer_mut());
         })
         .expect("the frame is painted");
     Frame {
         cells: completed.buffer.clone(),
         palette,
-        told,
-    }
-}
-
-/// The one cell of `area` drawn in the mark ink: the caret as a frame's cells name it. A drag
-/// highlight wears the same ink over the transcript, which is no row of the composer's band.
-fn named_caret(buffer: &Buffer, palette: &Palette, area: Rect) -> Option<(u16, u16)> {
-    let mut named = None;
-    for y in area.y..area.bottom() {
-        for x in area.x..area.right() {
-            let cell = buffer.cell((x, y)).expect("a cell of the area");
-            if Look::of(cell, palette) != Some(Look::plain(Ink::Mark)) {
-                continue;
-            }
-            assert!(
-                named.is_none(),
-                "{area:?} carries one caret and not two: {:?} and ({x}, {y})",
-                named
-            );
-            named = Some((x, y));
-        }
-    }
-    named
-}
-
-/// Why the two readings are no one caret: a cell the pass never placed the cursor in, a caret the
-/// frame's cells never name, or two cells that are not one.
-fn carets_agree(named: Option<(u16, u16)>, placed: Option<Position>) -> Result<(), String> {
-    let placed = placed.map(|at| (at.x, at.y));
-    match (named, placed) {
-        (Some(named), Some(placed)) if named != placed => Err(format!(
-            "its cells name the caret at {named:?} where the pass placed it at {placed:?}"
-        )),
-        (Some(named), None) => Err(format!(
-            "its cells name a caret at {named:?} that the pass never placed the cursor in"
-        )),
-        (None, Some(placed)) => Err(format!(
-            "the pass placed the cursor at {placed:?} in a cell its cells name no caret in"
-        )),
-        _ => Ok(()),
     }
 }
 
@@ -1418,42 +1356,4 @@ fn a_cell_wearing_two_faces_is_written_and_read_back_as_the_one_name_it_has() {
     );
     let row = row_of(written).expect("the row the fixture wrote is the row it reads back");
     assert_eq!(row.looks, [emphasis, linked]);
-}
-
-#[test]
-fn a_frame_whose_caret_cell_and_placed_cell_disagree_is_no_fixture() {
-    let mut frame = painted("typing", 120, 40, Capabilities::default());
-    frame.assert_caret("typing-120x40");
-
-    let band = frame
-        .told
-        .layout()
-        .expect("a pass that drew a frame hands back the frame it laid out")
-        .composer;
-    let named =
-        named_caret(&frame.cells, &frame.palette, band).expect("a draft is drawn with a caret");
-    pen::stamp(
-        &mut frame.cells,
-        named.0,
-        named.1,
-        Ink::Plain.style(&frame.palette),
-    );
-
-    let caught = panic::catch_unwind(AssertUnwindSafe(|| frame.assert_caret("typing-120x40")));
-    assert!(
-        caught.is_err(),
-        "a frame whose cells stop naming the caret the pass placed is no fixture"
-    );
-    assert!(
-        carets_agree(Some(named), None).is_err(),
-        "a caret the frame's cells name and the pass never placed is no fixture"
-    );
-    assert!(
-        carets_agree(None, frame.told.caret()).is_err(),
-        "a caret the pass placed in a cell the frame's cells never name is no fixture"
-    );
-    assert!(
-        carets_agree(Some(named), Some(Position::new(named.0 + 1, named.1))).is_err(),
-        "two cells that are not one cell are no fixture"
-    );
 }

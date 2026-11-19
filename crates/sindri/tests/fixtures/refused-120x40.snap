@@ -40,6 +40,6 @@ refused at 120x40
 34 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
 35 |  cannot create the sandbox: bubblewrap is on PATH                                                                      | muted:50 plain:70
 36 |┌prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────28 chars┐| accent+faint:111 muted:8 accent+faint:1
-37 |│› why does the retry test fail                                                                                        │| dim:1 accent:2 plain:28 mark:1 plain:87 dim:1
+37 |│› why does the retry test fail                                                                                        │| dim:1 accent:2 plain:116 dim:1
 38 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120
 39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47

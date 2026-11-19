@@ -1060,7 +1060,7 @@ impl View {
             self.highlight(share.transcript, buffer, drawn.span());
             self.note(&mut painted, drawn);
             painted.caret = self
-                .caret_cell(layout.composer, layout.queue, None)
+                .caret(layout.composer, layout.queue, None)
                 .map(|(x, y)| Position::new(x, y));
             painted.layout = Some(layout);
             return painted;
@@ -1082,11 +1082,8 @@ impl View {
             &self.capabilities.palette(),
         );
         painted.presses = body.paint(held, buffer, &self.capabilities.palette());
-        // A card's scrim strips the faces the band was drawn with, so a carded frame stamps its block
-        // again — and never on a cell the card itself holds.
-        self.block(layout.composer, layout.queue, Some(bounds), buffer);
         painted.caret = self
-            .caret_cell(layout.composer, layout.queue, Some(bounds))
+            .caret(layout.composer, layout.queue, Some(bounds))
             .map(|(x, y)| Position::new(x, y));
         layout.card = Some(held);
         painted.layout = Some(layout);
@@ -1302,11 +1299,12 @@ impl View {
     /// cell where no plane stands under them, one claim per row, so no cell loses its own ink.
     fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) -> Option<Plane> {
         let palette = self.capabilities.palette();
+        let caret = self.caret(band, queue, None);
         let plane = self
             .capabilities
             .pictures()
             .cell()
-            .and_then(|cell| Plane::composer(band, cell, self.caret(band, queue), &palette));
+            .and_then(|cell| Plane::composer(band, cell, caret, &palette));
         match plane.is_some() {
             true => pen::claim(buffer, band, palette.ground(None)),
             false => {
@@ -1324,7 +1322,6 @@ impl View {
             }
         }
         self.composer_inside(band, queue, buffer);
-        self.block(band, queue, None, buffer);
         self.composer_box(band, buffer);
         plane
     }
@@ -1578,29 +1575,9 @@ impl View {
         }
     }
 
-    /// Stamps the mark ink on the cell the draft's caret stands in.
-    fn block(&self, band: Rect, queue: Rect, card: Option<Rect>, buffer: &mut Buffer) {
-        let Some((x, y)) = self.caret_cell(band, queue, card) else {
-            return;
-        };
-        pen::stamp(buffer, x, y, Ink::Mark.style(&self.capabilities.palette()));
-    }
-
-    /// That cell, unless a card holds it: a card scrims the band and grounds its own box, so a caret
-    /// on one of its cells would be on the card and not on the draft.
-    fn caret_cell(&self, band: Rect, queue: Rect, card: Option<Rect>) -> Option<(u16, u16)> {
-        let (x, y) = self.caret(band, queue)?;
-        match card.is_some_and(|card| {
-            (card.x..card.right()).contains(&x) && (card.y..card.bottom()).contains(&y)
-        }) {
-            true => None,
-            false => Some((x, y)),
-        }
-    }
-
-    /// The cell the draft's caret stands in, and nothing while a screen stands over the band: the
-    /// draft behind it takes no key, so a block there would claim a cell the reader cannot type into.
-    fn caret(&self, band: Rect, queue: Rect) -> Option<(u16, u16)> {
+    /// The cell the draft's caret stands in: none while a screen stands over the band, because the
+    /// draft behind it takes no key, and none on a cell a card holds, which the reader cannot type in.
+    fn caret(&self, band: Rect, queue: Rect, card: Option<Rect>) -> Option<(u16, u16)> {
         if self.stack.modal().is_some() {
             return None;
         }
@@ -1608,17 +1585,19 @@ impl View {
         let ends = self.composer.ends();
         let (row, column) = self.composer.caret();
         let y = band.y.checked_add(ends.above)?.checked_add(row)?;
-        let column = match self.composer.text().is_empty() {
-            true => band::blank(),
-            false => pen::cells(INDENT).saturating_add(column),
-        };
         // A caret past the box's last column waits on that column, the way a terminal keeps the
         // cursor at its right margin rather than giving it up — and never on an upright.
         let x = boxed
             .x
-            .checked_add(column)?
+            .checked_add(pen::cells(INDENT).saturating_add(column))?
             .min(boxed.right().saturating_sub(1));
-        (boxed.width > 0 && y < draft_end(band, queue, ends.below)).then_some((x, y))
+        if boxed.width == 0 || y >= draft_end(band, queue, ends.below) {
+            return None;
+        }
+        match card.is_some_and(|card| card.contains(Position::new(x, y))) {
+            true => None,
+            false => Some((x, y)),
+        }
     }
 
     /// The columns the draft's words have: the band's inside, less the gutter an answer is set from.
@@ -1686,7 +1665,7 @@ enum Page {
 
 /// Where a paint pass put each part of the frame: the bands it shared the rows out in, the cells it
 /// gave the transcript, the rail it stood beside them, and the body it gave a card when one was
-/// drawn. The band the block is stamped on is this pass's, and never a second laying out of it.
+/// drawn. The band the caret is placed in is this pass's, and never a second laying out of it.
 #[derive(Clone, Copy, Debug)]
 pub struct Layout {
     /// The rows the transcript was drawn in, after the rail took its share.

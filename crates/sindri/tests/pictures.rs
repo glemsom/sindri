@@ -11,7 +11,6 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::Modifier;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
@@ -1794,10 +1793,10 @@ fn the_carets_glow_carries_across_the_rise_out_of_the_well() {
     let mut cells = Buffer::empty(area);
     let painted = view.paint(area, &mut cells);
     let band = painted.layout().expect("a laid out frame").composer;
-    let caret = (band.y..band.bottom())
-        .flat_map(|y| (band.x..band.right()).map(move |x| (x, y)))
-        .find(|(x, y)| cells[(*x, *y)].modifier.contains(Modifier::REVERSED))
-        .expect("the caret's block stands in the band");
+    let caret = painted
+        .caret()
+        .expect("a draft that takes the keys places the terminal's cursor");
+    let caret = (caret.x, caret.y);
     let ground = composer_plane(&painted);
     let (width, _height) = ground.pixels().dimensions();
     let at = u32::from(caret.0 - band.x) * cell().width() + cell().width() / 2;
@@ -1823,10 +1822,10 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
     let mut cells = Buffer::empty(area);
     let painted = view.paint(area, &mut cells);
     let band = painted.layout().expect("a laid out frame").composer;
-    let caret = (band.y..band.bottom())
-        .flat_map(|y| (band.x..band.right()).map(move |x| (x, y)))
-        .find(|(x, y)| cells[(*x, *y)].modifier.contains(Modifier::REVERSED))
-        .expect("the caret's block stands in the band");
+    let caret = painted
+        .caret()
+        .expect("a draft that takes the keys places the terminal's cursor");
+    let caret = (caret.x, caret.y);
     let ground = composer_plane(&painted);
     let (width, height) = ground.pixels().dimensions();
     let row = height / 10;
