@@ -47,6 +47,43 @@ fn the_query_line_is_one_row_cut_and_its_two_inks_say_which_half_the_reader_type
 }
 
 #[test]
+fn the_query_row_says_where_the_caret_waits_and_no_other_row_does() {
+    let rows = list(
+        Some("rows"),
+        vec![Item::new("rows.rs"), Item::new("view.rs")],
+        MARKER,
+    )
+    .rows();
+
+    assert_eq!(
+        rows[0].caret,
+        Some(11),
+        "the `rows` a reader typed after `query: ` wait the caret eleven columns in: seven for \
+             the words and four for the glyphs"
+    );
+    for (at, row) in rows.iter().enumerate().skip(1) {
+        assert_eq!(
+            row.caret, None,
+            "row {at} of the list is no row a glyph is typed at, so no caret waits on it"
+        );
+    }
+
+    let mut saying = list(Some("rows"), Vec::new(), MARKER);
+    saying.said = Some("no file answers");
+    assert_eq!(
+        saying.rows()[1].caret,
+        None,
+        "the line a list says in place of its rows is no row a glyph is typed at either"
+    );
+
+    let bare = list(None, vec![Item::new("rows.rs")], MARKER).rows();
+    assert_eq!(
+        bare[0].caret, None,
+        "a list with no query line waits in no column at all"
+    );
+}
+
+#[test]
 fn a_list_that_says_a_line_in_place_of_its_rows_draws_no_row_of_an_item() {
     let mut list = list(Some("gpt"), Vec::new(), MARKER);
     list.items.push(Item::new("gpt-4o"));

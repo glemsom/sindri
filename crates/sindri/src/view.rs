@@ -1082,8 +1082,9 @@ impl View {
             &self.capabilities.palette(),
         );
         painted.presses = body.paint(held, buffer, &self.capabilities.palette());
-        painted.caret = self
-            .caret(layout.composer, layout.queue, Some(bounds))
+        painted.caret = body
+            .caret(held)
+            .or_else(|| self.caret(layout.composer, layout.queue, Some(bounds)))
             .map(|(x, y)| Position::new(x, y));
         layout.card = Some(held);
         painted.layout = Some(layout);
@@ -1576,7 +1577,8 @@ impl View {
     }
 
     /// The cell the draft's caret stands in: none while a screen stands over the band, because the
-    /// draft behind it takes no key, and none on a cell a card holds, which the reader cannot type in.
+    /// draft behind it takes no key, and none on a cell the card a draft opens holds. A screen's own
+    /// caret is its body's to place; a frame with no card, and the composer's plane's glow, ask this.
     fn caret(&self, band: Rect, queue: Rect, card: Option<Rect>) -> Option<(u16, u16)> {
         if self.stack.modal().is_some() {
             return None;
@@ -1800,6 +1802,27 @@ impl ScreenBody {
             ScreenBody::Rows(rows) => u16::try_from(rows.len()).unwrap_or(u16::MAX),
             ScreenBody::Ledger(sheet) => sheet.height(),
         }
+    }
+
+    /// The cell a row of this body waits for the glyphs typed at it in: the first waiting row the
+    /// body has room for, kept on its last column the way a terminal keeps its cursor at the margin.
+    fn caret(&self, body: Rect) -> Option<(u16, u16)> {
+        let ScreenBody::Rows(rows) = self else {
+            return None;
+        };
+        if body.width == 0 || body.height == 0 {
+            return None;
+        }
+        let waiting = rows
+            .iter()
+            .take(usize::from(body.height))
+            .position(|row| row.caret.is_some())?;
+        let x = body
+            .x
+            .saturating_add(rows[waiting].caret?)
+            .min(body.right() - 1);
+        let y = body.y.checked_add(u16::try_from(waiting).ok()?)?;
+        Some((x, y))
     }
 
     /// Draws the screen in `body`, and never in a row the card did not give it, with the rows a press

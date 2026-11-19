@@ -7,19 +7,20 @@ use std::path::{Path, PathBuf};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger::{self, Boot, Ctx};
+use sindri::list::QUERY;
 use sindri::mark;
 use sindri::palette::Palette;
 use sindri::pen::{self, Clip};
 use sindri::pictures::PLACEHOLDER;
 use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
-use sindri::view::{Transcript, View};
+use sindri::view::{Painted, Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::open::Ground;
 use sindri_core::policy::{Boundary, Enforcement, PolicyRecord};
@@ -63,6 +64,8 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
     insta::with_settings!({ snapshot_path => FIXTURES, prepend_module_to_snapshot => false }, {
         insta::assert_snapshot!(fixture.as_str(), drawn);
     });
+
+    frame.assert_caret(&fixture);
 
     // The line `make check` ends on, written on a line of its own: libtest has left the
     // test's name unterminated on the terminal while this test ran.
@@ -1146,7 +1149,9 @@ fn answer(turn: u32, text: &str) -> Entry {
 pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
     let fixture = format!("{name}-{cols}x{rows}");
     let taken = painted(name, cols, rows, Capabilities::default().reporting(true));
+    taken.assert_caret(&fixture);
     let none = painted(name, cols, rows, Capabilities::default().reporting(false));
+    none.assert_caret(&fixture);
 
     assert_eq!(
         taken.text(name),
@@ -1157,15 +1162,79 @@ pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
     println!("\ncheck: frame {fixture} pointer ... ok");
 }
 
-/// A frame painted on a headless screen: the cells it left, and the palette it was drawn in.
+/// A frame painted on a headless screen: the cells it left, the palette it was drawn in, and what
+/// the pass told the terminal of the cursor it placed.
 struct Frame {
     cells: Buffer,
     palette: Palette,
+    told: Painted,
 }
 
 impl Frame {
     fn text(&self, name: &str) -> String {
         text(name, &self.palette, &self.cells)
+    }
+
+    /// Holds the caret the pass placed against the cell the cells draw a card's query row at: a
+    /// golden frame writes down cells and no positions, so the two are read apart.
+    fn assert_caret(&self, fixture: &str) {
+        let Some(body) = self.told.layout().and_then(|laid| laid.card) else {
+            return;
+        };
+        if let Err(disagreed) = carets_agree(drawn_query(&self.cells, body), self.told.caret()) {
+            panic!("frame {fixture}: {disagreed}");
+        }
+    }
+}
+
+/// The cell a card's query row is typed at, read off a frame's cells: the row of `body` that draws
+/// the words `query: `, and the column past the last glyph drawn after them — a blank the reader
+/// typed at the end of a query is that body's own fill by then.
+fn drawn_query(cells: &Buffer, body: Rect) -> Option<(u16, u16)> {
+    let area = cells.area;
+    let words: Vec<char> = QUERY.chars().collect();
+    for y in body.y..body.bottom() {
+        let row: Vec<(u16, char)> = (area.x..area.right())
+            .map(|x| {
+                let cell = cells.cell((x, y)).expect("a cell of the row");
+                (x, glyph(cell, x, y))
+            })
+            .collect();
+        let Some(at) = row.windows(words.len()).position(|window| {
+            window
+                .iter()
+                .map(|(_, drawn)| *drawn)
+                .eq(words.iter().copied())
+        }) else {
+            continue;
+        };
+        let typed: Vec<(u16, char)> = row[at..]
+            .iter()
+            .copied()
+            .take_while(|(x, _)| *x < body.right())
+            .collect();
+        let last = typed.iter().rposition(|(_, drawn)| *drawn != ' ')?;
+        let column = typed
+            .get((last + 1).max(words.len()))
+            .map(|(x, _)| *x)
+            .unwrap_or_else(|| body.right().saturating_sub(1));
+        return Some((column, y));
+    }
+    None
+}
+
+/// Why the two readings are no one caret: a query row the pass placed no cursor in, or one it placed
+/// the cursor elsewhere in. A frame that draws no query row places its cursor where it likes.
+fn carets_agree(named: Option<(u16, u16)>, placed: Option<Position>) -> Result<(), String> {
+    let placed = placed.map(|at| (at.x, at.y));
+    match (named, placed) {
+        (Some(named), Some(placed)) if named != placed => Err(format!(
+            "its cells type the query at {named:?} where the pass placed the cursor at {placed:?}"
+        )),
+        (Some(named), None) => Err(format!(
+            "its cells type the query at {named:?} and the pass placed no cursor there"
+        )),
+        _ => Ok(()),
     }
 }
 
@@ -1175,14 +1244,16 @@ fn painted(name: &str, cols: u16, rows: u16, capabilities: Capabilities) -> Fram
     let palette = view.capabilities().palette();
     let mut terminal =
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
+    let mut told = Painted::none();
     let completed = terminal
         .draw(|frame| {
-            view.paint(frame.area(), frame.buffer_mut());
+            told = view.paint(frame.area(), frame.buffer_mut());
         })
         .expect("the frame is painted");
     Frame {
         cells: completed.buffer.clone(),
         palette,
+        told,
     }
 }
 
@@ -1356,4 +1427,44 @@ fn a_cell_wearing_two_faces_is_written_and_read_back_as_the_one_name_it_has() {
     );
     let row = row_of(written).expect("the row the fixture wrote is the row it reads back");
     assert_eq!(row.looks, [emphasis, linked]);
+}
+
+#[test]
+fn a_frame_whose_cards_query_row_and_placed_caret_disagree_is_no_fixture() {
+    let frame = painted("files", 120, 40, Capabilities::default());
+    frame.assert_caret("files-120x40");
+
+    let body = frame
+        .told
+        .layout()
+        .and_then(|laid| laid.card)
+        .expect("the picker is drawn on a card");
+    let drawn =
+        drawn_query(&frame.cells, body).expect("the card draws the row its query is typed at");
+    let (column, row) = drawn;
+    assert_eq!(
+        frame.told.caret(),
+        Some(Position::new(column, row)),
+        "a frame whose cells draw a query row places its cursor one column past the glyphs typed \\
+         at it"
+    );
+    assert!(
+        carets_agree(Some(drawn), Some(Position::new(column + 1, row))).is_err(),
+        "a pass that placed the cursor elsewhere than the query row is drawn is no fixture"
+    );
+    assert!(
+        carets_agree(Some(drawn), None).is_err(),
+        "and a query row the pass placed no cursor in at all is no fixture either"
+    );
+    let keys = painted("keys", 120, 40, Capabilities::default());
+    let card = keys
+        .told
+        .layout()
+        .and_then(|laid| laid.card)
+        .expect("the keys screen is drawn on a card");
+    assert_eq!(
+        drawn_query(&keys.cells, card),
+        None,
+        "a card that takes no glyph draws no query row for a caret to wait in"
+    );
 }

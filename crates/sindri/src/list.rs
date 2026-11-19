@@ -10,7 +10,7 @@ use crate::rows::wrap;
 const GAP: u16 = 2;
 
 /// The words a list's query is typed after.
-const QUERY: &str = "query: ";
+pub const QUERY: &str = "query: ";
 
 /// The glyph before the row a reader is on, in every list a card draws: one mark, because every
 /// screen that lists says the same thing with it.
@@ -23,6 +23,9 @@ pub struct ScreenRow {
     pub clip: Clip,
     /// The place this row holds in the list its screen keeps, or nothing where no key hangs from it.
     pub choice: Option<usize>,
+    /// The column of this row, in cells from its first one, where the caret waits, and nothing for a
+    /// row no glyph is typed at.
+    pub caret: Option<u16>,
 }
 
 impl ScreenRow {
@@ -32,6 +35,7 @@ impl ScreenRow {
             spans,
             clip: Clip::Whole,
             choice: None,
+            caret: None,
         }
     }
 
@@ -41,6 +45,7 @@ impl ScreenRow {
             spans,
             clip: Clip::Edge,
             choice: None,
+            caret: None,
         }
     }
 
@@ -48,6 +53,14 @@ impl ScreenRow {
     pub fn choosing(self, at: usize) -> ScreenRow {
         ScreenRow {
             choice: Some(at),
+            ..self
+        }
+    }
+
+    /// The same row, holding the cell the caret waits in `column` cells in from its first one.
+    pub fn holding(self, column: u16) -> ScreenRow {
+        ScreenRow {
+            caret: Some(column),
             ..self
         }
     }
@@ -202,10 +215,12 @@ impl List<'_> {
     pub fn rows(&self) -> Vec<ScreenRow> {
         let mut rows = Vec::new();
         if let Some(typed) = self.query {
-            rows.push(ScreenRow::cut(vec![
+            let spans = vec![
                 (QUERY.to_owned(), Look::plain(Ink::Dim)),
                 (typed.to_owned(), Look::plain(Ink::Muted)),
-            ]));
+            ];
+            let column = pen::width(&spans);
+            rows.push(ScreenRow::cut(spans).holding(column));
         }
         if let Some(words) = self.said {
             rows.push(whole(words, Look::plain(Ink::Dim)));
