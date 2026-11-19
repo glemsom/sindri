@@ -665,7 +665,13 @@ impl Write for Wire {
 /// The composer's plane at a two-cell band, and the rail's beside it: two planes a backend tells
 /// apart by the identity each is placed under, and by nothing else.
 fn composer_plane() -> Plane {
-    Plane::composer(Rect::new(2, 3, 2, 1), CellSize::NOMINAL, None).expect("a plane")
+    composer_at(Rect::new(2, 3, 2, 1), None)
+}
+
+/// The composer's plane over `area`, with the caret waiting at `caret` where one is given: the
+/// design's own colours, which is the palette a frame nobody told a palette about draws.
+fn composer_at(area: Rect, caret: Option<(u16, u16)>) -> Plane {
+    Plane::composer(area, CellSize::NOMINAL, caret, &Palette::TRUECOLOR).expect("a plane")
 }
 
 fn rail_plane() -> Plane {
@@ -718,9 +724,9 @@ fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
 fn a_resized_plane_replaces_the_old_placement_and_a_moved_caret_refreshes_it() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
-    let first = Plane::composer(Rect::new(2, 3, 2, 1), CellSize::NOMINAL, None).unwrap();
-    let moved = Plane::composer(Rect::new(2, 3, 2, 1), CellSize::NOMINAL, Some((3, 3))).unwrap();
-    let resized = Plane::composer(Rect::new(1, 5, 3, 2), CellSize::NOMINAL, Some((3, 3))).unwrap();
+    let first = composer_at(Rect::new(2, 3, 2, 1), None);
+    let moved = composer_at(Rect::new(2, 3, 2, 1), Some((3, 3)));
+    let resized = composer_at(Rect::new(1, 5, 3, 2), Some((3, 3)));
     backend.planes(&[first]).unwrap();
     backend.planes(&[moved]).unwrap();
     backend.planes(&[resized]).unwrap();

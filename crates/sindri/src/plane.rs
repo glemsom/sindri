@@ -41,10 +41,18 @@ pub struct Plane {
 }
 
 impl Plane {
-    /// The composer's band: the ramp the design draws in its own greys, with the glow under the
-    /// column the caret waits in. None for an area with no rows or columns.
-    pub fn composer(area: Rect, cell: CellSize, caret: Option<(u16, u16)>) -> Option<Plane> {
+    /// The composer's band: the ladder's head falling into its foot over its height, with the glow
+    /// under the column the caret waits in. None for an area with no rows or columns or a palette
+    /// with no colour in it.
+    pub fn composer(
+        area: Rect,
+        cell: CellSize,
+        caret: Option<(u16, u16)>,
+        palette: &Palette,
+    ) -> Option<Plane> {
         let (width, height) = extent(area, cell)?;
+        let head = channels(palette.step(0, area.height))?;
+        let foot = channels(palette.step(area.height - 1, area.height))?;
         let glow = caret
             .map(|(x, _)| (f64::from(x.saturating_sub(area.x)) + 0.5) * f64::from(cell.width()));
         let pixels = image::RgbaImage::from_fn(width, height, |x, y| {
@@ -54,13 +62,13 @@ impl Plane {
                 let depth = t / 0.65;
                 (-(distance * distance + depth * depth) * 2.0).exp() * 22.0
             });
-            let channel = |top: f64, bottom: f64| {
-                (top * (1.0 - t) + bottom * t + light).clamp(0.0, 255.0) as u8
+            let channel = |top: u8, bottom: u8| {
+                (f64::from(top) * (1.0 - t) + f64::from(bottom) * t + light).clamp(0.0, 255.0) as u8
             };
             image::Rgba([
-                channel(36.0, 8.0),
-                channel(49.0, 13.0),
-                channel(63.0, 19.0),
+                channel(head[0], foot[0]),
+                channel(head[1], foot[1]),
+                channel(head[2], foot[2]),
                 255,
             ])
         });

@@ -154,13 +154,14 @@ _Avoid_: Region, pane, panel, viewport
 
 **Plane**:
 A band's ground drawn as one image placed under its cells, so a surface shades in pixels rather than
-in whole rows: the composer's carries its ramp and the glow under the caret, and the rail's carries
-the band at its head and falls continuously into the shadow at its foot, reaching back over the seam
-so the rail comes out of the transcript's edge rather than being parted from it. It is placed once
-per size, carries an identity of its own so one is taken away and the other stands, and is handed
-back with the pass that drew it. A terminal that places no picture is given none, and so is the rail
-in a palette that draws no colour, where the band's own rows — its flat ground, the lit column down
-its boundary and the shadow across its last one — are the whole of its shading.
+in whole rows: the composer's runs from the head the palette's own ladder gives it into that ladder's
+foot, with the glow under the caret, and the rail's carries the band at its head and falls
+continuously into the shadow at its foot, reaching back over the seam so the rail comes out of the
+transcript's edge rather than being parted from it. It is placed once per size, carries an identity
+of its own so one is taken away and the other stands, and is handed back with the pass that drew it.
+A terminal that places no picture is given none, and so is either band in a palette that draws no
+colour, where the band's own rows — its flat ground, the lit column down its boundary and the shadow
+across its last one — are the whole of its shading.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 
 **Seam**:

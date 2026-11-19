@@ -69,6 +69,15 @@ pub fn uncoloured() -> Capabilities {
     )
 }
 
+/// A terminal that names Kitty and draws in the 256-colour palette: it places pictures, and names
+/// no twenty-four-bit colour, so the design is spelled in its greys.
+pub fn greys() -> Capabilities {
+    probed(
+        &[("TERM", "xterm-kitty")],
+        Answers::at(CellSize::NOMINAL).sized(),
+    )
+}
+
 /// A terminal that names Kitty, with the config's face switch as given.
 pub fn faced(face: bool) -> Capabilities {
     let terms = BTreeMap::from([
