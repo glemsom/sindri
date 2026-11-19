@@ -48,7 +48,7 @@ use crate::rows::{INDENT, Row, Rows, Scroll};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
-use crate::stream::{Said, Stream};
+use crate::stream::Stream;
 
 #[derive(Clone, Copy)]
 struct Hint {
@@ -862,14 +862,6 @@ impl View {
             Outcome::Unchanged
         } else {
             Outcome::Edited
-        }
-    }
-
-    /// A word the run says: the one that opens a new entry returns the frame to the tail, and every
-    /// word after it leaves the frame where the reader put it.
-    fn follows(&mut self, said: Said, fragment: &str) {
-        if !fragment.is_empty() && self.stream.opens(said) {
-            self.scroll = Scroll::Tail;
         }
     }
 
@@ -1702,7 +1694,6 @@ impl View {
 
 impl Deltas for View {
     fn text(&mut self, fragment: &str) {
-        self.follows(Said::Answer, fragment);
         self.stream.text(fragment);
     }
 
