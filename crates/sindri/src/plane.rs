@@ -41,9 +41,9 @@ pub struct Plane {
 }
 
 impl Plane {
-    /// The composer's band: its first cell rising out of the well into its head, the rung above the
-    /// rail's tone, which falls into the rail's own tone over the height left, with the glow under
-    /// the caret's column. None for an area with no rows or no columns, or no colour in a pixel.
+    /// The composer's band: its first cell rising out of the transcript's well into its head, the rung
+    /// above the rail's tone, which falls into the rail's own tone over the height left, with the glow
+    /// under the caret's column. None for an area with no rows or no columns, or no colour in a pixel.
     pub fn composer(
         area: Rect,
         cell: CellSize,
@@ -54,31 +54,23 @@ impl Plane {
         let head = channels(palette.step(0, area.height))?;
         let foot = channels(palette.step(area.height - 1, area.height))?;
         let well = channels(palette.band(Band::Well))?;
-        let rise = cell.height().min(height - 1).max(1);
-        let body = height - rise;
+        let rise = cell.height().min(height.saturating_sub(1)).max(1);
+        // The head's own row is the rise's last, so the fall runs over the rows under it.
+        let body = height.saturating_sub(rise + 1);
         let glow = caret
             .map(|(x, _)| (f64::from(x.saturating_sub(area.x)) + 0.5) * f64::from(cell.width()));
         let pixels = image::RgbaImage::from_fn(width, height, |x, y| {
-            let down = f64::from(y) / f64::from(height.max(1));
-            let raised = match y < rise {
-                true => {
-                    let left = 1.0 - f64::from(y) / f64::from(rise);
-                    mix(well, head, 1.0 - left * left)
-                }
-                false => mix(head, foot, f64::from(y - rise) / f64::from(body.max(1))),
+            let tone = match y < rise {
+                true => mix(well, head, ease(share(y, rise))),
+                false => mix(head, foot, share(y - rise, body)),
             };
             let light = glow.map_or(0.0, |center| {
                 let distance = (f64::from(x) - center) / (f64::from(cell.width()) * 8.0);
-                let depth = down / 0.65;
+                let depth = share(y, height) / 0.65;
                 (-(distance * distance + depth * depth) * 2.0).exp() * 22.0
             });
             let channel = |at: u8| (f64::from(at) + light).clamp(0.0, 255.0) as u8;
-            image::Rgba([
-                channel(raised[0]),
-                channel(raised[1]),
-                channel(raised[2]),
-                255,
-            ])
+            image::Rgba([channel(tone[0]), channel(tone[1]), channel(tone[2]), 255])
         });
         Some(Plane {
             id: PlaneId::Composer,
@@ -185,14 +177,25 @@ impl Seam {
     }
 }
 
+/// The share `at` of `span`, and the whole of it for a span of none, so nothing is divided by
+/// nothing.
+fn share(at: u32, span: u32) -> f64 {
+    match span {
+        0 => 1.0,
+        span => f64::from(at.min(span)) / f64::from(span),
+    }
+}
+
+/// The share of a rise `at` of the way up, eased out: it leaves the well quickly and comes into the
+/// head gently, so no row of it takes the whole step.
+fn ease(at: f64) -> f64 {
+    1.0 - (1.0 - at) * (1.0 - at)
+}
+
 /// The colour `at` pixels along a ramp of `span` pixels from `head` to `foot`, its ends the ends of
 /// the ramp.
 fn fall(head: [u8; 3], foot: [u8; 3], at: u32, span: u32) -> [u8; 3] {
-    let t = match span {
-        0 => 1.0,
-        span => f64::from(at.min(span)) / f64::from(span),
-    };
-    mix(head, foot, t)
+    mix(head, foot, share(at, span))
 }
 
 /// The colour a plane is at `t` of the way down a ramp from `head` to `foot`.
