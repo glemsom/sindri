@@ -1058,6 +1058,21 @@ struct Sequence {
 fn sequence(drawn: &str) -> Option<Sequence> {
     let rest = drawn.strip_prefix('\u{1b}')?;
     let Some(params) = rest.strip_prefix('[') else {
+        if let Some(words) = rest.strip_prefix(']') {
+            // A sequence that hands words to the terminal paints no cell: it runs from `ESC ]` to
+            // its `ST` or `BEL`, so no glyph of the document it carries is read as the screen's.
+            let at = words.find(['\u{7}', '\u{1b}'])?;
+            let close = match words.as_bytes()[at..] {
+                [b'\x07', ..] => 1,
+                [b'\x1b', b'\\', ..] => 2,
+                _ => return None,
+            };
+            return Some(Sequence {
+                move_to: None,
+                reversed: None,
+                taken: 2 + at + close,
+            });
+        }
         // `ESC O A` and the single-shift keys: no move, and as long as its last byte.
         let taken = 1 + rest.chars().next().map_or(0, char::len_utf8);
         return Some(Sequence {
@@ -3199,4 +3214,51 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
 
     pty.type_bytes(&[0x11]);
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn a_status_document_written_between_two_painted_rows_puts_no_word_of_its_payload_in_the_picture() {
+    let document = "\u{1b}]7501;{\"phase\":\"done\",\"message\":\"12 files read\"}\u{1b}\\";
+    let drawn = format!("\u{1b}[1;1Htemp  41b0c336/tmp{document}\u{1b}[3;1Hturns  2 / 250");
+    assert_eq!(
+        picture(&drawn),
+        BTreeMap::from([
+            (1, "temp  41b0c336/tmp".to_string()),
+            (3, "turns  2 / 250".to_string()),
+        ]),
+        "a status document is one sequence and stands in no cell: the rows on either side of it \
+         are the picture, and none of the words it hands the terminal are read into the rail: \
+         {drawn:?}"
+    );
+}
+
+#[test]
+fn every_document_a_frame_hands_its_terminal_stands_in_no_cell_of_the_picture() {
+    let before = "\u{1b}[1;1Htemp  41b0c336/tmp";
+    let after = "\u{1b}[3;1Hturns  2 / 250";
+    let rows = BTreeMap::from([
+        (1, "temp  41b0c336/tmp".to_string()),
+        (3, "turns  2 / 250".to_string()),
+    ]);
+    for (shape, document) in [
+        ("a title", "\u{1b}]2;forge \u{2014} done\u{1b}\\"),
+        ("a progress mark", "\u{1b}]9;4;3\u{1b}\\"),
+        ("a mark cleared", "\u{1b}]9;4;0\u{1b}\\"),
+        ("a notification", "\u{1b}]9;four files moved\u{7}"),
+        ("a clipboard copy", "\u{1b}]52;c;Zm9yZ2U=\u{1b}\\"),
+        (
+            "a link opened",
+            "\u{1b}]8;;https://example.com/forge\u{1b}\\",
+        ),
+        ("a link closed", "\u{1b}]8;;\u{1b}\\"),
+        ("a sized run", "\u{1b}]66;s=2;The fence rule\u{1b}\\"),
+    ] {
+        let drawn = format!("{before}{document}{after}");
+        assert_eq!(
+            picture(&drawn),
+            rows,
+            "a frame hands its terminal {shape} between two painted rows, and the document is \
+             the terminal's and not the screen's: no word of it stands in a rail {drawn:?}"
+        );
+    }
 }
