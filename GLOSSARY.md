@@ -287,11 +287,11 @@ What the terminal a frame draws on can do — the cell it measures a picture aga
 holds, whether it draws text at more than one cell, whether it reports a **pointer**, whether it
 places pictures, whether this window is the one being read, which the code calls `Focus`, and whether
 Sindri's **face** is drawn over the rail. Probed once before the first frame and handed to the frame
-whole, except the focus: asked for when the screen is taken and given up on the way out, one fact the
-frame draws from rather than a behaviour, so the accent edge recedes while nobody is reading and
-returns when they are. A terminal that reports nothing is drawn in the cells one that reports
-everything is, minus the facts it does not have — and one that reports nothing of the focus is being
-read.
+whole, and the focus is asked for when the screen is taken, reported again as the window is left and
+returned to, and given up on the way out. It is one fact the frame draws from rather than a
+behaviour: the accent edge recedes while nobody is reading and returns when they are. A terminal that
+reports nothing is drawn in the cells one that reports everything is, minus the facts it does not
+have — and one that reports nothing of the focus is being read.
 _Avoid_: Terminal features, environment, detection, caps
 
 **Frame facts**: the workspace and the ground it is judged against, the home the skills are read from,
