@@ -253,6 +253,46 @@ fn a_blank_line_inside_a_marked_fence_is_a_line_of_the_copy() {
 }
 
 #[test]
+fn a_copy_of_a_fence_marked_on_its_name_hands_back_the_fence_whole() {
+    let fence = "```rust crates/sindri/src/rows.rs\nfn one() {}\n```";
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([answer(1, fence)]),
+    );
+    let (frame, laid) = painted(&mut view);
+    let row = row_of(&frame, laid.transcript, "rust crates/sindri/src/rows.rs");
+    view.drag(Cell::new(row, 0), Cell::new(row, 30));
+    let taken = copied(&mut view);
+
+    assert_eq!(
+        taken, "fn one() {}",
+        "the row that names the fence is one of its rows, so a mark on it takes the fence whole \
+         and never the bar the name is drawn behind"
+    );
+}
+
+#[test]
+fn a_mark_that_runs_past_the_fence_is_copied_as_it_is_drawn() {
+    let text = "```rust\nlet one = 1;\n```\n\nthe prose under the fence";
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([answer(1, text)]),
+    );
+    let (frame, laid) = painted(&mut view);
+    let row = row_of(&frame, laid.transcript, "let one");
+    view.drag(Cell::new(row, 2), Cell::new(row + 2, 30));
+    let taken = copied(&mut view);
+
+    assert!(
+        taken.contains("the prose under the fence"),
+        "a mark that runs past the fence covers the prose too, and a copy of it keeps every row \
+         the drag covered: {taken:?}"
+    );
+}
+
+#[test]
 fn ctrl_y_with_no_mark_copies_the_last_answer() {
     let mut view = View::of(
         Capabilities::default(),

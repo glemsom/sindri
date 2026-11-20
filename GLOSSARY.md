@@ -216,6 +216,13 @@ stands there, because a fence is kept in the shape it was written in and no band
 reader walks a marked fence sideways for the rest, and a copy takes the line as it was written.
 _Avoid_: Truncation, ellipsis, overflow, wrap
 
+**Source**:
+The words a fence was written with, line for line, kept beside the rows the frame draws them as: a
+copy of a marked fence hands the source back whole — the line breaks and the indentation it was
+written with, and no bar, guide or cut — where the cells are what the band made of it. A fence's tag
+row is no line of its source, and a mark on it takes the fence whole all the same.
+_Avoid_: Body, content, raw text
+
 **Draft count**:
 What Enter would send, counted on the far corner of the composer's band: the files the draft's words
 name, the command it opens with, and the characters it holds. It is a count of the draft and never of

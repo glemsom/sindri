@@ -44,7 +44,7 @@ use crate::pointer::{Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{Fence, INDENT, Row, Rows, Scroll, Sideways};
+use crate::rows::{INDENT, Row, Rows, Scroll, Sideways};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
@@ -417,14 +417,15 @@ struct Laid {
     head: bool,
 }
 
-/// The fence a mark stands over: the entry it is drawn in and the block it is a line of, which is
-/// what a sideways key needs to walk every row of it and no row of anything else — and whether the
-/// band cut a line of it, because a fence the band holds whole has nothing to walk to.
+/// The fence a mark stands over: the entry it is drawn in, the block it is a line of, whether the
+/// band cut a line of it — so there is something past the edge to walk to — and whether the mark
+/// stands wholly on it, which is what makes a copy take the fence rather than the cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct MarkedFence {
     entry: usize,
     fence: usize,
     cut: bool,
+    whole: bool,
 }
 
 /// The record a frame draws and the row the reader stands at in it: the third of the three values a
@@ -677,11 +678,11 @@ impl View {
         self.mark
     }
 
-    /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does when
-    /// nothing is marked. What leaves is the span the last paint drew, not a second reading — and a
-    /// mark on a fence takes that fence's whole source, which no band ever drew as it was written.
+    /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does when nothing
+    /// is marked. A mark standing wholly on a fence takes the fence's source rather than the cells,
+    /// because no band draws the line breaks it was written with.
     fn copy(&self) -> Outcome {
-        if let Some(marked) = self.fence
+        if let Some(marked) = self.fence.filter(|marked| marked.whole)
             && let Some(source) = self.rows.source(marked.entry, marked.fence)
         {
             return Outcome::Copy(source);
@@ -1424,6 +1425,7 @@ impl View {
         self.fence = None;
         let mut y = area.y;
         let mut lines = Vec::new();
+        let mut covered = false;
         let mut drawn = Vec::new();
         for piece in window.pieces() {
             let top = y.saturating_sub(area.y);
@@ -1453,9 +1455,19 @@ impl View {
                 if let Some(mark) = self.mark {
                     lines.push(Line::of(row.glyph_columns(), row.cut(area.width)));
                     let band = y.saturating_sub(area.y);
-                    self.fence = self
-                        .fence
-                        .or_else(|| fence_under(piece.entry, rows, row, band, area.width, mark));
+                    if (mark.first()..=mark.last()).contains(&band) {
+                        // A mark is settled on the fence its first covered row stands in, and kept
+                        // only while every row after that one stands in the same.
+                        let here = row.fence_id();
+                        self.fence = match covered {
+                            false => fence_under(piece.entry, rows, row, area.width),
+                            true => self.fence.map(|marked| MarkedFence {
+                                whole: marked.whole && here == Some(marked.fence),
+                                ..marked
+                            }),
+                        };
+                        covered = true;
+                    }
                 }
                 y += 1;
             }
@@ -2176,30 +2188,17 @@ fn corners(
     );
 }
 
-/// The fence the row `at` of `entry` is a line of, where the mark `mark` covers the band row `band`,
-/// and whether the band cut a line of it: a fence the band holds whole is copied as whole as one it
-/// cut, and has nothing past its edge to walk to.
-fn fence_under(
-    entry: usize,
-    rows: &[Row],
-    at: &Row,
-    band: u16,
-    room: u16,
-    mark: Mark,
-) -> Option<MarkedFence> {
-    let first = mark.anchor().row.min(mark.head().row);
-    let last = mark.anchor().row.max(mark.head().row);
-    if !(first..=last).contains(&band) {
-        return None;
-    }
-    let fence = at.fence()?;
-    let cut = rows
-        .iter()
-        .any(|line| line.fence().map(Fence::id) == Some(fence.id()) && line.cut(room));
+/// The fence the row `at` of `entry` stands in, where one does, and whether the band cut a line of
+/// it: the rows a sideways key walks, and the sign that there is anything past the edge to walk to.
+fn fence_under(entry: usize, rows: &[Row], at: &Row, room: u16) -> Option<MarkedFence> {
+    let fence = at.fence_id()?;
     Some(MarkedFence {
         entry,
-        fence: fence.id(),
-        cut,
+        fence,
+        cut: rows
+            .iter()
+            .any(|line| line.line_of(fence) && line.cut(room)),
+        whole: true,
     })
 }
 

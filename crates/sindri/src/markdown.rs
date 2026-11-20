@@ -305,6 +305,8 @@ struct Room {
     /// The line of a fence the row being flushed was drawn from, which no other row has: set just
     /// before the flush that lays it.
     source: Option<String>,
+    /// The fence the row being flushed names, while that row is the tag row it opens with.
+    naming: Option<usize>,
 }
 
 impl Room {
@@ -341,6 +343,7 @@ impl Room {
             fence: None,
             opened: 0,
             source: None,
+            naming: None,
         }
     }
 
@@ -425,12 +428,11 @@ impl Room {
                     if let Some(mermaid) = &mut self.mermaid {
                         mermaid.source.push_str(&text);
                     }
-                    let lines = code.highlight(&text);
-                    for (line, runs) in lines {
-                        for (text, look) in runs {
+                    for line in code.highlight(&text) {
+                        for (text, look) in line.runs {
                             self.extend(&text, look);
                         }
-                        self.source = Some(line);
+                        self.source = Some(line.source);
                         self.flush();
                     }
                 }
@@ -813,10 +815,12 @@ impl Room {
             CodeBlockKind::Fenced(tag) => tag.trim().to_owned(),
             CodeBlockKind::Indented => String::new(),
         };
-        self.code = Some(Code::of(language(&tag)));
+        let info = info(&tag);
+        self.code = Some(Code::of(info.language));
         if !tag.is_empty() {
-            self.place(language(&tag), FAINT_ACCENT, false);
-            self.draw_name(file(&tag));
+            self.place(info.language, FAINT_ACCENT, false);
+            self.draw_name(info.file);
+            self.naming = Some(self.opened);
             self.flush();
         }
         // The tag row is no line of the fence: the lines under it are the ones the reader walks.
@@ -824,7 +828,7 @@ impl Room {
         self.opened = self.opened.saturating_add(1);
         // A mermaid fence is a picture and not code: its source is kept so the drawing can be
         // made when the block closes, and so the reason it could not be drawn prints under it.
-        if language(&tag) == "mermaid" {
+        if info.language == "mermaid" {
             let fence = match closed(span) {
                 true => Fence::Closed,
                 false => Fence::Streaming,
@@ -1037,11 +1041,15 @@ impl Room {
             });
         }
         let mut row = Row::of(self.spans());
+        let source = self.source.take();
         if let Some(fence) = self.fence {
             row = row.fenced(fence, pen::columns(gutter));
+            if let Some(source) = source {
+                row = row.sourced(source);
+            }
         }
-        if let Some(source) = self.source.take() {
-            row = row.sourced(source);
+        if let Some(fence) = self.naming.take() {
+            row = row.naming(fence);
         }
         let sized = !runs.is_empty();
         for run in runs {
@@ -1357,6 +1365,12 @@ fn fence_line(line: &str) -> Option<(char, usize, &str)> {
     }
 }
 
+/// One line of a fence: the words it was written as, and the runs the frame draws them as.
+struct CodeLine {
+    source: String,
+    runs: Vec<(String, Look)>,
+}
+
 /// One code block in hand, and the parse `syntect` carries across its lines: a string that
 /// opens on one line and closes on the next is one string only because the parse outlives it.
 struct Code {
@@ -1368,20 +1382,22 @@ struct Code {
 }
 
 impl Code {
-    fn of(tag: &str) -> Code {
-        let parse = match tag.is_empty() {
+    fn of(language: &str) -> Code {
+        let parse = match language.is_empty() {
             true => None,
             false => syntaxes()
-                .find_syntax_by_token(tag)
+                .find_syntax_by_token(language)
                 .map(|syntax| (ParseState::new(syntax), ScopeStack::new())),
         };
-        let diff = language(tag) == "diff";
-        Code { parse, diff }
+        Code {
+            parse,
+            diff: language == "diff",
+        }
     }
 
-    /// Every line of `text` as the runs it is drawn as, beside the line itself: the source is what a
-    /// copy of the fence hands back, where the runs are what the frame makes of it.
-    fn highlight(&mut self, text: &str) -> Vec<(String, Vec<(String, Look)>)> {
+    /// Every line of `text` beside the runs the frame draws it as: the words as written are what a
+    /// copy of the fence hands back, and the runs are what the frame makes of them.
+    fn highlight(&mut self, text: &str) -> Vec<CodeLine> {
         let mut lines = Vec::new();
         let mut rest = text.split('\n').peekable();
         while let Some(line) = rest.next() {
@@ -1391,7 +1407,10 @@ impl Code {
                 break;
             }
             let runs = self.line(line);
-            lines.push((String::from(line), runs));
+            lines.push(CodeLine {
+                source: String::from(line),
+                runs,
+            });
         }
         lines
     }
@@ -1446,19 +1465,23 @@ fn ink_of(line: &str) -> Option<Ink> {
     }
 }
 
-/// The one word an info string names its language with: a tag carries more than that word, as
-/// `diff path/to/file` does, and the rest of it says nothing about how the block is drawn.
-fn language(tag: &str) -> &str {
-    tag.split_whitespace().next().unwrap_or_default()
+/// What a fence's info string says: the word its language is named by, and the file it names after
+/// it, as `diff path/to/file` does. A string of one word names no file.
+fn info(tag: &str) -> Info<'_> {
+    let tag = tag.trim();
+    let language = tag.split_whitespace().next().unwrap_or_default();
+    Info {
+        language,
+        file: tag[language.len()..].trim(),
+    }
 }
 
-/// The file an info string names after that word, trimmed, and nothing where it names one word
-/// only: a fence that names no file is drawn as its language alone.
-fn file(tag: &str) -> &str {
-    match tag.split_once(char::is_whitespace) {
-        Some((_, rest)) => rest.trim(),
-        None => "",
-    }
+/// A fence's info string read: the language it is drawn as, and the file it names.
+struct Info<'a> {
+    language: &'a str,
+    /// The file the fence names, and nothing where it names one word only: a fence that names no
+    /// file is drawn as its language alone.
+    file: &'a str,
 }
 
 /// `runs` with the last of the line's leading whitespace drawn as the frame's dim guide. Only a

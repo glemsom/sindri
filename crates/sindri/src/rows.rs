@@ -99,6 +99,9 @@ pub struct Row {
     /// The line of source this row was drawn from, on the rows of a fence and on no other: a copy
     /// of a fence takes the words it was written as, and never the guide or the cut drawn over them.
     source: Option<String>,
+    /// The fence whose tag row this is, on that row and no other: a mark over a fence's name takes
+    /// the fence whole, where the row itself is no line of it — it never walks and is never cut.
+    names: Option<usize>,
 }
 
 /// A fence line: the block it is a line of, the columns of gutter its words are set past, and how
@@ -140,6 +143,7 @@ impl Row {
             sizes: Vec::new(),
             fence: None,
             source: None,
+            names: None,
         }
     }
 
@@ -167,6 +171,7 @@ impl Row {
             sizes: Vec::new(),
             fence: None,
             source: None,
+            names: None,
         }
     }
 
@@ -193,6 +198,23 @@ impl Row {
 
     pub fn source(&self) -> Option<&str> {
         self.source.as_deref()
+    }
+
+    /// This row as the tag row of fence `fence`, which names it and is no line of it.
+    pub fn naming(mut self, fence: usize) -> Row {
+        self.names = Some(fence);
+        self
+    }
+
+    /// The fence this row stands in, as a line of it or as the row that names it: a mark over any
+    /// row of a fence is a mark over the fence.
+    pub fn fence_id(&self) -> Option<usize> {
+        self.fence.map(Fence::id).or(self.names)
+    }
+
+    /// Whether this row is a line of fence `id`, which is what a walk and a copy of it are made of.
+    pub fn line_of(&self, id: usize) -> bool {
+        self.fence.is_some_and(|line| line.id() == id)
     }
 
     /// This row walked `by` columns sideways, which only the rows of one fence ever are.
@@ -247,7 +269,8 @@ impl Row {
             sizes: self.sizes.iter().map(|run| run.shifted(by)).collect(),
             picture: self.picture,
             fence: self.fence,
-            source: None,
+            source: self.source,
+            names: self.names,
         }
     }
 
@@ -1407,7 +1430,7 @@ impl Rows {
         };
         let widest = rows
             .iter()
-            .filter(|row| row.fence().map(Fence::id) == Some(fence))
+            .filter(|row| row.line_of(fence))
             .map(Row::width)
             .max();
         let Some(widest) = widest else {
@@ -1430,7 +1453,7 @@ impl Rows {
         }
         if let Some(rows) = held.rows.as_mut() {
             for row in rows {
-                if row.fence().map(Fence::id) == Some(fence) {
+                if row.line_of(fence) {
                     row.walked(to);
                 }
             }
@@ -1706,10 +1729,7 @@ impl Rows {
     pub fn source(&self, at: usize, fence: usize) -> Option<String> {
         let rows = self.held.get(at)?.rows.as_ref()?;
         let mut lines = Vec::new();
-        for row in rows
-            .iter()
-            .filter(|row| row.fence().map(Fence::id) == Some(fence))
-        {
+        for row in rows.iter().filter(|row| row.line_of(fence)) {
             lines.push(row.source()?);
         }
         (!lines.is_empty()).then(|| lines.join("\n"))
