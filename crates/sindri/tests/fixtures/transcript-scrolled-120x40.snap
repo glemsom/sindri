@@ -38,7 +38,7 @@ transcript-scrolled at 120x40
 32 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
 33 |                                                                                                                        | plain:120
 34 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
-35 |4 rows back · End follows the run                                                                                       | muted:11 dim:3 plain+bold:3 muted:16 plain:87
+35 |prompt 3 / 6 · 4 rows back · End follows the run                                                                        | muted:12 dim:3 muted:11 dim:3 plain+bold:3 muted:16 plain:72
 36 |┌prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
 37 |│› what should the run do?                                                                                             │| dim:26 plain:93 dim:1
 38 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120

@@ -215,6 +215,24 @@ impl Drawn {
             .find(|laid| laid.band.contains(&row))
             .map(|laid| laid.entry)
     }
+
+    /// The entry whose first row the band's row `row` is: the row a press acts on.
+    fn first(&self, row: u16) -> Option<usize> {
+        self.laid
+            .iter()
+            .find(|laid| laid.band.start == row)
+            .map(|laid| laid.entry)
+    }
+
+    /// The rows the entries `of` were drawn in, and none where the band drew none of them.
+    fn rows_of(&self, of: Range<usize>) -> Option<Range<u16>> {
+        let drawn: Vec<&Laid> = self
+            .laid
+            .iter()
+            .filter(|laid| of.contains(&laid.entry))
+            .collect();
+        Some(drawn.first()?.band.start..drawn.last()?.band.end)
+    }
 }
 
 /// What one paint pass tells the terminal and what it drew: where it laid the frame out, the cell
@@ -613,6 +631,8 @@ impl View {
             Act::Back => self.page(Page::Back),
             Act::Forward => self.page(Page::Forward),
             Act::Tail => self.tail(key),
+            Act::Before => self.prompt(key, Move::Previous),
+            Act::After => self.prompt(key, Move::Next),
         }
     }
 
@@ -906,6 +926,58 @@ impl View {
         Outcome::Edited
     }
 
+    /// `[` and `]`: the prompt before or after the one the frame's first band row stands on. A draft
+    /// holding any words is the draft's own key, exactly as `?` is.
+    fn prompt(&mut self, key: Key, way: Move) -> Outcome {
+        if !self.composer.text().is_empty() {
+            return self.composer.key(key);
+        }
+        let Some(back) = self.prompt_back(way) else {
+            return Outcome::Unchanged;
+        };
+        if Scroll::of(back) == self.scroll {
+            return Outcome::Unchanged;
+        }
+        self.scrolled(Scroll::of(back));
+        Outcome::Edited
+    }
+
+    /// How far back the frame stands to put the prompt `way` prompts on from the one its first band
+    /// row stands in, and none where there is no prompt that way.
+    fn prompt_back(&mut self, way: Move) -> Option<u32> {
+        let total = self.drawn.total()?;
+        let tops = self.rows.prompts();
+        let at = self.prompt_of(&self.drawn, &tops)?;
+        let target = match way {
+            Move::Previous => at.checked_sub(1)?,
+            Move::Next => at.checked_add(1).filter(|next| *next < tops.len())?,
+        };
+        // The band a frame at the tail is drawn in, and the last of it an off-tail frame reaches
+        // with its top on the transcript's first row.
+        let rows = self.drawn.band().saturating_add(self.notice_rows());
+        let deepest = total.saturating_sub(u32::from(rows).saturating_sub(1));
+        Some(deepest.saturating_sub(tops[target]))
+    }
+
+    /// The prompt the frame's first band row stands in, counted from zero.
+    fn prompt_of(&self, drawn: &Drawn, tops: &[u32]) -> Option<usize> {
+        let total = drawn.total()?;
+        let top = total
+            .saturating_sub(u32::from(drawn.band()))
+            .saturating_sub(self.scroll.back());
+        tops.iter().rposition(|row| *row <= top)
+    }
+
+    /// `prompt 2 / 7` for the prompt the frame stands in, and none where the conversation holds one
+    /// prompt or none.
+    fn standing(&self, drawn: &Drawn, tops: &[u32]) -> Option<String> {
+        if tops.len() < 2 {
+            return None;
+        }
+        let at = self.prompt_of(drawn, tops)?;
+        Some(format!("prompt {} / {}", at.saturating_add(1), tops.len()))
+    }
+
     /// The rows a page moves: the band the transcript is drawn in at the tail, which is one row more
     /// than while the row saying it is not is drawn over the band — so a page back and the page on
     /// beside it are one band of rows.
@@ -1009,8 +1081,15 @@ impl View {
     }
 
     /// A press on a row of a card: the row is chosen, and then the key it hangs from is sent, which
-    /// is `Enter` for every row a card draws.
+    /// is `Enter` for every row a card draws. A press on the transcript's band opens or marks what it
+    /// stood on, and a card standing over the frame leaves it no row of the band to act on.
     fn pressed(&mut self, painted: &Painted, at: Cell) -> Outcome {
+        let Some(layout) = painted.layout() else {
+            return Outcome::Unchanged;
+        };
+        if layout.card.is_none() && layout.transcript.contains(Position::new(at.column, at.row)) {
+            return self.pressed_row(painted.drawn(), layout.transcript, at);
+        }
         let Some(row) = painted.press(at) else {
             return Outcome::Unchanged;
         };
@@ -1018,6 +1097,52 @@ impl View {
             return Outcome::Unchanged;
         }
         self.key(Key::Enter)
+    }
+
+    /// A press on the transcript's band, read off the rows the pass drew: the head row of a settled
+    /// work folds it, an answer's first row marks the exchange it ended, and any other row is no act.
+    fn pressed_row(&mut self, drawn: &Drawn, band: Rect, at: Cell) -> Outcome {
+        let Some(row) = at.row.checked_sub(band.y) else {
+            return Outcome::Unchanged;
+        };
+        let Some(entry) = drawn.first(row) else {
+            return Outcome::Unchanged;
+        };
+        if self.folded(drawn, entry, row) {
+            return Outcome::Edited;
+        }
+        match self.marked(drawn, entry, band.width) {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// The work entry `at` stands in, folded or opened where the press landed on its head row: a
+    /// frame to paint when the band draws one row of it and the press stood there.
+    fn folded(&mut self, drawn: &Drawn, at: usize, row: u16) -> bool {
+        let Some(rows) = drawn.rows_of(self.rows.work_of(at)) else {
+            return false;
+        };
+        rows.start == row && self.rows.toggle(at)
+    }
+
+    /// The exchange the answer `at` ended, marked from the prompt that asked it through the row the
+    /// run ended on: a frame to paint where the band drew the answer's first row.
+    fn marked(&mut self, drawn: &Drawn, at: usize, width: u16) -> bool {
+        if !self.rows.is_answer(at) {
+            return false;
+        }
+        let Some(exchange) = self.rows.exchange(at) else {
+            return false;
+        };
+        let Some(rows) = drawn.rows_of(exchange) else {
+            return false;
+        };
+        self.mark = Some(Mark::drag(
+            Cell::new(rows.start, 0),
+            Cell::new(rows.end.saturating_sub(1), width.saturating_sub(1)),
+        ));
+        true
     }
 
     /// The row a press landed on, chosen: `true` when it is a row the list the frame keeps still
@@ -1095,7 +1220,7 @@ impl View {
                 &mut painted.sizes,
             );
         }
-        self.notice_band(layout.notice, buffer);
+        self.notice_band(layout.notice, buffer, &drawn);
         if let Some(plane) = self.composer_band(layout.composer, layout.queue, buffer) {
             painted.planes.push(plane);
         }
@@ -1340,7 +1465,7 @@ impl View {
     /// The row saying where the frame stands, how many rows have landed below it since and the key
     /// that follows the run again, whole or not drawn at all: a frame too narrow for the words
     /// leaves the cells blank rather than cutting the sentence it says.
-    fn notice_band(&self, area: Rect, buffer: &mut Buffer) {
+    fn notice_band(&mut self, area: Rect, buffer: &mut Buffer, drawn: &Drawn) {
         let Some(place) = self.notice() else {
             return;
         };
@@ -1350,13 +1475,28 @@ impl View {
             return;
         }
         let landed = counted(self.landed, "landed");
-        let mut spans: Vec<(&str, Look)> = vec![(place.as_str(), keys::MEANING)];
+        let standing = {
+            let tops = self.rows.prompts();
+            self.standing(drawn, &tops)
+        };
+        let mut spans: Vec<(&str, Look)> = Vec::new();
+        if let Some(standing) = standing.as_deref() {
+            spans.push((standing, keys::MEANING));
+            spans.push((GAP, SEPARATOR));
+        }
+        // The prompt is the row's first fact, so a row too narrow for it keeps the rest and gives
+        // the count up whole.
+        let counted_from = spans.len();
+        spans.push((place.as_str(), keys::MEANING));
         if let Some(landed) = landed.as_deref() {
             spans.push((GAP, SEPARATOR));
             spans.push((landed, keys::MEANING));
         }
         spans.push((GAP, SEPARATOR));
         spans.extend(keyed("End", "follows the run"));
+        if counted_from > 0 && pen::width(&spans) > area.width {
+            spans.drain(..counted_from);
+        }
         whole_row(buffer, area, area.y, &spans, &self.capabilities.palette());
     }
 
