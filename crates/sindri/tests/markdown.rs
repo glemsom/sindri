@@ -1739,6 +1739,25 @@ fn a_diffs_file_headers_are_muted_so_neither_reads_as_an_addition_or_a_removal()
 }
 
 #[test]
+fn a_diffs_row_whose_own_words_open_with_a_marker_is_still_the_change_its_marker_names() {
+    let rows = markdown::rows("```diff\n---banner\n+++banner\n```", 40);
+
+    assert_eq!(
+        rows[1].spans().last(),
+        Some(&(String::from("---banner"), Look::plain(Ink::Err))),
+        "a file header is a marker and the space and name after it, so a removed line that itself \
+         opens with its own markers is still a removal: {:?}",
+        rows[1].spans()
+    );
+    assert_eq!(
+        rows[2].spans().last(),
+        Some(&(String::from("+++banner"), Look::plain(Ink::Ok))),
+        "and an added line that opens with one is still an addition: {:?}",
+        rows[2].spans()
+    );
+}
+
+#[test]
 fn a_fences_tag_is_the_accent_drawn_faint_behind_a_dim_bar() {
     let rows = markdown::rows("```rust\nfn main() {}\n```", 40);
 
