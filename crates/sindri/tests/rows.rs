@@ -20,7 +20,7 @@ use sindri::palette::{Band, Palette};
 use sindri::pen;
 use sindri::picture::Surface;
 use sindri::pulse::Pulse;
-use sindri::rows::{Row, Rows, Scroll, Window, layout, layout_on};
+use sindri::rows::{Fence, Row, Rows, Scroll, Sideways, Window, layout, layout_on};
 use sindri::size::Sizes;
 use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
@@ -275,7 +275,7 @@ fn the_whole_height_costs_a_layout_only_for_what_it_has_not_seen() {
 }
 
 #[test]
-fn every_row_fits_the_width_it_was_laid_out_for() {
+fn every_row_but_a_fences_line_fits_the_width_it_was_laid_out_for() {
     let secrets = SecretSet::default();
     let entries = [
         Entry::Turn { turn: 1000 },
@@ -312,6 +312,9 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
     for cols in [2, 3, 5, 6, 7, 8, 40, 120] {
         for entry in &entries {
             for row in layout(entry, cols) {
+                if row.fence().is_some() {
+                    continue;
+                }
                 let drawn = row.width();
                 assert!(
                     drawn <= cols,
@@ -333,6 +336,131 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
             );
         }
     }
+}
+
+/// One answer written as the model wrote it, laid out as the rows an entry is.
+fn answered(text: &str) -> Entry {
+    Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact(text),
+    }
+}
+
+/// Two fences in one answer, the first wider than the twenty columns the walk is read at: the
+/// sentence every test of a walk counts its rows against.
+const TWO_FENCES: &str = "```rust\nlet a_line_wider_than_the_band_it_is_drawn_in = 1;\n```\n\n\
+                           between the two fences\n\n```rust\nlet short = 2;\n```";
+
+/// The fence each row of entry `at` is a line of, and how far it has been walked.
+fn walks(rows: &mut Rows, at: usize) -> Vec<(Option<usize>, u16)> {
+    rows.rows(at)
+        .iter()
+        .map(|row| {
+            (
+                row.fence().map(Fence::id),
+                row.fence().map_or(0, Fence::walk),
+            )
+        })
+        .collect()
+}
+
+fn walked(rows: &[(Option<usize>, u16)], fence: usize) -> Vec<u16> {
+    rows.iter()
+        .filter(|(id, _)| *id == Some(fence))
+        .map(|(_, walk)| *walk)
+        .collect()
+}
+
+#[test]
+fn a_walk_moves_every_row_of_one_fence_and_leaves_the_other_fence_and_the_other_entry_alone() {
+    let mut rows = Rows::new();
+    rows.resize(20);
+    rows.push(answered(TWO_FENCES));
+    rows.push(answered(TWO_FENCES));
+    let before = walks(&mut rows, 0);
+    let beside = walks(&mut rows, 1);
+    assert!(
+        !walked(&before, 0).is_empty() && !walked(&before, 1).is_empty(),
+        "the answer holds two fences to walk: {before:?}"
+    );
+
+    assert!(rows.sideways(0, 0, Sideways::Forward));
+    let moved = walks(&mut rows, 0);
+    assert_eq!(
+        walked(&moved, 0),
+        vec![8; walked(&before, 0).len()],
+        "every row of the fence the reader walked moved by the one step: {moved:?}"
+    );
+    assert_eq!(
+        walked(&moved, 1),
+        vec![0; walked(&before, 1).len()],
+        "and the fence beside it did not move"
+    );
+    assert_eq!(
+        walks(&mut rows, 1),
+        beside,
+        "and no row of the entry beside it moved either"
+    );
+    assert!(rows.sideways(0, 0, Sideways::Back), "the walk goes back");
+    assert_eq!(walks(&mut rows, 0), before, "and the fence is where it was");
+}
+
+#[test]
+fn a_fence_walked_as_far_as_its_widest_line_goes_no_further() {
+    let mut rows = Rows::new();
+    rows.resize(20);
+    rows.push(answered(TWO_FENCES));
+    let widest = rows
+        .rows(0)
+        .iter()
+        .filter(|row| row.fence().map(Fence::id) == Some(0))
+        .map(Row::width)
+        .max()
+        .expect("a fence with a line of it drawn");
+
+    let mut steps = 0;
+    while rows.sideways(0, 0, Sideways::Forward) {
+        steps += 1;
+        assert!(steps < 40, "the walk ran past the widest line of its fence");
+    }
+    assert!(steps > 0, "a fence wider than the band is walked at all");
+    assert_eq!(
+        walked(&walks(&mut rows, 0), 0).into_iter().max(),
+        Some(widest.saturating_sub(20)),
+        "the walk stops where the tail of the widest line stands at the band's edge"
+    );
+    assert!(
+        !rows.sideways(0, 0, Sideways::Forward),
+        "and a fence walked that far goes no further"
+    );
+}
+
+#[test]
+fn a_walk_outlives_a_line_laid_again_and_a_width_change_drops_it() {
+    let mut rows = Rows::new();
+    rows.resize(20);
+    rows.text("```rust\nlet a_line_wider_than_the_band_it_is_drawn_in = 1;\n");
+    rows.live(None);
+    assert!(
+        rows.sideways(0, 0, Sideways::Forward),
+        "the line the run is still writing is wider than the band, so the reader walks it"
+    );
+
+    rows.text("and a word more");
+    rows.live(None);
+    assert_eq!(
+        walked(&walks(&mut rows, 0), 0).into_iter().max(),
+        Some(8),
+        "the fragment the wire sent laid the line again, and the reader's walk is still on it"
+    );
+
+    rows.resize(24);
+    assert!(
+        walked(&walks(&mut rows, 0), 0)
+            .iter()
+            .all(|walk| *walk == 0),
+        "a width change drops the walk with the rows it was made at"
+    );
 }
 
 #[test]
@@ -670,6 +798,9 @@ fn a_row_too_narrow_for_a_marker_gives_up_the_marker_before_it_cuts_a_word() {
         }
 
         for row in layout(&entry, 2) {
+            if row.fence().is_some() {
+                continue;
+            }
             assert!(
                 row.width() <= 2,
                 "a row of two columns holds no word past them: {row:?}"

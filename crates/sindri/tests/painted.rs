@@ -59,6 +59,29 @@ fn symbols(buffer: &Buffer, y: u16, x: u16, width: u16) -> Vec<String> {
         .collect()
 }
 
+/// The band row whose cells hold `said`, counted from the band's first row.
+fn row_of(buffer: &Buffer, area: Rect, said: &str) -> u16 {
+    for y in area.y..area.bottom() {
+        if symbols(buffer, y, area.x, area.width)
+            .concat()
+            .contains(said)
+        {
+            return y.saturating_sub(area.y);
+        }
+    }
+    panic!("the frame draws {said:?} on no row of the band it was given");
+}
+
+/// One fence line wider than the band it is drawn in, and a row of prose under it.
+const FENCE: &str = "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_\
+                     the_shape_the_model_wrote_it_in_and_no_band_reflows_one = 1;\n```\n\n\
+                     the prose under the fence";
+
+/// What the frame's last row says.
+fn footer(buffer: &Buffer, laid: &sindri::view::Layout) -> String {
+    symbols(buffer, laid.footer.y, laid.footer.x, laid.footer.width).concat()
+}
+
 fn drawn_at(buffer: &Buffer, said: &str) -> (u16, u16) {
     let wanted: Vec<String> = said.chars().map(|glyph| glyph.to_string()).collect();
     let area = buffer.area;
@@ -727,5 +750,182 @@ fn a_card_that_leaves_the_carets_cell_leaves_the_cursor_in_that_same_cell() {
         mark_cells(&buffer, &palette, laid.composer),
         Vec::new(),
         "so the cursor is the whole of the caret, and no cell of the band is drawn for it"
+    );
+}
+
+#[test]
+fn a_marked_fence_answers_the_sideways_key_and_the_footer_names_it_only_there() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(answer(FENCE)),
+    );
+    let (before, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    let row = row_of(&before, laid.transcript, "a_fence_line");
+    assert!(
+        !footer(&before, &laid).contains("Shift+"),
+        "a frame with nothing marked names no sideways key: {}",
+        footer(&before, &laid)
+    );
+
+    view.drag(Cell::new(row, 0), Cell::new(row, 60));
+    let (marked, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    assert!(
+        footer(&marked, &laid).contains("Shift+→"),
+        "the footer names the key that walks the fence the mark stands on: {}",
+        footer(&marked, &laid)
+    );
+
+    assert_eq!(
+        view.key(Key::ShiftRight),
+        Outcome::Edited,
+        "the marked fence answers the sideways key"
+    );
+    let (walked, _) = painted_and_told(&mut view, 100, 24);
+    assert_eq!(
+        symbols(&walked, laid.transcript.y + row, 2, 60),
+        symbols(&marked, laid.transcript.y + row, 10, 60),
+        "the fence's line carries its words eight columns back, and its bar stays where it was"
+    );
+    for y in laid.transcript.y..laid.transcript.bottom() {
+        if y == laid.transcript.y + row {
+            continue;
+        }
+        assert_eq!(
+            symbols(&walked, y, 0, 100),
+            symbols(&marked, y, 0, 100),
+            "no other row of the band moved with it"
+        );
+    }
+}
+
+#[test]
+fn a_mark_that_covers_no_fence_line_answers_no_sideways_key() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(answer(FENCE)),
+    );
+    let (before, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    let row = row_of(&before, laid.transcript, "the prose under the fence");
+
+    view.drag(Cell::new(row, 0), Cell::new(row, 40));
+    let (marked, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+
+    assert!(
+        !footer(&marked, &laid).contains("Shift+"),
+        "the footer names no key the frame cannot honour: {}",
+        footer(&marked, &laid)
+    );
+    assert_eq!(
+        view.key(Key::ShiftRight),
+        Outcome::Unchanged,
+        "and a mark over prose walks nothing"
+    );
+}
+
+#[test]
+fn a_marked_fence_the_band_holds_whole_names_no_sideways_key() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(answer("```rust\nlet short = 1;\n```")),
+    );
+    let (before, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    let row = row_of(&before, laid.transcript, "let short");
+
+    view.drag(Cell::new(row, 0), Cell::new(row, 40));
+    let (marked, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+
+    assert!(
+        !footer(&marked, &laid).contains("Shift+"),
+        "a fence the band holds whole has no words past its edge, so the footer names no key that \
+         would walk it: {}",
+        footer(&marked, &laid)
+    );
+    assert_eq!(
+        view.key(Key::ShiftRight),
+        Outcome::Unchanged,
+        "and the key it names nowhere answers nothing"
+    );
+}
+
+#[test]
+fn a_marked_line_of_a_cut_fence_answers_the_key_however_short_the_line_is() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(answer(
+            "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_\
+             the_model_wrote_it_in = 1;\nlet short = 2;\n```",
+        )),
+    );
+    let (before, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    let row = row_of(&before, laid.transcript, "let short");
+
+    view.drag(Cell::new(row, 0), Cell::new(row, 40));
+    painted_and_told(&mut view, 100, 24);
+    assert_eq!(
+        view.key(Key::ShiftRight),
+        Outcome::Edited,
+        "the mark stands on one line of a fence the band cut, and the offset covers every row of \
+         that fence"
+    );
+}
+
+#[test]
+fn a_width_change_drops_the_walk_a_fence_was_left_in() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(answer(FENCE)),
+    );
+    let (wide, told) = painted_and_told(&mut view, 120, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    let row = row_of(&wide, laid.transcript, "a_fence_line");
+
+    view.drag(Cell::new(row, 0), Cell::new(row, 119));
+    painted_and_told(&mut view, 120, 24);
+    assert_eq!(view.key(Key::ShiftRight), Outcome::Edited);
+    let (nudged, told) = painted_and_told(&mut view, 120, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    let walked = symbols(&nudged, laid.transcript.y + row, 0, 120).concat();
+    assert!(
+        !walked.contains("let a_fence_line"),
+        "the fence was left walked, so its line opens eight columns in: {walked:?}"
+    );
+
+    let (narrow, _) = painted_and_told(&mut view, 60, 24);
+    let narrow: String = (0..24)
+        .map(|y| symbols(&narrow, y, 0, 60).concat())
+        .collect();
+    assert!(
+        narrow.contains("let a_fence_line"),
+        "a row laid again forgets the walk, which is what a width change is: {narrow:?}"
     );
 }

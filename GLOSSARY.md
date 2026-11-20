@@ -209,6 +209,12 @@ ever gives way, so no guide is drawn over a glyph, a fence's bar or a quote's, a
 leading whitespace, or one column of it, carries none.
 _Avoid_: Indent line, ruler, indent marker
 
+**Cut**:
+Where a band ends a fence's line: the words past its edge are dropped and the last cell says more
+stands there, because a fence is kept in the shape it was written in and no band reflows one. A
+reader walks a marked fence sideways for the rest, and a copy takes the line as it was written.
+_Avoid_: Truncation, ellipsis, overflow, wrap
+
 **Draft count**:
 What Enter would send, counted on the far corner of the composer's band: the files the draft's words
 name, the command it opens with, and the characters it holds. It is a count of the draft and never of

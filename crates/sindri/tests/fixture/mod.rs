@@ -190,6 +190,15 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-fence-nested" => construct(capabilities, nested()),
         "markdown-fence-unknown" => construct(capabilities, unknown()),
         "markdown-diff" => construct(capabilities, diff()),
+        "markdown-fence-cut" => construct(capabilities, cut()),
+        "markdown-fence-fits" => construct(capabilities, fits()),
+        "markdown-fence-walked" => {
+            let mut view = construct(capabilities, cut());
+            view.drag(mark::Cell::new(1, 0), mark::Cell::new(3, 70));
+            let mut view = drawn(view, 80, 24);
+            view.key(Key::ShiftRight);
+            view
+        }
         "markdown-diff-quoted" => construct(capabilities, &diff_quoted()),
         "markdown-inline" => construct(capabilities, inline()),
         "markdown-emphasis" => construct(capabilities, emphasised()),
@@ -460,6 +469,18 @@ fn nested() -> &'static str {
 fn unknown() -> &'static str {
     "```frobnicate\n// a comment stays the glyphs it was written as\nlet x = 1; # not rust\n\
      \"a string\" is a word too\n```"
+}
+
+/// One fence line wider than the eighty columns its frame is drawn on, so the band cuts it and says
+/// more stands past its edge.
+fn cut() -> &'static str {
+    "```rust\nlet a_fence_line_that_is_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_\
+     the_model_wrote_it_in = 1;\n```"
+}
+
+/// The same fence with every line short enough for the band to hold it whole.
+fn fits() -> &'static str {
+    "```rust\nlet a_fence_line_that_fits = 1;\n```"
 }
 
 /// A diff fence with a file header, a hunk header, the rows both sides share and one row each
@@ -1437,6 +1458,19 @@ fn carets_agree(named: Option<(u16, u16)>, placed: Option<Position>) -> Result<(
         )),
         _ => Ok(()),
     }
+}
+
+/// `view` drawn once on a headless screen of that size, so a fixture built by a key is handed back
+/// with the pass that key read.
+fn drawn(mut view: View, cols: u16, rows: u16) -> View {
+    let mut terminal =
+        Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
+    terminal
+        .draw(|frame| {
+            view.paint(frame.area(), frame.buffer_mut());
+        })
+        .expect("the frame is painted");
+    view
 }
 
 /// The frame `name` draws on a headless screen of that size.

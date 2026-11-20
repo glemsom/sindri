@@ -1899,6 +1899,25 @@ fn asking(queued: usize) -> View {
     view
 }
 
+/// A frame whose mark stands on a fence line wider than the band, so the sideways keys are hints it
+/// can honour.
+fn marked_fence() -> View {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([Entry::Assistant {
+            turn: 1,
+            text: SecretSet::default().redact(
+                "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_\
+                 the_model_wrote_it_in = 1;\n```",
+            ),
+        }]),
+    );
+    view.drag(Cell::new(1, 0), Cell::new(3, 40));
+    painted_and_told(&mut view, 40, 40);
+    view
+}
+
 fn drawn_footer(view: &mut View, cols: u16, rows: u16) -> String {
     let (buffer, told) = painted_and_told(view, cols, rows);
     drawn_row(&buffer, laid_out(&told).footer.y)
@@ -3369,6 +3388,7 @@ fn every_hint_the_table_writes_is_drawn_in_the_frame_that_honours_it() {
         ),
         asking(0),
         asking(3),
+        marked_fence(),
     ] {
         let depth = depth(&view);
         for width in 20..=200u16 {

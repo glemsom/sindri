@@ -4,7 +4,7 @@ use crate::pen;
 
 /// Rows of a band as the mark reads them: every glyph with the column it is drawn from and the
 /// columns it covers.
-fn band(rows: &[&str]) -> Vec<Vec<Glyph>> {
+fn band(rows: &[&str]) -> Vec<Line> {
     rows.iter()
         .map(|row| {
             let mut column = 0u16;
@@ -14,8 +14,16 @@ fn band(rows: &[&str]) -> Vec<Vec<Glyph>> {
                 line.push((column, glyph, width));
                 column = column.saturating_add(width);
             }
-            line
+            Line::of(line, false)
         })
+        .collect()
+}
+
+/// The same band with every row of it cut at the band's edge.
+fn cut(rows: &[&str]) -> Vec<Line> {
+    band(rows)
+        .into_iter()
+        .map(|line| Line::of(line.glyphs, true))
         .collect()
 }
 
@@ -122,4 +130,22 @@ fn a_drag_that_lands_on_nothing_covers_nothing() {
         "a row of blanks is no part of a mark, so a drag over one covers nothing"
     );
     assert_eq!(span.text(), "");
+}
+
+#[test]
+fn a_row_the_band_cut_keeps_the_glyphs_past_the_marks_right_edge() {
+    let lines = cut(&["abcdefghij"]);
+
+    let span = Span::of(Mark::drag(Cell::new(0, 2), Cell::new(0, 4)), &lines);
+
+    assert_eq!(
+        span.text(),
+        "cdefghij",
+        "the words the band's edge hid are still the row's, so a copy of it takes them"
+    );
+    assert_eq!(
+        span.rows()[0].left(),
+        2,
+        "while the left edge the mark chose still holds"
+    );
 }

@@ -89,6 +89,19 @@ fn highlighted(buffer: &Buffer, palette: &Palette, area: Rect) -> String {
     rows.join("\n")
 }
 
+/// The band row whose cells hold `said`, counted from the band's first row.
+fn row_of(buffer: &Buffer, area: Rect, said: &str) -> u16 {
+    for y in area.y..area.bottom() {
+        let line: String = (area.x..area.right())
+            .map(|x| buffer[(x, y)].symbol())
+            .collect();
+        if line.contains(said) {
+            return y.saturating_sub(area.y);
+        }
+    }
+    panic!("the frame draws {said:?} on no row of the transcript it was given");
+}
+
 /// What `Ctrl-Y` hands the terminal, read after the frame the key changed has been painted.
 fn copied(view: &mut View) -> String {
     painted(view);
@@ -148,6 +161,32 @@ fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
         again, taken,
         "and `Ctrl-Y` copies again with no fresh selection: the mark outlives the paint \
          that drew it"
+    );
+}
+
+#[test]
+fn a_copy_of_a_row_the_band_cut_hands_back_the_line_as_the_model_wrote_it() {
+    let line = "let a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_the_model_\
+                wrote_it_in_and_no_band_reflows_one = 1;";
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([answer(1, &format!("```rust\n{line}\n```"))]),
+    );
+    let (frame, laid) = painted(&mut view);
+    let row = row_of(&frame, laid.transcript, "a_fence_line");
+    view.drag(Cell::new(row, 2), Cell::new(row, 40));
+    let taken = copied(&mut view);
+
+    assert_eq!(
+        taken, line,
+        "the words past the mark's right edge are still the row's, so a copy takes the line the \
+         model wrote and never the fragment the band's edge left showing"
+    );
+    assert!(
+        !taken.contains('…'),
+        "and the cut that says more stands past the edge is no cell of the row, so no copy takes \
+         it: {taken:?}"
     );
 }
 

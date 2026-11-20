@@ -12,7 +12,7 @@ use sindri::markdown;
 use sindri::palette::{Band, Palette};
 use sindri::pen;
 use sindri::picture::Surface;
-use sindri::rows::Row;
+use sindri::rows::{Fence, Row};
 use sindri::size::Sizes;
 
 fn words(row: &Row) -> String {
@@ -320,19 +320,29 @@ fn painted(rows: &[Row], links: &mut Links) -> Buffer {
     painted_over(rows, links, Style::default())
 }
 
+/// The same rows painted into a frame `cols` columns wide.
+fn painted_in(rows: &[Row], links: &mut Links, cols: u16) -> Buffer {
+    painted_width(rows, links, Style::default(), cols)
+}
+
 /// The same rows painted over a frame whose every cell was first claimed in `ground`, so a test
 /// reads the cells a row leaves blank as well as the ones its words cover.
 fn painted_over(rows: &[Row], links: &mut Links, ground: Style) -> Buffer {
+    painted_width(rows, links, ground, 120)
+}
+
+/// The same rows over that ground, in a frame `cols` columns wide.
+fn painted_width(rows: &[Row], links: &mut Links, ground: Style, cols: u16) -> Buffer {
     let area = Rect::new(
         0,
         0,
-        120,
+        cols,
         u16::try_from(rows.len()).expect("a frame this short"),
     );
     let mut buffer = Buffer::empty(area);
     pen::claim(&mut buffer, area, ground);
     for (at, row) in rows.iter().enumerate() {
-        let area = Rect::new(0, u16::try_from(at).expect("a frame this short"), 120, 1);
+        let area = Rect::new(0, u16::try_from(at).expect("a frame this short"), cols, 1);
         row.paint(
             area,
             &mut buffer,
@@ -1593,34 +1603,31 @@ fn a_diffs_removed_row_is_drawn_err_and_its_added_row_ok() {
 }
 
 #[test]
-fn a_diff_rows_tint_carries_over_every_row_a_narrow_band_cuts_it_to() {
+fn a_diff_row_wider_than_the_band_is_one_row_and_wholly_added() {
     let rows = markdown::rows(
         "```diff\n+a row long enough that a narrow band cannot hold it\n```",
         24,
     );
-    let cut = &rows[1..];
 
-    assert!(
-        cut.len() > 1,
-        "the row was cut to more than one row of the band: {}",
-        drawn(&rows).join("|")
+    assert_eq!(
+        rows.len(),
+        2,
+        "the band never cuts a fence's line into rows of its own: {rows:?}"
     );
-    for row in cut {
-        assert_eq!(
-            row.spans()[0],
-            (String::from("▏ "), Look::plain(Ink::Dim)),
-            "the bar stands before every row a fence is cut to: {:?}",
-            row.spans()
-        );
-        assert!(
-            row.spans()[1..]
-                .iter()
-                .all(|(_, look)| *look == Look::plain(Ink::Ok)),
-            "every row the band cuts an added line to is added, so the tint is never left on the \
-             first: {:?}",
-            row.spans()
-        );
-    }
+    assert_eq!(
+        rows[1].spans()[0],
+        (String::from("▏ "), Look::plain(Ink::Dim)),
+        "the bar stands before the line: {:?}",
+        rows[1].spans()
+    );
+    assert!(
+        rows[1].spans()[1..]
+            .iter()
+            .all(|(_, look)| *look == Look::plain(Ink::Ok)),
+        "the whole line is added, so the tint carries over every glyph of it and is never left on \
+         the first: {:?}",
+        rows[1].spans()
+    );
 }
 
 #[test]
@@ -1785,6 +1792,90 @@ fn a_fence_still_open_at_the_end_of_the_text_is_a_code_block() {
         rows[3].spans()[0],
         (String::from("▏ "), Look::plain(Ink::Dim)),
         "and a fence still open is guttered like a fence that closed"
+    );
+}
+
+#[test]
+fn a_fence_line_wider_than_the_band_is_one_row_and_no_word_of_it_is_broken() {
+    let rows = markdown::rows(
+        "```diff\n+a row long enough that a narrow band cannot hold it\n```",
+        24,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "▏ diff",
+            "▏ +a row long enough that a narrow band cannot hold it"
+        ],
+        "a fence keeps the shape it was written in, so its line is one row whether or not the band \
+         is wide enough for it"
+    );
+    assert!(
+        rows[1].width() > 24,
+        "and that row carries the whole line past the band's edge: {} columns",
+        rows[1].width()
+    );
+}
+
+#[test]
+fn a_fence_line_is_tagged_with_the_fence_it_belongs_to_and_no_prose_is() {
+    let rows = markdown::rows(
+        "```rust\nlet one = 1;\n```\n\nbetween the two fences\n\n```rust\nlet two = 2;\n```",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "▏ rust",
+            "▏ let one = 1;",
+            "",
+            "between the two fences",
+            "",
+            "▏ rust",
+            "▏ let two = 2;"
+        ],
+        "two fences and the prose between them"
+    );
+    let tagged: Vec<Option<usize>> = rows.iter().map(|row| row.fence().map(Fence::id)).collect();
+    assert_eq!(
+        tagged,
+        [None, Some(0), None, None, None, None, Some(1)],
+        "each line carries the block it is a line of, and the tag row and the prose carry none: a \
+         tag is no line of the fence and neither is a paragraph"
+    );
+}
+
+#[test]
+fn a_fence_line_wider_than_the_band_is_cut_at_its_edge_and_its_last_cell_says_more_stands() {
+    let rows = markdown::rows(
+        "```rust\nlet a_line_of_rust_wider_than_the_band_its_own_row_is_drawn_in = 1;\n```\n\n\
+         ```rust\nlet short = 2;\n```",
+        40,
+    );
+    let mut links = Links::none();
+    let buffer = painted_in(&rows, &mut links, 40);
+
+    assert!(
+        buffer[(39, 1)].symbol() == "…",
+        "the last cell of the row the band cuts says more words stand past it: {:?}",
+        buffer[(39, 1)].symbol()
+    );
+    let drawn: String = (0..40).map(|x| buffer[(x, 1)].symbol()).collect();
+    assert!(
+        !drawn.contains("= 1;"),
+        "no cell of the band past its edge holds a glyph of the line: {drawn:?}"
+    );
+    assert!(
+        !buffer[(39, 4)].symbol().eq("…"),
+        "a fence line the band holds whole carries no mark of a cut: {:?}",
+        buffer[(39, 4)].symbol()
+    );
+    assert!(
+        !rows[1].spans().iter().any(|(text, _)| text.contains('…')),
+        "the cut is no cell of the row's spans, so a copy never takes it: {:?}",
+        rows[1].spans()
     );
 }
 

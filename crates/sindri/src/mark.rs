@@ -80,8 +80,24 @@ impl Marked {
     }
 }
 
+/// One row of a band as the mark reads it: the columns its glyphs are drawn in, and whether the
+/// band cut its words off — a row the band cut is one a copy takes whole.
+#[derive(Clone, Debug, Default)]
+pub struct Line {
+    glyphs: Vec<Glyph>,
+    cut: bool,
+}
+
+impl Line {
+    pub fn of(glyphs: Vec<Glyph>, cut: bool) -> Line {
+        Line { glyphs, cut }
+    }
+}
+
 impl Span {
-    pub fn of(mark: Mark, lines: &[Vec<Glyph>]) -> Span {
+    /// The words the mark covers in the band `lines` drew, a cut row keeping every glyph past the
+    /// mark's right edge.
+    pub fn of(mark: Mark, lines: &[Line]) -> Span {
         let first = mark.anchor.row.min(mark.head.row);
         let last = mark.anchor.row.max(mark.head.row);
         let from = mark.anchor.column.min(mark.head.column);
@@ -91,7 +107,7 @@ impl Span {
             let Some(line) = lines.get(usize::from(row)) else {
                 continue;
             };
-            if let Some(marked) = marked_row(row, line, from, to) {
+            if let Some(marked) = marked_row(row, &line.glyphs, from, to, line.cut) {
                 rows.push(marked);
             }
         }
@@ -115,7 +131,13 @@ impl Span {
     }
 }
 
-fn marked_row(row: u16, line: &[Glyph], from: u16, to: u16) -> Option<Marked> {
+fn marked_row(row: u16, line: &[Glyph], from: u16, to: u16, cut: bool) -> Option<Marked> {
+    // The band's edge hides no word of a cut row from a copy: the left edge the mark chose still
+    // holds, and the right one gives way to the words past it.
+    let to = match cut {
+        true => u16::MAX,
+        false => to,
+    };
     let kept: Vec<&Glyph> = line
         .iter()
         .filter(|(column, _, width)| column.saturating_add(*width) > from && *column <= to)

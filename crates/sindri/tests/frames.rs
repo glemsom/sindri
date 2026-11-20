@@ -514,3 +514,18 @@ fn files_120x40_is_the_same_cells_where_the_pointer_is_taken_and_where_it_is_not
 fn commands_120x40_is_the_same_cells_where_the_pointer_is_taken_and_where_it_is_not() {
     fixture::assert_pointer_draws_the_same_cells("commands", 120, 40);
 }
+
+#[test]
+fn markdown_fence_cut_80x24_is_a_fence_line_the_band_cuts_and_marks() {
+    fixture::assert_frame("markdown-fence-cut", 80, 24);
+}
+
+#[test]
+fn markdown_fence_fits_80x24_is_a_fence_line_the_band_holds_whole() {
+    fixture::assert_frame("markdown-fence-fits", 80, 24);
+}
+
+#[test]
+fn markdown_fence_walked_80x24_is_the_line_the_band_cut_carried_eight_columns_on() {
+    fixture::assert_frame("markdown-fence-walked", 80, 24);
+}

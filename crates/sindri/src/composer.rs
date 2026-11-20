@@ -48,6 +48,8 @@ pub enum Key {
     Down,
     ShiftUp,
     ShiftDown,
+    ShiftLeft,
+    ShiftRight,
     Home,
     End,
     PageUp,
@@ -343,6 +345,8 @@ impl Composer {
             // change and no rows to move.
             Key::ShiftUp
             | Key::ShiftDown
+            | Key::ShiftLeft
+            | Key::ShiftRight
             | Key::Copy
             | Key::Fold
             | Key::PageUp

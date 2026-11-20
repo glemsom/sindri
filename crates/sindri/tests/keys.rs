@@ -109,6 +109,20 @@ fn the_four_keys_that_move_the_transcript_are_one_band_each_way() {
 }
 
 #[test]
+fn the_sideways_arrows_walk_the_marked_fence_they_answer() {
+    assert_eq!(
+        act_of(Mode::Composer, Key::ShiftRight),
+        Some(Act::SidewaysForward),
+        "`Shift+→` walks the fence under the mark on"
+    );
+    assert_eq!(
+        act_of(Mode::Composer, Key::ShiftLeft),
+        Some(Act::SidewaysBack),
+        "and `Shift+←` walks it back"
+    );
+}
+
+#[test]
 fn end_returns_the_frame_to_the_tail_and_is_the_carets_own_only_there() {
     assert_eq!(
         act_of(Mode::Composer, Key::End),

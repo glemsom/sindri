@@ -86,6 +86,8 @@ pub enum Act {
     Fold,
     ExtendDown,
     ExtendUp,
+    SidewaysBack,
+    SidewaysForward,
     Drop,
     Keys,
     Files,
@@ -113,7 +115,7 @@ pub struct Binding {
     pub act: Act,
 }
 
-const COMPOSER: [Binding; 25] = [
+const COMPOSER: [Binding; 27] = [
     Binding {
         key: Key::Char('?'),
         name: "?",
@@ -209,6 +211,18 @@ const COMPOSER: [Binding; 25] = [
         name: "Shift+↑",
         does: "grow the mark a row up",
         act: Act::ExtendUp,
+    },
+    Binding {
+        key: Key::ShiftLeft,
+        name: "Shift+←",
+        does: "the marked fence sideways back",
+        act: Act::SidewaysBack,
+    },
+    Binding {
+        key: Key::ShiftRight,
+        name: "Shift+→",
+        does: "the marked fence sideways on",
+        act: Act::SidewaysForward,
     },
     Binding {
         key: Key::Left,
