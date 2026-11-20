@@ -20,20 +20,13 @@ use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
 use rustix::termios::{Winsize, tcsetwinsize};
 use tempfile::TempDir;
 
-// The one call this harness makes of its own: a child of a session of its own, so the size it
-// paints is the pty's and not that of a terminal it inherited.
-unsafe extern "C" {
-    fn setsid() -> i32;
-}
-
 /// How long a sequence is given to arrive before a test calls it absent: generous, because a test that is merely
 /// slow must not read as a program that never spoke.
 const PATIENCE: Duration = Duration::from_secs(10);
 
-/// The size the pty is told it has, and so the size every screen here is read at: the two cannot
-/// disagree about the frame a launch drew.
+/// The size the pty is told it has, and so the size every frame here is read at: the two cannot
+/// disagree about what a launch drew.
 const COLS: u16 = 80;
-
 const ROWS: u16 = 24;
 
 const ANSWER: &str =
@@ -267,11 +260,11 @@ impl Session {
     }
 
     fn spawn(command: &mut Command) -> Session {
+        // A child sharing this session would ask a controlling terminal for a size and paint a
+        // frame the pty never heard of.
         unsafe {
             command.pre_exec(|| {
-                if setsid() == -1 {
-                    return Err(std::io::Error::last_os_error());
-                }
+                rustix::process::setsid().map_err(std::io::Error::from)?;
                 Ok(())
             });
         }
@@ -490,7 +483,7 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
     // line break and sends nothing. No `?` in the draft either: that key opens a screen.
     pty.type_bytes(b"triage this");
     assert!(
-        drawn.wait_until(|stream| frame::screened(stream, COLS, ROWS)
+        drawn.wait_until(|stream| frame::read(stream, COLS, ROWS)
             .caret()
             .is_some_and(|(_, column)| column == 14)),
         "eleven glyphs typed in the draft's fourth column, one column in from the band's \

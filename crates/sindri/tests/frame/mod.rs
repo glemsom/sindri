@@ -47,10 +47,10 @@ pub fn painted(view: &mut View, cols: u16, rows: u16) -> Frame {
     }
 }
 
-/// The screen `drawn` — the bytes a launch wrote — left on a terminal of that size, and the cell the
-/// caret was in when it went quiet. No pass here told a terminal anything, and a screen carries
-/// the colours it drew with no palette to name them.
-pub fn screened(drawn: &str, cols: u16, rows: u16) -> Frame {
+/// The frame the bytes `drawn` left in a terminal of that size, read as the cells it holds, and the
+/// cell the caret was in when it went quiet. No pass here told a terminal anything, so the cells
+/// carry the colours it drew them in and there is no palette to name them by.
+pub fn read(drawn: &str, cols: u16, rows: u16) -> Frame {
     let mut terminal =
         avt::Terminal::new(usize::from(cols), usize::from(rows)).expect("a screen of that size");
     terminal.feed(drawn);
@@ -62,6 +62,7 @@ pub fn screened(drawn: &str, cols: u16, rows: u16) -> Frame {
     let caret = terminal
         .cursor()
         .position()
+        // A parser counts a cursor as (col, row) where a frame's cell is (row, column).
         .map(|(col, row)| (narrow(row), narrow(col)));
     Frame {
         cells,
@@ -71,9 +72,10 @@ pub fn screened(drawn: &str, cols: u16, rows: u16) -> Frame {
     }
 }
 
-/// A cell the screen counts: a terminal wider or taller than a `u16` names is no screen a test reads.
+/// A row or a column a terminal counts: a terminal wider or taller than a `u16` names is no frame a
+/// test reads.
 fn narrow(at: usize) -> u16 {
-    u16::try_from(at).expect("a cell of the screen")
+    u16::try_from(at).expect("a row or a column of the screen")
 }
 
 /// A frame of cells written outside a paint, for the rules a real view cannot reach.
@@ -103,8 +105,8 @@ impl Frame {
 
     pub fn palette(&self) -> &Palette {
         self.palette.as_ref().expect(
-            "a frame read off a terminal's bytes carries the colours it drew and no palette to name \
-             them: a screen a launch drew names looks nowhere",
+            "a frame read off a terminal's bytes carries the colours it drew and no palette to \
+             name them, so none of its cells is a look",
         )
     }
 

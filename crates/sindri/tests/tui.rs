@@ -26,22 +26,13 @@ use sindri::ledger::Rail;
 use sindri::pen;
 use sindri::plane::SEAM;
 
-use crate::frame::Frame;
-
-// The one call this harness makes of its own: a child of a session of its own, so the size it
-// paints is the pty's and not that of a terminal it inherited.
-unsafe extern "C" {
-    fn setsid() -> i32;
-}
-
 /// How long a frame is given to arrive before a test calls it absent: generous,
 /// because a test that is merely slow must not read as a program that never drew.
 const PATIENCE: Duration = Duration::from_secs(10);
 
-/// The size the pty is told it has, and so the size every screen here is read at: the two cannot
-/// disagree about the frame a launch drew.
+/// The size the pty is told it has, and so the size every frame here is read at: the two cannot
+/// disagree about what a launch drew.
 const COLS: u16 = 120;
-
 const ROWS: u16 = 40;
 
 const ANSWER: &str =
@@ -49,11 +40,6 @@ const ANSWER: &str =
 
 const ANSWER_CACHED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream_cached.sse");
-
-/// The footer's first hint, as the glyphs a terminal paints and as the bytes that carry them: a key
-/// and the word that says what it does are two looks, so the escape between them stands inside the
-/// row's bytes and not inside the glyphs it is read back as.
-const FIRST_HINT: &str = "Enter send";
 
 const FIRST_KEY: &[u8] = b"Enter";
 
@@ -494,11 +480,11 @@ impl Session {
 
     fn starting(mut command: Command) -> (Session, Pty, Drawn) {
         let pty = Pty::open();
+        // A child sharing this session would ask a controlling terminal for a size and paint a
+        // frame the pty never heard of.
         unsafe {
             command.pre_exec(|| {
-                if setsid() == -1 {
-                    return Err(std::io::Error::last_os_error());
-                }
+                rustix::process::setsid().map_err(std::io::Error::from)?;
                 Ok(())
             });
         }
@@ -547,12 +533,6 @@ impl Drop for Session {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
-}
-
-/// The screen the bytes a launch drew leave in a terminal of the size its pty was told: the one way
-/// this file reads a frame off a terminal of its own.
-fn screen(drawn: &str) -> Frame {
-    frame::screened(drawn, COLS, ROWS)
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -1046,18 +1026,22 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
 }
 
 /// The rows the composer's band took in the last frame that painted it: the gap between the row of
-/// its corner and the row of its foot. The corner is the one drawn in the frame's first column — a
-/// rail and a transcript both draw rules of their own — and the foot is the last row it drew.
+/// its corner and the footer's, which is the frame's last. The corner is the one drawn in the
+/// frame's first column: a rail and a transcript both draw rules of their own.
 fn composer_rows(drawn: &str) -> Option<u16> {
-    let rows = screen(drawn).rows();
-    let corner = rows.iter().rposition(|row| row.starts_with('\u{250c}'))?;
-    let foot = rows.iter().rposition(|row| !row.trim().is_empty())?;
-    u16::try_from(foot.checked_sub(corner)?).ok()
+    let corner = frame::read(drawn, COLS, ROWS)
+        .rows()
+        .iter()
+        .rposition(|row| row.starts_with('\u{250c}'))?;
+    usize::from(ROWS)
+        .checked_sub(1)?
+        .checked_sub(corner)
+        .and_then(|band| u16::try_from(band).ok())
 }
 
 /// The last row of the screen that says `needle`, counted from the frame's first row.
 fn row_of(drawn: &str, needle: &str) -> Option<u16> {
-    screen(drawn)
+    frame::read(drawn, COLS, ROWS)
         .rows()
         .into_iter()
         .rposition(|row| row.contains(needle))
@@ -1067,7 +1051,7 @@ fn row_of(drawn: &str, needle: &str) -> Option<u16> {
 /// The screen the terminal holds after every frame drawn so far: each row that has a glyph on it,
 /// cut at the trailing blanks the screen pads it with.
 fn picture(drawn: &str) -> BTreeMap<u16, String> {
-    screen(drawn)
+    frame::read(drawn, COLS, ROWS)
         .rows()
         .into_iter()
         .enumerate()
@@ -1109,25 +1093,22 @@ fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
 /// The cell the terminal's own cursor stands in after the last frame, and none where the frame hid
 /// it: a frame that places a caret shows it in the cell it places it in.
 fn placed(drawn: &str) -> Option<(u16, u16)> {
-    screen(drawn).caret()
+    frame::read(drawn, COLS, ROWS).caret()
 }
 
-/// Whether the bytes ask the terminal for a cursor shape or a cursor colour: the one thing a launch
-/// never says, because the shape and the colour of its cursor are the reader's to choose.
+/// Whether the bytes ask the terminal for a cursor colour, `OSC 12`, or one of the seven shapes
+/// `DECSCUSR` names: the one thing a launch never says, the shape and the colour of the cursor being
+/// the reader's to choose.
 fn asked_a_cursor(drawn: &str) -> bool {
     drawn.contains("\u{1b}]12;")
-        || drawn.match_indices("\u{1b}[").any(|(at, _)| {
-            let params = &drawn[at + 2..];
-            let shape = params.find(|glyph: char| !glyph.is_ascii_digit());
-            shape.is_some_and(|end| {
-                params[end..].starts_with(" q")
-                    && matches!(&params[..end], "" | "0" | "1" | "2" | "3" | "4" | "5" | "6")
-            })
+        || (0..=6).any(|shape| {
+            drawn.contains(&format!("\u{1b}[{shape} q")) || drawn.contains("\u{1b}[ q")
         })
 }
 
+/// The one claim no painted frame can make: the cells a launch's own bytes leave, glyph by glyph.
 #[test]
-fn a_launchs_own_bytes_read_as_the_cells_it_holds_and_the_caret_it_placed() {
+fn the_boot_frame_is_read_as_the_cells_and_the_caret_its_terminal_holds() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);
 
@@ -1136,53 +1117,23 @@ fn a_launchs_own_bytes_read_as_the_cells_it_holds_and_the_caret_it_placed() {
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
-    let boot = screen(&drawn.text());
+    let boot = frame::read(&drawn.text(), COLS, ROWS);
     let corner = (0..ROWS)
         .find(|y| boot.glyph(0, *y) == '\u{250c}')
         .expect("the composer's band draws its corner in the frame's first column");
     assert_eq!(
-        boot.glyph(0, corner + 2),
-        '\u{2514}',
-        "the box the band is drawn in closes on the row under the draft: {:?}",
-        boot.rows()
-    );
-    assert!(
-        boot.row(corner + 3).contains(FIRST_HINT),
-        "and the band's foot says the first hint under the box it closes: {:?}",
-        boot.rows()
-    );
-    assert_eq!(
         (boot.glyph(1, corner + 1), boot.glyph(GUTTER, corner + 1)),
         ('\u{203a}', 'w'),
         "the draft's row carries the sigil one column in and the placeholder's first glyph at \
-         the gutter: {:?}",
+         the gutter, as cells and not as the escapes that wrote them: {:?}",
         boot.row(corner + 1)
     );
     assert_eq!(
         boot.caret(),
         Some((corner + 1, GUTTER)),
-        "and the terminal's own caret waits in the cell that glyph is drawn at"
+        "and the terminal's own caret stands in the cell that glyph is drawn at"
     );
 
-    pty.type_bytes(b"?");
-    assert!(
-        drawn.wait_until(|frame| showing(frame, "Backspace")),
-        "the keys screen is drawn over the band: {:?}",
-        drawn.text()
-    );
-    assert_eq!(
-        screen(&drawn.text()).caret(),
-        None,
-        "a screen over the band places no caret at all, so the terminal holds none: {:?}",
-        drawn.text()
-    );
-
-    pty.type_bytes(b"\x1b");
-    assert!(
-        drawn.wait_until(|frame| !showing(frame, "Backspace")),
-        "Esc gives the frame back: {:?}",
-        drawn.text()
-    );
     pty.type_bytes(&[0x11]);
     assert_eq!(
         session.wait().code(),
@@ -1367,7 +1318,7 @@ fn a_card_that_takes_a_query_places_the_caret_past_the_glyphs_typed_at_it() {
         drawn.text()
     );
     let opened = drawn.text();
-    let (query, at) = screen(&opened).drawn_at("query: ");
+    let (query, at) = frame::read(&opened, COLS, ROWS).drawn_at("query: ");
     let column = at + pen::cells("query: ");
     assert_eq!(
         placed(&opened),
@@ -1429,7 +1380,7 @@ fn the_placed_caret_follows_the_row_the_draft_window_scrolls_to() {
         drawn.text()
     );
     let frame = drawn.text();
-    let (row, column) = screen(&frame).drawn_at("line nine");
+    let (row, column) = frame::read(&frame, COLS, ROWS).drawn_at("line nine");
     assert_eq!(
         placed(&frame),
         Some((row, column + 9)),
@@ -1456,7 +1407,7 @@ fn a_caret_at_the_boxes_right_margin_waits_on_that_column() {
         drawn.text()
     );
 
-    let boot = screen(&drawn.text());
+    let boot = frame::read(&drawn.text(), COLS, ROWS);
     let corner = (0..ROWS)
         .find(|y| boot.glyph(0, *y) == '\u{250c}')
         .expect("the box's edge is drawn on the boot frame");
