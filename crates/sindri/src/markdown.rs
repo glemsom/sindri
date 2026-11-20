@@ -30,6 +30,13 @@ const FAINT_ACCENT: Look = Look::plain(Ink::Accent).wearing(Faces::FAINT);
 
 const HAIRLINE: char = '─';
 
+/// The bullet a list item's mark is: the two columns a task's box stands in the place of, so a
+/// task's words begin where an ordinary item's do.
+const BULLET: &str = "• ";
+
+const TICK: char = '✓';
+const BOX: char = '☐';
+
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
 }
@@ -164,7 +171,7 @@ impl Rule {
     }
 }
 
-/// A list item's marker: the run it is drawn as on the item's first row, and the ink it is drawn in.
+/// A list item's marker: the run that stands beside its words on its first row, and the ink it wears.
 struct Mark {
     text: String,
     ink: Ink,
@@ -194,7 +201,7 @@ struct Room {
     /// The gutter every row of the entry opens with, which a block's own bar stands in the place of.
     base: Vec<(String, Look)>,
     /// The markers of the list items open, outermost first: every row is indented by the ones
-    /// outside it and by the width of the innermost, so each depth costs the columns a `•` takes.
+    /// outside it and by the width of the innermost.
     marks: Vec<Mark>,
     lists: Vec<Option<u64>>,
     first: bool,
@@ -275,7 +282,7 @@ impl Room {
                 self.lists.pop();
             }
             Event::Start(Tag::Item) => self.open_item(),
-            Event::TaskListMarker(checked) => self.task(checked),
+            Event::TaskListMarker(checked) => self.mark_task(checked),
             Event::End(TagEnd::Item) => self.close_item(),
             Event::Start(Tag::Table(_)) => {
                 self.open_block();
@@ -757,7 +764,7 @@ impl Room {
                 *next = next.saturating_add(1);
                 marker
             }
-            _ => String::from("• "),
+            _ => String::from(BULLET),
         };
         self.marks.push(Mark {
             text: marker,
@@ -766,17 +773,23 @@ impl Room {
         self.first = true;
     }
 
-    /// A task's mark stands in the bullet its item opened with, padded to the columns that bullet
-    /// took, because the words beside it are said with no leading blank.
-    fn task(&mut self, checked: bool) {
+    /// A task's mark stands in the bullet its item opened with, where the words beside it are said
+    /// with no leading blank; an ordinal mark keeps its number and the box stands beside it.
+    fn mark_task(&mut self, checked: bool) {
         let (glyph, ink) = match checked {
-            true => ("✓", Ink::Ok),
-            false => ("☐", Ink::Dim),
+            true => (TICK, Ink::Ok),
+            false => (BOX, Ink::Dim),
         };
-        if let Some(mark) = self.marks.last_mut() {
-            mark.text = pen::pad(glyph, pen::cells(&mark.text));
-            mark.ink = ink;
-        }
+        let Some(mark) = self.marks.last_mut() else {
+            return;
+        };
+        let boxed = pen::pad(&glyph.to_string(), pen::cells(BULLET));
+        let bullet = mark.text == BULLET;
+        mark.text = match bullet {
+            true => boxed,
+            false => format!("{}{boxed}", mark.text),
+        };
+        mark.ink = ink;
     }
 
     fn close_item(&mut self) {

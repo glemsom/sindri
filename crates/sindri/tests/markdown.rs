@@ -27,6 +27,10 @@ fn looks(row: &Row) -> Vec<Look> {
     row.spans().iter().map(|(_, look)| *look).collect()
 }
 
+fn said(rows: &[Row]) -> Vec<Vec<(String, Look)>> {
+    rows.iter().map(|row| row.spans().to_vec()).collect()
+}
+
 fn wears(row: &Row, word: &str, look: Look) -> bool {
     row.spans()
         .iter()
@@ -938,9 +942,8 @@ fn a_bullet_marks_each_item_and_two_spaces_mark_each_depth() {
         ["• one", "• two", "  • inner", "• three"],
         "one row per item, a nested item two columns inside the one it belongs to"
     );
-    let said: Vec<Vec<(String, Look)>> = rows.iter().map(|row| row.spans().to_vec()).collect();
     assert_eq!(
-        said,
+        said(&rows),
         [
             vec![(String::from("• "), mark), (String::from("one"), word)],
             vec![(String::from("• "), mark), (String::from("two"), word)],
@@ -992,9 +995,8 @@ fn a_task_draws_an_unchecked_box_in_dim_and_a_checked_tick_in_ok() {
     let word = Look::plain(Ink::Plain);
 
     assert_eq!(drawn(&rows), ["☐ open", "✓ done"], "one row per task");
-    let said: Vec<Vec<(String, Look)>> = rows.iter().map(|row| row.spans().to_vec()).collect();
     assert_eq!(
-        said,
+        said(&rows),
         [
             vec![
                 (String::from("☐ "), Look::plain(Ink::Dim)),
@@ -1050,9 +1052,8 @@ fn tasks_mixed_with_ordinary_items_indent_as_they_do_and_keep_their_own_marks() 
         ["• one", "☐ two", "  • three", "✓ four"],
         "an item is marked by what it is, and a deeper one two columns inside"
     );
-    let said: Vec<Vec<(String, Look)>> = rows.iter().map(|row| row.spans().to_vec()).collect();
     assert_eq!(
-        said,
+        said(&rows),
         [
             vec![(String::from("• "), accent), (String::from("one"), word)],
             vec![
@@ -1070,6 +1071,41 @@ fn tasks_mixed_with_ordinary_items_indent_as_they_do_and_keep_their_own_marks() 
             ],
         ],
         "the indent under a task is plain, and the task's own box keeps its ink"
+    );
+}
+
+#[test]
+fn an_ordinal_list_numbers_a_task_and_hangs_its_words_under_the_number_and_the_box() {
+    let rows = markdown::rows("1. one\n2. [ ] a task long enough to wrap\n3. three", 20);
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "1. one",
+            "2. ☐ a task long",
+            "     enough to wrap",
+            "3. three"
+        ],
+        "the number stands where the list put it, the box beside it, and the words that wrap hang \
+         under the words beside the box"
+    );
+}
+
+#[test]
+fn a_task_in_a_quote_keeps_the_bar_and_one_under_it_keeps_the_depth() {
+    let rows = markdown::rows("> - [x] a task in a quote\n>   - [ ] one under it", 40);
+    let bar = Look::plain(Ink::Dim);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ ✓ a task in a quote", "▏   ☐ one under it"],
+        "a task keeps the bar of the quote it sits in, and the depth of any other item"
+    );
+    assert_eq!(
+        looks(&rows[0])[0],
+        bar,
+        "the bar is dim, as every quote's is: {:?}",
+        rows[0].spans()
     );
 }
 

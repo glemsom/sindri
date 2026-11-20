@@ -347,7 +347,7 @@ fn tasks() -> &'static str {
     "- [ ] a task waiting on a decision\n- [x] a task that is done\n- [X] one written with a \
      capital\n- an ordinary bullet among them\n- [ ] a task with one under it\n  - [x] the \
      nested task\n- [ ] a task whose words are long enough that this row cannot hold them all \
-     and the rest hangs under them"
+     and the rest hangs under them\n1. a numbered item among them\n2. [x] a numbered task"
 }
 
 fn table() -> &'static str {
