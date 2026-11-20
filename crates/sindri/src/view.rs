@@ -680,7 +680,8 @@ impl View {
 
     /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does when nothing
     /// is marked. A mark standing wholly on a fence takes the fence's source rather than the cells,
-    /// because no band draws the line breaks it was written with.
+    /// because no band draws the line breaks it was written with, and one standing wholly on a prompt
+    /// that keeps rows back takes every word the reader typed rather than the slice it draws.
     fn copy(&self) -> Outcome {
         if let Some(marked) = self.fence.filter(|marked| marked.whole) {
             // A fence with no line drawn yet has nothing to hand back — and never the cells its
@@ -696,6 +697,11 @@ impl View {
         }
         let span = self.drawn.span();
         if !span.is_empty() {
+            if let Some(entry) = self.covered(span)
+                && let Some(words) = self.rows.prompt_source(entry)
+            {
+                return Outcome::Copy(words);
+            }
             return Outcome::Copy(span.text());
         }
         match self.rows.last_answer() {
@@ -704,8 +710,22 @@ impl View {
         }
     }
 
-    /// `Ctrl-O`: the fold of the newest settled work, a frame to paint where it moved and nothing
-    /// where it did not.
+    /// The one entry every row of `span` is drawn from, and none where the mark crosses from one
+    /// entry into another: a copy takes a prompt's own words only where the mark stands on it.
+    fn covered(&self, span: &Span) -> Option<usize> {
+        let mut one = None;
+        for marked in span.rows() {
+            let entry = self.drawn.entry(marked.row())?;
+            if one.is_some_and(|seen| seen != entry) {
+                return None;
+            }
+            one = Some(entry);
+        }
+        one
+    }
+
+    /// `Ctrl-O`: the fold of the newest settled work or of the newest prompt that keeps rows back, a
+    /// frame to paint where it moved and nothing where it did not.
     fn fold(&mut self) -> Outcome {
         match self.rows.toggle_newest() {
             true => Outcome::Edited,
@@ -1158,28 +1178,32 @@ impl View {
         let Some(row) = at.row.checked_sub(band.y) else {
             return Outcome::Unchanged;
         };
-        let Some(entry) = drawn.first(row) else {
+        let Some(entry) = drawn.entry(row) else {
             return Outcome::Unchanged;
         };
         if self.folded(drawn, entry, row) {
             return Outcome::Edited;
         }
+        let Some(entry) = drawn.first(row) else {
+            return Outcome::Unchanged;
+        };
         match self.marked(drawn, entry, band.width) {
             true => Outcome::Edited,
             false => Outcome::Unchanged,
         }
     }
 
-    /// The work entry `at` stands in, folded or opened where the press landed on its head row: a
-    /// frame to paint when the band draws one row of it and the press stood there.
+    /// The fold the entry `at` holds, opened or folded where the press landed on the row that moves
+    /// it: the one row a settled work is drawn as, the row counting a prompt's rows kept back, and
+    /// the head row of a prompt the reader opened.
     fn folded(&mut self, drawn: &Drawn, at: usize, row: u16) -> bool {
-        let Some(work) = self.rows.work_of(at) else {
+        let Some(rows) = drawn.rows_of(at..at + 1) else {
             return false;
         };
-        let Some(rows) = drawn.rows_of(work) else {
+        let Some(row) = row.checked_sub(rows.start) else {
             return false;
         };
-        rows.start == row && self.rows.toggle(at)
+        self.rows.press(at, row)
     }
 
     /// The exchange the answer `at` ended, marked from the prompt that asked it through the row the

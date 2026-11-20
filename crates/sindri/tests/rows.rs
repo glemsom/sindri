@@ -4206,3 +4206,223 @@ fn a_streaming_answer_draws_the_definitions_that_ended_and_never_one_still_arriv
         "the answer read from the record draws the foot the stream was already drawing"
     );
 }
+
+/// The reader's own words laid a row to a line, so a fold's arithmetic is one the test can state.
+fn prompt_of_lines(lines: usize) -> Entry {
+    let text: Vec<String> = (1..=lines).map(|line| format!("line {line}")).collect();
+    Entry::Prompt {
+        text: SecretSet::default().redact(text.join("\n")),
+    }
+}
+
+#[test]
+fn a_prompt_longer_than_its_head_draws_its_head_and_the_count_of_rows_kept_back() {
+    let rows = layout(&prompt_of_lines(12), 80);
+    let drawn: Vec<String> = rows.iter().map(words).collect();
+
+    assert_eq!(
+        drawn,
+        [
+            String::new(),
+            String::from("┃›line 1"),
+            String::from("┃ line 2"),
+            String::from("┃ line 3"),
+            String::from("⋯ 9 rows kept back"),
+        ],
+        "a prompt past the head a fold keeps is drawn as that head and one row counting the rows \
+         kept back, and never a last row to stand beside them: {drawn:?}"
+    );
+    assert_eq!(
+        rows[4].stands_on(),
+        Some(Band::Prompt),
+        "the row counting a prompt's rows kept back stands on the prompt's own band, so a press on \
+         it is read as a row of that prompt: {:?}",
+        rows[4]
+    );
+    assert_eq!(
+        inks(&rows[4]),
+        vec![Ink::Dim, Ink::Plain, Ink::Dim],
+        "and its marker and its words wear the dim ink a folded result's count wears, so a reader \
+         meets one kind of fold"
+    );
+}
+
+#[test]
+fn a_prompt_short_enough_to_draw_whole_is_offered_no_count() {
+    for lines in [1, 3, 6] {
+        let rows = layout(&prompt_of_lines(lines), 80);
+        let drawn: Vec<String> = rows.iter().map(words).collect();
+
+        assert_eq!(
+            drawn.len(),
+            lines + 1,
+            "a prompt of {lines} lines is the blank row above it and one row a line, and no row \\
+             standing in for words the reader cannot see: {drawn:?}"
+        );
+        assert!(
+            !drawn.iter().any(|row| row.contains("kept back")),
+            "a prompt the band draws whole is offered no count of rows kept back, because it keeps \\
+             none: {drawn:?}"
+        );
+        assert!(
+            drawn[lines].ends_with(&format!("line {lines}")),
+            "so the last line the reader typed is the last row the prompt draws: {drawn:?}"
+        );
+    }
+}
+
+#[test]
+fn one_key_opens_a_folded_prompt_where_no_work_is_drawn_as_a_row_and_closes_it_again() {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(80, Surface::none(), None));
+    rows.push(prompt_of_lines(12));
+    rows.push(answer(1));
+    rows.push(stop_entry(Stop::Final));
+
+    let folded: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        folded.len(),
+        4,
+        "the prompt that opens the conversation draws the head of its fold with no blank row above \
+         it: {folded:?}"
+    );
+    assert!(
+        folded[3].contains("kept back"),
+        "and the count of the rows it keeps back closes it: {folded:?}"
+    );
+
+    assert!(
+        rows.toggle_newest(),
+        "the newest fold the reader may move is this prompt's, where no work of the exchange is \
+         drawn as a row for the key to take instead"
+    );
+    let opened: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        opened.len(),
+        12,
+        "the opened prompt draws every line the reader typed: {opened:?}"
+    );
+    assert!(
+        !opened.iter().any(|row| row.contains("kept back")),
+        "and none of it is counted back, because none of it is kept back: {opened:?}"
+    );
+
+    assert!(
+        rows.toggle_newest(),
+        "and the same key folds it again, because a prompt's fold is the reader's too"
+    );
+    let reclosed: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        reclosed, folded,
+        "so the rows it gives back to the conversation are the ones the reader was handed before: \
+         {reclosed:?}"
+    );
+
+    assert!(
+        rows.open(0),
+        "a row the mark is grown over opens the fold the prompt keeps, the way it opens a result's"
+    );
+    assert_eq!(
+        rows.rows(0).len(),
+        12,
+        "so every line the reader typed is drawn again: {:?}",
+        rows.rows(0).iter().map(words).collect::<Vec<String>>()
+    );
+}
+
+#[test]
+fn a_prompt_a_reader_folded_survives_a_reflow_and_counts_the_rows_the_narrower_band_keeps_back() {
+    let said = "the retry test is the one to read, and the line it disagrees with is the one";
+    let prompt = Entry::Prompt {
+        text: SecretSet::default().redact([said; 12].join("\n")),
+    };
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(80, Surface::none(), None));
+    rows.push(prompt_of_lines(2));
+    rows.push(answer(1));
+    rows.push(prompt);
+    rows.push(answer(2));
+    rows.push(stop_entry(Stop::Final));
+
+    assert_eq!(
+        kept_back_row(rows.rows(2)).as_deref(),
+        Some("⋯ 9 rows kept back"),
+        "at eighty columns a line of the prompt is one row, and the fold counts the nine under the \
+         head it draws"
+    );
+    assert!(
+        rows.toggle_newest(),
+        "the fold the reader moves is this prompt's"
+    );
+    let opened: Vec<String> = rows.rows(2).iter().map(words).collect();
+    assert_eq!(
+        opened.len(),
+        13,
+        "opened, the prompt draws the blank row above it and every line of its own: {opened:?}"
+    );
+
+    rows.measure(Measure::new(40, Surface::none(), None));
+    let reflowed = rows.rows(2).len();
+    assert!(
+        reflowed > opened.len(),
+        "the same words take more rows at forty columns than at eighty: {reflowed} against {}",
+        opened.len()
+    );
+    assert_eq!(
+        kept_back_row(rows.rows(2)),
+        None,
+        "a resize is no reader's hand on the fold, so the prompt stays open and counts nothing back"
+    );
+
+    assert!(
+        rows.toggle_newest(),
+        "and the key folds it again at the width it is drawn at"
+    );
+    let folded: Vec<String> = rows.rows(2).iter().map(words).collect();
+    assert_eq!(
+        kept_back_row(rows.rows(2)),
+        Some(format!("⋯ {} rows kept back", reflowed - 4)),
+        "so the count is the rows the narrower band keeps back and never the count the wider one \
+         told: {folded:?}"
+    );
+    assert_eq!(
+        folded.len(),
+        5,
+        "the head of four rows and the count under it are all it draws, and no last row beside \
+         them: {folded:?}"
+    );
+}
+
+#[test]
+fn a_copy_of_a_folded_prompt_takes_its_whole_where_a_prompt_drawn_whole_keeps_none() {
+    let whole: Vec<String> = (1..=12).map(|line| format!("line {line}")).collect();
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(80, Surface::none(), None));
+    rows.push(prompt_of_lines(12));
+    rows.push(answer(1));
+    rows.push(stop_entry(Stop::Final));
+    rows.rows(0);
+    assert_eq!(
+        rows.prompt_source(0).as_deref(),
+        Some(whole.join("\n").as_str()),
+        "a folded prompt hands a copy every line the reader typed, the line breaks they typed \
+         among them, and never the head it draws or the count of what it keeps back"
+    );
+
+    let mut short = Rows::new();
+    short.measure(Measure::new(80, Surface::none(), None));
+    short.push(prompt_of_lines(3));
+    short.rows(0);
+    assert_eq!(
+        short.prompt_source(0),
+        None,
+        "a prompt short enough to draw whole keeps nothing back, so a copy takes the cells the band \
+         drew rather than a whole there is none of"
+    );
+
+    assert!(
+        !short.toggle_newest(),
+        "and a prompt that keeps nothing back is no key's, so the newest fold is one the reader may \
+         not move"
+    );
+}

@@ -519,7 +519,7 @@ fn laid(
             None,
         ),
         Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
-        Entry::Prompt { text } => (asked(&text.to_string(), cols), None),
+        Entry::Prompt { text } => folded_prompt(asked(&text.to_string(), cols), cols, fold),
         Entry::Stop { stop } => (stopped(stop, cols), None),
     }
 }
@@ -544,6 +544,25 @@ fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>
     rows.truncate(FOLD_HEAD);
     rows.push(kept_back(kept, cols));
     rows.push(last);
+    (rows, Some(kept))
+}
+
+/// A prompt's rows as the reader is handed them: the rows of its head and one row counting the rows
+/// kept back, in the shape and the word a folded result's count wears — and no last row, because a
+/// prompt has none to keep. The count comes back beside them for as long as the prompt has a fold.
+fn folded_prompt(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>) {
+    let Some(kept) = rows
+        .len()
+        .checked_sub(FOLD_HEAD)
+        .filter(|kept| *kept > FOLD_KEPT)
+    else {
+        return (rows, None);
+    };
+    if fold == Fold::Open {
+        return (rows, Some(kept));
+    }
+    rows.truncate(FOLD_HEAD);
+    rows.push(kept_back(kept, cols).standing(Band::Prompt));
     (rows, Some(kept))
 }
 
@@ -1648,22 +1667,44 @@ impl Rows {
         )
     }
 
-    /// The newest work a key may open: the newest one the band draws as a row, closed or open.
-    fn newest_work(&self) -> Option<Range<usize>> {
-        (0..self.held.len())
-            .rev()
-            .filter(|at| matches!(self.held[*at].place, Place::Opens(_)))
-            .map(|at| self.work(at))
-            .find(|work| self.worth_a_row(work))
+    /// The newest fold a key may move: the newest work the band draws as a row and the newest prompt
+    /// that keeps rows back, whichever stands last. A result inside a work is never the one.
+    fn newest_fold(&mut self) -> Option<usize> {
+        for at in (0..self.held.len()).rev() {
+            if is_prompt(&self.held[at]) {
+                self.rows(at);
+                if self.held[at].kept.is_some() {
+                    return Some(at);
+                }
+            } else if matches!(self.held[at].place, Place::Opens(_))
+                && self.worth_a_row(&self.work(at))
+            {
+                return Some(at);
+            }
+        }
+        None
     }
 
-    /// The newest settled work's fold, opened if it is closed and folded if it is open: false where
-    /// the transcript holds no work drawn as a row.
+    /// The newest fold the reader may move, opened if it is closed and folded if it is open: a work
+    /// drawn as a row, or a prompt that keeps rows back. False where neither holds a fold.
     pub fn toggle_newest(&mut self) -> bool {
-        let Some(work) = self.newest_work() else {
+        let Some(at) = self.newest_fold() else {
             return false;
         };
-        self.toggle(work.start)
+        match is_prompt(&self.held[at]) {
+            true => self.flipped(at),
+            false => self.toggle(at),
+        }
+    }
+
+    /// The fold the entry `at` keeps, left in the one it is not: a key that names no row moves a
+    /// prompt's fold wherever it stands, so it stands where the reader has not left it.
+    fn flipped(&mut self, at: usize) -> bool {
+        let to = match self.held[at].fold {
+            Fold::Closed => Fold::Open,
+            Fold::Open => Fold::Closed,
+        };
+        self.fold(at, to)
     }
 
     /// The fold of the work `at` stands in, opened if closed and folded if open: what a press on a
@@ -1679,6 +1720,25 @@ impl Rows {
             _ => return false,
         };
         self.opened(work.start, to)
+    }
+
+    /// The fold the row `row` of entry `at` answers to, opened or folded where that row is the one a
+    /// press stands on: a prompt opens on the row counting what it keeps back and folds on its head
+    /// row, and a work opens or folds on the one row it is drawn as.
+    pub fn press(&mut self, at: usize, row: u16) -> bool {
+        let Some(held) = self.held.get(at) else {
+            return false;
+        };
+        if !is_prompt(held) {
+            return row == 0 && self.work(at).start == at && self.toggle(at);
+        }
+        let drawn = u16::try_from(self.rows(at).len()).unwrap_or(u16::MAX);
+        let to = match self.held[at].fold {
+            Fold::Closed if row == drawn.saturating_sub(1) => Fold::Open,
+            Fold::Open if row == 0 => Fold::Closed,
+            _ => return false,
+        };
+        self.fold(at, to)
     }
 
     /// The work entry `at` stands in, which is the one row of it a press opens or folds, and none
@@ -1739,13 +1799,13 @@ impl Rows {
         true
     }
 
-    /// The result entry `at` left in the fold `to`, which is a frame to paint when this call moved
-    /// it: one already in `to` repaints nothing, and a result its whole fold holds is no key's.
+    /// The entry `at` left in the fold `to`, which is a frame to paint when this call moved it: one
+    /// already in `to` repaints nothing, and an entry its whole fold holds is no key's.
     fn fold(&mut self, at: usize, to: Fold) -> bool {
         let Some(held) = self.held.get(at) else {
             return false;
         };
-        if !holds_result(held) || held.fold == to {
+        if !holds_fold(held) || held.fold == to {
             return false;
         }
         if self.held[at].rows.is_none() {
@@ -1757,6 +1817,17 @@ impl Rows {
         self.held[at].fold = to;
         self.held[at].rows = None;
         true
+    }
+
+    /// The words the reader typed as the prompt entry `at`, where the band keeps rows of them back:
+    /// the drawn cells are then a slice of these, so a copy takes these and never that slice.
+    pub fn prompt_source(&self, at: usize) -> Option<String> {
+        match &self.held.get(at)?.what {
+            What::Fact(Entry::Prompt { text }) if self.held[at].kept.is_some() => {
+                Some(text.to_string())
+            }
+            _ => None,
+        }
     }
 
     /// A copy of the last answer takes the line breaks the model wrote, not the ones the
@@ -1905,9 +1976,9 @@ fn result_of(held: &Held) -> Option<&Entry> {
     }
 }
 
-/// Whether this entry is a result, and so holds a fold of its own.
-fn holds_result(held: &Held) -> bool {
-    result_of(held).is_some()
+/// Whether this entry is a result or a prompt, and so holds a fold of its own.
+fn holds_fold(held: &Held) -> bool {
+    result_of(held).is_some() || is_prompt(held)
 }
 
 #[derive(Clone, Debug, Default)]
