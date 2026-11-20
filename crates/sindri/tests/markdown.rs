@@ -60,6 +60,18 @@ fn heading_block(level: usize) -> (Look, Option<String>) {
     (looked[0], rule)
 }
 
+/// The run of columns a horizontal rule fills the room of the block that holds it with.
+fn hairline(room: usize) -> String {
+    pen::filled(pen::columns(room), '─')
+}
+
+/// The one row of an answer a horizontal rule is drawn on.
+fn ruled_row(rows: &[Row]) -> &Row {
+    rows.iter()
+        .find(|row| words(row).contains('─'))
+        .unwrap_or_else(|| panic!("the row a rule is drawn on: {}", drawn(rows).join("|")))
+}
+
 #[test]
 fn no_level_of_a_heading_is_drawn_as_the_prose_around_it() {
     let prose = Look::plain(Ink::Plain);
@@ -1658,5 +1670,237 @@ fn a_heading_a_band_leaves_no_whole_cell_for_is_cut_by_its_edge_and_never_by_a_c
         ["", "日", "", "════"],
         "a band four wide holds the glyph and the row under it, so the heading is drawn at twice \
          the cell and fills the band's edge exactly"
+    );
+}
+
+#[test]
+fn a_rule_between_two_paragraphs_is_one_hairline_with_a_blank_row_either_side() {
+    let rows = markdown::rows("above\n\n---\n\nbelow", 20);
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            String::from("above"),
+            String::new(),
+            hairline(20),
+            String::new(),
+            String::from("below"),
+        ],
+        "a rule is one hairline across the room, with a blank row above it and below it"
+    );
+}
+
+#[test]
+fn a_rule_is_no_wider_than_the_room_the_block_leaves() {
+    let narrow = markdown::rows("---", 7);
+    assert_eq!(
+        drawn(&narrow),
+        [hairline(7)],
+        "a rule fills the room it stands in and never the band past it"
+    );
+
+    let quote = markdown::rows("> ---", 20);
+    assert_eq!(
+        drawn(&quote),
+        [format!("▏ {}", hairline(18))],
+        "a rule behind a bar is the room the bar leaves, so the row is the band and no wider"
+    );
+    for row in &quote {
+        assert!(
+            row.width() <= 20,
+            "a row ran past the room it was laid out for: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn a_rule_in_a_quote_keeps_the_bar_and_begins_behind_it() {
+    let rows = markdown::rows("> words\n>\n> ---\n>\n> more", 20);
+
+    let rule = ruled_row(&rows);
+    assert_eq!(
+        words(rule),
+        format!("▏ {}", hairline(18)),
+        "the rule is the room the bar leaves, and the bar stands before it: {:?}",
+        drawn(&rows)
+    );
+    assert_eq!(
+        rule.spans().first(),
+        Some(&(String::from("▏ "), Look::plain(Ink::Dim))),
+        "the row opens with the quote's own bar: {:?}",
+        rule.spans()
+    );
+    for row in &rows {
+        assert!(
+            row.width() <= 20,
+            "a row ran past the room it was laid out for: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn a_rule_in_an_item_hangs_under_the_items_gutter_and_never_its_bullet() {
+    let rows = markdown::rows("- an item\n\n  ---\n\n  after", 20);
+
+    let rule = ruled_row(&rows);
+    assert_eq!(
+        words(rule),
+        format!("  {}", hairline(18)),
+        "the hairline begins where the item's words do, past the bullet's own columns: {:?}",
+        drawn(&rows)
+    );
+    let after = rows
+        .iter()
+        .position(|row| words(row).contains("after"))
+        .expect("the row the item's words after the rule are drawn on");
+    assert!(
+        drawn(&rows)[after].starts_with("  after"),
+        "the item's words stand under its mark after the rule: {:?}",
+        drawn(&rows)
+    );
+}
+
+#[test]
+fn a_rule_that_opens_an_item_is_drawn_beside_the_items_mark() {
+    let rows = markdown::rows("- ***", 12);
+
+    assert_eq!(
+        drawn(&rows),
+        [format!("• {}", hairline(10))],
+        "the item's mark stands beside the rule its only row is, and the hairline is the room \
+         the mark leaves"
+    );
+}
+
+#[test]
+fn a_rule_alone_in_an_answer_is_that_answers_only_row() {
+    let rows = markdown::rows("---", 12);
+
+    assert_eq!(
+        drawn(&rows),
+        [hairline(12)],
+        "an answer that says nothing but a rule is drawn as the rule and no blank row around it"
+    );
+}
+
+#[test]
+fn the_hairline_a_rule_is_drawn_as_is_the_dim_ink_and_no_face() {
+    let rows = markdown::rows("---", 12);
+
+    assert_eq!(
+        looks(&rows[0]),
+        [Look::plain(Ink::Dim)],
+        "a rule is the dim ink every hairline of this front end wears: {:?}",
+        rows[0].spans()
+    );
+}
+
+#[test]
+fn a_break_tag_ends_the_row_in_prose() {
+    for written in ["<br>", "<br/>", "<br />", "<BR>"] {
+        let rows = markdown::rows(&format!("one {written} two"), 40);
+
+        assert_eq!(
+            drawn(&rows),
+            ["one", "two"],
+            "{written} is a break, so the words after it begin a row of their own"
+        );
+    }
+}
+
+#[test]
+fn a_break_tag_ends_the_row_inside_an_item_and_the_words_after_it_stand_under_its_gutter() {
+    let rows = markdown::rows("- one<br>two", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["• one", "  two"],
+        "the words after a break in an item begin a row of their own, under the item's gutter"
+    );
+}
+
+#[test]
+fn a_break_tag_inside_a_quote_keeps_the_bar() {
+    let rows = markdown::rows("> one<br>two", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ one", "▏ two"],
+        "a break in a quote ends the row and the next one stands behind the same bar"
+    );
+}
+
+#[test]
+fn a_break_tag_ends_the_row_inside_a_table_cell() {
+    let rows = markdown::rows("| one<br>two | three |\n| --- | --- |\n| a | b |", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["one │ three", "two │ ", "────┼──────", "a   │ b"],
+        "a cell's break is two lines of it, and the column is no wider than its widest line"
+    );
+}
+
+#[test]
+fn a_tag_that_is_not_a_break_draws_no_glyph_and_the_words_around_it_keep_the_blocks_ink() {
+    let prose = markdown::rows("one <span>two</span> three", 40);
+    assert_eq!(
+        drawn(&prose),
+        ["one two three"],
+        "no raw tag draws a cell of its own"
+    );
+    assert_eq!(
+        looks(&prose[0]),
+        [Look::plain(Ink::Plain)],
+        "the words between two tags keep the ink the prose gave them: {:?}",
+        prose[0].spans()
+    );
+
+    let quote = markdown::rows("> one <span>two</span> three", 40);
+    assert_eq!(
+        quote[0].spans(),
+        [
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+            (String::from("one two three"), Look::plain(Ink::Plain)),
+        ],
+        "the same words in a quote keep the quote's ink behind its bar"
+    );
+
+    let heading = markdown::rows("## one <span>two</span> three", 40);
+    assert_eq!(drawn(&heading)[0], "one two three");
+    assert_eq!(
+        looks(&heading[0]),
+        [Look::new(Ink::Plain, Face::Bold)],
+        "in a heading the same words keep the heading's look: {:?}",
+        heading[0].spans()
+    );
+
+    let block = markdown::rows("one\n\n<div>\nwords\n</div>\n\ntwo", 40);
+    assert_eq!(
+        drawn(&block),
+        ["one", "", "two"],
+        "a block of raw HTML draws no cell of its own and no word of it is the answer's"
+    );
+}
+
+#[test]
+fn a_break_written_inside_a_fence_stays_the_glyphs_it_was_written_as() {
+    let rows = markdown::rows("```\none<br>two\n```", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ one<br>two"],
+        "a fence holds the glyphs it was written with, and a tag inside it is four of them"
+    );
+}
+
+#[test]
+fn a_break_alone_on_its_own_line_draws_no_row_of_its_own() {
+    let rows = markdown::rows("one\n\n<br>\n\ntwo", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["one", "", "two"],
+        "a break between two paragraphs is the blank row it already stands in and no cell"
     );
 }

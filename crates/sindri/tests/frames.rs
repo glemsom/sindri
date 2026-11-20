@@ -325,6 +325,16 @@ fn markdown_table_narrow_40x24_is_a_wide_table_wrapped_inside_its_cells() {
 }
 
 #[test]
+fn markdown_rule_80x24_is_a_hairline_in_prose_a_quote_and_an_item() {
+    fixture::assert_frame("markdown-rule", 80, 24);
+}
+
+#[test]
+fn markdown_break_80x24_is_a_break_in_prose_an_item_and_a_table_cell() {
+    fixture::assert_frame("markdown-break", 80, 24);
+}
+
+#[test]
 fn rail_160x40_is_a_wide_frame_s_rail_at_its_ceiling_with_the_served_name_whole() {
     fixture::assert_frame("rail", 160, 40);
 }

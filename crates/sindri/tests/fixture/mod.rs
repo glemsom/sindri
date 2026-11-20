@@ -185,6 +185,8 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-emphasis" => construct(capabilities, emphasised()),
         "markdown-link" => ways(capabilities),
         "markdown-table-narrow" => construct(capabilities, narrow()),
+        "markdown-rule" => construct(capabilities, ruled()),
+        "markdown-break" => construct(capabilities, breaks()),
         // The same answer in both, three of its four fragments under the live marker and all of it
         // under the settled one; nine point four seconds is under ten, so that marker keeps its decimal.
         "pulse-live" => with_pulse(capabilities, Pulse::live(4_200), &PULSE_ANSWER[..3]),
@@ -344,6 +346,21 @@ fn table() -> &'static str {
     "| construct | rendering |\n| --- | --- |\n| heading | bold, one blank row \
      above |\n| table | columns joined by a bar, a rule under the header |\n| code | a \
      bar down its left and the language's tag |"
+}
+
+fn ruled() -> &'static str {
+    "A rule divides one paragraph from the next.\n\n---\n\nAnd the answer carries on under \
+     it.\n\n> a quote keeps its bar over the rule it holds\n>\n> ---\n>\n> and goes on behind \
+     the bar\n\n- an item hangs its rule under its own gutter\n\n  ---\n\n  and goes on under \
+     the bullet"
+}
+
+fn breaks() -> &'static str {
+    "- an item's words break here<br>and carry on under its gutter\n\nThe words before a \
+     break<br>and the words after it are two rows of one paragraph.\n\nThe tag <span>around these \
+     words</span> draws no cell of its own, and neither does <kbd>this</kbd> one.\n\n> a quote \
+     keeps its bar<br>over the words a break puts under it\n\n| row | words |\n| --- | --- |\n| \
+     one | above<br>below |"
 }
 
 fn quoted() -> &'static str {
