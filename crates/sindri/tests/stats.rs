@@ -3,9 +3,7 @@
 //! prove; the frame's half is that a reader can reach the screen and that it draws what it was handed.
 
 mod caps; // the terminals these frames are drawn on
-
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
+mod frame; // one paint-and-read for every test
 
 use sindri::capability::Capabilities;
 use sindri::commands::{self, Command};
@@ -18,28 +16,6 @@ use sindri::view::{Transcript, View};
 mod fixture; // one frame rendered at a fixed size into the text a fixture holds
 
 use fixture::{GUID, document, facts};
-
-fn painted(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(cols, rows)).expect("a terminal");
-    terminal
-        .draw(|frame| {
-            view.paint(frame.area(), frame.buffer_mut());
-        })
-        .expect("a frame");
-    let buffer = terminal.backend().buffer();
-    (0..rows)
-        .map(|y| {
-            (0..cols)
-                .map(|x| {
-                    buffer
-                        .cell((x, y))
-                        .unwrap_or_else(|| panic!("row {y}, column {x} is outside the frame"))
-                        .symbol()
-                })
-                .collect()
-        })
-        .collect()
-}
 
 fn opened() -> View {
     let mut view = View::of(
@@ -90,7 +66,7 @@ fn a_slash_stats_line_opens_the_screen_and_escape_gives_the_frame_back() {
 #[test]
 fn the_screen_draws_the_facts_no_rail_column_holds_whole() {
     let mut view = opened();
-    let rows = painted(&mut view, 120, 40);
+    let rows = frame::painted(&mut view, 120, 40).rows();
 
     for asked in [
         "/stats", GUID, "route", "input", "total", "start", "end", "commit",
@@ -105,7 +81,7 @@ fn the_screen_draws_the_facts_no_rail_column_holds_whole() {
 #[test]
 fn a_frame_too_short_for_the_card_counts_the_rows_it_cannot_hold() {
     let mut view = opened();
-    let rows = painted(&mut view, 80, 24);
+    let rows = frame::painted(&mut view, 80, 24).rows();
 
     assert!(
         rows.iter().any(|row| row.contains("rows kept back")),
@@ -124,7 +100,7 @@ fn a_frame_too_short_for_the_card_counts_the_rows_it_cannot_hold() {
 #[test]
 fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
     let mut view = opened();
-    let rows = painted(&mut view, 120, 40);
+    let rows = frame::painted(&mut view, 120, 40).rows();
     let last = rows.len() - 1;
 
     assert!(
@@ -156,7 +132,7 @@ fn a_frame_handed_no_record_and_no_fact_still_opens_the_screen_with_its_title_an
     view.paste("/stats");
     view.key(Key::Enter);
 
-    let rows = painted(&mut view, 80, 24);
+    let rows = frame::painted(&mut view, 80, 24).rows();
 
     assert_eq!(
         view.mode(),

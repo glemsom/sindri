@@ -3,8 +3,8 @@
 //! the line it says in place of rows, its count row and its refusal row among them.
 
 mod caps; // the terminals these frames are drawn on
+mod frame; // one paint-and-read for every test
 
-use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
@@ -244,9 +244,7 @@ fn the_ledger_body_holds_the_rows_it_laid_and_the_card_it_is_drawn_on_is_that_ta
         .expect("the ledger is a screen, so it answers with a body");
     let laid = usize::from(ledger(&body).height());
 
-    let mut buffer = Buffer::empty(tall);
-    let told = view.paint(tall, &mut buffer);
-    let card = told
+    let card = frame::painted(&mut view, tall.width, tall.height)
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out")
         .card
@@ -259,9 +257,7 @@ fn the_ledger_body_holds_the_rows_it_laid_and_the_card_it_is_drawn_on_is_that_ta
     );
 
     let small = Rect::new(0, 0, 80, 24);
-    let mut buffer = Buffer::empty(small);
-    let told = view.paint(small, &mut buffer);
-    let card = told
+    let card = frame::painted(&mut view, small.width, small.height)
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out")
         .card

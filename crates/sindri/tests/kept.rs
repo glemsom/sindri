@@ -2,9 +2,7 @@
 //! a press chooses, each answered by the description of the screen rather than by matching on it.
 
 mod caps; // the terminals these frames are drawn on
-
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+mod frame; // one paint-and-read for every test
 
 use sindri::capability::Capabilities;
 use sindri::commands;
@@ -629,21 +627,17 @@ fn a_glyph_lands_in_the_list_the_screen_keeps() {
 #[test]
 fn a_press_on_a_row_of_the_visit_is_no_act() {
     let (_root, mut view) = screen(Mode::Settings, caps::pointing());
-    let area = Rect::new(0, 0, 120, 40);
-    let mut buffer = Buffer::empty(area);
-    let told = view.paint(area, &mut buffer);
-    let row = (area.y..area.bottom())
-        .find(|y| {
-            (area.x..area.right())
-                .map(|x| buffer.cell((x, *y)).expect("a cell of the row").symbol())
-                .collect::<String>()
-                .contains("thinking")
-        })
+    let frame = frame::painted(&mut view, 120, 40);
+    let row = frame
+        .rows()
+        .iter()
+        .position(|drawn| drawn.contains("thinking"))
+        .map(|at| at as u16)
         .expect("the settings card draws the keys of the schema on the rows of its list");
     let before = marks(&view);
 
     assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(row, 40))),
+        view.pointer(frame.told(), Pointer::Press(Cell::new(row, 40))),
         Outcome::Unchanged,
         "a row of the visit hangs no choice, so a press on it writes no value and sends no key"
     );

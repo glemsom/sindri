@@ -2,18 +2,15 @@
 //! screen, the glyphs that are the query and the ones still the prompt's, and the word a selection leaves in
 //! the draft. Every workspace is the test's own, so nothing of this repository decides what a picker offers.
 
-use std::path::Path;
+mod frame; // one paint-and-read for every test
 
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
-use ratatui::buffer::Buffer;
+use std::path::Path;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
-use sindri::ink::{Ink, Look};
+use sindri::ink::Ink;
 use sindri::keys::Mode;
-use sindri::palette::Palette;
 use sindri::picker::Row;
 use sindri::view::{Transcript, View};
 
@@ -256,31 +253,6 @@ fn escape_at_the_picker_leaves_the_draft_as_it_was() {
     assert_eq!(view.mode(), Mode::Composer);
 }
 
-/// The frame `view` paints at `cols` columns and `rows` rows, read back cell by cell.
-fn painted(view: &mut View, cols: u16, rows: u16) -> Buffer {
-    let mut terminal =
-        Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
-    terminal
-        .draw(|frame| {
-            view.paint(frame.area(), frame.buffer_mut());
-        })
-        .expect("the frame is painted");
-    terminal.backend().buffer().clone()
-}
-
-fn look(buffer: &Buffer, palette: &Palette, x: u16, y: u16) -> Look {
-    Look::of(buffer.cell((x, y)).expect("a cell of the frame"), palette)
-        .expect("every cell of a frame is drawn in a look")
-}
-
-/// One row of the frame as the glyphs it draws, left to right from its first column.
-fn row(buffer: &Buffer, y: u16) -> String {
-    let area = buffer.area;
-    (area.x..area.right())
-        .map(|x| buffer.cell((x, y)).expect("a cell of the row").symbol())
-        .collect()
-}
-
 /// The column of `said` where `needle` begins, counted in cells rather than bytes: a drawn row
 /// holds glyphs wider than the one byte they are written in.
 fn opens_at(said: &str, needle: &str) -> Option<usize> {
@@ -290,22 +262,14 @@ fn opens_at(said: &str, needle: &str) -> Option<usize> {
         .find(|at| said[*at..*at + needle.len()] == needle[..])
 }
 
-/// Every row of the frame, top to bottom, as the glyphs each draws.
-fn frame_rows(buffer: &Buffer) -> Vec<String> {
-    (buffer.area.y..buffer.area.bottom())
-        .map(|y| row(buffer, y))
-        .collect()
-}
-
 /// The rows a screen's body is drawn in, each as the words it says: between a card's two borders,
 /// or the whole of every row in a frame too narrow to be given one.
-fn body_rows(buffer: &Buffer) -> Vec<String> {
-    let rows = frame_rows(buffer);
+fn body_rows(rows: &[String]) -> Vec<String> {
     let (Some(top), Some(bottom)) = (
         rows.iter().position(|row| row.contains('╭')),
         rows.iter().rposition(|row| row.contains('╰')),
     ) else {
-        return rows.into_iter().map(|row| row.trim().to_owned()).collect();
+        return rows.iter().map(|row| row.trim().to_owned()).collect();
     };
     let border: Vec<char> = rows[top].chars().collect();
     let sides = (
@@ -355,26 +319,26 @@ fn each_row_draws_the_files_name_and_the_directory_it_sits_in_at_every_width_tha
     let root = workspace(&["rows.rs", "src/view.rs", "docs/adr/note.md"]);
     let mut view = standing(root.path());
     view.key(Key::Char('@'));
-    let palette = Palette::default();
 
     for cols in WIDTHS {
-        let buffer = painted(&mut view, cols, 40);
-        let rows = frame_rows(&buffer);
+        let frame = frame::painted(&mut view, cols, 40);
+        let rows = frame.rows();
+        let area = frame.cells().area;
         for (name, directory) in [("rows.rs", ""), ("view.rs", "src"), ("note.md", "docs/adr")] {
-            let y = buffer.area.y
+            let y = area.y
                 + u16::try_from(
                     rows.iter()
                         .position(|row| row.contains(name))
                         .unwrap_or_else(|| panic!("{name} is drawn on no row at {cols} columns")),
                 )
                 .expect("a row of the frame");
-            let said = row(&buffer, y);
+            let said = frame.row(y);
             let opens = opens_at(&said, name).expect("the name is drawn whole");
             let ends = opens + name.chars().count();
             for at in opens..ends {
-                let x = buffer.area.x + u16::try_from(at).expect("a column of the frame");
+                let x = area.x + u16::try_from(at).expect("a column of the frame");
                 assert_ne!(
-                    look(&buffer, &palette, x, y).ink(),
+                    frame.look(x, y).ink(),
                     Ink::Dim,
                     "{name} is what a reader is reading, so it is drawn in the row's own ink \
                      at {cols} columns: {said:?}"
@@ -388,9 +352,9 @@ fn each_row_draws_the_files_name_and_the_directory_it_sits_in_at_every_width_tha
                  columns: {said:?}"
             );
             for at in ends + 2..ends + 2 + directory.len() {
-                let x = buffer.area.x + u16::try_from(at).expect("a column of the frame");
+                let x = area.x + u16::try_from(at).expect("a column of the frame");
                 assert_eq!(
-                    look(&buffer, &palette, x, y).ink(),
+                    frame.look(x, y).ink(),
                     Ink::Dim,
                     "the directory is the quieter half of the row, so it is dim at {cols} \
                      columns: {said:?}"
@@ -409,8 +373,7 @@ fn a_name_too_wide_for_the_card_is_cut_before_its_directory_is_drawn() {
     let mut view = standing(root.path());
     view.key(Key::Char('@'));
 
-    let buffer = painted(&mut view, 40, 40);
-    let rows = frame_rows(&buffer);
+    let rows = frame::painted(&mut view, 40, 40).rows();
     let said = rows
         .iter()
         .find(|row| row.contains("a-file-name"))
@@ -434,7 +397,7 @@ fn the_card_says_which_matches_it_shows_and_how_many_the_query_left() {
     let mut view = standing(root.path());
     view.key(Key::Char('@'));
 
-    let rows = body_rows(&painted(&mut view, 120, 40));
+    let rows = body_rows(&frame::painted(&mut view, 120, 40).rows());
     assert!(
         rows.iter().any(|row| row == "1\u{2013}8 of 17"),
         "seventeen files answer an empty query and the card has the room to draw eight of \
@@ -445,7 +408,7 @@ fn the_card_says_which_matches_it_shows_and_how_many_the_query_left() {
     let mut view = standing(root.path());
     view.key(Key::Char('@'));
 
-    let rows = body_rows(&painted(&mut view, 120, 40));
+    let rows = body_rows(&frame::painted(&mut view, 120, 40).rows());
     assert!(
         rows.iter().any(|row| row == "1\u{2013}3 of 3"),
         "three files answer, all three are drawn, and the count says so rather than leaving \
@@ -462,7 +425,7 @@ fn a_query_that_matches_nothing_draws_one_line_saying_so() {
         view.key(Key::Char(glyph));
     }
 
-    let rows = body_rows(&painted(&mut view, 120, 40));
+    let rows = body_rows(&frame::painted(&mut view, 120, 40).rows());
     assert_eq!(
         rows,
         vec![String::from("query: zzz"), String::from("no file answers")],
@@ -479,9 +442,9 @@ fn a_band_too_short_for_the_picker_draws_the_rows_that_fit_and_keeps_the_rest_ba
     let mut view = standing(root.path());
     view.key(Key::Char('@'));
 
-    let held = body_rows(&painted(&mut view, 120, 40));
-    let short = painted(&mut view, 120, 11);
-    let rows = frame_rows(&short);
+    let held = body_rows(&frame::painted(&mut view, 120, 40).rows());
+    let short = frame::painted(&mut view, 120, 11);
+    let rows = short.rows();
     let top = rows
         .iter()
         .position(|row| row.contains('╭'))
@@ -507,7 +470,7 @@ fn a_band_too_short_for_the_picker_draws_the_rows_that_fit_and_keeps_the_rest_ba
         );
     }
 
-    let drawn = body_rows(&short);
+    let drawn = body_rows(&short.rows());
     let (kept, count) = drawn.split_at(drawn.len().saturating_sub(1));
     assert!(
         kept.len() < held.len(),

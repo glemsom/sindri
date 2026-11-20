@@ -140,9 +140,11 @@ impl Frame {
         text
     }
 
-    pub fn snapshot(&self, name: &str) {
+    /// The golden `golden` that the frame `name` draws: the snapshot the suite holds is this one
+    /// text, blessed from here and from no other file.
+    pub fn snapshot(&self, name: &str, golden: &str) {
         insta::with_settings!({ snapshot_path => FIXTURES, prepend_module_to_snapshot => false }, {
-            insta::assert_snapshot!(name, self.text(name));
+            insta::assert_snapshot!(golden, self.text(name));
         });
     }
 
