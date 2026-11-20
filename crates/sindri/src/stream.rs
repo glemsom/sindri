@@ -1,8 +1,7 @@
-use sindri_core::provider::Deltas;
+//! The turn in flight as the wire feeds it: the runs of fragments the newest turn was said in, the
+//! revision that counts them, and whether each run is a reasoning or an answer.
 
-use crate::picture::Surface;
-use crate::pulse::Head;
-use crate::rows::{Row, answer_on, head_row, thought};
+use sindri_core::provider::Deltas;
 
 #[derive(Clone, Debug, Default)]
 pub struct Stream {
@@ -35,36 +34,12 @@ impl Stream {
         self.runs.is_empty()
     }
 
-    /// Whether the turn in flight has said an answer rather than a thought alone, which is the row
-    /// the frame's marker heads.
     pub(crate) fn says_answer(&self) -> bool {
         self.runs.iter().any(|run| run.said == Said::Answer)
     }
 
     pub fn said(&self) -> impl Iterator<Item = (&str, Said)> {
         self.runs.iter().map(|run| (run.words.as_str(), run.said))
-    }
-
-    /// `head` goes on the newest answer alone, and on a row of its own before that answer
-    /// has a fragment: a frame waiting on a wire must not look idle.
-    pub fn rows(&self, cols: u16, head: Option<&Head>) -> Vec<Row> {
-        self.rows_on(cols, head, &Surface::none())
-    }
-
-    pub fn rows_on(&self, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
-        let newest = self.runs.iter().rposition(|run| run.said == Said::Answer);
-        let mut rows = Vec::new();
-        for (at, run) in self.runs.iter().enumerate() {
-            let head = if Some(at) == newest { head } else { None };
-            rows.extend(match run.said {
-                Said::Reasoning => thought(&run.words, cols),
-                Said::Answer => answer_on(&run.words, cols, head, surface),
-            });
-        }
-        if let (None, Some(head)) = (newest, head) {
-            rows.push(head_row(head, cols));
-        }
-        rows
     }
 
     /// A fragment of nothing is not a tick: a wire that sends an empty one has said nothing.

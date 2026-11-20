@@ -321,10 +321,13 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
             }
         }
 
+        let mut live = Rows::new();
+        live.resize(cols);
         let head = Pulse::live(4_200).head();
         let mut stream = Stream::new();
         stream.text("a braille marker at the head of the newest answer, and its words");
-        for row in stream.rows(cols, Some(&head)) {
+        live.live(&stream, Some(&head));
+        for row in live.rows(0) {
             let drawn = row.width();
             assert!(
                 drawn <= cols,
@@ -701,16 +704,16 @@ fn a_marker_no_band_holds_beside_a_word_leaves_the_answer_its_columns() {
     let head = Pulse::live(4_200).head();
     let mut stream = Stream::new();
     stream.text("the answer's own words");
+    let mut rows = Rows::new();
 
     for cols in 6..=7 {
-        let marked: Vec<String> = stream.rows(cols, Some(&head)).iter().map(words).collect();
+        rows.resize(cols);
+        rows.live(&stream, Some(&head));
+        let marked: Vec<String> = rows.rows(0).iter().map(words).collect();
+        rows.live(&stream, None);
+        let bare: Vec<String> = rows.rows(0).iter().map(words).collect();
         assert_eq!(
-            marked,
-            stream
-                .rows(cols, None)
-                .iter()
-                .map(words)
-                .collect::<Vec<String>>(),
+            marked, bare,
             "a marker {cols} columns cannot hold beside a word of the answer takes no column of it"
         );
     }
@@ -987,6 +990,121 @@ fn a_live_entry_is_laid_out_alone_as_its_fragments_land() {
         settled + 105,
         "one layout per fragment, and the settled entries never laid out again"
     );
+}
+
+#[test]
+fn the_rows_module_lays_the_turn_in_flight_from_the_words_it_has_said() {
+    let mut rows = Rows::new();
+    rows.resize(60);
+    let mut stream = Stream::new();
+    stream.reasoning("the fence is the question. ");
+    stream.text("A fence still open ");
+    stream.reasoning("so its tail is code. ");
+    stream.text("is a code block.");
+    rows.live(&stream, None);
+
+    let laid = rows.rows(0);
+    assert_eq!(
+        laid.iter().map(words).collect::<Vec<String>>(),
+        [
+            "│ the fence is the question.",
+            "  A fence still open",
+            "│ so its tail is code.",
+            "  is a code block.",
+        ],
+        "the turn in flight is laid in the order its fragments landed, each under its own gutter"
+    );
+    assert_eq!(
+        laid.iter().map(inks).collect::<Vec<_>>(),
+        [
+            vec![Ink::Dim, Ink::Muted],
+            vec![Ink::Plain, Ink::Plain],
+            vec![Ink::Dim, Ink::Muted],
+            vec![Ink::Plain, Ink::Plain],
+        ],
+        "a thought is read in reasoning's ink, inside its rule; an answer in the frame's"
+    );
+}
+
+#[test]
+fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
+    let mut rows = Rows::new();
+    rows.resize(40);
+    let mut stream = Stream::new();
+    stream.reasoning("read the fence rule first. ");
+    stream.text("The rule is one line: ");
+    rows.live(&stream, None);
+    let drawn = rows.rows(0).to_vec();
+    assert!(!drawn.is_empty(), "a fragment of prose is rows");
+
+    stream.text("a fence still open is a code block, never prose.\n```rust\nfn main() {");
+    rows.live(&stream, None);
+    let more = rows.rows(0).to_vec();
+    assert_eq!(
+        &more[..drawn.len() - 1],
+        &drawn[..drawn.len() - 1],
+        "every row above the one the fragment landed on stands still"
+    );
+    assert!(
+        more.len() > drawn.len(),
+        "the answer grew rows as it streamed: {} then {}",
+        drawn.len(),
+        more.len()
+    );
+    let tail: Vec<String> = more[drawn.len()..].iter().map(words).collect();
+    assert_eq!(
+        tail,
+        [
+            "  open is a code block, never prose.",
+            "",
+            "▏ rust",
+            "▏ fn main() {"
+        ],
+        "the fence and its still-streaming contents are drawn as the block they opened"
+    );
+    assert_eq!(
+        inks(more.last().expect("a row under the fence"))[..2],
+        [Ink::Dim, Ink::Accent],
+        "and behind the bar a code block is set behind, not as prose"
+    );
+}
+
+#[test]
+fn the_marker_heads_the_newest_answers_first_row_and_no_other() {
+    let mut rows = Rows::new();
+    rows.resize(60);
+    let mut stream = Stream::new();
+    stream.text("the first thing said. ");
+    stream.reasoning("and then a thought. ");
+    stream.text("and the answer being read now.");
+
+    let head = Pulse::live(4_200).head();
+    rows.live(&stream, Some(&head));
+    let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
+
+    assert_eq!(
+        drawn,
+        [
+            "  the first thing said.",
+            "│ and then a thought.",
+            "⠹ 4.2s and the answer being read now.",
+        ],
+        "the marker is on the newest answer, and the older one is drawn as it always was"
+    );
+}
+
+#[test]
+fn a_turn_that_has_only_reasoned_opens_the_answers_row_under_its_thought() {
+    let mut rows = Rows::new();
+    rows.resize(60);
+    let mut stream = Stream::new();
+    stream.reasoning("thinking it over.");
+
+    let head = Pulse::live(4_200).head();
+    rows.live(&stream, Some(&head));
+    let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
+
+    assert_eq!(drawn, ["│ thinking it over.", "⠹ 4.2s"]);
 }
 
 #[test]

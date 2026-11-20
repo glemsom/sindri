@@ -23,7 +23,7 @@ use crate::picture::{self, Surface};
 use crate::pulse::{self, Head};
 use crate::size::{self, Sized, Sizes};
 use crate::spell;
-use crate::stream::Stream;
+use crate::stream::{Said, Stream};
 
 /// The gutter every row of every entry opens with, two columns of it: the glyph that says what the
 /// row is and the blank after it, so every entry's words begin in one column.
@@ -425,7 +425,7 @@ fn asked(text: &str, cols: u16) -> Vec<Row> {
     rows
 }
 
-pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
+fn thought(text: &str, cols: u16) -> Vec<Row> {
     let (gutter, room) = margin(THOUGHT, cols);
     wrap(text, room)
         .into_iter()
@@ -436,7 +436,7 @@ pub(crate) fn thought(text: &str, cols: u16) -> Vec<Row> {
 /// The rows an answer is drawn as, set in the answer's gutter — except the row the run's marker
 /// heads, which stands the marker and its blank column in that gutter and lays that row's words
 /// out beside them.
-pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
+fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
     // The marker's own words count against the width; the gutter it stands in the place of does
     // not, and a marker the band cannot hold beside one word of the answer is given up whole.
@@ -462,7 +462,7 @@ pub(crate) fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Su
 
 /// The row a run's marker heads: the mark stands in the gutter and the words it says begin where
 /// the entry's own do.
-pub(crate) fn head_row(head: &Head, cols: u16) -> Row {
+fn head_row(head: &Head, cols: u16) -> Row {
     let Some(((glyph, ink), words)) = head.spans().split_first() else {
         return Row::blank();
     };
@@ -1038,7 +1038,7 @@ impl Rows {
         {
             return;
         }
-        let rows = stream.rows_on(self.cols, head.as_ref(), &self.surface);
+        let rows = self.live_rows(stream, head.as_ref());
         match at {
             Some(at) => {
                 let held = &mut self.held[at];
@@ -1062,6 +1062,32 @@ impl Rows {
             }
         }
         self.lays += 1;
+    }
+
+    /// The newest answer alone wears `head`, and a turn that has said no answer gets a row of its own
+    /// for it: a frame waiting on a wire must not look idle.
+    fn live_rows(&self, stream: &Stream, head: Option<&Head>) -> Vec<Row> {
+        let newest = stream
+            .said()
+            .enumerate()
+            .filter(|(_, (_, said))| *said == Said::Answer)
+            .map(|(at, _)| at)
+            .last();
+        let mut rows = Vec::new();
+        for (at, (words, said)) in stream.said().enumerate() {
+            let head = match Some(at) == newest {
+                true => head,
+                false => None,
+            };
+            rows.extend(match said {
+                Said::Reasoning => thought(words, self.cols),
+                Said::Answer => answer_on(words, self.cols, head, &self.surface),
+            });
+        }
+        if let (None, Some(head)) = (newest, head) {
+            rows.push(head_row(head, self.cols));
+        }
+        rows
     }
 
     /// Where the turn in flight stands, which a stop that landed under it leaves in its own place:
