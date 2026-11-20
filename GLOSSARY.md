@@ -5,6 +5,12 @@ because an ordinary one would blur two things this project keeps apart.
 
 ## The run
 
+**Launch**:
+One opening of the front end: the session it holds, the boundary it enforces, and everything a run
+is opened with. `/new` ends the conversation without ending the launch, and a batch run is a launch
+of one prompt.
+_Avoid_: Invocation, startup, instance, process
+
 **Run**:
 One invocation of the agent loop for one prompt, from the first request to a stop reason.
 _Avoid_: Job, task, query, conversation
@@ -28,7 +34,7 @@ _Avoid_: Pair, round, item, Activity, Trace, Log
 **Prompt**:
 The reader's own words a run was asked with: the first fact of the session's transcript, and what the
 wire is asked last, after the turns that came before it.
-_Avoid_: Query, question, input, message (that one is the wire's)
+_Avoid_: Query, question, input
 
 **Turn**:
 One request to the model and the tool calls it asks for. Not a unit of progress, and no row of the
@@ -52,7 +58,7 @@ _Avoid_: Exit status, failure, termination, reason
 **State**:
 Whether a run is running or the stop it ended on, in one word: `running` while it is, and the stop's
 own word once it ends. The rail's first row is the state — under the frame's marker while a run is
-live, and in the ink that stop earns — and the screen's stop rows say the same word beside the exit
+live, and in the colour that stop earns — and the card's stop rows say the same word beside the exit
 it left.
 _Avoid_: Status, phase, progress
 
@@ -106,10 +112,15 @@ both built from, so the names a listing serves are read from the endpoint a run 
 _Avoid_: Provider, host, client
 
 **Signing**:
-The sign-in a wire that has no key of its own is asked with: the store its session is read from, or
-the words saying why there is none. One value covers both, so a run and a listing cannot disagree
-about whether there is a sign-in at all.
+The sign-in a wire that has no key of its own is asked with: the store the **Credential** is read
+from, or the words saying why there is none. One value covers both, so a run and a listing cannot
+disagree about whether there is a sign-in at all.
 _Avoid_: Credential (that one is what a wire is asked with), token, account
+
+**Credential**:
+The credentials a wire is asked with: the key a config or the environment holds, the sign-in a wire
+with no key of its own is read from, or nothing at all.
+_Avoid_: Token, secret, API key, auth
 
 **Served name**:
 A model identifier read off the wire, never invented, kept beside the endpoint that produced it.
@@ -157,20 +168,25 @@ The picture of Sindri that the `sindri` binary carries beside the bundled font, 
 own header into a footprint and drawn over those cells — decoration, so a terminal that places
 no picture is given no cells and no words for it. It stands over the top rows of the rail's
 column where the frame has room for one, and nowhere else. A reader turns it off in the config, and a
-frame with it off reserves no row: the facts stand from the rail's first row. Not the face an ink
-wears.
+frame with it off reserves no row: the facts stand from the rail's first row.
 _Avoid_: Logo, avatar, mascot, icon
 
 **Band**:
-A strip of rows the frame shares out — the transcript's, the composer's, the row that says the frame
-stands off the tail, and the footer's — each drawn in the rows it was given and never past them. A
-queued prompt has no band of its own: it stands in the composer's, under the draft, one prompt to a
-row and the newest at the foot. What a band cannot hold it counts: the rows of a draft past the
-composer's ceiling, and the prompts of a queue past the rows it was given. A fence is not counted
-that way: it is kept in the shape it was written in, so a band never reflows one — the words of a
-fence line past the band's edge are dropped, that row's last cell says more stands there, and a
+A strip of rows the frame shares out — the transcript's, the **Composer**'s, the row that says the
+frame stands off the tail, and the footer's — each drawn in the rows it was given and never past
+them. A queued prompt has no band of its own: it stands in the composer's, under the draft, one
+prompt to a row and the newest at the foot. What a band cannot hold it counts: the rows of a draft
+past the composer's ceiling, and the prompts of a queue past the rows it was given. A fence is not
+counted that way: it is kept in the shape it was written in, so a band never reflows one — the words
+of a fence line past the band's edge are dropped, that row's last cell says more stands there, and a
 reader walks the fence sideways for the rest. The **Caret** is no cell of a band.
 _Avoid_: Region, pane, panel, viewport
+
+**Rail**:
+The column beside the transcript that carries the frame's facts: a column down the frame's
+right-hand edge where the width holds one, and one row along the bottom of the transcript's band
+where it does not.
+_Avoid_: Sidebar, side panel, gutter, fact bar
 
 **Measure**:
 The three facts the rows of a band are laid at: its width, the surface a picture in an answer is
@@ -191,9 +207,14 @@ picture nothing widens, and the lit column down the rail's boundary and the shad
 row are what that frame draws.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 
+**Footprint**:
+The columns by rows a picture is fitted into under a ceiling: one scale on both axes, so the
+picture's shape is kept — shrunk until it fits and never grown.
+_Avoid_: Dimensions, bounding box, image size
+
 **Alert**:
 A quote whose first line names a kind — `NOTE`, `TIP`, `IMPORTANT`, `WARNING` or `CAUTION` — and
-that draws that kind as a label: the name on a row of its own, in an ink of its own, with the
+that draws that kind as a label: the name on a row of its own, in a colour of its own, with the
 quote's words under it in the same column. A quote whose first line names no kind is a quote and
 nothing more, marker-like words and all.
 _Avoid_: Callout, admonition, banner, badge, note (that one is a kind)
@@ -205,11 +226,17 @@ written with, and nothing the band drew into it — where the cells are what the
 fence's tag row is no line of its source, and a mark on it takes the fence whole all the same.
 _Avoid_: Body, content, raw text
 
+**Composer**:
+The draft a reader types: its words, the place the next glyph lands among them, the scroll they are
+read through, and the columns a frame has measured for them. The columns are measured before the
+band is placed, so a draft wraps at the width it is drawn at.
+_Avoid_: Text box, input box, editor, entry field
+
 **Draft count**:
-What Enter would send, counted on the far corner of the composer's band: the files the draft's words
-name, the command it opens with, and the characters it holds. It is a count of the draft and never of
-the run's facts, it follows every edit, and a frame too narrow for the whole of it draws none of it —
-the rule keeps the row.
+What Enter would send, counted on the far corner of the **Composer**'s band: the files the draft's
+words name, the command it opens with, and the characters it holds. It is a count of the draft and
+never of the run's facts, it follows every edit, and a frame too narrow for the whole of it draws
+none of it — the rule keeps the row.
 _Avoid_: Tokens, stats, progress
 
 **Layout**:
@@ -227,21 +254,21 @@ never sending; and a queue behind the draft is counted where the key that recall
 _Avoid_: Status bar, help line, key bar
 
 **Card**:
-The frame a screen is drawn on: a rounded border carrying the screen's name in its top row and
-the key that leaves in its bottom, at most seventy-two columns wide and as tall as the rows the body
-holds, centred — a body taller than the frame is capped, and the card counts the rows it keeps back —
-and under fifty columns the whole frame with its title row and no border.
+The frame a body of rows is drawn on: a rounded border carrying the name of what it shows in its top
+row and the key that leaves in its bottom, at most seventy-two columns wide and as tall as the rows
+the body holds, centred — a body taller than the frame is capped, and the card counts the rows it
+keeps back — and under fifty columns the whole frame with its title row and no border.
 _Avoid_: Modal, dialog, popup, overlay, sheet
 
 **List**:
 The shape a card's rows share: the query they answer at the head, the one line they say in place of
 their rows, and one row per item with the row a reader is on marked — filled down the band the card
-hands it and cut at its frame's edge. A screen that shows one names its own rows, its own mark and
+hands it and cut at its frame's edge. A card that shows one names its own rows, its own mark and
 its own line, so the list knows neither files nor served names.
 _Avoid_: Table, menu, picker (that one is the Path picker)
 
 **Path picker**:
-The screen `@` opens: the workspace's files as `git` reads them, ranked by how the query sits in one —
+The card `@` opens: the workspace's files as `git` reads them, ranked by how the query sits in one —
 a name it starts, a name it holds, a path it holds — and nearest first within a rank. The card draws
 the first eight as the file's name with the directory it sits in set quieter beside it, and one row
 under them saying which matches it shows and how many the query left.
@@ -303,9 +330,9 @@ _Avoid_: Terminal features, environment, detection, caps
 The workspace and the ground it is judged against, the home the skills are read from, the served name,
 the run's record, the state the run is in, the facts the rail lays, the marker at the head of the
 answer, and the focus the terminal reported, gathered as one value and handed to the frame whole. The
-value is also the screen the frame is drawn as: the **Splash screen** until a prompt has been asked
-for — holding what the launch already knows and no run's fact, so no fact that lands ends it — and
-that run's frame from the prompt on.
+value is also which frame is drawn: the **Splash screen** until a prompt has been asked for —
+holding what the launch already knows and no run's fact, so no fact that lands ends it — and that
+run's frame from the prompt on.
 _Avoid_: View model, props, session state, context
 
 **Transcript**:
