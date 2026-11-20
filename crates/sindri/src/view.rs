@@ -394,7 +394,8 @@ pub struct View {
     read: ReadMark,
     mark: Option<Mark>,
     /// The fence the mark stands over in the frame the last pass drew, and none while it covers no
-    /// line a band cut: the one fence the sideways keys walk.
+    /// line of one: the fence a copy takes whole, and the one the sideways keys walk where the band
+    /// cut a line of it.
     fence: Option<MarkedFence>,
     /// The workspace's files, walked once and read by the count the edge hangs on its far corner.
     files: Files,
@@ -417,11 +418,13 @@ struct Laid {
 }
 
 /// The fence a mark stands over: the entry it is drawn in and the block it is a line of, which is
-/// what a sideways key needs to walk every row of it and no row of anything else.
+/// what a sideways key needs to walk every row of it and no row of anything else — and whether the
+/// band cut a line of it, because a fence the band holds whole has nothing to walk to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct MarkedFence {
     entry: usize,
     fence: usize,
+    cut: bool,
 }
 
 /// The record a frame draws and the row the reader stands at in it: the third of the three values a
@@ -675,8 +678,14 @@ impl View {
     }
 
     /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does when
-    /// nothing is marked. What leaves is the span the last paint drew, not a second reading.
+    /// nothing is marked. What leaves is the span the last paint drew, not a second reading — and a
+    /// mark on a fence takes that fence's whole source, which no band ever drew as it was written.
     fn copy(&self) -> Outcome {
+        if let Some(marked) = self.fence
+            && let Some(source) = self.rows.source(marked.entry, marked.fence)
+        {
+            return Outcome::Copy(source);
+        }
         let span = self.drawn.span();
         if !span.is_empty() {
             return Outcome::Copy(span.text());
@@ -1881,7 +1890,7 @@ impl View {
             When::Always => true,
             When::Draft(state) => self.composer.state() == state,
             When::Queue => !self.queue.is_empty(),
-            When::Fence => self.fence.is_some(),
+            When::Fence => self.fence.is_some_and(|marked| marked.cut),
         }
     }
 
@@ -2167,8 +2176,9 @@ fn corners(
     );
 }
 
-/// The fence the row `at` of `entry` is a line of, where the mark `mark` covers the band row `band`
-/// and a line of that fence is cut: a fence the band holds whole has nothing past its edge to walk to.
+/// The fence the row `at` of `entry` is a line of, where the mark `mark` covers the band row `band`,
+/// and whether the band cut a line of it: a fence the band holds whole is copied as whole as one it
+/// cut, and has nothing past its edge to walk to.
 fn fence_under(
     entry: usize,
     rows: &[Row],
@@ -2186,9 +2196,10 @@ fn fence_under(
     let cut = rows
         .iter()
         .any(|line| line.fence().map(Fence::id) == Some(fence.id()) && line.cut(room));
-    cut.then_some(MarkedFence {
+    Some(MarkedFence {
         entry,
         fence: fence.id(),
+        cut,
     })
 }
 

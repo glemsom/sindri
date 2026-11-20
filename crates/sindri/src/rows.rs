@@ -96,6 +96,9 @@ pub struct Row {
     /// The fence this row is a line of, when it is one: a line of a fence is laid whole and the
     /// reader may walk it sideways, where every other row is wrapped to the band.
     fence: Option<Fence>,
+    /// The line of source this row was drawn from, on the rows of a fence and on no other: a copy
+    /// of a fence takes the words it was written as, and never the guide or the cut drawn over them.
+    source: Option<String>,
 }
 
 /// A fence line: the block it is a line of, the columns of gutter its words are set past, and how
@@ -136,6 +139,7 @@ impl Row {
             picture: None,
             sizes: Vec::new(),
             fence: None,
+            source: None,
         }
     }
 
@@ -162,6 +166,7 @@ impl Row {
             picture: None,
             sizes: Vec::new(),
             fence: None,
+            source: None,
         }
     }
 
@@ -177,6 +182,17 @@ impl Row {
 
     pub fn fence(&self) -> Option<Fence> {
         self.fence
+    }
+
+    /// This row as the line of source it was drawn from: what a copy of the fence it belongs to
+    /// hands back, where the row's own cells are what the band made of that line.
+    pub fn sourced(mut self, source: impl Into<String>) -> Row {
+        self.source = Some(source.into());
+        self
+    }
+
+    pub fn source(&self) -> Option<&str> {
+        self.source.as_deref()
     }
 
     /// This row walked `by` columns sideways, which only the rows of one fence ever are.
@@ -231,6 +247,7 @@ impl Row {
             sizes: self.sizes.iter().map(|run| run.shifted(by)).collect(),
             picture: self.picture,
             fence: self.fence,
+            source: None,
         }
     }
 
@@ -1682,6 +1699,20 @@ impl Rows {
             What::Fact(Entry::Assistant { text, .. }) => Some(text.to_string()),
             _ => None,
         })
+    }
+
+    /// The source of fence `fence` in entry `at`, one line per row it was laid as and the line breaks
+    /// it was written with: nothing where no row of it is laid, or a row of it keeps no source.
+    pub fn source(&self, at: usize, fence: usize) -> Option<String> {
+        let rows = self.held.get(at)?.rows.as_ref()?;
+        let mut lines = Vec::new();
+        for row in rows
+            .iter()
+            .filter(|row| row.fence().map(Fence::id) == Some(fence))
+        {
+            lines.push(row.source()?);
+        }
+        (!lines.is_empty()).then(|| lines.join("\n"))
     }
 
     /// The transcript's whole height in rows, laying out every entry this cache has never

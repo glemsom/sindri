@@ -192,6 +192,8 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-diff" => construct(capabilities, diff()),
         "markdown-fence-cut" => construct(capabilities, cut()),
         "markdown-fence-fits" => construct(capabilities, fits()),
+        "markdown-fence-named" => construct(capabilities, named_file()),
+        "markdown-fence-named-cut" => construct(capabilities, named_cut()),
         "markdown-fence-walked" => {
             let mut view = construct(capabilities, cut());
             view.drag(mark::Cell::new(1, 0), mark::Cell::new(3, 70));
@@ -481,6 +483,26 @@ fn cut() -> &'static str {
 /// The same fence with every line short enough for the band to hold it whole.
 fn fits() -> &'static str {
     "```rust\nlet a_fence_line_that_fits = 1;\n```"
+}
+
+/// A fence that names the file the model was writing: the path is drawn as a faint chip beside the
+/// language, and the lines under it are the source a copy of the fence hands back.
+fn named_file() -> &'static str {
+    concat!(
+        "```rust crates/sindri/src/rows.rs\n",
+        "let rows = markdown::rows(text, cols);\n",
+        "```"
+    )
+}
+
+/// The same fence named by a path forty columns cannot hold, so the name is cut at the band's edge
+/// rather than wrapped or given a row of its own.
+fn named_cut() -> &'static str {
+    concat!(
+        "```rust crates/sindri/src/provider/transport/hauling/the/whole/of/it.rs\n",
+        "let rows = markdown::rows(text, cols);\n",
+        "```"
+    )
 }
 
 /// A diff fence with a file header, a hunk header, the rows both sides share and one row each

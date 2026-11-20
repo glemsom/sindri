@@ -191,6 +191,68 @@ fn a_copy_of_a_row_the_band_cut_hands_back_the_line_as_the_model_wrote_it() {
 }
 
 #[test]
+fn a_copy_of_a_marked_fence_hands_back_the_fence_whole() {
+    let fence = "```rust\nfn one() {\n    let two = 2;\n}\n```";
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([answer(1, fence)]),
+    );
+    let (frame, laid) = painted(&mut view);
+    let row = row_of(&frame, laid.transcript, "two = 2");
+    view.drag(Cell::new(row, 2), Cell::new(row, 20));
+    let taken = copied(&mut view);
+
+    assert_eq!(
+        taken, "fn one() {\n    let two = 2;\n}",
+        "the mark stands on one line of the fence and the copy takes the fence whole: the line \
+         breaks the model wrote, and neither the bar nor the guide nor the cut the frame drew"
+    );
+}
+
+#[test]
+fn a_copy_of_a_fence_the_band_cut_hands_back_every_whole_line_of_it() {
+    let long = "let a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_the_model_\
+                wrote_it_in_and_no_band_reflows_one = 1;";
+    let fence = format!("```rust\n{long}\nlet short = 2;\n```");
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([answer(1, &fence)]),
+    );
+    let (frame, laid) = painted(&mut view);
+    let row = row_of(&frame, laid.transcript, "short");
+    view.drag(Cell::new(row, 2), Cell::new(row, 40));
+    let taken = copied(&mut view);
+
+    assert_eq!(
+        taken,
+        format!("{long}\nlet short = 2;"),
+        "the band cut the first line of the fence and drew an ellipsis over its last cell, and the \
+         copy is still both lines as the model wrote them: {taken:?}"
+    );
+}
+
+#[test]
+fn a_blank_line_inside_a_marked_fence_is_a_line_of_the_copy() {
+    let fence = "```rust\nlet a = 1;\n\nlet b = 2;\n```";
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([answer(1, fence)]),
+    );
+    let (frame, laid) = painted(&mut view);
+    let row = row_of(&frame, laid.transcript, "b = 2");
+    view.drag(Cell::new(row, 2), Cell::new(row, 20));
+    let taken = copied(&mut view);
+
+    assert_eq!(
+        taken, "let a = 1;\n\nlet b = 2;",
+        "the blank line the model wrote is one line of the fence and one line of the copy: {taken:?}"
+    );
+}
+
+#[test]
 fn ctrl_y_with_no_mark_copies_the_last_answer() {
     let mut view = View::of(
         Capabilities::default(),

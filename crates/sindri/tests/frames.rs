@@ -529,3 +529,13 @@ fn markdown_fence_fits_80x24_is_a_fence_line_the_band_holds_whole() {
 fn markdown_fence_walked_80x24_is_the_line_the_band_cut_carried_eight_columns_on() {
     fixture::assert_frame("markdown-fence-walked", 80, 24);
 }
+
+#[test]
+fn markdown_fence_named_80x24_is_a_fence_that_names_the_file_it_was_written_in() {
+    fixture::assert_frame("markdown-fence-named", 80, 24);
+}
+
+#[test]
+fn markdown_fence_named_cut_40x24_is_that_name_cut_at_the_bands_edge() {
+    fixture::assert_frame("markdown-fence-named-cut", 40, 24);
+}

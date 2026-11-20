@@ -1781,6 +1781,108 @@ fn a_fences_tag_is_the_accent_drawn_faint_behind_a_dim_bar() {
 }
 
 #[test]
+fn a_fence_naming_a_file_draws_the_name_faint_beside_its_language() {
+    let rows = markdown::rows("```rust crates/sindri/src/rows.rs\nfn main() {}\n```", 80);
+
+    assert_eq!(
+        rows[0].spans(),
+        [
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+            (
+                String::from("rust"),
+                Look::plain(Ink::Accent).wearing(Faces::FAINT)
+            ),
+            (String::from(" "), Look::plain(Ink::Plain)),
+            (
+                String::from("crates/sindri/src/rows.rs"),
+                Look::plain(Ink::Accent).wearing(Faces::FAINT)
+            ),
+        ],
+        "the language stands on the tag row as it always did, one space of the band's own ink \
+         and then the file the fence names in the same faint accent: {:?}",
+        rows[0].spans()
+    );
+    assert_eq!(
+        drawn(&rows),
+        ["▏ rust crates/sindri/src/rows.rs", "▏ fn main() {}",],
+        "and the name claims no row of its own"
+    );
+}
+
+#[test]
+fn a_fence_naming_no_file_draws_its_language_and_nothing_beside_it() {
+    for tag in ["rust", "rust ", " rust"] {
+        let rows = markdown::rows(&format!("```{tag}\nfn main() {{}}\n```"), 40);
+
+        assert_eq!(
+            rows[0].spans(),
+            [
+                (String::from("▏ "), Look::plain(Ink::Dim)),
+                (
+                    String::from("rust"),
+                    Look::plain(Ink::Accent).wearing(Faces::FAINT)
+                ),
+            ],
+            "a fence that names no file is drawn as it always was, one word of info string and \
+             no space after it: {tag:?}"
+        );
+        assert_eq!(
+            drawn(&rows),
+            ["▏ rust", "▏ fn main() {}"],
+            "and no row of it moved: {tag:?}"
+        );
+    }
+}
+
+#[test]
+fn a_fence_naming_a_file_forty_columns_cannot_hold_is_cut_at_the_bands_edge() {
+    let file = "crates/sindri/src/provider/transport/hauling/the/whole/of/it.rs";
+    let rows = markdown::rows(&format!("```rust {file}\nfn main() {{}}\n```"), 40);
+    let mut links = Links::none();
+    let buffer = painted_in(&rows, &mut links, 40);
+
+    assert_eq!(
+        rows.len(),
+        2,
+        "the name claims no row of its own, however little of it the band holds: {:?}",
+        drawn(&rows)
+    );
+    assert_eq!(
+        rows[0].width(),
+        40,
+        "and the tag row is filled to the band's edge and no further: {:?}",
+        drawn(&rows)
+    );
+    assert!(
+        file.starts_with(drawn(&rows)[0].trim_start_matches("▏ rust ").trim_end()),
+        "the head of the name the band holds is drawn whole and its tail dropped: {:?}",
+        drawn(&rows)[0]
+    );
+    assert!(
+        !buffer[(39, 1)].symbol().eq("…"),
+        "a cut name says nothing of a line the reader walks: nothing of it is a fence line"
+    );
+    let drawn: String = (0..40).map(|x| buffer[(x, 0)].symbol()).collect();
+    assert!(
+        file.contains(drawn.trim_end().trim_start_matches("▏ rust ")),
+        "every cell of the band is a glyph of the name and none of it is spent on a mark of what \
+         was dropped: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_named_fence_is_still_highlighted_by_its_language() {
+    let rows = markdown::rows("```rust crates/sindri/src/rows.rs\nlet a = 1;\n```", 80);
+
+    assert!(
+        wears(&rows[1], "let", Look::new(Ink::Accent, Face::Bold)),
+        "the language the info string opens with is the one the fence is parsed as, so a keyword \
+         is still the accent worn bold: {:?}",
+        rows[1].spans()
+    );
+}
+
+#[test]
 fn a_fence_still_open_at_the_end_of_the_text_is_a_code_block() {
     let rows = markdown::rows("the rule is one boolean:\n```rust\nfn main() {", 40);
     assert_eq!(

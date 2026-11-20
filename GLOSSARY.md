@@ -199,7 +199,8 @@ _Avoid_: Callout, admonition, banner, badge, note (that one is a kind)
 **Chip**:
 An inline code span, drawn in the accent ink with no band behind it and in the spacing it was written
 with. Inside a way it keeps the way's own dim line under it; inside a heading it is told from the
-heading's own words, because the chip is the accent while the heading keeps its weight.
+heading's own words, because the chip is the accent while the heading keeps its weight. A fence that
+names the file it was written in draws that name as a faint chip beside its language tag.
 _Avoid_: Badge, tag, pill, inline code
 
 **Guide**:

@@ -302,6 +302,9 @@ struct Room {
     fence: Option<usize>,
     /// How many code blocks this answer has opened.
     opened: usize,
+    /// The line of a fence the row being flushed was drawn from, which no other row has: set just
+    /// before the flush that lays it.
+    source: Option<String>,
 }
 
 impl Room {
@@ -337,6 +340,7 @@ impl Room {
             wholeness: Wholeness::Whole,
             fence: None,
             opened: 0,
+            source: None,
         }
     }
 
@@ -422,10 +426,11 @@ impl Room {
                         mermaid.source.push_str(&text);
                     }
                     let lines = code.highlight(&text);
-                    for runs in lines {
+                    for (line, runs) in lines {
                         for (text, look) in runs {
                             self.extend(&text, look);
                         }
+                        self.source = Some(line);
                         self.flush();
                     }
                 }
@@ -808,9 +813,10 @@ impl Room {
             CodeBlockKind::Fenced(tag) => tag.trim().to_owned(),
             CodeBlockKind::Indented => String::new(),
         };
-        self.code = Some(Code::of(&tag));
+        self.code = Some(Code::of(language(&tag)));
         if !tag.is_empty() {
-            self.place(&tag, FAINT_ACCENT, false);
+            self.place(language(&tag), FAINT_ACCENT, false);
+            self.draw_name(file(&tag));
             self.flush();
         }
         // The tag row is no line of the fence: the lines under it are the ones the reader walks.
@@ -833,6 +839,18 @@ impl Room {
                 at,
             });
         }
+    }
+
+    /// The file a fence names drawn beside its language: the accent at faint weight, clipped to the
+    /// columns the tag row has left, so a name never wraps and never claims a row of its own.
+    fn draw_name(&mut self, file: &str) {
+        let room = self.room().saturating_sub(self.used).saturating_sub(1);
+        if file.is_empty() || room == 0 {
+            return;
+        }
+        let (kept, _) = split_at(file, room);
+        self.extend(" ", Look::plain(Ink::Plain));
+        self.extend(&kept, FAINT_ACCENT);
     }
 
     /// A code block closes. A mermaid fence says what became of it — a picture placed over the
@@ -1021,6 +1039,9 @@ impl Room {
         let mut row = Row::of(self.spans());
         if let Some(fence) = self.fence {
             row = row.fenced(fence, pen::columns(gutter));
+        }
+        if let Some(source) = self.source.take() {
+            row = row.sourced(source);
         }
         let sized = !runs.is_empty();
         for run in runs {
@@ -1358,7 +1379,9 @@ impl Code {
         Code { parse, diff }
     }
 
-    fn highlight(&mut self, text: &str) -> Vec<Vec<(String, Look)>> {
+    /// Every line of `text` as the runs it is drawn as, beside the line itself: the source is what a
+    /// copy of the fence hands back, where the runs are what the frame makes of it.
+    fn highlight(&mut self, text: &str) -> Vec<(String, Vec<(String, Look)>)> {
         let mut lines = Vec::new();
         let mut rest = text.split('\n').peekable();
         while let Some(line) = rest.next() {
@@ -1367,7 +1390,8 @@ impl Code {
             if rest.peek().is_none() && line.is_empty() {
                 break;
             }
-            lines.push(self.line(line));
+            let runs = self.line(line);
+            lines.push((String::from(line), runs));
         }
         lines
     }
@@ -1426,6 +1450,15 @@ fn ink_of(line: &str) -> Option<Ink> {
 /// `diff path/to/file` does, and the rest of it says nothing about how the block is drawn.
 fn language(tag: &str) -> &str {
     tag.split_whitespace().next().unwrap_or_default()
+}
+
+/// The file an info string names after that word, trimmed, and nothing where it names one word
+/// only: a fence that names no file is drawn as its language alone.
+fn file(tag: &str) -> &str {
+    match tag.split_once(char::is_whitespace) {
+        Some((_, rest)) => rest.trim(),
+        None => "",
+    }
 }
 
 /// `runs` with the last of the line's leading whitespace drawn as the frame's dim guide. Only a
