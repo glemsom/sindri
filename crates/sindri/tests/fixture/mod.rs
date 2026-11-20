@@ -187,6 +187,8 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-alert" => construct(capabilities, alerts()),
         "markdown-alert-marker" => construct(capabilities, marker_alerts()),
         "markdown-code" => construct(capabilities, code()),
+        "markdown-fence-nested" => construct(capabilities, nested()),
+        "markdown-fence-unknown" => construct(capabilities, unknown()),
         "markdown-inline" => construct(capabilities, inline()),
         "markdown-emphasis" => construct(capabilities, emphasised()),
         "markdown-struck" => construct(capabilities, struck()),
@@ -437,8 +439,25 @@ fn marker_alerts() -> &'static str {
 }
 
 fn code() -> &'static str {
-    "```rust\nfn main() {\n    let fence = Fence::open(\"rust\");\n    fence.words();\n}\n```\n\n\
-     ```frobnicate\nthis language names no syntax definition\n```"
+    "```rust\n#[derive(Debug)]\nstruct Fence {\n    tag: &'static str,\n    words: usize,\n}\
+     \n\nimpl Fence {\n    fn open(tag: &'static str) -> Fence {\n        \
+     // the language names the parse\n        let words = 2;\n        \
+     Fence { tag, words }\n    }\n}\n\nfn rust() -> Fence {\n    Fence::open(\"rust\")\n}\n```"
+}
+
+/// One fence whose lines stand at no indent, one column, four, eight and twelve, so a guide reads
+/// down the block and the one-column line carries none that would take its words' room.
+fn nested() -> &'static str {
+    concat!(
+        "```rust\nfn open() {\n let one = 1;\n    let four = 4;\n",
+        "        let eight = 8;\n            let twelve = 12;\n}\n```"
+    )
+}
+
+/// A fence whose tag no syntax definition names: its words are plain and stand at no indent.
+fn unknown() -> &'static str {
+    "```frobnicate\n// a comment stays the glyphs it was written as\nlet x = 1; # not rust\n\
+     \"a string\" is a word too\n```"
 }
 
 fn inline() -> &'static str {

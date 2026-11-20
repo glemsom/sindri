@@ -202,6 +202,13 @@ with. Inside a way it keeps the way's own dim line under it; inside a heading it
 heading's own words, because the chip is the accent while the heading keeps its weight.
 _Avoid_: Badge, tag, pill, inline code
 
+**Guide**:
+The dim column a fence's leading whitespace carries: one `│` standing in the last space or tab of
+an indent of two columns or more, so a nested block's depth is read at a glance. Only whitespace
+ever gives way, so no guide is drawn over a glyph, a fence's bar or a quote's, and a line with no
+leading whitespace, or one column of it, carries none.
+_Avoid_: Indent line, ruler, indent marker
+
 **Draft count**:
 What Enter would send, counted on the far corner of the composer's band: the files the draft's words
 name, the command it opens with, and the characters it holds. It is a count of the draft and never of

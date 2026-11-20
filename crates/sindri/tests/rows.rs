@@ -886,13 +886,13 @@ fn a_fenced_block_is_guttered_by_its_language_and_the_prose_resumes_after_it() {
             "",
             "▏ rust",
             "▏ fn main() {",
-            "▏     let  x = 1;",
+            "▏    │let  x = 1;",
             "▏ }",
             "",
             "  and the prose goes on.",
         ],
-        "the tag stands over the code, the code is the code that was written, and the \
-         answer's own prose resumes after the closing fence"
+        "the tag stands over the code, the code is the code it was written as behind a guide, \
+         and the answer's own prose resumes after the closing fence"
     );
     assert_eq!(
         inks(&rows[2]),
@@ -932,7 +932,7 @@ fn a_fence_that_is_still_open_draws_the_rest_of_the_answer_as_code() {
             "  Here is the rule:",
             "",
             "▏ a fence still open",
-            "▏     is a code block",
+            "▏    │is a code block",
         ],
         "the tail is drawn as code rather than swallowed as prose"
     );

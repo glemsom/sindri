@@ -32,9 +32,9 @@ queue at 120x40
 26 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
 27 |                                                                                                                        | plain:120
 28 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
-29 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
-30 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
-31 |▏     row.paint(area, buffer);                                                                                          | dim:2 plain:118
+29 |▏ fn main() {                                                                                                           | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:111
+30 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
+31 |▏    │row.paint(area, buffer);                                                                                          | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:105
 32 |▏ }                                                                                                                     | dim:2 plain:118
 33 |┌running ━─────────────────────────────────────────────────────────────────────────────────────────────────────28 chars┐| accent:111 muted:8 accent:1
 34 |│› and this one while they wait                                                                                        │| dim:1 accent:2 plain:116 dim:1

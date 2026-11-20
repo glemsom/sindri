@@ -36,8 +36,8 @@ card at 120x40
 30 |                        │ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 plain+bold:21 muted:33 plain:15 dim:25
 31 |▏ rust                  │ Ctrl-O               open or fold the newest work                    │                        | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
 32 |▏ fn main() {           │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
-33 |▏     let row = Row::of(│ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
-34 |▏     row.paint(area, bu│ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+33 |▏    │let row = Row::of(│ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+34 |▏    │row.paint(area, bu│ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
 35 |▏ }                     ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 36 |┌prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| dim:120
 37 |│› what should the run do?                                                                                             │| dim:120

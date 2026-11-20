@@ -35,9 +35,9 @@ mark at 120x40
 29 |  the row above it holds.                                                                                               | plain:120
 30 |                                                                                                                        | plain:120
 31 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
-32 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
-33 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
-34 |▏     row.paint(area, buffer);                                                                                          | dim:2 plain:118
+32 |▏ fn main() {                                                                                                           | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:111
+33 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
+34 |▏    │row.paint(area, buffer);                                                                                          | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:105
 35 |▏ }                                                                                                                     | dim:2 plain:118
 36 |┌prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
 37 |│› what should the run do?                                                                                             │| dim:26 plain:93 dim:1
