@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 const APPLICATION: &str = "sindri";
 const SESSIONS: &str = "sessions";
 const TEMP: &str = "tmp";
@@ -31,6 +31,19 @@ pub struct Session {
 }
 impl Session {
     pub fn create(state_home: &Path) -> Result<Session, SessionError> {
+        Session::open(state_home, fresh_guid()?)
+    }
+    /// A session under a state home and a GUID the caller names: the name is one directory, so the
+    /// same name under the same home is one session, its temp and spill shared by whoever opens it.
+    pub fn named(state_home: &Path, guid: &str) -> Result<Session, SessionError> {
+        if !one_component(guid) {
+            return Err(SessionError::Unnameable {
+                guid: guid.to_owned(),
+            });
+        }
+        Session::open(state_home, guid.to_owned())
+    }
+    fn open(state_home: &Path, guid: String) -> Result<Session, SessionError> {
         std::fs::create_dir_all(state_home).map_err(|error| SessionError::Uncreatable {
             path: state_home.to_path_buf(),
             reason: error.to_string(),
@@ -40,7 +53,6 @@ impl Session {
                 path: state_home.to_path_buf(),
                 reason: error.to_string(),
             })?;
-        let guid = fresh_guid()?;
         let directory = root.join(APPLICATION).join(SESSIONS).join(&guid);
         let temp = directory.join(TEMP);
         let spill = directory.join(SPILL);
@@ -149,6 +161,10 @@ impl fmt::Display for SpillRef {
         write!(formatter, "{}", self.path.display())
     }
 }
+fn one_component(guid: &str) -> bool {
+    let mut components = Path::new(guid).components();
+    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
+}
 fn fresh_guid() -> Result<String, SessionError> {
     let mut bytes = [0u8; 16];
     File::open("/dev/urandom")
@@ -176,11 +192,12 @@ pub enum SessionError {
     Unreadable { path: PathBuf, reason: String },
     Unremovable { path: PathBuf, reason: String },
     Unspillable { path: PathBuf, reason: String },
+    Unnameable { guid: String },
 }
 impl SessionError {
     pub fn exit_code(&self) -> u8 {
         match self {
-            SessionError::NoStateHome => 2,
+            SessionError::NoStateHome | SessionError::Unnameable { .. } => 2,
             SessionError::NoEntropy { .. }
             | SessionError::Uncreatable { .. }
             | SessionError::Unreadable { .. }
@@ -195,6 +212,10 @@ impl fmt::Display for SessionError {
             SessionError::NoStateHome => write!(
                 formatter,
                 "neither XDG_STATE_HOME nor HOME is set, so there is nowhere to record a session"
+            ),
+            SessionError::Unnameable { guid } => write!(
+                formatter,
+                "a GUID names one directory, and {guid:?} does not name one"
             ),
             SessionError::NoEntropy { reason } => {
                 write!(formatter, "cannot read a GUID from /dev/urandom: {reason}")

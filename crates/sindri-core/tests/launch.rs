@@ -318,6 +318,33 @@ fn a_launch_hands_the_transcript_its_record_wrote() {
 }
 
 #[test]
+fn a_launch_that_names_no_session_mints_a_guid_of_its_own() {
+    let homes = Homes::new();
+    let first = Launch::open(
+        &homes.machine(),
+        &naming_wire(closed_wire()),
+        Enforcement::Unsafe,
+        FrontEnd::Terminal,
+    )
+    .ok()
+    .expect("a config naming a wire, a model and a key names a run");
+    let second = Launch::open(
+        &homes.machine(),
+        &naming_wire(closed_wire()),
+        Enforcement::Unsafe,
+        FrontEnd::Terminal,
+    )
+    .ok()
+    .expect("a second launch of the same config");
+
+    assert_ne!(
+        first.session().guid(),
+        second.session().guid(),
+        "a launch that names no session mints one, so two launches are two sessions"
+    );
+}
+
+#[test]
 fn a_launch_outlives_the_runs_it_drives() {
     let homes = Homes::new();
     let mut launch = Launch::open(
