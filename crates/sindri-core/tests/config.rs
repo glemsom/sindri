@@ -56,6 +56,62 @@ const EXAMPLES: [(&str, &str); 16] = [
     ("ssh_agent", "false"),
 ];
 
+/// One worked example of every key as its own variable spells it, paired with the file's spelling:
+/// the variable is a shell path list for the paths and one header per line for the headers.
+const SPOKEN: [(&str, &str, &str); 16] = [
+    ("provider", "openai", "\"openai\""),
+    ("model", "claude-sonnet-4-5", "\"claude-sonnet-4-5\""),
+    ("route", "responses", "\"responses\""),
+    (
+        "base_url",
+        "https://gateway.test/",
+        "\"https://gateway.test/\"",
+    ),
+    ("api_key", "sk-not-a-real-key", "\"sk-not-a-real-key\""),
+    ("thinking", "true", "true"),
+    (
+        "extra_writable_paths",
+        "/srv/data:/srv/cache",
+        "[\"/srv/data\", \"/srv/cache\"]",
+    ),
+    (
+        "extra_headers",
+        "X-Gateway-Session: {session}\nX-Trace: on",
+        "[\"X-Gateway-Session: {session}\", \"X-Trace: on\"]",
+    ),
+    ("context_window", "200000", "200000"),
+    ("max_turns", "250", "250"),
+    ("timeout", "120", "120"),
+    ("command_budget_ms", "3600000", "3600000"),
+    ("output_budget_bytes", "8388608", "8388608"),
+    ("status", "true", "true"),
+    ("face", "false", "false"),
+    ("ssh_agent", "false", "false"),
+];
+
+fn examples_document() -> String {
+    EXAMPLES
+        .iter()
+        .map(|(key, example)| format!("{key} = {example}\n"))
+        .collect()
+}
+
+fn worked(key: &str) -> &'static (&'static str, &'static str, &'static str) {
+    SPOKEN
+        .iter()
+        .find(|(name, _, _)| *name == key)
+        .unwrap_or_else(|| panic!("the worked examples name `{key}`"))
+}
+
+fn file_read(text: &str) -> Config {
+    let home = config_home(text);
+    Config::load_from(&home.path().join("sindri/config.toml")).expect("the file reads")
+}
+
+fn the_key_alone(key: &str, file: &str) -> Config {
+    file_read(&format!("{key} = {file}\n"))
+}
+
 #[test]
 fn an_unknown_key_names_the_key_and_the_file() {
     let home = config_home("modle = \"claude-sonnet-4-5\"\n");
@@ -867,4 +923,149 @@ fn two_configs_that_differ_only_in_what_a_frame_reads_decide_the_same_run() {
             field.name
         );
     }
+}
+
+#[test]
+fn every_row_names_its_own_variable() {
+    for field in Config::SCHEMA {
+        assert_eq!(
+            field.variable,
+            format!("SINDRI_{}", field.name.to_uppercase()),
+            "a key is spoken by `SINDRI_` and its own name upper-cased, and `{}` is spoken by \
+             another",
+            field.name
+        );
+    }
+
+    let mut variables: Vec<&str> = Config::SCHEMA.iter().map(|field| field.variable).collect();
+    let rows = variables.len();
+    variables.sort_unstable();
+    variables.dedup();
+
+    assert_eq!(
+        variables.len(),
+        rows,
+        "no two keys are spoken by one variable: {variables:?}"
+    );
+}
+
+#[test]
+fn every_key_is_read_from_its_own_row() {
+    assert_eq!(
+        SPOKEN.len(),
+        Config::SCHEMA.len(),
+        "the worked variables and the key list must name the same keys"
+    );
+
+    for field in Config::SCHEMA {
+        let (_, variable, file) = worked(field.name);
+        let from_the_variable =
+            Config::from_environment(&environment(&[(field.variable, variable)]))
+                .expect("a worked example is a value its key holds");
+
+        assert_eq!(
+            from_the_variable,
+            the_key_alone(field.name, file),
+            "`{}` is read by the row of `{}`, so it sets that key and no other",
+            field.variable,
+            field.name
+        );
+    }
+}
+
+#[test]
+fn a_variable_holding_a_value_its_key_cannot_hold_is_refused_naming_it() {
+    let refused = [
+        ("provider", "gemini"),
+        ("route", "completions"),
+        ("api_key", sindri_core::redact::MASK),
+        ("thinking", "maybe"),
+        ("extra_headers", "no-colon-here"),
+        ("context_window", "0"),
+        ("max_turns", "many"),
+        ("timeout", "soon"),
+        ("command_budget_ms", "later"),
+        ("output_budget_bytes", "plenty"),
+        ("status", "maybe"),
+        ("face", "maybe"),
+        ("ssh_agent", "maybe"),
+    ];
+
+    for (key, text) in refused {
+        let field = Config::field(key).unwrap_or_else(|| panic!("the schema names `{key}`"));
+
+        let error = Config::from_environment(&environment(&[(field.variable, text)]))
+            .expect_err(&format!("`{text}` is not a value `{key}` can hold"));
+
+        assert_eq!(
+            error.exit_code(),
+            2,
+            "`{text}` in `{}` is a usage error",
+            field.variable
+        );
+        let message = error.to_string();
+        assert!(
+            message.contains(field.variable),
+            "the refusal names the variable a person has to fix, and it says: {message}"
+        );
+    }
+}
+
+#[test]
+fn a_variable_that_says_nothing_yields_to_the_file_for_every_key() {
+    let home = config_home(&examples_document());
+    let written = resolved(home.path(), &[], Config::default()).expect("the config loads");
+
+    for field in Config::SCHEMA {
+        let yielded = resolved(home.path(), &[(field.variable, "")], Config::default())
+            .expect("an exported nothing is no value at all");
+
+        assert_eq!(
+            yielded, written,
+            "`{}` exported empty says nothing, so the file's `{}` is the key in force",
+            field.variable, field.name
+        );
+    }
+
+    let all_silent: Vec<(&str, &str)> = Config::SCHEMA
+        .iter()
+        .map(|field| (field.variable, ""))
+        .collect();
+    let silent = resolved(home.path(), &all_silent, Config::default()).expect("the config loads");
+
+    assert_eq!(
+        silent, written,
+        "every variable exported empty at once leaves the whole file speaking"
+    );
+}
+
+#[test]
+fn every_variable_is_the_key_in_force_over_a_file_that_says_nothing() {
+    for field in Config::SCHEMA {
+        let (_, variable, file) = worked(field.name);
+        let from_a_silent_file = resolved_in("", &[(field.variable, variable)], Config::default());
+
+        assert_eq!(
+            from_a_silent_file,
+            the_key_alone(field.name, file),
+            "`{}` set over a file that says nothing is the key in force, replacing rather than adding",
+            field.variable
+        );
+    }
+}
+
+#[test]
+fn every_key_merges_above_a_lower_config_and_yields_to_one_above_it() {
+    let full = file_read(&examples_document());
+
+    assert_eq!(
+        full.clone().above(Config::default()),
+        full,
+        "a key the higher config names is the key in force, and it is the higher config's value"
+    );
+    assert_eq!(
+        Config::default().above(full.clone()),
+        full,
+        "a key the higher config says nothing about is the lower config's key"
+    );
 }

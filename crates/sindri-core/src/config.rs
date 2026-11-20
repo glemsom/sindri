@@ -38,40 +38,58 @@ pub struct Config {
 type Shown = fn(&Config) -> String;
 type Reading = fn(&'static str, &mut Config, &str) -> Result<(), ConfigError>;
 type Writing = fn(&'static str, &Config, &mut DocumentMut) -> Result<(), ConfigError>;
+type Merging = fn(&mut Config, &Config);
 
 #[derive(Debug)]
 pub struct Field {
     pub name: &'static str,
+    pub variable: &'static str,
     switch: bool,
     shown: Shown,
     reading: Reading,
     writing: Writing,
+    spoken: Reading,
+    merging: Merging,
+}
+
+macro_rules! or_lower {
+    ($key:ident) => {
+        |config: &mut Config, lower: &Config| {
+            config.$key = config.$key.take().or_else(|| lower.$key.clone());
+        }
+    };
 }
 
 impl Field {
-    const fn typed(name: &'static str, shown: Shown, reading: Reading, writing: Writing) -> Field {
+    const fn typed(
+        name: &'static str,
+        variable: &'static str,
+        shown: Shown,
+        reading: Reading,
+        writing: Writing,
+        merging: Merging,
+    ) -> Field {
         Field {
             name,
+            variable,
             switch: false,
             shown,
             reading,
             writing,
+            spoken: reading,
+            merging,
         }
     }
 
-    const fn switched(
-        name: &'static str,
-        shown: Shown,
-        reading: Reading,
-        writing: Writing,
-    ) -> Field {
-        Field {
-            name,
-            switch: true,
-            shown,
-            reading,
-            writing,
-        }
+    const fn switched(mut self) -> Field {
+        self.switch = true;
+        self
+    }
+
+    /// For the rows whose variable speaks a dialect of its own rather than the reader's.
+    const fn spoken(mut self, spoken: Reading) -> Field {
+        self.spoken = spoken;
+        self
     }
 
     pub fn switch(&self) -> bool {
@@ -80,6 +98,15 @@ impl Field {
 
     pub fn shown(&self, config: &Config) -> String {
         (self.shown)(config)
+    }
+
+    /// Reads the variable's words into this key, naming the variable when it refuses them.
+    pub fn speak(&self, text: &str, config: &mut Config) -> Result<(), ConfigError> {
+        (self.spoken)(self.variable, config, text)
+    }
+
+    pub fn or_lower(&self, config: &mut Config, lower: &Config) {
+        (self.merging)(config, lower)
     }
 
     /// The config a reader's words name for this key alone, every other key left unset.
@@ -99,42 +126,51 @@ impl Config {
     pub const SCHEMA: [Field; 16] = [
         Field::typed(
             "provider",
+            "SINDRI_PROVIDER",
             |config| word_or_empty(config.provider.map(Wire::word)),
             |key, config, text| {
                 config.provider = Some(as_wire(key, text)?);
                 Ok(())
             },
             |key, config, document| write_value(key, config.provider.map(Wire::word), document),
+            or_lower!(provider),
         ),
         Field::typed(
             "model",
+            "SINDRI_MODEL",
             |config| string_or_empty(&config.model),
             |_, config, text| {
                 config.model = Some(text.to_owned());
                 Ok(())
             },
             |key, config, document| write_text(key, config.model.as_ref(), document),
+            or_lower!(model),
         ),
         Field::typed(
             "route",
+            "SINDRI_ROUTE",
             |config| word_or_empty(config.route.map(Route::word)),
             |key, config, text| {
                 config.route = Some(as_route(key, text)?);
                 Ok(())
             },
             |key, config, document| write_value(key, config.route.map(Route::word), document),
+            or_lower!(route),
         ),
         Field::typed(
             "base_url",
+            "SINDRI_BASE_URL",
             |config| string_or_empty(&config.base_url),
             |_, config, text| {
                 config.base_url = Some(text.to_owned());
                 Ok(())
             },
             |key, config, document| write_text(key, config.base_url.as_ref(), document),
+            or_lower!(base_url),
         ),
         Field::typed(
             "api_key",
+            "SINDRI_API_KEY",
             |config| {
                 if config.api_key.is_some() {
                     MASK.to_owned()
@@ -147,18 +183,23 @@ impl Config {
                 Ok(())
             },
             |key, config, document| write_text(key, config.api_key.as_ref(), document),
+            or_lower!(api_key),
         ),
-        Field::switched(
+        Field::typed(
             "thinking",
+            "SINDRI_THINKING",
             |config| on_or_empty(config.thinking),
             |key, config, text| {
                 config.thinking = Some(parsed(key, text)?);
                 Ok(())
             },
             |key, config, document| write_value(key, config.thinking, document),
-        ),
+            or_lower!(thinking),
+        )
+        .switched(),
         Field::typed(
             "extra_writable_paths",
+            "SINDRI_EXTRA_WRITABLE_PATHS",
             |config| {
                 let paths = config.extra_writable_paths.as_deref().unwrap_or_default();
                 paths
@@ -175,9 +216,15 @@ impl Config {
             |key, config, document| {
                 write_paths(key, config.extra_writable_paths.as_deref(), document)
             },
-        ),
+            or_lower!(extra_writable_paths),
+        )
+        .spoken(|_, config, text| {
+            config.extra_writable_paths = Some(env::split_paths(text).collect());
+            Ok(())
+        }),
         Field::typed(
             "extra_headers",
+            "SINDRI_EXTRA_HEADERS",
             |config| {
                 config
                     .extra_headers
@@ -190,79 +237,110 @@ impl Config {
                 Ok(())
             },
             |key, config, document| write_headers(key, config.extra_headers.as_deref(), document),
-        ),
+            or_lower!(extra_headers),
+        )
+        .spoken(|variable, config, text| {
+            let headers: Vec<String> = text
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned)
+                .collect();
+            header_shape(variable, &headers)?;
+            config.extra_headers = Some(headers);
+            Ok(())
+        }),
         Field::typed(
             "context_window",
+            "SINDRI_CONTEXT_WINDOW",
             |config| number_or_empty(config.context_window),
             |key, config, text| {
                 config.context_window = Some(nonzero_window(key, parsed(key, text)?)?);
                 Ok(())
             },
             |key, config, document| write_window(key, config.context_window, document),
+            or_lower!(context_window),
         ),
         Field::typed(
             "max_turns",
+            "SINDRI_MAX_TURNS",
             |config| number_or_empty(config.max_turns),
             |key, config, text| {
                 config.max_turns = Some(parsed(key, text)?);
                 Ok(())
             },
             |key, config, document| write_number(key, config.max_turns.map(u64::from), document),
+            or_lower!(max_turns),
         ),
         Field::typed(
             "timeout",
+            "SINDRI_TIMEOUT",
             |config| number_or_empty(config.timeout),
             |key, config, text| {
                 config.timeout = Some(parsed(key, text)?);
                 Ok(())
             },
             |key, config, document| write_number(key, config.timeout, document),
+            or_lower!(timeout),
         ),
         Field::typed(
             "command_budget_ms",
+            "SINDRI_COMMAND_BUDGET_MS",
             |config| number_or_empty(config.command_budget_ms),
             |key, config, text| {
                 config.command_budget_ms = Some(parsed(key, text)?);
                 Ok(())
             },
             |key, config, document| write_number(key, config.command_budget_ms, document),
+            or_lower!(command_budget_ms),
         ),
         Field::typed(
             "output_budget_bytes",
+            "SINDRI_OUTPUT_BUDGET_BYTES",
             |config| number_or_empty(config.output_budget_bytes),
             |key, config, text| {
                 config.output_budget_bytes = Some(parsed(key, text)?);
                 Ok(())
             },
             |key, config, document| write_number(key, config.output_budget_bytes, document),
+            or_lower!(output_budget_bytes),
         ),
-        Field::switched(
+        Field::typed(
             "status",
+            "SINDRI_STATUS",
             |config| on_or_empty(config.status),
             |key, config, text| {
                 config.status = Some(parsed(key, text)?);
                 Ok(())
             },
             |key, config, document| write_value(key, config.status, document),
-        ),
-        Field::switched(
+            or_lower!(status),
+        )
+        .switched(),
+        Field::typed(
             "face",
+            "SINDRI_FACE",
             |config| on_or_empty(config.face),
             |key, config, text| {
                 config.face = Some(parsed(key, text)?);
                 Ok(())
             },
             |key, config, document| write_value(key, config.face, document),
-        ),
-        Field::switched(
+            or_lower!(face),
+        )
+        .switched(),
+        Field::typed(
             "ssh_agent",
+            "SINDRI_SSH_AGENT",
             |config| on_or_empty(config.ssh_agent),
             |key, config, text| {
                 config.ssh_agent = Some(parsed(key, text)?);
                 Ok(())
             },
             |key, config, document| write_value(key, config.ssh_agent, document),
-        ),
+            or_lower!(ssh_agent),
+        )
+        .switched(),
     ];
 
     /// The field the schema names, and `None` when the table holds no such key.
@@ -378,46 +456,21 @@ impl Config {
         }
         Ok(())
     }
-    pub fn above(self, lower: Config) -> Config {
-        Config {
-            provider: self.provider.or(lower.provider),
-            model: self.model.or(lower.model),
-            route: self.route.or(lower.route),
-            base_url: self.base_url.or(lower.base_url),
-            api_key: self.api_key.or(lower.api_key),
-            thinking: self.thinking.or(lower.thinking),
-            extra_writable_paths: self.extra_writable_paths.or(lower.extra_writable_paths),
-            extra_headers: self.extra_headers.or(lower.extra_headers),
-            context_window: self.context_window.or(lower.context_window),
-            max_turns: self.max_turns.or(lower.max_turns),
-            timeout: self.timeout.or(lower.timeout),
-            command_budget_ms: self.command_budget_ms.or(lower.command_budget_ms),
-            output_budget_bytes: self.output_budget_bytes.or(lower.output_budget_bytes),
-            status: self.status.or(lower.status),
-            face: self.face.or(lower.face),
-            ssh_agent: self.ssh_agent.or(lower.ssh_agent),
+    pub fn above(mut self, lower: Config) -> Config {
+        for field in &Config::SCHEMA {
+            field.or_lower(&mut self, &lower);
         }
+        self
     }
     pub fn from_environment(environment: &impl Environment) -> Result<Config, ConfigError> {
-        Ok(Config {
-            provider: spoken_wire(environment, "SINDRI_PROVIDER")?,
-            model: spoken(environment, "SINDRI_MODEL"),
-            route: spoken_route(environment, "SINDRI_ROUTE")?,
-            base_url: spoken(environment, "SINDRI_BASE_URL"),
-            api_key: spoken(environment, "SINDRI_API_KEY"),
-            thinking: spoken_parsed(environment, "SINDRI_THINKING")?,
-            extra_writable_paths: spoken(environment, "SINDRI_EXTRA_WRITABLE_PATHS")
-                .map(|paths| env::split_paths(&paths).collect()),
-            extra_headers: spoken_headers(environment, "SINDRI_EXTRA_HEADERS")?,
-            context_window: spoken_window(environment, "SINDRI_CONTEXT_WINDOW")?,
-            max_turns: spoken_parsed(environment, "SINDRI_MAX_TURNS")?,
-            timeout: spoken_parsed(environment, "SINDRI_TIMEOUT")?,
-            command_budget_ms: spoken_parsed(environment, "SINDRI_COMMAND_BUDGET_MS")?,
-            output_budget_bytes: spoken_parsed(environment, "SINDRI_OUTPUT_BUDGET_BYTES")?,
-            status: spoken_parsed(environment, "SINDRI_STATUS")?,
-            face: spoken_parsed(environment, "SINDRI_FACE")?,
-            ssh_agent: spoken_parsed(environment, "SINDRI_SSH_AGENT")?,
-        })
+        let mut config = Config::default();
+        for field in &Config::SCHEMA {
+            let Some(text) = spoken(environment, field.variable) else {
+                continue;
+            };
+            field.speak(&text, &mut config)?;
+        }
+        Ok(config)
     }
 
     /// The endpoint this config names, and `None` when it names no wire.
@@ -474,7 +527,7 @@ impl Config {
             .and_then(Wire::credential_variable)
             .into_iter()
             .collect();
-        variables.push("SINDRI_API_KEY");
+        variables.extend(Config::field("api_key").map(|field| field.variable));
         variables
     }
     pub fn missing(&self) -> Vec<&'static str> {
@@ -759,34 +812,6 @@ pub fn config_path(environment: &impl Environment) -> Result<PathBuf, ConfigErro
 pub(crate) fn spoken(environment: &impl Environment, name: &str) -> Option<String> {
     environment.var(name).filter(|value| !value.is_empty())
 }
-fn spoken_parsed<T>(environment: &impl Environment, name: &str) -> Result<Option<T>, ConfigError>
-where
-    T: FromStr,
-    T::Err: fmt::Display,
-{
-    match spoken(environment, name) {
-        None => Ok(None),
-        Some(text) => parsed(name, &text).map(Some),
-    }
-}
-fn spoken_route(environment: &impl Environment, name: &str) -> Result<Option<Route>, ConfigError> {
-    match spoken(environment, name) {
-        None => Ok(None),
-        Some(word) => as_route(name, &word).map(Some),
-    }
-}
-fn spoken_wire(environment: &impl Environment, name: &str) -> Result<Option<Wire>, ConfigError> {
-    match spoken(environment, name) {
-        None => Ok(None),
-        Some(word) => as_wire(name, &word).map(Some),
-    }
-}
-fn spoken_window(environment: &impl Environment, name: &str) -> Result<Option<u64>, ConfigError> {
-    match spoken_parsed(environment, name)? {
-        None => Ok(None),
-        Some(window) => nonzero_window(name, window).map(Some),
-    }
-}
 fn parsed<T>(origin: &str, text: &str) -> Result<T, ConfigError>
 where
     T: FromStr,
@@ -824,22 +849,6 @@ fn as_wire(origin: &str, text: &str) -> Result<Wire, ConfigError> {
             Wire::WORDS.join(", ")
         ),
     })
-}
-fn spoken_headers(
-    environment: &impl Environment,
-    name: &str,
-) -> Result<Option<Vec<String>>, ConfigError> {
-    let Some(value) = spoken(environment, name) else {
-        return Ok(None);
-    };
-    let headers: Vec<String> = value
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_owned)
-        .collect();
-    header_shape(name, &headers)?;
-    Ok(Some(headers))
 }
 fn header_shape(origin: &str, headers: &[String]) -> Result<(), ConfigError> {
     match headers.iter().find(|header| !header.contains(':')) {
