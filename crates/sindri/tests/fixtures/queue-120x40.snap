@@ -3,28 +3,28 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 queue at 120x40
-00 |  between the tail and the window and lays out every one of them on the way.wire      anthropic                         | plain:76 dim:10 plain:34
-01 |  Each is laid out once and kept, so the whole history scrolled through     model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
-02 |  costs one layout per entry and scrolling it again costs none.             think     high                              | plain:76 dim:10 plain:34
-03 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
-04 |  git diff --stat                                                           turns                               6 /  250| plain:76 dim:10 plain:34
-05 |✓ exit 0  9 ms · 128 bytes                                                  ctx                      █░░░░░ 48.2k / 200k| ok:1 plain:1 dim:24 plain:50 dim:10 plain:16 dim:5 plain:13
-06 |  crates/sindri/src/rows.rs | 412 +++++++++++++                             cache                                    88%| muted:47 plain:29 dim:10 plain:34
-07 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | muted:45 plain:75
-08 |  The transcript's unit is the entry. An entry never carries a formatted    workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
-09 |  line, so the same run is drawn the same way by the TUI, by a reader of thebranch    spec/1-capability                 | plain:76 dim:10 plain:34
-10 |  transcript and by whatever front end comes next.                                                                      | plain:120
-11 |                                                                            skills                                     2| plain:76 dim:10 plain:34
-12 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
-13 |  ──────────┼───────────────────────────                                    sandbox   bwrap                             | plain:2 dim:38 plain:36 dim:10 plain:34
-14 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
-15 |  code      │ behind a bar, highlighted                                     session   9f2c7a41                          | plain:11 dim:3 plain:62 dim:10 plain:34
-16 |  table     │ columns joined by a bar                                       temp      …/sindri/sessions/9f2c7a41/tmp    | plain:11 dim:3 plain:62 dim:10 plain:34
-17 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
-18 |  make check STAGES=frames                                                                                              | plain:120
-19 |✓ exit 0  31 ms · 104 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
-20 |  check: frame calls ... ok                                                                                             | muted:27 plain:93
-21 |  check: frame transcript ... ok                                                                                        | muted:32 plain:88
+00 |› what does the check cost?                                                 wire      anthropic                         | plain:76 dim:10 plain:34
+01 |⋯ 1 call · 118 ms                                                           model     claude-sonnet-4-5-20250929        | dim:1 plain:1 dim:15 plain:59 dim:10 plain:34
+02 |  What that buys is the plain case and what it costs is the scrolled one: a think     high                              | plain:76 dim:10 plain:34
+03 |  window is a row offset from the tail, so resolving one walks the entries                                              | plain:120
+04 |  between the tail and the window and lays out every one of them on the way.turns                               6 /  250| plain:76 dim:10 plain:34
+05 |  Each is laid out once and kept, so the whole history scrolled through     ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+06 |  costs one layout per entry and scrolling it again costs none.             cache                                    88%| plain:76 dim:10 plain:34
+07 |─ prompt ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+08 |› what is the transcript's unit?                                            workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
+09 |⋯ 1 call · 9 ms                                                             branch    spec/1-capability                 | dim:1 plain:1 dim:13 plain:61 dim:10 plain:34
+10 |  The transcript's unit is the entry. An entry never carries a formatted                                                | plain:120
+11 |  line, so the same run is drawn the same way by the TUI, by a reader of theskills                                     2| plain:76 dim:10 plain:34
+12 |  transcript and by whatever front end comes next.                                                                      | plain:120
+13 |                                                                            sandbox   bwrap                             | plain:76 dim:10 plain:34
+14 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
+15 |  ──────────┼───────────────────────────                                    session   9f2c7a41                          | plain:2 dim:38 plain:36 dim:10 plain:34
+16 |  heading   │ in the answer's own gutter                                    temp      …/sindri/sessions/9f2c7a41/tmp    | plain:11 dim:3 plain:62 dim:10 plain:34
+17 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
+18 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
+19 |─ prompt ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+20 |› what does a row of the band say?                                                                                      | plain:120
+21 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 22 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
 23 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
 24 |                                                                                                                        | plain:120

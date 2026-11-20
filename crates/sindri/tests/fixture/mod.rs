@@ -96,9 +96,9 @@ fn drafting(capabilities: Capabilities, facts: Facts, lines: &[&str]) -> View {
     view
 }
 
-/// The frames this front end paints, each built from the three values it draws: the terminal a test
-/// states, the facts it holds and the record it draws. A frame that needs pictures, large text or no
-/// face states its own terminal; every other one is drawn on `capabilities`.
+/// The frames this front end paints, each built from the three values it draws and then asked for
+/// the key a reader presses where a frame is reached by one. A frame that needs pictures, large text
+/// or no face states its own terminal; every other one is drawn on `capabilities`.
 fn named(name: &str, capabilities: Capabilities) -> View {
     match name {
         "boot" => splash(false),
@@ -118,7 +118,16 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "face" => faced(true),
         "face-off" => faced(false),
         "streaming" => streaming(capabilities),
-        "calls" => running(capabilities, calls(), Scroll::Tail),
+        "calls" => {
+            let mut view = running(capabilities, calls(), Scroll::Tail);
+            assert_eq!(
+                view.key(Key::Fold),
+                Outcome::Edited,
+                "the four calls the newest settled exchange made are opened, so a frame draws each \
+                 verdict the work holds"
+            );
+            view
+        }
         "tools" => tools(capabilities),
         "fold" => fold(capabilities, false),
         "fold-open" => fold(capabilities, true),
@@ -689,11 +698,14 @@ pub fn facts() -> ledger::Facts {
 }
 
 fn opening() -> Vec<Entry> {
-    transcript().into_iter().take(4).collect()
+    transcript().into_iter().take(5).collect()
 }
 
+/// A conversation a reader scrolls back through: the prompt each exchange was asked with, the work
+/// the run did under it, the answer it got and the stop every run ends on.
 fn transcript() -> Vec<Entry> {
     vec![
+        prompt("where does rendering live?"),
         Entry::Turn { turn: 1 },
         call(1, "bash", r#"{"command": "rg -n 'fence' src"}"#),
         result(
@@ -710,6 +722,8 @@ fn transcript() -> Vec<Entry> {
              fact and never a rendering: the TUI and any reader draw one run from one \
              value, and the core may not name a terminal at all.",
         ),
+        end(),
+        prompt("how does a width change reflow the cache?"),
         Entry::Turn { turn: 2 },
         call(
             2,
@@ -731,6 +745,8 @@ fn transcript() -> Vec<Entry> {
              cache is one width deep, which is what a resize being a reflow and not a \
              lookup means.",
         ),
+        end(),
+        prompt("how is a window measured?"),
         Entry::Turn { turn: 3 },
         call(3, "bash", r#"{"command": "make check STAGES=rows"}"#),
         result(3, "bash", Exit::Code(0), "check: test ... ok", 64, 41),
@@ -742,6 +758,8 @@ fn transcript() -> Vec<Entry> {
              laid out, so a 250-turn history on a 40-row terminal pays for what it shows \
              and no more.",
         ),
+        end(),
+        prompt("what does the check cost?"),
         Entry::Turn { turn: 4 },
         call(4, "bash", r#"{"command": "make check"}"#),
         result(
@@ -760,6 +778,8 @@ fn transcript() -> Vec<Entry> {
              Each is laid out once and kept, so the whole history scrolled through costs \
              one layout per entry and scrolling it again costs none.",
         ),
+        end(),
+        prompt("what is the transcript's unit?"),
         Entry::Turn { turn: 5 },
         call(5, "bash", r#"{"command": "git diff --stat"}"#),
         result(
@@ -778,6 +798,8 @@ fn transcript() -> Vec<Entry> {
              stands |\n| --- | --- |\n| heading | in the answer's own gutter |\n| code | \
              behind a bar, highlighted |\n| table | columns joined by a bar |",
         ),
+        end(),
+        prompt("what does a row of the band say?"),
         Entry::Turn { turn: 6 },
         call(6, "bash", r#"{"command": "make check STAGES=frames"}"#),
         result(
@@ -795,6 +817,7 @@ fn transcript() -> Vec<Entry> {
              above it holds.\n\n```rust\nfn main() {\n    let row = Row::of(spans);\n    \
              row.paint(area, buffer);\n}\n```",
         ),
+        end(),
     ]
 }
 
@@ -864,9 +887,9 @@ const PULSE_ANSWER: [&str; 4] = [
 ];
 
 fn with_pulse(capabilities: Capabilities, pulse: Pulse, said: &[&str]) -> View {
-    let state = match &pulse {
-        Pulse::Live { .. } => RunState::Running,
-        Pulse::Settled { stop, .. } => RunState::Stopped(stop.clone()),
+    let (state, ended) = match &pulse {
+        Pulse::Live { .. } => (RunState::Running, None),
+        Pulse::Settled { stop, .. } => (RunState::Stopped(stop.clone()), Some(stop.clone())),
     };
     let mut entries = opening();
     entries.push(Entry::Turn { turn: 2 });
@@ -892,6 +915,9 @@ fn with_pulse(capabilities: Capabilities, pulse: Pulse, said: &[&str]) -> View {
     }
     for fragment in said {
         view.text(fragment);
+    }
+    if let Some(stop) = ended {
+        view.stopped(&stop);
     }
     view
 }
@@ -1033,16 +1059,16 @@ fn output() -> String {
         .join("\n")
 }
 
-/// A transcript whose newest result is longer than its fold, with the answer the run wrote above
-/// it: the result is the work and folds, the answer is the reader's and never does.
+/// A settled exchange whose one result is longer than its fold: closed the work is one row, and
+/// opened it draws the call and the head, the count and the last row the result keeps.
 fn fold(capabilities: Capabilities, open: bool) -> View {
     let mut view = running(capabilities, folded_run(), Scroll::Tail);
     if open {
         assert_eq!(
             view.key(Key::Fold),
             Outcome::Edited,
-            "Ctrl-O opens the newest result's fold, and a frame that answered nothing would be a \
-             picture of the fold it already had"
+            "Ctrl-O opens the newest settled work, and a frame that answered nothing would be a \
+             picture of the row it already had"
         );
     }
     view
@@ -1052,6 +1078,7 @@ fn fold(capabilities: Capabilities, open: bool) -> View {
 /// never an answer's: one frame holds both kinds of entry beside one another.
 fn folded_run() -> Vec<Entry> {
     vec![
+        prompt("why does the retry test fail?"),
         Entry::Turn { turn: 1 },
         answer(
             1,
@@ -1064,14 +1091,19 @@ fn folded_run() -> Vec<Entry> {
             r#"{"command": "cargo test -p sindri --test rows"}"#,
         ),
         result(1, "bash", Exit::Code(0), &output(), 640, 1_800),
+        answer(
+            2,
+            "Three rows of the fold are the whole of it: the head, the count and the last.",
+        ),
+        end(),
     ]
 }
 
 fn folded_beside_an_answer(capabilities: Capabilities) -> View {
     let mut entries = folded_run();
-    entries.push(Entry::Turn { turn: 2 });
+    entries.push(Entry::Turn { turn: 3 });
     entries.push(answer(
-        2,
+        3,
         "The run proves the fold and nothing else: every row of a command's output is drawn in the \
          quieter ink behind the gutter the call opened, and the rows a reader usually needs are the \
          head of it, the row counting the rows kept back and the last row the command wrote.\n\n\
@@ -1080,11 +1112,21 @@ fn folded_beside_an_answer(capabilities: Capabilities) -> View {
          The fold opens on one key and on a mark grown over a row of it, and a fold a reader \
          opened stays open through a scroll, a resize and the entry that lands beside it.",
     ));
-    running(capabilities, entries, Scroll::Tail)
+    let mut view = running(capabilities, entries, Scroll::Tail);
+    assert_eq!(
+        view.key(Key::Fold),
+        Outcome::Edited,
+        "the work the folded result stands in is opened, because a work drawn as one row draws no \
+         result to read beside the answer"
+    );
+    view
 }
 
+/// A settled exchange whose four calls ended four ways, opened so a reader reads them all, and the
+/// exchange after it whose one call is still out.
 fn calls() -> Vec<Entry> {
     vec![
+        prompt("which calls settle well?"),
         Entry::Turn { turn: 1 },
         call(1, "bash", r#"{"command": "rg -n 'verdict' src"}"#),
         result(
@@ -1120,6 +1162,7 @@ fn calls() -> Vec<Entry> {
              cancels and keeps the draft, so the row says `✗ cancelled` rather than \
              leaving a spinner turning for a result that will never come.",
         ),
+        prompt("and the one that is still out?"),
         Entry::Turn { turn: 5 },
         call(5, "bash", r#"{"command": "make check STAGES=test"}"#),
     ]
@@ -1151,6 +1194,18 @@ fn answer(turn: u32, text: &str) -> Entry {
         turn,
         text: SecretSet::default().redact(text),
     }
+}
+
+fn prompt(text: &str) -> Entry {
+    Entry::Prompt {
+        text: SecretSet::default().redact(text),
+    }
+}
+
+/// The stop every run ends on: it draws no row of the band's, and it is what says the work above it
+/// is the work of an exchange that has settled.
+fn end() -> Entry {
+    Entry::Stop { stop: Stop::Final }
 }
 
 /// The same frame drawn where the terminal reports a pointer and where it reports none: a pointer

@@ -21,11 +21,22 @@ pub fn pulse_glyph(elapsed_ms: u64) -> char {
 
 /// Truncated rather than rounded, because a run 999 ms in has not been running a second yet.
 pub fn format_duration(ms: u64) -> String {
+    duration(ms, "")
+}
+
+/// The same duration spaced as a fact is read rather than as a clock is watched: `4.1 s`, `12 s`,
+/// `1m 30s`, `1h 02m`.
+pub fn format_duration_spaced(ms: u64) -> String {
+    duration(ms, " ")
+}
+
+/// The one table both forms read, where `gap` is what stands between a number and its unit.
+fn duration(ms: u64, gap: &str) -> String {
     match ms {
-        ms if ms < 10_000 => format!("{}.{}s", ms / 1_000, ms % 1_000 / 100),
-        ms if ms < 60_000 => format!("{}s", ms / 1_000),
-        ms if ms < 3_600_000 => format!("{}m{:02}s", ms / 60_000, ms % 60_000 / 1_000),
-        ms => format!("{}h{:02}m", ms / 3_600_000, ms % 3_600_000 / 60_000),
+        ms if ms < 10_000 => format!("{}.{}{gap}s", ms / 1_000, ms % 1_000 / 100),
+        ms if ms < 60_000 => format!("{}{gap}s", ms / 1_000),
+        ms if ms < 3_600_000 => format!("{}m{gap}{:02}s", ms / 60_000, ms % 60_000 / 1_000),
+        ms => format!("{}h{gap}{:02}m", ms / 3_600_000, ms % 3_600_000 / 60_000),
     }
 }
 

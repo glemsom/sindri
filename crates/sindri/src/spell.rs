@@ -32,6 +32,16 @@ pub fn of(name: &str, arguments: &str) -> String {
         .map_or_else(|| spelled(&said), String::from)
 }
 
+/// The file a call of `name` reads, when its arguments name one: the path an open names, and never
+/// the url it names instead, because a url is no file of this workspace.
+pub fn file(name: &str, arguments: &str) -> Option<String> {
+    if name != OPEN {
+        return None;
+    }
+    let said = serde_json::from_str::<Value>(arguments.trim()).ok()?;
+    said.get("path").and_then(Value::as_str).map(String::from)
+}
+
 /// Every word a value says — an object's key then the value under it, an array's items, a number's
 /// digits and a boolean's own word — for an argument no tool of this product spells: no brace,
 /// bracket, quote, comma or colon of the JSON that framed them survives.

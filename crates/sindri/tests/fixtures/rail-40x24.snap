@@ -3,22 +3,22 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 rail at 40x24
-00 |✓ bash                                  | ok:1 plain:1 dim:4 plain:34
-01 |  rg -n 'fence' src                     | plain:40
-02 |✓ exit 0  23 ms · 412 bytes             | ok:1 plain:1 dim:25 plain:13
-03 |  src/rows.rs: the glyph a turn opens   | muted:37 plain:3
-04 |  with                                  | muted:6 plain:34
-05 |  src/rows.rs: a word longer than a row | muted:39 plain:1
-06 |  is broken                             | muted:11 plain:29
-07 |  Rendering lives in the front end and  | plain:40
-08 |  not in the core, because an entry is a| plain:40
-09 |  fact and never a rendering: the TUI   | plain:40
-10 |  and any reader draw one run from one  | plain:40
-11 |  value, and the core may not name a    | plain:40
-12 |  terminal at all.                      | plain:40
-13 |⠹ 4.2s                                  | accent:1 plain:1 dim:4 plain:34
-14 |                                        | plain:40
-15 |                                        | plain:40
+00 |─ prompt ───────────────────────────────| dim:40
+01 |› where does rendering live?            | plain:40
+02 |✓ bash                                  | ok:1 plain:1 dim:4 plain:34
+03 |  rg -n 'fence' src                     | plain:40
+04 |✓ exit 0  23 ms · 412 bytes             | ok:1 plain:1 dim:25 plain:13
+05 |  src/rows.rs: the glyph a turn opens   | muted:37 plain:3
+06 |  with                                  | muted:6 plain:34
+07 |  src/rows.rs: a word longer than a row | muted:39 plain:1
+08 |  is broken                             | muted:11 plain:29
+09 |  Rendering lives in the front end and  | plain:40
+10 |  not in the core, because an entry is a| plain:40
+11 |  fact and never a rendering: the TUI   | plain:40
+12 |  and any reader draw one run from one  | plain:40
+13 |  value, and the core may not name a    | plain:40
+14 |  terminal at all.                      | plain:40
+15 |⠹ 4.2s                                  | accent:1 plain:1 dim:4 plain:34
 16 |                                        | plain:40
 17 |                                        | plain:40
 18 |                                        | plain:40
