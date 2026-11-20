@@ -34,26 +34,93 @@ pub struct Config {
     pub face: Option<bool>,
     pub ssh_agent: Option<bool>,
 }
+#[derive(Debug)]
+pub struct Field {
+    pub name: &'static str,
+    switch: bool,
+    shown: fn(&Config) -> String,
+}
+
+impl Field {
+    const fn typed(name: &'static str, shown: fn(&Config) -> String) -> Field {
+        Field {
+            name,
+            switch: false,
+            shown,
+        }
+    }
+
+    const fn switched(name: &'static str, shown: fn(&Config) -> String) -> Field {
+        Field {
+            name,
+            switch: true,
+            shown,
+        }
+    }
+
+    pub fn switch(&self) -> bool {
+        self.switch
+    }
+
+    pub fn shown(&self, config: &Config) -> String {
+        (self.shown)(config)
+    }
+}
+
 impl Config {
-    pub const KEYS: [&'static str; 16] = [
-        "provider",
-        "model",
-        "route",
-        "base_url",
-        "api_key",
-        "thinking",
-        "extra_writable_paths",
-        "extra_headers",
-        "context_window",
-        "max_turns",
-        "timeout",
-        "command_budget_ms",
-        "output_budget_bytes",
-        "status",
-        "face",
-        "ssh_agent",
+    pub const SCHEMA: [Field; 16] = [
+        Field::typed("provider", |config| {
+            word_or_empty(config.provider.map(Wire::word))
+        }),
+        Field::typed("model", |config| string_or_empty(&config.model)),
+        Field::typed("route", |config| {
+            word_or_empty(config.route.map(Route::word))
+        }),
+        Field::typed("base_url", |config| string_or_empty(&config.base_url)),
+        Field::typed("api_key", |config| {
+            if config.api_key.is_some() {
+                MASK.to_owned()
+            } else {
+                String::new()
+            }
+        }),
+        Field::switched("thinking", |config| on_or_empty(config.thinking)),
+        Field::typed("extra_writable_paths", |config| {
+            let paths = config.extra_writable_paths.as_deref().unwrap_or_default();
+            paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<String>>()
+                .join(LIST_SEPARATOR)
+        }),
+        Field::typed("extra_headers", |config| {
+            config
+                .extra_headers
+                .as_deref()
+                .unwrap_or_default()
+                .join(LIST_SEPARATOR)
+        }),
+        Field::typed("context_window", |config| {
+            number_or_empty(config.context_window)
+        }),
+        Field::typed("max_turns", |config| number_or_empty(config.max_turns)),
+        Field::typed("timeout", |config| number_or_empty(config.timeout)),
+        Field::typed("command_budget_ms", |config| {
+            number_or_empty(config.command_budget_ms)
+        }),
+        Field::typed("output_budget_bytes", |config| {
+            number_or_empty(config.output_budget_bytes)
+        }),
+        Field::switched("status", |config| on_or_empty(config.status)),
+        Field::switched("face", |config| on_or_empty(config.face)),
+        Field::switched("ssh_agent", |config| on_or_empty(config.ssh_agent)),
     ];
-    pub const TOGGLES: [&'static str; 4] = ["thinking", "status", "face", "ssh_agent"];
+
+    /// The field the schema names, and `None` when the table holds no such key.
+    pub fn field(name: &str) -> Option<&'static Field> {
+        Config::SCHEMA.iter().find(|field| field.name == name)
+    }
+
     pub fn tells_status(&self) -> bool {
         self.status.unwrap_or(true)
     }
@@ -90,10 +157,7 @@ impl Config {
             origin: path.display().to_string(),
             reason: error.to_string(),
         })?;
-        if let Some(key) = table
-            .keys()
-            .find(|key| !Config::KEYS.contains(&key.as_str()))
-        {
+        if let Some(key) = table.keys().find(|key| Config::field(key).is_none()) {
             return Err(ConfigError::UnknownKey {
                 key: key.clone(),
                 path: path.to_path_buf(),
@@ -225,52 +289,6 @@ impl Config {
             write_key(document, "ssh_agent", Value::from(value));
         }
         Ok(())
-    }
-    pub fn text(&self, key: &str) -> String {
-        let shown = |value: &Option<String>| value.clone().unwrap_or_default();
-        match key {
-            "provider" => self
-                .provider
-                .map(|wire| wire.word().to_owned())
-                .unwrap_or_default(),
-            "model" => shown(&self.model),
-            "route" => self
-                .route
-                .map(|route| route.word().to_owned())
-                .unwrap_or_default(),
-            "base_url" => shown(&self.base_url),
-            "api_key" => self
-                .api_key
-                .as_ref()
-                .map(|_| MASK.to_owned())
-                .unwrap_or_default(),
-            "thinking" => on_or_empty(self.thinking),
-            "extra_writable_paths" => self
-                .extra_writable_paths
-                .as_ref()
-                .map(|paths| {
-                    paths
-                        .iter()
-                        .map(|path| path.display().to_string())
-                        .collect::<Vec<String>>()
-                        .join(LIST_SEPARATOR)
-                })
-                .unwrap_or_default(),
-            "extra_headers" => self
-                .extra_headers
-                .as_ref()
-                .map(|headers| headers.join(LIST_SEPARATOR))
-                .unwrap_or_default(),
-            "context_window" => number_or_empty(self.context_window),
-            "max_turns" => number_or_empty(self.max_turns),
-            "timeout" => number_or_empty(self.timeout),
-            "command_budget_ms" => number_or_empty(self.command_budget_ms),
-            "output_budget_bytes" => number_or_empty(self.output_budget_bytes),
-            "status" => on_or_empty(self.status),
-            "face" => on_or_empty(self.face),
-            "ssh_agent" => on_or_empty(self.ssh_agent),
-            _ => String::new(),
-        }
     }
     pub fn above(self, lower: Config) -> Config {
         Config {
@@ -483,6 +501,12 @@ fn headers_of(key: &str, text: &str) -> Result<Vec<String>, ConfigError> {
     let headers = listed(text);
     header_shape(key, &headers)?;
     Ok(headers)
+}
+fn string_or_empty(value: &Option<String>) -> String {
+    value.clone().unwrap_or_default()
+}
+fn word_or_empty(word: Option<&'static str>) -> String {
+    word.map(str::to_owned).unwrap_or_default()
 }
 fn on_or_empty(value: Option<bool>) -> String {
     value.map(|on| on.to_string()).unwrap_or_default()

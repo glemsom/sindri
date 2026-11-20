@@ -70,7 +70,7 @@ fn opened(home: &TempDir) -> View {
 }
 
 fn walk_to(view: &mut View, key: &str) {
-    for _ in 0..Config::KEYS.len() {
+    for _ in 0..Config::SCHEMA.len() {
         if row_key(view.settings()) == Some(key) {
             return;
         }

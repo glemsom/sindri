@@ -704,7 +704,7 @@ fn in_force() -> Config {
 fn refused(capabilities: Capabilities) -> View {
     let mut view = View::of(capabilities, Facts::default(), Transcript::none());
     view.open_settings(&in_force());
-    for _ in 0..Config::KEYS.len() {
+    for _ in 0..Config::SCHEMA.len() {
         let row = view
             .settings()
             .rows()
