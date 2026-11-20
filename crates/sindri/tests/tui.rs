@@ -130,6 +130,12 @@ impl Ground {
         ground
     }
 
+    /// A path under the ground's own root: the bin directory a fake opener lives in, and the file
+    /// it records its argv in.
+    fn at(&self, relative: &str) -> PathBuf {
+        self._root.path().join(relative)
+    }
+
     fn command(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
         command
@@ -194,8 +200,8 @@ impl Wire {
         Wire::scripted([reply])
     }
 
-    /// A wire holding a script: every request is answered by the next reply, and a request past the
-    /// end of it by its last, so a run that asked twice is answered twice.
+    /// A wire holding a script: each request is answered by the next reply, and a request past the
+    /// end of the script by its last, so a run that asks again is never left waiting for one.
     fn scripted(replies: impl IntoIterator<Item = &'static str>) -> Wire {
         let replies: Vec<&'static str> = replies.into_iter().collect();
         assert!(
@@ -3528,9 +3534,9 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
 
     // `Opener::host()` finds the opener through `PATH`, so the first entry is a script of this
     // test's own and the argv it records is the argv the host opener really received.
-    let bin = ground._root.path().join("bin");
+    let bin = ground.at("bin");
     std::fs::create_dir_all(&bin).expect("the bin directory");
-    let argv = ground._root.path().join("argv");
+    let argv = ground.at("argv");
     let opener = bin.join("xdg-open");
     std::fs::write(
         &opener,

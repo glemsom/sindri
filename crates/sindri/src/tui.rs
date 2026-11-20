@@ -26,7 +26,7 @@ use sindri_core::session::Session;
 use sindri_core::tools::FrontEnd;
 
 use crate::cli::Cli;
-use crate::open::Opener;
+use crate::open::HostOpener;
 use crate::reports::{Asking, Report, Running, ask};
 use crate::signal::{Signals, Wake};
 use crate::term::{Canvas, Screen, Terminal, missing_terminal, paint, tell};
@@ -183,9 +183,8 @@ struct Loop<'a> {
     asking: Option<Asking>,
     painted: Painted,
     wake: Arc<Wake>,
-    /// This front end supplies what spawns: the sandbox has no display, so the host owns the
-    /// opener and the launch holds it for every run it starts.
-    opener: Opener,
+    /// The opener this front end supplies, held for every run the launch starts.
+    opener: HostOpener,
 }
 
 impl<'a> Loop<'a> {
@@ -239,7 +238,7 @@ impl<'a> Loop<'a> {
             asking: None,
             painted: Painted::none(),
             wake,
-            opener: Opener::host(),
+            opener: HostOpener::host(),
         })
     }
 

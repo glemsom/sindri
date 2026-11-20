@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sindri_core::config::Config;
-use sindri_core::open::{Ground, Opening, Spawner};
+use sindri_core::open::{Ground, Opener, Opening};
 use sindri_core::policy::{
     Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES, Enforcement,
 };
@@ -1118,15 +1118,15 @@ fn a_bash_call_that_names_no_command_is_an_error() {
 
 /// A shell standing on a ground of real directories, and the opener it was handed: a run's own
 /// work lands in the session temp, which is beside the workspace and not inside it.
-struct Shop {
+struct OpenGround {
     _root: tempfile::TempDir,
     workspace: PathBuf,
     temp: PathBuf,
     boundary: Boundary,
 }
 
-impl Shop {
-    fn new() -> Shop {
+impl OpenGround {
+    fn new() -> OpenGround {
         let root = tempfile::tempdir().expect("a temp ground");
         let temp = root.path().join("temp");
         let workspace = root.path().join("workspace");
@@ -1137,7 +1137,7 @@ impl Shop {
         let temp = std::fs::canonicalize(&temp).expect("the temp resolves");
         let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Unsafe)
             .expect("the boundary holds");
-        Shop {
+        OpenGround {
             _root: root,
             workspace,
             temp,
@@ -1162,11 +1162,11 @@ impl Shop {
 /// An opener that hands nothing anywhere and keeps what it was handed, so a test reads the target
 /// the run judged rather than what a browser did with it.
 #[derive(Debug, Default)]
-struct Handed {
+struct Logged {
     openings: Mutex<Vec<Opening>>,
 }
 
-impl Handed {
+impl Logged {
     fn openings(&self) -> Vec<Opening> {
         self.openings
             .lock()
@@ -1175,8 +1175,8 @@ impl Handed {
     }
 }
 
-impl Spawner for Handed {
-    fn spawn(&self, opening: &Opening) -> Result<(), String> {
+impl Opener for Logged {
+    fn open(&self, opening: &Opening) -> Result<(), String> {
         self.openings
             .lock()
             .expect("the log is not poisoned")
@@ -1185,9 +1185,10 @@ impl Spawner for Handed {
     }
 }
 
-fn seam(handed: &Arc<Handed>) -> Arc<dyn Spawner> {
-    let cloned: Arc<Handed> = Arc::clone(handed);
-    cloned
+/// The same log, as the seam a shell is handed.
+fn shared(logged: &Arc<Logged>) -> Arc<dyn Opener> {
+    let held: Arc<Logged> = Arc::clone(logged);
+    held
 }
 
 fn opening(arguments: &str) -> Call {
@@ -1196,10 +1197,10 @@ fn opening(arguments: &str) -> Call {
 
 #[test]
 fn an_open_call_hands_the_judged_file_to_the_opener_the_run_was_given() {
-    let shop = Shop::new();
-    let target = shop.file("page.html");
-    let handed = Arc::new(Handed::default());
-    let shell = shop.shell().opener(Some(seam(&handed)));
+    let ground = OpenGround::new();
+    let target = ground.file("page.html");
+    let logged = Arc::new(Logged::default());
+    let shell = ground.shell().opener(Some(shared(&logged)));
 
     let acted = shell
         .execute(
@@ -1209,7 +1210,7 @@ fn an_open_call_hands_the_judged_file_to_the_opener_the_run_was_given() {
         .expect("a file in the session temp is a target the run may open");
 
     assert_eq!(
-        handed.openings(),
+        logged.openings(),
         vec![Opening::File(target.clone())],
         "the opener is handed the path the ground resolved, not the words the call wrote"
     );
@@ -1224,9 +1225,9 @@ fn an_open_call_hands_the_judged_file_to_the_opener_the_run_was_given() {
 
 #[test]
 fn an_open_call_naming_a_page_on_the_allowlist_hands_the_url_over() {
-    let shop = Shop::new();
-    let handed = Arc::new(Handed::default());
-    let shell = shop.shell().opener(Some(seam(&handed)));
+    let ground = OpenGround::new();
+    let logged = Arc::new(Logged::default());
+    let shell = ground.shell().opener(Some(shared(&logged)));
 
     let acted = shell
         .execute(
@@ -1236,7 +1237,7 @@ fn an_open_call_naming_a_page_on_the_allowlist_hands_the_url_over() {
         .expect("a page on the allowlist is a target the run may open");
 
     assert_eq!(
-        handed.openings(),
+        logged.openings(),
         vec![Opening::Url(String::from("https://localhost/notes"))],
         "a url reaches the opener as the url it was judged to be"
     );
@@ -1246,9 +1247,9 @@ fn an_open_call_naming_a_page_on_the_allowlist_hands_the_url_over() {
 
 #[test]
 fn an_open_call_outside_the_ground_is_refused_and_nothing_is_handed_over() {
-    let shop = Shop::new();
-    let handed = Arc::new(Handed::default());
-    let shell = shop.shell().opener(Some(seam(&handed)));
+    let ground = OpenGround::new();
+    let logged = Arc::new(Logged::default());
+    let shell = ground.shell().opener(Some(shared(&logged)));
 
     let refused = shell
         .execute(
@@ -1262,17 +1263,17 @@ fn an_open_call_outside_the_ground_is_refused_and_nothing_is_handed_over() {
         "the refusal says where a target may come from: {refused}"
     );
     assert!(
-        handed.openings().is_empty(),
+        logged.openings().is_empty(),
         "a target the ground refused never reaches the browser"
     );
 }
 
 #[test]
 fn a_shell_given_no_opener_cannot_run_an_open_call() {
-    let shop = Shop::new();
-    let target = shop.file("page.html");
+    let ground = OpenGround::new();
+    let target = ground.file("page.html");
 
-    let refused = shop
+    let refused = ground
         .shell()
         .execute(
             &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
@@ -1288,11 +1289,11 @@ fn a_shell_given_no_opener_cannot_run_an_open_call() {
 
 #[test]
 fn the_tool_list_a_refusal_writes_holds_open_only_when_the_shell_holds_an_opener() {
-    let shop = Shop::new();
+    let ground = OpenGround::new();
     let mut loaded = Loaded::default();
     let unknown = Call::new("toolu_1", "web", "{}");
 
-    let bare = shop
+    let bare = ground
         .shell()
         .execute(&unknown, &mut loaded)
         .expect_err("a shell holding no opener answers bash and skill");
@@ -1305,9 +1306,9 @@ fn the_tool_list_a_refusal_writes_holds_open_only_when_the_shell_holds_an_opener
         "and a tool it cannot run is not named among them: {bare}"
     );
 
-    let opened = shop
+    let opened = ground
         .shell()
-        .opener(Some(Arc::new(Handed::default())))
+        .opener(Some(Arc::new(Logged::default())))
         .execute(&unknown, &mut loaded)
         .expect_err("a shell holding an opener still answers no `web`");
     assert!(

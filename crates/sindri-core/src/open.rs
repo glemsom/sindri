@@ -45,8 +45,8 @@ impl fmt::Display for Opening {
 /// What hands a judged target to the browser on this machine. The front end supplies it,
 /// because the sandbox has no display and the core never spawns; the `Err` words are why the
 /// target could not be handed over.
-pub trait Spawner: fmt::Debug + Send + Sync {
-    fn spawn(&self, opening: &Opening) -> Result<(), String>;
+pub trait Opener: fmt::Debug + Send + Sync {
+    fn open(&self, opening: &Opening) -> Result<(), String>;
 }
 
 /// Where a run stands when it asks to open something: the writable set, the session temp

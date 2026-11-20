@@ -9,7 +9,7 @@ use std::time::Instant;
 use crate::asking::Asking;
 use crate::bash::BWRAP;
 use crate::config::{Config, Environment, Process};
-use crate::open::{Ground, Spawner};
+use crate::open::{Ground, Opener};
 use crate::outcome::{Facts as Reported, Outcome};
 use crate::policy::{Boundary, Enforcement};
 use crate::preamble::Preamble;
@@ -113,7 +113,7 @@ impl Launch {
         config: &Config,
         enforcement: Enforcement,
         front_end: FrontEnd,
-        opener: Option<Arc<dyn Spawner>>,
+        opener: Option<Arc<dyn Opener>>,
     ) -> Result<Launch, Refusal> {
         let (Some(endpoint), Some(model)) = (config.endpoint(), config.model.clone()) else {
             return Err(Refusal::new(
@@ -147,7 +147,7 @@ impl Launch {
         endpoint: Endpoint,
         model: String,
         session: &Session,
-        opener: Option<Arc<dyn Spawner>>,
+        opener: Option<Arc<dyn Opener>>,
     ) -> Result<Launch, Refusal> {
         let wire = endpoint.wire();
         let workspace = std::env::current_dir().map_err(|error| {
