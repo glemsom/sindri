@@ -8,15 +8,15 @@ transcript-scrolled at 120x40
 02 |  and stops at the first row that fills the band. Only the rows a band      think     high                              | plain:76 dim:10 plain:34
 03 |  reaches are laid out, so a 250-turn history on a 40-row terminal pays for                                             | plain:120
 04 |  what it shows and no more.                                                turns                               6 /  250| plain:76 dim:10 plain:34
-05 |─ prompt ───────────────────────────────────────────────────────────────────ctx                      █░░░░░ 48.2k / 200k| dim:86 plain:16 dim:5 plain:13
+05 |                                                                            ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
 06 |› what does the check cost?                                                 cache                                    88%| plain:76 dim:10 plain:34
 07 |⋯ 1 call · 118 ms                                                                                                       | dim:1 plain:1 dim:15 plain:103
 08 |  What that buys is the plain case and what it costs is the scrolled one: a workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
-09 |  window is a row offset from the tail, so resolving one walks the entries  branch    spec/1-capability                 | plain:76 dim:10 plain:34
+09 |█ window is a row offset from the tail, so resolving one walks the entries  branch    spec/1-capability                 | dim:1 plain:75 dim:10 plain:34
 10 |█ between the tail and the window and lays out every one of them on the way.                                            | dim:1 plain:119
 11 |█ Each is laid out once and kept, so the whole history scrolled through     skills                                     2| dim:1 plain:75 dim:10 plain:34
 12 |█ costs one layout per entry and scrolling it again costs none.                                                         | dim:1 plain:119
-13 |█ prompt ───────────────────────────────────────────────────────────────────sandbox   bwrap                             | dim:86 plain:34
+13 |█                                                                           sandbox   bwrap                             | dim:1 plain:75 dim:10 plain:34
 14 |█ what is the transcript's unit?                                                                                        | dim:1 plain:119
 15 |█ 1 call · 9 ms                                                             session   9f2c7a41                          | dim:1 plain:1 dim:13 plain:61 dim:10 plain:34
 16 |█ The transcript's unit is the entry. An entry never carries a formatted    temp      …/sindri/sessions/9f2c7a41/tmp    | dim:1 plain:75 dim:10 plain:34
@@ -28,7 +28,7 @@ transcript-scrolled at 120x40
 22 |█ heading   │ in the answer's own gutter                                                                                | dim:1 plain:10 dim:3 plain:106
 23 |█ code      │ behind a bar, highlighted                                                                                 | dim:1 plain:10 dim:3 plain:106
 24 |█ table     │ columns joined by a bar                                                                                   | dim:1 plain:10 dim:3 plain:106
-25 |█ prompt ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+25 |█                                                                                                                       | dim:1 plain:119
 26 |█ what does a row of the band say?                                                                                      | dim:1 plain:119
 27 |█ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 28 |█ A row is one line                                                                                                     | dim:1 plain:1 plain+bold:17 plain:101

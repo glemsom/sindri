@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 gutter at 80x24
-00 |─ prompt ───────────────────────────────────────────────────────────────────────| dim:80
+00 |                                                                                | plain:80
 01 |› triage the retry test                                                         | plain:80
 02 |✓ bash                                                                          | ok:1 plain:1 dim:4 plain:74
 03 |  rg -n 'gutter' src                                                            | plain:80

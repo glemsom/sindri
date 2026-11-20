@@ -3,17 +3,17 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 rail at 99x24
-00 |─ prompt ──────────────────────────────────────────────────────────────────────────────────────────| dim:99
-01 |› where does rendering live?                                                                       | plain:99
-02 |✓ bash                                                                                             | ok:1 plain:1 dim:4 plain:93
-03 |  rg -n 'fence' src                                                                                | plain:99
-04 |✓ exit 0  23 ms · 412 bytes                                                                        | ok:1 plain:1 dim:25 plain:72
-05 |  src/rows.rs: the glyph a turn opens with                                                         | muted:42 plain:57
-06 |  src/rows.rs: a word longer than a row is broken                                                  | muted:49 plain:50
-07 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a     | plain:99
-08 |  rendering: the TUI and any reader draw one run from one value, and the core may not name a       | plain:99
-09 |  terminal at all.                                                                                 | plain:99
-10 |⠹ 4.2s                                                                                             | accent:1 plain:1 dim:4 plain:93
+00 |› where does rendering live?                                                                       | plain:99
+01 |✓ bash                                                                                             | ok:1 plain:1 dim:4 plain:93
+02 |  rg -n 'fence' src                                                                                | plain:99
+03 |✓ exit 0  23 ms · 412 bytes                                                                        | ok:1 plain:1 dim:25 plain:72
+04 |  src/rows.rs: the glyph a turn opens with                                                         | muted:42 plain:57
+05 |  src/rows.rs: a word longer than a row is broken                                                  | muted:49 plain:50
+06 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a     | plain:99
+07 |  rendering: the TUI and any reader draw one run from one value, and the core may not name a       | plain:99
+08 |  terminal at all.                                                                                 | plain:99
+09 |⠹ 4.2s                                                                                             | accent:1 plain:1 dim:4 plain:93
+10 |                                                                                                   | plain:99
 11 |                                                                                                   | plain:99
 12 |                                                                                                   | plain:99
 13 |                                                                                                   | plain:99

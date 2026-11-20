@@ -10,7 +10,7 @@ queue at 120x40
 04 |  between the tail and the window and lays out every one of them on the way.turns                               6 /  250| plain:76 dim:10 plain:34
 05 |  Each is laid out once and kept, so the whole history scrolled through     ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
 06 |  costs one layout per entry and scrolling it again costs none.             cache                                    88%| plain:76 dim:10 plain:34
-07 |─ prompt ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+07 |                                                                                                                        | plain:120
 08 |› what is the transcript's unit?                                            workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
 09 |⋯ 1 call · 9 ms                                                             branch    spec/1-capability                 | dim:1 plain:1 dim:13 plain:61 dim:10 plain:34
 10 |  The transcript's unit is the entry. An entry never carries a formatted                                                | plain:120
@@ -22,7 +22,7 @@ queue at 120x40
 16 |  heading   │ in the answer's own gutter                                    temp      …/sindri/sessions/9f2c7a41/tmp    | plain:11 dim:3 plain:62 dim:10 plain:34
 17 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 18 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
-19 |─ prompt ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+19 |                                                                                                                        | plain:120
 20 |› what does a row of the band say?                                                                                      | plain:120
 21 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 22 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101

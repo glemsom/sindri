@@ -5127,6 +5127,16 @@ fn long_answer(which: &str) -> String {
         .collect()
 }
 
+/// The rows a band holds of the whole `entries` laid at `cols`: every entry laid out, less the
+/// separating row the exchange the transcript opens with has nothing above it to draw.
+fn laid_rows(entries: &[Entry], cols: u16) -> usize {
+    entries
+        .iter()
+        .map(|entry| crate::rows::layout(entry, cols).len())
+        .sum::<usize>()
+        .saturating_sub(1)
+}
+
 #[test]
 fn the_band_counts_every_row_the_whole_conversation_holds() {
     let mut view = View::of(
@@ -5158,10 +5168,7 @@ fn the_band_counts_every_row_the_whole_conversation_holds() {
     );
     let (_, told) = painted_and_told(&mut view, 100, 20);
 
-    let whole: usize = entries
-        .iter()
-        .map(|entry| crate::rows::layout(entry, 100).len())
-        .sum();
+    let whole = laid_rows(&entries, 100);
     assert!(
         whole > 20,
         "the conversation is taller than the band it is drawn in: {whole} rows"
@@ -5284,10 +5291,7 @@ fn a_frame_re_laid_at_another_width_lays_every_entry_the_record_holds() {
     let mut laid = Vec::new();
     for cols in [100, 60] {
         let (_, told) = painted_and_told(&mut view, cols, 20);
-        let whole: u32 = entries
-            .iter()
-            .map(|entry| u32::try_from(crate::rows::layout(entry, cols).len()).expect("a band"))
-            .sum();
+        let whole = u32::try_from(laid_rows(&entries, cols)).expect("a conversation a band holds");
         assert_eq!(
             told.drawn().total(),
             Some(whole),
@@ -5508,10 +5512,9 @@ fn a_word_a_run_says_after_slash_new_is_drawn_and_the_rows_it_superseded_are_not
     );
 }
 
-/// Whether `row` is a prompt's divider: the word it opens with and the rule filled to the band's edge
-/// behind it.
-fn divider(row: &str) -> bool {
-    row.contains("prompt ─") && row.ends_with('─')
+/// Whether `row` holds no words at all.
+fn blank(row: &str) -> bool {
+    row.trim().is_empty()
 }
 
 /// A frame on a transcript of `count` exchanges.
@@ -5523,8 +5526,8 @@ fn conversation(count: u32) -> View {
     )
 }
 
-/// The entries of `count` exchanges, each a prompt of one row of words under its divider and an
-/// answer of one row, so a prompt's place in the band is a fact of its number.
+/// The entries of `count` exchanges, each a prompt of one row of words and an answer of one row: a
+/// prompt opens on a blank row above it but the first, and so its place is a fact of its number.
 fn exchanges(count: u32) -> Vec<Entry> {
     (1..=count)
         .flat_map(|asked| {
@@ -5546,9 +5549,9 @@ fn a_bracket_takes_the_frame_to_the_prompt_before_the_one_it_stands_on() {
     let mut view = conversation(20);
     let buffer = painted(&mut view, 120, 40);
     assert!(
-        divider(&drawn_row(&buffer, 0)),
-        "twenty exchanges of three rows are sixty rows, and the band's thirty-six open on the \
-             ninth prompt's divider: {:?}",
+        blank(&drawn_row(&buffer, 0)),
+        "twenty exchanges are fifty-nine rows, and the band's thirty-six open on the blank row \
+         above the ninth prompt: {:?}",
         frame_rows(&buffer)
     );
     assert!(drawn_row(&buffer, 1).contains("prompt 9"));
@@ -5560,8 +5563,8 @@ fn a_bracket_takes_the_frame_to_the_prompt_before_the_one_it_stands_on() {
     );
     let buffer = painted(&mut view, 120, 40);
     assert!(
-        divider(&drawn_row(&buffer, 0)),
-        "the frame stands on the eighth prompt's divider: {:?}",
+        blank(&drawn_row(&buffer, 0)),
+        "the frame stands on the blank row above the eighth prompt: {:?}",
         frame_rows(&buffer)
     );
     assert!(drawn_row(&buffer, 1).contains("prompt 8"));
@@ -5590,8 +5593,8 @@ fn a_bracket_takes_the_frame_to_the_prompt_after_the_one_it_stands_on() {
     );
     let buffer = painted(&mut view, 120, 40);
     assert!(
-        divider(&drawn_row(&buffer, 0)),
-        "the frame stands on the ninth prompt's divider again: {:?}",
+        blank(&drawn_row(&buffer, 0)),
+        "the frame stands on the blank row above the ninth prompt again: {:?}",
         frame_rows(&buffer)
     );
     assert!(drawn_row(&buffer, 1).contains("prompt 9"));
@@ -5650,11 +5653,10 @@ fn both_brackets_stop_at_the_first_and_the_last_prompt() {
     );
     let buffer = painted(&mut view, 120, 40);
     assert!(
-        divider(&drawn_row(&buffer, 0)),
-        "the first prompt's divider opens the band: {:?}",
+        drawn_row(&buffer, 0).contains("prompt 1"),
+        "the first prompt's own words open the band, with no blank row above them: {:?}",
         frame_rows(&buffer)[..3].to_vec()
     );
-    assert!(drawn_row(&buffer, 1).contains("prompt 1"));
     assert_eq!(
         view.key(Key::Char('[')),
         Outcome::Unchanged,
@@ -5723,14 +5725,14 @@ fn the_row_above_the_composer_names_the_prompt_the_frame_stands_on() {
     assert_eq!(
         view.key(Key::PageUp),
         Outcome::Edited,
-        "a page back from the tail reaches the deepest row of sixty"
+        "a page back from the tail reaches the deepest row of fifty-nine"
     );
     let buffer = painted(&mut view, 120, 40);
 
     let (notice, y) = notice_of(&buffer);
     assert_eq!(
         notice.trim_end(),
-        "prompt 1 / 20 \u{b7} 24 rows back \u{b7} End follows the run",
+        "prompt 1 / 20 \u{b7} 23 rows back \u{b7} End follows the run",
         "the row names the prompt the band's first row stands in, how many the conversation \
              holds, how far back the frame stands and the key that follows the run"
     );
@@ -5761,7 +5763,7 @@ fn the_prompt_the_frame_stands_on_is_given_up_before_the_row_is() {
     let (notice, _) = notice_of(&narrow);
     assert_eq!(
         notice.trim_end(),
-        "24 rows back \u{b7} End follows the run",
+        "23 rows back \u{b7} End follows the run",
         "a row too narrow for the count keeps the rest of what it says"
     );
 

@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 refused at 120x40
-00 |─ prompt ───────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34
+00 |                                                                            wire      anthropic                         | plain:76 dim:10 plain:34
 01 |› what does the check cost?                                                 model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
 02 |⋯ 1 call · 118 ms                                                           think     high                              | dim:1 plain:1 dim:15 plain:59 dim:10 plain:34
 03 |  What that buys is the plain case and what it costs is the scrolled one: a                                             | plain:120
@@ -11,7 +11,7 @@ refused at 120x40
 05 |  between the tail and the window and lays out every one of them on the way.ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
 06 |  Each is laid out once and kept, so the whole history scrolled through     cache                                    88%| plain:76 dim:10 plain:34
 07 |  costs one layout per entry and scrolling it again costs none.                                                         | plain:120
-08 |─ prompt ───────────────────────────────────────────────────────────────────workspace …/git/sindri/.worktrees/46-rail   | dim:86 plain:34
+08 |                                                                            workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
 09 |› what is the transcript's unit?                                            branch    spec/1-capability                 | plain:76 dim:10 plain:34
 10 |⋯ 1 call · 9 ms                                                                                                         | dim:1 plain:1 dim:13 plain:105
 11 |  The transcript's unit is the entry. An entry never carries a formatted    skills                                     2| plain:76 dim:10 plain:34
@@ -23,7 +23,7 @@ refused at 120x40
 17 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
 18 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 19 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
-20 |─ prompt ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+20 |                                                                                                                        | plain:120
 21 |› what does a row of the band say?                                                                                      | plain:120
 22 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 23 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101

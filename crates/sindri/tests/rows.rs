@@ -656,7 +656,7 @@ fn a_walk_outlives_a_line_laid_again_and_a_width_change_drops_it() {
 }
 
 #[test]
-fn the_readers_own_words_are_drawn_under_the_row_that_names_them() {
+fn the_readers_own_words_open_the_exchange_and_no_row_names_them() {
     let secrets = SecretSet::default();
     let rows = layout(
         &Entry::Prompt {
@@ -665,18 +665,115 @@ fn the_readers_own_words_are_drawn_under_the_row_that_names_them() {
         40,
     );
 
-    assert!(
-        words(&rows[0]).starts_with("─ prompt "),
-        "the row that names the prompt says whose words these are: {:?}",
+    assert_eq!(
+        words(&rows[0]),
+        "",
+        "a prompt laid out on its own opens on a blank row: {:?}",
         rows[0]
     );
-    assert_eq!(rows[0].width(), 40, "and runs to the band's width");
     assert_eq!(
         words(&rows[1]),
         "› triage this",
-        "the words open with the prompt's sigil in the gutter an answer is set from"
+        "and its own words follow, the prompt's sigil in the gutter an answer is set from"
     );
     assert_eq!(inks(&rows[1]), [Ink::Plain, Ink::Plain]);
+    assert_eq!(
+        rows.len(),
+        2,
+        "and nothing stands above the words but that row"
+    );
+    assert!(
+        !rows.iter().any(|row| words(row).contains('─')),
+        "no row of the exchange draws a rule: {:?}",
+        rows.iter().map(words).collect::<Vec<String>>()
+    );
+}
+
+/// The rows a band paints of `entries` at the tail, read from the screen's first row down.
+fn band(entries: Vec<Entry>, cols: u16, rows: u16) -> Vec<String> {
+    let mut view = View::of(
+        Capabilities::default(),
+        facts::Facts::default().asked(),
+        Transcript::of(entries),
+    );
+    frame::painted(&mut view, cols, rows).words()
+}
+
+#[test]
+fn a_prompt_opens_under_a_blank_row_unless_it_opens_the_band() {
+    let turn = |said: &str| Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact(said),
+    };
+    let drawn = band(
+        vec![
+            asked_for(1),
+            turn("one answer"),
+            asked_for(2),
+            call(2),
+            timed(2, 4_100),
+            call(2),
+            timed(2, 100),
+            call(2),
+            timed(2, 100),
+            asked_for(3),
+            turn("three answer"),
+            stop_entry(Stop::Cancelled),
+            asked_for(4),
+            turn("four answer"),
+        ],
+        60,
+        24,
+    );
+    let whole = drawn.join("\n");
+    let prompt = |which: u32| {
+        let said = format!("› prompt {which}");
+        drawn
+            .iter()
+            .position(|row| row.contains(&said))
+            .unwrap_or_else(|| panic!("the band draws {said:?}: {whole}"))
+    };
+
+    assert_eq!(
+        prompt(1),
+        0,
+        "the first exchange of a conversation has nothing above it to be separated from: {whole}"
+    );
+    assert_eq!(
+        drawn[0], "› prompt 1",
+        "so the prompt's own words open the band: {whole}"
+    );
+    for (which, after) in [
+        (2, "an answer"),
+        (3, "a settled work of one row"),
+        (4, "a stop"),
+    ] {
+        assert_eq!(
+            drawn[prompt(which) - 1],
+            "",
+            "the prompt that stands after {after} has one blank row above it: {whole}"
+        );
+        assert_ne!(
+            drawn[prompt(which) - 2],
+            "",
+            "and no more than one: {whole}"
+        );
+    }
+    assert_eq!(
+        drawn[prompt(2) + 1],
+        "⋯ 3 calls · 4.3 s",
+        "and no blank row stands between a prompt and the work it asked: {whole}"
+    );
+    assert_eq!(
+        drawn[prompt(3) - 2],
+        "⋯ 3 calls · 4.3 s",
+        "the work the second prompt asked is the one row it settled as, and the blank row under \
+         it is the third prompt's own: {whole}"
+    );
+    assert!(
+        !drawn.iter().any(|row| row.starts_with('─')),
+        "no row of the band opens on a rule of its own: {whole}"
+    );
 }
 
 #[test]
@@ -723,11 +820,15 @@ fn three_exchanges_are_three_prompts_and_three_answers_and_no_row_saying_a_run_e
 
     let asked = drawn
         .iter()
-        .filter(|row| row.starts_with("─ prompt "))
+        .filter(|row| row.starts_with("› prompt "))
         .count();
     assert_eq!(
         asked, 3,
         "a conversation of three prompts opens on three prompts: {whole}"
+    );
+    assert!(
+        !drawn.iter().any(|row| row.starts_with('─')),
+        "and no row of the band opens on a rule of its own: {whole}"
     );
     for turn in 1..=3 {
         assert_eq!(
@@ -924,7 +1025,6 @@ fn the_marker_that_says_what_a_row_is_stands_in_the_gutter() {
         .expect("the fence is rows of its own");
 
     let marked = [
-        (&prompt[0], '─'),
         (&prompt[1], '›'),
         (&flight[0], '…'),
         (&ok[0], '✓'),
@@ -968,7 +1068,7 @@ fn a_row_too_narrow_for_a_marker_gives_up_the_marker_before_it_cuts_a_word() {
             Entry::Prompt {
                 text: secrets.redact("prompt"),
             },
-            '─',
+            '›',
         ),
         (
             Entry::Assistant {
@@ -1000,11 +1100,14 @@ fn a_row_too_narrow_for_a_marker_gives_up_the_marker_before_it_cuts_a_word() {
         }
 
         let narrow = layout(&entry, 3);
-        let head = &narrow[0];
+        let head = narrow
+            .iter()
+            .find(|row| !row.glyphs().trim().is_empty())
+            .unwrap_or_else(|| panic!("three columns hold a word: {narrow:?}"));
         assert_eq!(
             drawn_at(head, 0),
             Some(marker),
-            "three columns hold the marker: {head:?}"
+            "the first row of words holds the marker {marker:?}: {head:?}"
         );
         assert_eq!(drawn_at(head, 1), Some(' '), "and its blank: {head:?}");
         assert_eq!(

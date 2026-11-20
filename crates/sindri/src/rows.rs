@@ -33,13 +33,11 @@ pub(crate) const INDENT: &str = "  ";
 /// the draft that asks the next one alike.
 pub(crate) const SIGIL: &str = "› ";
 
-const RULE: &str = "─ ";
 const THOUGHT: &str = "│ ";
 
 const PENDING: char = '…';
 const CHECK: char = '✓';
 const CROSS: char = '✗';
-const HAIRLINE: char = '─';
 const KEPT: char = '⋯';
 
 /// The one cell that says a fence's line carries more words past the band's edge.
@@ -598,13 +596,16 @@ fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
     rows
 }
 
+/// The rows a prompt is drawn as: the blank row that separates its exchange from the one above it,
+/// and then the reader's own words under the sigil — the blank row `Rows` drops for the first
+/// exchange, which has nothing above it.
 fn asked(text: &str, cols: u16) -> Vec<Row> {
     let (gutter, room) = margin(SIGIL, cols);
     let blanks = match gutter.is_empty() {
         true => "",
         false => INDENT,
     };
-    let mut rows = vec![divider("prompt ", cols)];
+    let mut rows = vec![Row::blank()];
     let mut lines = wrap(text, room).into_iter();
     if let Some(first) = lines.next() {
         rows.push(words_past(gutter, Ink::Plain, Ink::Plain, first, cols));
@@ -852,13 +853,6 @@ fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
     Row::of(kept)
 }
 
-fn clip(text: &str, room: u16) -> String {
-    if pen::cells(text) <= room {
-        return String::from(text);
-    }
-    split_at(text, usize::from(room.max(1))).0
-}
-
 /// The words of a tool's arguments or its result, set in the gutter a body is set from and in the
 /// ink that kind of body is drawn in. A body that names a way to a file is laid with that path's
 /// own cells a way there, and every other body is laid as the wrapping lays it.
@@ -878,16 +872,6 @@ fn body(text: &str, cols: u16, way: Option<Way>, ink: Ink) -> Vec<Row> {
             .map(|line| words_past(gutter, ink, ink, line, cols))
             .collect(),
     }
-}
-
-/// The row an entry that opens with a hairline is drawn as: the words it names itself with and the
-/// pen's fill out to the band's edge.
-fn divider(lead: &str, cols: u16) -> Row {
-    let (gutter, room) = margin(RULE, cols);
-    let lead = clip(lead, room);
-    let filled = room.saturating_sub(pen::cells(&lead));
-    let line = format!("{lead}{}", pen::filled(filled, HAIRLINE));
-    Row::of([(line, Ink::Dim)]).guttered(gutter, Ink::Dim)
 }
 
 /// One row of `line` set past `gutter`, the gutter in `mark`'s ink and the words in `words`'': the
@@ -1532,6 +1516,11 @@ impl Rows {
             if let Some((mut rows, kept)) = laid {
                 self.lays += 1;
                 self.walking(at, &mut rows);
+                // The transcript's first row has nothing above it to be separated from, so the
+                // exchange that opens it opens on its own words.
+                if at == 0 && is_prompt(&self.held[at]) {
+                    rows.remove(0);
+                }
                 self.held[at].rows = Some(rows);
                 self.held[at].kept = kept;
             }
@@ -1760,7 +1749,9 @@ impl Rows {
         height
     }
 
-    /// The top row of every prompt the record holds, counted from the transcript's first row.
+    /// The top row of every prompt the record holds, counted from the transcript's first row: the
+    /// blank row it opens under, but for the prompt the transcript opens with, whose words are its
+    /// own top row.
     pub fn prompts(&mut self) -> Vec<u32> {
         let mut tops = Vec::new();
         let mut at: u32 = 0;

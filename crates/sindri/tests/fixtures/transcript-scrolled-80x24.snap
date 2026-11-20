@@ -11,7 +11,7 @@ transcript-scrolled at 80x24
 05 |  heading   │ in the answer's own gutter                                        | plain:11 dim:3 plain:66
 06 |  code      │ behind a bar, highlighted                                         | plain:11 dim:3 plain:66
 07 |  table     │ columns joined by a bar                                           | plain:11 dim:3 plain:66
-08 |─ prompt ───────────────────────────────────────────────────────────────────────| dim:80
+08 |                                                                                | plain:80
 09 |› what does a row of the band say?                                              | plain:80
 10 |⋯ 1 call · 31 ms                                                                | dim:1 plain:1 dim:14 plain:64
 11 |█ A row is one line                                                             | dim:1 plain:1 plain+bold:17 plain:61

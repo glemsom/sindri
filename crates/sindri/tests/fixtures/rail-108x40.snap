@@ -3,18 +3,18 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 rail at 108x40
-00 |─ prompt ───────────────────────────────────────────────────────────state     ⠹ running                     | dim:78 accent:9 plain:21
-01 |› where does rendering live?                                                                                | plain:108
-02 |✓ bash                                                              wire      anthropic                     | ok:1 plain:1 dim:4 plain:62 dim:10 plain:30
-03 |  rg -n 'fence' src                                                 model     claude-sonnet-4-5-20250929    | plain:68 dim:10 plain:30
-04 |✓ exit 0  23 ms · 412 bytes                                         think     high                          | ok:1 plain:1 dim:25 plain:41 dim:10 plain:30
-05 |  src/rows.rs: the glyph a turn opens with                                                                  | muted:42 plain:66
-06 |  src/rows.rs: a word longer than a row is broken                   turns                           6 /  250| muted:49 plain:19 dim:10 plain:30
-07 |  Rendering lives in the front end and not in the core, because an  ctx                  █░░░░░ 48.2k / 200k| plain:68 dim:10 plain:12 dim:5 plain:13
-08 |  entry is a fact and never a rendering: the TUI and any reader drawcache                                88%| plain:68 dim:10 plain:30
-09 |  one run from one value, and the core may not name a terminal at                                           | plain:108
-10 |  all.                                                              workspace …/sindri/.worktrees/46-rail   | plain:68 dim:10 plain:30
-11 |⠹ 4.2s                                                              branch    spec/1-capability             | accent:1 plain:1 dim:4 plain:62 dim:10 plain:30
+00 |› where does rendering live?                                        state     ⠹ running                     | plain:68 dim:10 accent:9 plain:21
+01 |✓ bash                                                                                                      | ok:1 plain:1 dim:4 plain:102
+02 |  rg -n 'fence' src                                                 wire      anthropic                     | plain:68 dim:10 plain:30
+03 |✓ exit 0  23 ms · 412 bytes                                         model     claude-sonnet-4-5-20250929    | ok:1 plain:1 dim:25 plain:41 dim:10 plain:30
+04 |  src/rows.rs: the glyph a turn opens with                          think     high                          | muted:42 plain:26 dim:10 plain:30
+05 |  src/rows.rs: a word longer than a row is broken                                                           | muted:49 plain:59
+06 |  Rendering lives in the front end and not in the core, because an  turns                           6 /  250| plain:68 dim:10 plain:30
+07 |  entry is a fact and never a rendering: the TUI and any reader drawctx                  █░░░░░ 48.2k / 200k| plain:68 dim:10 plain:12 dim:5 plain:13
+08 |  one run from one value, and the core may not name a terminal at   cache                                88%| plain:68 dim:10 plain:30
+09 |  all.                                                                                                      | plain:108
+10 |⠹ 4.2s                                                              workspace …/sindri/.worktrees/46-rail   | accent:1 plain:1 dim:4 plain:62 dim:10 plain:30
+11 |                                                                    branch    spec/1-capability             | plain:68 dim:10 plain:30
 12 |                                                                                                            | plain:108
 13 |                                                                    skills                                 2| plain:68 dim:10 plain:30
 14 |                                                                                                            | plain:108

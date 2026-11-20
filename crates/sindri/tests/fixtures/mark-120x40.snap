@@ -7,14 +7,14 @@ mark at 120x40
 01 |  The window is measured from the tail backwards, so following the newest row never asks how tall the history is: it    | plain:120
 02 |  lays out the entries it shows and stops at the first row that fills the band. Only the rows a band reaches are laid   | plain:120
 03 |  out, so a 250-turn history on a 40-row terminal pays for what it shows and no more.                                   | plain:120
-04 |─ prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+04 |                                                                                                                        | plain:120
 05 |› what does the check cost?                                                                                             | plain:120
 06 |⋯ 1 call · 118 ms                                                                                                       | dim:1 plain:1 dim:15 plain:103
 07 |  What that buys is the plain case and what it costs is the scrolled one: a window is a row offset from the tail, so    | plain:120
 08 |  resolving one walks the entries between the tail and the window and lays out every one of them on the way. Each is    | plain:120
 09 |  laid out once and kept, so the whole history scrolled through costs one layout per entry and scrolling it again costs | plain:120
 10 |  none.                                                                                                                 | plain:120
-11 |─ prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
+11 |                                                                                                                        | plain:120
 12 |› what is the transcript's unit?                                                                                        | plain:120
 13 |⋯ 1 call · 9 ms                                                                                                         | dim:1 plain:1 dim:13 plain:105
 14 |  The transcript's unit is the entry. An entry never carries a formatted line, so the same run is drawn the same way by | plain:120
@@ -25,7 +25,7 @@ mark at 120x40
 19 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
 20 |  code      │ behind a bar, highlighted                                                                                 | plain:2 mark:37 plain:81
 21 |  table     │ columns joined by a bar                                                                                   | plain:2 mark:35 plain:83
-22 |─ prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| mark:71 dim:49
+22 |                                                                                                                        | plain:120
 23 |› what does a row of the band say?                                                                                      | mark:34 plain:86
 24 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 25 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
