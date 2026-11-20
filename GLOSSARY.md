@@ -52,7 +52,7 @@ _Avoid_: Exit status, failure, termination, reason
 **State**:
 Whether a run is running or the stop it ended on, in one word: `running` while it is, and the stop's
 own word once it ends. The rail's first row is the state — under the frame's marker while a run is
-live, and in the ink that stop earns — and the screen's stop block says the same word beside the exit
+live, and in the ink that stop earns — and the screen's stop rows say the same word beside the exit
 it left.
 _Avoid_: Status, phase, progress
 
@@ -71,16 +71,16 @@ _Avoid_: Context limit, token budget, max context
 **Status**:
 The document a session publishes about its run: the phase, one redacted line of the run's own words,
 the turn the run is on, and the workspace's name. The line is never the command, the prompt or the
-answer. One is appended to `status.json` beside the transcript as the run goes, so they read back in
-order, and the same document is reported off the terminal, so a listener outside the frame reads it
-too. A report about a run held by a session, and never the run's own word about itself, which is
-**State**'s alone.
+answer. One is appended to `status.json` beside the transcript as the run goes, so `status.json`
+reads back in order, and the same document is reported off the terminal, so a listener outside the
+frame reads it too. A report about a run held by a session, and never the run's own word about
+itself, which is **State**'s alone.
 _Avoid_: Progress, notice, indicator
 
 **Phase**:
-One of the four facts a **Status** holds: which of `idle`, `working`, `done`, `blocked` or `error` the
-document reports. The five are the document's words.
-_Avoid_: Status, state (that one is the run's own), step
+One of the four facts a **Status** holds, in one of five words: `idle`, `working`, `done`, `blocked`
+or `error`. The five are the document's words.
+_Avoid_: Status, state, step
 
 ## Confinement
 
@@ -169,8 +169,7 @@ row and the newest at the foot. What a band cannot hold it counts: the rows of a
 composer's ceiling, and the prompts of a queue past the rows it was given. A fence is not counted
 that way: it is kept in the shape it was written in, so a band never reflows one — the words of a
 fence line past the band's edge are dropped, that row's last cell says more stands there, and a
-reader walks the fence sideways for the rest. The **Caret** is no cell of a band, so no band counts
-one.
+reader walks the fence sideways for the rest. The **Caret** is no cell of a band.
 _Avoid_: Region, pane, panel, viewport
 
 **Plane**:
@@ -214,10 +213,10 @@ answered from.
 _Avoid_: Geometry, arrangement, tiling, regions
 
 **Footer**:
-The frame's last row: the hints of what a key does _this_ frame can honour, most valuable first, each
-giving up its tail as the row narrows, and a key the frame cannot answer not named at all. An idle
-draft names sending, the commands, the files and the keys; a run in flight names cancelling and never
-sending; and a queue behind the draft is counted where the key that recalls one stands.
+The frame's last row: the hints of what a key does that this frame can honour, most valuable first,
+each giving up its tail as the row narrows, and a key the frame cannot answer not named at all. An
+idle draft names sending, the commands, the files and the keys; a run in flight names cancelling and
+never sending; and a queue behind the draft is counted where the key that recalls one stands.
 _Avoid_: Status bar, help line, key bar
 
 **Card**:
