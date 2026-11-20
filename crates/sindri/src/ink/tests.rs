@@ -157,14 +157,58 @@ fn a_look_may_carry_a_line_under_it_and_reads_back_as_its_ink_its_faces_and_that
     }
 }
 
-/// Every set the four faces compose, from the one a look wearing none has up to all four.
+#[test]
+fn a_run_struck_out_is_a_face_of_its_own_in_its_blocks_ink_and_never_an_ink() {
+    let struck = Look::new(Ink::Accent, Face::Crossed);
+
+    assert_eq!(
+        Face::Crossed.name(),
+        "crossed",
+        "the face a struck run wears is named for the line through it"
+    );
+    assert_eq!(
+        struck.name(),
+        "accent+crossed",
+        "a struck run is its block's ink wearing the face, and the fixture writes it as one"
+    );
+    assert_eq!(Look::from_name("accent+crossed"), Some(struck));
+    assert_eq!(
+        Faces::of_modifier(Modifier::CROSSED_OUT),
+        Some(Faces::wearing(Face::Crossed)),
+        "a cell the terminal draws crossed reads back as the face, which is what a fixture \
+         holding a struck run has to say"
+    );
+    assert_eq!(
+        Ink::from_name("crossed"),
+        None,
+        "crossing is a face and not an ink, so the design names no second ink for it"
+    );
+    for palette in PALETTES {
+        let mut cell = Cell::default();
+        cell.set_style(struck.style(&palette));
+
+        assert_eq!(
+            Look::of(&cell, &palette),
+            Some(struck),
+            "the accent drawn crossed reads back as some other look"
+        );
+    }
+}
+
+/// Every set the five faces compose, from the one a look wearing none has up to all five.
 fn sets_of_faces() -> impl Iterator<Item = Faces> {
-    (0u8..16).map(|worn| {
-        [Face::Bold, Face::Italic, Face::Reversed, Face::Faint]
-            .into_iter()
-            .enumerate()
-            .filter(|(bit, _)| worn & (1 << bit) != 0)
-            .fold(Faces::PLAIN, |set, (_, face)| set.and(Faces::wearing(face)))
+    (0u8..32).map(|worn| {
+        [
+            Face::Bold,
+            Face::Italic,
+            Face::Crossed,
+            Face::Reversed,
+            Face::Faint,
+        ]
+        .into_iter()
+        .enumerate()
+        .filter(|(bit, _)| worn & (1 << bit) != 0)
+        .fold(Faces::PLAIN, |set, (_, face)| set.and(Faces::wearing(face)))
     })
 }
 

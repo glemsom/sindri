@@ -16,9 +16,11 @@ use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, split_at};
 use crate::size::{self, Sized};
 
-/// The parser's options: GFM tables and task lists on, because CommonMark leaves both out. No
-/// other extension is enabled, so a footnote and a strikethrough parse as plain prose.
-const OPTIONS: Options = Options::ENABLE_TABLES.union(Options::ENABLE_TASKLISTS);
+/// The parser's options: GFM tables, task lists and strikethrough on, because CommonMark leaves
+/// all three out. No other extension is enabled, so a footnote still parses as plain prose.
+const OPTIONS: Options = Options::ENABLE_TABLES
+    .union(Options::ENABLE_TASKLISTS)
+    .union(Options::ENABLE_STRIKETHROUGH);
 
 /// The line under a way's words: an ink of its own and never a face, so the words keep the
 /// weight the block and its marks gave them.
@@ -327,6 +329,10 @@ impl Room {
             }
             Event::Start(Tag::Emphasis) => self.faces.push(Face::Italic),
             Event::End(TagEnd::Emphasis) => {
+                self.faces.pop();
+            }
+            Event::Start(Tag::Strikethrough) => self.faces.push(Face::Crossed),
+            Event::End(TagEnd::Strikethrough) => {
                 self.faces.pop();
             }
             Event::Start(Tag::CodeBlock(kind)) => self.open_code(kind, span),

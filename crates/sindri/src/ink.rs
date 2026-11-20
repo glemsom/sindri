@@ -59,6 +59,7 @@ pub enum Face {
     Plain,
     Bold,
     Italic,
+    Crossed,
     Reversed,
     /// The accent at half its weight, so a face can recede without a second ink being named.
     Faint,
@@ -67,10 +68,11 @@ pub enum Face {
 impl Face {
     /// Every face in the one order a name reads them, with the plain one first because it is the
     /// face of a look that wears none.
-    pub(crate) const ALL: [Face; 5] = [
+    pub(crate) const ALL: [Face; 6] = [
         Face::Plain,
         Face::Bold,
         Face::Italic,
+        Face::Crossed,
         Face::Reversed,
         Face::Faint,
     ];
@@ -80,6 +82,7 @@ impl Face {
             Face::Plain => "plain",
             Face::Bold => "bold",
             Face::Italic => "italic",
+            Face::Crossed => "crossed",
             Face::Reversed => "reversed",
             Face::Faint => "faint",
         }
@@ -94,6 +97,7 @@ impl Face {
             Face::Plain => Modifier::empty(),
             Face::Bold => Modifier::BOLD,
             Face::Italic => Modifier::ITALIC,
+            Face::Crossed => Modifier::CROSSED_OUT,
             Face::Reversed => Modifier::REVERSED,
             Face::Faint => Modifier::DIM,
         }
@@ -106,6 +110,7 @@ impl Face {
             Face::Plain => 0,
             Face::Bold => 1,
             Face::Italic => 1 << 1,
+            Face::Crossed => 1 << 4,
             Face::Reversed => 1 << 2,
             Face::Faint => 1 << 3,
         }

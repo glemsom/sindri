@@ -169,6 +169,29 @@ fn ctrl_y_with_no_mark_copies_the_last_answer() {
 }
 
 #[test]
+fn ctrl_y_copies_a_struck_run_with_the_tildes_the_model_wrote() {
+    let struck = "A ~~struck~~ word is drawn crossed out and still copied `~~struck~~`, \
+                  because a copy is the words and never the faces they were drawn in.";
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([Entry::Turn { turn: 1 }, answer(1, struck)]),
+    );
+
+    let taken = copied(&mut view);
+
+    assert_eq!(
+        taken, struck,
+        "the copy is the answer as the model wrote it, so the tildes a struck run is written \
+         with travel with it and no crossing is spelled out in their place"
+    );
+    assert!(
+        taken.contains("~~struck~~"),
+        "a struck run is copied with its tildes: {taken:?}"
+    );
+}
+
+#[test]
 fn ctrl_y_on_a_frame_with_nothing_marked_and_no_answer_hands_out_nothing() {
     let mut view = View::of(
         Capabilities::default(),
