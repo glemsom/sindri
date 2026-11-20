@@ -610,6 +610,12 @@ impl Shell {
         self
     }
 
+    /// Whether a call by `name` reaches an arm: the question a front end's tool set has to answer
+    /// for every name it registers.
+    pub fn answers(&self, name: &str) -> bool {
+        Arm::of(name).is_some()
+    }
+
     pub(crate) fn grounded(&self) -> Option<&Ground> {
         self.ground.as_ref()
     }
@@ -703,13 +709,32 @@ impl Shell {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Arm {
+    Bash,
+    Skill,
+    Open,
+}
+
+impl Arm {
+    fn of(name: &str) -> Option<Arm> {
+        match name {
+            BASH => Some(Arm::Bash),
+            SKILL => Some(Arm::Skill),
+            OPEN => Some(Arm::Open),
+            _ => None,
+        }
+    }
+}
+
 impl Executor for Shell {
     fn execute(&self, call: &Call, loaded: &mut Loaded) -> Result<Acted, Redacted> {
-        match call.name.as_str() {
-            BASH => self.bash(&call.arguments),
-            SKILL => self.skill(&call.arguments, loaded),
-            OPEN => self.open(&call.arguments),
-            other => {
+        match Arm::of(&call.name) {
+            Some(Arm::Bash) => self.bash(&call.arguments),
+            Some(Arm::Skill) => self.skill(&call.arguments, loaded),
+            Some(Arm::Open) => self.open(&call.arguments),
+            None => {
+                let other = call.name.as_str();
                 let mut named = vec![BASH, SKILL];
                 if self.opener.is_some() {
                     named.push(OPEN);

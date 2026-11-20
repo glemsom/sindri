@@ -7,14 +7,16 @@ use std::io::ErrorKind;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use sindri_core::config::Config;
 use sindri_core::launch::{Handed, Launch, Machine, Turns};
+use sindri_core::open::{Opener, Opening};
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
 use sindri_core::records::{Entry, SessionDocument, read_transcript};
 use sindri_core::run::{Cancel, Stop, Turn};
-use sindri_core::tools::FrontEnd;
+use sindri_core::tools::{FrontEnd, OPEN, SKILL};
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
@@ -514,4 +516,70 @@ fn a_launch_the_sandbox_refuses_leaves_no_session_behind() {
         kept.is_empty(),
         "the session is made before the proof, so a refusal takes it away again: {kept:?}"
     );
+}
+
+/// An opener that reports a target handed over and hands it nowhere.
+#[derive(Debug)]
+struct HandsNowhere;
+
+impl Opener for HandsNowhere {
+    fn open(&self, _opening: &Opening) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+fn every_registered_tool_is_answered(launch: &Launch) {
+    for tool in launch.tools() {
+        assert!(
+            launch.executor().answers(tool.name()),
+            "the front end registers `{}` and the launch's executor cannot run it",
+            tool.name()
+        );
+    }
+}
+
+#[test]
+fn every_tool_a_terminal_launch_registers_is_a_tool_its_own_executor_answers() {
+    let homes = Homes::new();
+    homes.user_skill("deploy", "ship the branch");
+
+    let launch = Launch::open(
+        &homes.machine(),
+        &naming_wire(closed_wire()),
+        Enforcement::Unsafe,
+        FrontEnd::Terminal,
+        Some(Arc::new(HandsNowhere)),
+    )
+    .ok()
+    .expect("a config naming a wire, a model and a key names a run");
+
+    assert!(
+        launch.tools().iter().any(|tool| tool.name() == OPEN),
+        "a terminal launch registers `open`, the tool a front end has shipped without an arm"
+    );
+
+    every_registered_tool_is_answered(&launch);
+}
+
+#[test]
+fn every_tool_a_batch_launch_registers_is_a_tool_its_own_executor_answers() {
+    let homes = Homes::new();
+    homes.user_skill("deploy", "ship the branch");
+
+    let launch = Launch::open(
+        &homes.machine(),
+        &naming_wire(closed_wire()),
+        Enforcement::Unsafe,
+        FrontEnd::Batch,
+        None,
+    )
+    .ok()
+    .expect("a config naming a wire, a model and a key names a run");
+
+    assert!(
+        launch.tools().iter().any(|tool| tool.name() == SKILL),
+        "the skill this test planted gives the batch set a second tool to walk"
+    );
+
+    every_registered_tool_is_answered(&launch);
 }
