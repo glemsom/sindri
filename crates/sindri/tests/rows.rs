@@ -3548,3 +3548,36 @@ fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
         );
     }
 }
+
+#[test]
+fn a_streaming_answer_gathers_its_definitions_and_draws_the_foot_only_once_it_settles() {
+    let text = "a note[^1] here\n\n[^1]: the words it stands for";
+    let mut rows = Rows::new();
+    rows.resize(40);
+    rows.text(text);
+    rows.live(None);
+
+    let streaming: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        streaming,
+        ["  a note¹ here"],
+        "an answer still arriving gathers its definitions and draws neither them nor a hairline"
+    );
+
+    rows.push(Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact(text),
+    });
+    let settled: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        settled,
+        [
+            String::from("  a note¹ here"),
+            String::new(),
+            format!("  {}", pen::filled(pen::columns(38), '─')),
+            String::from("  ¹ the words it stands for"),
+        ],
+        "the same answer read from the record draws its foot, the hairline and the definitions \
+         both behind the answer's own gutter"
+    );
+}

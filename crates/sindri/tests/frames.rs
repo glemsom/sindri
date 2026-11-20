@@ -340,6 +340,16 @@ fn markdown_rule_80x24_is_a_hairline_in_prose_a_quote_and_an_item() {
 }
 
 #[test]
+fn markdown_footnote_80x24_is_a_marker_in_prose_a_quote_and_a_cell_under_one_foot() {
+    fixture::assert_frame("markdown-footnote", 80, 24);
+}
+
+#[test]
+fn markdown_footnote_undefined_80x24_is_a_reference_drawn_as_written_and_no_unused_definition() {
+    fixture::assert_frame("markdown-footnote-undefined", 80, 24);
+}
+
+#[test]
 fn markdown_break_80x24_is_a_break_in_prose_an_item_and_a_table_cell() {
     fixture::assert_frame("markdown-break", 80, 24);
 }

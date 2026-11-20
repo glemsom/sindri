@@ -16,11 +16,13 @@ use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, split_at};
 use crate::size::{self, Sized};
 
-/// The parser's options: GFM tables, task lists and strikethrough on, because CommonMark leaves
-/// all three out. No other extension is enabled, so a footnote still parses as plain prose.
+/// The parser's options: GFM tables, task lists, strikethrough and footnotes on, because
+/// CommonMark leaves all four out. A footnote is drawn as the marker a reference stands in and the
+/// definitions gathered at the foot, which the parser only tells apart once it has enabled them.
 const OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_TASKLISTS)
-    .union(Options::ENABLE_STRIKETHROUGH);
+    .union(Options::ENABLE_STRIKETHROUGH)
+    .union(Options::ENABLE_FOOTNOTES);
 
 /// The line under a way's words: an ink of its own and never a face, so the words keep the
 /// weight the block and its marks gave them.
@@ -31,6 +33,10 @@ const UNDERLINE: Ink = Ink::Dim;
 const FAINT_ACCENT: Look = Look::plain(Ink::Accent).wearing(Faces::FAINT);
 
 const HAIRLINE: char = '─';
+
+/// The digits a footnote's number is drawn with, one cell each, so a marker is never wider than
+/// the bracketed form it stands in the place of.
+const SUPERSCRIPT: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
 
 /// The bullet a list item's mark is: the two columns a task's box stands in the place of, so a
 /// task's words begin where an ordinary item's do.
@@ -53,7 +59,7 @@ pub fn rows_under(text: &str, cols: u16, reserve: u16) -> Vec<Row> {
 /// The same markdown on a `surface`: a picture is a block, so how many rows one takes is
 /// the layout's business and only the surface can answer it.
 pub fn rows_on(text: &str, cols: u16, reserve: u16, surface: &Surface) -> Vec<Row> {
-    rows_in(text, cols, reserve, "", surface)
+    rows_in(text, cols, reserve, "", surface, true)
 }
 
 /// The same markdown set in `gutter`: the rows come back opening with it, so an answer's words
@@ -64,9 +70,11 @@ pub(crate) fn rows_in(
     reserve: u16,
     gutter: &str,
     surface: &Surface,
+    settled: bool,
 ) -> Vec<Row> {
     let mut room = Room::new(cols.max(1), surface);
     room.reserve = usize::from(reserve);
+    room.settled = settled;
     if !gutter.is_empty() {
         room.base = vec![(String::from(gutter), Look::plain(Ink::Plain))];
     }
@@ -233,6 +241,19 @@ struct Room {
     /// How many cells a glyph of the block in hand is drawn over: two inside a heading a terminal
     /// sizes text for, and one everywhere else.
     scale: u16,
+    /// The footnotes the answer's references named, in the order they were read: a reference's
+    /// number is where its name stands here.
+    refs: Vec<String>,
+    /// The definitions the answer wrote, kept as the events they were written as rather than laid:
+    /// a definition is drawn once, at the foot, and only an answer that is whole has one.
+    notes: Vec<(Event<'static>, String)>,
+    /// Whether the events arriving belong to a definition being collected.
+    noting: bool,
+    /// Whether this room lays a definition at the answer's foot, where a name `refs` does not hold
+    /// has no number to be drawn under.
+    foot: bool,
+    /// Whether the answer is whole: a definition still arriving is gathered but never drawn.
+    settled: bool,
 }
 
 impl Room {
@@ -261,11 +282,21 @@ impl Room {
             surface: surface.clone(),
             image: None,
             scale: 1,
+            refs: Vec::new(),
+            notes: Vec::new(),
+            noting: false,
+            foot: false,
+            settled: false,
         }
     }
 
     fn event(&mut self, event: Event, span: &str) {
+        if self.noting || matches!(event, Event::Start(Tag::FootnoteDefinition(_))) {
+            self.note(event, span);
+            return;
+        }
         match event {
+            Event::FootnoteReference(name) => self.reference(&name),
             Event::Start(Tag::Paragraph) => self.open_block(),
             Event::End(TagEnd::Paragraph) => self.flush_if_written(),
             Event::Start(Tag::Heading { level, .. }) => self.open_heading(level),
@@ -366,14 +397,7 @@ impl Room {
                     true => Look::plain(Ink::Accent).underlined(UNDERLINE),
                     false => Look::plain(Ink::Accent),
                 };
-                let way = self.destination.clone();
-                match &mut self.table {
-                    Some(table) => table.text(&text, look, way.as_deref()),
-                    None => {
-                        self.place(&text, look, self.spaced);
-                        self.spaced = false;
-                    }
-                }
+                self.run(&text, look);
             }
             Event::Start(Tag::Image { dest_url, .. }) => {
                 self.image = Some((String::from(&*dest_url), String::new()));
@@ -404,6 +428,47 @@ impl Room {
             }
             Event::HardBreak => self.end_row(),
             _ => {}
+        }
+    }
+
+    /// A definition is kept whole and laid at the answer's foot, so the words of it are read here
+    /// and drawn nowhere near where the answer wrote them.
+    fn note(&mut self, event: Event, span: &str) {
+        self.noting = !matches!(event, Event::End(TagEnd::FootnoteDefinition));
+        self.notes.push((event.into_static(), String::from(span)));
+    }
+
+    /// A reference stands as the marker of its footnote's number, which counts the references as
+    /// the answer reads them: a name the foot already holds keeps the number it was given, and a
+    /// definition's own words are the one place a reference no number answers is drawn as written.
+    fn reference(&mut self, name: &str) {
+        let at = match self.refs.iter().position(|known| known == name) {
+            Some(at) => at,
+            None if self.foot => {
+                let words = format!("[^{name}]");
+                let look = self.prose_look();
+                self.run(&words, look);
+                return;
+            }
+            None => {
+                self.refs.push(String::from(name));
+                self.refs.len() - 1
+            }
+        };
+        let marker = superscript(at.saturating_add(1));
+        self.run(&marker, Look::plain(Ink::Dim));
+    }
+
+    /// One run of glyphs in the words of the block in hand, or in the cell of a table being read,
+    /// which is laid only once the whole table has arrived.
+    fn run(&mut self, text: &str, look: Look) {
+        let way = self.destination.clone();
+        match &mut self.table {
+            Some(table) => table.text(text, look, way.as_deref()),
+            None => {
+                self.place(text, look, self.spaced);
+                self.spaced = false;
+            }
         }
     }
 
@@ -1023,7 +1088,85 @@ impl Room {
         if self.rows.is_empty() {
             self.push(Row::blank());
         }
+        if self.settled {
+            self.foot();
+        }
         self.rows
+    }
+
+    /// The answer's foot: one hairline across the room the answer's own gutter leaves, then each
+    /// definition its references named. A definition no reference names and a definition of an
+    /// answer still arriving are both drawn nowhere, and an answer without either has no foot.
+    fn foot(&mut self) {
+        let definitions = self.definitions();
+        if definitions.is_empty() {
+            return;
+        }
+        let mut spans = self.gutter();
+        spans.push((
+            pen::filled(pen::columns(self.room_cells()), HAIRLINE),
+            Look::plain(Ink::Dim),
+        ));
+        self.gap();
+        self.push(Row::of(spans));
+        for row in definitions {
+            self.push(row);
+        }
+    }
+
+    /// Each named definition laid in a room of its own, in the order its reference was read, under
+    /// the marker of its number as its gutter: a wrapped definition hangs under that number and
+    /// the answer's own bars stand behind it.
+    fn definitions(&self) -> Vec<Row> {
+        let mut laid = Vec::new();
+        for (at, name) in self.refs.iter().enumerate() {
+            if !self.wrote(name) {
+                continue;
+            }
+            let mut room = Room::new(self.wide, &self.surface);
+            room.base.clone_from(&self.base);
+            room.refs.clone_from(&self.refs);
+            room.foot = true;
+            room.first = true;
+            room.marks.push(Mark {
+                text: format!("{} ", superscript(at.saturating_add(1))),
+                ink: Ink::Dim,
+            });
+            for (event, span) in self.body(name) {
+                room.event(event.clone(), span);
+            }
+            room.flush_if_written();
+            laid.extend(room.rows);
+        }
+        laid
+    }
+
+    /// Whether a definition of `name` arrived at all: a reference no definition answers is drawn
+    /// where it stands and gathers nothing.
+    fn wrote(&self, name: &str) -> bool {
+        self.notes.iter().any(|(event, _)| {
+            matches!(event, Event::Start(Tag::FootnoteDefinition(written)) if written.as_ref() == name)
+        })
+    }
+
+    /// The events a definition wrote between its opening and its closing line, and no event of the
+    /// answer around it.
+    fn body<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> impl Iterator<Item = &'a (Event<'static>, String)> + 'a {
+        let mut inside = false;
+        self.notes.iter().filter(move |(event, _)| match event {
+            Event::Start(Tag::FootnoteDefinition(written)) => {
+                inside = written.as_ref() == name;
+                false
+            }
+            Event::End(TagEnd::FootnoteDefinition) => {
+                inside = false;
+                false
+            }
+            _ => inside,
+        })
     }
 }
 
@@ -1070,6 +1213,17 @@ fn breaking(tag: &str) -> bool {
             .all(|glyph| glyph == '/' || glyph.is_whitespace()),
         _ => false,
     }
+}
+
+/// A footnote's number as the marker it is drawn as: one cell a digit, so the marker of any number
+/// is narrower than the bracketed form it stands in the place of.
+fn superscript(number: usize) -> String {
+    number
+        .to_string()
+        .chars()
+        .filter_map(|glyph| glyph.to_digit(10))
+        .map(|digit| SUPERSCRIPT[digit as usize])
+        .collect()
 }
 
 /// `None` for a line that is not a fence: indented more than the three columns a fence may
