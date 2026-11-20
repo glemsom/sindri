@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 footer-queue at 72x24
 00 |⠋ 0.0s                                                                  | accent:1 plain:1 dim:4 plain:66

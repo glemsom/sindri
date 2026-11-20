@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 markdown-fence-named-cut at 40x24
 00 |▏ rust crates/sindri/src/provider/transp| dim:2 accent+faint:4 plain:1 accent+faint:33

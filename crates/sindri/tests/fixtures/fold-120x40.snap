@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 fold at 120x40
 00 |─ prompt ───────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34

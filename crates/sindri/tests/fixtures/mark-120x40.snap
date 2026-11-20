@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 mark at 120x40
 00 |⋯ 1 call · 41 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104

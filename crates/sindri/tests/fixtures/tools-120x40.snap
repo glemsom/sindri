@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 tools at 120x40
 00 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
