@@ -17,13 +17,20 @@ anything but a final answer still joins with what it ended on — except one `/n
 words went with the conversation it emptied.
 _Avoid_: Chat, thread, memory, context, history (that one is a run's own turns)
 
+**Exchange**:
+The band's unit: the reader's own words wearing the sigil they were asked with, the work between
+them, and the answer. One exchange to a prompt, and what the run did between the two is drawn under
+the prompt rather than under a name of its own.
+_Avoid_: Pair, round, item
+
 **Prompt**:
 The reader's own words a run was asked with: the first fact of the session's transcript, and what the
 wire is asked last, after the turns that came before it.
 _Avoid_: Query, question, input, message (that one is the wire's)
 
 **Turn**:
-One request to the model and the tool calls it asks for. Not a unit of progress.
+One request to the model and the tool calls it asks for. Not a unit of progress, and no row of the
+band: the record writes one for every turn the run took and the drawing leaves it out.
 _Avoid_: Step, iteration, wave
 
 **Answer**:
@@ -32,10 +39,12 @@ _Avoid_: Response, output, result
 
 **Stop**:
 The reason a run ended — `final`, `max_turns`, `budget`, `cancelled` or `error` — in its own word. It
-is laid in the transcript where the run ended: an error with one line of the run's own words about
-it, redacted as every other fact is, and a final answer or a cancellation with no line it does not
-have. The marker at the head of the newest answer settles on the same word, so no two drawings of one
-stop disagree.
+is laid in the transcript where the run ended, and it earns a row there where it says something the
+answer above it does not: `cancelled`, `max_turns`, `budget` or an error, the error with one line of
+the run's own words about it, redacted as every other fact is, and a cancellation with no line it
+does not have. A run that ended on `final` draws no row, because the answer under the marker is the
+whole of what it ended on. The marker at the head of the newest answer settles on the same word, so
+no two drawings of one stop disagree.
 _Avoid_: Exit status, failure, termination, reason
 
 **State**:

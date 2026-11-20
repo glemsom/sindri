@@ -21,12 +21,12 @@ use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
 fn turns(count: u32) -> Vec<Entry> {
-    (1..=count).map(note).collect()
+    (1..=count).map(thought).collect()
 }
 
 /// One row of the band that says which turn it is: a turn draws no row of its own, so a
-/// transcript of one row per turn says which one each row stands on with a thought.
-fn note(turn: u32) -> Entry {
+/// transcript of one row to a turn says which one they stand on with a thought.
+fn thought(turn: u32) -> Entry {
     Entry::Reasoning {
         turn,
         text: SecretSet::default().redact(format!("turn {turn}")),

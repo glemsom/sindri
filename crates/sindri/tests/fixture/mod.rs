@@ -621,9 +621,8 @@ pub fn document() -> SessionDocument {
 }
 
 /// One row of the band that says which turn it is: a turn draws no row of its own, so a fixture
-/// that counts the rows of the band off the frame says which one each row stands on with a
-/// thought in the reasoning gutter.
-fn note(turn: u32) -> Entry {
+/// that counts the rows of the band off the frame says which one they stand on with a thought.
+fn thought(turn: u32) -> Entry {
     Entry::Reasoning {
         turn,
         text: SecretSet::default().redact(format!("turn {turn}")),
@@ -636,7 +635,7 @@ fn thumbing(capabilities: Capabilities, scroll: Scroll) -> View {
     View::of(
         capabilities,
         Facts::default().asked(),
-        Transcript::of((1..=80).map(note)).scrolled(scroll),
+        Transcript::of((1..=80).map(thought)).scrolled(scroll),
     )
 }
 
@@ -902,8 +901,8 @@ fn wire_refused() -> Stop {
     Stop::Error(SecretSet::default().redact("the wire refused the request: 401 unauthorized"))
 }
 
-/// One entry of every stop a run can end on, one above the other, so the five words and the two
-/// marks are read at once.
+/// One entry of every stop a run can end on, one above the other, so the words it says and the
+/// marks they wear are read at once.
 fn stops() -> Vec<Entry> {
     vec![
         Stop::Final,

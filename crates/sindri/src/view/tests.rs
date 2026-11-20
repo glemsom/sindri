@@ -1503,7 +1503,7 @@ fn a_frame_draws_the_three_values_it_was_built_from() {
     let mut view = View::of(
         inked(Palette::ANSI),
         Facts::default().asked().railed(rail()),
-        Transcript::of([note(1)]),
+        Transcript::of([thought(1)]),
     );
     let buffer = painted(&mut view, 120, 40);
 
@@ -1526,7 +1526,7 @@ fn a_frame_draws_the_three_values_it_was_built_from() {
 
 #[test]
 fn a_frame_draws_the_record_from_the_row_the_reader_stands_at() {
-    let turns = (1..=80).map(note);
+    let turns = (1..=80).map(thought);
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -2248,8 +2248,8 @@ fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_ex
 }
 
 /// One row of the band that says which turn it is: a turn draws no row of its own, so the frames
-/// these tests count rows with say which one each row stands on with a thought in its gutter.
-fn note(turn: u32) -> Entry {
+/// these tests count rows with say which one they stand on with a thought drawn as one row.
+fn thought(turn: u32) -> Entry {
     Entry::Reasoning {
         turn,
         text: SecretSet::default().redact(format!("turn {turn}")),
@@ -2262,7 +2262,7 @@ fn turns(count: u32) -> View {
     View::of(
         Capabilities::default(),
         Facts::default().asked(),
-        Transcript::of((1..=count).map(note)),
+        Transcript::of((1..=count).map(thought)),
     )
 }
 
@@ -2271,7 +2271,7 @@ fn turns_taken(count: u32) -> View {
     View::of(
         pointing(),
         Facts::default().asked(),
-        Transcript::of((1..=count).map(note)),
+        Transcript::of((1..=count).map(thought)),
     )
 }
 
@@ -2286,7 +2286,7 @@ fn folded_run(rows: u32) -> View {
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::of(vec![
-            note(1),
+            thought(1),
             Entry::Call {
                 turn: 1,
                 id: None,
@@ -2809,7 +2809,7 @@ fn one_row_back_is_said_in_the_singular() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
-        Transcript::of((1..=100).map(note)).scrolled(Scroll::Back(1)),
+        Transcript::of((1..=100).map(thought)).scrolled(Scroll::Back(1)),
     );
     let buffer = painted(&mut view, 120, 40);
 
@@ -3199,8 +3199,8 @@ fn a_page_up_at_the_first_row_stops_there_rather_than_wrapping_to_the_tail() {
     assert!(
         first.starts_with(&format!("{THUMB} turn 1 ")),
         "the transcript's first row stands at the top of the band with the thumb in the cell \
-             the rule's corner gave up and the turn's words past it, so a reader who paged back \
-             sees where they stand over the turn they stand on: {first:?}"
+             the row's gutter gave up and the row's own words past it, so a reader who paged back \
+             sees where they stand over the row they stand on: {first:?}"
     );
     for _ in 0..3 {
         assert_eq!(
@@ -3544,7 +3544,7 @@ fn scrolled(count: u32, scroll: Scroll) -> View {
     View::of(
         Capabilities::default(),
         Facts::default().asked(),
-        Transcript::of((1..=count).map(note)).scrolled(scroll),
+        Transcript::of((1..=count).map(thought)).scrolled(scroll),
     )
 }
 
@@ -3638,7 +3638,7 @@ fn wide(cols: u16) -> Buffer {
         turn: 1,
         text: SecretSet::default().redact("\u{8003}"),
     }];
-    entries.extend((1..=79).map(note));
+    entries.extend((1..=79).map(thought));
     // A window taken further back than the transcript reaches lands on its first row.
     painted(
         &mut View::of(
@@ -4686,7 +4686,7 @@ fn the_band_alone_places_the_caret_and_no_answer_or_prompt_does() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().running(),
-        Transcript::of((1..=3).map(note)),
+        Transcript::of((1..=3).map(thought)),
     );
     view.enqueue(prompt("a prompt behind the draft"));
     view.paste("a draft");
