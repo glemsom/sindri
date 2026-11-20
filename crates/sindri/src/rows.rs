@@ -254,7 +254,9 @@ fn laid(
 ) -> (Vec<Row>, Option<usize>) {
     let cols = cols.max(1);
     match entry {
-        Entry::Turn { turn } => (vec![divider(&format!("turn {turn} "), cols)], None),
+        // A turn is no row of the band, and a stop that ended on the answer under it says nothing
+        // that answer does not: the record writes both, and the drawing leaves them out.
+        Entry::Turn { .. } | Entry::Stop { stop: Stop::Final } => (Vec::new(), None),
         Entry::Call {
             name, arguments, ..
         } => (
@@ -618,8 +620,8 @@ fn body(text: &str, cols: u16, way: Option<Way>, ink: Ink) -> Vec<Row> {
     }
 }
 
-/// The row between one turn and the next: the hairline it opens with, the words naming the turn,
-/// and the pen's fill out to the band's edge.
+/// The row an entry that opens with a hairline is drawn as: the words it names itself with and the
+/// pen's fill out to the band's edge.
 fn divider(lead: &str, cols: u16) -> Row {
     let (gutter, room) = margin(RULE, cols);
     let lead = clip(lead, room);

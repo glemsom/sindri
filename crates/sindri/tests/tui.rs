@@ -1150,12 +1150,12 @@ fn runs(drawn: &str) -> Vec<Run> {
 }
 
 /// The rows the composer's band took in the last frame that painted it: the gap between the row of
-/// its edge and the row of the footer's first hint. The edge is the one drawn from the frame's first
-/// column, because a rail draws rules of its own and paints them after it.
+/// its corner and the row of the footer's first hint. The corner is the one drawn in the frame's
+/// first column: a rail and a transcript both draw rules of their own after the composer's.
 fn composer_rows(drawn: &str) -> Option<u16> {
     let (mut edge, mut footer) = (None, None);
     for run in runs(drawn) {
-        if (run.glyphs.starts_with('┌') || run.glyphs.starts_with('─')) && run.column == 1 {
+        if run.glyphs.starts_with('┌') && run.column == 1 {
             edge = Some(run.row);
         }
         if run.glyphs.contains(FIRST_HINT) {

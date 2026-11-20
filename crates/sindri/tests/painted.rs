@@ -21,7 +21,16 @@ use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
 fn turns(count: u32) -> Vec<Entry> {
-    (1..=count).map(|turn| Entry::Turn { turn }).collect()
+    (1..=count).map(thought).collect()
+}
+
+/// One row of the band that says which turn it is: a turn draws no row of its own, so a
+/// transcript of one row to a turn says which one they stand on with a thought.
+fn thought(turn: u32) -> Entry {
+    Entry::Reasoning {
+        turn,
+        text: SecretSet::default().redact(format!("turn {turn}")),
+    }
 }
 
 fn answer(text: &str) -> Vec<Entry> {
@@ -370,7 +379,7 @@ fn a_pass_under_a_card_hands_back_the_body_the_screens_rows_were_drawn_in() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
-        Transcript::of(turns(3)),
+        Transcript::of(answer("- gate\n- rule\n- mark")),
     );
     view.key(Key::Char('?'));
     let (buffer, told) = painted_and_told(&mut view, 120, 40);

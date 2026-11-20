@@ -3,19 +3,19 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 transcript-scrolled at 80x24
-00 |  construct │ where it stands                                                   | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:51
-01 |  ──────────┼───────────────────────────                                        | plain:2 dim:38 plain:40
-02 |  heading   │ in the answer's own gutter                                        | plain:11 dim:3 plain:66
-03 |  code      │ behind a bar, highlighted                                         | plain:11 dim:3 plain:66
-04 |  table     │ columns joined by a bar                                           | plain:11 dim:3 plain:66
-05 |─ turn 6 ───────────────────────────────────────────────────────────────────────| dim:80
+00 |                                                                                | plain:80
+01 |  construct │ where it stands                                                   | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:51
+02 |  ──────────┼───────────────────────────                                        | plain:2 dim:38 plain:40
+03 |  heading   │ in the answer's own gutter                                        | plain:11 dim:3 plain:66
+04 |  code      │ behind a bar, highlighted                                         | plain:11 dim:3 plain:66
+05 |  table     │ columns joined by a bar                                           | plain:11 dim:3 plain:66
 06 |✓ bash                                                                          | ok:1 plain:1 dim:4 plain:74
 07 |  make check STAGES=frames                                                      | plain:80
 08 |✓ exit 0  31 ms · 104 bytes                                                     | ok:1 plain:1 dim:25 plain:53
 09 |  check: frame calls ... ok                                                     | muted:27 plain:53
 10 |  check: frame transcript ... ok                                                | muted:32 plain:48
 11 |  A row is one line                                                             | plain:2 plain+bold:17 plain:61
-12 |  ─────────────────                                                             | plain:2 accent+faint:17 plain:61
+12 |█ ─────────────────                                                             | dim:1 plain:1 accent+faint:17 plain:61
 13 |█                                                                               | dim:1 plain:79
 14 |█ A row says the exit code and not the command, because the verdict is a fact   | dim:1 plain:79
 15 |█ the record holds and the command is a fact the row above it holds.            | dim:1 plain:79
