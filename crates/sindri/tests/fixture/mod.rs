@@ -192,15 +192,11 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-diff" => construct(capabilities, diff()),
         "markdown-fence-cut" => construct(capabilities, cut()),
         "markdown-fence-fits" => construct(capabilities, fits()),
-        "markdown-fence-nudged" => {
+        "markdown-fence-walked" => {
             let mut view = construct(capabilities, cut());
             view.drag(mark::Cell::new(1, 0), mark::Cell::new(3, 70));
             let mut view = drawn(view, 80, 24);
-            assert_eq!(
-                view.key(Key::ShiftRight),
-                Outcome::Edited,
-                "the fence the mark stands on is walked on before the frame is drawn"
-            );
+            view.key(Key::ShiftRight);
             view
         }
         "markdown-diff-quoted" => construct(capabilities, &diff_quoted()),

@@ -2,9 +2,9 @@ use super::*;
 
 use crate::pen;
 
-/// Rows of a band as the mark reads them: every glyph with the column it is drawn from, the columns
-/// it covers, and whether the band cut that row's tail off.
-fn band(rows: &[&str]) -> Vec<(Vec<Glyph>, bool)> {
+/// Rows of a band as the mark reads them: every glyph with the column it is drawn from and the
+/// columns it covers.
+fn band(rows: &[&str]) -> Vec<Line> {
     rows.iter()
         .map(|row| {
             let mut column = 0u16;
@@ -14,16 +14,16 @@ fn band(rows: &[&str]) -> Vec<(Vec<Glyph>, bool)> {
                 line.push((column, glyph, width));
                 column = column.saturating_add(width);
             }
-            (line, false)
+            Line::of(line, false)
         })
         .collect()
 }
 
 /// The same band with every row of it cut at the band's edge.
-fn cut(rows: &[&str]) -> Vec<(Vec<Glyph>, bool)> {
+fn cut(rows: &[&str]) -> Vec<Line> {
     band(rows)
         .into_iter()
-        .map(|(line, _)| (line, true))
+        .map(|line| Line::of(line.glyphs, true))
         .collect()
 }
 

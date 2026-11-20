@@ -301,7 +301,7 @@ struct Room {
     /// it is what tags the rows a fence's lines are drawn as.
     fence: Option<usize>,
     /// How many code blocks this answer has opened.
-    fences: usize,
+    opened: usize,
 }
 
 impl Room {
@@ -336,7 +336,7 @@ impl Room {
             gathering: None,
             wholeness: Wholeness::Whole,
             fence: None,
-            fences: 0,
+            opened: 0,
         }
     }
 
@@ -814,8 +814,8 @@ impl Room {
             self.flush();
         }
         // The tag row is no line of the fence: the lines under it are the ones the reader walks.
-        self.fence = Some(self.fences);
-        self.fences = self.fences.saturating_add(1);
+        self.fence = Some(self.opened);
+        self.opened = self.opened.saturating_add(1);
         // A mermaid fence is a picture and not code: its source is kept so the drawing can be
         // made when the block closes, and so the reason it could not be drawn prints under it.
         if language(&tag) == "mermaid" {

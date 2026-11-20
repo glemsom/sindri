@@ -837,6 +837,64 @@ fn a_mark_that_covers_no_fence_line_answers_no_sideways_key() {
 }
 
 #[test]
+fn a_marked_fence_the_band_holds_whole_names_no_sideways_key() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(answer("```rust\nlet short = 1;\n```")),
+    );
+    let (before, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    let row = row_of(&before, laid.transcript, "let short");
+
+    view.drag(Cell::new(row, 0), Cell::new(row, 40));
+    let (marked, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+
+    assert!(
+        !footer(&marked, &laid).contains("Shift+"),
+        "a fence the band holds whole has no words past its edge, so the footer names no key that \
+         would walk it: {}",
+        footer(&marked, &laid)
+    );
+    assert_eq!(
+        view.key(Key::ShiftRight),
+        Outcome::Unchanged,
+        "and the key it names nowhere answers nothing"
+    );
+}
+
+#[test]
+fn a_marked_line_of_a_cut_fence_answers_the_key_however_short_the_line_is() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(answer(
+            "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_\
+             the_model_wrote_it_in = 1;\nlet short = 2;\n```",
+        )),
+    );
+    let (before, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    let row = row_of(&before, laid.transcript, "let short");
+
+    view.drag(Cell::new(row, 0), Cell::new(row, 40));
+    painted_and_told(&mut view, 100, 24);
+    assert_eq!(
+        view.key(Key::ShiftRight),
+        Outcome::Edited,
+        "the mark stands on one line of a fence the band cut, and the offset covers every row of \
+         that fence"
+    );
+}
+
+#[test]
 fn a_width_change_drops_the_walk_a_fence_was_left_in() {
     let mut view = View::of(
         Capabilities::default(),

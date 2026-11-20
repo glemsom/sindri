@@ -1914,7 +1914,7 @@ fn marked_fence() -> View {
         }]),
     );
     view.drag(Cell::new(1, 0), Cell::new(3, 40));
-    painted_and_told(&mut view, 200, 40);
+    painted_and_told(&mut view, 40, 40);
     view
 }
 

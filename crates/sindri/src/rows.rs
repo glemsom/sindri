@@ -1027,6 +1027,9 @@ struct Held {
     /// How many rows this entry's closed fold keeps back, and nothing where its whole fold holds
     /// it: a fact of its last layout, because what a fold holds depends on the width.
     kept: Option<usize>,
+    /// How far each fence of this entry has been walked, by the block's ordinal: kept off the rows so
+    /// a line laid again is walked where the reader left it, and dropped with them at a new width.
+    walks: Vec<(usize, u16)>,
 }
 
 #[derive(Clone, Debug)]
@@ -1121,6 +1124,7 @@ impl Rows {
             place,
             fold: Fold::Closed,
             kept: None,
+            walks: Vec::new(),
         });
     }
 
@@ -1209,9 +1213,10 @@ impl Rows {
         {
             return;
         }
-        let rows = self.live_rows(head.as_ref());
+        let mut rows = self.live_rows(head.as_ref());
         match at {
             Some(at) => {
+                self.walking(at, &mut rows);
                 let held = &mut self.held[at];
                 held.what = What::Live { revision, head };
                 held.rows = Some(rows);
@@ -1224,6 +1229,7 @@ impl Rows {
                     place: Place::Alone,
                     fold: Fold::Closed,
                     kept: None,
+                    walks: Vec::new(),
                 };
                 match self.ended {
                     true => self.held.insert(self.held.len() - 1, held),
@@ -1371,26 +1377,30 @@ impl Rows {
         self.unlay();
     }
 
-    /// Walks the fence `fence` of entry `at` one step sideways, answering whether it moved: every
-    /// row of that fence moves and no other row does, and a fence walked as far as its widest line
-    /// goes no further. A row laid again forgets the walk, which is what a width change is.
+    /// Walks the fence `fence` of entry `at` one step sideways, answering whether it moved: every row
+    /// of that fence moves and no other, and a fence walked as far as its widest line goes no further.
+    /// The walk is the entry's, so a line laid again keeps it until a new width drops it.
     pub fn sideways(&mut self, at: usize, fence: usize, way: Sideways) -> bool {
         let cols = self.cols;
-        let Some(rows) = self.held.get_mut(at).and_then(|held| held.rows.as_mut()) else {
+        let Some(held) = self.held.get_mut(at) else {
             return false;
         };
-        let mut widest = 0u16;
-        let mut walk = None;
-        for row in rows.iter() {
-            if row.fence().map(Fence::id) != Some(fence) {
-                continue;
-            }
-            widest = widest.max(row.width());
-            walk = walk.or(row.fence().map(Fence::walk));
-        }
-        let Some(walk) = walk else {
+        let Some(rows) = held.rows.as_ref() else {
             return false;
         };
+        let widest = rows
+            .iter()
+            .filter(|row| row.fence().map(Fence::id) == Some(fence))
+            .map(Row::width)
+            .max();
+        let Some(widest) = widest else {
+            return false;
+        };
+        let walk = held
+            .walks
+            .iter()
+            .find(|(id, _)| *id == fence)
+            .map_or(0, |(_, walk)| *walk);
         // The widest line is the bound: walked past it, the tail would stand past the band's edge
         // with nothing left to bring to it.
         let most = widest.saturating_sub(cols);
@@ -1401,19 +1411,40 @@ impl Rows {
         if to == walk {
             return false;
         }
-        for row in rows.iter_mut() {
-            if row.fence().map(Fence::id) == Some(fence) {
-                row.walked(to);
+        if let Some(rows) = held.rows.as_mut() {
+            for row in rows {
+                if row.fence().map(Fence::id) == Some(fence) {
+                    row.walked(to);
+                }
             }
+        }
+        match held.walks.iter_mut().find(|(id, _)| *id == fence) {
+            Some((_, walk)) => *walk = to,
+            None => held.walks.push((fence, to)),
         }
         true
     }
 
-    /// Drops every row: a fact a row was laid out against has moved, and a row is only a drawing
-    /// of the facts that made it.
+    /// `rows` walked where the reader left this entry's fences: the one thing about them that is the
+    /// entry's and not the width's.
+    fn walking(&self, at: usize, rows: &mut [Row]) {
+        let walks = &self.held[at].walks;
+        for row in rows {
+            let Some(fence) = row.fence() else {
+                continue;
+            };
+            if let Some((_, walk)) = walks.iter().find(|(id, _)| *id == fence.id()) {
+                row.walked(*walk);
+            }
+        }
+    }
+
+    /// Drops every row, and the walk its fences were left in with them: a fact a row was laid out
+    /// against has moved, and a row is only a drawing of the facts that made it.
     fn unlay(&mut self) {
         for held in &mut self.held {
             held.rows = None;
+            held.walks.clear();
         }
     }
 
@@ -1445,8 +1476,9 @@ impl Rows {
                 }
                 (What::Live { .. }, _) => None,
             };
-            if let Some((rows, kept)) = laid {
+            if let Some((mut rows, kept)) = laid {
                 self.lays += 1;
+                self.walking(at, &mut rows);
                 self.held[at].rows = Some(rows);
                 self.held[at].kept = kept;
             }

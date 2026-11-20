@@ -526,6 +526,6 @@ fn markdown_fence_fits_80x24_is_a_fence_line_the_band_holds_whole() {
 }
 
 #[test]
-fn markdown_fence_nudged_80x24_is_that_line_walked_eight_columns_sideways() {
-    fixture::assert_frame("markdown-fence-nudged", 80, 24);
+fn markdown_fence_walked_80x24_is_the_line_the_band_cut_carried_eight_columns_on() {
+    fixture::assert_frame("markdown-fence-walked", 80, 24);
 }

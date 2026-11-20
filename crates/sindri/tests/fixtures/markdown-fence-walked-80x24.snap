@@ -2,7 +2,7 @@
 source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
-markdown-fence-nudged at 80x24
+markdown-fence-walked at 80x24
 00 |▏ rust                                                                          | dim:2 accent+faint:4 plain:74
 01 |▏ nce_line_that_is_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_the_…| mark:80
 02 |                                                                                | plain:80

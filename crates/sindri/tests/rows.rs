@@ -436,6 +436,34 @@ fn a_fence_walked_as_far_as_its_widest_line_goes_no_further() {
 }
 
 #[test]
+fn a_walk_outlives_a_line_laid_again_and_a_width_change_drops_it() {
+    let mut rows = Rows::new();
+    rows.resize(20);
+    rows.text("```rust\nlet a_line_wider_than_the_band_it_is_drawn_in = 1;\n");
+    rows.live(None);
+    assert!(
+        rows.sideways(0, 0, Sideways::Forward),
+        "the line the run is still writing is wider than the band, so the reader walks it"
+    );
+
+    rows.text("and a word more");
+    rows.live(None);
+    assert_eq!(
+        walked(&walks(&mut rows, 0), 0).into_iter().max(),
+        Some(8),
+        "the fragment the wire sent laid the line again, and the reader's walk is still on it"
+    );
+
+    rows.resize(24);
+    assert!(
+        walked(&walks(&mut rows, 0), 0)
+            .iter()
+            .all(|walk| *walk == 0),
+        "a width change drops the walk with the rows it was made at"
+    );
+}
+
+#[test]
 fn the_readers_own_words_are_drawn_under_the_row_that_names_them() {
     let secrets = SecretSet::default();
     let rows = layout(
