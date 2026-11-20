@@ -1,4 +1,4 @@
-use sindri_core::config::{Config, ConfigError, Environment, Key as SchemaKey, Touched};
+use sindri_core::config::{self, Config, ConfigError, Environment, Touched};
 use sindri_core::redact::MASK;
 
 use crate::composer::Key;
@@ -13,17 +13,25 @@ pub struct Settings {
     refusal: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 struct Row {
-    key: &'static SchemaKey,
+    key: &'static config::Field,
     text: String,
     touched: bool,
 }
 
+impl PartialEq for Row {
+    fn eq(&self, other: &Row) -> bool {
+        self.key.name == other.key.name && self.text == other.text && self.touched == other.touched
+    }
+}
+
+impl Eq for Row {}
+
 impl Settings {
     pub fn of(config: &Config) -> Settings {
         Settings {
-            rows: Config::KEYS
+            rows: Config::SCHEMA
                 .iter()
                 .map(|key| Row {
                     key,

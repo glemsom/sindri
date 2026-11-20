@@ -93,7 +93,7 @@ fn a_bad_value_is_a_usage_error_at_exit_two() {
 fn every_key_in_the_schema_is_accepted() {
     assert_eq!(
         EXAMPLES.len(),
-        Config::KEYS.len(),
+        Config::SCHEMA.len(),
         "the worked examples and the key list must name the same keys"
     );
     let document: String = EXAMPLES
@@ -151,17 +151,17 @@ fn the_table_names_every_key_of_the_schema_in_the_order_the_screen_reads_them() 
         "ssh_agent",
     ];
 
-    let named: Vec<&str> = Config::KEYS.iter().map(|key| key.name).collect();
+    let named: Vec<&str> = Config::SCHEMA.iter().map(|field| field.name).collect();
 
     assert_eq!(
         named, order,
         "one table names every key of the schema, in the order the settings screen reads them"
     );
 
-    let switches: Vec<&str> = Config::KEYS
+    let switches: Vec<&str> = Config::SCHEMA
         .iter()
-        .filter(|key| key.switch())
-        .map(|key| key.name)
+        .filter(|field| field.switch())
+        .map(|field| field.name)
         .collect();
 
     assert_eq!(
@@ -173,7 +173,7 @@ fn the_table_names_every_key_of_the_schema_in_the_order_the_screen_reads_them() 
 
 #[test]
 fn the_face_is_drawn_unless_the_config_says_otherwise_and_its_key_sits_beside_status() {
-    let keys: Vec<&str> = Config::KEYS.iter().map(|key| key.name).collect();
+    let keys: Vec<&str> = Config::SCHEMA.iter().map(|field| field.name).collect();
     let at = keys
         .iter()
         .position(|key| *key == "face")
@@ -186,10 +186,7 @@ fn the_face_is_drawn_unless_the_config_says_otherwise_and_its_key_sits_beside_st
          company with: {keys:?}"
     );
     assert!(
-        Config::KEYS
-            .iter()
-            .find(|key| key.name == "face")
-            .is_some_and(|key| key.switch()),
+        Config::field("face").is_some_and(|field| field.switch()),
         "a key that holds on or off is one the settings screen's space flips"
     );
     assert!(
@@ -230,7 +227,7 @@ fn an_exported_true_turns_the_face_back_on_over_a_file_that_turned_it_off() {
 
 #[test]
 fn a_context_window_in_the_file_is_read_as_tokens_beside_the_turn_cap() {
-    let keys: Vec<&str> = Config::KEYS.iter().map(|key| key.name).collect();
+    let keys: Vec<&str> = Config::SCHEMA.iter().map(|field| field.name).collect();
     let at = keys
         .iter()
         .position(|key| *key == "context_window")
@@ -785,7 +782,7 @@ fn a_sindri_toml_in_the_working_directory_grants_nothing() {
 #[test]
 fn yolo_unsafe_is_neither_a_key_nor_a_variable() {
     assert!(
-        !Config::KEYS.iter().any(|key| key.name == "yolo_unsafe"),
+        Config::field("yolo_unsafe").is_none(),
         "the escape hatch cannot be persisted, so it is not a key"
     );
 
@@ -842,12 +839,12 @@ fn two_configs_that_differ_only_in_what_a_frame_reads_decide_the_same_run() {
         );
     }
 
-    for key in Config::KEYS
+    for field in Config::SCHEMA
         .iter()
-        .filter(|key| !["status", "face"].contains(&key.name))
+        .filter(|field| !["status", "face"].contains(&field.name))
     {
         let mut other = run.clone();
-        match key.name {
+        match field.name {
             "provider" => other.provider = Some(Wire::Openai),
             "model" => other.model = Some(String::from("claude-haiku-4-5")),
             "route" => other.route = Some(Route::Responses),
@@ -867,7 +864,7 @@ fn two_configs_that_differ_only_in_what_a_frame_reads_decide_the_same_run() {
         assert!(
             !run.decides_the_same_run(&other),
             "`{}` decides the run a session records, so another value of it is another run",
-            key.name
+            field.name
         );
     }
 }

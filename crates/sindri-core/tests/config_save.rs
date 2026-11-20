@@ -408,7 +408,7 @@ fn a_save_writes_the_keys_the_schema_has_and_invents_none() {
     let document: toml::Table = text.parse().expect("the file it wrote is TOML");
     let mut written: Vec<&str> = document.keys().map(String::as_str).collect();
     written.sort_unstable();
-    let mut schema: Vec<&str> = Config::KEYS.iter().map(|key| key.name).collect();
+    let mut schema: Vec<&str> = Config::SCHEMA.iter().map(|field| field.name).collect();
     schema.sort_unstable();
 
     assert_eq!(
@@ -689,23 +689,23 @@ fn every_row_of_the_table_shows_the_value_its_own_key_holds() {
         ("ssh_agent", "false"),
     ];
 
-    for key in Config::KEYS {
+    for field in Config::SCHEMA {
         let value = held
             .iter()
-            .find(|(name, _)| *name == key.name)
+            .find(|(name, _)| *name == field.name)
             .map(|(_, value)| *value)
-            .unwrap_or_else(|| panic!("the test names a value for `{}`", key.name));
-        let shown = key.shown(&set);
+            .unwrap_or_else(|| panic!("the test names a value for `{}`", field.name));
+        let shown = field.shown(&set);
 
         assert_eq!(
             shown, value,
             "the row of `{}` shows what that key holds and nothing another key holds",
-            key.name
+            field.name
         );
         assert!(
             !shown.is_empty(),
             "every key is set here, so `{}` is a row with a value in it",
-            key.name
+            field.name
         );
     }
 }
@@ -719,15 +719,13 @@ fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
     // The one key a screen may not show: a secret is masked wherever it is drawn, so its row is a
     // mask and never the text a file would hold.
     let mut readers = Vec::new();
-    for key in Config::KEYS {
-        if key.name != "api_key" {
-            readers.push((key.name, key.shown(&written)));
+    for field in Config::SCHEMA {
+        if field.name != "api_key" {
+            readers.push((field.name, field.shown(&written)));
         }
     }
-    let masked = Config::KEYS
-        .iter()
-        .find(|key| key.name == "api_key")
-        .map(|key| key.shown(&written))
+    let masked = Config::field("api_key")
+        .map(|field| field.shown(&written))
         .expect("the schema names the key a secret is set under");
     let mut patch = Touched::new();
     for (key, text) in &readers {

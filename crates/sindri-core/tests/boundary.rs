@@ -268,7 +268,9 @@ fn unsafe_is_reachable_by_invocation_only_and_says_so() {
     let workspace = ground.workspace();
 
     assert!(
-        !Config::KEYS.iter().any(|key| key.name.contains("yolo")),
+        !Config::SCHEMA
+            .iter()
+            .any(|field| field.name.contains("yolo")),
         "the escape hatch cannot be persisted, so it is not a key"
     );
 

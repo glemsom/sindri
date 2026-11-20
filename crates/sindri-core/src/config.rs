@@ -35,22 +35,29 @@ pub struct Config {
     pub ssh_agent: Option<bool>,
 }
 #[derive(Debug)]
-pub struct Key {
+pub struct Field {
     pub name: &'static str,
-    pub switch: bool,
+    switch: bool,
     shown: fn(&Config) -> String,
 }
 
-/// Rows are compared by the key they name: a function pointer is no value to compare.
-impl PartialEq for Key {
-    fn eq(&self, other: &Key) -> bool {
-        self.name == other.name
+impl Field {
+    const fn typed(name: &'static str, shown: fn(&Config) -> String) -> Field {
+        Field {
+            name,
+            switch: false,
+            shown,
+        }
     }
-}
 
-impl Eq for Key {}
+    const fn switched(name: &'static str, shown: fn(&Config) -> String) -> Field {
+        Field {
+            name,
+            switch: true,
+            shown,
+        }
+    }
 
-impl Key {
     pub fn switch(&self) -> bool {
         self.switch
     }
@@ -61,122 +68,59 @@ impl Key {
 }
 
 impl Config {
-    pub const KEYS: [Key; 16] = [
-        Key {
-            name: "provider",
-            switch: false,
-            shown: |config| {
-                config
-                    .provider
-                    .map(|wire| wire.word().to_owned())
-                    .unwrap_or_default()
-            },
-        },
-        Key {
-            name: "model",
-            switch: false,
-            shown: |config| string_or_empty(&config.model),
-        },
-        Key {
-            name: "route",
-            switch: false,
-            shown: |config| {
-                config
-                    .route
-                    .map(|route| route.word().to_owned())
-                    .unwrap_or_default()
-            },
-        },
-        Key {
-            name: "base_url",
-            switch: false,
-            shown: |config| string_or_empty(&config.base_url),
-        },
-        Key {
-            name: "api_key",
-            switch: false,
-            shown: |config| {
-                config
-                    .api_key
-                    .as_ref()
-                    .map(|_| MASK.to_owned())
-                    .unwrap_or_default()
-            },
-        },
-        Key {
-            name: "thinking",
-            switch: true,
-            shown: |config| on_or_empty(config.thinking),
-        },
-        Key {
-            name: "extra_writable_paths",
-            switch: false,
-            shown: |config| {
-                config
-                    .extra_writable_paths
-                    .as_ref()
-                    .map(|paths| {
-                        paths
-                            .iter()
-                            .map(|path| path.display().to_string())
-                            .collect::<Vec<String>>()
-                            .join(LIST_SEPARATOR)
-                    })
-                    .unwrap_or_default()
-            },
-        },
-        Key {
-            name: "extra_headers",
-            switch: false,
-            shown: |config| {
-                config
-                    .extra_headers
-                    .as_ref()
-                    .map(|headers| headers.join(LIST_SEPARATOR))
-                    .unwrap_or_default()
-            },
-        },
-        Key {
-            name: "context_window",
-            switch: false,
-            shown: |config| number_or_empty(config.context_window),
-        },
-        Key {
-            name: "max_turns",
-            switch: false,
-            shown: |config| number_or_empty(config.max_turns),
-        },
-        Key {
-            name: "timeout",
-            switch: false,
-            shown: |config| number_or_empty(config.timeout),
-        },
-        Key {
-            name: "command_budget_ms",
-            switch: false,
-            shown: |config| number_or_empty(config.command_budget_ms),
-        },
-        Key {
-            name: "output_budget_bytes",
-            switch: false,
-            shown: |config| number_or_empty(config.output_budget_bytes),
-        },
-        Key {
-            name: "status",
-            switch: true,
-            shown: |config| on_or_empty(config.status),
-        },
-        Key {
-            name: "face",
-            switch: true,
-            shown: |config| on_or_empty(config.face),
-        },
-        Key {
-            name: "ssh_agent",
-            switch: true,
-            shown: |config| on_or_empty(config.ssh_agent),
-        },
+    pub const SCHEMA: [Field; 16] = [
+        Field::typed("provider", |config| {
+            word_or_empty(config.provider.map(Wire::word))
+        }),
+        Field::typed("model", |config| string_or_empty(&config.model)),
+        Field::typed("route", |config| {
+            word_or_empty(config.route.map(Route::word))
+        }),
+        Field::typed("base_url", |config| string_or_empty(&config.base_url)),
+        Field::typed("api_key", |config| {
+            if config.api_key.is_some() {
+                MASK.to_owned()
+            } else {
+                String::new()
+            }
+        }),
+        Field::switched("thinking", |config| on_or_empty(config.thinking)),
+        Field::typed("extra_writable_paths", |config| {
+            let paths = config.extra_writable_paths.as_deref().unwrap_or_default();
+            paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<String>>()
+                .join(LIST_SEPARATOR)
+        }),
+        Field::typed("extra_headers", |config| {
+            config
+                .extra_headers
+                .as_deref()
+                .unwrap_or_default()
+                .join(LIST_SEPARATOR)
+        }),
+        Field::typed("context_window", |config| {
+            number_or_empty(config.context_window)
+        }),
+        Field::typed("max_turns", |config| number_or_empty(config.max_turns)),
+        Field::typed("timeout", |config| number_or_empty(config.timeout)),
+        Field::typed("command_budget_ms", |config| {
+            number_or_empty(config.command_budget_ms)
+        }),
+        Field::typed("output_budget_bytes", |config| {
+            number_or_empty(config.output_budget_bytes)
+        }),
+        Field::switched("status", |config| on_or_empty(config.status)),
+        Field::switched("face", |config| on_or_empty(config.face)),
+        Field::switched("ssh_agent", |config| on_or_empty(config.ssh_agent)),
     ];
+
+    /// The field the schema names, and `None` when the table holds no such key.
+    pub fn field(name: &str) -> Option<&'static Field> {
+        Config::SCHEMA.iter().find(|field| field.name == name)
+    }
+
     pub fn tells_status(&self) -> bool {
         self.status.unwrap_or(true)
     }
@@ -213,10 +157,7 @@ impl Config {
             origin: path.display().to_string(),
             reason: error.to_string(),
         })?;
-        if let Some(key) = table
-            .keys()
-            .find(|key| !Config::KEYS.iter().any(|known| known.name == key.as_str()))
-        {
+        if let Some(key) = table.keys().find(|key| Config::field(key).is_none()) {
             return Err(ConfigError::UnknownKey {
                 key: key.clone(),
                 path: path.to_path_buf(),
@@ -563,6 +504,9 @@ fn headers_of(key: &str, text: &str) -> Result<Vec<String>, ConfigError> {
 }
 fn string_or_empty(value: &Option<String>) -> String {
     value.clone().unwrap_or_default()
+}
+fn word_or_empty(word: Option<&'static str>) -> String {
+    word.map(str::to_owned).unwrap_or_default()
 }
 fn on_or_empty(value: Option<bool>) -> String {
     value.map(|on| on.to_string()).unwrap_or_default()

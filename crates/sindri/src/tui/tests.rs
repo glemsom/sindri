@@ -211,7 +211,7 @@ impl Stage {
 }
 
 fn walk_to(view: &mut View, key: &str) {
-    for _ in 0..sindri_core::config::Config::KEYS.len() {
+    for _ in 0..sindri_core::config::Config::SCHEMA.len() {
         let row = view
             .settings()
             .rows()

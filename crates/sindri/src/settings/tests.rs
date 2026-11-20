@@ -34,14 +34,32 @@ fn at(settings: &mut Settings, key: &str) {
 
 #[test]
 fn the_screen_walks_every_key_the_schema_has_in_the_order_the_schema_names_them() {
+    let order = [
+        "provider",
+        "model",
+        "route",
+        "base_url",
+        "api_key",
+        "thinking",
+        "extra_writable_paths",
+        "extra_headers",
+        "context_window",
+        "max_turns",
+        "timeout",
+        "command_budget_ms",
+        "output_budget_bytes",
+        "status",
+        "face",
+        "ssh_agent",
+    ];
+
     let settings = Settings::of(&Config::default());
-    let named: Vec<&str> = Config::KEYS.iter().map(|key| key.name).collect();
     let rows: Vec<&str> = settings.rows().map(|(key, _)| key).collect();
 
     assert_eq!(
-        rows, named,
-        "the list is the schema's own keys, so a key the schema gains is a row here with \
-             nothing to remember"
+        rows, order,
+        "the screen reads the table's rows in the table's order, so a key the schema gains is \
+             a row here with nothing to remember"
     );
 }
 
@@ -53,7 +71,7 @@ fn a_row_starts_holding_the_value_in_force_whichever_layer_spoke_it() {
     assert_eq!(
         shown(&settings, "thinking"),
         "true",
-        "a toggle reads as the word it will be written as"
+        "a switch reads as the word it will be written as"
     );
     assert_eq!(
         shown(&settings, "timeout"),
@@ -128,7 +146,7 @@ fn ctrl_u_on_a_row_already_empty_is_not_a_key_that_repaints() {
 }
 
 #[test]
-fn space_flips_a_toggle_from_unset_to_on_and_back_off_again() {
+fn space_flips_a_switch_from_unset_to_on_and_back_off_again() {
     let mut settings = Settings::of(&Config::default());
     at(&mut settings, "ssh_agent");
 
@@ -136,7 +154,7 @@ fn space_flips_a_toggle_from_unset_to_on_and_back_off_again() {
     assert_eq!(
         shown(&settings, "ssh_agent"),
         "true",
-        "a toggle neither on nor off is what a reader pressing the switch means"
+        "a switch neither on nor off is what a reader pressing it means"
     );
     settings.space();
     assert_eq!(shown(&settings, "ssh_agent"), "false");
@@ -147,7 +165,7 @@ fn space_flips_a_toggle_from_unset_to_on_and_back_off_again() {
 }
 
 #[test]
-fn space_on_a_key_that_is_not_a_toggle_is_a_glyph() {
+fn space_on_a_key_that_is_not_a_switch_is_a_glyph() {
     let mut settings = Settings::of(&Config::default());
     at(&mut settings, "extra_writable_paths");
     settings.key(Key::Char('/'));
@@ -160,39 +178,62 @@ fn space_on_a_key_that_is_not_a_toggle_is_a_glyph() {
         shown(&settings, "extra_writable_paths"),
         format!("/a{}b", ' '),
         "a path may hold a space, and a screen that could not type one could not name a \
-             path: only the schema's own toggles flip"
+             path: only the schema's own switches flip"
     );
 }
 
 #[test]
 fn space_flips_every_row_the_table_calls_a_switch_and_types_into_every_other() {
-    let mut settings = Settings::of(&Config::default());
+    let switches: Vec<&str> = Config::SCHEMA
+        .iter()
+        .filter(|field| field.switch())
+        .map(|field| field.name)
+        .collect();
+    assert_eq!(
+        switches,
+        vec!["thinking", "status", "face", "ssh_agent"],
+        "the space flips a key only where the table names it a switch"
+    );
 
-    for key in Config::KEYS {
-        at(&mut settings, key.name);
+    let set = Config {
+        thinking: Some(true),
+        status: Some(false),
+        face: Some(true),
+        ssh_agent: Some(false),
+        ..Config::default()
+    };
+    let mut settings = Settings::of(&set);
+
+    for (name, before, after) in [
+        ("thinking", "true", "false"),
+        ("status", "false", "true"),
+        ("face", "true", "false"),
+        ("ssh_agent", "false", "true"),
+    ] {
+        at(&mut settings, name);
+        assert_eq!(
+            shown(&settings, name),
+            before,
+            "the row of `{name}` holds the word the config does"
+        );
         settings.space();
-        if key.switch() {
-            assert_eq!(
-                shown(&settings, key.name),
-                "true",
-                "the table calls `{}` a switch, so space turns it on",
-                key.name
-            );
-            settings.space();
-            assert_eq!(
-                shown(&settings, key.name),
-                "false",
-                "and space again turns `{}` back off",
-                key.name
-            );
-        } else {
-            assert_eq!(
-                shown(&settings, key.name),
-                " ",
-                "the table calls `{}` no switch, so space is a glyph in its row",
-                key.name
-            );
-        }
+        assert_eq!(
+            shown(&settings, name),
+            after,
+            "the space flips `{name}`, and every other row it left alone still holds its own"
+        );
+    }
+
+    let mut typed = Settings::of(&Config::default());
+    for field in Config::SCHEMA.iter().filter(|field| !field.switch()) {
+        at(&mut typed, field.name);
+        typed.space();
+        assert_eq!(
+            shown(&typed, field.name),
+            " ",
+            "the table calls `{}` no switch, so space is a glyph in its row",
+            field.name
+        );
     }
 }
 
