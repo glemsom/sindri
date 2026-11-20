@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 keys at 120x40
 00 |                                                                                                                        | dim:120

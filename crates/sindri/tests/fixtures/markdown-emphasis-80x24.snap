@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 markdown-emphasis at 80x24
 00 |  A strong word is bold, an emphasis is italic, and one word can be both at     | plain:19 plain+bold:4 plain:17 plain+italic:6 plain:22 plain+bold+italic:4 plain:8

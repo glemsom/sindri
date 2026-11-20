@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 markdown-table-narrow at 40x24
 00 |  a heading of the  │ a table wider than| plain:2 plain+bold:1 plain:1 plain+bold:7 plain:1 plain+bold:2 plain:1 plain+bold:3 plain:1 dim:3 plain+bold:1 plain:1 plain+bold:5 plain:1 plain+bold:5 plain:1 plain+bold:4

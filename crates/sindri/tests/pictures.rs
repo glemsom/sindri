@@ -3,12 +3,11 @@
 //! wire — no byte leaves this process.
 
 mod caps; // the terminals these frames are drawn on
+mod frame; // one paint-and-read for every test
 
 use std::path::{Path, PathBuf};
 
 use image::{Rgba, RgbaImage};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 
@@ -560,18 +559,6 @@ fn frame(caps: Capabilities, workspace: &Path, text: &str) -> View {
     )
 }
 
-fn painted_at(view: &mut View, size: (u16, u16)) -> Buffer {
-    let (cols, rows) = size;
-    let mut terminal =
-        Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
-    let completed = terminal
-        .draw(|frame| {
-            view.paint(frame.area(), frame.buffer_mut());
-        })
-        .expect("the frame is painted");
-    completed.buffer.clone()
-}
-
 /// The first chunk of the protocol's transmission, which a terminal is told once and never
 /// again for one picture: the glyph a cell holds when the placement sends the picture rather
 /// than pointing at what the terminal already holds.
@@ -779,9 +766,9 @@ fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
         "before ![a purple field](shot.png) after",
     );
 
-    let painted = painted_at(&mut view, SCREEN);
+    let painted = frame::painted(&mut view, SCREEN.0, SCREEN.1);
 
-    let rows = pictured_rows(&painted);
+    let rows = pictured_rows(painted.cells());
     assert_eq!(
         rows.len(),
         10,
@@ -794,7 +781,7 @@ fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
         "the picture is made once for the size it was measured into"
     );
     assert_eq!(
-        transmission_headers(&painted),
+        transmission_headers(painted.cells()),
         1,
         "and the header that sends it is on the screen once, in the first cell of its block"
     );
@@ -805,21 +792,21 @@ fn a_picture_painted_a_second_time_carries_no_transmission_header() {
     let (_root, workspace) = workspace(400, 200);
     let mut view = frame(caps::at(cell()), &workspace, "![a purple field](shot.png)");
 
-    let first = painted_at(&mut view, SCREEN);
-    let again = painted_at(&mut view, SCREEN);
+    let first = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let again = frame::painted(&mut view, SCREEN.0, SCREEN.1);
 
     assert_eq!(
-        transmission_headers(&first),
+        transmission_headers(first.cells()),
         1,
         "the first paint is what tells the terminal about the picture"
     );
     assert_eq!(
-        transmission_headers(&again),
+        transmission_headers(again.cells()),
         0,
         "and the second paint writes the placeholders of a picture the terminal already holds"
     );
     assert_eq!(
-        pictured_rows(&again).len(),
+        pictured_rows(again.cells()).len(),
         10,
         "the picture is where it was, ten rows of placeholders: a repaint moves neither its \
          rows nor its transmission"
@@ -895,7 +882,7 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
         ]),
     );
 
-    painted_at(&mut view, SCREEN);
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
     assert_eq!(
         view.capabilities().pictures().rasterises("shot.png"),
         1,
@@ -908,7 +895,7 @@ fn a_resize_rasterises_only_the_picture_the_band_goes_on_to_show() {
          out to draw"
     );
 
-    painted_at(&mut view, (60, SCREEN.1));
+    frame::painted(&mut view, 60, SCREEN.1);
     assert_eq!(
         view.capabilities().pictures().rasterises("shot.png"),
         2,
@@ -928,9 +915,9 @@ fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
     let (_root, workspace) = workspace(800, 200);
     let mut view = frame(caps::at(cell()), &workspace, "![a purple field](shot.png)");
 
-    let wide = painted_at(&mut view, SCREEN);
+    let wide = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     assert_eq!(
-        transmission_headers(&wide),
+        transmission_headers(wide.cells()),
         1,
         "the picture is sent once at the size the wide band fits it into"
     );
@@ -940,21 +927,21 @@ fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
         "and made once for that size"
     );
 
-    let narrow = painted_at(&mut view, (60, SCREEN.1));
+    let narrow = frame::painted(&mut view, 60, SCREEN.1);
     assert_eq!(
         view.capabilities().pictures().rasterises("shot.png"),
         2,
         "the narrower band fits the picture into fewer columns, so it is another picture"
     );
     assert_eq!(
-        transmission_headers(&narrow),
+        transmission_headers(narrow.cells()),
         1,
         "and the terminal is told about that size once"
     );
 
-    let again = painted_at(&mut view, (60, SCREEN.1));
+    let again = frame::painted(&mut view, 60, SCREEN.1);
     assert_eq!(
-        transmission_headers(&again),
+        transmission_headers(again.cells()),
         0,
         "the size the band shows is still held: a repaint of it transmits nothing"
     );
@@ -964,7 +951,7 @@ fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
         "and makes no second raster of it"
     );
 
-    let back = painted_at(&mut view, SCREEN);
+    let back = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     assert_eq!(
         view.capabilities().pictures().rasterises("shot.png"),
         3,
@@ -972,7 +959,7 @@ fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
          again"
     );
     assert_eq!(
-        transmission_headers(&back),
+        transmission_headers(back.cells()),
         1,
         "and sends it again, which is the price of a cache that is bounded"
     );
@@ -982,13 +969,13 @@ fn a_resize_keeps_the_picture_the_band_shows_and_drops_the_size_it_has_left() {
 fn a_picture_block_copied_out_of_the_band_is_its_words_and_never_its_bytes() {
     let (_root, workspace) = workspace(400, 200);
     let mut view = frame(caps::at(cell()), &workspace, "![a purple field](shot.png)");
-    let painted = painted_at(&mut view, SCREEN);
-    let drawn = *pictured_rows(&painted)
+    let painted = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let drawn = *pictured_rows(painted.cells())
         .first()
         .expect("the picture is on the screen");
 
     view.drag(Cell::new(drawn, 0), Cell::new(drawn, SCREEN.0 - 1));
-    painted_at(&mut view, SCREEN);
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let taken = match view.key(Key::Copy) {
         Outcome::Copy(words) => words,
         other => panic!("Ctrl-Y is a copy, and this frame answered it {other:?}"),
@@ -1018,27 +1005,20 @@ fn a_terminal_that_speaks_no_kitty_is_given_the_words_and_an_uncorrupted_frame()
         !view.capabilities().pictures().draws(),
         "this frame places no picture"
     );
-    let painted = painted_at(&mut view, SCREEN);
-    let words: String = (painted.area.y..painted.area.bottom())
-        .map(|y| {
-            (painted.area.x..painted.area.right())
-                .filter_map(|x| painted.cell((x, y)).map(|cell| cell.symbol().to_owned()))
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let words: String = frame.rows().join("\n");
 
     assert!(
         words.contains("a purple field"),
         "the picture's words are on the screen, and are the only thing it is said as: {words:?}"
     );
     assert_eq!(
-        transmission_headers(&painted),
+        transmission_headers(frame.cells()),
         0,
         "and no byte of a picture protocol is in a frame that places none"
     );
     assert!(
-        pictured_rows(&painted).is_empty(),
+        pictured_rows(frame.cells()).is_empty(),
         "nor is a cell claimed for a picture that will not be drawn"
     );
 }
@@ -1139,15 +1119,15 @@ fn a_diagram_and_an_image_in_one_answer_are_placed_each_over_its_own_block() {
         "![a purple field](shot.png)\n\n```mermaid\nflowchart TD\n  A-->B\n```",
     );
 
-    let painted = painted_at(&mut view, SCREEN);
+    let painted = frame::painted(&mut view, SCREEN.0, SCREEN.1);
 
     assert!(
-        pictured_rows(&painted).len() >= 10,
+        pictured_rows(painted.cells()).len() >= 10,
         "both pictures are on the screen: {:?}",
-        pictured_rows(&painted)
+        pictured_rows(painted.cells())
     );
     assert_eq!(
-        transmission_headers(&painted),
+        transmission_headers(painted.cells()),
         2,
         "and each was transmitted once, from its own first cell"
     );
@@ -1157,19 +1137,19 @@ fn a_diagram_and_an_image_in_one_answer_are_placed_each_over_its_own_block() {
 fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
     for cols in [100, 120] {
         let mut view = railed(true, true);
-        let painted = painted_at(&mut view, (cols, 40));
+        let painted = frame::painted(&mut view, cols, 40);
         let rail = rail_band(cols, 40);
         let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
 
         assert_eq!(
-            pictured_rows(&painted),
+            pictured_rows(painted.cells()),
             (rail.y..rail.y + face.rows()).collect::<Vec<u16>>(),
             "the face is drawn in the {cols}-column frame's top rows, {} of them, from the rail's first \
              row",
             face.rows()
         );
         for y in rail.y..rail.y + face.rows() {
-            let columns = pictured_cols(&painted, y);
+            let columns = pictured_cols(painted.cells(), y);
             assert_eq!(
                 (columns.first().copied(), columns.len()),
                 (
@@ -1180,34 +1160,34 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
                 face.cols()
             );
             assert!(
-                !rail_row(&painted, rail, y).contains('─'),
+                !rail_row(painted.cells(), rail, y).contains('─'),
                 "row {y} of the face has a hairline drawn through it: {:?}",
-                rail_row(&painted, rail, y)
+                rail_row(painted.cells(), rail, y)
             );
         }
 
         for y in rail.y + face.rows()..rail.bottom() {
             assert!(
-                pictured_cols(&painted, y).is_empty(),
+                pictured_cols(painted.cells(), y).is_empty(),
                 "row {y} of the rail stands under the face and holds a cell of it: {:?}",
-                pictured_cols(&painted, y)
+                pictured_cols(painted.cells(), y)
             );
         }
 
         let rule = rail.y + face.rows();
         assert_eq!(
-            rail_row(&painted, rail, rule).trim_end(),
+            rail_row(painted.cells(), rail, rule).trim_end(),
             "─".repeat(usize::from(rail.width)),
             "the face is closed by the one rule the rail draws in its body"
         );
         let first = rule + 1;
         assert_eq!(
-            rail_row(&painted, rail, first).trim_end(),
+            rail_row(painted.cells(), rail, first).trim_end(),
             "wire      anthropic",
             "and the first block stands on the row under that rule, whole"
         );
         assert_eq!(
-            rail_row(&painted, rail, first + 1).trim_end(),
+            rail_row(painted.cells(), rail, first + 1).trim_end(),
             format!(
                 "model     {}",
                 match cols {
@@ -1226,9 +1206,9 @@ fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
     for cols in [100, 120] {
         let rail = rail_band(cols, 40);
         let mut bare = railed(false, true);
-        let without = painted_at(&mut bare, (cols, 40));
+        let without = frame::painted(&mut bare, cols, 40);
         let mut faced = railed(true, true);
-        let with = painted_at(&mut faced, (cols, 40));
+        let with = frame::painted(&mut faced, cols, 40);
 
         let stated = |buffer: &Buffer, from: u16| -> Vec<String> {
             (from..rail.bottom())
@@ -1237,20 +1217,20 @@ fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
                 .collect()
         };
         // the rows the face takes, and the one under them that holds the rule closing it
-        let under = u16::try_from(pictured_rows(&with).len()).expect("the band's rows") + 1;
+        let under = u16::try_from(pictured_rows(with.cells()).len()).expect("the band's rows") + 1;
 
         assert_eq!(
-            stated(&with, rail.y + under),
-            stated(&without, rail.y),
+            stated(with.cells(), rail.y + under),
+            stated(without.cells(), rail.y),
             "the {cols}-column frame draws the same twelve facts under the face that it drew \
              from the rail's first row: none is given up to the face"
         );
         assert!(
-            !stated(&with, rail.y + under)
+            !stated(with.cells(), rail.y + under)
                 .iter()
                 .any(|row| row.contains("more")),
             "and none is counted as gone, so the rail grows no row saying one went: {:?}",
-            stated(&with, rail.y + under)
+            stated(with.cells(), rail.y + under)
         );
     }
 }
@@ -1259,15 +1239,15 @@ fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
 fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
     for cols in [40, 80, 99] {
         let mut faced = railed(true, true);
-        let with = painted_at(&mut faced, (cols, 24));
+        let with = frame::painted(&mut faced, cols, 24);
         let mut bare = railed(false, true);
-        let without = painted_at(&mut bare, (cols, 24));
+        let without = frame::painted(&mut bare, cols, 24);
 
         assert!(
-            pictured_rows(&with).is_empty(),
+            pictured_rows(with.cells()).is_empty(),
             "a {cols}-column frame draws one row of facts and no face: it has no band to reserve"
         );
-        same_cells_outside_ground(&with, &without, strip_band(cols, 24), 8);
+        same_cells_outside_ground(with.cells(), without.cells(), strip_band(cols, 24), 8);
     }
 }
 
@@ -1276,27 +1256,27 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
     for cols in [100, 120] {
         let rail = rail_band(cols, 40);
         let mut turned_off = railed(true, false);
-        let off = painted_at(&mut turned_off, (cols, 40));
+        let off = frame::painted(&mut turned_off, cols, 40);
         let mut placeless = railed(false, true);
-        let placeless = painted_at(&mut placeless, (cols, 40));
+        let placeless = frame::painted(&mut placeless, cols, 40);
 
         assert!(
-            pictured_rows(&off).is_empty(),
+            pictured_rows(off.cells()).is_empty(),
             "a frame the config turned the face off for is given no cell of it"
         );
         assert_eq!(
-            rail_row(&off, rail, rail.y).trim_end(),
+            rail_row(off.cells(), rail, rail.y).trim_end(),
             "wire      anthropic",
             "the facts stand from the rail's first row, and the row under them is the second \
              fact: no band is reserved for a face that is not drawn, and no rule closes one"
         );
-        same_cells_outside_ground(&off, &placeless, rail, 8);
+        same_cells_outside_ground(off.cells(), placeless.cells(), rail, 8);
 
         let mut back_on = railed(true, true);
-        let back_on = painted_at(&mut back_on, (cols, 40));
+        let back_on = frame::painted(&mut back_on, cols, 40);
         let face = face::over_rail(rail.width, &carried(true)).expect("a face the rail holds");
         assert_eq!(
-            pictured_rows(&back_on).len(),
+            pictured_rows(back_on.cells()).len(),
             usize::from(face.rows()),
             "a frame the setting is turned back on for draws the face again, over the rows it \
              reserved before"
@@ -1307,14 +1287,14 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
 #[test]
 fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let mut pictured = splash(true);
-    let with = painted_at(&mut pictured, (120, 40));
+    let with = frame::painted(&mut pictured, 120, 40);
     let mut placeless = splash(false);
-    let without = painted_at(&mut placeless, (120, 40));
+    let without = frame::painted(&mut placeless, 120, 40);
     let rail = rail_band(120, 40);
     let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
 
     let pictured_in_rail = |y: u16| -> Vec<u16> {
-        pictured_cols(&with, y)
+        pictured_cols(with.cells(), y)
             .into_iter()
             .filter(|x| (rail.x..rail.right()).contains(x))
             .collect()
@@ -1344,13 +1324,13 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
 
     let hairline = rail.y + face.rows();
     assert_eq!(
-        rail_row(&with, rail, hairline).trim_end(),
+        rail_row(with.cells(), rail, hairline).trim_end(),
         "─".repeat(usize::from(rail.width)),
         "the face the rail carries is closed by the one rule the rail draws in its body"
     );
     let first = hairline + 1;
     assert_eq!(
-        rail_row(&with, rail, first).trim_end(),
+        rail_row(with.cells(), rail, first).trim_end(),
         "wire      anthropic",
         "and the first fact stands on the row under that rule, whole"
     );
@@ -1362,15 +1342,17 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
             .collect()
     };
     assert_eq!(
-        stated(&with, first),
-        stated(&without, rail.y),
+        stated(with.cells(), first),
+        stated(without.cells(), rail.y),
         "the splash screen's rail draws the facts a terminal that places no picture draws from \
          its first row, so the face it carries takes no fact of one"
     );
     assert!(
-        !stated(&with, first).iter().any(|row| row.contains("more")),
+        !stated(with.cells(), first)
+            .iter()
+            .any(|row| row.contains("more")),
         "and none is counted as gone, so the rail grows no row saying one went: {:?}",
-        stated(&with, first)
+        stated(with.cells(), first)
     );
 }
 
@@ -1378,42 +1360,42 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
 fn a_splash_screen_the_face_is_turned_off_for_is_the_one_a_placeless_terminal_draws() {
     let rail = rail_band(120, 40);
     let mut turned_off = View::of(caps::faced(false), boot_facts(), Transcript::none());
-    let off = painted_at(&mut turned_off, (120, 40));
+    let off = frame::painted(&mut turned_off, 120, 40);
     let mut placeless = splash(false);
-    let without = painted_at(&mut placeless, (120, 40));
+    let without = frame::painted(&mut placeless, 120, 40);
 
     assert!(
-        pictured_rows(&off).is_empty(),
+        pictured_rows(off.cells()).is_empty(),
         "a splash frame the config turned the face off for is given no cell of the one the rail \
          carries"
     );
     assert_eq!(
-        rail_row(&off, rail, rail.y).trim_end(),
+        rail_row(off.cells(), rail, rail.y).trim_end(),
         "wire      anthropic",
         "the facts stand from the rail's first row: no band is reserved for a face that is not \
          drawn, and no rule closes one"
     );
-    same_cells_outside_ground(&off, &without, rail, 5);
+    same_cells_outside_ground(off.cells(), without.cells(), rail, 5);
 }
 
 #[test]
 fn an_eighty_column_splash_screen_holds_no_face_and_neither_does_a_runs_frame() {
     let mut launching = splash(true);
-    let splash = painted_at(&mut launching, (80, 24));
+    let splash = frame::painted(&mut launching, 80, 24);
     let mut live = railed(true, true);
-    let run = painted_at(&mut live, (80, 24));
+    let run = frame::painted(&mut live, 80, 24);
 
     assert!(
-        pictured_rows(&splash).is_empty(),
+        pictured_rows(splash.cells()).is_empty(),
         "80 columns leave no rail beside the splash screen, and the frame carries no other face: \
          {:?}",
-        pictured_rows(&splash)
+        pictured_rows(splash.cells())
     );
     assert!(
-        pictured_rows(&run).is_empty(),
+        pictured_rows(run.cells()).is_empty(),
         "and a conversation's 80-column frame is the strip it was drawn as, with no face on it \
          either: {:?}",
-        pictured_rows(&run)
+        pictured_rows(run.cells())
     );
 }
 
@@ -1421,15 +1403,15 @@ fn an_eighty_column_splash_screen_holds_no_face_and_neither_does_a_runs_frame() 
 fn a_terminal_that_places_no_picture_draws_the_facts_from_the_rails_first_row() {
     for cols in [100, 120] {
         let mut view = railed(false, true);
-        let painted = painted_at(&mut view, (cols, 40));
+        let painted = frame::painted(&mut view, cols, 40);
         let rail = rail_band(cols, 40);
 
         assert!(
-            pictured_rows(&painted).is_empty(),
+            pictured_rows(painted.cells()).is_empty(),
             "a terminal that places no picture is given no cell of the face"
         );
         assert_eq!(
-            rail_row(&painted, rail, rail.y).trim_end(),
+            rail_row(painted.cells(), rail, rail.y).trim_end(),
             "wire      anthropic",
             "the facts stand from the rail's first row, as they did before the face was drawn"
         );
@@ -1479,7 +1461,7 @@ fn the_face_is_capped_at_twelve_rows_and_keeps_its_shape() {
 fn the_placement_covers_the_band_the_ledger_reserved_for_it_and_no_cell_outside_it() {
     for cols in [100, 120] {
         let mut view = railed(true, true);
-        let painted = painted_at(&mut view, (cols, 40));
+        let painted = frame::painted(&mut view, cols, 40);
         let rail = rail_band(cols, 40);
         let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
         let reserved = ledger::split(&railed_facts(), shared_band(cols, 40))
@@ -1492,7 +1474,7 @@ fn the_placement_covers_the_band_the_ledger_reserved_for_it_and_no_cell_outside_
 
         for y in rail.y..rail.bottom() {
             for x in rail.x..rail.right() {
-                let covered = pictured_cols(&painted, y).contains(&x);
+                let covered = pictured_cols(painted.cells(), y).contains(&x);
                 assert_eq!(
                     covered,
                     reserved.contains(Position::new(x, y)),
@@ -1509,10 +1491,9 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
-    let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 24));
-    let painted = view.paint(buffer.area, &mut buffer);
-    let band = painted.layout().expect("a laid out frame").composer;
-    let ground = composer_plane(&painted);
+    let frame = frame::painted(&mut view, 80, 24);
+    let band = frame.told().layout().expect("a laid out frame").composer;
+    let ground = composer_plane(frame.told());
     assert_eq!(ground.area(), band);
     assert_eq!(
         ground.pixels().dimensions(),
@@ -1520,12 +1501,12 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     );
     assert!(
         (band.y..band.bottom())
-            .any(|y| { (band.x..band.right()).any(|x| buffer[(x, y)].symbol() == "f") })
+            .any(|y| { (band.x..band.right()).any(|x| frame.cells()[(x, y)].symbol() == "f") })
     );
     assert!((band.y..band.bottom()).all(|y| {
-        (band.x..band.right()).all(|x| !buffer[(x, y)].symbol().contains(PLACEHOLDER))
+        (band.x..band.right()).all(|x| !frame.cells()[(x, y)].symbol().contains(PLACEHOLDER))
     }));
-    let palette = view.capabilities().palette();
+    let palette = *frame.palette();
     let (head, foot) = (
         channels(palette.step(0, band.height)).expect("the band's head in pixels"),
         channels(palette.step(band.height - 1, band.height)).expect("its foot in pixels"),
@@ -1561,11 +1542,9 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
 #[test]
 fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
     let mut launching = splash(true);
-    let area = Rect::new(0, 0, 120, 40);
-    let mut cells = Buffer::empty(area);
-    let painted = launching.paint(area, &mut cells);
-    let band = painted.layout().expect("a laid out frame").composer;
-    let ground = composer_plane(&painted);
+    let frame = frame::painted(&mut launching, 120, 40);
+    let band = frame.told().layout().expect("a laid out frame").composer;
+    let ground = composer_plane(frame.told());
     assert_eq!(
         ground.area(),
         band,
@@ -1576,11 +1555,11 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
         (u32::from(band.width) * 10, u32::from(band.height) * 20),
         "at the pixels of the cell it is drawn on"
     );
-    let palette = launching.capabilities().palette();
+    let palette = *frame.palette();
     for row in 0..band.height {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
-            cells[(x, y)].bg,
+            frame.cells()[(x, y)].bg,
             palette.ground(None).bg.unwrap(),
             "row {row} of the band is claimed as the ground the pixels are, and not ramped \
              cell by cell over it"
@@ -1592,17 +1571,15 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
 fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::greys(), &workspace, "hello");
-    let area = Rect::new(0, 0, 80, 24);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
-    let palette = view.capabilities().palette();
+    let frame = frame::painted(&mut view, 80, 24);
+    let palette = *frame.palette();
     assert_eq!(
         palette,
         Palette::ANSI,
         "a terminal that names no twenty-four-bit colour draws the design in its greys"
     );
-    let band = painted.layout().expect("a laid out frame").composer;
-    let ground = composer_plane(&painted);
+    let band = frame.told().layout().expect("a laid out frame").composer;
+    let ground = composer_plane(frame.told());
     let (width, height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the band's well in pixels");
     let head = channels(palette.step(0, band.height)).expect("the band's head in pixels");
@@ -1650,11 +1627,9 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
 fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
-    let area = Rect::new(0, 0, 80, 24);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
-    let band = painted.layout().expect("a laid out frame").composer;
-    let ground = composer_plane(&painted);
+    let frame = frame::painted(&mut view, 80, 24);
+    let band = frame.told().layout().expect("a laid out frame").composer;
+    let ground = composer_plane(frame.told());
     let (width, height) = ground.pixels().dimensions();
     assert_eq!(
         (width, height),
@@ -1698,12 +1673,10 @@ fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
 fn the_bands_ground_rises_out_of_the_well_over_its_first_cell() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
-    let area = Rect::new(0, 0, 80, 24);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
-    let palette = view.capabilities().palette();
-    let band = painted.layout().expect("a laid out frame").composer;
-    let ground = composer_plane(&painted);
+    let frame = frame::painted(&mut view, 80, 24);
+    let palette = *frame.palette();
+    let band = frame.told().layout().expect("a laid out frame").composer;
+    let ground = composer_plane(frame.told());
     let (width, height) = ground.pixels().dimensions();
     let column = width - 1;
     assert_eq!(
@@ -1729,12 +1702,10 @@ fn the_bands_ground_rises_out_of_the_well_over_its_first_cell() {
 fn the_rise_out_of_the_well_eases_into_the_bands_head() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
-    let area = Rect::new(0, 0, 80, 24);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
-    let palette = view.capabilities().palette();
-    let band = painted.layout().expect("a laid out frame").composer;
-    let ground = composer_plane(&painted);
+    let frame = frame::painted(&mut view, 80, 24);
+    let palette = *frame.palette();
+    let band = frame.told().layout().expect("a laid out frame").composer;
+    let ground = composer_plane(frame.told());
     let (width, _height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the well in pixels");
     let head = channels(palette.step(0, band.height)).expect("the band's head in pixels");
@@ -1789,15 +1760,14 @@ fn the_carets_glow_carries_across_the_rise_out_of_the_well() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
-    let area = Rect::new(0, 0, 80, 24);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
-    let band = painted.layout().expect("a laid out frame").composer;
-    let caret = painted
+    let frame = frame::painted(&mut view, 80, 24);
+    let band = frame.told().layout().expect("a laid out frame").composer;
+    let caret = frame
+        .told()
         .caret()
         .expect("a draft that takes the keys places the terminal's cursor");
     let caret = (caret.x, caret.y);
-    let ground = composer_plane(&painted);
+    let ground = composer_plane(frame.told());
     let (width, _height) = ground.pixels().dimensions();
     let at = u32::from(caret.0 - band.x) * cell().width() + cell().width() / 2;
     for row in 0..cell().height() {
@@ -1818,15 +1788,14 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
-    let area = Rect::new(0, 0, 80, 24);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
-    let band = painted.layout().expect("a laid out frame").composer;
-    let caret = painted
+    let frame = frame::painted(&mut view, 80, 24);
+    let band = frame.told().layout().expect("a laid out frame").composer;
+    let caret = frame
+        .told()
         .caret()
         .expect("a draft that takes the keys places the terminal's cursor");
     let caret = (caret.x, caret.y);
-    let ground = composer_plane(&painted);
+    let ground = composer_plane(frame.told());
     let (width, height) = ground.pixels().dimensions();
     let row = height / 10;
     let at = u32::from(caret.0 - band.x) * cell().width() + cell().width() / 2;
@@ -1857,12 +1826,10 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
 fn the_bands_top_rule_reads_back_as_the_accent_edge_over_its_rise() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
-    let area = Rect::new(0, 0, 80, 24);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
-    let palette = view.capabilities().palette();
-    let band = painted.layout().expect("a laid out frame").composer;
-    let ground = composer_plane(&painted);
+    let frame = frame::painted(&mut view, 80, 24);
+    let palette = *frame.palette();
+    let band = frame.told().layout().expect("a laid out frame").composer;
+    let ground = composer_plane(frame.told());
     assert_eq!(
         ground.area(),
         band,
@@ -1871,13 +1838,15 @@ fn the_bands_top_rule_reads_back_as_the_accent_edge_over_its_rise() {
     let edge = palette.accent_edge();
     let mut ruled = 0;
     for x in band.x..band.right() {
-        let cell = &cells[(x, band.y)];
-        if !matches!(cell.symbol(), "\u{2500}" | "\u{250c}" | "\u{2510}") {
+        if !matches!(
+            frame.cell(x, band.y).symbol(),
+            "\u{2500}" | "\u{250c}" | "\u{2510}"
+        ) {
             continue;
         }
         assert_eq!(
-            palette.look_of(cell),
-            Some(edge),
+            frame.look(x, band.y),
+            edge,
             "column {x} of the band's top row reads back as the accent edge the rule is drawn in, \
              and not as an ink the rise under it lent it"
         );
@@ -1893,20 +1862,20 @@ fn the_bands_top_rule_reads_back_as_the_accent_edge_over_its_rise() {
 #[test]
 fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     let mut view = railed(true, false);
-    let area = Rect::new(0, 0, 120, 40);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
-    let rail = painted
+    let frame = frame::painted(&mut view, 120, 40);
+    let rail = frame
+        .told()
         .layout()
         .expect("a laid out frame")
         .rail
         .expect("a rail")
         .1
         .area;
-    let palette = view.capabilities().palette();
+    let palette = *frame.palette();
 
     assert_eq!(
-        painted
+        frame
+            .told()
             .planes()
             .iter()
             .map(Plane::id)
@@ -1914,7 +1883,7 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
         vec![PlaneId::Rail, PlaneId::Composer],
         "the frame hands back the rail's plane beside the composer's, each under its own identity"
     );
-    let band = plane_of(&painted, PlaneId::Rail);
+    let band = plane_of(frame.told(), PlaneId::Rail);
     assert_eq!(
         band.area(),
         Rect {
@@ -1954,7 +1923,7 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     );
     for y in rail.y..rail.bottom() {
         assert!(
-            !rail_row(&cells, rail, y).contains(PLACEHOLDER),
+            !rail_row(frame.cells(), rail, y).contains(PLACEHOLDER),
             "row {y} of the rail's band is drawn by the plane the cells stand on, and no cell of \
              it is replaced by the placeholder glyph"
         );
@@ -1970,16 +1939,15 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
             .railed(railed_facts()),
         Transcript::none(),
     );
-    let area = Rect::new(0, 0, 120, 40);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
+    let frame = frame::painted(&mut view, 120, 40);
     assert_eq!(
         view.capabilities().palette(),
         Palette::SLOTS,
         "a terminal told NO_COLOR draws the reader's own slots"
     );
     assert!(
-        painted
+        frame
+            .told()
             .planes()
             .iter()
             .all(|plane| plane.id() != PlaneId::Rail),
@@ -1992,28 +1960,27 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
 fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_composer() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::uncoloured(), &workspace, "hello");
-    let area = Rect::new(0, 0, 80, 24);
-    let mut cells = Buffer::empty(area);
-    let painted = view.paint(area, &mut cells);
-    let palette = view.capabilities().palette();
+    let frame = frame::painted(&mut view, 80, 24);
+    let palette = *frame.palette();
     assert_eq!(
         palette,
         Palette::SLOTS,
         "a terminal told NO_COLOR draws the reader's own slots"
     );
     assert!(
-        painted
+        frame
+            .told()
             .planes()
             .iter()
             .all(|plane| plane.id() != PlaneId::Composer),
         "a palette that draws no colour is handed no plane over the composer: the band drawn in \
          its place is the flat one the frame already had"
     );
-    let band = painted.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     for row in 0..band.height {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
-            cells[(x, y)].bg,
+            frame.cells()[(x, y)].bg,
             palette.raised(row, band.height).bg.unwrap(),
             "row {row} of the band stands on the flat ground the reader's own slots are, and on \
              no ground a plane was claimed over"
@@ -2026,27 +1993,27 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
     let (_root, workspace) = workspace(10, 20);
     let mut plain = frame(Capabilities::default(), &workspace, "hello");
     let mut pictured = frame(caps::at(cell()), &workspace, "hello");
-    let area = Rect::new(0, 0, 80, 24);
-    let mut plain_cells = Buffer::empty(area);
-    let mut picture_cells = Buffer::empty(area);
-    let plain_frame = plain.paint(area, &mut plain_cells);
-    let picture_frame = pictured.paint(area, &mut picture_cells);
+    let plain_frame = frame::painted(&mut plain, 80, 24);
+    let picture_frame = frame::painted(&mut pictured, 80, 24);
     assert!(
-        plain_frame.planes().is_empty(),
+        plain_frame.told().planes().is_empty(),
         "a terminal that places no picture is handed no plane at all: {:?}",
-        plain_frame.planes()
+        plain_frame.told().planes()
     );
-    let band = plain_frame.layout().unwrap().composer;
-    assert_eq!(band, picture_frame.layout().unwrap().composer);
-    let palette = plain.capabilities().palette();
+    let band = plain_frame.told().layout().unwrap().composer;
+    assert_eq!(band, picture_frame.told().layout().unwrap().composer);
+    let palette = plain_frame.palette();
     for row in 0..band.height {
         let x = band.x + band.width / 2;
         let y = band.y + row;
         assert_eq!(
-            plain_cells[(x, y)].bg,
+            plain_frame.cells()[(x, y)].bg,
             palette.raised(row, band.height).bg.unwrap()
         );
-        assert_eq!(picture_cells[(x, y)].bg, palette.ground(None).bg.unwrap());
+        assert_eq!(
+            picture_frame.cells()[(x, y)].bg,
+            palette.ground(None).bg.unwrap()
+        );
     }
 }
 

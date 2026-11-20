@@ -1,12 +1,12 @@
-//! The mark's contract with the clipboard, proved where a reader's eyes are: a drag on a headless buffer, the
-//! frame painted from it, the cells the highlight covers read back out of that buffer, and those bytes held
+//! The mark's contract with the clipboard, proved where a reader's eyes are: a drag on a headless screen, the
+//! frame painted from it, the cells the highlight covers read back out of that frame, and those bytes held
 //! to what `Ctrl-Y` hands out. A snapshot would compare the frame with a copy of itself.
 
 mod caps; // the terminals these frames are drawn on
+mod frame; // one paint-and-read for every test
 
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
-use ratatui::buffer::Buffer;
+use frame::Frame;
+
 use ratatui::layout::Rect;
 
 use sindri::capability::Capabilities;
@@ -14,8 +14,7 @@ use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::ink::Ink;
 use sindri::mark::Cell;
-use sindri::palette::Palette;
-use sindri::view::{Layout, Painted, Transcript, View};
+use sindri::view::{Layout, Transcript, View};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
@@ -47,32 +46,21 @@ fn answer(turn: u32, text: &str) -> Entry {
     }
 }
 
-fn painted(view: &mut View) -> (Buffer, Layout) {
-    let (cols, rows) = SCREEN;
-    let mut terminal =
-        Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
-    let mut told = Painted::none();
-    let completed = terminal
-        .draw(|frame| {
-            told = view.paint(frame.area(), frame.buffer_mut());
-        })
-        .expect("the frame is painted");
-    let laid = told
+/// The frame the pass laid out, which a pass that drew a frame always hands back.
+fn laid_of(frame: &Frame) -> Layout {
+    frame
+        .told()
         .layout()
-        .expect("a pass that drew a frame hands back the frame it laid out");
-    (completed.buffer.clone(), laid)
+        .expect("a pass that drew a frame hands back the frame it laid out")
 }
 
 /// The cells the highlight covers, read off the rows the transcript was given.
-fn highlighted(buffer: &Buffer, palette: &Palette, area: Rect) -> String {
+fn highlighted(frame: &Frame, area: Rect) -> String {
     let mut rows: Vec<String> = Vec::new();
     for y in area.y..area.bottom() {
         let mut line = String::new();
-        for x in area.x..area.right() {
-            let cell = buffer
-                .cell((x, y))
-                .unwrap_or_else(|| panic!("row {y}, column {x} is outside the frame it is in"));
-            if Ink::of(cell, palette) != Some(Ink::Mark) {
+        for (x, glyph) in (area.x..area.right()).zip(frame.row(y).chars()) {
+            if frame.ink(x, y) != Some(Ink::Mark) {
                 // The mark covers one run of cells a row, so the first cell of it that is not marked
                 // ends the run this row carries.
                 if !line.is_empty() {
@@ -80,7 +68,7 @@ fn highlighted(buffer: &Buffer, palette: &Palette, area: Rect) -> String {
                 }
                 continue;
             }
-            line.push_str(cell.symbol());
+            line.push(glyph);
         }
         if !line.is_empty() {
             rows.push(line);
@@ -89,22 +77,9 @@ fn highlighted(buffer: &Buffer, palette: &Palette, area: Rect) -> String {
     rows.join("\n")
 }
 
-/// The band row whose cells hold `said`, counted from the band's first row.
-fn row_of(buffer: &Buffer, area: Rect, said: &str) -> u16 {
-    for y in area.y..area.bottom() {
-        let line: String = (area.x..area.right())
-            .map(|x| buffer[(x, y)].symbol())
-            .collect();
-        if line.contains(said) {
-            return y.saturating_sub(area.y);
-        }
-    }
-    panic!("the frame draws {said:?} on no row of the transcript it was given");
-}
-
 /// What `Ctrl-Y` hands the terminal, read after the frame the key changed has been painted.
 fn copied(view: &mut View) -> String {
-    painted(view);
+    frame::painted(view, SCREEN.0, SCREEN.1);
     match view.key(Key::Copy) {
         Outcome::Copy(words) => words,
         other => panic!("Ctrl-Y is a copy, and this frame answered it {other:?}"),
@@ -120,13 +95,15 @@ fn what_the_highlight_covers_is_byte_for_byte_what_the_copy_takes() {
     );
     view.drag(Cell::new(1, 2), Cell::new(6, 80));
 
-    let (frame, laid) = painted(&mut view);
-    let marked = highlighted(&frame, &view.capabilities().palette(), laid.transcript);
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&frame);
+    let marked = highlighted(&frame, laid.transcript);
     let taken = copied(&mut view);
 
     assert!(
         !taken.is_empty(),
-        "the drag covered words, or there is nothing to hold the copy to: {frame:?}"
+        "the drag covered words, or there is nothing to hold the copy to: {:?}",
+        frame.cells()
     );
     assert_eq!(
         marked, taken,
@@ -145,15 +122,21 @@ fn a_redraw_keeps_the_highlight_and_ctrl_y_copies_it_again() {
     );
     view.drag(Cell::new(1, 2), Cell::new(4, 60));
 
-    let (before, laid) = painted(&mut view);
+    let before = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&before);
     let taken = copied(&mut view);
-    let (after, repainted) = painted(&mut view);
+    let after = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let repainted = laid_of(&after);
     let again = copied(&mut view);
 
-    assert!(!taken.is_empty(), "there was a mark to copy: {before:?}");
+    assert!(
+        !taken.is_empty(),
+        "there was a mark to copy: {:?}",
+        before.cells()
+    );
     assert_eq!(
-        highlighted(&after, &view.capabilities().palette(), repainted.transcript),
-        highlighted(&before, &view.capabilities().palette(), laid.transcript),
+        highlighted(&after, repainted.transcript),
+        highlighted(&before, laid.transcript),
         "a redraw keeps the highlight, because the mark is corners of the band and not a \
          picture of a frame that has been thrown away"
     );
@@ -173,8 +156,9 @@ fn a_copy_of_a_row_the_band_cut_hands_back_the_line_as_the_model_wrote_it() {
         Facts::default().asked(),
         Transcript::of([answer(1, &format!("```rust\n{line}\n```"))]),
     );
-    let (frame, laid) = painted(&mut view);
-    let row = row_of(&frame, laid.transcript, "a_fence_line");
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&frame);
+    let row = frame.row_holding(laid.transcript, "a_fence_line");
     view.drag(Cell::new(row, 2), Cell::new(row, 40));
     let taken = copied(&mut view);
 
@@ -198,8 +182,9 @@ fn a_copy_of_a_marked_fence_hands_back_the_fence_whole() {
         Facts::default().asked(),
         Transcript::of([answer(1, fence)]),
     );
-    let (frame, laid) = painted(&mut view);
-    let row = row_of(&frame, laid.transcript, "two = 2");
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&frame);
+    let row = frame.row_holding(laid.transcript, "two = 2");
     view.drag(Cell::new(row, 2), Cell::new(row, 20));
     let taken = copied(&mut view);
 
@@ -220,8 +205,9 @@ fn a_copy_of_a_fence_the_band_cut_hands_back_every_whole_line_of_it() {
         Facts::default().asked(),
         Transcript::of([answer(1, &fence)]),
     );
-    let (frame, laid) = painted(&mut view);
-    let row = row_of(&frame, laid.transcript, "short");
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&frame);
+    let row = frame.row_holding(laid.transcript, "short");
     view.drag(Cell::new(row, 2), Cell::new(row, 40));
     let taken = copied(&mut view);
 
@@ -241,8 +227,9 @@ fn a_blank_line_inside_a_marked_fence_is_a_line_of_the_copy() {
         Facts::default().asked(),
         Transcript::of([answer(1, fence)]),
     );
-    let (frame, laid) = painted(&mut view);
-    let row = row_of(&frame, laid.transcript, "b = 2");
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&frame);
+    let row = frame.row_holding(laid.transcript, "b = 2");
     view.drag(Cell::new(row, 2), Cell::new(row, 20));
     let taken = copied(&mut view);
 
@@ -260,11 +247,12 @@ fn the_cells_a_marked_fence_is_highlighted_in_are_its_own_rows() {
         Facts::default().asked(),
         Transcript::of([answer(1, fence)]),
     );
-    let (frame, laid) = painted(&mut view);
-    let row = row_of(&frame, laid.transcript, "two = 2");
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&frame);
+    let row = frame.row_holding(laid.transcript, "two = 2");
     view.drag(Cell::new(row, 2), Cell::new(row, 20));
-    let (marked, _) = painted(&mut view);
-    let lit = highlighted(&marked, &view.capabilities().palette(), laid.transcript);
+    let marked = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let lit = highlighted(&marked, laid.transcript);
 
     for line in ["fn one()", "two = 2"] {
         assert!(
@@ -283,8 +271,9 @@ fn a_copy_of_a_fence_is_no_other_fence_of_the_same_answer() {
         Facts::default().asked(),
         Transcript::of([answer(1, text)]),
     );
-    let (frame, laid) = painted(&mut view);
-    let row = row_of(&frame, laid.transcript, "body = 1");
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&frame);
+    let row = frame.row_holding(laid.transcript, "body = 1");
     view.drag(Cell::new(row, 2), Cell::new(row, 20));
     let taken = copied(&mut view);
 
@@ -303,8 +292,9 @@ fn a_copy_of_a_fence_marked_on_its_name_hands_back_the_fence_whole() {
         Facts::default().asked(),
         Transcript::of([answer(1, fence)]),
     );
-    let (frame, laid) = painted(&mut view);
-    let row = row_of(&frame, laid.transcript, "rust crates/sindri/src/rows.rs");
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&frame);
+    let row = frame.row_holding(laid.transcript, "rust crates/sindri/src/rows.rs");
     view.drag(Cell::new(row, 0), Cell::new(row, 30));
     let taken = copied(&mut view);
 
@@ -323,8 +313,9 @@ fn a_mark_that_runs_past_the_fence_is_copied_as_it_is_drawn() {
         Facts::default().asked(),
         Transcript::of([answer(1, text)]),
     );
-    let (frame, laid) = painted(&mut view);
-    let row = row_of(&frame, laid.transcript, "let one");
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let laid = laid_of(&frame);
+    let row = frame.row_holding(laid.transcript, "let one");
     view.drag(Cell::new(row, 2), Cell::new(row + 2, 30));
     let taken = copied(&mut view);
 
@@ -380,7 +371,7 @@ fn ctrl_y_on_a_frame_with_nothing_marked_and_no_answer_hands_out_nothing() {
     );
 
     // Painted first, because a copy reads the span the last paint drew.
-    painted(&mut view);
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let outcome = view.key(Key::Copy);
 
     assert_eq!(
@@ -435,7 +426,7 @@ fn the_shift_arrows_do_nothing_when_no_mark_has_been_dragged() {
         Facts::default().asked(),
         Transcript::of(transcript()),
     );
-    painted(&mut view);
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
 
     assert_eq!(
         view.key(Key::ShiftDown),
@@ -454,38 +445,25 @@ fn a_heading_drawn_large_is_marked_in_the_mark_ink_and_copied_as_its_words() {
     );
     view.drag(Cell::new(0, 0), Cell::new(40, 100));
 
-    let (frame, _) = painted(&mut view);
-    let palette = view.capabilities().palette();
-    let row_of = |y: u16| -> String {
-        (frame.area.x..frame.area.right())
-            .map(|x| buffer_cell(&frame, x, y).symbol().to_owned())
-            .collect()
-    };
-    let heading = (frame.area.y..frame.area.bottom())
-        .find(|y| row_of(*y).contains("A   g a t e"))
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let heading = (0..SCREEN.1)
+        .find(|y| frame.row(*y).contains("A   g a t e"))
         .expect("the heading is drawn as the cells the sizing leaves");
 
-    for x in frame.area.x..frame.area.right() {
-        let cell = buffer_cell(&frame, x, heading);
-        if cell.symbol().trim().is_empty() {
+    for x in 0..SCREEN.0 {
+        if frame.cell(x, heading).symbol().trim().is_empty() {
             continue;
         }
         assert_eq!(
-            Ink::of(cell, &palette),
+            frame.ink(x, heading),
             Some(Ink::Mark),
             "column {x} of the heading is not the mark's, so the mark is drawn somewhere other \
              than the cells it covers: {:?}",
-            row_of(heading)
+            frame.row(heading)
         );
     }
     assert!(
         copied(&mut view).contains("A gate rule"),
         "and the mark copies the heading as its words"
     );
-}
-
-fn buffer_cell(frame: &Buffer, x: u16, y: u16) -> &ratatui::buffer::Cell {
-    frame
-        .cell((x, y))
-        .unwrap_or_else(|| panic!("row {y}, column {x} is outside the frame it is in"))
 }

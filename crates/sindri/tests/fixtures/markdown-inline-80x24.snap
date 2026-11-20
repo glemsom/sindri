@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 markdown-inline at 80x24
 00 |  Run make check before the gate: it is the definition of done, and             | plain:6 accent:10 plain:64

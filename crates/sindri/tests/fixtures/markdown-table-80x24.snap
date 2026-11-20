@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 markdown-table at 80x24
 00 |  construct │ rendering                                                         | plain:2 plain+bold:9 dim:3 plain+bold:9 plain:57

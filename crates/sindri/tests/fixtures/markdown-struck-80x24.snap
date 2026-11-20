@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 markdown-struck at 80x24
 00 |  A struck word is crossed out in the ink the prose around it gave it; a bold   | plain:4 plain+crossed:6 plain:63 plain+bold+crossed:4 plain:3

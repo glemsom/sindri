@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 markdown-link at 80x24
 00 |  The command is /export in the spec, and §16 is where the gate is written down.| plain:17 accent:7 plain:1 accent~dim:11 plain:6 accent~dim:3 plain:35

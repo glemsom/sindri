@@ -2,6 +2,8 @@
 //! how often layout happens, and a test that read the shape of the code instead would still
 //! pass on the day the cost came back.
 
+mod frame; // one paint-and-read for every test
+
 use std::path::PathBuf;
 
 use ratatui::buffer::Buffer;
@@ -508,7 +510,7 @@ fn settled_frame(entries: Vec<Entry>, stop: &Stop, cols: u16, rows: u16) -> Vec<
         Transcript::of(entries),
     );
     view.stopped(stop);
-    frame(&mut view, cols, rows)
+    frame::painted(&mut view, cols, rows).words()
 }
 
 #[test]
@@ -3517,27 +3519,6 @@ fn a_stop_read_back_from_a_transcript_is_drawn_with_the_reason_a_reader_missed()
     );
 }
 
-/// The rows of a frame at `cols` by `rows`: what a reader is handed, painted through the one seam.
-fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
-    let area = Rect::new(0, 0, cols, rows);
-    let mut buffer = Buffer::empty(area);
-    view.paint(area, &mut buffer);
-    (0..rows)
-        .map(|y| {
-            (0..cols)
-                .map(|x| {
-                    buffer
-                        .cell((x, y))
-                        .and_then(|cell| cell.symbol().chars().next())
-                        .unwrap_or(' ')
-                })
-                .collect::<String>()
-                .trim_end()
-                .to_owned()
-        })
-        .collect()
-}
-
 #[test]
 fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
     let mut view = View::of(
@@ -3554,7 +3535,7 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
             .pulsed(Some(Pulse::settled(&Stop::Cancelled, 1_200))),
     );
     view.stopped(&Stop::Cancelled);
-    let ended = frame(&mut view, 60, 12);
+    let ended = frame::painted(&mut view, 60, 12).words();
 
     assert_eq!(
         ended[0], "✗ cancelled 1.2s the first run's answer",
@@ -3568,7 +3549,7 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
     view.settle();
     view.handed(view.facts().clone().pulsed(Some(Pulse::live(0))));
     view.text("the second run is working");
-    let after = frame(&mut view, 60, 12);
+    let after = frame::painted(&mut view, 60, 12).words();
     let at = |said: &str| {
         after
             .iter()
@@ -3603,7 +3584,7 @@ fn a_refusal_is_the_entry_a_stop_is_beside_the_draft_that_asked_for_it() {
         panic!("a draft typed and sent is the prompt a run is asked with");
     };
     view.run_refused("cannot create the sandbox: bubblewrap is on PATH", prompt);
-    let drawn = frame(&mut view, 60, 12);
+    let drawn = frame::painted(&mut view, 60, 12).words();
     let whole = drawn.join("\n");
     let at = |said: &str| {
         drawn
@@ -3647,7 +3628,7 @@ fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
             .pulsed(Some(Pulse::settled(&stop, 1_240))),
     );
     view.stopped(&stop);
-    let drawn = frame(&mut view, 40, 12);
+    let drawn = frame::painted(&mut view, 40, 12).words();
     let whole = drawn.join("\n");
     let at = |said: &str| {
         drawn

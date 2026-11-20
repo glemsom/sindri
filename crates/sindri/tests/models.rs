@@ -3,9 +3,8 @@
 //! this tree made up. What happens to a chosen name afterwards is `tests/tui.rs`'s.
 
 mod caps; // the terminals these frames are drawn on
+mod frame; // one paint-and-read for every test
 
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
@@ -14,7 +13,7 @@ use sindri::keys::Mode;
 use sindri::mark::Cell;
 use sindri::models::Models;
 use sindri::pointer::Pointer;
-use sindri::view::{Painted, Transcript, View};
+use sindri::view::{Transcript, View};
 
 use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::served::Listing;
@@ -197,7 +196,7 @@ fn a_screen_opened_again_asks_the_wire_rather_than_serving_the_names_it_held() {
     view.paste("/model");
     view.key(Key::Enter);
 
-    let rows = frame(&mut view, 120, 40);
+    let rows = frame::painted(&mut view, 120, 40).rows();
     assert!(
         rows.iter()
             .any(|row| row.contains("asking the wire what it serves")),
@@ -222,36 +221,22 @@ fn enter_takes_the_chosen_name_and_closes_the_screen() {
     );
 }
 
-/// Every row of a frame `cols` by `rows`, as the glyphs it draws, painted on the way.
-fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
-    let area = Rect::new(0, 0, cols, rows);
-    let mut buffer = Buffer::empty(area);
-    view.paint(area, &mut buffer);
-    (area.y..area.bottom())
-        .map(|y| {
-            (area.x..area.right())
-                .map(|x| buffer.cell((x, y)).expect("a cell of the row").symbol())
-                .collect()
-        })
-        .collect()
-}
-
 /// The rows a card's two borders hold, each as the words it says.
-fn body(frame: &[String]) -> Vec<String> {
-    let top = frame
+fn body(rows: &[String]) -> Vec<String> {
+    let top = rows
         .iter()
         .position(|row| row.contains('\u{256d}'))
         .expect("a card drawn with its top border");
-    let bottom = frame
+    let bottom = rows
         .iter()
         .rposition(|row| row.contains('\u{2570}'))
         .expect("a card drawn with its bottom border");
-    let border: Vec<char> = frame[top].chars().collect();
+    let border: Vec<char> = rows[top].chars().collect();
     let sides = (
         border.iter().position(|glyph| *glyph == '\u{256d}'),
         border.iter().rposition(|glyph| *glyph == '\u{256e}'),
     );
-    frame[top + 1..bottom]
+    rows[top + 1..bottom]
         .iter()
         .map(|said| {
             let glyphs: Vec<char> = said.chars().collect();
@@ -270,30 +255,14 @@ fn body(frame: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// The row of a 120 by 40 frame the screen draws `said` on, and what that pass told the terminal:
-/// a press lands on the cells a row was drawn in, so the cells are what a test reads.
-fn row_holding(view: &mut View, said: &str) -> (u16, Painted) {
-    let area = Rect::new(0, 0, 120, 40);
-    let mut buffer = Buffer::empty(area);
-    let told = view.paint(area, &mut buffer);
-    let row = (area.y..area.bottom())
-        .find(|y| {
-            (area.x..area.right())
-                .map(|x| buffer.cell((x, *y)).expect("a cell of the row").symbol())
-                .collect::<String>()
-                .contains(said)
-        })
-        .unwrap_or_else(|| panic!("the screen draws {said:?} on no row of it"));
-    (row, told)
-}
-
 #[test]
 fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
     let mut view = screen(caps::pointing());
-    let (row, told) = row_holding(&mut view, SECOND);
+    let frame = frame::painted(&mut view, 120, 40);
+    let row = frame.row_holding(frame.area(), SECOND);
 
     assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(row, 40))),
+        view.pointer(frame.told(), Pointer::Press(Cell::new(row, 40))),
         Outcome::Model(String::from(SECOND)),
         "a press on the second row names the name that row hangs from, as `Enter` on it does"
     );
@@ -307,15 +276,16 @@ fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
 #[test]
 fn a_press_on_no_row_of_the_model_screen_names_nothing() {
     let mut view = screen(caps::pointing());
-    let (query, _) = row_holding(&mut view, "query:");
-    let (name, told) = row_holding(&mut view, SECOND);
+    let frame = frame::painted(&mut view, 120, 40);
+    let query = frame.row_holding(frame.area(), "query:");
+    let name = frame.row_holding(frame.area(), SECOND);
 
     for (at, why) in [
         (Cell::new(query, 40), "the row the query is typed on"),
         (Cell::new(name, 5), "a cell outside the card"),
     ] {
         assert_eq!(
-            view.pointer(&told, Pointer::Press(at)),
+            view.pointer(frame.told(), Pointer::Press(at)),
             Outcome::Unchanged,
             "a press on {why} chooses no row, so no model is named"
         );
@@ -366,8 +336,8 @@ fn a_query_that_leaves_no_row_leaves_the_screen_open() {
 #[test]
 fn a_band_too_short_for_the_served_names_draws_the_head_of_the_list_and_counts_the_rest() {
     let mut view = screen(Capabilities::default());
-    let held = body(&frame(&mut view, 120, 40));
-    let drawn = body(&frame(&mut view, 120, 4));
+    let held = body(&frame::painted(&mut view, 120, 40).rows());
+    let drawn = body(&frame::painted(&mut view, 120, 4).rows());
 
     assert_eq!(
         held.len(),
@@ -390,7 +360,8 @@ fn a_band_too_short_for_the_served_names_draws_the_head_of_the_list_and_counts_t
         "and the row under it says how many of the three the card could not hold: {drawn:?}"
     );
     assert!(
-        !frame(&mut view, 120, 4)
+        !frame::painted(&mut view, 120, 4)
+            .rows()
             .iter()
             .any(|row| row.contains(FIRST)),
         "and no name is drawn past the band the card gave the list: {drawn:?}"

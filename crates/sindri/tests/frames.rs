@@ -3,6 +3,7 @@
 
 mod caps; // the terminals these frames are drawn on
 mod fixture; // one frame rendered at a fixed size into the text a fixture holds
+mod frame; // one paint-and-read for every test
 
 #[test]
 fn boot_120x40_is_the_frame_a_launch_opens_on() {

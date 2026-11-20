@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 queue-long at 120x24
 00 |  code      │ behind a bar, highlighted                                     wire      anthropic                         | plain:11 dim:3 plain:62 dim:10 plain:34

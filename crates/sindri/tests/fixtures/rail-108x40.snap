@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 rail at 108x40
 00 |─ prompt ───────────────────────────────────────────────────────────state     ⠹ running                     | dim:78 accent:9 plain:21

@@ -2,8 +2,7 @@
 //! boundaries — what 999 ms reads as, which glyph is 80 ms later, a marker settled at 12.4 s still saying
 //! 12.4 s a minute on — are reachable only from here.
 
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
+mod frame; // one paint-and-read for every test
 
 use sindri::capability::Capabilities;
 use sindri::composer::Key;
@@ -21,26 +20,6 @@ const GLYPHS: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '�
 
 fn failed() -> Stop {
     Stop::Error(SecretSet::default().redact("the wire went away"))
-}
-
-fn frame(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
-    let area = Rect::new(0, 0, cols, rows);
-    let mut buffer = Buffer::empty(area);
-    view.paint(area, &mut buffer);
-    (0..rows)
-        .map(|y| {
-            (0..cols)
-                .map(|x| {
-                    buffer
-                        .cell((x, y))
-                        .and_then(|cell| cell.symbol().chars().next())
-                        .unwrap_or(' ')
-                })
-                .collect::<String>()
-                .trim_end()
-                .to_owned()
-        })
-        .collect()
 }
 
 fn answering() -> View {
@@ -263,7 +242,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
             .railed(rail)
             .pulsed(Some(Pulse::live(4_200))),
     );
-    let rows = frame(&mut view, 60, 12);
+    let rows = frame::painted(&mut view, 60, 12).words();
     let state_row = rows
         .iter()
         .position(|row| row.starts_with("state "))
@@ -279,7 +258,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
     );
 
     view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_280))));
-    let rows = frame(&mut view, 60, 12);
+    let rows = frame::painted(&mut view, 60, 12).words();
 
     assert_eq!(
         rows[0], "⠸ 4.2s The marker is one cell and at most fourteen",
@@ -295,7 +274,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
 fn the_marker_prefixes_the_newest_answers_first_row_in_the_answers_own_gutter() {
     let mut view = answering();
     view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
-    let rows = frame(&mut view, 60, 12);
+    let rows = frame::painted(&mut view, 60, 12).words();
 
     assert_eq!(
         rows[0], "⠹ 4.2s The marker is one cell and at most fourteen",
@@ -318,7 +297,7 @@ fn the_marker_heads_the_newest_answer_and_an_older_one_keeps_its_gutter() {
     view.reasoning("and then a thought");
     view.text("and the newest answer");
     view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
-    let rows = frame(&mut view, 60, 12);
+    let rows = frame::painted(&mut view, 60, 12).words();
 
     assert_eq!(
         rows[0], "  the first thing said",
@@ -336,7 +315,7 @@ fn a_marker_survives_a_narrow_frame() {
             .clone()
             .pulsed(Some(Pulse::settled(&Stop::Cancelled, 5_000))),
     );
-    let rows = frame(&mut view, 24, 14);
+    let rows = frame::painted(&mut view, 24, 14).words();
 
     assert!(
         rows[0].starts_with("✗ cancelled 5.0s "),
@@ -354,7 +333,7 @@ fn a_settled_marker_is_the_value_at_stop_and_is_never_recomputed() {
             .clone()
             .pulsed(Some(Pulse::settled(&Stop::Final, 9_400))),
     );
-    let at_stop = frame(&mut view, 60, 12);
+    let at_stop = frame::painted(&mut view, 60, 12).words();
     assert_eq!(
         at_stop[0], "✓ 9.4s The marker is one cell and at most fourteen",
         "the duration the run stopped at"
@@ -365,7 +344,7 @@ fn a_settled_marker_is_the_value_at_stop_and_is_never_recomputed() {
         "1m12s",
         "a marker that read a clock would say this instead"
     );
-    assert_eq!(frame(&mut view, 60, 12), at_stop);
+    assert_eq!(frame::painted(&mut view, 60, 12).words(), at_stop);
 }
 
 #[test]
@@ -376,7 +355,7 @@ fn a_live_marker_draws_the_answers_row_before_the_answer_has_said_anything() {
         Transcript::none(),
     );
     view.handed(view.facts().clone().pulsed(Some(Pulse::live(4_200))));
-    let rows = frame(&mut view, 60, 12);
+    let rows = frame::painted(&mut view, 60, 12).words();
 
     assert_eq!(rows[0], "⠹ 4.2s", "the marker, and the row it heads");
 }
@@ -388,7 +367,7 @@ fn a_frame_with_no_run_has_no_marker_on_it() {
         Facts::default().asked(),
         Transcript::none(),
     );
-    let rows = frame(&mut view, 60, 12);
+    let rows = frame::painted(&mut view, 60, 12).words();
 
     assert!(
         rows.iter()
@@ -399,7 +378,8 @@ fn a_frame_with_no_run_has_no_marker_on_it() {
     );
     view.key(Key::Char('x'));
     assert!(
-        frame(&mut view, 60, 12)
+        frame::painted(&mut view, 60, 12)
+            .words()
             .iter()
             .all(|row| !row.starts_with('⠹'))
     );

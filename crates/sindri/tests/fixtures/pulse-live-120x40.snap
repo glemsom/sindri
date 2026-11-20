@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 pulse-live at 120x40
 00 |─ prompt ───────────────────────────────────────────────────────────────────state     ⠹ running                         | dim:86 accent:9 plain:25

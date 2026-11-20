@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 thumb-tail at 120x40
 00 |│ turn 45                                                                                                               | dim:2 muted:7 plain:111

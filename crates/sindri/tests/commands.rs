@@ -3,14 +3,11 @@
 //! into a frame built the way the terminal builds one; the wire and the save behind `/model` are proved elsewhere.
 
 mod caps; // the terminals these frames are drawn on
+mod frame; // one paint-and-read for every test
 
 use std::path::Path;
 
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
-
+use frame::Frame;
 use sindri::capability::Capabilities;
 use sindri::commands::{self, Command};
 use sindri::composer::{Key, Outcome};
@@ -18,7 +15,7 @@ use sindri::facts::Facts;
 use sindri::keys::Mode;
 use sindri::mark::Cell;
 use sindri::pointer::Pointer;
-use sindri::view::{Painted, Transcript, View};
+use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -52,64 +49,13 @@ fn workspace_with(name: &str, frontmatter: &str) -> tempfile::TempDir {
     root
 }
 
-fn painted(view: &mut View) -> String {
-    let (cols, rows) = SCREEN;
-    let mut terminal =
-        Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
-    let drawn = terminal
-        .draw(|frame| {
-            view.paint(frame.area(), frame.buffer_mut());
-        })
-        .expect("the frame is painted")
-        .buffer
-        .clone();
-    rows_of(&drawn)
-}
-
-/// A frame 120 by 40 painted with the pointer taken: what a press on one of its rows is read
-/// against.
-fn painted_and_told(view: &mut View) -> (Buffer, Painted) {
-    let area = Rect::new(0, 0, 120, 40);
-    let mut buffer = Buffer::empty(area);
-    let told = view.paint(area, &mut buffer);
-    (buffer, told)
-}
-
-/// The row a frame draws `said` on, so a press can land where the words are.
-fn row_holding(buffer: &Buffer, said: &str) -> u16 {
-    let area = buffer.area;
-    (area.y..area.bottom())
-        .find(|y| {
-            let row: String = (area.x..area.right())
-                .map(|x| buffer.cell((x, *y)).expect("a cell of the row").symbol())
-                .collect();
-            row.contains(said)
-        })
-        .unwrap_or_else(|| panic!("the frame draws {said:?} on no row of it"))
-}
-
 /// Whether the commands card is drawn: its name hangs in the top row of a border, and the footer
 /// names the same words on a row of its own.
-fn card_open(view: &mut View) -> bool {
-    painted(view)
-        .lines()
+fn card_open(drawn: &Frame) -> bool {
+    drawn
+        .rows()
+        .iter()
         .any(|row| row.trim_start().starts_with('\u{256d}') && row.contains("/ commands"))
-}
-
-fn rows_of(buffer: &Buffer) -> String {
-    let area = buffer.area;
-    let mut lines: Vec<String> = Vec::new();
-    for y in area.y..area.bottom() {
-        let mut line = String::new();
-        for x in area.x..area.right() {
-            let cell = buffer
-                .cell((x, y))
-                .unwrap_or_else(|| panic!("row {y}, column {x} is outside the frame it is in"));
-            line.push_str(cell.symbol());
-        }
-        lines.push(line);
-    }
-    lines.join("\n")
 }
 
 #[test]
@@ -212,10 +158,12 @@ fn settings_opens_the_screen_the_modal_fills_in() {
         Mode::Settings,
         "seeded, the screen is up and the draft is behind it"
     );
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1)
+        .rows()
+        .join("\n");
     assert!(
-        painted(&mut view).contains("settings"),
-        "and it says what a reader opened: {}",
-        painted(&mut view)
+        drawn.contains("settings"),
+        "and it says what a reader opened: {drawn}"
     );
 }
 
@@ -235,10 +183,12 @@ fn model_opens_the_names_the_wire_serves_and_asks_the_wire_for_them() {
         view.models().waiting(),
         "the screen is up before the names are, and says so"
     );
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1)
+        .rows()
+        .join("\n");
     assert!(
-        painted(&mut view).contains("asking the wire what it serves"),
-        "and it paints that rather than an empty list: {}",
-        painted(&mut view)
+        drawn.contains("asking the wire what it serves"),
+        "and it paints that rather than an empty list: {drawn}"
     );
 }
 
@@ -277,18 +227,23 @@ fn new_clears_the_transcript_the_frame_held() {
             .working(root.path().to_path_buf(), None),
         Transcript::of(entries),
     );
+    let held = frame::painted(&mut view, SCREEN.0, SCREEN.1)
+        .rows()
+        .join("\n");
     assert!(
-        painted(&mut view).contains("the answer the conversation was about"),
+        held.contains("the answer the conversation was about"),
         "the frame a run left holds its answer"
     );
 
     assert_eq!(say(&mut view, "/new"), Outcome::Edited);
 
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1)
+        .rows()
+        .join("\n");
     assert!(
-        !painted(&mut view).contains("the answer the conversation was about"),
+        !drawn.contains("the answer the conversation was about"),
         "`/new` starts the conversation again, so nothing of the last one is on the frame: \
-         {}",
-        painted(&mut view)
+         {drawn}"
     );
 }
 
@@ -407,12 +362,12 @@ fn a_draft_whose_first_glyph_is_a_slash_draws_the_commands_card() {
     let mut view = frame(root.path());
     view.paste("/");
 
+    let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let drawn = frame.rows().join("\n");
     assert!(
-        card_open(&mut view),
-        "a draft that begins with a slash opens the commands card: {}",
-        painted(&mut view)
+        card_open(&frame),
+        "a draft that begins with a slash opens the commands card: {drawn}"
     );
-    let drawn = painted(&mut view);
     for said in ["/model", "/quit", "end the launch"] {
         assert!(
             drawn.contains(said),
@@ -428,7 +383,9 @@ fn the_commands_card_narrows_as_the_reader_types() {
     let mut view = frame(root.path());
     view.paste("/s");
 
-    let drawn = painted(&mut view);
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1)
+        .rows()
+        .join("\n");
     assert!(
         drawn.contains("/settings") && drawn.contains("/skill"),
         "`/s` leaves the commands that hold it: {drawn}"
@@ -469,10 +426,11 @@ fn enter_on_a_draft_naming_no_command_still_sends_the_draft() {
         ),
         other => panic!("a draft no command holds is sent, and this one was answered {other:?}"),
     }
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     assert!(
-        !card_open(&mut view),
+        !card_open(&drawn),
         "and the card that held no row is closed: {}",
-        painted(&mut view)
+        drawn.rows().join("\n")
     );
 }
 
@@ -481,13 +439,14 @@ fn choosing_a_command_closes_the_commands_card() {
     let root = workspace_with("commit-message", "");
     let mut view = frame(root.path());
     view.paste("/set");
-    assert!(card_open(&mut view));
+    assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
 
     assert_eq!(view.key(Key::Enter), Outcome::Settings);
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     assert!(
-        !card_open(&mut view),
+        !card_open(&drawn),
         "the row was chosen, so the card that offered it has done its work: {}",
-        painted(&mut view)
+        drawn.rows().join("\n")
     );
 }
 
@@ -512,10 +471,11 @@ fn escape_closes_the_commands_card_and_leaves_the_draft_as_it_was() {
     view.paste("/s");
 
     assert_eq!(view.key(Key::Escape), Outcome::Edited);
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     assert!(
-        !card_open(&mut view),
+        !card_open(&drawn),
         "the reader waved the card away: {}",
-        painted(&mut view)
+        drawn.rows().join("\n")
     );
     assert_eq!(view.composer().text(), "/s", "and the draft is untouched");
 
@@ -542,10 +502,11 @@ fn a_command_that_takes_a_word_is_written_into_the_draft_to_name_it() {
         "`/skill` is no command without a word after it, so the row writes the name and the \
          reader says which skill"
     );
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     assert!(
-        card_open(&mut view),
+        card_open(&drawn),
         "the card stands while the word is named: {}",
-        painted(&mut view)
+        drawn.rows().join("\n")
     );
 
     view.paste(":commit-message");
@@ -561,8 +522,8 @@ fn a_press_on_a_command_row_chooses_it_the_way_a_file_row_is_chosen() {
         Transcript::none(),
     );
     clicked.paste("/s");
-    let (drawn, told) = painted_and_told(&mut clicked);
-    let row = row_holding(&drawn, "/stats");
+    let drawn = frame::painted(&mut clicked, 120, 40);
+    let row = drawn.area().y + drawn.row_holding(drawn.area(), "/stats");
 
     let mut typed = View::of(
         Capabilities::default(),
@@ -572,7 +533,7 @@ fn a_press_on_a_command_row_chooses_it_the_way_a_file_row_is_chosen() {
     typed.paste("/stats");
 
     assert_eq!(
-        clicked.pointer(&told, Pointer::Press(Cell::new(row, 40))),
+        clicked.pointer(drawn.told(), Pointer::Press(Cell::new(row, 40))),
         typed.key(Key::Enter),
         "a press on the row that draws `/stats` sends what `Enter` on the typed line `/stats` \
          sends"

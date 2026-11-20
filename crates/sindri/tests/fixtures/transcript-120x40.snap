@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 transcript at 120x40
 00 |  reaches are laid out, so a 250-turn history on a 40-row terminal pays for wire      anthropic                         | plain:76 dim:10 plain:34

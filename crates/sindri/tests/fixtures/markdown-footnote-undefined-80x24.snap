@@ -1,6 +1,6 @@
 ---
-source: crates/sindri/tests/fixture/mod.rs
-expression: drawn
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
 ---
 markdown-footnote-undefined at 80x24
 00 |  A reference[^gone] whose definition never arrived is drawn as the words it was| plain:80
