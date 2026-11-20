@@ -1473,10 +1473,9 @@ impl View {
         counted(self.scroll.back(), "back")
     }
 
-    /// The row saying which prompt the frame stands on, where it stands, how many rows have landed
-    /// below it since and the key that follows the run again. A frame too narrow for the whole of it
-    /// gives the prompt up first, and a frame too narrow for the rest draws none of it: the row is
-    /// whole or it is not there.
+    /// The row saying which prompt the frame stands on, where, how many rows landed below it and the
+    /// key that follows the run again: a narrow frame gives the prompt up before it gives the row up,
+    /// which is whole or not drawn at all.
     fn notice_band(&mut self, area: Rect, buffer: &mut Buffer, drawn: &Drawn) {
         let Some(place) = self.notice() else {
             return;
