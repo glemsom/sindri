@@ -163,9 +163,12 @@ A strip of rows the frame shares out — the transcript's, the composer's, the r
 stands off the tail, and the footer's — each drawn in the rows it was given and never past them. A
 queued prompt has no band of its own: it stands in the composer's, under the draft, one prompt to a
 row and the newest at the foot. What a band cannot hold it counts: the rows of a draft past the
-composer's ceiling, and the prompts of a queue past the rows it was given. The **caret** is no cell
-of a band: it is placed in the cell the draft waits in wherever a reader can type there, and in the
-query row of a card that draws one. No answer and no prompt carries one.
+composer's ceiling, and the prompts of a queue past the rows it was given. A fence is not counted
+that way: it is kept in the shape it was written in, so a band never reflows one — a line past its
+edge is dropped, the band's last cell says more stands there, and a reader walks the fence sideways
+for the rest. The **caret** is no cell of a band: it is placed in the cell the draft waits in
+wherever a reader can type there, and in the query row of a card that draws one. No answer and no
+prompt carries one.
 _Avoid_: Region, pane, panel, viewport
 
 **Plane**:
@@ -192,35 +195,15 @@ _Avoid_: Border, divider, gutter, rule
 **Alert**:
 A quote whose first line names a kind — `NOTE`, `TIP`, `IMPORTANT`, `WARNING` or `CAUTION` — and
 that draws that kind as a **label**: the name on a row of its own, in an ink of its own, with the
-quote's words under it behind the bar the quote already had. A quote whose first line names no kind
-is a quote and nothing more, marker-like words and all.
+quote's words under that row, drawn as the quote already draws them. A quote whose first line
+names no kind is a quote and nothing more, marker-like words and all.
 _Avoid_: Callout, admonition, banner, badge, note (that one is a kind)
-
-**Chip**:
-An inline code span, drawn in the accent ink with no band behind it and in the spacing it was written
-with. Inside a way it keeps the way's own dim line under it; inside a heading it is told from the
-heading's own words, because the chip is the accent while the heading keeps its weight. A fence that
-names the file it was written in draws that name as a faint chip beside its language tag.
-_Avoid_: Badge, tag, pill, inline code
-
-**Guide**:
-The dim column a fence's leading whitespace carries: one `│` standing in the last space or tab of
-an indent of two columns or more, so a nested block's depth is read at a glance. Only whitespace
-ever gives way, so no guide is drawn over a glyph, a fence's bar or a quote's, and a line with no
-leading whitespace, or one column of it, carries none.
-_Avoid_: Indent line, ruler, indent marker
-
-**Cut**:
-Where a band ends a fence's line: the words past its edge are dropped and the last cell says more
-stands there, because a fence is kept in the shape it was written in and no band reflows one. A
-reader walks a marked fence sideways for the rest, and a copy takes the line as it was written.
-_Avoid_: Truncation, ellipsis, overflow, wrap
 
 **Source**:
 The words a fence was written with, line for line, kept beside the rows the frame draws them as: a
 copy of a marked fence hands the source back whole — the line breaks and the indentation it was
-written with, and no bar, guide or cut — where the cells are what the band made of it. A fence's tag
-row is no line of its source, and a mark on it takes the fence whole all the same.
+written with, and nothing the band drew into it — where the cells are what the band made of it. A
+fence's tag row is no line of its source, and a mark on it takes the fence whole all the same.
 _Avoid_: Body, content, raw text
 
 **Draft count**:
