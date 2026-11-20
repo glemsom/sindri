@@ -103,10 +103,13 @@ fn worked(key: &str) -> &'static (&'static str, &'static str, &'static str) {
         .unwrap_or_else(|| panic!("the worked examples name `{key}`"))
 }
 
+fn file_read(text: &str) -> Config {
+    let home = config_home(text);
+    Config::load_from(&home.path().join("sindri/config.toml")).expect("the file reads")
+}
+
 fn the_key_alone(key: &str, file: &str) -> Config {
-    let home = config_home(&format!("{key} = {file}\n"));
-    Config::load_from(&home.path().join("sindri/config.toml"))
-        .expect("a worked example is a value its key holds")
+    file_read(&format!("{key} = {file}\n"))
 }
 
 #[test]
@@ -928,7 +931,8 @@ fn every_row_names_its_own_variable() {
         assert_eq!(
             field.variable,
             format!("SINDRI_{}", field.name.to_uppercase()),
-            "the row of `{}` names the variable that key is spoken by",
+            "a key is spoken by `SINDRI_` and its own name upper-cased, and `{}` is spoken by \
+             another",
             field.name
         );
     }
@@ -1052,12 +1056,7 @@ fn every_variable_is_the_key_in_force_over_a_file_that_says_nothing() {
 
 #[test]
 fn every_key_merges_above_a_lower_config_and_yields_to_one_above_it() {
-    let full = Config::load_from(
-        &config_home(&examples_document())
-            .path()
-            .join("sindri/config.toml"),
-    )
-    .expect("every key in the schema parses");
+    let full = file_read(&examples_document());
 
     assert_eq!(
         full.clone().above(Config::default()),

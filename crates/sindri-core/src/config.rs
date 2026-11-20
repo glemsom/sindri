@@ -38,7 +38,6 @@ pub struct Config {
 type Shown = fn(&Config) -> String;
 type Reading = fn(&'static str, &mut Config, &str) -> Result<(), ConfigError>;
 type Writing = fn(&'static str, &Config, &mut DocumentMut) -> Result<(), ConfigError>;
-type Spoken = fn(&'static str, &mut Config, &str) -> Result<(), ConfigError>;
 type Merging = fn(&mut Config, &Config);
 
 #[derive(Debug)]
@@ -49,11 +48,10 @@ pub struct Field {
     shown: Shown,
     reading: Reading,
     writing: Writing,
-    spoken: Spoken,
+    spoken: Reading,
     merging: Merging,
 }
 
-/// A key the higher config names, or the lower one's when it says nothing.
 macro_rules! or_lower {
     ($key:ident) => {
         |config: &mut Config, lower: &Config| {
@@ -89,7 +87,7 @@ impl Field {
     }
 
     /// For the rows whose variable speaks a dialect of its own rather than the reader's.
-    const fn spoken(mut self, spoken: Spoken) -> Field {
+    const fn spoken(mut self, spoken: Reading) -> Field {
         self.spoken = spoken;
         self
     }
@@ -107,8 +105,7 @@ impl Field {
         (self.spoken)(self.variable, config, text)
     }
 
-    /// Leaves this key the lower config's when the higher one says nothing about it.
-    pub fn merge(&self, config: &mut Config, lower: &Config) {
+    pub fn or_lower(&self, config: &mut Config, lower: &Config) {
         (self.merging)(config, lower)
     }
 
@@ -461,7 +458,7 @@ impl Config {
     }
     pub fn above(mut self, lower: Config) -> Config {
         for field in &Config::SCHEMA {
-            field.merge(&mut self, &lower);
+            field.or_lower(&mut self, &lower);
         }
         self
     }
