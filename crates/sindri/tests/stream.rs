@@ -1,19 +1,22 @@
-//! The turn in flight, held to the value the wire feeds: text and reasoning stream as they land, each in its own
-//! gutter and ink, and the rows a reader has already seen never move under them. The frame that shows the
-//! same turn beside the settled entries is `frames`' `streaming-120x40`.
+//! The turn in flight, held to the value the wire feeds: the runs a turn was said in, in the order
+//! they land, and the revision that counts them. The rows they are drawn as belong to `rows`, and
+//! the frame that shows the same turn beside the settled entries is `frames`' `streaming-120x40`.
 
-use sindri::ink::Ink;
-use sindri::pulse::Pulse;
-use sindri::rows::Row;
+use std::fs;
+
 use sindri::stream::{Said, Stream};
 use sindri_core::provider::Deltas;
 
-fn words(row: &Row) -> String {
-    row.spans().iter().map(|(text, _)| text.as_str()).collect()
-}
-
-fn inks(row: &Row) -> Vec<Ink> {
-    row.spans().iter().map(|(_, look)| look.ink()).collect()
+/// The file and line of every `needle` written in the turn in flight's module, as a search would
+/// report them, so a failure says where the copy is and not only that one exists.
+fn naming(needle: &str) -> Vec<String> {
+    let body = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/stream.rs"))
+        .expect("the turn in flight's own module");
+    body.lines()
+        .enumerate()
+        .filter(|(_, line)| line.contains(needle))
+        .map(|(at, line)| format!("src/stream.rs:{}: {line}", at + 1))
+        .collect()
 }
 
 #[test]
@@ -24,29 +27,6 @@ fn thought_and_answer_fragments_land_in_the_order_they_arrive() {
     stream.reasoning("so its tail is code. ");
     stream.text("is a code block.");
 
-    let rows = stream.rows(60, None);
-    let drawn: Vec<String> = rows.iter().map(words).collect();
-    assert_eq!(
-        drawn,
-        [
-            "│ the fence is the question.",
-            "  A fence still open",
-            "│ so its tail is code.",
-            "  is a code block.",
-        ],
-        "the fragments are drawn in the order they landed, each under its own gutter"
-    );
-    assert_eq!(
-        rows.iter().map(inks).collect::<Vec<_>>(),
-        [
-            vec![Ink::Dim, Ink::Muted],
-            vec![Ink::Plain, Ink::Plain],
-            vec![Ink::Dim, Ink::Muted],
-            vec![Ink::Plain, Ink::Plain],
-        ],
-        "a thought is read in reasoning's ink, inside its rule; an answer in the frame's"
-    );
-
     assert_eq!(
         stream.said().collect::<Vec<_>>(),
         [
@@ -55,46 +35,7 @@ fn thought_and_answer_fragments_land_in_the_order_they_arrive() {
             ("so its tail is code. ", Said::Reasoning),
             ("is a code block.", Said::Answer),
         ],
-        "the stream keeps the runs a turn was said in, and nothing it can be drawn as"
-    );
-}
-
-#[test]
-fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
-    let mut stream = Stream::new();
-    stream.reasoning("read the fence rule first. ");
-    stream.text("The rule is one line: ");
-    let drawn = stream.rows(40, None);
-    assert!(!drawn.is_empty(), "a fragment of prose is rows");
-
-    stream.text("a fence still open is a code block, never prose.\n```rust\nfn main() {");
-    let more = stream.rows(40, None);
-    assert_eq!(
-        &more[..drawn.len() - 1],
-        &drawn[..drawn.len() - 1],
-        "every row above the one the fragment landed on stands still"
-    );
-    assert!(
-        more.len() > drawn.len(),
-        "the answer grew rows as it streamed: {} then {}",
-        drawn.len(),
-        more.len()
-    );
-    let tail: Vec<String> = more[drawn.len()..].iter().map(words).collect();
-    assert_eq!(
-        tail,
-        [
-            "  open is a code block, never prose.",
-            "",
-            "▏ rust",
-            "▏ fn main() {"
-        ],
-        "the fence and its still-streaming contents are drawn as the block they opened"
-    );
-    assert_eq!(
-        inks(more.last().expect("a row under the fence"))[..2],
-        [Ink::Dim, Ink::Accent],
-        "and behind the bar a code block is set behind, not as prose"
+        "the runs a turn was said in stand in the order the fragments landed"
     );
 }
 
@@ -110,40 +51,43 @@ fn fragments_of_one_kind_accumulate_into_one_run() {
         [("A fence still open is code.", Said::Answer)],
         "the fragments of one run are one run"
     );
+}
+
+#[test]
+fn a_turn_that_has_only_reasoned_has_said_no_answer() {
+    let mut stream = Stream::new();
+    stream.reasoning("thinking it over. ");
+    stream.reasoning("");
+
     assert_eq!(
-        stream.rows(40, None).iter().map(words).collect::<Vec<_>>(),
-        ["  A fence still open is code."]
+        stream.said().collect::<Vec<_>>(),
+        [("thinking it over. ", Said::Reasoning)],
+        "one thought is one run, and an empty fragment adds a word to none"
+    );
+    assert_eq!(
+        stream.revision(),
+        1,
+        "the revision counts the fragment that landed, and an empty one is not a tick"
     );
 }
 
 #[test]
-fn the_marker_heads_the_newest_answers_first_row_and_no_other() {
-    let mut stream = Stream::new();
-    stream.text("the first thing said. ");
-    stream.reasoning("and then a thought. ");
-    stream.text("and the answer being read now.");
-
-    let head = Pulse::live(4_200).head();
-    let drawn: Vec<String> = stream.rows(60, Some(&head)).iter().map(words).collect();
-
-    assert_eq!(
-        drawn,
-        [
-            "  the first thing said.",
-            "│ and then a thought.",
-            "⠹ 4.2s and the answer being read now.",
-        ],
-        "the marker is on the newest answer, and the older one is drawn as it always was"
-    );
-}
-
-#[test]
-fn a_turn_that_has_only_reasoned_opens_the_answers_row_under_its_thought() {
-    let mut stream = Stream::new();
-    stream.reasoning("thinking it over.");
-
-    let head = Pulse::live(4_200).head();
-    let drawn: Vec<String> = stream.rows(60, Some(&head)).iter().map(words).collect();
-
-    assert_eq!(drawn, ["│ thinking it over.", "⠹ 4.2s"]);
+fn the_turn_in_flight_names_nothing_it_is_drawn_as() {
+    for needle in [
+        "crate::rows",
+        "Row",
+        "rows",
+        "markdown",
+        "gutter",
+        "mark",
+        "Head",
+        "Surface",
+    ] {
+        let named = naming(needle);
+        assert!(
+            named.is_empty(),
+            "the turn in flight keeps the wire's words and lays none of them: `{needle}` is \
+             written at {named:?}"
+        );
+    }
 }
