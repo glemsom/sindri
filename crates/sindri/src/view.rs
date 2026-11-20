@@ -679,9 +679,8 @@ impl View {
     }
 
     /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does when nothing
-    /// is marked. A mark standing wholly on a fence takes the fence's source rather than the cells,
-    /// because no band draws the line breaks it was written with, and one standing wholly on a folded
-    /// prompt takes every word the reader typed rather than the head it draws.
+    /// is marked. A mark on a fence takes the fence's source rather than the cells, because no band
+    /// draws its line breaks; one on a folded prompt takes every word the reader typed.
     fn copy(&self) -> Outcome {
         if let Some(marked) = self.fence.filter(|marked| marked.whole) {
             // A fence with no line drawn yet has nothing to hand back — and never the cells its
@@ -1181,7 +1180,7 @@ impl View {
         let Some(entry) = drawn.entry(row) else {
             return Outcome::Unchanged;
         };
-        if self.folded(drawn, entry, row) {
+        if self.pressed_fold(drawn, entry, row) {
             return Outcome::Edited;
         }
         let Some(entry) = drawn.first(row) else {
@@ -1193,10 +1192,10 @@ impl View {
         }
     }
 
-    /// The fold the entry `at` holds, opened or folded where the press landed on the row that moves
-    /// it: the one row a settled work is drawn as, the row counting a prompt's rows kept back, and
-    /// the head row of a prompt the reader opened.
-    fn folded(&mut self, drawn: &Drawn, at: usize, row: u16) -> bool {
+    /// The fold the press on row `row` of entry `at` moves, where that row is one a fold answers to:
+    /// the one row a settled work is drawn as, the row counting a prompt's rows kept back, and the
+    /// row a prompt's words begin on.
+    fn pressed_fold(&mut self, drawn: &Drawn, at: usize, row: u16) -> bool {
         let Some(rows) = drawn.rows_of(at..at + 1) else {
             return false;
         };

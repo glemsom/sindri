@@ -474,7 +474,7 @@ pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Gr
 }
 
 /// The rows of one entry in the fold it is drawn as, and how many rows of it that fold keeps back:
-/// a result's fold is a fact of its last layout, and a width change re-lays it.
+/// a fold is a fact of its last layout, and a width change re-lays it.
 fn laid(
     entry: &Entry,
     cols: u16,
@@ -583,9 +583,9 @@ fn folded_prompt(mut words: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Optio
     (words, Some(kept))
 }
 
-/// The row that says how many rows of a result the fold keeps back, drawn as any other row of that
-/// entry: the marker in the gutter and the count in the dim ink of the fold's own words, a rung
-/// quieter than the output it stands among.
+/// The row that says how many rows the fold keeps back, drawn as any other row of that entry: the
+/// marker in the gutter and the count in the dim ink of the fold's own words, a rung quieter than
+/// the output it stands among.
 fn kept_back(kept: usize, cols: u16) -> Row {
     let words = format!("{kept} rows kept back");
     marked(&KEPT.to_string(), Ink::Dim, vec![(words, Ink::Dim)], cols)
@@ -657,9 +657,8 @@ fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
 }
 
 /// The rows a prompt is drawn as: the blank row that separates its exchange from the one above it —
-/// the one `Rows` drops for the first exchange, which has nothing above it — and the reader's own
-/// words down the spine of a quoted block. The blank row is no word of the prompt, so no fold counts
-/// it.
+/// the one `Rows` drops for the first exchange — and the reader's own words down the spine of a
+/// quoted block. The blank row is no word of the prompt, so no fold counts it.
 fn asked(text: &str, cols: u16) -> (Row, Vec<Row>) {
     let opening = format!("{SPINE}{}", SIGIL.trim_end());
     let (gutter, room) = margin(&opening, cols);
@@ -1156,8 +1155,8 @@ struct Held {
     /// Where this entry stands in the work around it, and the fold the reader left that whole work
     /// in where this entry opens one.
     place: Place,
-    /// The fold the reader left this result in, which is theirs and survives every re-lay of the
-    /// rows under it.
+    /// The fold the reader left this result or prompt in, which is theirs and survives every re-lay
+    /// of the rows under it.
     fold: Fold,
     /// How many rows this entry's closed fold keeps back, and nothing where its whole fold holds
     /// it: a fact of its last layout, because what a fold holds depends on the width.
@@ -1782,7 +1781,7 @@ impl Rows {
 
     /// Opens the fold entry `at` stands on, and answers whether this call is what moved it: the work
     /// where `at` belongs to a settled one the reader has not opened, and otherwise the fold the
-    /// result itself keeps. A work drawn as no row and an entry with no fold answer nothing.
+    /// entry itself keeps. A work drawn as no row and an entry with no fold answer nothing.
     pub fn open(&mut self, at: usize) -> bool {
         if at >= self.held.len() {
             return false;
