@@ -35,12 +35,6 @@ impl Stream {
         self.runs.is_empty()
     }
 
-    /// Whether a fragment of `said` opens an entry of its own rather than continuing the newest: a
-    /// run that opens an answer over its own thought opens a row as its first word does.
-    pub fn opens(&self, said: Said) -> bool {
-        self.runs.last().is_none_or(|newest| newest.said != said)
-    }
-
     /// Whether the turn in flight has said an answer rather than a thought alone, which is the row
     /// the frame's marker heads.
     pub(crate) fn says_answer(&self) -> bool {

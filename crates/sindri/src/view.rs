@@ -48,7 +48,7 @@ use crate::rows::{INDENT, Row, Rows, Scroll};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
-use crate::stream::{Said, Stream};
+use crate::stream::Stream;
 
 #[derive(Clone, Copy)]
 struct Hint {
@@ -338,6 +338,8 @@ struct ReadMark {
 pub struct View {
     rows: Rows,
     scroll: Scroll,
+    /// The rows that have landed below the frame since it last stood at the tail.
+    landed: u32,
     /// What the last paint pass drew: what a page, a copy and a fold read rather than laying the
     /// transcript out a second time.
     drawn: Drawn,
@@ -412,6 +414,7 @@ impl View {
         let mut view = View {
             rows,
             scroll,
+            landed: 0,
             drawn: Drawn::none(),
             composer: Composer::new(),
             stream: Stream::new(),
@@ -441,6 +444,15 @@ impl View {
     /// How far back from the tail the transcript is drawn.
     pub fn scroll(&self) -> Scroll {
         self.scroll
+    }
+
+    /// Moves the frame to `scroll`: the tail is a frame with nothing below it to count, so the rows
+    /// that landed below the one the reader left go with it.
+    fn scrolled(&mut self, scroll: Scroll) {
+        self.scroll = scroll;
+        if scroll.is_tail() {
+            self.landed = 0;
+        }
     }
 
     pub fn queue(&self) -> &Queue {
@@ -479,7 +491,7 @@ impl View {
     pub fn settle(&mut self) {
         self.rows.retire();
         self.stream = Stream::new();
-        self.scroll = Scroll::Tail;
+        self.scrolled(Scroll::Tail);
         self.composer.set_state(State::Idle);
         self.facts = self.facts.clone().asked();
         self.superseded = false;
@@ -556,7 +568,7 @@ impl View {
     /// where the reader is owed the ending.
     pub fn stopped(&mut self, stop: &Stop) {
         self.rows.stopped(stop.clone());
-        self.scroll = Scroll::Tail;
+        self.scrolled(Scroll::Tail);
     }
 
     /// A run that could not start is the entry a stop is, and the prompt it was asked with is never
@@ -710,7 +722,7 @@ impl View {
         // The words the record already holds are the conversation `/new` emptied, so the mark moves
         // to the document's end and no row of them comes back.
         self.read.entries = self.facts.transcript().map_or(0, <[Entry]>::len);
-        self.scroll = Scroll::Tail;
+        self.scrolled(Scroll::Tail);
         self.stream = Stream::new();
         self.facts = self.facts.clone().pulsed(None);
         self.mark = None;
@@ -865,20 +877,12 @@ impl View {
         }
     }
 
-    /// A word the run says: the one that opens a new entry returns the frame to the tail, and every
-    /// word after it leaves the frame where the reader put it.
-    fn follows(&mut self, said: Said, fragment: &str) {
-        if !fragment.is_empty() && self.stream.opens(said) {
-            self.scroll = Scroll::Tail;
-        }
-    }
-
     /// `End` off the tail is the run's tail; at the tail it is the draft's own end of line.
     fn tail(&mut self, key: Key) -> Outcome {
         if self.scroll.is_tail() {
             return self.draft(key);
         }
-        self.scroll = Scroll::Tail;
+        self.scrolled(Scroll::Tail);
         Outcome::Edited
     }
 
@@ -897,7 +901,7 @@ impl View {
         if at == self.scroll.back() {
             return Outcome::Unchanged;
         }
-        self.scroll = Scroll::of(at);
+        self.scrolled(Scroll::of(at));
         Outcome::Edited
     }
 
@@ -1237,7 +1241,10 @@ impl View {
                 .saturating_add(grown)
                 .min(self.rows.deepest(area.height)),
         };
-        self.scroll = Scroll::of(back);
+        self.scrolled(Scroll::of(back));
+        if !self.scroll.is_tail() {
+            self.landed = self.landed.saturating_add(grown);
+        }
         let thumb = self.rows.thumb(self.scroll, area.height);
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
@@ -1326,17 +1333,14 @@ impl View {
 
     /// How far back from the tail the frame stands, in words: a frame at the tail has nothing to say.
     fn notice(&self) -> Option<String> {
-        match self.scroll.back() {
-            0 => None,
-            1 => Some(String::from("1 row back")),
-            rows => Some(format!("{rows} rows back")),
-        }
+        counted(self.scroll.back(), "back")
     }
 
-    /// The row is whole or it is not drawn, as a hint is: a frame too narrow for the words leaves
-    /// the cells blank rather than cutting the sentence that says where the reader stands.
+    /// The row saying where the frame stands, how many rows have landed below it since and the key
+    /// that follows the run again, whole or not drawn at all: a frame too narrow for the words
+    /// leaves the cells blank rather than cutting the sentence it says.
     fn notice_band(&self, area: Rect, buffer: &mut Buffer) {
-        let Some(count) = self.notice() else {
+        let Some(place) = self.notice() else {
             return;
         };
         // A band of no rows stands on the composer's edge row: the row is given up, never drawn
@@ -1344,7 +1348,13 @@ impl View {
         if area.height == 0 {
             return;
         }
-        let mut spans: Vec<(&str, Look)> = vec![(count.as_str(), keys::MEANING), (GAP, SEPARATOR)];
+        let landed = counted(self.landed, "landed");
+        let mut spans: Vec<(&str, Look)> = vec![(place.as_str(), keys::MEANING)];
+        if let Some(landed) = landed.as_deref() {
+            spans.push((GAP, SEPARATOR));
+            spans.push((landed, keys::MEANING));
+        }
+        spans.push((GAP, SEPARATOR));
         spans.extend(keyed("End", "follows the run"));
         whole_row(buffer, area, area.y, &spans, &self.capabilities.palette());
     }
@@ -1702,12 +1712,10 @@ impl View {
 
 impl Deltas for View {
     fn text(&mut self, fragment: &str) {
-        self.follows(Said::Answer, fragment);
         self.stream.text(fragment);
     }
 
     fn reasoning(&mut self, fragment: &str) {
-        self.follows(Said::Reasoning, fragment);
         self.stream.reasoning(fragment);
     }
 }
@@ -1982,6 +1990,16 @@ fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[Hint], depth: &str, palet
         spans.extend(keyed(hint.key, hint.words(depth)));
     }
     pen::write(buffer, area, &spans, Clip::Whole, palette);
+}
+
+/// A count of rows in words and what they are rows of: `1 row back`, `4 rows landed`, and nothing at
+/// all for none of them.
+fn counted(rows: u32, of: &str) -> Option<String> {
+    match rows {
+        0 => None,
+        1 => Some(format!("1 row {of}")),
+        rows => Some(format!("{rows} rows {of}")),
+    }
 }
 
 /// A key and the words that say what pressing it does, in the two looks a key and its meaning are

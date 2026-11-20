@@ -2849,12 +2849,78 @@ fn a_row_that_lands_while_the_reader_is_scrolled_back_holds_the_window_still() {
              is reading back"
     );
     let (now, _) = notice_of(&after);
-    assert_eq!(
-        now.trim_end(),
-        "38 rows back \u{b7} End follows the run",
-        "the two rows the answer landed are added to the count of rows back: the frame \
-             holds the rows it was reading rather than sliding with the tail"
+    assert!(
+        now.trim_end().starts_with("38 rows back"),
+        "the two rows the answer landed are added to the count of rows back: the frame holds \
+             the rows it was reading rather than sliding with the tail, and what the row says \
+             of them is its own test: {now:?}"
     );
+}
+
+#[test]
+fn a_frame_off_the_tail_counts_the_rows_that_landed_below_it() {
+    let mut view = turns(100);
+    view.text("a first word of an answer");
+    painted(&mut view, 120, 40);
+    view.key(Key::PageUp);
+    painted(&mut view, 120, 40);
+
+    view.text(&pen::filled(200, 'x'));
+    let landed = painted(&mut view, 120, 40);
+
+    let (drawn, _) = notice_of(&landed);
+    assert_eq!(
+        drawn.trim_end(),
+        "38 rows back \u{b7} 2 rows landed \u{b7} End follows the run",
+        "the row says how far back the frame stands, how many rows have landed below it \
+             since, and the key that follows the run"
+    );
+}
+
+#[test]
+fn one_row_that_landed_is_said_in_the_singular() {
+    let mut view = turns(100);
+    view.text("a first word of an answer");
+    painted(&mut view, 120, 40);
+    view.key(Key::PageUp);
+    painted(&mut view, 120, 40);
+
+    view.text(&pen::filled(110, 'x'));
+    let landed = painted(&mut view, 120, 40);
+
+    let (drawn, _) = notice_of(&landed);
+    assert_eq!(
+        drawn.trim_end(),
+        "37 rows back \u{b7} 1 row landed \u{b7} End follows the run",
+        "one row that landed is a count of one row, and not of one rows"
+    );
+}
+
+#[test]
+fn a_new_entry_that_lands_below_the_reader_holds_every_row_of_the_band_still() {
+    let mut view = turns(100);
+    view.reasoning("a thought the run says first");
+    painted(&mut view, 120, 40);
+    view.key(Key::PageUp);
+    let (before, told) = painted_and_told(&mut view, 120, 40);
+    assert_ne!(
+        view.scroll(),
+        Scroll::Tail,
+        "the frame under this test stands off the tail to begin with"
+    );
+
+    view.reasoning(&pen::filled(200, 'x'));
+    view.text("and the answer it opens");
+    let after = painted(&mut view, 120, 40);
+
+    for y in 0..told.drawn().band() {
+        assert_eq!(
+            drawn_row(&after, y),
+            drawn_row(&before, y),
+            "the row the reader is reading stands on the band row it stood on, though the \
+                 run opened two entries below it: row {y} moved"
+        );
+    }
 }
 
 #[test]
@@ -2930,20 +2996,22 @@ fn a_frame_too_short_for_the_row_gives_it_up_before_the_transcript_loses_its_las
 }
 
 #[test]
-fn a_new_entry_leaves_the_frame_at_the_tail() {
+fn a_new_entry_moves_the_frame_by_no_row() {
     let mut view = scrolled_back();
+    let back = view.scroll();
 
     view.text("the first word of an answer");
 
     assert_eq!(
         view.scroll(),
-        Scroll::Tail,
-        "an answer that opens its row puts the frame back at the tail without being asked"
+        back,
+        "an answer that opens its row is a row the run lands, so the frame is left where the \
+             reader put it"
     );
 }
 
 #[test]
-fn an_answer_that_opens_its_row_under_a_thought_leaves_the_frame_at_the_tail() {
+fn an_answer_that_opens_its_row_under_a_thought_moves_the_frame_by_no_row() {
     let mut view = turns(100);
     view.reasoning("a thought the run says first");
     painted(&mut view, 120, 40);
@@ -2953,28 +3021,112 @@ fn an_answer_that_opens_its_row_under_a_thought_leaves_the_frame_at_the_tail() {
         Scroll::Tail,
         "the frame under this test stands off the tail"
     );
+    let back = view.scroll();
 
     view.text("and the answer it introduces");
 
     assert_eq!(
         view.scroll(),
-        Scroll::Tail,
-        "an answer opens a row of its own under the thought, so it is a new entry as the \
-             run's first word is"
+        back,
+        "an answer opens a row of its own under the thought, and that row lands below the \
+             frame as every other row does"
     );
 }
 
 #[test]
-fn a_thought_that_opens_its_row_leaves_the_frame_at_the_tail() {
+fn a_thought_that_opens_its_row_moves_the_frame_by_no_row() {
     let mut view = scrolled_back();
+    let back = view.scroll();
 
     view.reasoning("the first word of a thought");
 
     assert_eq!(
         view.scroll(),
-        Scroll::Tail,
-        "the run's first reasoning is a new entry as its answer is"
+        back,
+        "a thought that opens a new entry is a row the run lands below the reader, and no \
+             hand on the frame they are reading back with"
     );
+}
+
+#[test]
+fn end_hands_the_frame_back_to_the_tail_and_it_follows_the_run_from_there() {
+    let mut view = turns(100);
+    view.text("a first word of an answer");
+    painted(&mut view, 120, 40);
+    view.key(Key::PageUp);
+    painted(&mut view, 120, 40);
+    assert_ne!(
+        view.scroll(),
+        Scroll::Tail,
+        "the frame under this test stands off the tail to begin with"
+    );
+
+    assert_eq!(
+        view.key(Key::End),
+        Outcome::Edited,
+        "End off the tail is the run's tail"
+    );
+    assert_eq!(
+        view.scroll(),
+        Scroll::Tail,
+        "which is the frame handed back to the tail"
+    );
+    painted(&mut view, 120, 40);
+
+    view.text(&pen::filled(200, 'x'));
+    let tail = painted(&mut view, 120, 40);
+
+    assert_eq!(
+        view.scroll(),
+        Scroll::Tail,
+        "and a frame at the tail follows the run: the rows that land are drawn, not counted"
+    );
+    assert!(
+        holds(&tail, &pen::filled(10, 'x')),
+        "so a fragment that lands after End is drawn at the tail: {:?}",
+        frame_rows(&tail)
+    );
+    assert!(
+        !holds(&tail, "rows back") && !holds(&tail, "landed"),
+        "and the row saying where the frame stood goes with its place off the tail"
+    );
+
+    assert_eq!(
+        view.key(Key::PageUp),
+        Outcome::Edited,
+        "a page back stands off the tail again"
+    );
+    let back = painted(&mut view, 120, 40);
+    let (drawn, _) = notice_of(&back);
+    assert_eq!(
+        drawn.trim_end(),
+        "36 rows back \u{b7} End follows the run",
+        "and a frame that stands off the tail again counts the rows landing below it from \
+             there, and none of the rows that landed before"
+    );
+}
+
+#[test]
+fn a_frame_at_the_tail_draws_the_row_every_fragment_lands_on() {
+    let mut view = turns(100);
+    let mut said = String::new();
+    for word in ["one ", "two ", "three"] {
+        said.push_str(word);
+        view.text(word);
+        let buffer = painted(&mut view, 120, 40);
+
+        assert_eq!(
+            view.scroll(),
+            Scroll::Tail,
+            "a frame at the tail is a frame that follows the run"
+        );
+        assert!(
+            holds(&buffer, said.trim_end()),
+            "so every row the run lands is drawn in it, `{}` and all: {:?}",
+            said.trim_end(),
+            frame_rows(&buffer)
+        );
+    }
 }
 
 #[test]
