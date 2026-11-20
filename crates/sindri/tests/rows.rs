@@ -75,7 +75,7 @@ fn a_width_change_invalidates_the_cache_and_reflows_once() {
         rows.push(entry);
     }
 
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     let wide = rows.window(Scroll::Tail, 6);
     let shown = wide.pieces().len();
     assert!(
@@ -95,7 +95,7 @@ fn a_width_change_invalidates_the_cache_and_reflows_once() {
     let newest = rows.len() - 1;
     let wide_rows = rows.rows(newest).len();
 
-    rows.resize(40);
+    rows.measure(Measure::new(40, Surface::none(), None));
     let narrow = rows.window(Scroll::Tail, 6);
     let reflowed = narrow.pieces().len();
     assert!(reflowed > 0);
@@ -115,7 +115,7 @@ fn a_width_change_invalidates_the_cache_and_reflows_once() {
         "reading the rows costs nothing extra"
     );
 
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     let restored = rows.window(Scroll::Tail, 6).pieces().len();
     assert_eq!(rows.lays(), shown + reflowed + restored);
 }
@@ -127,7 +127,7 @@ fn a_surface_that_changed_relays_the_band_once_and_one_that_did_not_relays_nothi
         turn: 1,
         text: SecretSet::default().redact("```mermaid\nflowchart TD\n  A-->B\n```"),
     });
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.window(Scroll::Tail, 10);
 
     let words = rows.rows(0).len();
@@ -141,7 +141,7 @@ fn a_surface_that_changed_relays_the_band_once_and_one_that_did_not_relays_nothi
         "and a terminal that places no picture is given the fence as the code it is"
     );
 
-    rows.retune(Surface::none());
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.window(Scroll::Tail, 10);
     assert_eq!(
         rows.lays(),
@@ -149,7 +149,11 @@ fn a_surface_that_changed_relays_the_band_once_and_one_that_did_not_relays_nothi
         "a surface that changed nothing drops no row and lays none out again"
     );
 
-    rows.retune(Surface::of(None, CellSize::new(10, 20), true, false));
+    rows.measure(Measure::new(
+        80,
+        Surface::of(None, CellSize::new(10, 20), true, false),
+        None,
+    ));
     rows.window(Scroll::Tail, 10);
     assert_eq!(
         rows.lays(),
@@ -307,103 +311,16 @@ fn a_measure_whose_surface_or_ground_moved_drops_every_row_without_a_reflow() {
 }
 
 #[test]
-fn the_three_setters_reach_the_same_layout_count_as_one_measure() {
+fn a_measure_that_moves_one_fact_lays_once_and_a_repeat_lays_nothing() {
     let tree = tempfile::tempdir().expect("a temp workspace");
     let drawn = Surface::of(None, CellSize::new(10, 20), true, false);
     let stood = ground(tree.path());
-
-    let mut set = Rows::new();
-    let mut measured = Rows::new();
-    for entry in transcript() {
-        set.push(entry.clone());
-        measured.push(entry);
-    }
-    set.resize(80);
-    measured.measure(Measure::new(80, Surface::none(), None));
-
-    let wide = set.window(Scroll::Tail, 6).pieces().len();
-    assert_eq!(
-        measured.window(Scroll::Tail, 6).pieces().len(),
-        wide,
-        "two caches over the same entries are one window at the tail"
-    );
-    assert_eq!(
-        (set.lays(), measured.lays()),
-        (wide, wide),
-        "and the band is laid out once at the measure both were given"
-    );
-
-    set.resize(40);
-    measured.measure(Measure::new(40, Surface::none(), None));
-    let narrow = set.window(Scroll::Tail, 6).pieces().len();
-    assert_eq!(
-        measured.window(Scroll::Tail, 6).pieces().len(),
-        narrow,
-        "a width moved by a setter and by the one call is one window"
-    );
-    assert_eq!(
-        (set.lays(), measured.lays()),
-        (wide + narrow, wide + narrow),
-        "and one number of layouts: the band laid out once at each measure"
-    );
-
-    set.retune(drawn.clone());
-    measured.measure(Measure::new(40, drawn.clone(), None));
-    let retuned = set.window(Scroll::Tail, 6).pieces().len();
-    assert_eq!(
-        measured.window(Scroll::Tail, 6).pieces().len(),
-        retuned,
-        "which holds for the surface alone, with the width unmoved"
-    );
-    assert_eq!(
-        (set.lays(), measured.lays()),
-        (wide + narrow + retuned, wide + narrow + retuned)
-    );
-
-    set.stand(Some(&stood));
-    measured.measure(Measure::new(40, drawn, Some(&stood)));
-    let grounded = set.window(Scroll::Tail, 6).pieces().len();
-    assert_eq!(
-        measured.window(Scroll::Tail, 6).pieces().len(),
-        grounded,
-        "and for the ground alone, with the width and the surface unmoved"
-    );
-    assert_eq!(
-        (set.lays(), measured.lays()),
-        (
-            wide + narrow + retuned + grounded,
-            wide + narrow + retuned + grounded
-        )
-    );
-
-    let newest = set.len() - 1;
-    let read = set.rows(newest).len();
-    assert_eq!(
-        measured.rows(newest).len(),
-        read,
-        "either cache hands the same rows back for the same entry"
-    );
-    assert_eq!(
-        (set.lays(), measured.lays()),
-        (
-            wide + narrow + retuned + grounded,
-            wide + narrow + retuned + grounded
-        ),
-        "and reading the rows back afterwards costs neither a layout"
-    );
-}
-
-#[test]
-fn a_setter_moves_its_fact_once_and_repeats_lay_nothing() {
-    let tree = tempfile::tempdir().expect("a temp workspace");
-    let drawn = Surface::of(None, CellSize::new(10, 20), true, false);
     let mut rows = Rows::new();
     for entry in transcript() {
         rows.push(entry);
     }
 
-    rows.resize(80);
-    assert_eq!(rows.cols(), 80, "the cache reports the width it was given");
+    rows.measure(Measure::new(80, Surface::none(), None));
     let wide = rows.window(Scroll::Tail, 6).pieces().len();
     assert_eq!(
         rows.lays(),
@@ -411,61 +328,55 @@ fn a_setter_moves_its_fact_once_and_repeats_lay_nothing() {
         "the band is laid out once at the width it was given"
     );
 
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     assert_eq!(
         rows.lays(),
         wide,
         "a width the cache already holds drops nothing and lays nothing"
     );
 
-    rows.resize(40);
-    assert_eq!(
-        rows.cols(),
-        40,
-        "and a width that moved is the one it reports"
-    );
+    rows.measure(Measure::new(40, Surface::none(), None));
     let narrow = rows.window(Scroll::Tail, 6).pieces().len();
     assert_eq!(
         rows.lays(),
         wide + narrow,
-        "a setter that moves the width reflows once"
+        "a measure that moves the width reflows once"
     );
 
-    rows.retune(drawn.clone());
+    rows.measure(Measure::new(40, drawn.clone(), None));
     let retuned = rows.window(Scroll::Tail, 6).pieces().len();
     assert_eq!(
         rows.lays(),
         wide + narrow + retuned,
-        "a setter that moves the surface lays the band out once"
+        "a measure that moves the surface lays the band out once"
     );
-    rows.retune(drawn.clone());
+    rows.measure(Measure::new(40, drawn.clone(), None));
     assert_eq!(
         rows.lays(),
         wide + narrow + retuned,
         "a surface the cache already holds lays nothing"
     );
 
-    rows.stand(Some(&ground(tree.path())));
-    let stood = rows.window(Scroll::Tail, 6).pieces().len();
+    rows.measure(Measure::new(40, drawn.clone(), Some(&stood)));
+    let grounded = rows.window(Scroll::Tail, 6).pieces().len();
     assert_eq!(
         rows.lays(),
-        wide + narrow + retuned + stood,
-        "a setter that moves the ground lays the band out once"
+        wide + narrow + retuned + grounded,
+        "a measure that moves the ground lays the band out once"
     );
-    rows.stand(Some(&ground(tree.path())));
+    rows.measure(Measure::new(40, drawn, Some(&stood)));
     assert_eq!(
         rows.lays(),
-        wide + narrow + retuned + stood,
+        wide + narrow + retuned + grounded,
         "a ground the cache already holds lays nothing"
     );
-    assert_eq!(rows.cols(), 40, "and no setter but resize moves the width");
 }
 
 #[test]
 fn scrolling_the_whole_transcript_lays_each_entry_out_once() {
     let history = 260;
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for which in 1..=history {
         rows.push(thought(which));
     }
@@ -517,7 +428,7 @@ fn scrolling_the_whole_transcript_lays_each_entry_out_once() {
 #[test]
 fn an_entry_above_the_window_is_never_laid_out() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for which in 1..=250 {
         rows.push(thought(which));
     }
@@ -539,7 +450,7 @@ fn an_entry_above_the_window_is_never_laid_out() {
 #[test]
 fn the_whole_height_costs_a_layout_only_for_what_it_has_not_seen() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for which in 1..=250 {
         rows.push(thought(which));
     }
@@ -605,7 +516,7 @@ fn every_row_but_a_fences_line_fits_the_width_it_was_laid_out_for() {
         }
 
         let mut live = Rows::new();
-        live.resize(cols);
+        live.measure(Measure::new(cols, Surface::none(), None));
         let head = Pulse::live(4_200).head();
         live.text("a braille marker at the head of the newest answer, and its words");
         live.live(Some(&head));
@@ -655,7 +566,7 @@ fn walked(rows: &[(Option<usize>, u16)], fence: usize) -> Vec<u16> {
 #[test]
 fn a_walk_moves_every_row_of_one_fence_and_leaves_the_other_fence_and_the_other_entry_alone() {
     let mut rows = Rows::new();
-    rows.resize(20);
+    rows.measure(Measure::new(20, Surface::none(), None));
     rows.push(answered(TWO_FENCES));
     rows.push(answered(TWO_FENCES));
     let before = walks(&mut rows, 0);
@@ -689,7 +600,7 @@ fn a_walk_moves_every_row_of_one_fence_and_leaves_the_other_fence_and_the_other_
 #[test]
 fn a_fence_walked_as_far_as_its_widest_line_goes_no_further() {
     let mut rows = Rows::new();
-    rows.resize(20);
+    rows.measure(Measure::new(20, Surface::none(), None));
     rows.push(answered(TWO_FENCES));
     let widest = rows
         .rows(0)
@@ -719,7 +630,7 @@ fn a_fence_walked_as_far_as_its_widest_line_goes_no_further() {
 #[test]
 fn a_walk_outlives_a_line_laid_again_and_a_width_change_drops_it() {
     let mut rows = Rows::new();
-    rows.resize(20);
+    rows.measure(Measure::new(20, Surface::none(), None));
     rows.text("```rust\nlet a_line_wider_than_the_band_it_is_drawn_in = 1;\n");
     rows.live(None);
     assert!(
@@ -735,7 +646,7 @@ fn a_walk_outlives_a_line_laid_again_and_a_width_change_drops_it() {
         "the fragment the wire sent laid the line again, and the reader's walk is still on it"
     );
 
-    rows.resize(24);
+    rows.measure(Measure::new(24, Surface::none(), None));
     assert!(
         walked(&walks(&mut rows, 0), 0)
             .iter()
@@ -1116,7 +1027,7 @@ fn a_marker_no_band_holds_beside_a_word_leaves_the_answer_its_columns() {
     rows.text("the answer's own words");
 
     for cols in 6..=7 {
-        rows.resize(cols);
+        rows.measure(Measure::new(cols, Surface::none(), None));
         rows.live(Some(&head));
         let marked: Vec<String> = rows.rows(0).iter().map(words).collect();
         rows.live(None);
@@ -1363,7 +1274,7 @@ fn a_live_entry_is_laid_out_alone_as_its_fragments_land() {
     for entry in transcript() {
         rows.push(entry);
     }
-    rows.resize(60);
+    rows.measure(Measure::new(60, Surface::none(), None));
 
     rows.window(Scroll::Tail, 20);
     let settled = rows.lays();
@@ -1398,7 +1309,7 @@ fn a_live_entry_is_laid_out_alone_as_its_fragments_land() {
 #[test]
 fn the_rows_module_lays_the_turn_in_flight_from_the_words_it_has_said() {
     let mut rows = Rows::new();
-    rows.resize(60);
+    rows.measure(Measure::new(60, Surface::none(), None));
     rows.reasoning("the fence is the question. ");
     rows.text("A fence still open ");
     rows.reasoning("so its tail is code. ");
@@ -1431,7 +1342,7 @@ fn the_rows_module_lays_the_turn_in_flight_from_the_words_it_has_said() {
 #[test]
 fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
     let mut rows = Rows::new();
-    rows.resize(40);
+    rows.measure(Measure::new(40, Surface::none(), None));
     rows.reasoning("read the fence rule first. ");
     rows.text("The rule is one line: ");
     rows.live(None);
@@ -1473,7 +1384,7 @@ fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
 #[test]
 fn the_marker_heads_the_newest_answers_first_row_and_no_other() {
     let mut rows = Rows::new();
-    rows.resize(60);
+    rows.measure(Measure::new(60, Surface::none(), None));
     rows.text("the first thing said. ");
     rows.reasoning("and then a thought. ");
     rows.text("and the answer being read now.");
@@ -1496,7 +1407,7 @@ fn the_marker_heads_the_newest_answers_first_row_and_no_other() {
 #[test]
 fn a_turn_that_has_only_reasoned_opens_the_answers_row_under_its_thought() {
     let mut rows = Rows::new();
-    rows.resize(60);
+    rows.measure(Measure::new(60, Surface::none(), None));
     rows.reasoning("thinking it over.");
 
     let head = Pulse::live(4_200).head();
@@ -1511,7 +1422,7 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
     let secrets = SecretSet::default();
     let mut rows = Rows::new();
     rows.push(thought(1));
-    rows.resize(40);
+    rows.measure(Measure::new(40, Surface::none(), None));
 
     rows.text("a fence still open is a code block.");
     rows.live(None);
@@ -1550,7 +1461,7 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
 #[test]
 fn a_live_entry_is_laid_out_again_when_the_marker_moves() {
     let mut rows = Rows::new();
-    rows.resize(40);
+    rows.measure(Measure::new(40, Surface::none(), None));
     rows.text("an answer arriving");
     rows.live(Some(&Pulse::live(4_200).head()));
     let laid = rows.lays();
@@ -1582,14 +1493,14 @@ fn a_live_entry_is_laid_out_again_when_the_marker_moves() {
 #[test]
 fn a_reflow_lays_the_live_entry_once_and_a_pass_that_moved_nothing_lays_none() {
     let mut rows = Rows::new();
-    rows.resize(40);
+    rows.measure(Measure::new(40, Surface::none(), None));
     rows.text("an answer arriving");
     let head = Pulse::live(4_200).head();
     rows.live(Some(&head));
     let laid = rows.lays();
     assert_eq!(laid, 1, "the live entry, laid out once to be drawn");
 
-    rows.resize(30);
+    rows.measure(Measure::new(30, Surface::none(), None));
     rows.live(Some(&head));
     rows.window(Scroll::Tail, 20);
 
@@ -1612,7 +1523,7 @@ fn a_reflow_lays_the_live_entry_once_and_a_pass_that_moved_nothing_lays_none() {
 #[test]
 fn a_live_run_opens_the_answers_row_before_it_has_said_anything() {
     let mut rows = Rows::new();
-    rows.resize(40);
+    rows.measure(Measure::new(40, Surface::none(), None));
     rows.live(Some(&Pulse::live(0).head()));
 
     assert_eq!(rows.len(), 1, "the answer's row, opened by its marker");
@@ -1905,7 +1816,7 @@ fn unpunctuated(row: &str) -> bool {
 #[test]
 fn a_call_wears_the_mark_its_verdict_settled_on_and_no_mark_before_one() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(call(1));
     let opened = painted(&rows.rows(0)[0], 80);
     assert_eq!(
@@ -1932,7 +1843,7 @@ fn a_call_wears_the_mark_its_verdict_settled_on_and_no_mark_before_one() {
 #[test]
 fn a_result_the_cache_reads_on_its_own_still_says_the_tool_it_came_from() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(result(1, Exit::Code(0)));
 
     assert_eq!(
@@ -1946,7 +1857,7 @@ fn a_result_the_cache_reads_on_its_own_still_says_the_tool_it_came_from() {
 fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_the_call_row_holds()
 {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(call(1));
     let opened = rows.rows(0).len();
 
@@ -2044,8 +1955,11 @@ fn spelled(row: &Row, cols: u16) -> String {
 #[test]
 fn a_live_answer_that_opens_on_a_large_heading_keeps_the_cells_the_sizing_leaves() {
     let mut rows = Rows::new();
-    rows.resize(40);
-    rows.retune(Surface::of(None, CellSize::new(10, 20), false, true));
+    rows.measure(Measure::new(
+        40,
+        Surface::of(None, CellSize::new(10, 20), false, true),
+        None,
+    ));
     rows.text("# A gate rule");
     rows.live(Some(&Pulse::live(4_200).head()));
 
@@ -2153,7 +2067,7 @@ fn kept_back_row(laid: &[Row]) -> Option<String> {
 #[test]
 fn a_results_fold_inside_an_opened_work_survives_a_reflow_and_a_new_entry_beside_it() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(long_result(1));
     rows.push(answer(1));
     rows.push(stop_entry(Stop::Final));
@@ -2173,7 +2087,7 @@ fn a_results_fold_inside_an_opened_work_survives_a_reflow_and_a_new_entry_beside
     );
     let laid = rows.lays();
 
-    rows.resize(30);
+    rows.measure(Measure::new(30, Surface::none(), None));
     let reflowed: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         rows.lays(),
@@ -2232,7 +2146,7 @@ fn a_session_read_back_is_folded_again() {
     );
 
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for entry in read.entries().iter().cloned() {
         rows.push(entry);
     }
@@ -2278,7 +2192,7 @@ fn asked_for(which: u32) -> Entry {
 /// The one row a settled exchange's work is drawn as, from the entries the work handed in.
 fn one_row_of(work: Vec<Entry>) -> Row {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(asked_for(1));
     for entry in work {
         rows.push(entry);
@@ -2297,7 +2211,7 @@ fn one_row_of(work: Vec<Entry>) -> Row {
 #[test]
 fn a_settled_exchanges_work_is_one_row() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
@@ -2441,7 +2355,7 @@ fn a_work_whose_results_carry_no_time_says_no_time() {
 #[test]
 fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
@@ -2483,7 +2397,7 @@ fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
 #[test]
 fn a_run_of_two_turns_leaves_one_row_for_the_work_of_both() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for entry in [
         asked_for(1),
         Entry::Turn { turn: 1 },
@@ -2526,7 +2440,7 @@ fn a_run_of_two_turns_leaves_one_row_for_the_work_of_both() {
 #[test]
 fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for entry in [
         asked_for(1),
         Entry::Turn { turn: 1 },
@@ -2567,7 +2481,7 @@ fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
 #[test]
 fn a_work_settles_under_the_answer_that_ended_it() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for entry in [
         asked_for(1),
         Entry::Turn { turn: 1 },
@@ -2595,7 +2509,7 @@ fn a_work_settles_under_the_answer_that_ended_it() {
 #[test]
 fn one_key_opens_the_newest_settled_works_row_and_the_same_key_closes_it_again() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
@@ -2644,7 +2558,7 @@ fn one_key_opens_the_newest_settled_works_row_and_the_same_key_closes_it_again()
     );
 
     let mut short = Rows::new();
-    short.resize(80);
+    short.measure(Measure::new(80, Surface::none(), None));
     short.push(result(1, Exit::Code(0)));
     assert!(
         !short.toggle_newest(),
@@ -2655,7 +2569,7 @@ fn one_key_opens_the_newest_settled_works_row_and_the_same_key_closes_it_again()
 #[test]
 fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
@@ -2674,7 +2588,7 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
     let opened = rows.rows(1).len();
     let laid = rows.lays();
 
-    rows.resize(30);
+    rows.measure(Measure::new(30, Surface::none(), None));
     let reflowed = rows.rows(1).len();
     assert_eq!(
         rows.lays(),
@@ -2714,7 +2628,7 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
 /// A cache holding one settled exchange whose one call read a result longer than its fold.
 fn the_long_call() -> Rows {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(asked_for(1));
     rows.push(call(1));
     rows.push(long_result(1));
@@ -2779,7 +2693,7 @@ fn a_result_inside_an_opened_work_keeps_its_own_fold() {
 #[test]
 fn an_exchange_that_did_no_work_draws_no_work_row() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
@@ -2855,7 +2769,7 @@ fn a_reasoning_entry_a_run_wrote_is_drawn_from_the_transcript_it_left() {
     );
 
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for entry in read.entries().iter().cloned() {
         rows.push(entry);
     }
@@ -2937,7 +2851,7 @@ fn the_record_writes_a_turn_for_every_turn_while_the_band_draws_no_row_for_one()
     );
 
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for entry in read.entries().iter().cloned() {
         rows.push(entry);
     }
@@ -2980,7 +2894,7 @@ fn a_transcript_whose_calls_hold_no_identity_pairs_each_result_with_the_call_bef
     let read = read_transcript(directory.path()).expect("the transcript reads back");
 
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for entry in read.entries().iter().cloned() {
         rows.push(entry);
     }
@@ -3020,7 +2934,7 @@ fn a_transcript_of_two_calls_pairs_them_by_identity_when_it_is_read_back() {
     let read = read_transcript(directory.path()).expect("the transcript reads back");
 
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     for entry in read.entries().iter().cloned() {
         rows.push(entry);
     }
@@ -3129,7 +3043,7 @@ fn a_call_the_timeout_killed_says_timed_out() {
 #[test]
 fn a_cancelled_call_is_a_row_and_not_a_dangling_spinner() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(call(1));
     let in_flight = said(&painted(&rows.rows(0)[0], 80));
     assert_eq!(
@@ -3151,7 +3065,7 @@ fn a_cancelled_call_is_a_row_and_not_a_dangling_spinner() {
 #[test]
 fn a_wave_of_calls_settles_its_rows_in_the_order_the_run_wrote_them() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(call(1));
     rows.push(call(1));
     rows.push(result(1, Exit::Code(0)));
@@ -3173,7 +3087,7 @@ fn a_wave_of_calls_settles_its_rows_in_the_order_the_run_wrote_them() {
 #[test]
 fn a_result_settles_the_call_it_names_when_a_turn_holds_two_calls_to_one_tool() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(call_of(1, Some("toolu_1")));
     rows.push(call_of(1, Some("toolu_2")));
     rows.push(result_of(1, Some("toolu_2"), Exit::Code(1)));
@@ -3196,7 +3110,7 @@ fn a_result_settles_the_call_it_names_when_a_turn_holds_two_calls_to_one_tool() 
 #[test]
 fn a_result_naming_a_call_the_cache_never_held_opens_a_row_of_its_own() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(call_of(1, Some("toolu_1")));
     rows.push(result_of(1, Some("toolu_2"), Exit::Code(0)));
 
@@ -3222,7 +3136,7 @@ fn a_result_naming_a_call_the_cache_never_held_opens_a_row_of_its_own() {
 #[test]
 fn a_settled_call_keeps_its_words_above_the_row_that_says_how_it_ended() {
     let mut rows = Rows::new();
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(call(1));
     rows.push(result(1, Exit::Code(0)));
 
@@ -3252,7 +3166,7 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
         rows.push(answer(which));
     }
     rows.push(call(4));
-    rows.resize(80);
+    rows.measure(Measure::new(80, Surface::none(), None));
     rows.window(Scroll::Tail, 40);
     let laid = rows.lays();
 
@@ -3294,7 +3208,7 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
 #[test]
 fn a_fence_that_opens_a_live_answer_claims_no_ground_of_its_own() {
     let mut rows = Rows::new();
-    rows.resize(40);
+    rows.measure(Measure::new(40, Surface::none(), None));
     rows.text("```rust\nfn main() {\n");
     rows.live(Some(&Pulse::live(4_200).head()));
 
@@ -3332,8 +3246,7 @@ fn a_fence_that_opens_a_live_answer_keeps_its_picture_under_the_marker() {
     let text = "```mermaid\nflowchart TD\n  A-->B\n```\nand the prose under it\n";
     let surface = Surface::of(None, CellSize::new(10, 20), true, false);
     let mut rows = Rows::new();
-    rows.resize(40);
-    rows.retune(surface.clone());
+    rows.measure(Measure::new(40, surface.clone(), None));
     rows.text(text);
     let head = Pulse::live(4_200).head();
     rows.live(Some(&head));
@@ -3356,8 +3269,7 @@ fn a_fence_that_opens_a_live_answer_keeps_its_picture_under_the_marker() {
     );
 
     let mut settled = Rows::new();
-    settled.resize(40);
-    settled.retune(surface);
+    settled.measure(Measure::new(40, surface, None));
     settled.push(Entry::Assistant {
         turn: 1,
         text: SecretSet::default().redact(text),
@@ -3373,7 +3285,7 @@ fn a_fence_that_opens_a_live_answer_keeps_its_picture_under_the_marker() {
 #[test]
 fn a_row_set_under_a_marker_moves_the_run_it_names_with_its_words() {
     let mut rows = Rows::new();
-    rows.resize(40);
+    rows.measure(Measure::new(40, Surface::none(), None));
     rows.text("[the spec](https://example.test/spec) and the prose under it\n");
     let head = Pulse::live(4_200).head();
     rows.live(Some(&head));
@@ -3585,7 +3497,7 @@ fn a_row_set_under_a_gutter_keeps_the_picture_it_stands_on() {
 /// `scroll`.
 fn thumb_of(turns: u32, band: u16, scroll: Scroll) -> Option<sindri::rows::Thumb> {
     let mut rows = Rows::new();
-    rows.resize(120);
+    rows.measure(Measure::new(120, Surface::none(), None));
     for which in 1..=turns {
         rows.push(thought(which));
     }
@@ -3661,7 +3573,7 @@ fn a_band_with_nothing_to_point_at_draws_no_thumb() {
 
     for cols in 2..=3 {
         let mut narrow = Rows::new();
-        narrow.resize(cols);
+        narrow.measure(Measure::new(cols, Surface::none(), None));
         for which in 1..=80 {
             narrow.push(thought(which));
         }
@@ -3674,7 +3586,7 @@ fn a_band_with_nothing_to_point_at_draws_no_thumb() {
     }
 
     let mut roomy = Rows::new();
-    roomy.resize(4);
+    roomy.measure(Measure::new(4, Surface::none(), None));
     for which in 1..=80 {
         roomy.push(thought(which));
     }
@@ -3943,7 +3855,7 @@ fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
 #[test]
 fn a_streaming_answer_draws_the_definitions_that_ended_and_never_one_still_arriving() {
     let mut rows = Rows::new();
-    rows.resize(40);
+    rows.measure(Measure::new(40, Surface::none(), None));
     rows.text("a note[^1] here\n\n[^1]: the words it stands for");
     rows.live(None);
 
