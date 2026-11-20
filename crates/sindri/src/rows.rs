@@ -1064,8 +1064,8 @@ impl Rows {
         self.lays += 1;
     }
 
-    /// The rows the turn in flight is drawn as: every run under its own gutter, the newest answer
-    /// alone wearing `head`, and a row of its own for that head while the answer has no word yet.
+    /// The newest answer alone wears `head`, and a turn that has said no answer gets a row of its own
+    /// for it: a frame waiting on a wire must not look idle.
     fn live_rows(&self, stream: &Stream, head: Option<&Head>) -> Vec<Row> {
         let newest = stream
             .said()

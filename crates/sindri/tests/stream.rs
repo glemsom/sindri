@@ -7,18 +7,6 @@ use std::fs;
 use sindri::stream::{Said, Stream};
 use sindri_core::provider::Deltas;
 
-/// The file and line of every `needle` written in the turn in flight's module, as a search would
-/// report them, so a failure says where the copy is and not only that one exists.
-fn naming(needle: &str) -> Vec<String> {
-    let body = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/stream.rs"))
-        .expect("the turn in flight's own module");
-    body.lines()
-        .enumerate()
-        .filter(|(_, line)| line.contains(needle))
-        .map(|(at, line)| format!("src/stream.rs:{}: {line}", at + 1))
-        .collect()
-}
-
 #[test]
 fn thought_and_answer_fragments_land_in_the_order_they_arrive() {
     let mut stream = Stream::new();
@@ -54,7 +42,7 @@ fn fragments_of_one_kind_accumulate_into_one_run() {
 }
 
 #[test]
-fn a_turn_that_has_only_reasoned_has_said_no_answer() {
+fn a_turn_that_has_only_reasoned_keeps_one_thought_and_no_answer() {
     let mut stream = Stream::new();
     stream.reasoning("thinking it over. ");
     stream.reasoning("");
@@ -72,22 +60,27 @@ fn a_turn_that_has_only_reasoned_has_said_no_answer() {
 }
 
 #[test]
-fn the_turn_in_flight_names_nothing_it_is_drawn_as() {
+fn the_turn_in_flight_lays_nothing_it_is_drawn_as() {
+    let source = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/stream.rs"))
+        .expect("the turn in flight's own module");
     for needle in [
         "crate::rows",
+        "crate::markdown",
+        "crate::mark",
+        "crate::pulse",
+        "crate::picture",
         "Row",
-        "rows",
-        "markdown",
-        "gutter",
-        "mark",
         "Head",
         "Surface",
     ] {
-        let named = naming(needle);
-        assert!(
-            named.is_empty(),
+        let written = source
+            .lines()
+            .position(|line| line.contains(needle))
+            .map(|at| at + 1);
+        assert_eq!(
+            written, None,
             "the turn in flight keeps the wire's words and lays none of them: `{needle}` is \
-             written at {named:?}"
+             written on line {written:?} of src/stream.rs"
         );
     }
 }

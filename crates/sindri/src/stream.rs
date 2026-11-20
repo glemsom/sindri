@@ -1,6 +1,5 @@
 //! The turn in flight as the wire feeds it: the runs of fragments the newest turn was said in, the
-//! revision that counts them, and whether each run is a reasoning or an answer. Nothing here is
-//! drawn — a drawing of these words belongs to the modules that lay one.
+//! revision that counts them, and whether each run is a reasoning or an answer.
 
 use sindri_core::provider::Deltas;
 
@@ -35,7 +34,6 @@ impl Stream {
         self.runs.is_empty()
     }
 
-    /// Whether the turn in flight has said an answer rather than a thought alone.
     pub(crate) fn says_answer(&self) -> bool {
         self.runs.iter().any(|run| run.said == Said::Answer)
     }

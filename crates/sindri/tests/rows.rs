@@ -1003,7 +1003,7 @@ fn the_rows_module_lays_the_turn_in_flight_from_the_words_it_has_said() {
     stream.text("is a code block.");
     rows.live(&stream, None);
 
-    let laid = rows.rows(rows.len() - 1);
+    let laid = rows.rows(0);
     assert_eq!(
         laid.iter().map(words).collect::<Vec<String>>(),
         [
@@ -1015,14 +1015,14 @@ fn the_rows_module_lays_the_turn_in_flight_from_the_words_it_has_said() {
         "the turn in flight is laid in the order its fragments landed, each under its own gutter"
     );
     assert_eq!(
-        inks(&laid[0]),
-        [Ink::Dim, Ink::Muted],
-        "a thought is read in reasoning's ink, inside its rule"
-    );
-    assert_eq!(
-        inks(&laid[1]),
-        [Ink::Plain, Ink::Plain],
-        "an answer in the frame's"
+        laid.iter().map(inks).collect::<Vec<_>>(),
+        [
+            vec![Ink::Dim, Ink::Muted],
+            vec![Ink::Plain, Ink::Plain],
+            vec![Ink::Dim, Ink::Muted],
+            vec![Ink::Plain, Ink::Plain],
+        ],
+        "a thought is read in reasoning's ink, inside its rule; an answer in the frame's"
     );
 }
 
