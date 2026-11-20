@@ -16,19 +16,18 @@ One invocation of the agent loop for one prompt, from the first request to a sto
 _Avoid_: Job, task, query, conversation
 
 **Conversation**:
-The prompts one launch has already had answered, each beside the answer it got, and what the run that
-joins next is asked after: it outlives the run that filled it and the launch that ends takes it away,
-and `/new` empties it. A queued prompt joins it at the turn it was asked, and a run that stopped on
-anything but a final answer still joins with what it ended on — except one `/new` superseded, whose
-words went with the conversation it emptied.
+The prompts one launch has had answered, each beside the answer it got, and what the run joining
+next is asked after: it outlives the run that filled it, `/new` empties it, and the launch that ends
+takes it away. A queued prompt joins it at the turn it was asked, and a run that stopped on anything
+but a final answer still joins with what it ended on — except one `/new` superseded, whose words
+went with the conversation.
 _Avoid_: Chat, thread, memory, context, history (that one is a run's own turns)
 
 **Exchange**:
 The band's unit: the prompt wearing the sigil it was asked with, what the run did under it, and the
-answer. That work is no row of the band — the thoughts, the calls, the results that came back and the
-answers it went past each standing as its own row while the run fills it — and one row once the
-exchange has ended, counting them: `⋯ 12 calls · 3 files · 4.1 s`. That row is the reader's to open,
-and a result inside an opened work keeps the fold of its own.
+answer. That work is no row of the band while the run fills it — each thought, call, result and
+answer it went past standing as its own row — and one row once it has ended, counting them. That row
+is the reader's to open, and a result inside an opened work keeps the fold of its own.
 _Avoid_: Pair, round, item, Activity, Trace, Log
 
 **Prompt**:
@@ -46,13 +45,11 @@ The text a run produces for stdout — the only thing on stdout in batch mode.
 _Avoid_: Response, output, result
 
 **Stop**:
-The reason a run ended — `final`, `max_turns`, `budget`, `cancelled` or `error` — in its own word. It
-is laid in the transcript where the run ended, and it earns a row there where it says something the
-answer above it does not: `cancelled`, `max_turns`, `budget` or an error, the error with one line of
-the run's own words about it, redacted as every other fact is, and a cancellation with no line it
-does not have. A run that ended on `final` draws no row, because the answer under the marker is the
-whole of what it ended on. The marker at the head of the newest answer settles on the same word, so
-no two drawings of one stop disagree.
+The reason a run ended — `final`, `max_turns`, `budget`, `cancelled` or `error` — in its own word.
+It is laid in the transcript where the run ended, and earns a row there where it says something the
+answer above it does not: `cancelled`, `max_turns`, `budget` or an error, the error with one
+redacted line of the run's words. The marker at the head of the newest answer settles on the same
+word.
 _Avoid_: Exit status, failure, termination, reason
 
 **State**:
@@ -77,10 +74,8 @@ _Avoid_: Context limit, token budget, max context
 **Status**:
 The document a session publishes about its run: the phase, one redacted line of the run's own words,
 the turn the run is on, and the workspace's name. The line is never the command, the prompt or the
-answer. One is appended to `status.json` beside the transcript as the run goes, so `status.json`
-reads back in order, and the same document is reported off the terminal, so a listener outside the
-frame reads it too. A report about a run held by a session, and never the run's own word about
-itself, which is **State**'s alone.
+answer, and a report about a run is never the run's own word about itself — that is **State**'s
+alone. One is appended to `status.json` as the run goes and reported off the terminal too.
 _Avoid_: Progress, notice, indicator
 
 **Phase**:
@@ -164,22 +159,19 @@ A way of driving the core — the TUI or batch mode; owns no decision the core c
 _Avoid_: UI, client, interface
 
 **Sindri's face**:
-The picture of Sindri that the `sindri` binary carries beside the bundled font, measured from its
-own header into a footprint and drawn over those cells — decoration, so a terminal that places
-no picture is given no cells and no words for it. It stands over the top rows of the rail's
-column where the frame has room for one, and nowhere else. A reader turns it off in the config, and a
-frame with it off reserves no row: the facts stand from the rail's first row.
+The picture of Sindri the `sindri` binary carries beside the bundled font, measured from its own
+header into a footprint and drawn over those cells — decoration, so a terminal that places no
+picture is given no cells and no words for it. It stands over the top rows of the rail's column
+where the frame has room, and nowhere else. A reader turns it off in the config, and a frame with it
+off reserves no row.
 _Avoid_: Logo, avatar, mascot, icon
 
 **Band**:
 A strip of rows the frame shares out — the transcript's, the **Composer**'s, the row that says the
 frame stands off the tail, and the footer's — each drawn in the rows it was given and never past
-them. A queued prompt has no band of its own: it stands in the composer's, under the draft, one
-prompt to a row and the newest at the foot. What a band cannot hold it counts: the rows of a draft
-past the composer's ceiling, and the prompts of a queue past the rows it was given. A fence is not
-counted that way: it is kept in the shape it was written in, so a band never reflows one — the words
-of a fence line past the band's edge are dropped, that row's last cell says more stands there, and a
-reader walks the fence sideways for the rest. The **Caret** is no cell of a band.
+them. What a band cannot hold it counts: a draft's rows past the composer's ceiling, and a queue's
+prompts past the composer's rows under the draft. A fence it never reflows, and the **Caret** is no
+cell of it.
 _Avoid_: Region, pane, panel, viewport
 
 **Rail**:
@@ -196,15 +188,11 @@ more rows, and that is no row landing.
 _Avoid_: Layout, size, metrics, measurement
 
 **Plane**:
-A band's surface drawn as one image placed under its cells, so it shades in pixels rather than
-in whole rows: placed once per size, carrying an identity of its own so one is taken away and the
-other stands, and handed back with the pass that drew it. The rail's plane reaches back over the
-transcript's last columns, so the rail comes out of the transcript's edge rather than being parted
-from it: no line is drawn there, the split costs neither band a column, and the words on both sides
-are drawn unshaded. A terminal that places no picture is given none, and so is either band in a
-palette that draws no colour, where each band's own rows are the whole of its shading; with no
-picture nothing widens, and the lit column down the rail's boundary and the shadow across its last
-row are what that frame draws.
+A band's surface drawn as one image placed under its cells, so it shades in pixels rather than in
+whole rows, placed once per size. The rail's plane reaches back over the transcript's last columns,
+so the rail comes out of the transcript's edge: no line is drawn there. A terminal that places no
+picture, or a band in a palette with no colour, is given none, and each band's own rows are the
+whole of its shading.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 
 **Footprint**:
@@ -221,9 +209,9 @@ _Avoid_: Callout, admonition, banner, badge, note (that one is a kind)
 
 **Source**:
 The words a fence was written with, line for line, kept beside the rows the frame draws them as: a
-copy of a marked fence hands the source back whole — the line breaks and the indentation it was
-written with, and nothing the band drew into it — where the cells are what the band made of it. A
-fence's tag row is no line of its source, and a mark on it takes the fence whole all the same.
+copy of a marked fence hands the source back whole — the line breaks and indentation it was written
+with, and nothing the band drew into it — where the cells are what the band made of it. A fence's
+tag row is no line of its source, and a mark on it takes the fence whole all the same.
 _Avoid_: Body, content, raw text
 
 **Composer**:
@@ -275,20 +263,17 @@ under them saying which matches it shows and how many the query left.
 _Avoid_: File browser, autocomplete, fuzzy finder, file search
 
 **Commands card**:
-The card a draft beginning with a slash draws: every command with the one line that says what it
-does, ranked by how the word after the slash sits in a name — a name it starts, then a name it holds —
-and the row the draft's word names the row marked, `↑`, `↓` and a press walking the mark to another
-row. `Esc` closes it and keeps the words, a word no command holds is a draft again, and the one
-command that takes a word after it is written into the draft for the reader to name.
+The card a draft beginning with a slash draws: every command with the one line saying what it does,
+ranked by how the word sits in a name — a name it starts, then a name it holds — the row the draft's
+word names marked. `Esc` closes it and keeps the words, a word no command holds is a draft again,
+and the one command that takes a word is written into the draft for the reader to name.
 _Avoid_: Palette, slash menu, command list, autocomplete
 
 **Splash screen**:
 The frame a launch opens on: the wordmark, one line saying what the product is, and three commands
 with the line that explains each, set as one block and centred in the band an answer is drawn in,
-with the rail of the facts the launch already holds beside it — the wire, the model, the
-workspace, its branch and the enforcement, and an em dash for the session and the temp a run has yet
-to fill — and nothing over it. In a frame too narrow for a rail's column it is drawn with no rail.
-One paint pass, and never again.
+with the rail of the facts the launch already holds beside it and nothing over it. A frame too
+narrow for a rail's column is drawn with no rail. One paint pass, and never again.
 _Avoid_: Front door, welcome screen, landing page, boot animation
 
 **Key protocol**:
@@ -299,40 +284,34 @@ is handed the same frame and the same keys.
 _Avoid_: Keyboard enhancement, CSI u, key encoding
 
 **Pointer**:
-The wheel's notch and the cell a press landed on. A launch asks whether its terminal reports one when
-it takes the screen, and a terminal nobody can vouch for is handed a frame that takes none. Where it
-is taken, one notch moves the transcript as the page keys do, a press on a card's row chooses that
-row and sends the key it hangs from, and a press on no row of a card is no act at all. A pointer
-is never drawn into a cell.
+The wheel's notch and the cell a press landed on. A launch asks whether its terminal reports one on
+taking the screen, and a terminal nobody can vouch for gets a frame that takes none. Where it is
+taken, one notch moves the transcript, a press on a card's row chooses it and sends the key it hangs
+from, and a press on no row of a card is no act — a pointer is never drawn into a cell.
 _Avoid_: Mouse, cursor (that one is the Caret), hover
 
 **Caret**:
 The terminal's own cursor, and never a cell of a frame: placed in the cell the draft waits in
 wherever a reader can type there, and in the query row of a card that draws one, past the last glyph
-typed at it and kept to the last column of the card's body where the query is cut there. A card that
-draws no query row places none, and no answer and no prompt carries one. Its shape, colour and blink
-are the reader's own settings, and no frame says them.
+typed at it, kept to the card body's last column where the query is cut. A card that draws no query
+row places none, and no answer or prompt carries one. Its shape, colour and blink are the reader's
+own.
 _Avoid_: Block (a caret is no cell), insertion point
 
 **Terminal capabilities**:
-What the terminal a frame draws on can do — the cell it measures a picture against, the colours it
-holds, whether it draws text at more than one cell, whether it reports a **Pointer**, whether it
-places pictures, whether this window is the one being read, which the code calls `Focus`, and whether
-**Sindri's face** is drawn over the rail. Probed once before the first frame and handed to the frame
-whole, and the focus is asked for when the screen is taken, reported again as the window is left and
-returned to, and given up on the way out. It is one fact the frame draws from rather than a
-behaviour: the accent edge recedes while nobody is reading and returns when they are. A terminal that
-reports nothing is drawn in the cells one that reports everything is, minus the facts it does not
-have — and one that reports nothing of the focus is being read.
+What the terminal a frame draws on can do — whether it places pictures, the colours it holds,
+whether it reports a **Pointer**, and whether this window is the one being read. Probed once before
+the first frame and handed to the frame whole, the focus asked for as the screen is taken and given
+up on the way out. A terminal that reports nothing is drawn as one that reports everything, less
+what it lacks.
 _Avoid_: Terminal features, environment, detection, caps
 
 **Frame facts**:
-The workspace and the ground it is judged against, the home the skills are read from, the served name,
-the run's record, the state the run is in, the facts the rail lays, the marker at the head of the
-answer, and the focus the terminal reported, gathered as one value and handed to the frame whole. The
-value is also which frame is drawn: the **Splash screen** until a prompt has been asked for —
-holding what the launch already knows and no run's fact, so no fact that lands ends it — and that
-run's frame from the prompt on.
+The workspace and its ground, the home the skills are read from, the served name, the run's record
+and state, the marker at the head of the answer, and the focus the terminal reported, gathered as
+one value and handed to the frame whole. The value is also which frame is drawn: the **Splash
+screen** until a prompt has been asked for, holding what the launch already knows and no run's fact,
+and that run's frame from the prompt on.
 _Avoid_: View model, props, session state, context
 
 **Transcript**:
