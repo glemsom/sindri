@@ -1,6 +1,6 @@
-//! One paint of a view at a size, read the way a test asks: the cells, the palette, the words, the
-//! caret. `dead_code` is allowed because every test binary compiles this harness and each one reads
-//! a different part of it.
+//! One paint of a view at a size, and one screen read off the bytes a launch drew at a size, read
+//! the way a test asks: the cells, the palette, the words, the caret. `dead_code` is allowed because
+//! every test binary compiles this harness and each one reads a different part of it.
 #![allow(dead_code)]
 
 use std::path::PathBuf;
@@ -9,6 +9,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::{Buffer, Cell};
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Style;
 use sindri::ink::{Ink, Look};
 use sindri::list::QUERY;
 use sindri::palette::Palette;
@@ -17,12 +18,14 @@ use sindri::view::{Painted, View};
 
 const SNAPSHOTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
-/// A view painted once on a headless screen: the cells the pass left, the palette it drew them in,
-/// and what the pass told the terminal of the cursor it placed.
+/// A view painted once on a headless screen, or a screen read off the bytes a launch drew: the
+/// cells, the palette a paint drew them in, what a pass told the terminal of the cursor it placed,
+/// and the cell the caret is in after the frame.
 pub struct Frame {
     cells: Buffer,
-    palette: Palette,
+    palette: Option<Palette>,
     told: Painted,
+    caret: Option<(u16, u16)>,
 }
 
 /// `view` painted once on a headless screen of that size: the one pass every reader here reads.
@@ -38,17 +41,48 @@ pub fn painted(view: &mut View, cols: u16, rows: u16) -> Frame {
         .expect("the frame is painted");
     Frame {
         cells: completed.buffer.clone(),
-        palette,
+        palette: Some(palette),
+        caret: told.caret().map(|at| (at.y, at.x)),
         told,
     }
+}
+
+/// The screen `drawn` — the bytes a launch wrote — left on a terminal of that size, and the cell the
+/// caret was in when it went quiet. No pass here told a terminal anything, and a screen carries
+/// the colours it drew with no palette to name them.
+pub fn screened(drawn: &str, cols: u16, rows: u16) -> Frame {
+    let mut terminal =
+        avt::Terminal::new(usize::from(cols), usize::from(rows)).expect("a screen of that size");
+    terminal.feed(drawn);
+    let mut cells = Buffer::empty(Rect::new(0, 0, cols, rows));
+    for (y, row) in terminal.screen().visible_rows().enumerate() {
+        let y = u16::try_from(y).expect("a row of the screen");
+        cells.set_string(0, y, row.text(), Style::default());
+    }
+    let caret = terminal
+        .cursor()
+        .position()
+        .map(|(col, row)| (narrow(row), narrow(col)));
+    Frame {
+        cells,
+        palette: None,
+        told: Painted::none(),
+        caret,
+    }
+}
+
+/// A cell the screen counts: a terminal wider or taller than a `u16` names is no screen a test reads.
+fn narrow(at: usize) -> u16 {
+    u16::try_from(at).expect("a cell of the screen")
 }
 
 /// A frame of cells written outside a paint, for the rules a real view cannot reach.
 pub fn holding(cells: Buffer, palette: Palette) -> Frame {
     Frame {
         cells,
-        palette,
+        palette: Some(palette),
         told: Painted::none(),
+        caret: None,
     }
 }
 
@@ -68,7 +102,15 @@ impl Frame {
     }
 
     pub fn palette(&self) -> &Palette {
-        &self.palette
+        self.palette.as_ref().expect(
+            "a frame read off a terminal's bytes carries the colours it drew and no palette to name \
+             them: a screen a launch drew names looks nowhere",
+        )
+    }
+
+    /// The cell the terminal's caret is in after the frame, and none where it placed none.
+    pub fn caret(&self) -> Option<(u16, u16)> {
+        self.caret
     }
 
     /// One row of the cells as glyphs, one to a column and full width, from the frame's left edge.
@@ -97,7 +139,7 @@ impl Frame {
 
     pub fn look(&self, x: u16, y: u16) -> Look {
         let cell = self.cell(x, y);
-        Look::of(cell, &self.palette).unwrap_or_else(|| {
+        Look::of(cell, self.palette()).unwrap_or_else(|| {
             panic!(
                 "row {y}, column {x} is drawn in a style that is not a look: foreground {:?}, \
                  background {:?}, modifiers {:?} — every cell of a frame is drawn in a look, so a \
@@ -108,7 +150,7 @@ impl Frame {
     }
 
     pub fn ink(&self, x: u16, y: u16) -> Option<Ink> {
-        Ink::of(self.cell(x, y), &self.palette)
+        Ink::of(self.cell(x, y), self.palette())
     }
 
     pub fn told(&self) -> &Painted {

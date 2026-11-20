@@ -2,9 +2,12 @@
 //! at all where there is no terminal to own. Batch mode gets a pseudo-terminal on stderr — a pipe or a file in
 //! the other half of each test — the UI is spawned on one, and the wire is a loopback socket.
 
+mod frame; // one paint-and-read for every test
+
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Receiver, channel};
@@ -17,9 +20,21 @@ use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
 use rustix::termios::{Winsize, tcsetwinsize};
 use tempfile::TempDir;
 
+// The one call this harness makes of its own: a child of a session of its own, so the size it
+// paints is the pty's and not that of a terminal it inherited.
+unsafe extern "C" {
+    fn setsid() -> i32;
+}
+
 /// How long a sequence is given to arrive before a test calls it absent: generous, because a test that is merely
 /// slow must not read as a program that never spoke.
 const PATIENCE: Duration = Duration::from_secs(10);
+
+/// The size the pty is told it has, and so the size every screen here is read at: the two cannot
+/// disagree about the frame a launch drew.
+const COLS: u16 = 80;
+
+const ROWS: u16 = 24;
 
 const ANSWER: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
@@ -135,8 +150,8 @@ impl Pty {
         tcsetwinsize(
             &slave,
             Winsize {
-                ws_row: 24,
-                ws_col: 80,
+                ws_row: ROWS,
+                ws_col: COLS,
                 ws_xpixel: 800,
                 ws_ypixel: 480,
             },
@@ -252,6 +267,14 @@ impl Session {
     }
 
     fn spawn(command: &mut Command) -> Session {
+        unsafe {
+            command.pre_exec(|| {
+                if setsid() == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
         Session {
             child: Some(command.spawn().expect("the binary should start")),
         }
@@ -290,35 +313,6 @@ impl Drop for Session {
 
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
-}
-
-/// The column the last frame placed the terminal's own cursor in: typing paints one glyph per frame,
-/// so the cursor a frame shows and then moves is how a test knows a whole prompt has landed.
-fn placed_column(stream: &str) -> Option<u16> {
-    let (mut shown, mut placed) = (false, None);
-    let mut rest = stream;
-    while let Some(glyph) = rest.chars().next() {
-        if let Some(tail) = rest.strip_prefix("\u{1b}[")
-            && let Some(end) = tail.find(|glyph: char| ('\u{40}'..='\u{7e}').contains(&glyph))
-        {
-            match (&tail[end..=end], &tail[..end]) {
-                ("h", "?25") => shown = true,
-                ("H", columns) if shown => {
-                    placed = columns
-                        .split_once(';')
-                        .and_then(|(_, column)| column.parse().ok());
-                    shown = false;
-                }
-                ("H", _) | ("l", "?25") => shown = false,
-                _ => {}
-            }
-            rest = &tail[end + 1..];
-            continue;
-        }
-        shown = false;
-        rest = &rest[glyph.len_utf8()..];
-    }
-    placed
 }
 
 fn sequences(stream: &str) -> Vec<&str> {
@@ -496,7 +490,9 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
     // line break and sends nothing. No `?` in the draft either: that key opens a screen.
     pty.type_bytes(b"triage this");
     assert!(
-        drawn.wait_until(|stream| placed_column(stream) == Some(15)),
+        drawn.wait_until(|stream| frame::screened(stream, COLS, ROWS)
+            .caret()
+            .is_some_and(|(_, column)| column == 14)),
         "eleven glyphs typed in the draft's fourth column, one column in from the band's \
          upright, so the terminal's cursor is placed one column past the last: {:?}",
         text(&drawn.bytes())

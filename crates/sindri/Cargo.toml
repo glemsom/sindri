@@ -37,6 +37,7 @@ unicode-width = "0.2"
 syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 
 [dev-dependencies]
+avt = "0.21"
 # `insta` hard-codes the `.snap` extension, which is why a frame's fixture carries one.
 insta = "1.49"
 # rustix already binds this crate's terminal: a second binding to the same termios would be
