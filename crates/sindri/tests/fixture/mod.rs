@@ -39,15 +39,13 @@ const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
 pub const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 
-/// The two skills the fixture's run loads, in the order it loads them.
-const LOADED: [&str; 2] = ["bash", "records"];
+const LOADED_SKILLS: [&str; 2] = ["bash", "records"];
 
-/// The window the run's newest ask is measured against, which the document cannot say: the `usage`
-/// it keeps is every ask summed, and the size the rail draws is what the last request carried.
-const WINDOW: u64 = 200_000;
+/// The window the run's newest ask is measured against.
+const CONTEXT_WINDOW: u64 = 200_000;
 
-/// What that newest ask reported: a size and the part of it the provider served from its own cache.
-const ASKED: Usage = Usage {
+/// The newest ask's own report, which the document's summed usage cannot stand in for.
+const MEASURED: Usage = Usage {
     input: Some(48_200),
     cached_input: Some(42_416),
     output: None,
@@ -751,7 +749,7 @@ fn refused(capabilities: Capabilities) -> View {
 
 fn stats(capabilities: Capabilities) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
-    for name in LOADED {
+    for name in LOADED_SKILLS {
         let directory = root.path().join(".agents/skills").join(name);
         std::fs::create_dir_all(&directory).expect("the skill's directory");
         std::fs::write(
@@ -770,7 +768,7 @@ fn stats(capabilities: Capabilities) -> View {
             .recorded(&document()),
         Transcript::none(),
     );
-    for name in LOADED {
+    for name in LOADED_SKILLS {
         view.paste(&format!("/skill:{name}"));
         assert_eq!(
             view.key(Key::Enter),
@@ -881,17 +879,16 @@ pub fn session() -> &'static Session {
     })
 }
 
-/// The rail's facts as production derives them, off the session the fixture's run writes and the
-/// document its record rewrites.
+/// The rail a run draws, derived the one way production derives it: off the session it writes and
+/// the document its record rewrites, so a fact the rail has stopped reading leaves with them.
 pub fn railed(document: &SessionDocument) -> ledger::Facts {
-    let loaded = LOADED.map(String::from);
+    let loaded = LOADED_SKILLS.map(String::from);
     ledger::Facts::of(session(), document)
         .recorded(document, &loaded)
-        .measured(&ASKED, Some(WINDOW))
+        .measured(&MEASURED, Some(CONTEXT_WINDOW))
 }
 
-/// The rail these frames draw: production's derivation of the record, less the state, because a
-/// frame here that draws no state row names none and the pulse and live fixtures name their own.
+/// The rail these frames draw, less the run's state: a frame that draws no state row names none.
 pub fn facts() -> ledger::Facts {
     ledger::Facts {
         state: None,
@@ -1749,49 +1746,14 @@ fn a_frame_whose_cards_query_row_and_placed_caret_disagree_is_no_fixture() {
 }
 
 #[test]
-fn the_rails_facts_are_read_off_the_fixture_session_and_the_document_it_recorded() {
+fn the_rails_facts_come_off_the_fixture_session_and_the_document_it_recorded() {
     let document = document();
     let facts = railed(&document);
 
     assert_eq!(
-        facts.wire.as_deref(),
-        Some("anthropic"),
-        "the wire the rail draws is the one the document records"
-    );
-    assert_eq!(
-        facts.model.as_deref(),
-        Some("claude-sonnet-4-5-20250929"),
-        "and its model is the served name the document names"
-    );
-    assert_eq!(
-        facts.think.as_deref(),
-        Some("high"),
-        "the thought the rail draws is the one the document's thinking asks for"
-    );
-    assert_eq!(
-        facts.turns,
-        Some((6, 250)),
-        "the turn the rail counts is the document's own against the cap it dialled"
-    );
-    assert_eq!(
-        facts.sandbox,
-        Some(Enforcement::Bubblewrap),
-        "the enforcement the rail names is the one the document says held"
-    );
-    assert_eq!(
-        facts.workspace.as_deref(),
-        Some(document.workspace.as_path()),
-        "the workspace is the tree the document recorded the run standing in"
-    );
-    assert_eq!(
-        facts.branch.as_deref(),
-        Some("spec/1-capability"),
-        "and the branch beside it is the document's own"
-    );
-    assert_eq!(
         facts.session.as_deref(),
         Some(GUID),
-        "the session is the one the fixture's own session was named by"
+        "the session the rail draws is the one the fixture's own session was named by"
     );
     assert_eq!(
         facts.temp.as_deref(),
@@ -1799,15 +1761,30 @@ fn the_rails_facts_are_read_off_the_fixture_session_and_the_document_it_recorded
         "and its temp is that session's, not a path written down here"
     );
     assert_eq!(
-        facts.loaded.len(),
-        LOADED.len(),
-        "the skill count is the count of the skills the run loaded"
+        facts.workspace.as_deref(),
+        Some(document.workspace.as_path()),
+        "the workspace is the tree the document recorded the run standing in"
+    );
+    assert_eq!(
+        facts.loaded, LOADED_SKILLS,
+        "the skills are the ones the run loaded, in the order it loaded them"
+    );
+    assert_eq!(
+        facts.ctx.map(|ctx| (ctx.size, ctx.window)),
+        Some((48_200, Some(CONTEXT_WINDOW))),
+        "the size is the newest ask's, measured against the window the fixture names"
+    );
+    assert_eq!(
+        facts.cache,
+        Some(88),
+        "and the cache beside it is that ask's hit rate, not the share of the summed spend"
     );
 }
 
 #[test]
 fn a_fact_the_document_changes_reaches_the_rail_with_no_edit_to_the_fixture() {
     let changed = SessionDocument {
+        wire: Wire::Openai,
         model: String::from("claude-opus-4-1"),
         branch: Some(String::from("spec/2-the-document")),
         turns: 31,
@@ -1818,14 +1795,19 @@ fn a_fact_the_document_changes_reaches_the_rail_with_no_edit_to_the_fixture() {
     let facts = railed(&changed);
 
     assert_eq!(
+        facts.wire.as_deref(),
+        Some("openai"),
+        "the wire the rail draws is the one the document records"
+    );
+    assert_eq!(
         facts.model.as_deref(),
         Some("claude-opus-4-1"),
-        "a model the document names is the one the rail draws"
+        "and its model is the served name the document names"
     );
     assert_eq!(
         facts.branch.as_deref(),
         Some("spec/2-the-document"),
-        "and a branch it records is the one beside it"
+        "a branch the document records is the one drawn beside the workspace"
     );
     assert_eq!(
         facts.turns,
@@ -1854,7 +1836,7 @@ fn the_rail_frames_draw_no_run_state_and_the_fixture_that_draws_one_says_so() {
     assert_eq!(
         facts().state,
         None,
-        "and a frame that draws no state row states none, leaving the row to the fixtures that \
+        "and a frame that draws no state row states none, leaving that row to the fixtures that \
          say a run is live or has stopped"
     );
 }
