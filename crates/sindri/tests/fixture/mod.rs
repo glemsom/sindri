@@ -188,6 +188,8 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-link" => ways(capabilities),
         "markdown-table-narrow" => construct(capabilities, narrow()),
         "markdown-rule" => construct(capabilities, ruled()),
+        "markdown-footnote" => construct(capabilities, footnotes()),
+        "markdown-footnote-undefined" => construct(capabilities, unfooted()),
         "markdown-break" => construct(capabilities, breaks()),
         // The same answer in both, three of its four fragments under the live marker and all of it
         // under the settled one; nine point four seconds is under ten, so that marker keeps its decimal.
@@ -362,6 +364,27 @@ fn ruled() -> &'static str {
      it.\n\n> a quote keeps its bar over the rule it holds\n>\n> ---\n>\n> and goes on behind \
      the bar\n\n- an item hangs its rule under its own gutter\n\n  ---\n\n  and goes on under \
      the bullet"
+}
+
+/// A reference in prose, one behind a bar and one in a table cell, one footnote referenced twice,
+/// and each definition gathered at the foot of the answer in the order its reference was read.
+fn footnotes() -> &'static str {
+    "A reference[^note] draws a dim marker where the brackets were, numbered by the order the \
+     answer read it in[^second].\n\n> a quote keeps its bar[^note] and the marker of its \
+     reference\n\n| written | where |\n| --- | --- |\n| a cell[^cell] | gathers too |\n\n\
+     [^note]: The one definition the first and the third reference share, drawn once at the foot \
+     however many markers stand in its place.\n\n[^second]: A definition gathered in the order \
+     this reference was read.\n\n[^cell]: A definition a cell gathered, drawn at the foot of the \
+     answer and never inside the table that named it."
+}
+
+/// A reference no definition answers, which is drawn as the words it was written with, and a
+/// definition no reference names, which is drawn nowhere at all.
+fn unfooted() -> &'static str {
+    "A reference[^gone] whose definition never arrived is drawn as the words it was written with, \
+     and one[^here] whose definition came draws the marker of its number.\n\n[^here]: The one \
+     definition this answer arrived with, drawn under its marker at the answer's foot.\n\n\
+     [^unused]: A definition no reference names, which no foot of this answer holds."
 }
 
 fn breaks() -> &'static str {

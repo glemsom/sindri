@@ -2193,3 +2193,247 @@ fn a_break_alone_on_its_own_line_draws_no_row_of_its_own() {
         "a break between two paragraphs is the blank row it already stands in and no cell"
     );
 }
+
+#[test]
+fn a_footnote_reference_draws_as_a_dim_marker_of_its_number_and_no_brackets() {
+    let rows = markdown::rows("a note[^1] here\n\n[^1]: the words it stands for", 30);
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            String::from("a note¹ here"),
+            String::new(),
+            hairline(30),
+            String::from("¹ the words it stands for"),
+        ],
+        "a reference is the marker of its own number and never the brackets it was written with"
+    );
+    assert!(
+        wears(&rows[0], "¹", Look::plain(Ink::Dim)),
+        "the marker is one dim run that borrows no face from the prose around it: {:?}",
+        rows[0].spans()
+    );
+    let marker: u16 = rows[0]
+        .spans()
+        .iter()
+        .filter(|(said, _)| said == "¹")
+        .map(|(said, _)| pen::cells(said))
+        .sum();
+    assert!(
+        marker < pen::cells("[^1]"),
+        "the marker claims fewer columns than the words it stands in the place of: {:?}",
+        rows[0].spans()
+    );
+}
+
+#[test]
+fn a_number_past_nine_is_drawn_as_its_digits_and_still_narrower_than_the_brackets() {
+    let mut text = String::from("first");
+    for at in 1..=10 {
+        text.push_str(&format!("[^{at}] "));
+    }
+    for at in 1..=10 {
+        text.push_str(&format!("\n\n[^{at}]: the {at} words"));
+    }
+    let rows = markdown::rows(&text, 60);
+    let first = rows.first().expect("the answer's first row");
+
+    assert!(
+        wears(first, "¹⁰", Look::plain(Ink::Dim)),
+        "the tenth reference is drawn as the digits of its number: {:?}",
+        first.spans()
+    );
+    assert!(
+        drawn(&rows).contains(&String::from("¹⁰ the 10 words")),
+        "and its definition stands under the same digits: {:?}",
+        drawn(&rows)
+    );
+}
+
+#[test]
+fn two_references_to_one_footnote_draw_two_markers_and_one_definition() {
+    let rows = markdown::rows("first[^a] and again[^a]\n\n[^a]: one definition", 30);
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            String::from("first¹ and again¹"),
+            String::new(),
+            hairline(30),
+            String::from("¹ one definition"),
+        ],
+        "two references to one footnote share its number and one definition answers both"
+    );
+    assert_eq!(
+        drawn(&rows)[0].matches('¹').count(),
+        2,
+        "both references draw a marker: {:?}",
+        drawn(&rows)
+    );
+}
+
+#[test]
+fn the_definitions_stand_at_the_foot_in_the_order_the_references_were_read() {
+    let rows = markdown::rows(
+        "the second[^b] and the first[^a]\n\n[^a]: the a words\n\n[^b]: the b words",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            String::from("the second¹ and the first²"),
+            String::new(),
+            hairline(40),
+            String::from("¹ the b words"),
+            String::from("² the a words"),
+        ],
+        "the number counts the references as they are read, and the definitions stand under it \
+         in that order however the answer wrote them"
+    );
+    assert_eq!(
+        drawn(&rows).iter().filter(|row| row.contains('─')).count(),
+        1,
+        "one hairline gathers the answer's foot and no definition rules a line of its own: {:?}",
+        drawn(&rows)
+    );
+}
+
+#[test]
+fn a_definition_is_drawn_at_the_foot_and_never_where_the_answer_wrote_it() {
+    let rows = markdown::rows("above[^1]\n\n[^1]: the note\n\nbelow", 30);
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            String::from("above¹"),
+            String::new(),
+            String::from("below"),
+            String::new(),
+            hairline(30),
+            String::from("¹ the note"),
+        ],
+        "a definition written between two paragraphs is still only drawn at the answer's foot"
+    );
+}
+
+#[test]
+fn a_reference_whose_definition_never_came_draws_the_words_it_was_written_as() {
+    let rows = markdown::rows("a note[^1] and one[^2]\n\n[^2]: the note that came", 30);
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            String::from("a note[^1] and one¹"),
+            String::new(),
+            hairline(30),
+            String::from("¹ the note that came"),
+        ],
+        "a reference no definition answers is the words it was written as, and the numbers count \
+         the definitions that did arrive"
+    );
+}
+
+#[test]
+fn an_answer_that_wrote_no_definition_is_ruled_by_no_hairline() {
+    let rows = markdown::rows("a note[^1] here", 30);
+
+    assert_eq!(
+        drawn(&rows),
+        [String::from("a note[^1] here")],
+        "a reference whose definition never arrived draws nothing else and no foot"
+    );
+    assert!(
+        !drawn(&rows).iter().any(|row| row.contains('─')),
+        "the foot is a hairline no definition of the answer stands behind, so none is drawn: {:?}",
+        drawn(&rows)
+    );
+}
+
+#[test]
+fn a_definition_no_reference_names_is_drawn_nowhere() {
+    let rows = markdown::rows(
+        "a note[^1]\n\n[^1]: the used one\n\n[^9]: the unused one",
+        30,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            String::from("a note¹"),
+            String::new(),
+            hairline(30),
+            String::from("¹ the used one"),
+        ],
+        "one definition per reference, so a definition no reference names is drawn neither at the \
+         foot nor in the prose"
+    );
+    assert!(
+        !drawn(&rows).iter().any(|row| row.contains("unused")),
+        "and no word of it is drawn anywhere: {:?}",
+        drawn(&rows)
+    );
+}
+
+#[test]
+fn a_reference_a_definition_writes_is_numbered_where_that_block_stands() {
+    let rows = markdown::rows(
+        "a note[^a] here\n\n[^a]: which points on[^b]\n\n[^b]: the b words",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            String::from("a note¹ here"),
+            String::new(),
+            hairline(40),
+            String::from("¹ which points on²"),
+            String::from("² the b words"),
+        ],
+        "a reference written inside a definition is read where that block stands, and its own \
+         definition gathers under it"
+    );
+}
+
+#[test]
+fn a_reference_in_a_quote_and_one_in_a_table_cell_both_gather_at_the_foot() {
+    let rows = markdown::rows(
+        "> a quoted[^q] reference\n\n| cell | other |\n| --- | --- |\n| a table[^t] | plain |\n\n\
+         [^q]: the quote's note\n\n[^t]: the table's note",
+        40,
+    );
+    let drawn = drawn(&rows);
+
+    let quoted = drawn
+        .iter()
+        .find(|row| row.contains("quoted"))
+        .unwrap_or_else(|| panic!("the row the quote is drawn on: {drawn:?}"));
+    assert!(
+        quoted.starts_with("▏ a quoted¹ reference"),
+        "a reference behind a bar draws its marker inside the block it was written in: {quoted:?}"
+    );
+    let cell = drawn
+        .iter()
+        .find(|row| row.contains("a table"))
+        .expect("the row the table's body is drawn on");
+    assert!(
+        cell.contains("a table² │ plain"),
+        "a reference in a cell draws its marker in the cell: {cell:?}"
+    );
+
+    let foot: Vec<&String> = drawn
+        .iter()
+        .skip_while(|row| !row.starts_with(&hairline(40)))
+        .collect();
+    assert_eq!(
+        foot,
+        [
+            &hairline(40),
+            &String::from("¹ the quote's note"),
+            &String::from("² the table's note"),
+        ],
+        "both definitions stand at the foot of the answer, in the order their references were \
+         read and behind one hairline: {drawn:?}"
+    );
+}

@@ -308,7 +308,16 @@ fn laid(
             cols,
             fold,
         ),
-        Entry::Assistant { text, .. } => (answer_on(&text.to_string(), cols, head, surface), None),
+        Entry::Assistant { text, .. } => (
+            answer_on(
+                &text.to_string(),
+                cols,
+                head,
+                surface,
+                markdown::Wholeness::Whole,
+            ),
+            None,
+        ),
         Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
         Entry::Prompt { text } => (asked(&text.to_string(), cols), None),
         Entry::Stop { stop } => (stopped(stop, cols), None),
@@ -437,7 +446,13 @@ fn thought(text: &str, cols: u16) -> Vec<Row> {
 /// The rows an answer is drawn as, set in the answer's gutter — except the row the run's marker
 /// heads, which stands the marker and its blank column in that gutter and lays that row's words
 /// out beside them.
-fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> Vec<Row> {
+fn answer_on(
+    text: &str,
+    cols: u16,
+    head: Option<&Head>,
+    surface: &Surface,
+    wholeness: markdown::Wholeness,
+) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
     // The marker's own words count against the width; the gutter it stands in the place of does
     // not, and a marker the band cannot hold beside one word of the answer is given up whole.
@@ -450,7 +465,7 @@ fn answer_on(text: &str, cols: u16, head: Option<&Head>, surface: &Surface) -> V
         true => (head, reserve),
         false => (None, 0),
     };
-    let mut rows = markdown::rows_in(text, cols, reserve, gutter, surface).into_iter();
+    let mut rows = markdown::rows_in(text, cols, reserve, gutter, surface, wholeness).into_iter();
     let mut laid: Vec<Row> = Vec::new();
     if let Some(head) = head
         && let Some(first) = rows.next()
@@ -1093,7 +1108,13 @@ impl Rows {
             };
             rows.extend(match said {
                 Said::Reasoning => thought(words, self.cols),
-                Said::Answer => answer_on(words, self.cols, head, &self.surface),
+                Said::Answer => answer_on(
+                    words,
+                    self.cols,
+                    head,
+                    &self.surface,
+                    markdown::Wholeness::Arriving,
+                ),
             });
         }
         if let (None, Some(head)) = (newest, head) {

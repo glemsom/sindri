@@ -3548,3 +3548,45 @@ fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
         );
     }
 }
+
+#[test]
+fn a_streaming_answer_draws_the_definitions_that_ended_and_never_one_still_arriving() {
+    let mut rows = Rows::new();
+    rows.resize(40);
+    rows.text("a note[^1] here\n\n[^1]: the words it stands for");
+    rows.live(None);
+
+    let arriving: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        arriving,
+        ["  a note¹ here"],
+        "a definition still arriving is gathered and drawn nowhere, so its answer has no foot yet"
+    );
+
+    rows.text("\n\nand the answer goes on");
+    rows.live(None);
+    let ended: Vec<String> = rows.rows(0).iter().map(words).collect();
+    assert_eq!(
+        ended,
+        [
+            String::from("  a note¹ here"),
+            String::new(),
+            String::from("  and the answer goes on"),
+            String::new(),
+            format!("  {}", pen::filled(pen::columns(38), '─')),
+            String::from("  ¹ the words it stands for"),
+        ],
+        "the definition ended, so an answer still arriving draws it at the foot behind one hairline"
+    );
+
+    rows.push(Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default()
+            .redact("a note[^1] here\n\n[^1]: the words it stands for\n\nand the answer goes on"),
+    });
+    assert_eq!(
+        rows.rows(0).iter().map(words).collect::<Vec<String>>(),
+        ended,
+        "the answer read from the record draws the foot the stream was already drawing"
+    );
+}

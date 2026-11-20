@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-footnote at 80x24
+00 |  A reference¹ draws a dim marker where the brackets were, numbered by the order| plain:13 dim:1 plain:66
+01 |  the answer read it in².                                                       | plain:23 dim:1 plain:56
+02 |                                                                                | plain:80
+03 |▏ a quote keeps its bar¹ and the marker of its reference                        | dim:2 plain:21 dim:1 plain:56
+04 |                                                                                | plain:80
+05 |  written │ where                                                               | plain:2 plain+bold:7 dim:3 plain+bold:5 plain:63
+06 |  ────────┼────────────                                                         | plain:2 dim:21 plain:57
+07 |  a cell³ │ gathers too                                                         | plain:8 dim:4 plain:68
+08 |                                                                                | plain:80
+09 |  ──────────────────────────────────────────────────────────────────────────────| plain:2 dim:78
+10 |  ¹ The one definition the first and the third reference share, drawn once at   | plain:2 dim:2 plain:76
+11 |    the foot however many markers stand in its place.                           | plain:80
+12 |  ² A definition gathered in the order this reference was read.                 | plain:2 dim:2 plain:76
+13 |  ³ A definition a cell gathered, drawn at the foot of the answer and never     | plain:2 dim:2 plain:76
+14 |    inside the table that named it.                                             | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |┌prompt ───────────────────────────────────────────────────────────────────────┐| accent+faint:80
+21 |│› what should the run do?                                                     │| dim:26 plain:53 dim:1
+22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
+23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7
