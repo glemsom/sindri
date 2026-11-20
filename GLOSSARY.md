@@ -199,7 +199,8 @@ _Avoid_: Callout, admonition, banner, badge, note (that one is a kind)
 **Chip**:
 An inline code span, drawn in the accent ink with no band behind it and in the spacing it was written
 with. Inside a way it keeps the way's own dim line under it; inside a heading it is told from the
-heading's own words, because the chip is the accent while the heading keeps its weight.
+heading's own words, because the chip is the accent while the heading keeps its weight. A fence that
+names the file it was written in draws that name as a faint chip beside its language tag.
 _Avoid_: Badge, tag, pill, inline code
 
 **Guide**:
@@ -214,6 +215,13 @@ Where a band ends a fence's line: the words past its edge are dropped and the la
 stands there, because a fence is kept in the shape it was written in and no band reflows one. A
 reader walks a marked fence sideways for the rest, and a copy takes the line as it was written.
 _Avoid_: Truncation, ellipsis, overflow, wrap
+
+**Source**:
+The words a fence was written with, line for line, kept beside the rows the frame draws them as: a
+copy of a marked fence hands the source back whole — the line breaks and the indentation it was
+written with, and no bar, guide or cut — where the cells are what the band made of it. A fence's tag
+row is no line of its source, and a mark on it takes the fence whole all the same.
+_Avoid_: Body, content, raw text
 
 **Draft count**:
 What Enter would send, counted on the far corner of the composer's band: the files the draft's words

@@ -837,6 +837,38 @@ fn a_mark_that_covers_no_fence_line_answers_no_sideways_key() {
 }
 
 #[test]
+fn a_mark_that_opens_on_the_prose_and_runs_into_the_fence_still_walks_it() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(answer(FENCE)),
+    );
+    let (before, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+    let fence = row_of(&before, laid.transcript, "a_fence_line");
+    let prose = row_of(&before, laid.transcript, "the prose under the fence");
+
+    view.drag(Cell::new(prose, 0), Cell::new(fence, 20));
+    let (marked, told) = painted_and_told(&mut view, 100, 24);
+    let laid = told
+        .layout()
+        .expect("a pass that drew a frame laid one out");
+
+    assert!(
+        footer(&marked, &laid).contains("Shift+→"),
+        "a drag the fence is part of is a drag over the fence, however far it runs past it: {}",
+        footer(&marked, &laid)
+    );
+    assert_eq!(
+        view.key(Key::ShiftRight),
+        Outcome::Edited,
+        "and the fence the drag covers answers the sideways key"
+    );
+}
+
+#[test]
 fn a_marked_fence_the_band_holds_whole_names_no_sideways_key() {
     let mut view = View::of(
         Capabilities::default(),

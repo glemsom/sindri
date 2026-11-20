@@ -35,6 +35,16 @@ impl Mark {
         self.head
     }
 
+    /// The first row of the band the mark covers.
+    pub fn first(self) -> u16 {
+        self.anchor.row.min(self.head.row)
+    }
+
+    /// The last row of the band the mark covers.
+    pub fn last(self) -> u16 {
+        self.anchor.row.max(self.head.row)
+    }
+
     pub fn grown(self, down: bool) -> Mark {
         let row = match down {
             true => self.head.row.saturating_add(1),
@@ -98,8 +108,8 @@ impl Span {
     /// The words the mark covers in the band `lines` drew, a cut row keeping every glyph past the
     /// mark's right edge.
     pub fn of(mark: Mark, lines: &[Line]) -> Span {
-        let first = mark.anchor.row.min(mark.head.row);
-        let last = mark.anchor.row.max(mark.head.row);
+        let first = mark.first();
+        let last = mark.last();
         let from = mark.anchor.column.min(mark.head.column);
         let to = mark.anchor.column.max(mark.head.column);
         let mut rows = Vec::new();
