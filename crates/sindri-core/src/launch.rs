@@ -22,7 +22,7 @@ use crate::run::{Cancel, Limits, Run, Shell, Turn};
 use crate::sandbox::{self, Proof};
 use crate::session::{self, Session};
 use crate::skills::{self, Catalog, Diagnostic, home};
-use crate::tools::{BASH, FrontEnd, ToolSet};
+use crate::tools::{BASH, FrontEnd, Tool, ToolSet};
 use crate::wire::Wire;
 
 /// The exit code for a launch that had nothing to run *with*.
@@ -242,6 +242,16 @@ impl Launch {
             .get(BASH)
             .expect("`bash` is the one tool every run registers")
             .description()
+    }
+
+    /// The tools this launch registers, in the order its front end offers them.
+    pub fn tools(&self) -> &[Tool] {
+        self.tools.tools()
+    }
+
+    /// The executor a run on this launch answers the calls those tools name with.
+    pub fn executor(&self) -> &Shell {
+        &self.shell
     }
 
     /// The skills a run on this launch would be offered, by name and with the scope each came
