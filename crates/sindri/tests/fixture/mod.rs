@@ -181,7 +181,7 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-tasks" => construct(capabilities, tasks()),
         "markdown-table" => construct(capabilities, table()),
         "markdown-table-aligned" => construct(capabilities, aligned()),
-        "markdown-table-unaligned" => construct(capabilities, unaligned()),
+        "markdown-table-unaligned" => construct(capabilities, &unaligned()),
         "markdown-table-aligned-narrow" => construct(capabilities, aligned()),
         "markdown-quote" => construct(capabilities, quoted()),
         "markdown-alert" => construct(capabilities, alerts()),
@@ -364,8 +364,7 @@ fn table() -> &'static str {
      bar down its left and the language's tag |"
 }
 
-/// A table whose columns name an alignment each, so every row of a column ends on the edge that
-/// column was written to.
+/// Each of the three alignments a column names, over cells of three widths.
 fn aligned() -> &'static str {
     "| construct | rendering | count |\n| :--- | :---: | ---: |\n| heading | bold, one blank row \
      above | 3 |\n| table | columns joined by a bar, a rule | 12 |\n| code | a bar down its \
@@ -373,10 +372,8 @@ fn aligned() -> &'static str {
 }
 
 /// The very table `aligned` holds, written with no alignment anywhere.
-fn unaligned() -> &'static str {
-    "| construct | rendering | count |\n| --- | --- | --- |\n| heading | bold, one blank row \
-     above | 3 |\n| table | columns joined by a bar, a rule | 12 |\n| code | a bar down its \
-     left | 128 |"
+fn unaligned() -> String {
+    aligned().replace("| :--- | :---: | ---: |", "| --- | --- | --- |")
 }
 
 fn ruled() -> &'static str {

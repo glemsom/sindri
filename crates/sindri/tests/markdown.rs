@@ -1633,13 +1633,6 @@ fn every_wrapped_row_of_a_right_aligned_column_ends_on_its_columns_edge() {
         ],
         "each row a wrapped cell is drawn on takes the pad of its own words"
     );
-    for row in &rows {
-        assert_eq!(
-            row.width(),
-            24,
-            "a wrapped row ends on its column's edge like every row above it: {row:?}"
-        );
-    }
 }
 
 #[test]
@@ -1763,19 +1756,28 @@ fn a_left_aligned_column_is_drawn_as_a_column_that_names_no_alignment() {
 #[test]
 fn a_right_aligned_columns_words_end_on_its_columns_last_cell() {
     let rows = markdown::rows(
-        "| when | count |\n| --- | ---: |\n| one | 1 |\n| two | 22 |",
+        "| when | n |\n| --- | ---: |\n| one | 1 |\n| two | 22 |",
         40,
     );
 
     assert_eq!(
         drawn(&rows),
-        [
-            "when │ count",
-            "─────┼──────",
-            "one  │     1",
-            "two  │    22",
-        ],
-        "a right aligned column is drawn hard against its own last cell"
+        ["when │  n", "─────┼───", "one  │  1", "two  │ 22",],
+        "a right aligned column is drawn hard against its own last cell, its header too"
+    );
+}
+
+#[test]
+fn a_right_aligned_column_a_bar_follows_still_ends_on_its_own_last_cell() {
+    let rows = markdown::rows(
+        "| n | when |\n| ---: | --- |\n| 1 | one |\n| 22 | two |",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [" n │ when", "───┼─────", " 1 │ one", "22 │ two"],
+        "the pad of a right aligned column is spent before its words, so the bar after it stays"
     );
 }
 

@@ -729,16 +729,15 @@ impl Room {
             return;
         };
 
-        let aligns: Vec<Alignment> = (0..columns).map(|at| table.align(at)).collect();
         for line in table.lines(&widths) {
-            let row = joined(&line, &widths, &aligns);
+            let row = joined(&line, &widths, &table.aligns);
             self.guttered(row);
         }
         let rule = header_rule(&widths);
         self.guttered(rule);
         for cells in table.body() {
             for line in lines_of(cells, &widths) {
-                let row = joined(&line, &widths, &aligns);
+                let row = joined(&line, &widths, &table.aligns);
                 self.guttered(row);
             }
         }
@@ -755,9 +754,9 @@ impl Room {
                 std::iter::once(table.head.get(at)).chain(table.rows.iter().map(|row| row.get(at)));
             for (position, cell) in cells.enumerate() {
                 if let Some(cell) = cell {
-                    let align = [table.align(at)];
+                    let align = table.aligns.get(at..).unwrap_or_default();
                     for line in lines_of(std::slice::from_ref(cell), &[available]) {
-                        let row = joined(&line, &[available], &align);
+                        let row = joined(&line, &[available], align);
                         self.guttered(row);
                     }
                 }
@@ -1466,10 +1465,6 @@ impl Table {
         self.rows.push(std::mem::take(&mut self.row));
     }
 
-    fn align(&self, at: usize) -> Alignment {
-        self.aligns.get(at).copied().unwrap_or(Alignment::None)
-    }
-
     fn columns(&self) -> usize {
         std::iter::once(&self.head)
             .chain(self.rows.iter())
@@ -1575,17 +1570,28 @@ fn joined(line: &[Row], widths: &[usize], aligns: &[Alignment]) -> Row {
         }
         let cell = line.get(at);
         let wrote = cell.map_or(0, Row::width);
-        // The last column keeps no blank past its words: padding it would draw cells that
-        // say nothing, and a row is a run of glyphs and not a box.
         let last = at + 1 == widths.len();
-        let align = aligns.get(at).copied().unwrap_or(Alignment::None);
-        let (before, after) = split_pad(align, width.saturating_sub(usize::from(wrote)), last);
+        // The last column keeps no blank past its words, nor any where it wrote nothing: padding
+        // either would draw cells that say nothing, and a row is a run of glyphs and not a box.
+        let spare = match last && wrote == 0 {
+            true => 0,
+            false => width.saturating_sub(usize::from(wrote)),
+        };
+        let before = match aligns.get(at).copied().unwrap_or(Alignment::None) {
+            Alignment::Right => spare,
+            Alignment::Center => spare / 2,
+            _ => 0,
+        };
         if before > 0 {
             row = row.followed_by(&blanks(before));
         }
         if let Some(cell) = cell {
             row = row.followed_by(cell);
         }
+        let after = match last {
+            true => 0,
+            false => spare - before,
+        };
         if after > 0 {
             row = row.followed_by(&blanks(after));
         }
@@ -1594,24 +1600,8 @@ fn joined(line: &[Row], widths: &[usize], aligns: &[Alignment]) -> Row {
 }
 
 /// A run of blank cells worn as a row's own words are, so a pad is drawn in the frame's ink.
-fn blanks(columns: usize) -> Row {
-    Row::of([(pen::blank(pen::columns(columns)), Look::plain(Ink::Plain))])
-}
-
-/// Where the cells a column leaves over are drawn: a right aligned column puts them all before its
-/// words, a centred one halves them with the odd cell after, and a column written with no alignment
-/// keeps its words first. The last column draws no cell past its words.
-fn split_pad(align: Alignment, spare: usize, last: bool) -> (usize, usize) {
-    let (before, after) = match align {
-        Alignment::Right => (spare, 0),
-        Alignment::Center => (spare / 2, spare - spare / 2),
-        _ => (0, spare),
-    };
-    let after = match last {
-        true => 0,
-        false => after,
-    };
-    (before, after)
+fn blanks(cells: usize) -> Row {
+    Row::of([(pen::blank(pen::columns(cells)), Look::plain(Ink::Plain))])
 }
 
 /// The rule under a header: the header's own row with every word spent as `─` and every bar
