@@ -1340,8 +1340,9 @@ fn a_code_block_is_guttered_by_its_language_and_highlighted() {
     let rows = markdown::rows("```rust\nfn main() {\n    let x = 1;\n}\n```", 40);
     assert_eq!(
         drawn(&rows),
-        ["▏ rust", "▏ fn main() {", "▏     let x = 1;", "▏ }"],
-        "the tag stands over the code and the code keeps its own four spaces"
+        ["▏ rust", "▏ fn main() {", "▏    │let x = 1;", "▏ }"],
+        "the tag stands over the code, the code keeps its own spaces, and the last of them \
+         is the frame's guide"
     );
     for row in &rows {
         assert_eq!(
@@ -1354,8 +1355,8 @@ fn a_code_block_is_guttered_by_its_language_and_highlighted() {
         rows[2]
             .spans()
             .iter()
-            .any(|(text, look)| text == "let" && *look == Look::plain(Ink::Accent)),
-        "a keyword is the ink the eye lands on: {:?}",
+            .any(|(text, look)| text == "let" && *look == Look::new(Ink::Accent, Face::Bold)),
+        "a keyword is the ink the eye lands on, worn bold: {:?}",
         rows[2].spans()
     );
     assert!(
@@ -1365,6 +1366,190 @@ fn a_code_block_is_guttered_by_its_language_and_highlighted() {
             .any(|(text, look)| text == "1" && *look == Look::plain(Ink::Muted)),
         "a number is a constant, and constants are read in muted ink: {:?}",
         rows[2].spans()
+    );
+}
+
+#[test]
+fn a_fences_comment_is_drawn_dim_and_italic() {
+    let rows = markdown::rows("```rust\nlet x = 1; // the code's own words\n```", 40);
+    assert!(
+        rows[1].spans().iter().any(
+            |(text, look)| text.starts_with("//") && *look == Look::new(Ink::Dim, Face::Italic)
+        ),
+        "a comment is the quiet ink of a fact, drawn italic: {:?}",
+        rows[1].spans()
+    );
+}
+
+#[test]
+fn a_fences_keyword_and_its_declaration_wear_the_accent_bold() {
+    let rows = markdown::rows("```rust\nstruct Fence {\n    words: u32,\n}\n```", 40);
+
+    for (at, word) in [(1, "struct"), (2, "u32")] {
+        assert!(
+            wears(&rows[at], word, Look::new(Ink::Accent, Face::Bold)),
+            "a declaration is the ink the eye lands on, worn bold: {word} in {:?}",
+            rows[at].spans()
+        );
+    }
+}
+
+#[test]
+fn a_fences_function_name_is_plain_worn_bold() {
+    let rows = markdown::rows("```rust\nfn open() {\n}\n```", 40);
+
+    assert!(
+        wears(
+            &rows[1],
+            "open",
+            Look::plain(Ink::Plain).wearing(Faces::BOLD)
+        ),
+        "a name is read by its weight alone, in the ink the words around it keep: {:?}",
+        rows[1].spans()
+    );
+}
+
+#[test]
+fn a_fences_type_name_is_drawn_in_the_err_ink() {
+    let rows = markdown::rows("```rust\nlet v: Vec<u8> = Vec::new();\n```", 40);
+
+    assert!(
+        wears(&rows[1], "Vec", Look::plain(Ink::Err)),
+        "a type is the frame's own err ink, and no ink was named for it: {:?}",
+        rows[1].spans()
+    );
+}
+
+#[test]
+fn a_fences_attribute_is_drawn_in_the_mark_ink() {
+    let rows = markdown::rows("```rust\n#[derive(Debug)]\nstruct Fence;\n```", 40);
+
+    assert!(
+        wears(&rows[1], "derive", Look::plain(Ink::Mark)),
+        "an attribute is drawn in the frame's own mark: {:?}",
+        rows[1].spans()
+    );
+}
+
+#[test]
+fn a_fences_seven_kinds_each_wear_a_look_no_other_kind_wears() {
+    let rows = markdown::rows(
+        "```rust\n#[derive(Debug)]\nstruct Fence {\n    tag: &'static str,\n}\
+         \n\n// the words it was written with\nfn open() -> Fence {\n    \
+         Fence { tag: \"rust\", words: 2 }\n}\n```",
+        60,
+    );
+    let look = |word: &str| {
+        rows.iter()
+            .flat_map(|row| row.spans())
+            .find(|(text, _)| text == word)
+            .map(|(_, look)| *look)
+            .unwrap_or_else(|| panic!("{word} is a word of the fence"))
+    };
+
+    let earned = [
+        (
+            "// the words it was written with",
+            Look::new(Ink::Dim, Face::Italic),
+        ),
+        ("fn", Look::new(Ink::Accent, Face::Bold)),
+        ("open", Look::plain(Ink::Plain).wearing(Faces::BOLD)),
+        ("Fence", Look::plain(Ink::Err)),
+        ("derive", Look::plain(Ink::Mark)),
+        ("2", Look::plain(Ink::Muted)),
+        ("\"rust\"", Look::plain(Ink::Ok)),
+    ];
+    for (at, (word, worn)) in earned.iter().enumerate() {
+        assert_eq!(
+            look(word),
+            *worn,
+            "a kind of word is drawn in the look it earned: {word}"
+        );
+        assert!(
+            !earned[..at].iter().any(|(_, beside)| beside == worn),
+            "and no two kinds of word are told apart the same way: {earned:?}"
+        );
+    }
+}
+
+#[test]
+fn a_line_indented_four_columns_carries_one_dim_guide_in_its_last_leading_space() {
+    let rows = markdown::rows("```rust\nfn open() {\n    let x = 1;\n}\n```", 40);
+
+    assert_eq!(
+        rows[2].spans(),
+        [
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+            (String::from("   "), Look::plain(Ink::Plain)),
+            (String::from("│"), Look::plain(Ink::Dim)),
+            (String::from("let"), Look::new(Ink::Accent, Face::Bold)),
+            (String::from(" x = "), Look::plain(Ink::Plain)),
+            (String::from("1"), Look::plain(Ink::Muted)),
+            (String::from(";"), Look::plain(Ink::Plain)),
+        ],
+        "the guide stands in the last leading space, behind the bar and the three before it"
+    );
+}
+
+#[test]
+fn a_line_with_no_leading_space_carries_no_guide_and_neither_does_one_indented_a_single_column() {
+    let rows = markdown::rows("```\nzero\n one\n  two\n```", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ zero", "▏  one", "▏  │two"],
+        "two spaces are the least that leaves the words after the guide their room"
+    );
+}
+
+#[test]
+fn a_line_indented_by_tabs_is_guided_in_the_last_of_them() {
+    let rows = markdown::rows("```rust\nfn open() {\n\t\tlet x = 1;\n}\n```", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ rust", "▏ fn open() {", "▏ \t│let x = 1;", "▏ }"],
+        "a tab is leading whitespace, and the last of it is the guide's to take"
+    );
+}
+
+#[test]
+fn a_guide_inside_a_quote_stands_behind_the_quotes_bar() {
+    let rows = markdown::rows("> ```rust\n> fn open() {\n>     let x = 1;\n> }\n> ```", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ ▏ rust", "▏ ▏ fn open() {", "▏ ▏    │let x = 1;", "▏ ▏ }"],
+        "the guide of a quoted fence stands inside the quote's own bar"
+    );
+}
+
+#[test]
+fn a_guide_inside_an_item_stands_past_the_items_gutter() {
+    let rows = markdown::rows("- ```rust\n  fn open() {\n      let x = 1;\n  }\n  ```", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ • rust", "▏   fn open() {", "▏      │let x = 1;", "▏   }"],
+        "the guide of an item's fence stands past the item's gutter"
+    );
+}
+
+#[test]
+fn a_fence_of_no_language_carries_the_frames_own_guide_over_plain_words() {
+    let rows = markdown::rows("```\nfn open() {\n    let x = 1;\n}\n```", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ fn open() {", "▏    │let x = 1;", "▏ }"],
+        "a fence the language says nothing about is still guided by the frame"
+    );
+    assert!(
+        rows[1].spans()[3..]
+            .iter()
+            .all(|(_, look)| *look == Look::plain(Ink::Plain)),
+        "and not one word of it is highlighted: {:?}",
+        rows[1].spans()
     );
 }
 
@@ -1421,8 +1606,8 @@ fn a_mermaid_fence_that_draws_is_drawn_as_the_source_it_was_written_as() {
     let rows = markdown::rows("```mermaid\nflowchart TD\n  A-->B\n```", 200);
     assert_eq!(
         drawn(&rows),
-        ["▏ mermaid", "▏ flowchart TD", "▏   A-->B"],
-        "a diagram is drawn as its source and says no reason, because nothing was refused"
+        ["▏ mermaid", "▏ flowchart TD", "▏  │A-->B"],
+        "a diagram is drawn as its source, one line indented behind its guide"
     );
 }
 

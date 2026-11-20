@@ -316,8 +316,18 @@ fn markdown_alert_marker_80x24_is_two_spellings_of_a_kind_a_marker_naming_none_a
 }
 
 #[test]
-fn markdown_code_80x24_is_a_guttered_block_highlighted_and_one_unknown_language() {
+fn markdown_code_80x24_is_one_block_whose_words_are_told_apart_in_their_inks() {
     fixture::assert_frame("markdown-code", 80, 24);
+}
+
+#[test]
+fn markdown_fence_nested_80x24_is_one_block_whose_depth_divides_its_leading_whitespace() {
+    fixture::assert_frame("markdown-fence-nested", 80, 24);
+}
+
+#[test]
+fn markdown_fence_unknown_80x24_is_a_tag_and_plain_words_no_definition_names() {
+    fixture::assert_frame("markdown-fence-unknown", 80, 24);
 }
 
 #[test]

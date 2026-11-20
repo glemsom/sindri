@@ -33,9 +33,9 @@ refused at 120x40
 27 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
 28 |                                                                                                                        | plain:120
 29 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
-30 |▏ fn main() {                                                                                                           | dim:2 accent:2 plain:116
-31 |▏     let row = Row::of(spans);                                                                                         | dim:2 plain:4 accent:3 plain:111
-32 |▏     row.paint(area, buffer);                                                                                          | dim:2 plain:118
+30 |▏ fn main() {                                                                                                           | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:111
+31 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
+32 |▏    │row.paint(area, buffer);                                                                                          | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:105
 33 |▏ }                                                                                                                     | dim:2 plain:118
 34 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
 35 |  cannot create the sandbox: bubblewrap is on PATH                                                                      | muted:50 plain:70

@@ -35,7 +35,13 @@ const UNDERLINE: Ink = Ink::Dim;
 /// a fence's tag read as the accent of the frame they sit in.
 const FAINT_ACCENT: Look = Look::plain(Ink::Accent).wearing(Faces::FAINT);
 
+const ACCENT_BOLD: Look = Look::plain(Ink::Accent).wearing(Faces::BOLD);
+const BOLD_PLAIN: Look = Look::plain(Ink::Plain).wearing(Faces::BOLD);
+
 const HAIRLINE: char = '─';
+
+/// One cell wide, so it stands in the place of the whitespace it takes and never widens a row.
+const GUIDE: char = '│';
 
 /// The digits a footnote's number is drawn with, one cell each, so the number is never wider than
 /// the bracketed reference it stands in the place of.
@@ -131,21 +137,35 @@ fn syntaxes() -> &'static SyntaxSet {
     SYNTAXES.get_or_init(SyntaxSet::load_defaults_newlines)
 }
 
-/// The ink a kind of word is drawn in, read off the scope `syntect` puts it in: a `syntect` theme
-/// colours a cell by RGB, where a cell of this frame is an ink a fixture writes down by name.
-fn kinds() -> &'static [(Scope, Ink)] {
-    static KINDS: OnceLock<Vec<(Scope, Ink)>> = OnceLock::new();
+/// The look a kind of word wears, read off the scope `syntect` puts it in: a `syntect` theme colours
+/// a cell by RGB, where a cell of this frame is an ink a fixture writes down by name.
+fn kinds() -> &'static [(Scope, Look)] {
+    static KINDS: OnceLock<Vec<(Scope, Look)>> = OnceLock::new();
     KINDS.get_or_init(|| {
         [
-            ("comment", Ink::Dim),
-            ("string", Ink::Ok),
-            ("keyword.operator", Ink::Plain),
-            ("keyword", Ink::Accent),
-            ("storage", Ink::Accent),
-            ("constant", Ink::Muted),
+            ("comment", Look::new(Ink::Dim, Face::Italic)),
+            ("entity.name.function", BOLD_PLAIN),
+            ("support.function", BOLD_PLAIN),
+            ("variable.function", BOLD_PLAIN),
+            ("support.macro", BOLD_PLAIN),
+            ("entity.other.attribute-name", Look::plain(Ink::Mark)),
+            ("variable.annotation", Look::plain(Ink::Mark)),
+            ("entity.name.type", Look::plain(Ink::Err)),
+            ("entity.name.struct", Look::plain(Ink::Err)),
+            ("entity.name.class", Look::plain(Ink::Err)),
+            ("entity.name.enum", Look::plain(Ink::Err)),
+            ("entity.name.trait", Look::plain(Ink::Err)),
+            ("entity.name.impl", Look::plain(Ink::Err)),
+            ("support.type", Look::plain(Ink::Err)),
+            ("support.class", Look::plain(Ink::Err)),
+            ("string", Look::plain(Ink::Ok)),
+            ("keyword.operator", Look::plain(Ink::Plain)),
+            ("keyword", ACCENT_BOLD),
+            ("storage", ACCENT_BOLD),
+            ("constant", Look::plain(Ink::Muted)),
         ]
         .into_iter()
-        .filter_map(|(name, ink)| Scope::new(name).ok().map(|scope| (scope, ink)))
+        .filter_map(|(name, look)| Scope::new(name).ok().map(|scope| (scope, look)))
         .collect()
     })
 }
@@ -1356,17 +1376,17 @@ impl Code {
     /// rather than a run that stops.
     fn line(&mut self, line: &str) -> Vec<(String, Look)> {
         let Some((parse, scopes)) = &mut self.parse else {
-            return vec![(String::from(line), Look::plain(Ink::Plain))];
+            return guided(vec![(String::from(line), Look::plain(Ink::Plain))]);
         };
         let Ok(ops) = parse.parse_line(line, syntaxes()) else {
-            return vec![(String::from(line), Look::plain(Ink::Plain))];
+            return guided(vec![(String::from(line), Look::plain(Ink::Plain))]);
         };
         let mut runs: Vec<(String, Look)> = Vec::new();
         let mut at = 0;
         for (offset, op) in ops {
             let offset = offset.min(line.len());
             if offset > at && line.is_char_boundary(offset) {
-                runs.push((String::from(&line[at..offset]), Look::plain(ink_of(scopes))));
+                runs.push((String::from(&line[at..offset]), look_of(scopes)));
                 at = offset;
             }
             // A scope operation this build cannot apply leaves the stack as it was, so the
@@ -1374,22 +1394,65 @@ impl Code {
             let _ = scopes.apply(&op);
         }
         if at < line.len() {
-            runs.push((String::from(&line[at..]), Look::plain(ink_of(scopes))));
+            runs.push((String::from(&line[at..]), look_of(scopes)));
         }
-        runs
+        guided(runs)
     }
 }
 
-/// The ink the innermost kind of scope stands for. The stack is read from its top down, so
-/// the most particular kind of word wins over the block it sits in, and a scope no kind
-/// names is the frame's own ink.
-fn ink_of(scopes: &ScopeStack) -> Ink {
-    for scope in scopes.as_slice().iter().rev() {
-        if let Some((_, ink)) = kinds().iter().find(|(kind, _)| kind.is_prefix_of(*scope)) {
-            return *ink;
+/// `runs` with the last of the line's leading whitespace drawn as the frame's dim guide. Only a
+/// space or a tab ever gives way, so no guide stands over a glyph, a fence bar or a quote's bar.
+fn guided(runs: Vec<(String, Look)>) -> Vec<(String, Look)> {
+    let mut lead = 0;
+    let mut last = None;
+    for (at, (text, _)) in runs.iter().enumerate() {
+        let spaces = leading(text);
+        if spaces > 0 {
+            lead += spaces;
+            last = Some((at, spaces));
+        }
+        if spaces < text.len() {
+            break;
         }
     }
-    Ink::Plain
+    let Some((at, spaces)) = last.filter(|_| lead >= 2) else {
+        return runs;
+    };
+    let mut laid = Vec::with_capacity(runs.len() + 2);
+    for (index, (text, look)) in runs.into_iter().enumerate() {
+        if index != at {
+            laid.push((text, look));
+            continue;
+        }
+        let (before, after) = (&text[..spaces - 1], &text[spaces..]);
+        if !before.is_empty() {
+            laid.push((String::from(before), look));
+        }
+        laid.push((GUIDE.to_string(), Look::plain(Ink::Dim)));
+        if !after.is_empty() {
+            laid.push((String::from(after), look));
+        }
+    }
+    laid
+}
+
+/// How many bytes of `text` open with blank space: what a guide may stand in.
+fn leading(text: &str) -> usize {
+    text.bytes()
+        .take_while(|byte| *byte == b' ' || *byte == b'\t')
+        .count()
+}
+
+/// The look the innermost kind of scope stands for. The stack is read from its top down, so
+/// the most particular kind of word wins over the block it sits in, and a scope no kind
+/// names is the frame's own ink.
+fn look_of(scopes: &ScopeStack) -> Look {
+    for scope in scopes.as_slice().iter().rev() {
+        if let Some((_, look)) = kinds().iter().find(|(kind, _)| kind.is_prefix_of(*scope)) {
+            return *look;
+        }
+    }
+    Look::plain(Ink::Plain)
 }
 
 #[derive(Debug, Default)]
