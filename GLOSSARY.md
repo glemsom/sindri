@@ -65,22 +65,22 @@ _Avoid_: Error, failure, exit, abort
 
 **Context window**:
 How many tokens the model's window holds, when a reader names it in the config. No wire reports
-one and nothing here guesses, so a run with none named has a size and no share of it.
+one and nothing here guesses, so a run with none named has a size and no share of the window.
 _Avoid_: Context limit, token budget, max context
 
 **Status**:
 The document a session publishes about its run: the phase, one redacted line of the run's own words,
 the turn the run is on, and the workspace's name. The line is never the command, the prompt or the
-answer. One is appended to `status.json` beside the transcript as the run goes, so the run of them
-reads back, and the same document is reported off the terminal, so a listener outside the frame reads
-it too. A report about a run held by a session, and never the run's own word about itself, which is
+answer. One is appended to `status.json` beside the transcript as the run goes, so they read back in
+order, and the same document is reported off the terminal, so a listener outside the frame reads it
+too. A report about a run held by a session, and never the run's own word about itself, which is
 **State**'s alone.
 _Avoid_: Progress, notice, indicator
 
 **Phase**:
-One of the four facts a **status** holds: `idle`, `working`, `done`, `blocked` or `error`. The five
-are the document's words, and none of them is the run's own word about itself, which is **State**'s.
-_Avoid_: Status, state, step
+One of the four facts a **Status** holds: which of `idle`, `working`, `done`, `blocked` or `error` the
+document reports. The five are the document's words.
+_Avoid_: Status, state (that one is the run's own), step
 
 ## Confinement
 
@@ -135,7 +135,7 @@ _Avoid_: Prompt, plugin, recipe, tool
 
 **Loaded-skill set**:
 The names loaded so far, in load order; `/skill:name` and the `skill` call both write to it, and
-clearing the history empties it.
+`/new` empties it.
 _Avoid_: Conversation state, skill cache, loaded prompt
 
 **Skill scope**:
@@ -154,10 +154,10 @@ _Avoid_: UI, client, interface
 
 **Sindri's face**:
 The picture of Sindri that the `sindri` binary carries beside the bundled font, measured from its
-own header into a **footprint** and drawn over those cells — decoration, so a terminal that places
-no picture is given no cells and no words for it. It stands over the top rows of the **rail**'s
+own header into a footprint and drawn over those cells — decoration, so a terminal that places
+no picture is given no cells and no words for it. It stands over the top rows of the rail's
 column where the frame has room for one, and nowhere else. A reader turns it off in the config, and a
-frame with it off reserves no row: the facts stand from the rail's first row. Not the **face** an ink
+frame with it off reserves no row: the facts stand from the rail's first row. Not the face an ink
 wears.
 _Avoid_: Logo, avatar, mascot, icon
 
@@ -169,13 +169,12 @@ row and the newest at the foot. What a band cannot hold it counts: the rows of a
 composer's ceiling, and the prompts of a queue past the rows it was given. A fence is not counted
 that way: it is kept in the shape it was written in, so a band never reflows one — the words of a
 fence line past the band's edge are dropped, that row's last cell says more stands there, and a
-reader walks the fence sideways for the rest. The **caret** is no cell of a band: it is placed in
-the cell the draft waits in wherever a reader can type there, and in the query row of a card that
-draws one. No answer and no prompt carries one.
+reader walks the fence sideways for the rest. The **Caret** is no cell of a band, so no band counts
+one.
 _Avoid_: Region, pane, panel, viewport
 
 **Plane**:
-A band's ground drawn as one image placed under its cells, so a surface shades in pixels rather than
+A band's surface drawn as one image placed under its cells, so it shades in pixels rather than
 in whole rows: placed once per size, carrying an identity of its own so one is taken away and the
 other stands, and handed back with the pass that drew it. The rail's plane reaches back over the
 transcript's last columns, so the rail comes out of the transcript's edge rather than being parted
@@ -188,7 +187,7 @@ _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 
 **Alert**:
 A quote whose first line names a kind — `NOTE`, `TIP`, `IMPORTANT`, `WARNING` or `CAUTION` — and
-that draws that kind as a **label**: the name on a row of its own, in an ink of its own, with the
+that draws that kind as a label: the name on a row of its own, in an ink of its own, with the
 quote's words under it in the same column. A quote whose first line names no kind is a quote and
 nothing more, marker-like words and all.
 _Avoid_: Callout, admonition, banner, badge, note (that one is a kind)
@@ -215,7 +214,7 @@ answered from.
 _Avoid_: Geometry, arrangement, tiling, regions
 
 **Footer**:
-The frame's last row: the hints of what a key does **this** frame can honour, most valuable first, each
+The frame's last row: the hints of what a key does _this_ frame can honour, most valuable first, each
 giving up its tail as the row narrows, and a key the frame cannot answer not named at all. An idle
 draft names sending, the commands, the files and the keys; a run in flight names cancelling and never
 sending; and a queue behind the draft is counted where the key that recalls one stands.
@@ -233,7 +232,7 @@ The shape a card's rows share: the query they answer at the head, the one line t
 their rows, and one row per item with the row a reader is on marked — filled down the band the card
 hands it and cut at its frame's edge. A screen that shows one names its own rows, its own mark and
 its own line, so the list knows neither files nor served names.
-_Avoid_: Table, menu, picker (that one is the files' own screen)
+_Avoid_: Table, menu, picker (that one is the Path picker)
 
 **Path picker**:
 The screen `@` opens: the workspace's files as `git` reads them, ranked by how the query sits in one —
@@ -253,7 +252,7 @@ _Avoid_: Palette, slash menu, command list, autocomplete
 **Splash screen**:
 The frame a launch opens on: the wordmark, one line saying what the product is, and three commands
 with the line that explains each, set as one block and centred in the band an answer is drawn in,
-with the **rail** of the facts the launch already holds beside it — the wire, the model, the
+with the rail of the facts the launch already holds beside it — the wire, the model, the
 workspace, its branch and the enforcement, and an em dash for the session and the temp a run has yet
 to fill — and nothing over it. In a frame too narrow for a rail's column it is drawn with no rail.
 One paint pass, and never again.
@@ -272,21 +271,21 @@ it takes the screen, and a terminal nobody can vouch for is handed a frame that 
 is taken, one notch moves the transcript as the page keys do, a press on a card's row chooses that
 row and sends the key it hangs from, and a press on no row of a card is no act at all. A pointer
 is never drawn into a cell.
-_Avoid_: Mouse, cursor (that one is the terminal's own), hover
+_Avoid_: Mouse, cursor (that one is the Caret), hover
 
 **Caret**:
 The terminal's own cursor, and never a cell of a frame: placed in the cell the draft waits in
 wherever a reader can type there, and in the query row of a card that draws one, past the last glyph
 typed at it and kept to the last column of the card's body where the query is cut there. A card that
-draws no query row places none. Its shape, colour and blink are the reader's own settings, and no
-frame says them.
+draws no query row places none, and no answer and no prompt carries one. Its shape, colour and blink
+are the reader's own settings, and no frame says them.
 _Avoid_: Block (a caret is no cell), insertion point
 
 **Terminal capabilities**:
 What the terminal a frame draws on can do — the cell it measures a picture against, the colours it
-holds, whether it draws text at more than one cell, whether it reports a **pointer**, whether it
+holds, whether it draws text at more than one cell, whether it reports a **Pointer**, whether it
 places pictures, whether this window is the one being read, which the code calls `Focus`, and whether
-Sindri's **face** is drawn over the rail. Probed once before the first frame and handed to the frame
+**Sindri's face** is drawn over the rail. Probed once before the first frame and handed to the frame
 whole, and the focus is asked for when the screen is taken, reported again as the window is left and
 returned to, and given up on the way out. It is one fact the frame draws from rather than a
 behaviour: the accent edge recedes while nobody is reading and returns when they are. A terminal that
@@ -294,16 +293,18 @@ reports nothing is drawn in the cells one that reports everything is, minus the 
 have — and one that reports nothing of the focus is being read.
 _Avoid_: Terminal features, environment, detection, caps
 
-**Frame facts**: the workspace and the ground it is judged against, the home the skills are read from,
-the served name, the run's record, the state the run is in, the facts the rail lays, the marker at the
-head of the answer, and the focus the terminal reported, gathered as one value and handed to the
-frame whole. The value is also the screen the frame is drawn as: the **splash screen** until a prompt
-has been asked for — holding what the launch already knows and no run's fact, so no fact that lands
-ends it — and that run's frame from the prompt on. _Avoid_: View model, props, session state,
-context.
+**Frame facts**:
+The workspace and the ground it is judged against, the home the skills are read from, the served name,
+the run's record, the state the run is in, the facts the rail lays, the marker at the head of the
+answer, and the focus the terminal reported, gathered as one value and handed to the frame whole. The
+value is also the screen the frame is drawn as: the **Splash screen** until a prompt has been asked
+for — holding what the launch already knows and no run's fact, so no fact that lands ends it — and
+that run's frame from the prompt on.
+_Avoid_: View model, props, session state, context
 
-**Transcript**: The record a frame draws — the entries a launch has written — with the row the reader
-stands at in it. One of the three values a frame is built from, beside **terminal capabilities**
-and the **frame facts** it draws: a launch hands over the tail, every entry the record writes after
-it is handed with those facts and drawn once, and a reader moves the row.
+**Transcript**:
+The record a frame draws — the entries a launch has written — with the row the reader stands at in it.
+One of the three values a frame is built from, beside **Terminal capabilities** and the **Frame
+facts** it draws: a launch hands over the tail, every entry the record writes after it is handed with
+those facts and drawn once, and a reader moves the row.
 _Avoid_: Log, scrollback, history (that one is a run's own turns)
