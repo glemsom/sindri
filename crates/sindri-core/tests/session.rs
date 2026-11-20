@@ -163,6 +163,80 @@ fn a_session_owns_one_directory_named_by_its_guid() {
 }
 
 #[test]
+fn a_session_a_caller_names_answers_to_that_name_where_it_stands() {
+    let state = state_home();
+    let guid = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
+    let session = Session::named(state.path(), guid).expect("a session named by its caller");
+
+    assert_eq!(session.guid(), guid, "the GUID is the one the caller gave");
+    let root = std::fs::canonicalize(state.path()).expect("the state home resolves");
+    assert_eq!(
+        session.directory(),
+        root.join("sindri").join("sessions").join(guid),
+        "the directory is the one that name stands for under the state home"
+    );
+    assert_eq!(session.temp(), session.directory().join("tmp"));
+    assert!(
+        session.temp().is_dir(),
+        "the temp exists the moment the session does: {}",
+        session.temp().display()
+    );
+    assert!(session.spill_dir().is_dir(), "so does spill/ beside it");
+}
+
+#[test]
+fn two_sessions_opened_under_one_name_stand_in_the_same_directory() {
+    let state = state_home();
+    let one = Session::named(state.path(), "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")
+        .expect("a session named by its caller");
+    let other = Session::named(state.path(), "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")
+        .expect("the session of the same name");
+
+    assert_eq!(one.guid(), other.guid());
+    assert_eq!(
+        one.directory(),
+        other.directory(),
+        "a name stands for one directory, so the second opening finds the first's"
+    );
+    assert_eq!(
+        one.temp(),
+        other.temp(),
+        "and the temp inside it, so a call's files are where the next call looks"
+    );
+}
+
+#[test]
+fn a_name_that_is_not_one_path_component_is_refused_by_name() {
+    let state = state_home();
+    for guid in ["", ".", "..", "/elsewhere", "one/two", "../up"] {
+        let refused = Session::named(state.path(), guid)
+            .expect_err(&format!("{guid:?} is not one path component"));
+
+        assert_eq!(
+            refused.exit_code(),
+            2,
+            "a name the caller cannot use is a usage error"
+        );
+        let said = refused.to_string();
+        assert!(
+            said.contains(&format!("{guid:?}")),
+            "the refusal names the GUID it was handed: {said}"
+        );
+        assert!(
+            said.contains("names one directory"),
+            "and says what a GUID is for: {said}"
+        );
+    }
+    assert!(
+        std::fs::read_dir(state.path())
+            .expect("the state home")
+            .count()
+            == 0,
+        "nothing was made for a name the session refused"
+    );
+}
+
+#[test]
 fn output_a_budget_could_not_hold_is_spilled_and_referenced() {
     let state = state_home();
     let mut session = Session::create(state.path()).expect("a session");

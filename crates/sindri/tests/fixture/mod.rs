@@ -3,6 +3,7 @@
 //! touch. The files are `.snap` because `insta` compares and blesses them and takes no other extension.
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -31,6 +32,7 @@ use sindri_core::provider::{Client, Credential, Deltas};
 use sindri_core::records::{Dials, Entry, SessionDocument, Usage};
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Budget, Exit, State as RunState, Stop};
+use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
@@ -852,7 +854,19 @@ fn live(capabilities: Capabilities, entries: Vec<Entry>, scroll: Scroll) -> View
     )
 }
 
+/// The session every frame names: one for the whole test process, in a state home of its own under
+/// the temp directory, so no path of a developer's home reaches a golden and no GUID comes from
+/// urandom.
+pub fn session() -> &'static Session {
+    static SESSION: OnceLock<Session> = OnceLock::new();
+    SESSION.get_or_init(|| {
+        let home = std::env::temp_dir().join("sindri-frames");
+        Session::named(&home, GUID).expect("a session the frames can name")
+    })
+}
+
 pub fn facts() -> ledger::Facts {
+    let session = session();
     ledger::Facts {
         wire: Some(String::from("anthropic")),
         model: Some(String::from("claude-sonnet-4-5-20250929")),
@@ -869,10 +883,8 @@ pub fn facts() -> ledger::Facts {
         branch: Some(String::from("spec/1-capability")),
         loaded: vec![String::from("bash"), String::from("records")],
         sandbox: Some(Enforcement::Bubblewrap),
-        session: Some(String::from(GUID)),
-        temp: Some(PathBuf::from(
-            "/home/glemsom/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
-        )),
+        session: Some(String::from(session.guid())),
+        temp: Some(session.temp().to_path_buf()),
         ..ledger::Facts::default()
     }
 }
@@ -1723,5 +1735,27 @@ fn a_frame_whose_cards_query_row_and_placed_caret_disagree_is_no_fixture() {
         drawn_query(&keys.cells, card),
         None,
         "a card that takes no glyph draws no query row for a caret to wait in"
+    );
+}
+
+#[test]
+fn the_facts_a_frame_draws_name_the_fixture_session_and_the_temp_it_stands_on() {
+    let facts = facts();
+    let session = session();
+
+    assert_eq!(
+        facts.session.as_deref(),
+        Some(GUID),
+        "the session a frame draws is the one the fixture names"
+    );
+    assert_eq!(
+        facts.temp.as_deref(),
+        Some(session.temp()),
+        "and its temp is that session's own, not a second session's"
+    );
+    assert!(
+        session.temp().ends_with(format!("sessions/{GUID}/tmp")),
+        "the temp is named by the GUID and by nothing drawn from urandom: {}",
+        session.temp().display()
     );
 }
