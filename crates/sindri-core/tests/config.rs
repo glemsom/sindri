@@ -1069,3 +1069,138 @@ fn every_key_merges_above_a_lower_config_and_yields_to_one_above_it() {
         "a key the higher config says nothing about is the lower config's key"
     );
 }
+
+#[test]
+fn every_key_of_the_table_is_reached_by_each_of_its_surfaces() {
+    assert_eq!(
+        SPOKEN.len(),
+        Config::SCHEMA.len(),
+        "the worked examples and the key list must name the same keys"
+    );
+
+    let mut names: Vec<&str> = Vec::new();
+    let mut variables: Vec<&str> = Vec::new();
+    let mut masked: Vec<&str> = Vec::new();
+
+    for field in Config::SCHEMA {
+        let key = field.name;
+        let (_, spoken, file) = worked(key);
+        let alone = the_key_alone(key, file);
+
+        assert!(
+            !key.is_empty(),
+            "every row of the table carries a name, and this row's name is blank"
+        );
+        assert!(
+            !names.contains(&key),
+            "no two rows of the table name one key, and `{key}` is named twice"
+        );
+        names.push(key);
+        let found = Config::field(key)
+            .unwrap_or_else(|| panic!("the schema names `{key}` as a row of its table"));
+        assert_eq!(
+            found.variable, field.variable,
+            "the row `Config::field` finds for `{key}` is that key's own row, spoken by the same \
+             variable and no other row's"
+        );
+        assert_eq!(
+            found.shown(&alone),
+            field.shown(&alone),
+            "the row `Config::field` finds for `{key}` shows what the row of `{key}` shows"
+        );
+
+        let words = field.shown(&alone);
+        assert!(
+            !words.is_empty(),
+            "the file says a value for `{key}`, so the row of `{key}` shows one"
+        );
+        assert!(
+            field.shown(&Config::default()).is_empty(),
+            "a config that says nothing about `{key}` is a row that shows nothing"
+        );
+        if words == sindri_core::redact::MASK {
+            masked.push(key);
+            let refused = field.read(&words).expect_err(&format!(
+                "`{key}` is drawn as the mask, so the row of `{key}` refuses it"
+            ));
+            assert!(
+                refused.to_string().contains(key),
+                "the refusal of the mask names the key a reader has to fix, and `{key}`'s says: \
+                 {refused}"
+            );
+        } else {
+            let parsed = field.read(&words).unwrap_or_else(|error| {
+                panic!("the row of `{key}` parses the words it shows: {error}")
+            });
+            assert_eq!(
+                parsed, alone,
+                "the words the row of `{key}` shows are a value `{key}` reads back as itself, and \
+                 no other key of the config"
+            );
+        }
+
+        let mut document = toml_edit::DocumentMut::new();
+        field
+            .write(&alone, &mut document)
+            .unwrap_or_else(|error| panic!("the row of `{key}` writes its key: {error}"));
+        let written = document.to_string();
+        let table: toml::Table = written
+            .parse()
+            .unwrap_or_else(|error| panic!("the document of `{key}` is TOML: {error}"));
+        let named: Vec<&str> = table.keys().map(String::as_str).collect();
+        assert_eq!(
+            named,
+            [key],
+            "the row of `{key}` writes that key and no other key, and the document is:\n{written}"
+        );
+        let back: Config = toml::from_str(&written).unwrap_or_else(|error| {
+            panic!("the document the row of `{key}` writes reads back: {error}")
+        });
+        assert_eq!(
+            back, alone,
+            "the document the row of `{key}` writes reads back as `{key}`'s value and no other, \
+             and the document is:\n{written}"
+        );
+
+        assert!(
+            !field.variable.is_empty(),
+            "the row of `{key}` carries the variable that speaks it"
+        );
+        assert!(
+            !variables.contains(&field.variable),
+            "no two rows of the table are spoken by one variable, and `{}` is not `{key}`'s alone",
+            field.variable
+        );
+        variables.push(field.variable);
+        let mut from_the_variable = Config::default();
+        field
+            .speak(spoken, &mut from_the_variable)
+            .unwrap_or_else(|error| {
+                panic!("`{}` speaks what `{key}` holds: {error}", field.variable)
+            });
+        assert_eq!(
+            from_the_variable, alone,
+            "`{}` spoken into a config that says nothing is `{key}`'s value and no other key's",
+            field.variable
+        );
+
+        let mut above = alone.clone();
+        field.or_lower(&mut above, &Config::default());
+        assert_eq!(
+            above, alone,
+            "`{key}` named above a config that says nothing keeps its own value"
+        );
+        let mut below = Config::default();
+        field.or_lower(&mut below, &alone);
+        assert_eq!(
+            below, alone,
+            "`{key}` named nowhere above a config that says it takes the lower one's value"
+        );
+    }
+
+    assert_eq!(
+        masked,
+        ["api_key"],
+        "the table masks the one row a secret is drawn as, so no row shows a secret"
+    );
+}
