@@ -628,12 +628,7 @@ fn a_glyph_lands_in_the_list_the_screen_keeps() {
 fn a_press_on_a_row_of_the_visit_is_no_act() {
     let (_root, mut view) = screen(Mode::Settings, caps::pointing());
     let frame = frame::painted(&mut view, 120, 40);
-    let row = frame
-        .rows()
-        .iter()
-        .position(|drawn| drawn.contains("thinking"))
-        .map(|at| at as u16)
-        .expect("the settings card draws the keys of the schema on the rows of its list");
+    let row = frame.row_holding(frame.area(), "thinking");
     let before = marks(&view);
 
     assert_eq!(

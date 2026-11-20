@@ -323,7 +323,7 @@ fn each_row_draws_the_files_name_and_the_directory_it_sits_in_at_every_width_tha
     for cols in WIDTHS {
         let frame = frame::painted(&mut view, cols, 40);
         let rows = frame.rows();
-        let area = frame.cells().area;
+        let area = frame.area();
         for (name, directory) in [("rows.rs", ""), ("view.rs", "src"), ("note.md", "docs/adr")] {
             let y = area.y
                 + u16::try_from(

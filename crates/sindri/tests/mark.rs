@@ -49,6 +49,7 @@ fn answer(turn: u32, text: &str) -> Entry {
 /// The frame the pass laid out, which a pass that drew a frame always hands back.
 fn laid_of(frame: &Frame) -> Layout {
     frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out")
 }
@@ -74,16 +75,6 @@ fn highlighted(frame: &Frame, area: Rect) -> String {
         }
     }
     rows.join("\n")
-}
-
-/// The band row whose cells hold `said`, counted from the band's first row.
-fn row_of(frame: &Frame, area: Rect, said: &str) -> u16 {
-    for y in area.y..area.bottom() {
-        if frame.row(y).contains(said) {
-            return y.saturating_sub(area.y);
-        }
-    }
-    panic!("the frame draws {said:?} on no row of the transcript it was given");
 }
 
 /// What `Ctrl-Y` hands the terminal, read after the frame the key changed has been painted.
@@ -167,7 +158,7 @@ fn a_copy_of_a_row_the_band_cut_hands_back_the_line_as_the_model_wrote_it() {
     );
     let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let laid = laid_of(&frame);
-    let row = row_of(&frame, laid.transcript, "a_fence_line");
+    let row = frame.row_holding(laid.transcript, "a_fence_line");
     view.drag(Cell::new(row, 2), Cell::new(row, 40));
     let taken = copied(&mut view);
 
@@ -193,7 +184,7 @@ fn a_copy_of_a_marked_fence_hands_back_the_fence_whole() {
     );
     let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let laid = laid_of(&frame);
-    let row = row_of(&frame, laid.transcript, "two = 2");
+    let row = frame.row_holding(laid.transcript, "two = 2");
     view.drag(Cell::new(row, 2), Cell::new(row, 20));
     let taken = copied(&mut view);
 
@@ -216,7 +207,7 @@ fn a_copy_of_a_fence_the_band_cut_hands_back_every_whole_line_of_it() {
     );
     let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let laid = laid_of(&frame);
-    let row = row_of(&frame, laid.transcript, "short");
+    let row = frame.row_holding(laid.transcript, "short");
     view.drag(Cell::new(row, 2), Cell::new(row, 40));
     let taken = copied(&mut view);
 
@@ -238,7 +229,7 @@ fn a_blank_line_inside_a_marked_fence_is_a_line_of_the_copy() {
     );
     let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let laid = laid_of(&frame);
-    let row = row_of(&frame, laid.transcript, "b = 2");
+    let row = frame.row_holding(laid.transcript, "b = 2");
     view.drag(Cell::new(row, 2), Cell::new(row, 20));
     let taken = copied(&mut view);
 
@@ -258,7 +249,7 @@ fn the_cells_a_marked_fence_is_highlighted_in_are_its_own_rows() {
     );
     let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let laid = laid_of(&frame);
-    let row = row_of(&frame, laid.transcript, "two = 2");
+    let row = frame.row_holding(laid.transcript, "two = 2");
     view.drag(Cell::new(row, 2), Cell::new(row, 20));
     let marked = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let lit = highlighted(&marked, laid.transcript);
@@ -282,7 +273,7 @@ fn a_copy_of_a_fence_is_no_other_fence_of_the_same_answer() {
     );
     let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let laid = laid_of(&frame);
-    let row = row_of(&frame, laid.transcript, "body = 1");
+    let row = frame.row_holding(laid.transcript, "body = 1");
     view.drag(Cell::new(row, 2), Cell::new(row, 20));
     let taken = copied(&mut view);
 
@@ -303,7 +294,7 @@ fn a_copy_of_a_fence_marked_on_its_name_hands_back_the_fence_whole() {
     );
     let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let laid = laid_of(&frame);
-    let row = row_of(&frame, laid.transcript, "rust crates/sindri/src/rows.rs");
+    let row = frame.row_holding(laid.transcript, "rust crates/sindri/src/rows.rs");
     view.drag(Cell::new(row, 0), Cell::new(row, 30));
     let taken = copied(&mut view);
 
@@ -324,7 +315,7 @@ fn a_mark_that_runs_past_the_fence_is_copied_as_it_is_drawn() {
     );
     let frame = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let laid = laid_of(&frame);
-    let row = row_of(&frame, laid.transcript, "let one");
+    let row = frame.row_holding(laid.transcript, "let one");
     view.drag(Cell::new(row, 2), Cell::new(row + 2, 30));
     let taken = copied(&mut view);
 

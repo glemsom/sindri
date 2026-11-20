@@ -9,7 +9,6 @@ use ratatui::layout::Position;
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
-use sindri::ink::Look;
 use sindri::ledger::{self, Boot};
 use sindri::mark;
 use sindri::pulse::Pulse;
@@ -28,9 +27,10 @@ use sindri_core::run::{Budget, Exit, State as RunState, Stop};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 
-const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
-
 pub const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
+
+/// The recorded files a fixture's view is built from: the picture corpus under `pictures`.
+const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
 const LOADED_SKILLS: [&str; 2] = ["bash", "records"];
 
@@ -65,14 +65,14 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
 
     // The cell before the line: `insta`'s diff of a frame says which rows moved and never
     // which cell is wrong.
-    if let Some(picture) = accepted(&fixture)
-        && let Some(differed) = first_difference(&picture, &drawn)
+    if let Some(picture) = crate::frame::accepted(&fixture)
+        && let Some(differed) = crate::frame::first_difference(&picture, &drawn)
     {
         println!("frame {fixture}: {differed}");
     }
 
-    frame.assert_caret(&fixture);
     frame.snapshot(name, &fixture);
+    frame.assert_caret(&fixture);
 
     // The line `make check` ends on, written on a line of its own: libtest has left the
     // test's name unterminated on the terminal while this test ran.
@@ -1421,98 +1421,8 @@ pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
 /// `view` drawn once on a headless screen of that size, so a fixture built by a key is handed back
 /// with the pass that key read.
 fn drawn(mut view: View, cols: u16, rows: u16) -> View {
-    let _ = crate::frame::painted(&mut view, cols, rows);
+    crate::frame::painted(&mut view, cols, rows);
     view
-}
-
-fn accepted(fixture: &str) -> Option<String> {
-    let path = PathBuf::from(FIXTURES).join(format!("{fixture}.snap"));
-    let text = std::fs::read_to_string(path).ok()?;
-    let mut lines = text.lines();
-    if lines.next()? != "---" {
-        return Some(text);
-    }
-    let frame: Vec<&str> = lines.skip_while(|line| *line != "---").skip(1).collect();
-    Some(frame.join("\n"))
-}
-
-fn first_difference(picture: &str, drawn: &str) -> Option<String> {
-    let picture: Vec<&str> = picture.lines().collect();
-    let drawn: Vec<&str> = drawn.lines().collect();
-
-    for (line, (expected, actual)) in picture.iter().zip(&drawn).enumerate() {
-        if expected == actual {
-            continue;
-        }
-        return Some(match (row_of(expected), row_of(actual)) {
-            (Some(expected), Some(actual)) => differing_cell(&expected, &actual),
-            _ => format!(
-                "line {} reads {expected:?} where the frame draws {actual:?}",
-                line + 1
-            ),
-        });
-    }
-
-    (picture.len() != drawn.len()).then(|| {
-        format!(
-            "the fixture holds {} lines and the frame draws {}",
-            picture.len(),
-            drawn.len()
-        )
-    })
-}
-
-fn differing_cell(expected: &Row, actual: &Row) -> String {
-    let columns = expected.glyphs.len().max(actual.glyphs.len());
-    for column in 0..columns {
-        let (held, drawn) = (cell(expected, column), cell(actual, column));
-        if held != drawn {
-            return format!(
-                "row {}, column {column}: the fixture holds {held} and the frame draws {drawn}",
-                expected.number
-            );
-        }
-    }
-    format!(
-        "row {}: every cell of it agrees and its line does not, which this harness wrote wrong",
-        expected.number
-    )
-}
-
-fn cell(row: &Row, column: usize) -> String {
-    match (row.glyphs.get(column), row.looks.get(column)) {
-        (Some(glyph), Some(look)) => format!("{glyph:?} in {}", look.name()),
-        _ => String::from("no cell at all"),
-    }
-}
-
-struct Row {
-    number: u16,
-    glyphs: Vec<char>,
-    looks: Vec<Look>,
-}
-
-fn row_of(line: &str) -> Option<Row> {
-    let (number, rest) = line.split_once(' ')?;
-    let (glyphs, runs) = rest.strip_prefix('|')?.rsplit_once('|')?;
-    let looks = looks_in(runs.trim())?;
-    let glyphs: Vec<char> = glyphs.chars().collect();
-    (glyphs.len() == looks.len()).then_some(Row {
-        number: number.parse().ok()?,
-        glyphs,
-        looks,
-    })
-}
-
-fn looks_in(runs: &str) -> Option<Vec<Look>> {
-    let mut looks = Vec::new();
-    for run in runs.split_whitespace() {
-        let (look, count) = run.split_once(':')?;
-        let look = Look::from_name(look)?;
-        let count: u16 = count.parse().ok()?;
-        looks.extend(std::iter::repeat_n(look, usize::from(count)));
-    }
-    Some(looks)
 }
 
 #[test]
@@ -1521,17 +1431,12 @@ fn a_frame_whose_cards_query_row_and_placed_caret_disagree_is_no_fixture() {
     let frame = crate::frame::painted(&mut view, 120, 40);
     frame.assert_caret("files-120x40");
 
-    let _card = frame
-        .told()
-        .layout()
-        .and_then(|laid| laid.card)
-        .expect("the picker is drawn on a card");
     let drawn = frame
         .query_row()
         .expect("the card draws the row its query is typed at");
     let (column, row) = drawn;
     assert_eq!(
-        frame.caret(),
+        frame.told().caret(),
         Some(Position::new(column, row)),
         "a frame whose cells draw a query row places its cursor one column past the glyphs typed \\
          at it"
@@ -1546,11 +1451,6 @@ fn a_frame_whose_cards_query_row_and_placed_caret_disagree_is_no_fixture() {
     );
     let mut view = named("keys", Capabilities::default());
     let keys = crate::frame::painted(&mut view, 120, 40);
-    let _card = keys
-        .told()
-        .layout()
-        .and_then(|laid| laid.card)
-        .expect("the keys screen is drawn on a card");
     assert_eq!(
         keys.query_row(),
         None,

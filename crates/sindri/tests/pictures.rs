@@ -1492,7 +1492,7 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
     let frame = frame::painted(&mut view, 80, 24);
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(frame.told());
     assert_eq!(ground.area(), band);
     assert_eq!(
@@ -1543,7 +1543,7 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
 fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
     let mut launching = splash(true);
     let frame = frame::painted(&mut launching, 120, 40);
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(frame.told());
     assert_eq!(
         ground.area(),
@@ -1578,7 +1578,7 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
         Palette::ANSI,
         "a terminal that names no twenty-four-bit colour draws the design in its greys"
     );
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(frame.told());
     let (width, height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the band's well in pixels");
@@ -1628,7 +1628,7 @@ fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(frame.told());
     let (width, height) = ground.pixels().dimensions();
     assert_eq!(
@@ -1675,7 +1675,7 @@ fn the_bands_ground_rises_out_of_the_well_over_its_first_cell() {
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
     let palette = *frame.palette();
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(frame.told());
     let (width, height) = ground.pixels().dimensions();
     let column = width - 1;
@@ -1704,7 +1704,7 @@ fn the_rise_out_of_the_well_eases_into_the_bands_head() {
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
     let palette = *frame.palette();
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(frame.told());
     let (width, _height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the well in pixels");
@@ -1761,8 +1761,9 @@ fn the_carets_glow_carries_across_the_rise_out_of_the_well() {
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
     let frame = frame::painted(&mut view, 80, 24);
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let caret = frame
+        .told()
         .caret()
         .expect("a draft that takes the keys places the terminal's cursor");
     let caret = (caret.x, caret.y);
@@ -1788,8 +1789,9 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
     let frame = frame::painted(&mut view, 80, 24);
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let caret = frame
+        .told()
         .caret()
         .expect("a draft that takes the keys places the terminal's cursor");
     let caret = (caret.x, caret.y);
@@ -1826,7 +1828,7 @@ fn the_bands_top_rule_reads_back_as_the_accent_edge_over_its_rise() {
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
     let palette = *frame.palette();
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(frame.told());
     assert_eq!(
         ground.area(),
@@ -1862,6 +1864,7 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     let mut view = railed(true, false);
     let frame = frame::painted(&mut view, 120, 40);
     let rail = frame
+        .told()
         .layout()
         .expect("a laid out frame")
         .rail
@@ -1973,7 +1976,7 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_composer() {
         "a palette that draws no colour is handed no plane over the composer: the band drawn in \
          its place is the flat one the frame already had"
     );
-    let band = frame.layout().expect("a laid out frame").composer;
+    let band = frame.told().layout().expect("a laid out frame").composer;
     for row in 0..band.height {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
@@ -1997,8 +2000,8 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
         "a terminal that places no picture is handed no plane at all: {:?}",
         plain_frame.told().planes()
     );
-    let band = plain_frame.layout().unwrap().composer;
-    assert_eq!(band, picture_frame.layout().unwrap().composer);
+    let band = plain_frame.told().layout().unwrap().composer;
+    assert_eq!(band, picture_frame.told().layout().unwrap().composer);
     let palette = plain_frame.palette();
     for row in 0..band.height {
         let x = band.x + band.width / 2;

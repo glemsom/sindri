@@ -20,7 +20,7 @@ use sindri::palette::Palette;
 use sindri::pen::{self, Clip};
 use sindri::pointer::Pointer;
 use sindri::rows::Scroll;
-use sindri::view::{Painted, Transcript, View};
+use sindri::view::{Transcript, View};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 
@@ -44,16 +44,6 @@ fn answer(text: &str) -> Vec<Entry> {
     }]
 }
 
-/// The band row whose cells hold `said`, counted from the band's first row.
-fn row_of(frame: &Frame, area: Rect, said: &str) -> u16 {
-    for y in area.y..area.bottom() {
-        if frame.row(y).contains(said) {
-            return y.saturating_sub(area.y);
-        }
-    }
-    panic!("the frame draws {said:?} on no row of the band it was given");
-}
-
 /// One fence line wider than the band it is drawn in, and a row of prose under it.
 const FENCE: &str = "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_\
                      the_shape_the_model_wrote_it_in_and_no_band_reflows_one = 1;\n```\n\n\
@@ -69,24 +59,6 @@ fn footer(frame: &Frame, laid: &sindri::view::Layout) -> String {
         .collect()
 }
 
-fn drawn_at(frame: &Frame, said: &str) -> (u16, u16) {
-    let wanted: Vec<char> = said.chars().collect();
-    let area = frame.cells().area;
-    for y in area.y..area.bottom() {
-        let row: Vec<char> = frame.row(y).chars().collect();
-        if let Some(at) = row
-            .windows(wanted.len())
-            .position(|held| held == wanted.as_slice())
-        {
-            return (
-                y,
-                area.x.saturating_add(u16::try_from(at).expect("a column")),
-            );
-        }
-    }
-    panic!("the frame draws {said:?} on no row of it");
-}
-
 #[test]
 fn a_pass_hands_back_the_destination_a_row_named() {
     let mut view = View::of(
@@ -95,7 +67,7 @@ fn a_pass_hands_back_the_destination_a_row_named() {
         Transcript::of(answer("see [the gate](https://example.test/gate)")),
     );
     let frame = frame::painted(&mut view, 120, 40);
-    let (row, column) = drawn_at(&frame, "the gate");
+    let (row, column) = frame.drawn_at("the gate");
 
     assert_eq!(
         frame.told().links().at(row, column),
@@ -143,7 +115,7 @@ fn a_press_on_a_row_the_pass_laid_chooses_that_row() {
     );
     view.key(Key::Char('/'));
     let frame = frame::painted(&mut view, 120, 40);
-    let (row, _) = drawn_at(&frame, "/quit");
+    let (row, _) = frame.drawn_at("/quit");
 
     assert_eq!(
         view.pointer(frame.told(), Pointer::Press(Cell::new(row, 40))),
@@ -172,7 +144,7 @@ fn a_pass_under_a_card_tells_the_terminal_nothing_of_the_frame_beneath_it() {
         frame.told().sizes().laid().is_empty(),
         "and no heading of it is drawn large: the scrim is read as the words it holds"
     );
-    let (row, _) = drawn_at(&frame, "/quit");
+    let (row, _) = frame.drawn_at("/quit");
     assert_eq!(
         view.pointer(frame.told(), Pointer::Press(Cell::new(row, 40))),
         Outcome::Quit,
@@ -234,7 +206,7 @@ fn a_pass_hands_back_the_entry_it_laid_on_a_row() {
         Transcript::of([turns(1), answer("- gate\n- rule\n- mark")].concat()),
     );
     let frame = frame::painted(&mut view, 120, 40);
-    let (row, _) = drawn_at(&frame, "gate");
+    let (row, _) = frame.drawn_at("gate");
 
     assert_eq!(
         frame.told().drawn().entry(row),
@@ -264,7 +236,7 @@ fn a_pass_hands_back_the_span_a_copy_takes() {
         Transcript::of(answer("- gate\n- rule\n- mark")),
     );
     let frame = frame::painted(&mut view, 120, 40);
-    let (row, column) = drawn_at(&frame, "rule");
+    let (row, column) = frame.drawn_at("rule");
 
     view.drag(Cell::new(row, column), Cell::new(row, column + 3));
     let frame = frame::painted(&mut view, 120, 40);
@@ -284,7 +256,7 @@ fn an_act_that_replaces_the_transcript_empties_what_the_pass_drew() {
         Transcript::of(answer("- gate\n- rule\n- mark")),
     );
     let frame = frame::painted(&mut view, 120, 40);
-    let (row, column) = drawn_at(&frame, "rule");
+    let (row, column) = frame.drawn_at("rule");
     view.drag(Cell::new(row, column), Cell::new(row, column + 3));
     frame::painted(&mut view, 120, 40);
     assert_eq!(
@@ -318,6 +290,7 @@ fn a_pass_hands_back_the_bands_it_shared_the_frame_out_in() {
     let area = Rect::new(0, 0, 120, 40);
     let frame = frame::painted(&mut view, 120, 40);
     let laid = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
 
@@ -376,7 +349,7 @@ fn a_pass_hands_back_the_bands_it_shared_the_frame_out_in() {
 /// The row a border glyph of a card is drawn on, and the columns it is drawn in: the glyph's first
 /// and last cell along that row, read off the frame rather than measured from the card's width.
 fn border(frame: &Frame, glyph: char) -> (u16, u16, u16) {
-    let area = frame.cells().area;
+    let area = frame.area();
     for y in area.y..area.bottom() {
         let found: Vec<u16> = frame
             .row(y)
@@ -402,6 +375,7 @@ fn a_pass_under_a_card_hands_back_the_body_the_screens_rows_were_drawn_in() {
     view.key(Key::Char('?'));
     let frame = frame::painted(&mut view, 120, 40);
     let laid = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
     let card = laid
@@ -463,6 +437,7 @@ fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
     );
     let frame = frame::painted(&mut view, 120, 40);
     let laid = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
 
@@ -488,6 +463,7 @@ fn a_pass_hands_back_the_rail_beside_the_transcript_and_none_while_no_fact_is_kn
     let area = Rect::new(0, 0, 120, 40);
     let frame = frame::painted(&mut view, 120, 40);
     let laid = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
     let (shape, rail) = laid
@@ -518,6 +494,7 @@ fn a_pass_hands_back_the_rail_beside_the_transcript_and_none_while_no_fact_is_kn
     );
     let frame = frame::painted(&mut plain, 120, 40);
     let laid = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
 
@@ -550,6 +527,7 @@ fn the_caret_is_placed_in_the_band_the_pass_drew_and_not_in_one_counted_again() 
 
     let frame = frame::painted(&mut view, 40, 12);
     let band = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out")
         .composer;
@@ -572,10 +550,12 @@ fn a_frame_with_no_card_keeps_the_caret_placed_in_the_band_the_pass_handed_back(
     plain.paste("a draft of mine");
     let frame = frame::painted(&mut plain, 40, 12);
     let laid = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
     assert_eq!(laid.card, None, "a draft alone draws no card: {laid:?}");
     let caret = frame
+        .told()
         .caret()
         .expect("a draft takes the keys, so the pass places the caret in it");
     assert!(
@@ -593,6 +573,7 @@ fn a_frame_with_no_card_keeps_the_caret_placed_in_the_band_the_pass_handed_back(
     screen.key(Key::Char('?'));
     let frame = frame::painted(&mut screen, 40, 12);
     let laid = frame
+        .told()
         .layout()
         .expect("a screen is drawn over a frame that was laid out under it");
     assert!(laid.card.is_some(), "a screen is drawn on a card: {laid:?}");
@@ -626,6 +607,7 @@ fn a_typed_drafts_band_carries_no_cell_drawn_in_the_mark() {
     view.paste("a draft of mine");
     let frame = frame::painted(&mut view, 40, 12);
     let laid = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
 
@@ -665,6 +647,7 @@ fn a_pass_counts_a_wide_glyph_as_two_columns_of_caret() {
         );
         view.paste(draft);
         frame::painted(&mut view, 40, 12)
+            .told()
             .caret()
             .expect("a draft takes the keys, so the pass places the cursor in it")
     };
@@ -687,6 +670,7 @@ fn a_pass_where_a_reader_types_no_draft_hands_back_no_caret() {
     commands.key(Key::Char('/'));
     let frame = frame::painted(&mut commands, 60, 13);
     let laid = frame
+        .told()
         .layout()
         .expect("a pass under a card still laid the frame the card stands over");
     assert!(laid.card.is_some(), "the commands card is drawn: {laid:?}");
@@ -720,12 +704,14 @@ fn a_card_that_leaves_the_carets_cell_leaves_the_cursor_in_that_same_cell() {
     view.key(Key::Char('/'));
     let frame = frame::painted(&mut view, 120, 40);
     let laid = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
     let card = laid
         .card
         .expect("the commands card is drawn, and the pass says where its body went");
     let cursor = frame
+        .told()
         .caret()
         .expect("a card that never reaches the caret's cell leaves the cursor where it was");
 
@@ -755,9 +741,10 @@ fn a_marked_fence_answers_the_sideways_key_and_the_footer_names_it_only_there() 
     );
     let before = frame::painted(&mut view, 100, 24);
     let laid = before
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
-    let row = row_of(&before, laid.transcript, "a_fence_line");
+    let row = before.row_holding(laid.transcript, "a_fence_line");
     assert!(
         !footer(&before, &laid).contains("Shift+"),
         "a frame with nothing marked names no sideways key: {}",
@@ -767,6 +754,7 @@ fn a_marked_fence_answers_the_sideways_key_and_the_footer_names_it_only_there() 
     view.drag(Cell::new(row, 0), Cell::new(row, 60));
     let marked = frame::painted(&mut view, 100, 24);
     let laid = marked
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
     assert!(
@@ -817,13 +805,15 @@ fn a_mark_that_covers_no_fence_line_answers_no_sideways_key() {
     );
     let before = frame::painted(&mut view, 100, 24);
     let laid = before
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
-    let row = row_of(&before, laid.transcript, "the prose under the fence");
+    let row = before.row_holding(laid.transcript, "the prose under the fence");
 
     view.drag(Cell::new(row, 0), Cell::new(row, 40));
     let marked = frame::painted(&mut view, 100, 24);
     let laid = marked
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
 
@@ -848,14 +838,16 @@ fn a_mark_that_opens_on_the_prose_and_runs_into_the_fence_still_walks_it() {
     );
     let before = frame::painted(&mut view, 100, 24);
     let laid = before
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
-    let fence = row_of(&before, laid.transcript, "a_fence_line");
-    let prose = row_of(&before, laid.transcript, "the prose under the fence");
+    let fence = before.row_holding(laid.transcript, "a_fence_line");
+    let prose = before.row_holding(laid.transcript, "the prose under the fence");
 
     view.drag(Cell::new(prose, 0), Cell::new(fence, 20));
     let marked = frame::painted(&mut view, 100, 24);
     let laid = marked
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
 
@@ -880,13 +872,15 @@ fn a_marked_fence_the_band_holds_whole_names_no_sideways_key() {
     );
     let before = frame::painted(&mut view, 100, 24);
     let laid = before
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
-    let row = row_of(&before, laid.transcript, "let short");
+    let row = before.row_holding(laid.transcript, "let short");
 
     view.drag(Cell::new(row, 0), Cell::new(row, 40));
     let marked = frame::painted(&mut view, 100, 24);
     let laid = marked
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
 
@@ -915,9 +909,10 @@ fn a_marked_line_of_a_cut_fence_answers_the_key_however_short_the_line_is() {
     );
     let before = frame::painted(&mut view, 100, 24);
     let laid = before
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
-    let row = row_of(&before, laid.transcript, "let short");
+    let row = before.row_holding(laid.transcript, "let short");
 
     view.drag(Cell::new(row, 0), Cell::new(row, 40));
     frame::painted(&mut view, 100, 24);
@@ -938,15 +933,17 @@ fn a_width_change_drops_the_walk_a_fence_was_left_in() {
     );
     let wide = frame::painted(&mut view, 120, 24);
     let laid = wide
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
-    let row = row_of(&wide, laid.transcript, "a_fence_line");
+    let row = wide.row_holding(laid.transcript, "a_fence_line");
 
     view.drag(Cell::new(row, 0), Cell::new(row, 119));
     frame::painted(&mut view, 120, 24);
     assert_eq!(view.key(Key::ShiftRight), Outcome::Edited);
     let nudged = frame::painted(&mut view, 120, 24);
     let laid = nudged
+        .told()
         .layout()
         .expect("a pass that drew a frame laid one out");
     let walked = nudged.row(laid.transcript.y + row);
@@ -975,16 +972,18 @@ fn one_pass_hands_back_the_cells_the_rows_the_words_and_the_caret() {
     let frame = frame::painted(&mut view, 120, 40);
 
     assert_eq!(
-        frame.cells().area,
+        frame.area(),
         Rect::new(0, 0, 120, 40),
         "the cells the pass left cover the screen"
     );
     assert_eq!(frame.rows().len(), 40, "one row to a row of the screen");
 
     let at = frame
+        .told()
         .caret()
         .expect("the pass places its caret in the draft it drew");
     let laid = frame
+        .told()
         .layout()
         .expect("a pass that drew a frame laid it out");
     assert!(
@@ -1000,7 +999,7 @@ fn one_pass_hands_back_the_cells_the_rows_the_words_and_the_caret() {
         "the row the draft is typed on says it: {row:?}"
     );
     assert_eq!(
-        frame.words()[usize::from(at.y - frame.cells().area.y)],
+        frame.words()[usize::from(at.y - frame.area().y)],
         row.trim_end(),
         "a word is the row with the trailing blanks cut off"
     );
@@ -1027,7 +1026,7 @@ fn the_text_a_golden_holds_names_every_cell_and_the_look_it_wears() {
         &palette,
     );
 
-    let drawn = frame::holding(cells, palette, Painted::none()).text("two-faces");
+    let drawn = frame::holding(cells, palette).text("two-faces");
     let written = drawn.lines().nth(1).expect("the one row of the frame");
     assert_eq!(
         written,
@@ -1037,6 +1036,12 @@ fn the_text_a_golden_holds_names_every_cell_and_the_look_it_wears() {
         ),
         "the faces a cell wears and the line under it are written in one order, so one frame has \
          one picture of it"
+    );
+    let row = frame::row_of(written).expect("the row a golden holds is the row it reads back");
+    assert_eq!(
+        row.looks,
+        [emphasis, linked],
+        "and the looks it reads back are the two the cells were written in"
     );
 }
 
@@ -1051,5 +1056,5 @@ fn a_cell_holding_two_glyphs_is_no_frame() {
         .expect("the one cell of the frame")
         .set_symbol("ab");
 
-    frame::holding(cells, palette, Painted::none()).rows();
+    frame::holding(cells, palette).rows();
 }

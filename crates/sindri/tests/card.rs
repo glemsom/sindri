@@ -17,7 +17,7 @@ use sindri::facts::Facts;
 use sindri::ink::{Face, Ink, Look};
 use sindri::keys::{Act, Mode};
 use sindri::palette::Palette;
-use sindri::view::{Painted, Transcript, View};
+use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::served::Listing;
@@ -134,23 +134,15 @@ fn drafted() -> View {
 /// The rows the card's two borders stand on and the columns its corners are drawn at, or none for a
 /// card a frame under fifty columns draws with no border at all.
 fn corners(drawn: &Frame) -> Option<(u16, u16, u16, u16)> {
-    let area = drawn.cells().area;
-    let corner = |y: u16, glyph: char| {
-        drawn
-            .row(y)
-            .chars()
-            .position(|said| said == glyph)
-            .and_then(|column| u16::try_from(column).ok())
-            .map(|column| area.x + column)
-    };
+    let area = drawn.area();
     let rows = area.y..area.bottom();
-    let top = rows.clone().find(|y| corner(*y, '╭').is_some())?;
-    let bottom = rows.rev().find(|y| corner(*y, '╰').is_some())?;
+    let top = rows.clone().find(|y| drawn.column_of(*y, '╭').is_some())?;
+    let bottom = rows.rev().find(|y| drawn.column_of(*y, '╰').is_some())?;
     Some((
         top,
         bottom,
-        corner(top, '╭').expect("a left corner"),
-        corner(top, '╮').expect("a right corner"),
+        drawn.column_of(top, '╭').expect("a left corner"),
+        drawn.column_of(top, '╮').expect("a right corner"),
     ))
 }
 
@@ -201,8 +193,8 @@ fn a_card_is_at_most_seventy_two_columns_wide_and_centred() {
             frame.row(top)
         );
         assert_eq!(
-            frame.row(top).chars().position(|said| said == '╮'),
-            Some(usize::from(left) + 71),
+            frame.column_of(top, '╮'),
+            Some(left + 71),
             "and its right corner is seventy-one columns on from its left one: {:?}",
             frame.row(top)
         );
@@ -261,7 +253,7 @@ fn every_screen_open_over_the_frame_carries_the_accent_on_the_edge_row_of_its_ca
             let card = corners(&frame);
             let (top, bottom, left, right) = match card {
                 Some((top, bottom, left, right)) => (top, bottom, left, right),
-                None => (frame.cells().area.y, frame.cells().area.y, 0, cols - 1),
+                None => (frame.area().y, frame.area().y, 0, cols - 1),
             };
             let edge = frame.row(top);
             assert!(
@@ -726,10 +718,7 @@ fn card_on(cols: u16, rows: u16, name: &str, leaves: &str, holds: u16) -> (Frame
         edge,
         &Palette::TRUECOLOR,
     );
-    (
-        frame::holding(cells, Palette::TRUECOLOR, Painted::none()),
-        body,
-    )
+    (frame::holding(cells, Palette::TRUECOLOR), body)
 }
 
 /// The card a frame of `cols` by `rows` paints when the screen inside it holds `holds` rows, and
@@ -874,7 +863,7 @@ fn a_card_covers_no_row_of_the_frame_its_body_and_borders_do_not_need() {
         edge,
         &Palette::TRUECOLOR,
     );
-    let frame = frame::holding(cells, Palette::TRUECOLOR, Painted::none());
+    let frame = frame::holding(cells, Palette::TRUECOLOR);
 
     for y in (0..7).chain(13..20) {
         assert_eq!(
@@ -968,8 +957,8 @@ fn every_screen_is_drawn_on_a_card_as_tall_as_the_rows_it_holds() {
                     frame.rows()
                 )
             });
-            let above = top - frame.cells().area.y;
-            let below = frame.cells().area.bottom() - 1 - bottom;
+            let above = top - frame.area().y;
+            let below = frame.area().bottom() - 1 - bottom;
             let held = bottom - top - 1;
 
             assert!(

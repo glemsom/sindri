@@ -1,4 +1,9 @@
+//! One paint of a view at a size, read the way a test asks: the cells, the palette, the words, the
+//! caret. `dead_code` is allowed because every test binary compiles this harness and each one reads
+//! a different part of it.
 #![allow(dead_code)]
+
+use std::path::PathBuf;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -8,9 +13,9 @@ use sindri::ink::{Ink, Look};
 use sindri::list::QUERY;
 use sindri::palette::Palette;
 use sindri::pictures::PLACEHOLDER;
-use sindri::view::{Layout, Painted, View};
+use sindri::view::{Painted, View};
 
-const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+const SNAPSHOTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
 /// A view painted once on a headless screen: the cells the pass left, the palette it drew them in,
 /// and what the pass told the terminal of the cursor it placed.
@@ -27,8 +32,8 @@ pub fn painted(view: &mut View, cols: u16, rows: u16) -> Frame {
         Terminal::new(TestBackend::new(cols, rows)).expect("a headless screen of that size");
     let mut told = Painted::none();
     let completed = terminal
-        .draw(|frame| {
-            told = view.paint(frame.area(), frame.buffer_mut());
+        .draw(|screen| {
+            told = view.paint(screen.area(), screen.buffer_mut());
         })
         .expect("the frame is painted");
     Frame {
@@ -39,17 +44,21 @@ pub fn painted(view: &mut View, cols: u16, rows: u16) -> Frame {
 }
 
 /// A frame of cells written outside a paint, for the rules a real view cannot reach.
-pub fn holding(cells: Buffer, palette: Palette, told: Painted) -> Frame {
+pub fn holding(cells: Buffer, palette: Palette) -> Frame {
     Frame {
         cells,
         palette,
-        told,
+        told: Painted::none(),
     }
 }
 
 impl Frame {
     pub fn cells(&self) -> &Buffer {
         &self.cells
+    }
+
+    pub fn area(&self) -> Rect {
+        self.cells.area
     }
 
     pub fn cell(&self, x: u16, y: u16) -> &Cell {
@@ -106,12 +115,43 @@ impl Frame {
         &self.told
     }
 
-    pub fn caret(&self) -> Option<Position> {
-        self.told.caret()
+    /// The column `glyph` is drawn in on row `y`, counted from the frame's first column.
+    pub fn column_of(&self, y: u16, glyph: char) -> Option<u16> {
+        let area = self.cells.area;
+        self.row(y)
+            .chars()
+            .position(|said| said == glyph)
+            .and_then(|at| u16::try_from(at).ok())
+            .map(|at| area.x.saturating_add(at))
     }
 
-    pub fn layout(&self) -> Option<Layout> {
-        self.told.layout()
+    /// The row of the frame whose cells say `said`, counted from the band's first row.
+    pub fn row_holding(&self, band: Rect, said: &str) -> u16 {
+        for y in band.y..band.bottom() {
+            if self.row(y).contains(said) {
+                return y.saturating_sub(band.y);
+            }
+        }
+        panic!("the frame draws {said:?} on no row of the band it was given");
+    }
+
+    /// The row and the column the words `said` begin at.
+    pub fn drawn_at(&self, said: &str) -> (u16, u16) {
+        let wanted: Vec<char> = said.chars().collect();
+        let area = self.cells.area;
+        for y in area.y..area.bottom() {
+            let row: Vec<char> = self.row(y).chars().collect();
+            if let Some(at) = row
+                .windows(wanted.len())
+                .position(|held| held == wanted.as_slice())
+            {
+                return (
+                    y,
+                    area.x.saturating_add(u16::try_from(at).expect("a column")),
+                );
+            }
+        }
+        panic!("the frame draws {said:?} on no row of it");
     }
 
     /// The golden text: the name and size of the frame, then every row as its glyphs between two
@@ -140,19 +180,19 @@ impl Frame {
         text
     }
 
-    /// The golden `golden` that the frame `name` draws: the snapshot the suite holds is this one
+    /// The golden `fixture` that the frame `name` draws: the snapshot the suite holds is this one
     /// text, blessed from here and from no other file.
-    pub fn snapshot(&self, name: &str, golden: &str) {
-        insta::with_settings!({ snapshot_path => FIXTURES, prepend_module_to_snapshot => false }, {
-            insta::assert_snapshot!(golden, self.text(name));
+    pub fn snapshot(&self, name: &str, fixture: &str) {
+        insta::with_settings!({ snapshot_path => SNAPSHOTS, prepend_module_to_snapshot => false }, {
+            insta::assert_snapshot!(fixture, self.text(name));
         });
     }
 
     /// Holds the caret the pass placed against the cell the cells draw a card's query row at: a
     /// golden frame writes down cells and no positions, so the two are read apart.
-    pub fn assert_caret(&self, golden: &str) {
+    pub fn assert_caret(&self, fixture: &str) {
         if let Err(disagreed) = carets_agree(self.query_row(), self.told.caret()) {
-            panic!("frame {golden}: {disagreed}");
+            panic!("frame {fixture}: {disagreed}");
         }
     }
 
@@ -230,4 +270,96 @@ fn glyph(cell: &Cell, x: u16, y: u16) -> char {
              nowhere to be written down"
         ),
     }
+}
+
+/// The text the golden `fixture` holds, and none while no fixture of that name is blessed.
+pub fn accepted(fixture: &str) -> Option<String> {
+    let path = PathBuf::from(SNAPSHOTS).join(format!("{fixture}.snap"));
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut lines = text.lines();
+    if lines.next()? != "---" {
+        return Some(text);
+    }
+    let frame: Vec<&str> = lines.skip_while(|line| *line != "---").skip(1).collect();
+    Some(frame.join("\n"))
+}
+
+/// Where the golden `picture` and the frame `drawn` first disagree, and none where they agree.
+pub fn first_difference(picture: &str, drawn: &str) -> Option<String> {
+    let picture: Vec<&str> = picture.lines().collect();
+    let drawn: Vec<&str> = drawn.lines().collect();
+
+    for (line, (expected, actual)) in picture.iter().zip(&drawn).enumerate() {
+        if expected == actual {
+            continue;
+        }
+        return Some(match (row_of(expected), row_of(actual)) {
+            (Some(expected), Some(actual)) => differing_cell(&expected, &actual),
+            _ => format!(
+                "line {} reads {expected:?} where the frame draws {actual:?}",
+                line + 1
+            ),
+        });
+    }
+
+    (picture.len() != drawn.len()).then(|| {
+        format!(
+            "the fixture holds {} lines and the frame draws {}",
+            picture.len(),
+            drawn.len()
+        )
+    })
+}
+
+fn differing_cell(expected: &Row, actual: &Row) -> String {
+    let columns = expected.glyphs.len().max(actual.glyphs.len());
+    for column in 0..columns {
+        let (held, drawn) = (cell(expected, column), cell(actual, column));
+        if held != drawn {
+            return format!(
+                "row {}, column {column}: the fixture holds {held} and the frame draws {drawn}",
+                expected.number
+            );
+        }
+    }
+    format!(
+        "row {}: every cell of it agrees and its line does not, which this harness wrote wrong",
+        expected.number
+    )
+}
+
+fn cell(row: &Row, column: usize) -> String {
+    match (row.glyphs.get(column), row.looks.get(column)) {
+        (Some(glyph), Some(look)) => format!("{glyph:?} in {}", look.name()),
+        _ => String::from("no cell at all"),
+    }
+}
+
+pub struct Row {
+    pub number: u16,
+    pub glyphs: Vec<char>,
+    pub looks: Vec<Look>,
+}
+
+pub fn row_of(line: &str) -> Option<Row> {
+    let (number, rest) = line.split_once(' ')?;
+    let (glyphs, runs) = rest.strip_prefix('|')?.rsplit_once('|')?;
+    let looks = looks_in(runs.trim())?;
+    let glyphs: Vec<char> = glyphs.chars().collect();
+    (glyphs.len() == looks.len()).then_some(Row {
+        number: number.parse().ok()?,
+        glyphs,
+        looks,
+    })
+}
+
+fn looks_in(runs: &str) -> Option<Vec<Look>> {
+    let mut looks = Vec::new();
+    for run in runs.split_whitespace() {
+        let (look, count) = run.split_once(':')?;
+        let look = Look::from_name(look)?;
+        let count: u16 = count.parse().ok()?;
+        looks.extend(std::iter::repeat_n(look, usize::from(count)));
+    }
+    Some(looks)
 }

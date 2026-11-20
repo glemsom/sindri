@@ -245,6 +245,7 @@ fn the_ledger_body_holds_the_rows_it_laid_and_the_card_it_is_drawn_on_is_that_ta
     let laid = usize::from(ledger(&body).height());
 
     let card = frame::painted(&mut view, tall.width, tall.height)
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out")
         .card
@@ -258,6 +259,7 @@ fn the_ledger_body_holds_the_rows_it_laid_and_the_card_it_is_drawn_on_is_that_ta
 
     let small = Rect::new(0, 0, 80, 24);
     let card = frame::painted(&mut view, small.width, small.height)
+        .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out")
         .card

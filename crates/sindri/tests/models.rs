@@ -5,8 +5,6 @@
 mod caps; // the terminals these frames are drawn on
 mod frame; // one paint-and-read for every test
 
-use frame::Frame;
-
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
@@ -257,22 +255,11 @@ fn body(rows: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// The row of a frame the screen draws `said` on: a press lands on the cells a row was drawn in,
-/// so the cells are what a test reads.
-fn row_holding(frame: &Frame, said: &str) -> u16 {
-    frame
-        .rows()
-        .iter()
-        .position(|row| row.contains(said))
-        .map(|row| u16::try_from(row).expect("a row of a frame this short"))
-        .unwrap_or_else(|| panic!("the screen draws {said:?} on no row of it"))
-}
-
 #[test]
 fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
     let mut view = screen(caps::pointing());
     let frame = frame::painted(&mut view, 120, 40);
-    let row = row_holding(&frame, SECOND);
+    let row = frame.row_holding(frame.area(), SECOND);
 
     assert_eq!(
         view.pointer(frame.told(), Pointer::Press(Cell::new(row, 40))),
@@ -290,8 +277,8 @@ fn a_press_on_a_served_row_names_that_name_and_closes_the_screen() {
 fn a_press_on_no_row_of_the_model_screen_names_nothing() {
     let mut view = screen(caps::pointing());
     let frame = frame::painted(&mut view, 120, 40);
-    let query = row_holding(&frame, "query:");
-    let name = row_holding(&frame, SECOND);
+    let query = frame.row_holding(frame.area(), "query:");
+    let name = frame.row_holding(frame.area(), SECOND);
 
     for (at, why) in [
         (Cell::new(query, 40), "the row the query is typed on"),

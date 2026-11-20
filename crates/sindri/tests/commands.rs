@@ -523,12 +523,7 @@ fn a_press_on_a_command_row_chooses_it_the_way_a_file_row_is_chosen() {
     );
     clicked.paste("/s");
     let drawn = frame::painted(&mut clicked, 120, 40);
-    let row = drawn
-        .rows()
-        .iter()
-        .position(|row| row.contains("/stats"))
-        .unwrap_or_else(|| panic!("the frame draws {:?} on no row of it", "/stats"));
-    let row = drawn.cells().area.y + u16::try_from(row).expect("a row of the frame");
+    let row = drawn.area().y + drawn.row_holding(drawn.area(), "/stats");
 
     let mut typed = View::of(
         Capabilities::default(),
