@@ -1292,11 +1292,54 @@ impl Rows {
         let Some(work) = self.newest_work() else {
             return false;
         };
+        self.toggle(work.start)
+    }
+
+    /// The fold of the work `at` stands in, opened if closed and folded if open: what a press on a
+    /// work's head row does. A work the band draws as no row, and an entry in no work, move nothing.
+    pub fn toggle(&mut self, at: usize) -> bool {
+        let work = self.work(at);
+        if !self.worth_a_row(&work) {
+            return false;
+        }
         let to = match self.held[work.start].place {
             Place::Opens(Fold::Closed) => Fold::Open,
-            _ => Fold::Closed,
+            Place::Opens(Fold::Open) => Fold::Closed,
+            _ => return false,
         };
         self.opened(work.start, to)
+    }
+
+    /// The work entry `at` stands in, which is the one row of it a press opens or folds, and none
+    /// for an entry the cache does not hold.
+    pub fn work_of(&self, at: usize) -> Option<Range<usize>> {
+        (at < self.held.len()).then(|| self.work(at))
+    }
+
+    /// The prompt that asked the exchange entry `at` belongs to: the one at it, or the last one
+    /// above it.
+    fn prompt_above(&self, at: usize) -> Option<usize> {
+        (0..=at).rev().find(|entry| is_prompt(&self.held[*entry]))
+    }
+
+    /// Whether entry `at` is the answer a run ended on rather than the work of one.
+    pub fn is_answer(&self, at: usize) -> bool {
+        self.held.get(at).is_some_and(|held| {
+            matches!(held.what, What::Fact(Entry::Assistant { .. })) && held.place == Place::Alone
+        })
+    }
+
+    /// The entries of the exchange entry `at` belongs to: from the prompt that asked it to the entry
+    /// before the next prompt, and none where no prompt stands above it.
+    pub fn exchange(&self, at: usize) -> Option<Range<usize>> {
+        if at >= self.held.len() {
+            return None;
+        }
+        let start = self.prompt_above(at)?;
+        let end = (start + 1..self.held.len())
+            .find(|entry| is_prompt(&self.held[*entry]))
+            .unwrap_or(self.held.len());
+        Some(start..end)
     }
 
     /// Opens the fold entry `at` stands on, and answers whether this call is what moved it: the work
@@ -1364,6 +1407,19 @@ impl Rows {
         height
     }
 
+    /// The top row of every prompt the record holds, counted from the transcript's first row.
+    pub fn prompts(&mut self) -> Vec<u32> {
+        let mut tops = Vec::new();
+        let mut at: u32 = 0;
+        for entry in 0..self.held.len() {
+            if is_prompt(&self.held[entry]) {
+                tops.push(at);
+            }
+            at = at.saturating_add(u32::try_from(self.rows(entry).len()).unwrap_or(u32::MAX));
+        }
+        tops
+    }
+
     /// The thumb a window `scroll` rows behind the tail of this transcript draws in a band `band`
     /// rows tall, and none where there is nothing left out of view or the band holds no gutter.
     pub fn thumb(&mut self, scroll: Scroll, band: u16) -> Option<Thumb> {
@@ -1428,6 +1484,11 @@ impl Rows {
         pieces.reverse();
         Window { pieces }
     }
+}
+
+/// Whether this entry is the reader's own words, which is the row an exchange opens with.
+fn is_prompt(held: &Held) -> bool {
+    matches!(held.what, What::Fact(Entry::Prompt { .. }))
 }
 
 /// Whether this entry is the work of its exchange: a turn, a thought, a call or a result. A

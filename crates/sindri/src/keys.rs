@@ -101,6 +101,8 @@ pub enum Act {
     Back,
     Forward,
     Tail,
+    Before,
+    After,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -111,7 +113,7 @@ pub struct Binding {
     pub act: Act,
 }
 
-const COMPOSER: [Binding; 23] = [
+const COMPOSER: [Binding; 25] = [
     Binding {
         key: Key::Char('?'),
         name: "?",
@@ -183,6 +185,18 @@ const COMPOSER: [Binding; 23] = [
         name: "Ctrl-D",
         does: "the transcript a band on",
         act: Act::Forward,
+    },
+    Binding {
+        key: Key::Char('['),
+        name: "[",
+        does: "the prompt before, while the draft is empty",
+        act: Act::Before,
+    },
+    Binding {
+        key: Key::Char(']'),
+        name: "]",
+        does: "the prompt after, while the draft is empty",
+        act: Act::After,
     },
     Binding {
         key: Key::ShiftDown,

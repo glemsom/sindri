@@ -5336,9 +5336,12 @@ fn the_band_scrolls_the_whole_conversation_the_record_holds() {
         "and the deepest row the frame stands at is the first row the whole conversation holds"
     );
     let (notice, _) = notice_of(&back);
-    assert!(
-        notice.starts_with(&format!("{} rows back", view.scroll().back())),
-        "the row above the composer counts the page off the whole conversation: {notice:?}"
+    let back = view.scroll().back();
+    assert_eq!(
+        notice.trim_end(),
+        format!("prompt 1 / 2 \u{b7} {back} rows back \u{b7} End follows the run"),
+        "the row above the composer names the prompt the frame stands on and counts the page \
+             off the whole conversation"
     );
 }
 
@@ -5483,4 +5486,486 @@ fn a_word_a_run_says_after_slash_new_is_drawn_and_the_rows_it_superseded_are_not
         "and the word the run in flight says after it is the new band's: {:?}",
         frame_rows(&drawn)
     );
+}
+
+/// Whether `row` is a prompt's divider: the word it opens with and the rule filled to the band's edge
+/// behind it.
+fn divider(row: &str) -> bool {
+    row.contains("prompt ─") && row.ends_with('─')
+}
+
+/// A frame on a transcript of `count` exchanges.
+fn conversation(count: u32) -> View {
+    View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(exchanges(count)),
+    )
+}
+
+/// The entries of `count` exchanges, each a prompt of one row of words under its divider and an
+/// answer of one row, so a prompt's place in the band is a fact of its number.
+fn exchanges(count: u32) -> Vec<Entry> {
+    (1..=count)
+        .flat_map(|asked| {
+            [
+                Entry::Prompt {
+                    text: SecretSet::default().redact(format!("prompt {asked}")),
+                },
+                Entry::Assistant {
+                    turn: asked,
+                    text: SecretSet::default().redact(format!("answer {asked}")),
+                },
+            ]
+        })
+        .collect()
+}
+
+#[test]
+fn a_bracket_takes_the_frame_to_the_prompt_before_the_one_it_stands_on() {
+    let mut view = conversation(20);
+    let buffer = painted(&mut view, 120, 40);
+    assert!(
+        divider(&drawn_row(&buffer, 0)),
+        "twenty exchanges of three rows are sixty rows, and the band's thirty-six open on the \
+             ninth prompt's divider: {:?}",
+        frame_rows(&buffer)
+    );
+    assert!(drawn_row(&buffer, 1).contains("prompt 9"));
+
+    assert_eq!(
+        view.key(Key::Char('[')),
+        Outcome::Edited,
+        "`[` is a frame to paint"
+    );
+    let buffer = painted(&mut view, 120, 40);
+    assert!(
+        divider(&drawn_row(&buffer, 0)),
+        "the frame stands on the eighth prompt's divider: {:?}",
+        frame_rows(&buffer)
+    );
+    assert!(drawn_row(&buffer, 1).contains("prompt 8"));
+    let (notice, _) = notice_of(&buffer);
+    assert!(
+        notice.starts_with("prompt 8 / 20"),
+        "the row above the composer names the prompt the frame stands on: {notice:?}"
+    );
+}
+
+#[test]
+fn a_bracket_takes_the_frame_to_the_prompt_after_the_one_it_stands_on() {
+    let mut view = conversation(20);
+    painted(&mut view, 120, 40);
+    assert_eq!(
+        view.key(Key::Char('[')),
+        Outcome::Edited,
+        "one prompt before the ninth is the eighth"
+    );
+    painted(&mut view, 120, 40);
+
+    assert_eq!(
+        view.key(Key::Char(']')),
+        Outcome::Edited,
+        "`]` is a frame to paint"
+    );
+    let buffer = painted(&mut view, 120, 40);
+    assert!(
+        divider(&drawn_row(&buffer, 0)),
+        "the frame stands on the ninth prompt's divider again: {:?}",
+        frame_rows(&buffer)
+    );
+    assert!(drawn_row(&buffer, 1).contains("prompt 9"));
+    let (notice, _) = notice_of(&buffer);
+    assert!(
+        notice.starts_with("prompt 9 / 20"),
+        "and the row above the composer names the ninth: {notice:?}"
+    );
+}
+
+#[test]
+fn both_brackets_stop_at_the_first_and_the_last_prompt() {
+    let tall = (1..=60)
+        .map(|line| format!("line {line} of the answer"))
+        .collect::<Vec<String>>()
+        .join("\n\n");
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(vec![
+            Entry::Prompt {
+                text: SecretSet::default().redact("prompt 1"),
+            },
+            Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact("answer 1"),
+            },
+            Entry::Prompt {
+                text: SecretSet::default().redact("prompt 2"),
+            },
+            Entry::Assistant {
+                turn: 2,
+                text: SecretSet::default().redact("answer 2"),
+            },
+            Entry::Prompt {
+                text: SecretSet::default().redact("prompt 3"),
+            },
+            Entry::Assistant {
+                turn: 3,
+                text: SecretSet::default().redact(&tall),
+            },
+        ]),
+    );
+    painted(&mut view, 120, 40);
+
+    assert_eq!(
+        view.key(Key::Char('[')),
+        Outcome::Edited,
+        "the third prompt's exchange is taller than the band, so `[` has a prompt to step to"
+    );
+    painted(&mut view, 120, 40);
+    assert_eq!(
+        view.key(Key::Char('[')),
+        Outcome::Edited,
+        "and one more step reaches the first of them"
+    );
+    let buffer = painted(&mut view, 120, 40);
+    assert!(
+        divider(&drawn_row(&buffer, 0)),
+        "the first prompt's divider opens the band: {:?}",
+        frame_rows(&buffer)[..3].to_vec()
+    );
+    assert!(drawn_row(&buffer, 1).contains("prompt 1"));
+    assert_eq!(
+        view.key(Key::Char('[')),
+        Outcome::Unchanged,
+        "and a frame on the first prompt has nothing before it"
+    );
+
+    assert_eq!(
+        view.key(Key::Char(']')),
+        Outcome::Edited,
+        "`]` walks the prompts on again"
+    );
+    painted(&mut view, 120, 40);
+    assert_eq!(
+        view.key(Key::Char(']')),
+        Outcome::Edited,
+        "one prompt at a time"
+    );
+    painted(&mut view, 120, 40);
+    assert_eq!(
+        view.key(Key::Char(']')),
+        Outcome::Unchanged,
+        "and stops at the last of them"
+    );
+}
+
+#[test]
+fn a_bracket_the_draft_holds_is_the_drafts_own_key() {
+    let mut view = conversation(20);
+    painted(&mut view, 120, 40);
+    let scroll = view.scroll();
+
+    view.paste("[");
+    assert_eq!(
+        view.key(Key::Char('[')),
+        Outcome::Edited,
+        "a draft holding words is the draft's own key, as `?` is"
+    );
+    assert_eq!(
+        view.composer().text(),
+        "[[",
+        "so the glyph is typed into it rather than stepping the frame"
+    );
+    assert_eq!(view.scroll(), scroll, "and the frame stands where it was");
+
+    assert_eq!(
+        view.key(Key::Cancel),
+        Outcome::Edited,
+        "`Ctrl-C` empties the draft"
+    );
+    assert_eq!(view.composer().text(), "");
+    view.paste("]");
+    assert_eq!(
+        view.key(Key::Char(']')),
+        Outcome::Edited,
+        "and the same key typed at an empty draft's words does the same"
+    );
+    assert_eq!(view.composer().text(), "]]");
+    assert_eq!(view.scroll(), scroll);
+}
+
+#[test]
+fn the_row_above_the_composer_names_the_prompt_the_frame_stands_on() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = conversation(20);
+    painted(&mut view, 120, 40);
+    assert_eq!(
+        view.key(Key::PageUp),
+        Outcome::Edited,
+        "a page back from the tail reaches the deepest row of sixty"
+    );
+    let buffer = painted(&mut view, 120, 40);
+
+    let (notice, y) = notice_of(&buffer);
+    assert_eq!(
+        notice.trim_end(),
+        "prompt 1 / 20 \u{b7} 24 rows back \u{b7} End follows the run",
+        "the row names the prompt the band's first row stands in, how many the conversation \
+             holds, how far back the frame stands and the key that follows the run"
+    );
+    let column = u16::try_from(
+        drawn_row(&buffer, y)
+            .find("prompt 1 / 20")
+            .expect("the row names the prompt"),
+    )
+    .expect("a column of the row");
+    assert_eq!(
+        look_at(&buffer, &palette, column, y),
+        keys::MEANING,
+        "the count is drawn in the look a meaning is drawn in"
+    );
+}
+
+#[test]
+fn the_prompt_the_frame_stands_on_is_given_up_before_the_row_is() {
+    let mut view = conversation(20);
+    painted(&mut view, 120, 40);
+    assert_eq!(
+        view.key(Key::PageUp),
+        Outcome::Edited,
+        "one page back, which is the frame both narrow drawings stand where it does"
+    );
+
+    let narrow = painted(&mut view, 40, 40);
+    let (notice, _) = notice_of(&narrow);
+    assert_eq!(
+        notice.trim_end(),
+        "24 rows back \u{b7} End follows the run",
+        "a row too narrow for the count keeps the rest of what it says"
+    );
+
+    let narrower = painted(&mut view, 30, 40);
+    assert!(
+        !holds(&narrower, "rows back"),
+        "and a row too narrow for that too is given up whole: {:?}",
+        frame_rows(&narrower)
+    );
+}
+
+#[test]
+fn a_conversation_of_one_prompt_counts_nothing_and_moves_by_nothing() {
+    let tall = (1..=40)
+        .map(|line| format!("line {line} of the answer"))
+        .collect::<Vec<String>>()
+        .join("\n\n");
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(vec![
+            Entry::Prompt {
+                text: SecretSet::default().redact("the only prompt"),
+            },
+            Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact(&tall),
+            },
+        ])
+        .scrolled(Scroll::Back(1)),
+    );
+    let buffer = painted(&mut view, 120, 40);
+    let (notice, _) = notice_of(&buffer);
+    assert_eq!(
+        notice.trim_end(),
+        "1 row back \u{b7} End follows the run",
+        "a conversation of one prompt has nothing to count and nothing to step to"
+    );
+
+    assert_eq!(
+        view.key(Key::Char('[')),
+        Outcome::Unchanged,
+        "`[` on the only prompt of a conversation moves nothing"
+    );
+    assert_eq!(
+        view.key(Key::Char(']')),
+        Outcome::Unchanged,
+        "and neither does `]`"
+    );
+    assert_eq!(
+        view.scroll(),
+        Scroll::Back(1),
+        "the frame stands where it was"
+    );
+}
+
+#[test]
+fn a_press_on_a_settled_works_row_opens_it_and_a_press_on_its_head_folds_it() {
+    let mut view = settled_run(20);
+    view.drawn_on(pointing());
+    let (drawn, told) = painted_and_told(&mut view, 120, 40);
+    let closed = row_holding(&drawn, "1 call \u{b7} 1.8 s");
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(closed, 10))),
+        Outcome::Edited,
+        "a press on the one row a settled work is drawn as opens it"
+    );
+    let opened = painted(&mut view, 120, 40);
+    assert!(
+        holds(&opened, "test rows::a_row_of_output_1 ... ok"),
+        "the work drawn open is the rows it stood for: {:?}",
+        frame_rows(&opened)
+    );
+
+    let head = row_holding(&opened, "turn 1");
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(head, 10))),
+        Outcome::Edited,
+        "and a press on the opened work's head row folds it again"
+    );
+    let folded = painted(&mut view, 120, 40);
+    assert!(
+        holds(&folded, "1 call \u{b7} 1.8 s"),
+        "the work is one row again: {:?}",
+        frame_rows(&folded)
+    );
+    assert!(!holds(&folded, "test rows::a_row_of_output_1 ... ok"));
+}
+
+#[test]
+fn a_press_on_an_answers_first_row_marks_the_exchange_it_ended() {
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(exchanges(3)),
+    );
+    let (drawn, told) = painted_and_told(&mut view, 120, 40);
+    let answer = row_holding(&drawn, "answer 3");
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(answer, 10))),
+        Outcome::Edited,
+        "a press on an answer's first row marks the exchange it ended"
+    );
+    painted(&mut view, 120, 40);
+    let words = match view.key(Key::Copy) {
+        Outcome::Copy(words) => words,
+        outcome => panic!("`Ctrl-Y` on a mark copies its words, not {outcome:?}"),
+    };
+    assert!(
+        words.contains("prompt 3") && words.contains("answer 3"),
+        "the mark covers the exchange from the prompt that asked it to the row the run ended \
+             on: {words:?}"
+    );
+    assert!(
+        !words.contains("prompt 2") && !words.contains("answer 2"),
+        "and no exchange before it: {words:?}"
+    );
+}
+
+#[test]
+fn a_press_on_a_row_the_band_cut_from_the_middle_of_a_work_opens_nothing() {
+    let mut view = settled_run(60);
+    view.drawn_on(pointing());
+    painted(&mut view, 120, 40);
+    assert_eq!(
+        view.key(Key::Fold),
+        Outcome::Edited,
+        "the newest settled work is opened to begin with"
+    );
+    let opened = painted(&mut view, 120, 40);
+    let kept = row_holding(&opened, "rows kept back");
+    view.drag(Cell::new(kept, 2), Cell::new(kept, 2));
+    assert_eq!(
+        view.key(Key::ShiftDown),
+        Outcome::Edited,
+        "and the result inside it opened whole, so the work stands taller than the band"
+    );
+    let (drawn, told) = painted_and_told(&mut view, 120, 40);
+    assert!(
+        holds(&drawn, "a_row_of_output_30"),
+        "the band's first row is a row the middle of that work: {:?}",
+        frame_rows(&drawn)[..3].to_vec()
+    );
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(0, 10))),
+        Outcome::Unchanged,
+        "a row the band cut from the middle of a work is no work row, so a press on it is no act"
+    );
+    assert!(
+        holds(&painted(&mut view, 120, 40), "a_row_of_output_30"),
+        "and the work stands open as the reader left it"
+    );
+}
+
+#[test]
+fn a_press_that_stands_on_no_row_that_opens_or_marks_is_no_act() {
+    let mut view = conversation(20);
+    let (drawn, told) = painted_and_told(&mut view, 120, 40);
+    let words = row_holding(&drawn, "prompt 12");
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(words, 10))),
+        Outcome::Unchanged,
+        "a press on a prompt's own words opens no fold and marks no exchange"
+    );
+    assert_eq!(view.mark(), None, "and nothing is marked");
+
+    let mut railed = View::of(
+        pointing(),
+        Facts::default().asked().railed(rail()),
+        Transcript::of(exchanges(20)),
+    );
+    let (_, told) = painted_and_told(&mut railed, 120, 40);
+    let laid = laid_out(&told);
+    assert!(laid.rail.is_some(), "the frame draws a rail beside it");
+    let column = laid.transcript.right().saturating_add(4);
+    assert_eq!(
+        railed.pointer(&told, Pointer::Press(Cell::new(4, column))),
+        Outcome::Unchanged,
+        "a press on the rail's columns is no press on the transcript"
+    );
+    assert_eq!(railed.mark(), None);
+}
+
+#[test]
+fn both_brackets_are_named_on_the_keys_screen() {
+    let view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    let Some(ScreenBody::Rows(rows)) = view.body(Mode::Keys, 72) else {
+        panic!("the keys screen is the rows of what each key does");
+    };
+    for (key, does) in [("[", "the prompt before"), ("]", "the prompt after")] {
+        let named = rows
+            .iter()
+            .find(|row| {
+                row.spans
+                    .first()
+                    .is_some_and(|(text, _)| text.trim() == key)
+            })
+            .unwrap_or_else(|| panic!("the keys screen names no {key}"));
+        assert_eq!(
+            named.spans[0].1,
+            keys::KEY,
+            "the {key} row draws its key in the look a key is drawn in"
+        );
+        let said: String = named.spans[1..]
+            .iter()
+            .map(|(text, _)| text.as_str())
+            .collect();
+        assert!(
+            said.contains(does),
+            "the {key} row says what the key does: {said:?}"
+        );
+        assert_eq!(
+            named.spans[1].1,
+            keys::MEANING,
+            "and says it in the look a meaning is drawn in"
+        );
+    }
 }
