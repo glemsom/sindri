@@ -8,6 +8,7 @@ use std::ops::Range;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::open::{Ground, Opening};
+use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::Redacted;
 use sindri_core::run::{Exit, Stop};
@@ -832,6 +833,9 @@ impl Thumb {
 pub struct Rows {
     cols: u16,
     held: Vec<Held>,
+    /// The words the wire has fed the run's newest turn, which the live entry is laid from and
+    /// retired with.
+    in_flight: Stream,
     /// How many layouts this cache has done. No code reads it: a test holds the laying out to a
     /// count rather than to a shape.
     lays: usize,
@@ -927,10 +931,11 @@ impl Rows {
     }
 
     pub fn push(&mut self, entry: Entry) {
+        let answer = matches!(entry, Entry::Assistant { .. });
         // A newer answer takes the marker from the one that wore it, so that one is laid again
         // without it: two answers never wear one marker.
         if self.head.is_some()
-            && matches!(entry, Entry::Assistant { .. })
+            && answer
             && let Some(at) = self.newest_answer()
         {
             self.held[at].rows = None;
@@ -941,7 +946,13 @@ impl Rows {
             self.settle(at, entry);
             return;
         }
-        self.retire();
+        // An answer landing is the record holding the turn's words, so the turn goes with it: one
+        // word drawn twice is one word in two rows.
+        if answer {
+            self.retire();
+        } else {
+            self.drop_live();
+        }
         let place = self.land(&entry);
         self.held.push(Held {
             what: What::Fact(entry),
@@ -1016,15 +1027,15 @@ impl Rows {
         self.held[at].rows = None;
     }
 
-    /// Holds the turn in flight as the cache's last entry. A stream asked again without
-    /// having moved lays nothing, and the mark counts as movement because it is laid into the
-    /// rows it heads: a held one would wear a clock that has moved on.
-    pub fn live(&mut self, stream: &Stream, head: Option<&Head>) {
-        if stream.is_empty() && head.is_none() {
-            self.retire();
+    /// Holds the turn this cache owns as its last entry. A turn asked again without having moved
+    /// lays nothing, and the mark counts as movement because it is laid into the rows it heads: a
+    /// held one would wear a clock that has moved on.
+    pub fn live(&mut self, head: Option<&Head>) {
+        if self.in_flight.is_empty() && head.is_none() {
+            self.drop_live();
             return;
         }
-        let revision = stream.revision();
+        let revision = self.in_flight.revision();
         let head = head.cloned();
         let at = self.live_at();
         if let Some(held) = at.map(|at| &self.held[at])
@@ -1038,7 +1049,7 @@ impl Rows {
         {
             return;
         }
-        let rows = self.live_rows(stream, head.as_ref());
+        let rows = self.live_rows(head.as_ref());
         match at {
             Some(at) => {
                 let held = &mut self.held[at];
@@ -1066,15 +1077,16 @@ impl Rows {
 
     /// The newest answer alone wears `head`, and a turn that has said no answer gets a row of its own
     /// for it: a frame waiting on a wire must not look idle.
-    fn live_rows(&self, stream: &Stream, head: Option<&Head>) -> Vec<Row> {
-        let newest = stream
+    fn live_rows(&self, head: Option<&Head>) -> Vec<Row> {
+        let newest = self
+            .in_flight
             .said()
             .enumerate()
             .filter(|(_, (_, said))| *said == Said::Answer)
             .map(|(at, _)| at)
             .last();
         let mut rows = Vec::new();
-        for (at, (words, said)) in stream.said().enumerate() {
+        for (at, (words, said)) in self.in_flight.said().enumerate() {
             let head = match Some(at) == newest {
                 true => head,
                 false => None,
@@ -1090,6 +1102,11 @@ impl Rows {
         rows
     }
 
+    /// Whether the turn this cache holds has said an answer rather than a thought alone.
+    pub(crate) fn says_answer(&self) -> bool {
+        self.in_flight.says_answer()
+    }
+
     /// Where the turn in flight stands, which a stop that landed under it leaves in its own place:
     /// the turn is found rather than taken to be the newest entry.
     fn live_at(&self) -> Option<usize> {
@@ -1098,8 +1115,16 @@ impl Rows {
             .position(|held| matches!(held.what, What::Live { .. }))
     }
 
-    /// Drops the turn in flight, wherever it stands: the run it belonged to has said its last word.
+    /// Drops the turn in flight with its entry: the run it belonged to has said its last word, or
+    /// the record holds those words as entries now.
     pub(crate) fn retire(&mut self) {
+        self.in_flight = Stream::new();
+        self.drop_live();
+    }
+
+    /// Drops the live entry alone, wherever it stands: an entry landing takes its place in the band,
+    /// and the turn it was laid from is still the one in flight.
+    fn drop_live(&mut self) {
         self.held
             .retain(|held| !matches!(held.what, What::Live { .. }));
         self.ended = false;
@@ -1509,6 +1534,16 @@ impl Rows {
         }
         pieces.reverse();
         Window { pieces }
+    }
+}
+
+impl Deltas for Rows {
+    fn text(&mut self, fragment: &str) {
+        self.in_flight.text(fragment);
+    }
+
+    fn reasoning(&mut self, fragment: &str) {
+        self.in_flight.reasoning(fragment);
     }
 }
 
