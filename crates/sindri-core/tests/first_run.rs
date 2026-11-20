@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use sindri_core::config::Flags;
+use sindri_core::config::Config;
 use sindri_core::first_run::FirstRun;
 use tempfile::TempDir;
 
@@ -18,7 +18,7 @@ fn first_run_environment(home: &Path, vars: &[(&str, &str)]) -> BTreeMap<String,
 }
 
 fn resolved_in(home: &Path, vars: &[(&str, &str)]) -> FirstRun {
-    FirstRun::resolve(&first_run_environment(home, vars), Flags::default())
+    FirstRun::resolve(&first_run_environment(home, vars), Config::default())
         .expect("a resolved config")
 }
 
@@ -95,7 +95,7 @@ fn a_first_run_with_no_file_resolves_once_a_key_is_exported() {
         ],
     );
 
-    let first_run = FirstRun::resolve(&environment, Flags::default()).expect("a resolved config");
+    let first_run = FirstRun::resolve(&environment, Config::default()).expect("a resolved config");
 
     assert!(
         first_run.config().is_ready(),
@@ -128,7 +128,7 @@ fn a_first_run_with_no_key_names_the_key_it_still_needs() {
         ],
     );
 
-    let first_run = FirstRun::resolve(&environment, Flags::default()).expect("a resolved config");
+    let first_run = FirstRun::resolve(&environment, Config::default()).expect("a resolved config");
 
     assert_eq!(first_run.config().missing(), vec!["api_key"]);
     assert!(!first_run.config().is_ready());
@@ -143,7 +143,7 @@ fn a_first_run_with_nothing_exported_names_the_wire_and_the_model() {
     let home = bare_home();
     let environment = first_run_environment(home.path(), &[]);
 
-    let first_run = FirstRun::resolve(&environment, Flags::default()).expect("a resolved config");
+    let first_run = FirstRun::resolve(&environment, Config::default()).expect("a resolved config");
 
     assert_eq!(first_run.config().missing(), vec!["provider", "model"]);
     assert!(!first_run.config().is_ready());
@@ -157,7 +157,7 @@ fn a_copilot_first_run_asks_for_no_key_at_all() {
         &[("SINDRI_PROVIDER", "copilot"), ("SINDRI_MODEL", "gpt-5")],
     );
 
-    let first_run = FirstRun::resolve(&environment, Flags::default()).expect("a resolved config");
+    let first_run = FirstRun::resolve(&environment, Config::default()).expect("a resolved config");
 
     assert!(
         first_run.config().is_ready(),
@@ -174,7 +174,7 @@ fn the_row_the_card_offers_names_the_variable_the_config_was_resolved_with() {
         &[("ANTHROPIC_API_KEY", "sk-ant-the-exported-one")],
     );
 
-    let first_run = FirstRun::resolve(&environment, Flags::default()).expect("a resolved config");
+    let first_run = FirstRun::resolve(&environment, Config::default()).expect("a resolved config");
 
     assert_eq!(
         first_run.config().api_key.as_deref(),

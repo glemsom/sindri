@@ -1,4 +1,4 @@
-use sindri_core::config::{Config, ConfigError, Environment, Flags, Touched};
+use sindri_core::config::{Config, ConfigError, Environment, Touched};
 use sindri_core::redact::MASK;
 
 use crate::composer::Key;
@@ -182,10 +182,10 @@ impl Kept for Settings {
 pub fn persist(
     environment: &impl Environment,
     touched: &Touched,
-    flags: Flags,
+    overrides: Config,
 ) -> Result<Config, ConfigError> {
     Config::save_touched(environment, touched)?;
-    Config::resolve(environment, flags)
+    Config::resolve(environment, overrides)
 }
 
 #[cfg(test)]

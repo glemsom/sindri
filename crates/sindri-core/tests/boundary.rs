@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use sindri_core::config::{Config, Flags};
+use sindri_core::config::Config;
 use sindri_core::policy::{Boundary, BoundaryError, Enforcement, MAX_TIMEOUT_SECONDS, WritableSet};
 use tempfile::TempDir;
 
@@ -23,7 +23,7 @@ fn config_home(text: &str) -> TempDir {
     home
 }
 
-fn resolved(home: &Path, vars: &[(&str, &str)], flags: Flags) -> Config {
+fn resolved(home: &Path, vars: &[(&str, &str)], flags: Config) -> Config {
     let mut environment = environment(vars);
     environment.insert(String::from("XDG_CONFIG_HOME"), home.display().to_string());
     Config::resolve(&environment, flags).expect("the config resolves")
@@ -69,7 +69,7 @@ fn the_description_names_every_writable_path_the_timeout_and_the_budgets() {
         data.display()
     ));
     let boundary = boundary(
-        &resolved(home.path(), &[], Flags::default()),
+        &resolved(home.path(), &[], Config::default()),
         &workspace,
         Enforcement::Bubblewrap,
     );
@@ -95,7 +95,7 @@ fn the_configured_limits_are_the_ones_the_description_names() {
     let home =
         config_home("timeout = 300\ncommand_budget_ms = 60000\noutput_budget_bytes = 1024\n");
     let boundary = boundary(
-        &resolved(home.path(), &[], Flags::default()),
+        &resolved(home.path(), &[], Config::default()),
         &workspace,
         Enforcement::Bubblewrap,
     );
@@ -123,7 +123,7 @@ fn the_description_is_byte_identical_every_time_it_is_rendered() {
         "extra_writable_paths = [\"{}\"]\n",
         data.display()
     ));
-    let config = resolved(home.path(), &[], Flags::default());
+    let config = resolved(home.path(), &[], Config::default());
 
     let once = boundary(&config, &workspace, Enforcement::Bubblewrap);
     let twice = boundary(&config, &workspace, Enforcement::Bubblewrap);
@@ -158,7 +158,7 @@ fn the_same_boundary_reached_by_file_environment_or_flags_renders_identical_byte
             ))
             .path(),
             &[],
-            Flags::default(),
+            Config::default(),
         ),
         &workspace,
         Enforcement::Bubblewrap,
@@ -168,7 +168,7 @@ fn the_same_boundary_reached_by_file_environment_or_flags_renders_identical_byte
         &resolved(
             config_home("").path(),
             &[("SINDRI_EXTRA_WRITABLE_PATHS", &format!("{logs}:{data}"))],
-            Flags::default(),
+            Config::default(),
         ),
         &workspace,
         Enforcement::Bubblewrap,
@@ -178,9 +178,9 @@ fn the_same_boundary_reached_by_file_environment_or_flags_renders_identical_byte
         &resolved(
             config_home("").path(),
             &[],
-            Flags {
+            Config {
                 extra_writable_paths: Some(vec![PathBuf::from(&data), PathBuf::from(&logs)]),
-                ..Flags::default()
+                ..Config::default()
             },
         ),
         &workspace,
@@ -211,7 +211,7 @@ fn the_record_stores_the_description_the_model_was_given() {
         data.display()
     ));
     let boundary = boundary(
-        &resolved(home.path(), &[], Flags::default()),
+        &resolved(home.path(), &[], Config::default()),
         &workspace,
         Enforcement::Bubblewrap,
     );
@@ -279,14 +279,14 @@ fn unsafe_is_reachable_by_invocation_only_and_says_so() {
         home.path().display().to_string(),
     );
     assert!(
-        Config::resolve(&environment, Flags::default()).is_err(),
+        Config::resolve(&environment, Config::default()).is_err(),
         "a file cannot grant the escape hatch"
     );
 
     let nothing = resolved(
         config_home("").path(),
         &[("SINDRI_YOLO_UNSAFE", "true")],
-        Flags::default(),
+        Config::default(),
     );
     assert_eq!(
         nothing,
@@ -414,7 +414,7 @@ fn a_timeout_above_the_ceiling_is_refused_naming_the_limit() {
     let home = config_home("timeout = 3601\n");
 
     let error = Boundary::from_config(
-        &resolved(home.path(), &[], Flags::default()),
+        &resolved(home.path(), &[], Config::default()),
         &workspace,
         Enforcement::Bubblewrap,
     )

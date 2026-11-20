@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use sindri_core::config::{Config, ConfigError, Flags, config_path};
+use sindri_core::config::{Config, ConfigError, config_path};
 use sindri_core::provider::Route;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
@@ -23,13 +23,13 @@ fn config_home(text: &str) -> TempDir {
     home
 }
 
-fn resolved(home: &Path, vars: &[(&str, &str)], flags: Flags) -> Result<Config, ConfigError> {
+fn resolved(home: &Path, vars: &[(&str, &str)], flags: Config) -> Result<Config, ConfigError> {
     let mut environment = environment(vars);
     environment.insert(String::from("XDG_CONFIG_HOME"), home.display().to_string());
     Config::resolve(&environment, flags)
 }
 
-fn resolved_in(text: &str, vars: &[(&str, &str)], flags: Flags) -> Config {
+fn resolved_in(text: &str, vars: &[(&str, &str)], flags: Config) -> Config {
     let home = config_home(text);
     resolved(home.path(), vars, flags).expect("the config loads")
 }
@@ -62,7 +62,7 @@ fn an_unknown_key_names_the_key_and_the_file() {
     let path = home.path().join("sindri").join("config.toml");
 
     let error =
-        resolved(home.path(), &[], Flags::default()).expect_err("an unknown key is an error");
+        resolved(home.path(), &[], Config::default()).expect_err("an unknown key is an error");
 
     let message = error.to_string();
     assert!(
@@ -80,7 +80,7 @@ fn an_unknown_key_names_the_key_and_the_file() {
 fn a_bad_value_is_a_usage_error_at_exit_two() {
     let home = config_home("max_turns = \"many\"\n");
 
-    let error = resolved(home.path(), &[], Flags::default()).expect_err("a bad value is an error");
+    let error = resolved(home.path(), &[], Config::default()).expect_err("a bad value is an error");
 
     assert_eq!(error.exit_code(), 2);
     assert!(
@@ -158,14 +158,14 @@ fn the_face_is_drawn_unless_the_config_says_otherwise_and_its_key_sits_beside_st
 #[test]
 fn an_exported_false_turns_the_face_off_for_one_launch_and_no_longer() {
     let home = config_home("");
-    let exported = resolved(home.path(), &[("SINDRI_FACE", "false")], Flags::default())
+    let exported = resolved(home.path(), &[("SINDRI_FACE", "false")], Config::default())
         .expect("an exported false is a value the schema holds");
     assert!(
         !exported.draws_face(),
         "the environment is the door a face is turned off at for one launch"
     );
 
-    let after = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+    let after = resolved(home.path(), &[], Config::default()).expect("the config loads");
     assert!(
         after.draws_face(),
         "and the next launch is the file's own answer, which said nothing"
@@ -175,7 +175,7 @@ fn an_exported_false_turns_the_face_off_for_one_launch_and_no_longer() {
 #[test]
 fn an_exported_true_turns_the_face_back_on_over_a_file_that_turned_it_off() {
     let home = config_home("face = false\n");
-    let exported = resolved(home.path(), &[("SINDRI_FACE", "true")], Flags::default())
+    let exported = resolved(home.path(), &[("SINDRI_FACE", "true")], Config::default())
         .expect("the config loads");
 
     assert!(
@@ -200,7 +200,7 @@ fn a_context_window_in_the_file_is_read_as_tokens_beside_the_turn_cap() {
     );
 
     let home = config_home("context_window = 200000\n");
-    let config = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+    let config = resolved(home.path(), &[], Config::default()).expect("the config loads");
 
     assert_eq!(
         config.context_window,
@@ -214,7 +214,7 @@ fn a_context_window_of_nothing_is_refused_naming_the_key() {
     let home = config_home("context_window = 0\n");
     let path = home.path().join("sindri").join("config.toml");
 
-    let error = resolved(home.path(), &[], Flags::default())
+    let error = resolved(home.path(), &[], Config::default())
         .expect_err("a window of no tokens is a share nothing can be taken of");
 
     assert_eq!(error.exit_code(), 2);
@@ -230,7 +230,7 @@ fn a_context_window_of_nothing_is_refused_naming_the_key() {
 fn an_unset_context_window_is_no_window_at_all() {
     let home = config_home("");
 
-    let config = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+    let config = resolved(home.path(), &[], Config::default()).expect("the config loads");
 
     assert_eq!(
         config.context_window, None,
@@ -242,16 +242,16 @@ fn an_unset_context_window_is_no_window_at_all() {
 #[test]
 fn the_context_window_layers_file_then_environment_then_flag() {
     let home = config_home("context_window = 200000\n");
-    let flag = Flags {
+    let flag = Config {
         context_window: Some(50_000),
-        ..Flags::default()
+        ..Config::default()
     };
 
-    let from_file = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+    let from_file = resolved(home.path(), &[], Config::default()).expect("the config loads");
     let from_environment = resolved(
         home.path(),
         &[("SINDRI_CONTEXT_WINDOW", "100000")],
-        Flags::default(),
+        Config::default(),
     )
     .expect("the config loads");
     let from_flag = resolved(home.path(), &[("SINDRI_CONTEXT_WINDOW", "100000")], flag)
@@ -281,7 +281,7 @@ fn an_exported_nothing_leaves_the_files_window_speaking() {
     let config = resolved(
         home.path(),
         &[("SINDRI_CONTEXT_WINDOW", "")],
-        Flags::default(),
+        Config::default(),
     )
     .expect("the config loads");
 
@@ -299,7 +299,7 @@ fn a_context_window_of_nothing_in_the_environment_names_the_variable() {
     let error = resolved(
         home.path(),
         &[("SINDRI_CONTEXT_WINDOW", "0")],
-        Flags::default(),
+        Config::default(),
     )
     .expect_err("a window of no tokens is a share nothing can be taken of");
 
@@ -315,7 +315,7 @@ fn a_context_window_of_nothing_in_the_environment_names_the_variable() {
 fn debug_never_prints_the_api_key() {
     let home = config_home("api_key = \"sk-not-a-real-key\"\n");
 
-    let config = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+    let config = resolved(home.path(), &[], Config::default()).expect("the config loads");
 
     let printed = format!("{config:?}");
     assert!(
@@ -356,7 +356,7 @@ fn the_environment_beats_the_file() {
     let config = resolved(
         home.path(),
         &[("SINDRI_MODEL", "from-the-environment")],
-        Flags::default(),
+        Config::default(),
     )
     .expect("the config loads");
 
@@ -370,9 +370,9 @@ fn a_flag_beats_both_the_file_and_the_environment() {
     let config = resolved(
         home.path(),
         &[("SINDRI_MODEL", "from-the-environment")],
-        Flags {
+        Config {
             model: Some(String::from("from-the-flag")),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("the config loads");
@@ -387,7 +387,7 @@ fn the_wire_own_variable_is_where_a_launch_takes_its_key_from() {
     let config = resolved(
         home.path(),
         &[("ANTHROPIC_API_KEY", "sk-ant-the-wires-own")],
-        Flags::default(),
+        Config::default(),
     )
     .expect("the config loads");
 
@@ -403,7 +403,7 @@ fn a_config_whose_key_only_the_wire_own_variable_holds_is_ready() {
     let config = resolved_in(
         "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\n",
         &[("ANTHROPIC_API_KEY", "sk-ant-the-wires-own")],
-        Flags::default(),
+        Config::default(),
     );
 
     assert!(
@@ -428,7 +428,7 @@ fn the_wire_the_layering_names_is_the_one_whose_variable_is_read() {
             ("OPENAI_API_KEY", "sk-the-openai-one"),
             ("ANTHROPIC_API_KEY", "sk-the-anthropic-one"),
         ],
-        Flags::default(),
+        Config::default(),
     )
     .expect("the config loads");
 
@@ -447,7 +447,7 @@ fn a_wire_that_signs_in_names_no_variable_to_read() {
     let config = resolved(
         home.path(),
         &[("ANTHROPIC_API_KEY", "sk-the-anthropic-one")],
-        Flags::default(),
+        Config::default(),
     )
     .expect("the config loads");
 
@@ -466,9 +466,9 @@ fn the_flag_supplies_the_key_and_wins_over_the_exported_one() {
             ("SINDRI_MODEL", "claude-sonnet-4-5"),
             ("ANTHROPIC_API_KEY", "sk-ant-the-exported-one"),
         ],
-        Flags {
+        Config {
             api_key: Some(String::from("sk-ant-the-flag")),
-            ..Flags::default()
+            ..Config::default()
         },
     );
 
@@ -489,7 +489,7 @@ fn sindris_own_variable_wins_over_the_wires() {
             ("SINDRI_API_KEY", "sk-ant-named-explicitly"),
             ("ANTHROPIC_API_KEY", "sk-ant-the-fallback"),
         ],
-        Flags::default(),
+        Config::default(),
     );
 
     assert_eq!(
@@ -504,7 +504,7 @@ fn an_exported_key_wins_over_a_key_in_the_file() {
     let config = resolved_in(
         "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\napi_key = \"sk-ant-in-the-file\"\n",
         &[("ANTHROPIC_API_KEY", "sk-ant-exported")],
-        Flags::default(),
+        Config::default(),
     );
 
     assert_eq!(
@@ -519,7 +519,7 @@ fn a_key_in_the_file_is_the_last_word_when_no_variable_holds_one() {
     let config = resolved_in(
         "provider = \"anthropic\"\nmodel = \"claude-sonnet-4-5\"\napi_key = \"sk-ant-in-the-file\"\n",
         &[],
-        Flags::default(),
+        Config::default(),
     );
 
     assert_eq!(
@@ -533,13 +533,13 @@ fn a_key_in_the_file_is_the_last_word_when_no_variable_holds_one() {
 #[test]
 fn the_route_a_run_takes_layers_file_then_environment_then_flag() {
     let home = config_home("route = \"responses\"\n");
-    let flag = Flags {
+    let flag = Config {
         route: Some(Route::Chat),
-        ..Flags::default()
+        ..Config::default()
     };
 
-    let from_file = resolved(home.path(), &[], Flags::default()).expect("the config loads");
-    let from_environment = resolved(home.path(), &[("SINDRI_ROUTE", "chat")], Flags::default())
+    let from_file = resolved(home.path(), &[], Config::default()).expect("the config loads");
+    let from_environment = resolved(home.path(), &[("SINDRI_ROUTE", "chat")], Config::default())
         .expect("the config loads");
     let from_flag =
         resolved(home.path(), &[("SINDRI_ROUTE", "chat")], flag).expect("the config loads");
@@ -561,7 +561,7 @@ fn the_route_a_run_takes_layers_file_then_environment_then_flag() {
 fn a_route_no_wire_serves_is_a_usage_error_naming_the_key() {
     let home = config_home("route = \"completions\"\n");
 
-    let error = resolved(home.path(), &[], Flags::default()).expect_err("a bad route");
+    let error = resolved(home.path(), &[], Config::default()).expect_err("a bad route");
 
     assert_eq!(error.exit_code(), 2);
     let message = error.to_string();
@@ -578,7 +578,7 @@ fn a_route_in_the_environment_is_read_as_a_route() {
     let error = resolved(
         home.path(),
         &[("SINDRI_ROUTE", "complete")],
-        Flags::default(),
+        Config::default(),
     )
     .expect_err("a bad route is an error");
 
@@ -597,9 +597,9 @@ fn a_repeated_flag_replaces_the_configured_list() {
     let config = resolved(
         home.path(),
         &[],
-        Flags {
+        Config {
             extra_writable_paths: Some(vec![PathBuf::from("/from-the-flag")]),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("the config loads");
@@ -636,8 +636,8 @@ fn the_config_falls_back_to_home_config() {
 fn an_exported_nothing_leaves_the_file_speaking() {
     let home = config_home("model = \"from-the-file\"\n");
 
-    let config =
-        resolved(home.path(), &[("SINDRI_MODEL", "")], Flags::default()).expect("the config loads");
+    let config = resolved(home.path(), &[("SINDRI_MODEL", "")], Config::default())
+        .expect("the config loads");
 
     assert_eq!(config.model.as_deref(), Some("from-the-file"));
 }
@@ -649,7 +649,7 @@ fn the_environment_reads_a_path_list_the_way_the_shell_does() {
     let config = resolved(
         home.path(),
         &[("SINDRI_EXTRA_WRITABLE_PATHS", "/from-the-environment:/also")],
-        Flags::default(),
+        Config::default(),
     )
     .expect("the config loads");
 
@@ -672,7 +672,7 @@ fn headers_arrive_one_per_line() {
             "SINDRI_EXTRA_HEADERS",
             "X-Gateway-Session: {session}\nX-Trace: on",
         )],
-        Flags::default(),
+        Config::default(),
     )
     .expect("the config loads");
 
@@ -692,7 +692,7 @@ fn a_bad_environment_value_names_the_variable() {
     let error = resolved(
         home.path(),
         &[("SINDRI_MAX_TURNS", "many")],
-        Flags::default(),
+        Config::default(),
     )
     .expect_err("a bad value is an error");
 
@@ -707,8 +707,8 @@ fn a_bad_environment_value_names_the_variable() {
 fn a_provider_outside_the_three_wires_is_a_bad_value() {
     let home = config_home("provider = \"gemini\"\n");
 
-    let error =
-        resolved(home.path(), &[], Flags::default()).expect_err("a fourth wire cannot be invented");
+    let error = resolved(home.path(), &[], Config::default())
+        .expect_err("a fourth wire cannot be invented");
 
     assert_eq!(error.exit_code(), 2);
     let message = error.to_string();
@@ -730,7 +730,7 @@ fn a_sindri_toml_in_the_working_directory_grants_nothing() {
     let home = config_home("");
     let _standing = Standing::in_directory(workspace.path());
 
-    let config = resolved(home.path(), &[], Flags::default()).expect("the config loads");
+    let config = resolved(home.path(), &[], Config::default()).expect("the config loads");
 
     assert_eq!(
         config.extra_writable_paths, None,
@@ -746,7 +746,7 @@ fn yolo_unsafe_is_neither_a_key_nor_a_variable() {
     );
 
     let home = config_home("yolo_unsafe = true\n");
-    let error = resolved(home.path(), &[], Flags::default())
+    let error = resolved(home.path(), &[], Config::default())
         .expect_err("the escape hatch cannot be persisted in the file");
     assert!(
         error.to_string().contains("yolo_unsafe"),
@@ -757,7 +757,7 @@ fn yolo_unsafe_is_neither_a_key_nor_a_variable() {
     let config = resolved(
         home.path(),
         &[("SINDRI_YOLO_UNSAFE", "true")],
-        Flags::default(),
+        Config::default(),
     )
     .expect("an unknown variable is not an error");
 

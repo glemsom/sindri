@@ -1,4 +1,4 @@
-use crate::config::{Config, ConfigError, Environment, Flags, MODE, config_path};
+use crate::config::{Config, ConfigError, Environment, MODE, config_path};
 use std::path::{Path, PathBuf};
 
 pub struct FirstRun {
@@ -7,10 +7,13 @@ pub struct FirstRun {
 }
 
 impl FirstRun {
-    pub fn resolve(environment: &impl Environment, flags: Flags) -> Result<FirstRun, ConfigError> {
+    pub fn resolve(
+        environment: &impl Environment,
+        overrides: Config,
+    ) -> Result<FirstRun, ConfigError> {
         let path = config_path(environment)?;
         Ok(FirstRun {
-            config: Config::resolve(environment, flags)?,
+            config: Config::resolve(environment, overrides)?,
             path,
         })
     }
