@@ -157,11 +157,52 @@ fn a_look_may_carry_a_line_under_it_and_reads_back_as_its_ink_its_faces_and_that
     }
 }
 
-/// Every set the four faces compose, from the one a look wearing none has up to all four.
+#[test]
+fn a_struck_run_is_a_face_the_look_wears_and_no_ink_hands_it_out() {
+    let struck = Look::new(Ink::Accent, Faces::CROSSED);
+
+    assert_eq!(
+        Face::Crossed.name(),
+        "crossed",
+        "the face a struck run wears is named for the line through it"
+    );
+    assert_eq!(
+        struck.name(),
+        "accent+crossed",
+        "a struck run is its block's ink wearing the face, and the fixture writes it as one"
+    );
+    assert_eq!(Look::from_name("accent+crossed"), Some(struck));
+    assert_eq!(
+        Faces::of_modifier(Modifier::CROSSED_OUT),
+        Some(Faces::CROSSED),
+        "a cell the terminal draws crossed reads back as the face, which is what a fixture \
+         holding a struck run has to say"
+    );
+    for palette in PALETTES {
+        for ink in Ink::ALL {
+            let mut cell = Cell::default();
+            cell.set_style(Look::plain(ink).style(&palette));
+
+            assert!(
+                !Look::of(&cell, &palette)
+                    .expect("every cell painted is a look")
+                    .faces()
+                    .has(Face::Crossed),
+                "the {} ink hands out the crossing, so a struck run would be an ink of its own: \
+                 the design gives the crossing no colour",
+                ink.name()
+            );
+        }
+    }
+}
+
+/// Every set the faces compose, from the one a look wearing none has up to all of them: `Face::ALL`
+/// names them once, so a face added there is crossed with the others without a second list.
 fn sets_of_faces() -> impl Iterator<Item = Faces> {
-    (0u8..16).map(|worn| {
-        [Face::Bold, Face::Italic, Face::Reversed, Face::Faint]
+    (0u8..(1 << (Face::ALL.len() - 1))).map(|worn| {
+        Face::ALL
             .into_iter()
+            .filter(|face| *face != Face::Plain)
             .enumerate()
             .filter(|(bit, _)| worn & (1 << bit) != 0)
             .fold(Faces::PLAIN, |set, (_, face)| set.and(Faces::wearing(face)))

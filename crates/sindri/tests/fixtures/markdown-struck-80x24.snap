@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-struck at 80x24
+00 |  A struck word is crossed out in the ink the prose around it gave it; a bold   | plain:4 plain+crossed:6 plain:63 plain+bold+crossed:4 plain:3
+01 |  one and an italic one are crossed in the faces their marks gave them.         | plain:13 plain+italic+crossed:6 plain:61
+02 |                                                                                | plain:80
+03 |  A heading keeps its level: struck and both inside it                          | plain:2 plain+bold:27 plain+bold+crossed:6 plain+bold:5 plain+bold+italic+crossed:4 plain+bold:10 plain:26
+04 |  ────────────────────────────────────────────────────                          | plain:2 accent+faint:52 plain:26
+05 |                                                                                | plain:80
+06 |▏ a quote keeps its bar and its ink, struck word and all                        | dim:2 plain:35 plain+crossed:6 plain:37
+07 |                                                                                | plain:80
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |┌prompt ───────────────────────────────────────────────────────────────────────┐| accent+faint:80
+21 |│› what should the run do?                                                     │| dim:26 plain:53 dim:1
+22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
+23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7

@@ -825,6 +825,155 @@ fn a_strong_run_is_bold_and_an_emphasis_run_is_italic_in_prose_and_in_a_list() {
 }
 
 #[test]
+fn a_struck_run_wears_the_crossed_face_in_the_ink_its_block_gave_it() {
+    let rows = markdown::rows("a ~~struck~~ word and a plain one", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["a struck word and a plain one"],
+        "the tildes are drawn and not spoken"
+    );
+    assert_eq!(
+        rows[0].spans(),
+        [
+            (String::from("a "), Look::plain(Ink::Plain)),
+            (
+                String::from("struck"),
+                Look::new(Ink::Plain, Faces::CROSSED)
+            ),
+            (
+                String::from(" word and a plain one"),
+                Look::plain(Ink::Plain)
+            ),
+        ],
+        "a struck word is the frame's own ink worn crossed, which is the only thing the mark \
+         adds and no word beside it wears it"
+    );
+}
+
+#[test]
+fn a_struck_run_inside_a_heading_wears_the_headings_weight_and_its_ink() {
+    let heading = [
+        Look::new(Ink::Accent, Face::Bold),
+        Look::new(Ink::Plain, Face::Bold),
+        Look::new(Ink::Muted, Face::Bold),
+        Look::plain(Ink::Muted),
+        Look::new(Ink::Dim, Face::Bold),
+        Look::new(Ink::Dim, Faces::BOLD.and(Faces::ITALIC)),
+    ];
+
+    for (at, look) in heading.into_iter().enumerate() {
+        let rows = markdown::rows(&format!("{} a ~~struck~~ word", "#".repeat(at + 1)), 40);
+        let said = rows
+            .iter()
+            .flat_map(Row::spans)
+            .find(|(text, _)| text.contains("struck"));
+        assert_eq!(
+            said.map(|(_, worn)| *worn),
+            Some(look.wearing(Faces::CROSSED)),
+            "the struck word on the level {} is {look:?} worn crossed, because the mark adds a \
+             face and the ink stays the level's: {rows:?}",
+            at + 1
+        );
+    }
+}
+
+#[test]
+fn a_struck_run_inside_strong_and_inside_emphasis_wears_those_faces_and_the_crossing() {
+    let rows = markdown::rows(
+        "a **~~struck heavy~~** word and a *~~struck slanted~~* one",
+        60,
+    );
+    let heavy = Faces::BOLD.and(Faces::CROSSED);
+    let slanted = Faces::ITALIC.and(Faces::CROSSED);
+
+    assert_eq!(
+        drawn(&rows),
+        ["a struck heavy word and a struck slanted one"],
+        "the marks are drawn and not spoken, and the words they hold still read"
+    );
+    assert!(
+        wears(&rows[0], "struck", Look::new(Ink::Plain, heavy))
+            && wears(&rows[0], "heavy", Look::new(Ink::Plain, heavy)),
+        "a struck word inside a strong run is bold and crossed at once: {:?}",
+        rows[0].spans()
+    );
+    assert!(
+        wears(&rows[0], "slanted", Look::new(Ink::Plain, slanted)),
+        "and one inside an emphasis is italic and crossed at once: {:?}",
+        rows[0].spans()
+    );
+}
+
+#[test]
+fn a_struck_run_keeps_the_bar_of_a_quote_the_gutter_of_an_item_and_the_line_of_a_way() {
+    let struck = Look::new(Ink::Plain, Faces::CROSSED);
+    let quoted = markdown::rows("> a ~~struck~~ word behind a bar", 40);
+
+    for row in &quoted {
+        assert_eq!(
+            row.spans().first(),
+            Some(&(String::from("▏ "), Look::plain(Ink::Dim))),
+            "every row of the quote still opens with its bar: {row:?}"
+        );
+    }
+    assert!(
+        quoted.iter().any(|row| wears(row, "struck", struck)),
+        "a struck word in a quote is the quote's own ink worn crossed: {quoted:?}"
+    );
+
+    let item = markdown::rows("- a ~~struck~~ item whose words wrap past one row", 24);
+    assert_eq!(
+        drawn(&item),
+        ["• a struck item whose", "  words wrap past one", "  row"],
+        "the item's words hang under its gutter, struck word and all"
+    );
+    assert!(
+        wears(&item[0], "struck", struck),
+        "a struck word in an item is the item's own ink worn crossed: {item:?}"
+    );
+
+    let way = markdown::rows("see [~~the gate~~](https://example.test/gate)", 60);
+    assert_eq!(drawn(&way), ["see the gate"]);
+    assert!(
+        wears(
+            &way[0],
+            "the gate",
+            Look::new(Ink::Accent, Faces::CROSSED).underlined(Ink::Dim)
+        ),
+        "a struck word in a way is the accent worn crossed, under the line a way wears: {:?}",
+        way[0].spans()
+    );
+    assert_eq!(
+        ways(&way).at(0, 4),
+        Some("https://example.test/gate"),
+        "and the destination still travels beside the row, where the words begin"
+    );
+}
+
+#[test]
+fn a_struck_mark_that_opens_and_never_closes_draws_its_words_and_crosses_nothing_after_it() {
+    let rows = markdown::rows(
+        "a ~~run that never closes and the words after it\n\nand the block under it",
+        24,
+    );
+
+    assert!(
+        drawn(&rows)
+            .join(" ")
+            .contains("~~run that never closes and the words after it"),
+        "a mark no closing mark answers is drawn as the words it was written as: {rows:?}"
+    );
+    assert!(
+        rows.iter()
+            .flat_map(Row::spans)
+            .all(|(_, look)| *look == Look::plain(Ink::Plain)),
+        "and nothing is crossed, neither the words after the mark on its own row nor the block \
+         under it: {rows:?}"
+    );
+}
+
+#[test]
 fn emphasis_inside_a_heading_wears_the_headings_weight_and_keeps_its_level() {
     let both = Faces::BOLD.and(Faces::ITALIC);
     let wanted = [
@@ -885,14 +1034,14 @@ fn a_fences_string_literal_is_drawn_in_the_ok_ink() {
 #[test]
 fn a_fences_words_are_drawn_as_the_fence_drew_them_and_a_mark_inside_one_stays_a_glyph() {
     let rows = markdown::rows(
-        "```\n**bold** and *italic* stay glyphs\n```\n\nand `a **b** c` in a span",
+        "```\n**b** and *i* and ~~s~~ stay glyphs\n```\n\nand `a **b** c` in a span",
         40,
     );
 
     assert_eq!(
         drawn(&rows),
         [
-            "▏ **bold** and *italic* stay glyphs",
+            "▏ **b** and *i* and ~~s~~ stay glyphs",
             "",
             "and a **b** c in a span"
         ],

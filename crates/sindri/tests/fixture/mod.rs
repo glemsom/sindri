@@ -184,6 +184,7 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-code" => construct(capabilities, code()),
         "markdown-inline" => construct(capabilities, inline()),
         "markdown-emphasis" => construct(capabilities, emphasised()),
+        "markdown-struck" => construct(capabilities, struck()),
         "markdown-link" => ways(capabilities),
         "markdown-table-narrow" => construct(capabilities, narrow()),
         "markdown-rule" => construct(capabilities, ruled()),
@@ -392,6 +393,13 @@ fn emphasised() -> &'static str {
      once.\n\n## A heading keeps its level: **bold**, *italic* and ***both*** inside it\n\n> a quote \
      keeps its ink and its gutter, *even here*\n\n```\n**bold** and *italic* stay glyphs in a \
      fence\n```"
+}
+
+fn struck() -> &'static str {
+    "A ~~struck~~ word is crossed out in the ink the prose around it gave it; a **~~bold~~** \
+     one and an *~~italic~~* one are crossed in the faces their marks gave them.\n\n## A heading \
+     keeps its level: ~~struck~~ and ***~~both~~*** inside it\n\n> a quote keeps its bar and its \
+     ink, ~~struck~~ word and all"
 }
 
 /// An answer's ways and the paths a call names: a link is its words with the destination travelling
