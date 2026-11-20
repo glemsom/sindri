@@ -35,11 +35,11 @@ fn at(settings: &mut Settings, key: &str) {
 #[test]
 fn the_screen_walks_every_key_the_schema_has_in_the_order_the_schema_names_them() {
     let settings = Settings::of(&Config::default());
+    let named: Vec<&str> = Config::KEYS.iter().map(|key| key.name).collect();
     let rows: Vec<&str> = settings.rows().map(|(key, _)| key).collect();
 
     assert_eq!(
-        rows,
-        Config::KEYS.to_vec(),
+        rows, named,
         "the list is the schema's own keys, so a key the schema gains is a row here with \
              nothing to remember"
     );
@@ -162,6 +162,38 @@ fn space_on_a_key_that_is_not_a_toggle_is_a_glyph() {
         "a path may hold a space, and a screen that could not type one could not name a \
              path: only the schema's own toggles flip"
     );
+}
+
+#[test]
+fn space_flips_every_row_the_table_calls_a_switch_and_types_into_every_other() {
+    let mut settings = Settings::of(&Config::default());
+
+    for key in Config::KEYS {
+        at(&mut settings, key.name);
+        settings.space();
+        if key.switch() {
+            assert_eq!(
+                shown(&settings, key.name),
+                "true",
+                "the table calls `{}` a switch, so space turns it on",
+                key.name
+            );
+            settings.space();
+            assert_eq!(
+                shown(&settings, key.name),
+                "false",
+                "and space again turns `{}` back off",
+                key.name
+            );
+        } else {
+            assert_eq!(
+                shown(&settings, key.name),
+                " ",
+                "the table calls `{}` no switch, so space is a glyph in its row",
+                key.name
+            );
+        }
+    }
 }
 
 #[test]

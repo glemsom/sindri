@@ -408,7 +408,7 @@ fn a_save_writes_the_keys_the_schema_has_and_invents_none() {
     let document: toml::Table = text.parse().expect("the file it wrote is TOML");
     let mut written: Vec<&str> = document.keys().map(String::as_str).collect();
     written.sort_unstable();
-    let mut schema: Vec<&str> = Config::KEYS.to_vec();
+    let mut schema: Vec<&str> = Config::KEYS.iter().map(|key| key.name).collect();
     schema.sort_unstable();
 
     assert_eq!(
@@ -668,6 +668,49 @@ fn a_screens_save_lands_owner_only_and_leaves_no_temp_file_behind() {
 }
 
 #[test]
+fn every_row_of_the_table_shows_the_value_its_own_key_holds() {
+    let set = every_key_set();
+    let held = [
+        ("provider", "anthropic"),
+        ("model", "claude-sonnet-4-5"),
+        ("route", "responses"),
+        ("base_url", "https://gateway.test/v1"),
+        ("api_key", sindri_core::redact::MASK),
+        ("thinking", "true"),
+        ("extra_writable_paths", "/srv/data"),
+        ("extra_headers", "X-Gateway-Session: {session}"),
+        ("context_window", "200000"),
+        ("max_turns", "250"),
+        ("timeout", "120"),
+        ("command_budget_ms", "3600000"),
+        ("output_budget_bytes", "8388608"),
+        ("status", "true"),
+        ("face", "false"),
+        ("ssh_agent", "false"),
+    ];
+
+    for key in Config::KEYS {
+        let value = held
+            .iter()
+            .find(|(name, _)| *name == key.name)
+            .map(|(_, value)| *value)
+            .unwrap_or_else(|| panic!("the test names a value for `{}`", key.name));
+        let shown = key.shown(&set);
+
+        assert_eq!(
+            shown, value,
+            "the row of `{}` shows what that key holds and nothing another key holds",
+            key.name
+        );
+        assert!(
+            !shown.is_empty(),
+            "every key is set here, so `{}` is a row with a value in it",
+            key.name
+        );
+    }
+}
+
+#[test]
 fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
     let home = bare_home();
     let path = file_in(&home);
@@ -677,11 +720,15 @@ fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
     // mask and never the text a file would hold.
     let mut readers = Vec::new();
     for key in Config::KEYS {
-        if key != "api_key" {
-            readers.push((key, written.text(key)));
+        if key.name != "api_key" {
+            readers.push((key.name, key.shown(&written)));
         }
     }
-    let masked = written.text("api_key");
+    let masked = Config::KEYS
+        .iter()
+        .find(|key| key.name == "api_key")
+        .map(|key| key.shown(&written))
+        .expect("the schema names the key a secret is set under");
     let mut patch = Touched::new();
     for (key, text) in &readers {
         patch.set(key, text.as_str());

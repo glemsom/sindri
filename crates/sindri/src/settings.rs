@@ -1,4 +1,4 @@
-use sindri_core::config::{Config, ConfigError, Environment, Touched};
+use sindri_core::config::{Config, ConfigError, Environment, Key as SchemaKey, Touched};
 use sindri_core::redact::MASK;
 
 use crate::composer::Key;
@@ -15,7 +15,7 @@ pub struct Settings {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Row {
-    key: &'static str,
+    key: &'static SchemaKey,
     text: String,
     touched: bool,
 }
@@ -27,7 +27,7 @@ impl Settings {
                 .iter()
                 .map(|key| Row {
                     key,
-                    text: config.text(key),
+                    text: key.shown(config),
                     touched: false,
                 })
                 .collect(),
@@ -37,7 +37,9 @@ impl Settings {
     }
 
     pub fn rows(&self) -> impl Iterator<Item = (&'static str, &str)> {
-        self.rows.iter().map(|row| (row.key, row.text.as_str()))
+        self.rows
+            .iter()
+            .map(|row| (row.key.name, row.text.as_str()))
     }
 
     pub fn current(&self) -> usize {
@@ -71,7 +73,7 @@ impl Settings {
     pub fn touched(&self) -> Touched {
         let mut touched = Touched::new();
         for row in self.rows.iter().filter(|row| row.touched) {
-            touched.set(row.key, row.text.as_str());
+            touched.set(row.key.name, row.text.as_str());
         }
         touched
     }
@@ -98,7 +100,7 @@ impl Settings {
         if !self.has_row() {
             return false;
         }
-        if !Config::TOGGLES.contains(&self.standing().key) {
+        if !self.standing().key.switch() {
             return self.write(' ');
         }
         let row = self.standing();

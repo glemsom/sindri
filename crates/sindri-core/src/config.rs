@@ -34,26 +34,149 @@ pub struct Config {
     pub face: Option<bool>,
     pub ssh_agent: Option<bool>,
 }
+#[derive(Debug)]
+pub struct Key {
+    pub name: &'static str,
+    pub switch: bool,
+    shown: fn(&Config) -> String,
+}
+
+/// Rows are compared by the key they name: a function pointer is no value to compare.
+impl PartialEq for Key {
+    fn eq(&self, other: &Key) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for Key {}
+
+impl Key {
+    pub fn switch(&self) -> bool {
+        self.switch
+    }
+
+    pub fn shown(&self, config: &Config) -> String {
+        (self.shown)(config)
+    }
+}
+
 impl Config {
-    pub const KEYS: [&'static str; 16] = [
-        "provider",
-        "model",
-        "route",
-        "base_url",
-        "api_key",
-        "thinking",
-        "extra_writable_paths",
-        "extra_headers",
-        "context_window",
-        "max_turns",
-        "timeout",
-        "command_budget_ms",
-        "output_budget_bytes",
-        "status",
-        "face",
-        "ssh_agent",
+    pub const KEYS: [Key; 16] = [
+        Key {
+            name: "provider",
+            switch: false,
+            shown: |config| {
+                config
+                    .provider
+                    .map(|wire| wire.word().to_owned())
+                    .unwrap_or_default()
+            },
+        },
+        Key {
+            name: "model",
+            switch: false,
+            shown: |config| string_or_empty(&config.model),
+        },
+        Key {
+            name: "route",
+            switch: false,
+            shown: |config| {
+                config
+                    .route
+                    .map(|route| route.word().to_owned())
+                    .unwrap_or_default()
+            },
+        },
+        Key {
+            name: "base_url",
+            switch: false,
+            shown: |config| string_or_empty(&config.base_url),
+        },
+        Key {
+            name: "api_key",
+            switch: false,
+            shown: |config| {
+                config
+                    .api_key
+                    .as_ref()
+                    .map(|_| MASK.to_owned())
+                    .unwrap_or_default()
+            },
+        },
+        Key {
+            name: "thinking",
+            switch: true,
+            shown: |config| on_or_empty(config.thinking),
+        },
+        Key {
+            name: "extra_writable_paths",
+            switch: false,
+            shown: |config| {
+                config
+                    .extra_writable_paths
+                    .as_ref()
+                    .map(|paths| {
+                        paths
+                            .iter()
+                            .map(|path| path.display().to_string())
+                            .collect::<Vec<String>>()
+                            .join(LIST_SEPARATOR)
+                    })
+                    .unwrap_or_default()
+            },
+        },
+        Key {
+            name: "extra_headers",
+            switch: false,
+            shown: |config| {
+                config
+                    .extra_headers
+                    .as_ref()
+                    .map(|headers| headers.join(LIST_SEPARATOR))
+                    .unwrap_or_default()
+            },
+        },
+        Key {
+            name: "context_window",
+            switch: false,
+            shown: |config| number_or_empty(config.context_window),
+        },
+        Key {
+            name: "max_turns",
+            switch: false,
+            shown: |config| number_or_empty(config.max_turns),
+        },
+        Key {
+            name: "timeout",
+            switch: false,
+            shown: |config| number_or_empty(config.timeout),
+        },
+        Key {
+            name: "command_budget_ms",
+            switch: false,
+            shown: |config| number_or_empty(config.command_budget_ms),
+        },
+        Key {
+            name: "output_budget_bytes",
+            switch: false,
+            shown: |config| number_or_empty(config.output_budget_bytes),
+        },
+        Key {
+            name: "status",
+            switch: true,
+            shown: |config| on_or_empty(config.status),
+        },
+        Key {
+            name: "face",
+            switch: true,
+            shown: |config| on_or_empty(config.face),
+        },
+        Key {
+            name: "ssh_agent",
+            switch: true,
+            shown: |config| on_or_empty(config.ssh_agent),
+        },
     ];
-    pub const TOGGLES: [&'static str; 4] = ["thinking", "status", "face", "ssh_agent"];
     pub fn tells_status(&self) -> bool {
         self.status.unwrap_or(true)
     }
@@ -92,7 +215,7 @@ impl Config {
         })?;
         if let Some(key) = table
             .keys()
-            .find(|key| !Config::KEYS.contains(&key.as_str()))
+            .find(|key| !Config::KEYS.iter().any(|known| known.name == key.as_str()))
         {
             return Err(ConfigError::UnknownKey {
                 key: key.clone(),
@@ -225,52 +348,6 @@ impl Config {
             write_key(document, "ssh_agent", Value::from(value));
         }
         Ok(())
-    }
-    pub fn text(&self, key: &str) -> String {
-        let shown = |value: &Option<String>| value.clone().unwrap_or_default();
-        match key {
-            "provider" => self
-                .provider
-                .map(|wire| wire.word().to_owned())
-                .unwrap_or_default(),
-            "model" => shown(&self.model),
-            "route" => self
-                .route
-                .map(|route| route.word().to_owned())
-                .unwrap_or_default(),
-            "base_url" => shown(&self.base_url),
-            "api_key" => self
-                .api_key
-                .as_ref()
-                .map(|_| MASK.to_owned())
-                .unwrap_or_default(),
-            "thinking" => on_or_empty(self.thinking),
-            "extra_writable_paths" => self
-                .extra_writable_paths
-                .as_ref()
-                .map(|paths| {
-                    paths
-                        .iter()
-                        .map(|path| path.display().to_string())
-                        .collect::<Vec<String>>()
-                        .join(LIST_SEPARATOR)
-                })
-                .unwrap_or_default(),
-            "extra_headers" => self
-                .extra_headers
-                .as_ref()
-                .map(|headers| headers.join(LIST_SEPARATOR))
-                .unwrap_or_default(),
-            "context_window" => number_or_empty(self.context_window),
-            "max_turns" => number_or_empty(self.max_turns),
-            "timeout" => number_or_empty(self.timeout),
-            "command_budget_ms" => number_or_empty(self.command_budget_ms),
-            "output_budget_bytes" => number_or_empty(self.output_budget_bytes),
-            "status" => on_or_empty(self.status),
-            "face" => on_or_empty(self.face),
-            "ssh_agent" => on_or_empty(self.ssh_agent),
-            _ => String::new(),
-        }
     }
     pub fn above(self, lower: Config) -> Config {
         Config {
@@ -483,6 +560,9 @@ fn headers_of(key: &str, text: &str) -> Result<Vec<String>, ConfigError> {
     let headers = listed(text);
     header_shape(key, &headers)?;
     Ok(headers)
+}
+fn string_or_empty(value: &Option<String>) -> String {
+    value.clone().unwrap_or_default()
 }
 fn on_or_empty(value: Option<bool>) -> String {
     value.map(|on| on.to_string()).unwrap_or_default()
