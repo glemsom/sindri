@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use sindri_core::config::Config;
-use sindri_core::open::Ground;
+use sindri_core::open::{Ground, Spawner};
 use sindri_core::policy::{Boundary, Enforcement};
 use tempfile::TempDir;
 
@@ -113,6 +113,57 @@ impl Opener {
             }
         }
     }
+}
+
+/// Hands a target over through the seam a launch hands one over through, retrying while the
+/// script is still open for writing in another test's thread: that is a `ETXTBSY` and not the
+/// opener saying no.
+fn spawned_patiently(spawner: &dyn Spawner, opening: &Opening) -> Result<(), String> {
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        match spawner.spawn(opening) {
+            Err(reason) if reason.contains("busy") && Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            outcome => return outcome,
+        }
+    }
+}
+
+#[test]
+fn the_spawner_hands_a_judged_target_over_as_the_one_argv_word_the_opener_is_spawned_with() {
+    let tree = Tree::new();
+    let target = tree.in_workspace("my notes.html");
+    let opening = tree
+        .ground()
+        .judge(r#"{"path":"my notes.html"}"#)
+        .expect("the file is inside the workspace");
+
+    spawned_patiently(&tree.recording_opener(), &opening).expect("the fake opener is spawned");
+
+    assert_eq!(
+        tree.recorded(),
+        vec![target.display().to_string()],
+        "the seam spawns the opener, which spawns the target as one word"
+    );
+}
+
+#[test]
+fn a_spawner_that_cannot_be_spawned_says_which_program_would_not_run() {
+    let tree = Tree::new();
+    tree.in_workspace("notes.html");
+    let opening = tree
+        .ground()
+        .judge(r#"{"path":"notes.html"}"#)
+        .expect("the file is inside the workspace");
+
+    let reason = spawned_patiently(&Opener::new("/nonexistent/opener"), &opening)
+        .expect_err("there is no such program");
+
+    assert!(
+        reason.contains("/nonexistent/opener"),
+        "the reason names the program that would not run: {reason}"
+    );
 }
 
 #[test]

@@ -2,7 +2,9 @@
 //! already judged the target, and it arrives as one argv word and never through a
 //! shell. The child outlives the frame, so it is reaped rather than waited for.
 
-use std::ffi::{OsStr, OsString};
+#[cfg(test)]
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fmt;
 use std::io::ErrorKind;
 use std::process::{Command, Stdio};
@@ -35,7 +37,8 @@ impl Opener {
         Opener::new(HOST_OPENER)
     }
 
-    /// The program this opener spawns.
+    /// The program this opener spawns: no launch reads it, because a launch spawns the host's.
+    #[cfg(test)]
     pub fn program(&self) -> &OsStr {
         &self.program
     }
@@ -64,6 +67,12 @@ impl Opener {
     }
 }
 
+impl sindri_core::open::Spawner for Opener {
+    fn spawn(&self, opening: &Opening) -> Result<(), String> {
+        self.open(opening).map_err(|error| error.to_string())
+    }
+}
+
 /// Why the opener could not be spawned.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OpenError {
@@ -77,12 +86,9 @@ pub struct OpenError {
 }
 
 impl OpenError {
-    /// The program that would not run.
-    pub fn program(&self) -> &OsStr {
-        &self.program
-    }
-
-    /// What kind of failure it was.
+    /// What kind of failure it was: no launch reads it, because a test is what tells a
+    /// missing opener from one that would not start.
+    #[cfg(test)]
     pub fn kind(&self) -> ErrorKind {
         self.kind
     }

@@ -31,6 +31,7 @@ pub fn run(cli: &Cli) -> ExitCode {
         &config,
         cli.enforcement(),
         FrontEnd::Batch,
+        None,
     ) {
         Ok(launch) => launch,
         Err(refusal) => return refuse(refusal.message(), refusal.code()),

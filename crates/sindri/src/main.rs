@@ -4,8 +4,6 @@ mod batch; // is the Unix filter: a prompt in, the answer and one newline out
 mod caps; // the terminals a test states rather than probes
 mod cli; // the command line as clap sees it
 mod doctor; // the honest window: it proves the sandbox
-// Nothing in this binary calls the opener yet: the tool-call rows that will are not built.
-#[allow(dead_code)]
 mod open; // the host spawns the opener, because the sandbox has no display
 mod osc; // sequences that carry words out of the terminal
 mod paste; // the terminal's echo is off while the key is typed

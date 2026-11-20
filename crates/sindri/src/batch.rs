@@ -77,7 +77,13 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
         Ok(prompt) => prompt,
         Err(usage) => return refuse(&usage, USAGE),
     };
-    let opened = Launch::open(&Machine::this(), config, cli.enforcement(), FrontEnd::Batch);
+    let opened = Launch::open(
+        &Machine::this(),
+        config,
+        cli.enforcement(),
+        FrontEnd::Batch,
+        None,
+    );
     let mut launch = match opened {
         Ok(launch) => launch,
         Err(refusal) => return refuse(refusal.message(), refusal.code()),

@@ -132,6 +132,7 @@ fn a_config_that_names_no_run_is_refused_by_the_launch_in_one_vocabulary() {
         &Config::default(),
         Enforcement::Bubblewrap,
         FrontEnd::Batch,
+        None,
     ) else {
         panic!("a config naming neither a provider nor a model names no run");
     };
@@ -164,6 +165,7 @@ fn a_launch_refused_by_the_sandbox_keeps_no_record_and_asks_no_turn() {
         &naming_wire(format!("http://127.0.0.1:{port}")),
         Enforcement::Bubblewrap,
         FrontEnd::Batch,
+        None,
     ) else {
         panic!("this machine cannot make the sandbox");
     };
@@ -232,6 +234,7 @@ fn a_launch_records_the_wire_the_model_and_the_boundary_it_runs() {
         &naming_wire(closed_wire()),
         Enforcement::Unsafe,
         FrontEnd::Batch,
+        None,
     )
     .ok()
     .expect("a config naming a wire, a model and a key names a run");
@@ -290,6 +293,7 @@ fn a_launch_hands_the_transcript_its_record_wrote() {
         &naming_wire(closed_wire()),
         Enforcement::Unsafe,
         FrontEnd::Terminal,
+        None,
     )
     .ok()
     .expect("a config naming a wire, a model and a key names a run");
@@ -325,6 +329,7 @@ fn a_launch_that_names_no_session_mints_a_guid_of_its_own() {
         &naming_wire(closed_wire()),
         Enforcement::Unsafe,
         FrontEnd::Terminal,
+        None,
     )
     .ok()
     .expect("a config naming a wire, a model and a key names a run");
@@ -333,6 +338,7 @@ fn a_launch_that_names_no_session_mints_a_guid_of_its_own() {
         &naming_wire(closed_wire()),
         Enforcement::Unsafe,
         FrontEnd::Terminal,
+        None,
     )
     .ok()
     .expect("a second launch of the same config");
@@ -352,6 +358,7 @@ fn a_launch_outlives_the_runs_it_drives() {
         &naming_wire(closed_wire()),
         Enforcement::Unsafe,
         FrontEnd::Terminal,
+        None,
     )
     .ok()
     .expect("a config naming a wire, a model and a key names a run");
@@ -416,6 +423,7 @@ fn a_launch_hands_the_words_and_skills_its_tools_were_built_from() {
         &config,
         Enforcement::Unsafe,
         FrontEnd::Batch,
+        None,
     )
     .ok()
     .expect("a config naming a wire, a model and a key names a run");
@@ -450,6 +458,7 @@ fn a_launch_nobody_drove_leaves_no_session_behind() {
         &naming_wire(closed_wire()),
         Enforcement::Unsafe,
         FrontEnd::Batch,
+        None,
     )
     .ok()
     .expect("a config naming a wire, a model and a key names a run");
@@ -485,6 +494,7 @@ fn a_launch_the_sandbox_refuses_leaves_no_session_behind() {
         &naming_wire(closed_wire()),
         Enforcement::Bubblewrap,
         FrontEnd::Batch,
+        None,
     ) else {
         panic!("this machine cannot make the sandbox");
     };
