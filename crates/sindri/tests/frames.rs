@@ -305,6 +305,17 @@ fn markdown_quote_80x24_is_a_heading_and_prose_behind_one_dim_bar() {
 }
 
 #[test]
+fn markdown_alert_80x24_is_the_five_kinds_each_named_in_an_ink_of_its_own() {
+    fixture::assert_frame("markdown-alert", 80, 24);
+}
+
+#[test]
+fn markdown_alert_marker_80x24_is_two_spellings_of_a_kind_a_marker_naming_none_and_one_in_an_item()
+{
+    fixture::assert_frame("markdown-alert-marker", 80, 24);
+}
+
+#[test]
 fn markdown_code_80x24_is_a_guttered_block_highlighted_and_one_unknown_language() {
     fixture::assert_frame("markdown-code", 80, 24);
 }

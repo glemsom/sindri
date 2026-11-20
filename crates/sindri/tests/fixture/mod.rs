@@ -181,6 +181,8 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-tasks" => construct(capabilities, tasks()),
         "markdown-table" => construct(capabilities, table()),
         "markdown-quote" => construct(capabilities, quoted()),
+        "markdown-alert" => construct(capabilities, alerts()),
+        "markdown-alert-marker" => construct(capabilities, marker_alerts()),
         "markdown-code" => construct(capabilities, code()),
         "markdown-inline" => construct(capabilities, inline()),
         "markdown-emphasis" => construct(capabilities, emphasised()),
@@ -399,6 +401,24 @@ fn quoted() -> &'static str {
     "> ## A heading that keeps the bar\n>\n> A fence still open while streaming renders as a \
      code block, so a half-written diagram never costs a raster pass and never flickers while \
      it is being typed.\n>\n> - ### an item's heading, two columns further in"
+}
+
+/// One alert of each kind, each named on the row above the words it holds.
+fn alerts() -> &'static str {
+    "> [!NOTE]\n> a note is the quietest thing a quote can say\n\n\
+     > [!TIP]\n> a tip is advice the reader can take\n\n\
+     > [!IMPORTANT]\n> what is important is said in the accent\n\n\
+     > [!WARNING]\n> a warning is said in the ink the prose is\n\n\
+     > [!CAUTION]\n> and a caution is the frame's own alarm"
+}
+
+/// Both spellings that are still a kind, the marker that names none at all, and one alert under the
+/// words of an item, hung under its gutter.
+fn marker_alerts() -> &'static str {
+    "> [!tip]\n> a lowercase marker names the kind a capitalised one does\n\n\
+     > [!WaRnInG]\n> and a mixed one names no third kind\n\n\
+     > [!GREETING]\n> a marker no kind answers to is the quote's own words\n\n\
+     - an item holding an alert\n  > [!CAUTION]\n  > its words hang under the item's gutter"
 }
 
 fn code() -> &'static str {
