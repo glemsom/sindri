@@ -16,14 +16,17 @@ use sindri::rows::Scroll;
 use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::open::Ground;
-use sindri_core::policy::{Boundary, Enforcement, PolicyRecord};
+use sindri_core::policy::{
+    Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES, DEFAULT_TIMEOUT_SECONDS,
+    Enforcement,
+};
 use sindri_core::provider::Route;
 use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential, Deltas};
 use sindri_core::records::{Dials, Entry, SessionDocument, Usage};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Budget, Exit, State as RunState, Stop};
+use sindri_core::run::{Budget, DEFAULT_MAX_TURNS, Exit, Limits, State as RunState, Stop};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 
@@ -33,6 +36,10 @@ pub const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
 const LOADED_SKILLS: [&str; 2] = ["bash", "records"];
+
+/// The workspace the record names: a name and no directory of this machine, because the frame draws
+/// the whole of it and a golden may not be a picture of the box that blessed it.
+const WORKSPACE: &str = "/home/glemsom/Documents/git/sindri/.worktrees/46-rail";
 
 /// The window the run's newest ask is measured against.
 const CONTEXT_WINDOW: u64 = 200_000;
@@ -560,13 +567,9 @@ fn struck() -> &'static str {
 /// beside the row, a link written over its own URL says it once, and a path a call names is a way to
 /// the file the run judged openable — the one it did not is drawn as the words it was written as.
 fn ways(capabilities: Capabilities) -> View {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("the tree the product is built in");
     View::of(
         capabilities,
-        Facts::default().asked().grounded(Some(ground(workspace))),
+        Facts::default().asked().grounded(Some(ground())),
         Transcript::of([
             answer(
                 1,
@@ -583,16 +586,9 @@ fn ways(capabilities: Capabilities) -> View {
 /// then a turn whose three calls are still in flight — the row says the thing the call names, and a
 /// result says the verdict, the duration and the size and never the name the call row holds.
 fn tools(capabilities: Capabilities) -> View {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("the tree the product is built in");
     View::of(
         capabilities,
-        Facts::default()
-            .asked()
-            .grounded(Some(ground(workspace)))
-            .running(),
+        Facts::default().asked().grounded(Some(ground())).running(),
         Transcript::of(vec![
             Entry::Turn { turn: 1 },
             call(
@@ -627,11 +623,22 @@ fn tools(capabilities: Capabilities) -> View {
     )
 }
 
-/// The ground a run standing in `workspace` judges a target from.
-fn ground(workspace: &std::path::Path) -> Ground {
-    let boundary = Boundary::from_config(&Config::default(), workspace, Enforcement::Bubblewrap)
-        .expect("the boundary holds");
-    Ground::new(&boundary, workspace, workspace).expect("the ground resolves")
+/// The tree a launch resolves this process's working directory to, which is what a fixture stands
+/// its own run in.
+fn tree() -> &'static Path {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("the tree the product is built in")
+}
+
+fn boundary(config: &Config) -> Boundary {
+    Boundary::from_config(config, tree(), Enforcement::Bubblewrap).expect("the boundary holds")
+}
+
+fn ground() -> Ground {
+    Ground::new(&boundary(&Config::default()), session().temp(), tree())
+        .expect("the ground resolves")
 }
 
 fn narrow() -> &'static str {
@@ -777,29 +784,21 @@ fn stats(capabilities: Capabilities) -> View {
 }
 
 pub fn document() -> SessionDocument {
+    document_of(&Config::default())
+}
+
+fn document_of(config: &Config) -> SessionDocument {
+    let boundary = boundary(config);
     SessionDocument {
         session: String::from(GUID),
         wire: Wire::Anthropic,
         model: String::from("claude-sonnet-4-5-20250929"),
-        enforcement: Enforcement::Bubblewrap,
-        policy: PolicyRecord {
-            enforcement: Enforcement::Bubblewrap,
-            writable: vec![String::from(
-                "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
-            )],
-            timeout_seconds: 120,
-            command_budget_ms: 3_600_000,
-            output_budget_bytes: 8 * 1024 * 1024,
-            description: String::from("the boundary the model was told about"),
-        },
-        workspace: PathBuf::from("/home/glemsom/Documents/git/sindri/.worktrees/46-rail"),
+        enforcement: boundary.enforcement(),
+        policy: boundary.record_policy(),
+        workspace: PathBuf::from(WORKSPACE),
         branch: Some(String::from("spec/1-capability")),
         commit: Some(String::from("16becb5")),
-        dials: Dials {
-            max_turns: 250,
-            command_budget_ms: 3_600_000,
-            output_budget_bytes: 8 * 1024 * 1024,
-        },
+        dials: Dials::of(&Limits::from_config(config, &boundary)),
         start: String::from("2026-01-01T00:00:00Z"),
         end: Some(String::from("2026-01-01T00:04:12Z")),
         turns: 6,
@@ -1573,5 +1572,76 @@ fn the_facts_a_frame_draws_name_the_fixture_session_and_the_temp_it_stands_on() 
         session.temp().ends_with(format!("sessions/{GUID}/tmp")),
         "the temp is named by the GUID and by nothing drawn from urandom: {}",
         session.temp().display()
+    );
+}
+
+#[test]
+fn the_record_keeps_the_boundary_the_tree_is_bound_by() {
+    let document = document();
+    let tree = std::fs::canonicalize(tree()).expect("the tree resolves");
+
+    assert_eq!(
+        document.policy.writable,
+        vec![tree.display().to_string()],
+        "the writable set the record keeps is the boundary's, over the tree the run stands in"
+    );
+    assert_eq!(
+        document.enforcement,
+        Enforcement::Bubblewrap,
+        "and the enforcement it keeps is the one that boundary holds"
+    );
+    assert_eq!(
+        document.policy.timeout_seconds, DEFAULT_TIMEOUT_SECONDS,
+        "the timeout is production's default, which no literal here can drift from"
+    );
+    assert_eq!(
+        document.policy.command_budget_ms, DEFAULT_COMMAND_BUDGET_MS,
+        "so is the command budget"
+    );
+    assert_eq!(
+        document.policy.output_budget_bytes, DEFAULT_OUTPUT_BUDGET_BYTES,
+        "and the output budget"
+    );
+    assert_eq!(
+        document.dials.max_turns, DEFAULT_MAX_TURNS,
+        "and the turn cap the record dials is the one a run with no cap set is bound by"
+    );
+}
+
+#[test]
+fn the_ground_the_frames_judge_by_is_that_boundary_and_the_session_temp() {
+    let tree = std::fs::canonicalize(tree()).expect("the tree resolves");
+    let temp = std::fs::canonicalize(session().temp()).expect("the temp resolves");
+    let mut places = vec![tree, temp];
+    places.sort();
+
+    assert_eq!(
+        ground().places(),
+        places,
+        "a frame judges a path by the writable set the boundary holds and the temp the run writes in"
+    );
+}
+
+#[test]
+fn a_config_that_binds_a_run_differently_moves_what_the_fixture_draws() {
+    let changed = Config {
+        timeout: Some(7),
+        max_turns: Some(9),
+        ..Config::default()
+    };
+    let document = document_of(&changed);
+
+    assert_eq!(
+        document.policy.timeout_seconds, 7,
+        "a timeout the config sets is the one the record keeps"
+    );
+    assert_eq!(
+        railed(&document).turns,
+        Some((6, 9)),
+        "and the turns row of the rail draws the run's count against the cap the config set"
+    );
+    assert_eq!(
+        document.turns, 6,
+        "while the count the record holds is the run's own, untouched by the cap"
     );
 }
