@@ -18,18 +18,12 @@ words went with the conversation it emptied.
 _Avoid_: Chat, thread, memory, context, history (that one is a run's own turns)
 
 **Exchange**:
-The band's unit: the reader's own words wearing the sigil they were asked with, the work between
-them, and the answer. One exchange to a prompt, and what the run did between the two is drawn under
-the prompt rather than under a name of its own.
-_Avoid_: Pair, round, item
-
-**Work**:
-What a run did between a prompt and the answer it ended on: the thoughts it thought, the calls it
-made, the results that came back and the answers it went past. It is no row of the band's while the
-run fills it — every entry of it stands as the rows it is drawn as — and one row counting its calls,
-its files and its time once its exchange has ended: `⋯ 12 calls · 3 files · 4.1 s`. That row is the
-reader's to open, and a result inside an opened work keeps the fold of its own.
-_Avoid_: Activity, step, trace, log
+The band's unit: the prompt wearing the sigil it was asked with, what the run did under it, and the
+answer. That work is no row of the band — the thoughts, the calls, the results that came back and the
+answers it went past each standing as its own row while the run fills it — and one row once the
+exchange has ended, counting them: `⋯ 12 calls · 3 files · 4.1 s`. That row is the reader's to open,
+and a result inside an opened work keeps the fold of its own.
+_Avoid_: Pair, round, item, Activity, Trace, Log
 
 **Prompt**:
 The reader's own words a run was asked with: the first fact of the session's transcript, and what the
