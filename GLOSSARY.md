@@ -172,6 +172,13 @@ fence line past the band's edge are dropped, that row's last cell says more stan
 reader walks the fence sideways for the rest. The **Caret** is no cell of a band.
 _Avoid_: Region, pane, panel, viewport
 
+**Measure**:
+The three facts the rows of a band are laid at: its width, the surface a picture in an answer is
+measured against, and the **Ground** a call's path is judged against. Any one of the three moving drops
+every row laid, and only the width moving is a reflow — a narrower band lays the same history out in
+more rows, and that is no row landing.
+_Avoid_: Layout, size, metrics, measurement
+
 **Plane**:
 A band's surface drawn as one image placed under its cells, so it shades in pixels rather than
 in whole rows: placed once per size, carrying an identity of its own so one is taken away and the

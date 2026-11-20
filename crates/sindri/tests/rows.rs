@@ -22,7 +22,7 @@ use sindri::palette::{Band, Palette};
 use sindri::pen;
 use sindri::picture::Surface;
 use sindri::pulse::Pulse;
-use sindri::rows::{Fence, Row, Rows, Scroll, Sideways, Window, layout, layout_on};
+use sindri::rows::{Fence, Measure, Row, Rows, Scroll, Sideways, Window, layout, layout_on};
 use sindri::size::Sizes;
 use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
@@ -180,6 +180,285 @@ fn a_surface_that_changed_relays_the_band_once_and_one_that_did_not_relays_nothi
         2,
         "and reading the rows back after it costs no third layout"
     );
+}
+
+#[test]
+fn a_measure_the_cache_holds_lays_nothing_and_reflows_nothing() {
+    let mut rows = Rows::new();
+    for entry in transcript() {
+        rows.push(entry);
+    }
+
+    let reflowed = rows.measure(Measure::new(80, Surface::none(), None));
+    assert!(
+        reflowed,
+        "no band has been handed to a fresh cache yet, so the first measure is a reflow"
+    );
+    let shown = rows.window(Scroll::Tail, 6).pieces().len();
+    assert!(
+        shown > 0,
+        "a window at the tail shows the end of the transcript"
+    );
+    assert_eq!(rows.lays(), shown, "the first pass lays out what it shows");
+
+    let reflowed = rows.measure(Measure::new(80, Surface::none(), None));
+    assert!(
+        !reflowed,
+        "a measure the cache already holds is a band that did not reflow"
+    );
+    let again = rows.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(again, shown, "and the same entries are the window");
+    assert_eq!(
+        rows.lays(),
+        shown,
+        "a measure at the facts already held lays nothing"
+    );
+}
+
+#[test]
+fn a_measure_whose_width_moved_drops_every_row_and_reflows_once() {
+    let mut rows = Rows::new();
+    for entry in transcript() {
+        rows.push(entry);
+    }
+
+    rows.measure(Measure::new(80, Surface::none(), None));
+    let wide = rows.window(Scroll::Tail, 6).pieces().len();
+    assert!(
+        wide > 0,
+        "a window at the tail shows the end of the transcript"
+    );
+    assert_eq!(rows.lays(), wide, "the first pass lays out what it shows");
+
+    let reflowed = rows.measure(Measure::new(40, Surface::none(), None));
+    assert!(
+        reflowed,
+        "a measure whose width moved is a band that reflowed, and says so"
+    );
+    let narrow = rows.window(Scroll::Tail, 6).pieces().len();
+    assert!(narrow > 0, "and the band is drawn again at the new width");
+    assert_eq!(
+        rows.lays(),
+        wide + narrow,
+        "the one call drops every laid row and lays each visible entry out once"
+    );
+
+    let newest = rows.len() - 1;
+    rows.rows(newest);
+    assert_eq!(
+        rows.lays(),
+        wide + narrow,
+        "and reading them back costs no third layout"
+    );
+}
+
+#[test]
+fn a_measure_whose_surface_or_ground_moved_drops_every_row_without_a_reflow() {
+    let tree = tempfile::tempdir().expect("a temp workspace");
+    let drawn = Surface::of(None, CellSize::new(10, 20), true, false);
+
+    let mut rows = Rows::new();
+    for entry in transcript() {
+        rows.push(entry);
+    }
+    rows.measure(Measure::new(80, Surface::none(), None));
+    let plain = rows.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        rows.lays(),
+        plain,
+        "the band is laid out once, at the surface the measure gave it"
+    );
+
+    let reflowed = rows.measure(Measure::new(80, drawn.clone(), None));
+    assert!(
+        !reflowed,
+        "a measure whose surface moved is no reflow: the width did not move"
+    );
+    let retuned = rows.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        rows.lays(),
+        plain + retuned,
+        "a surface that moved drops every laid row and lays each visible entry out once"
+    );
+
+    let mut standing = Rows::new();
+    for entry in transcript() {
+        standing.push(entry);
+    }
+    standing.measure(Measure::new(80, drawn.clone(), None));
+    let ungrounded = standing.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        standing.lays(),
+        ungrounded,
+        "the band is laid out once, before a ground is handed to it"
+    );
+
+    let reflowed = standing.measure(Measure::new(80, drawn, Some(&ground(tree.path()))));
+    assert!(
+        !reflowed,
+        "a measure whose ground moved is no reflow: the width did not move"
+    );
+    let stood = standing.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        standing.lays(),
+        ungrounded + stood,
+        "a ground that moved drops every laid row and lays each visible entry out once"
+    );
+}
+
+#[test]
+fn the_three_setters_reach_the_same_layout_count_as_one_measure() {
+    let tree = tempfile::tempdir().expect("a temp workspace");
+    let drawn = Surface::of(None, CellSize::new(10, 20), true, false);
+    let stood = ground(tree.path());
+
+    let mut set = Rows::new();
+    let mut measured = Rows::new();
+    for entry in transcript() {
+        set.push(entry.clone());
+        measured.push(entry);
+    }
+    set.resize(80);
+    measured.measure(Measure::new(80, Surface::none(), None));
+
+    let wide = set.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        measured.window(Scroll::Tail, 6).pieces().len(),
+        wide,
+        "two caches over the same entries are one window at the tail"
+    );
+    assert_eq!(
+        (set.lays(), measured.lays()),
+        (wide, wide),
+        "and the band is laid out once at the measure both were given"
+    );
+
+    set.resize(40);
+    measured.measure(Measure::new(40, Surface::none(), None));
+    let narrow = set.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        measured.window(Scroll::Tail, 6).pieces().len(),
+        narrow,
+        "a width moved by a setter and by the one call is one window"
+    );
+    assert_eq!(
+        (set.lays(), measured.lays()),
+        (wide + narrow, wide + narrow),
+        "and one number of layouts: the band laid out once at each measure"
+    );
+
+    set.retune(drawn.clone());
+    measured.measure(Measure::new(40, drawn.clone(), None));
+    let retuned = set.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        measured.window(Scroll::Tail, 6).pieces().len(),
+        retuned,
+        "which holds for the surface alone, with the width unmoved"
+    );
+    assert_eq!(
+        (set.lays(), measured.lays()),
+        (wide + narrow + retuned, wide + narrow + retuned)
+    );
+
+    set.stand(Some(&stood));
+    measured.measure(Measure::new(40, drawn, Some(&stood)));
+    let grounded = set.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        measured.window(Scroll::Tail, 6).pieces().len(),
+        grounded,
+        "and for the ground alone, with the width and the surface unmoved"
+    );
+    assert_eq!(
+        (set.lays(), measured.lays()),
+        (
+            wide + narrow + retuned + grounded,
+            wide + narrow + retuned + grounded
+        )
+    );
+
+    let newest = set.len() - 1;
+    let read = set.rows(newest).len();
+    assert_eq!(
+        measured.rows(newest).len(),
+        read,
+        "either cache hands the same rows back for the same entry"
+    );
+    assert_eq!(
+        (set.lays(), measured.lays()),
+        (
+            wide + narrow + retuned + grounded,
+            wide + narrow + retuned + grounded
+        ),
+        "and reading the rows back afterwards costs neither a layout"
+    );
+}
+
+#[test]
+fn a_setter_moves_its_fact_once_and_repeats_lay_nothing() {
+    let tree = tempfile::tempdir().expect("a temp workspace");
+    let drawn = Surface::of(None, CellSize::new(10, 20), true, false);
+    let mut rows = Rows::new();
+    for entry in transcript() {
+        rows.push(entry);
+    }
+
+    rows.resize(80);
+    assert_eq!(rows.cols(), 80, "the cache reports the width it was given");
+    let wide = rows.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        rows.lays(),
+        wide,
+        "the band is laid out once at the width it was given"
+    );
+
+    rows.resize(80);
+    assert_eq!(
+        rows.lays(),
+        wide,
+        "a width the cache already holds drops nothing and lays nothing"
+    );
+
+    rows.resize(40);
+    assert_eq!(
+        rows.cols(),
+        40,
+        "and a width that moved is the one it reports"
+    );
+    let narrow = rows.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        rows.lays(),
+        wide + narrow,
+        "a setter that moves the width reflows once"
+    );
+
+    rows.retune(drawn.clone());
+    let retuned = rows.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        rows.lays(),
+        wide + narrow + retuned,
+        "a setter that moves the surface lays the band out once"
+    );
+    rows.retune(drawn.clone());
+    assert_eq!(
+        rows.lays(),
+        wide + narrow + retuned,
+        "a surface the cache already holds lays nothing"
+    );
+
+    rows.stand(Some(&ground(tree.path())));
+    let stood = rows.window(Scroll::Tail, 6).pieces().len();
+    assert_eq!(
+        rows.lays(),
+        wide + narrow + retuned + stood,
+        "a setter that moves the ground lays the band out once"
+    );
+    rows.stand(Some(&ground(tree.path())));
+    assert_eq!(
+        rows.lays(),
+        wide + narrow + retuned + stood,
+        "a ground the cache already holds lays nothing"
+    );
+    assert_eq!(rows.cols(), 40, "and no setter but resize moves the width");
 }
 
 #[test]
