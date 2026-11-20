@@ -1074,8 +1074,8 @@ pub struct Rows {
     /// The words the wire has fed the run's newest turn, which the live entry is laid from and
     /// retired with.
     in_flight: Stream,
-    /// How many layouts this cache has done. No code reads it: a test holds the laying out to a
-    /// count rather than to a shape.
+    /// How many layouts this cache has done: the instrument the rows tests hold the laying out to,
+    /// read from outside this crate and never by it.
     lays: usize,
     /// Whether the stop this cache holds last is the one the turn in flight ended, which stands above
     /// it, and never the stop a run before it left.
@@ -1414,40 +1414,8 @@ impl Rows {
         self.held.is_empty()
     }
 
-    pub fn cols(&self) -> u16 {
-        self.measure.cols
-    }
-
     pub fn lays(&self) -> usize {
         self.lays
-    }
-
-    /// A different width drops every row: this cache holds one measure at a time, so going
-    /// back to a width is a reflow and not a lookup.
-    pub fn resize(&mut self, cols: u16) {
-        let measure = Measure {
-            cols: cols.max(1),
-            ..self.measure.clone()
-        };
-        self.measure(measure);
-    }
-
-    /// Where the run stands when it judges a target: a ground that arrives or moves drops every
-    /// row, because whether a path a call names is a way is a fact of that row.
-    pub fn stand(&mut self, ground: Option<&Ground>) {
-        let measure = Measure {
-            ground: ground.cloned(),
-            ..self.measure.clone()
-        };
-        self.measure(measure);
-    }
-
-    pub fn retune(&mut self, surface: Surface) {
-        let measure = Measure {
-            surface,
-            ..self.measure.clone()
-        };
-        self.measure(measure);
     }
 
     /// Hands the cache the band it is drawn at, answering whether the band reflowed: true only when
@@ -1811,7 +1779,7 @@ impl Rows {
         let total = self.height();
         // A band this narrow leaves a wide glyph no room beside the gutter, and the row gives the
         // gutter up for it: there the thumb would stand on the word instead.
-        if self.cols() <= pen::cells(INDENT) + 1
+        if self.measure.cols <= pen::cells(INDENT) + 1
             || band < 2
             || total <= u32::from(band)
             || scroll.back() == 0
