@@ -309,7 +309,13 @@ fn laid(
             fold,
         ),
         Entry::Assistant { text, .. } => (
-            answer_on(&text.to_string(), cols, head, surface, true),
+            answer_on(
+                &text.to_string(),
+                cols,
+                head,
+                surface,
+                markdown::Wholeness::Whole,
+            ),
             None,
         ),
         Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
@@ -445,7 +451,7 @@ fn answer_on(
     cols: u16,
     head: Option<&Head>,
     surface: &Surface,
-    settled: bool,
+    wholeness: markdown::Wholeness,
 ) -> Vec<Row> {
     let (gutter, room) = margin(INDENT, cols);
     // The marker's own words count against the width; the gutter it stands in the place of does
@@ -459,7 +465,7 @@ fn answer_on(
         true => (head, reserve),
         false => (None, 0),
     };
-    let mut rows = markdown::rows_in(text, cols, reserve, gutter, surface, settled).into_iter();
+    let mut rows = markdown::rows_in(text, cols, reserve, gutter, surface, wholeness).into_iter();
     let mut laid: Vec<Row> = Vec::new();
     if let Some(head) = head
         && let Some(first) = rows.next()
@@ -1102,7 +1108,13 @@ impl Rows {
             };
             rows.extend(match said {
                 Said::Reasoning => thought(words, self.cols),
-                Said::Answer => answer_on(words, self.cols, head, &self.surface, false),
+                Said::Answer => answer_on(
+                    words,
+                    self.cols,
+                    head,
+                    &self.surface,
+                    markdown::Wholeness::Arriving,
+                ),
             });
         }
         if let (None, Some(head)) = (newest, head) {

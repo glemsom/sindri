@@ -3550,34 +3550,43 @@ fn a_stop_and_the_marker_beside_it_say_the_same_word_and_never_two() {
 }
 
 #[test]
-fn a_streaming_answer_gathers_its_definitions_and_draws_the_foot_only_once_it_settles() {
-    let text = "a note[^1] here\n\n[^1]: the words it stands for";
+fn a_streaming_answer_draws_the_definitions_that_ended_and_never_one_still_arriving() {
     let mut rows = Rows::new();
     rows.resize(40);
-    rows.text(text);
+    rows.text("a note[^1] here\n\n[^1]: the words it stands for");
     rows.live(None);
 
-    let streaming: Vec<String> = rows.rows(0).iter().map(words).collect();
+    let arriving: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
-        streaming,
+        arriving,
         ["  a note¹ here"],
-        "an answer still arriving gathers its definitions and draws neither them nor a hairline"
+        "a definition still arriving is gathered and drawn nowhere, so its answer has no foot yet"
     );
 
-    rows.push(Entry::Assistant {
-        turn: 1,
-        text: SecretSet::default().redact(text),
-    });
-    let settled: Vec<String> = rows.rows(0).iter().map(words).collect();
+    rows.text("\n\nand the answer goes on");
+    rows.live(None);
+    let ended: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
-        settled,
+        ended,
         [
             String::from("  a note¹ here"),
+            String::new(),
+            String::from("  and the answer goes on"),
             String::new(),
             format!("  {}", pen::filled(pen::columns(38), '─')),
             String::from("  ¹ the words it stands for"),
         ],
-        "the same answer read from the record draws its foot, the hairline and the definitions \
-         both behind the answer's own gutter"
+        "the definition ended, so an answer still arriving draws it at the foot behind one hairline"
+    );
+
+    rows.push(Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default()
+            .redact("a note[^1] here\n\n[^1]: the words it stands for\n\nand the answer goes on"),
+    });
+    assert_eq!(
+        rows.rows(0).iter().map(words).collect::<Vec<String>>(),
+        ended,
+        "the answer read from the record draws the foot the stream was already drawing"
     );
 }

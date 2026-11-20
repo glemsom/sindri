@@ -2213,10 +2213,40 @@ fn a_footnote_reference_draws_as_a_dim_marker_of_its_number_and_no_brackets() {
         "the marker is one dim run that borrows no face from the prose around it: {:?}",
         rows[0].spans()
     );
+    let marker: u16 = rows[0]
+        .spans()
+        .iter()
+        .filter(|(said, _)| said == "¹")
+        .map(|(said, _)| pen::cells(said))
+        .sum();
     assert!(
-        rows[0].width() < pen::cells("a note[^1] here"),
+        marker < pen::cells("[^1]"),
         "the marker claims fewer columns than the words it stands in the place of: {:?}",
         rows[0].spans()
+    );
+}
+
+#[test]
+fn a_number_past_nine_is_drawn_as_its_digits_and_still_narrower_than_the_brackets() {
+    let mut text = String::from("first");
+    for at in 1..=10 {
+        text.push_str(&format!("[^{at}] "));
+    }
+    for at in 1..=10 {
+        text.push_str(&format!("\n\n[^{at}]: the {at} words"));
+    }
+    let rows = markdown::rows(&text, 60);
+    let first = rows.first().expect("the answer's first row");
+
+    assert!(
+        wears(first, "¹⁰", Look::plain(Ink::Dim)),
+        "the tenth reference is drawn as the digits of its number: {:?}",
+        first.spans()
+    );
+    assert!(
+        drawn(&rows).contains(&String::from("¹⁰ the 10 words")),
+        "and its definition stands under the same digits: {:?}",
+        drawn(&rows)
     );
 }
 
@@ -2335,13 +2365,34 @@ fn a_definition_no_reference_names_is_drawn_nowhere() {
             hairline(30),
             String::from("¹ the used one"),
         ],
-        "one definition per reference, so a definition no reference names is drawn at the foot and \
-         in the prose alike"
+        "one definition per reference, so a definition no reference names is drawn neither at the \
+         foot nor in the prose"
     );
     assert!(
         !drawn(&rows).iter().any(|row| row.contains("unused")),
         "and no word of it is drawn anywhere: {:?}",
         drawn(&rows)
+    );
+}
+
+#[test]
+fn a_reference_a_definition_writes_is_numbered_where_that_block_stands() {
+    let rows = markdown::rows(
+        "a note[^a] here\n\n[^a]: which points on[^b]\n\n[^b]: the b words",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            String::from("a note¹ here"),
+            String::new(),
+            hairline(40),
+            String::from("¹ which points on²"),
+            String::from("² the b words"),
+        ],
+        "a reference written inside a definition is read where that block stands, and its own \
+         definition gathers under it"
     );
 }
 
