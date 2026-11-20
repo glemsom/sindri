@@ -60,6 +60,18 @@ fn heading_block(level: usize) -> (Look, Option<String>) {
     (looked[0], rule)
 }
 
+/// The run of columns a horizontal rule fills the room of the block that holds it with.
+fn hairline(room: usize) -> String {
+    pen::filled(pen::columns(room), '─')
+}
+
+/// The one row of an answer a horizontal rule is drawn on.
+fn ruled_row(rows: &[Row]) -> &Row {
+    rows.iter()
+        .find(|row| words(row).contains('─'))
+        .unwrap_or_else(|| panic!("the row a rule is drawn on: {}", drawn(rows).join("|")))
+}
+
 #[test]
 fn no_level_of_a_heading_is_drawn_as_the_prose_around_it() {
     let prose = Look::plain(Ink::Plain);
@@ -1670,7 +1682,7 @@ fn a_rule_between_two_paragraphs_is_one_hairline_with_a_blank_row_either_side() 
         [
             String::from("above"),
             String::new(),
-            pen::filled(pen::columns(20), '─'),
+            hairline(20),
             String::new(),
             String::from("below"),
         ],
@@ -1683,14 +1695,14 @@ fn a_rule_is_no_wider_than_the_room_the_block_leaves() {
     let narrow = markdown::rows("---", 7);
     assert_eq!(
         drawn(&narrow),
-        [pen::filled(pen::columns(7), '─')],
+        [hairline(7)],
         "a rule fills the room it stands in and never the band past it"
     );
 
     let quote = markdown::rows("> ---", 20);
     assert_eq!(
         drawn(&quote),
-        [format!("▏ {}", pen::filled(pen::columns(18), '─'))],
+        [format!("▏ {}", hairline(18))],
         "a rule behind a bar is the room the bar leaves, so the row is the band and no wider"
     );
     for row in &quote {
@@ -1705,21 +1717,13 @@ fn a_rule_is_no_wider_than_the_room_the_block_leaves() {
 fn a_rule_in_a_quote_keeps_the_bar_and_begins_behind_it() {
     let rows = markdown::rows("> words\n>\n> ---\n>\n> more", 20);
 
-    let sharp: Vec<String> = rows
-        .iter()
-        .filter(|row| words(row).contains('─'))
-        .map(words)
-        .collect();
+    let rule = ruled_row(&rows);
     assert_eq!(
-        sharp,
-        [format!("▏ {}", pen::filled(pen::columns(18), '─'))],
+        words(rule),
+        format!("▏ {}", hairline(18)),
         "the rule is the room the bar leaves, and the bar stands before it: {:?}",
         drawn(&rows)
     );
-    let rule = rows
-        .iter()
-        .find(|row| words(row).contains('─'))
-        .expect("the row the rule is drawn on");
     assert_eq!(
         rule.spans().first(),
         Some(&(String::from("▏ "), Look::plain(Ink::Dim))),
@@ -1738,19 +1742,12 @@ fn a_rule_in_a_quote_keeps_the_bar_and_begins_behind_it() {
 fn a_rule_in_an_item_hangs_under_the_items_gutter_and_never_its_bullet() {
     let rows = markdown::rows("- an item\n\n  ---\n\n  after", 20);
 
-    let rule = rows
-        .iter()
-        .find(|row| words(row).contains('─'))
-        .unwrap_or_else(|| panic!("the row an item's rule is drawn on: {rows:?}"));
+    let rule = ruled_row(&rows);
     assert_eq!(
         words(rule),
-        format!("  {}", pen::filled(pen::columns(18), '─')),
+        format!("  {}", hairline(18)),
         "the hairline begins where the item's words do, past the bullet's own columns: {:?}",
         drawn(&rows)
-    );
-    assert!(
-        !words(rule).starts_with('•'),
-        "the rule is drawn in the gutter and never as the item's mark: {rule:?}"
     );
     let after = rows
         .iter()
@@ -1764,12 +1761,24 @@ fn a_rule_in_an_item_hangs_under_the_items_gutter_and_never_its_bullet() {
 }
 
 #[test]
+fn a_rule_that_opens_an_item_is_drawn_beside_the_items_mark() {
+    let rows = markdown::rows("- ***", 12);
+
+    assert_eq!(
+        drawn(&rows),
+        [format!("• {}", hairline(10))],
+        "the item's mark stands beside the rule its only row is, and the hairline is the room \
+         the mark leaves"
+    );
+}
+
+#[test]
 fn a_rule_alone_in_an_answer_is_that_answers_only_row() {
     let rows = markdown::rows("---", 12);
 
     assert_eq!(
         drawn(&rows),
-        [pen::filled(pen::columns(12), '─')],
+        [hairline(12)],
         "an answer that says nothing but a rule is drawn as the rule and no blank row around it"
     );
 }
@@ -1807,6 +1816,17 @@ fn a_break_tag_ends_the_row_inside_an_item_and_the_words_after_it_stand_under_it
         drawn(&rows),
         ["• one", "  two"],
         "the words after a break in an item begin a row of their own, under the item's gutter"
+    );
+}
+
+#[test]
+fn a_break_tag_inside_a_quote_keeps_the_bar() {
+    let rows = markdown::rows("> one<br>two", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ one", "▏ two"],
+        "a break in a quote ends the row and the next one stands behind the same bar"
     );
 }
 

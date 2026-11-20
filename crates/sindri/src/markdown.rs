@@ -28,8 +28,6 @@ const UNDERLINE: Ink = Ink::Dim;
 /// a fence's tag read as the accent of the frame they sit in.
 const FAINT_ACCENT: Look = Look::plain(Ink::Accent).wearing(Faces::FAINT);
 
-/// The mark a horizontal rule fills the room of the block that holds it with: one hairline, in
-/// the ink every other hairline of this front end wears.
 const HAIRLINE: char = '─';
 
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
@@ -390,13 +388,6 @@ impl Room {
                     self.end_row();
                 }
             }
-            Event::Html(html) => {
-                for line in html.lines() {
-                    if breaking(line) {
-                        self.end_row();
-                    }
-                }
-            }
             Event::HardBreak => self.end_row(),
             _ => {}
         }
@@ -431,17 +422,15 @@ impl Room {
         }
     }
 
-    /// A break ends the row in hand. A cell is the exception: it is collected whole before a row of
-    /// it is drawn, so its break is kept in the runs the cell holds.
     fn end_row(&mut self) {
         match &mut self.table {
-            Some(table) => table.brk(),
+            Some(table) => table.break_line(),
             None => self.flush_if_written(),
         }
     }
 
-    /// A horizontal rule is one hairline across the room the block has, drawn in the block's own
-    /// gutter, so a rule in a quote keeps the bar and one in an item hangs under its mark.
+    /// Drawn in the block's own gutter, so a rule in a quote keeps the bar and one in an item hangs
+    /// under its mark.
     fn draw_rule(&mut self) {
         self.flush_if_written();
         self.open_block();
@@ -1031,8 +1020,6 @@ fn closed(span: &str) -> bool {
     }
 }
 
-/// Whether a tag is a break: `br` in either case, carrying nothing but whitespace and a slash
-/// before its closing mark.
 fn breaking(tag: &str) -> bool {
     let Some(inner) = tag
         .trim()
@@ -1179,9 +1166,9 @@ impl Table {
         match self.cell.last_mut() {
             Some(Said::Words {
                 text: said,
-                look: at,
+                look: worn,
                 destination: way,
-            }) if *at == look && *way == destination => said.push_str(text),
+            }) if *worn == look && *way == destination => said.push_str(text),
             _ => self.cell.push(Said::Words {
                 text: String::from(text),
                 look,
@@ -1190,9 +1177,7 @@ impl Table {
         }
     }
 
-    /// A break in the cell in hand, kept where it was written: a cell is measured before a row of
-    /// it is drawn, so the break is a run of the cell's rather than a row of the block's.
-    fn brk(&mut self) {
+    fn break_line(&mut self) {
         if !self.cell.is_empty() {
             self.cell.push(Said::Break);
         }
@@ -1351,16 +1336,19 @@ fn header_rule(widths: &[usize]) -> Row {
     Row::of([(text, Look::plain(Ink::Dim))])
 }
 
-/// The widest line of a cell: its runs are added up to a break and no further, because the rows
-/// a cell is drawn as are the lines its break leaves.
+/// The widest line of a cell: its runs are added up to a break and no further, because the rows a
+/// cell is drawn as are the lines its break leaves.
 fn measured(cell: &[Said]) -> usize {
-    let mut lines = vec![0usize];
+    let mut widest = 0;
+    let mut line = 0;
     for said in cell {
-        let line = lines.last_mut().expect("a line is always in hand");
         match said {
-            Said::Words { text, .. } => *line += usize::from(pen::cells(text)),
-            Said::Break => lines.push(0),
+            Said::Words { text, .. } => line += usize::from(pen::cells(text)),
+            Said::Break => {
+                widest = widest.max(line);
+                line = 0;
+            }
         }
     }
-    lines.into_iter().max().unwrap_or(0)
+    widest.max(line)
 }

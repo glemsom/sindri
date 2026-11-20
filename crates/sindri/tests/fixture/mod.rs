@@ -186,7 +186,7 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-link" => ways(capabilities),
         "markdown-table-narrow" => construct(capabilities, narrow()),
         "markdown-rule" => construct(capabilities, ruled()),
-        "markdown-break" => construct(capabilities, broken()),
+        "markdown-break" => construct(capabilities, breaks()),
         // The same answer in both, three of its four fragments under the live marker and all of it
         // under the settled one; nine point four seconds is under ten, so that marker keeps its decimal.
         "pulse-live" => with_pulse(capabilities, Pulse::live(4_200), &PULSE_ANSWER[..3]),
@@ -355,11 +355,12 @@ fn ruled() -> &'static str {
      the bullet"
 }
 
-fn broken() -> &'static str {
-    "The words before a break<br>and the words after it are two rows of one paragraph.\n\nThe tag \
-     <span>around these words</span> draws no cell of its own, and neither does <kbd>this</kbd> \
-     one.\n\n- an item's words break here<br>and carry on under its gutter\n\n| row | words |\n| \
-     --- | --- |\n| one | above<br>below |"
+fn breaks() -> &'static str {
+    "- an item's words break here<br>and carry on under its gutter\n\nThe words before a \
+     break<br>and the words after it are two rows of one paragraph.\n\nThe tag <span>around these \
+     words</span> draws no cell of its own, and neither does <kbd>this</kbd> one.\n\n> a quote \
+     keeps its bar<br>over the words a break puts under it\n\n| row | words |\n| --- | --- |\n| \
+     one | above<br>below |"
 }
 
 fn quoted() -> &'static str {
