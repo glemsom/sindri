@@ -1,6 +1,5 @@
-//! The rows an entry is drawn as, cached beside the width and the surface they were
-//! laid out at: either one changing drops them all, because a row's height is a fact
-//! about that measurement and about nothing else.
+//! The rows an entry is drawn as, cached beside the measure they were laid out at: a row's height is
+//! a fact of that measure and of nothing else, so a measure that moved drops every one of them.
 
 use std::collections::BTreeSet;
 use std::ops::Range;
@@ -1031,11 +1030,46 @@ pub enum Sideways {
 /// How many columns one press of a sideways key walks a fence.
 const WALK: u16 = 8;
 
-/// Every entry a transcript holds, each with the rows it was laid out as at one width,
+/// The three facts a band is laid at: the `cols` it is drawn in, the `surface` a picture in an answer
+/// is measured against, and the `ground` a call's path is judged against. Rows laid at another measure
+/// are rows drawn from facts that have moved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Measure {
+    cols: u16,
+    surface: Surface,
+    ground: Option<Ground>,
+}
+
+/// A cache no band has been handed yet holds the narrowest one, because a band is never narrower than
+/// the column that draws nothing.
+impl Default for Measure {
+    fn default() -> Measure {
+        Measure {
+            cols: 1,
+            surface: Surface::none(),
+            ground: None,
+        }
+    }
+}
+
+impl Measure {
+    /// The measure of a band `cols` wide, held at no fewer than one column: a band narrower than that
+    /// draws nothing.
+    pub fn new(cols: u16, surface: Surface, ground: Option<&Ground>) -> Measure {
+        Measure {
+            cols: cols.max(1),
+            surface,
+            ground: ground.cloned(),
+        }
+    }
+}
+
+/// Every entry a transcript holds, each with the rows it was laid out as at one measure,
 /// and nothing it was not drawn as.
 #[derive(Clone, Debug, Default)]
 pub struct Rows {
-    cols: u16,
+    /// The measure every row here was laid at, and the one the next rows will be laid at.
+    measure: Measure,
     held: Vec<Held>,
     /// The words the wire has fed the run's newest turn, which the live entry is laid from and
     /// retired with.
@@ -1043,10 +1077,6 @@ pub struct Rows {
     /// How many layouts this cache has done. No code reads it: a test holds the laying out to a
     /// count rather than to a shape.
     lays: usize,
-    /// What a picture in an answer is measured against — the cell, and whether this terminal
-    /// places one — because how many rows a picture takes is part of the rows it was laid out as.
-    surface: Surface,
-    ground: Option<Ground>,
     /// Whether the stop this cache holds last is the one the turn in flight ended, which stands above
     /// it, and never the stop a run before it left.
     ended: bool,
@@ -1302,18 +1332,18 @@ impl Rows {
                 false => None,
             };
             rows.extend(match said {
-                Said::Reasoning => thought(words, self.cols),
+                Said::Reasoning => thought(words, self.measure.cols),
                 Said::Answer => answer_on(
                     words,
-                    self.cols,
+                    self.measure.cols,
                     head,
-                    &self.surface,
+                    &self.measure.surface,
                     markdown::Wholeness::Arriving,
                 ),
             });
         }
         if let (None, Some(head)) = (newest, head) {
-            rows.push(head_row(head, self.cols));
+            rows.push(head_row(head, self.measure.cols));
         }
         rows
     }
@@ -1385,47 +1415,58 @@ impl Rows {
     }
 
     pub fn cols(&self) -> u16 {
-        self.cols
+        self.measure.cols
     }
 
     pub fn lays(&self) -> usize {
         self.lays
     }
 
-    /// A different width drops every row: this cache holds one width at a time, so going
+    /// A different width drops every row: this cache holds one measure at a time, so going
     /// back to a width is a reflow and not a lookup.
     pub fn resize(&mut self, cols: u16) {
-        let cols = cols.max(1);
-        if cols == self.cols {
-            return;
-        }
-        self.cols = cols;
-        self.unlay();
+        let measure = Measure {
+            cols: cols.max(1),
+            ..self.measure.clone()
+        };
+        self.measure(measure);
     }
 
     /// Where the run stands when it judges a target: a ground that arrives or moves drops every
     /// row, because whether a path a call names is a way is a fact of that row.
     pub fn stand(&mut self, ground: Option<&Ground>) {
-        if ground == self.ground.as_ref() {
-            return;
-        }
-        self.ground = ground.cloned();
-        self.unlay();
+        let measure = Measure {
+            ground: ground.cloned(),
+            ..self.measure.clone()
+        };
+        self.measure(measure);
     }
 
     pub fn retune(&mut self, surface: Surface) {
-        if surface == self.surface {
-            return;
+        let measure = Measure {
+            surface,
+            ..self.measure.clone()
+        };
+        self.measure(measure);
+    }
+
+    /// Hands the cache the band it is drawn at, answering whether the band reflowed: true only when
+    /// the width moved.
+    pub fn measure(&mut self, measure: Measure) -> bool {
+        if measure == self.measure {
+            return false;
         }
-        self.surface = surface;
+        let reflowed = measure.cols != self.measure.cols;
+        self.measure = measure;
         self.unlay();
+        reflowed
     }
 
     /// Walks the fence `fence` of entry `at` one step sideways, answering whether it moved: every row
     /// of that fence moves and no other, and a fence walked as far as its widest line goes no further.
     /// The walk is the entry's, so a line laid again keeps it until a new width drops it.
     pub fn sideways(&mut self, at: usize, fence: usize, way: Sideways) -> bool {
-        let cols = self.cols;
+        let cols = self.measure.cols;
         let Some(held) = self.held.get_mut(at) else {
             return false;
         };
@@ -1501,9 +1542,9 @@ impl Rows {
         if one && at != work.start {
             return &[];
         }
-        let cols = self.cols;
-        let surface = &self.surface;
-        let ground = self.ground.as_ref();
+        let cols = self.measure.cols;
+        let surface = &self.measure.surface;
+        let ground = self.measure.ground.as_ref();
         let held = &self.held[at];
         if held.rows.is_none() {
             let laid = match (&held.what, held.result.as_ref()) {
