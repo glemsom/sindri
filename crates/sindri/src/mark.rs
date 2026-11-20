@@ -81,17 +81,19 @@ impl Marked {
 }
 
 impl Span {
-    pub fn of(mark: Mark, lines: &[Vec<Glyph>]) -> Span {
+    /// The words the mark covers in the band `lines` drew: each row's glyphs and whether the band cut
+    /// that row's tail off, because a cut row keeps every glyph past the mark's right edge.
+    pub fn of(mark: Mark, lines: &[(Vec<Glyph>, bool)]) -> Span {
         let first = mark.anchor.row.min(mark.head.row);
         let last = mark.anchor.row.max(mark.head.row);
         let from = mark.anchor.column.min(mark.head.column);
         let to = mark.anchor.column.max(mark.head.column);
         let mut rows = Vec::new();
         for row in first..=last {
-            let Some(line) = lines.get(usize::from(row)) else {
+            let Some((line, cut)) = lines.get(usize::from(row)) else {
                 continue;
             };
-            if let Some(marked) = marked_row(row, line, from, to) {
+            if let Some(marked) = marked_row(row, line, from, to, *cut) {
                 rows.push(marked);
             }
         }
@@ -115,7 +117,13 @@ impl Span {
     }
 }
 
-fn marked_row(row: u16, line: &[Glyph], from: u16, to: u16) -> Option<Marked> {
+fn marked_row(row: u16, line: &[Glyph], from: u16, to: u16, cut: bool) -> Option<Marked> {
+    // A row the band cut has no cells past the mark that the row does not hold: the left edge the
+    // mark chose still holds, and the right one gives way to the words the edge hid.
+    let to = match cut {
+        true => u16::MAX,
+        false => to,
+    };
     let kept: Vec<&Glyph> = line
         .iter()
         .filter(|(column, _, width)| column.saturating_add(*width) > from && *column <= to)

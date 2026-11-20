@@ -169,6 +169,8 @@ impl Decoder {
             // terminals use for `Shift+↑` and `Shift+↓`.
             (b'A', _) if shifted(&params) => Step::Event(Event::Key(Key::ShiftUp)),
             (b'B', _) if shifted(&params) => Step::Event(Event::Key(Key::ShiftDown)),
+            (b'C', _) if shifted(&params) => Step::Event(Event::Key(Key::ShiftRight)),
+            (b'D', _) if shifted(&params) => Step::Event(Event::Key(Key::ShiftLeft)),
             // `Shift+Tab` is `CSI Z` on every terminal, and `CSI 1;2Z` under one that says which
             // modifier it held.
             (b'Z', _) => Step::Event(Event::Key(Key::BackTab)),

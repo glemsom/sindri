@@ -310,6 +310,20 @@ fn a_shifted_arrow_arrives_as_the_key_that_grows_the_mark() {
 }
 
 #[test]
+fn a_shifted_sideways_arrow_arrives_as_the_key_that_walks_a_fence() {
+    assert_eq!(
+        event(b"\x1b[1;2C"),
+        key(Key::ShiftRight),
+        "the right arrow with shift held is the one that walks a marked fence on"
+    );
+    assert_eq!(
+        event(b"\x1b[1;2D"),
+        key(Key::ShiftLeft),
+        "and the left one walks it back"
+    );
+}
+
+#[test]
 fn a_key_after_a_paste_is_read_again() {
     assert_eq!(
         events(&[b"\x1b[200~a\x1b[201~", b"\r"]),

@@ -43,6 +43,9 @@ const CROSS: char = '✗';
 const HAIRLINE: char = '─';
 const KEPT: char = '⋯';
 
+/// The one cell that says a fence's line carries more words past the band's edge.
+const CUT: char = '…';
+
 /// The rows of a result's head that a folded result keeps.
 const FOLD_HEAD: usize = 4;
 
@@ -75,8 +78,9 @@ impl Place {
     }
 }
 
-/// One row of the transcript: never wider than the width it was laid out at, bar the
-/// one glyph that is itself wider than that whole width and that no layout can split.
+/// One row of the transcript: never wider than the width it was laid out at, bar the one glyph that
+/// is itself wider than that whole width and no layout can split — and bar a fence's line, which is
+/// the shape the model wrote it in and no band reflows one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     spans: Vec<(String, Look)>,
@@ -89,6 +93,29 @@ pub struct Row {
     /// The runs of this row a terminal draws at more than one cell: the row is measured by the
     /// cells they leave, and its spans say the words they are written as.
     sizes: Vec<Sized>,
+    /// The fence this row is a line of, when it is one: a line of a fence is laid whole and the
+    /// reader may walk it sideways, where every other row is wrapped to the band.
+    fence: Option<Fence>,
+}
+
+/// A fence line: the block it is a line of, the columns of gutter its words are set past, and how
+/// far the reader has walked it sideways. A fence line is never reflowed, so a band too narrow for
+/// it carries the words past its edge and the cut marks the rest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Fence {
+    id: usize,
+    gutter: u16,
+    walk: u16,
+}
+
+impl Fence {
+    pub fn id(self) -> usize {
+        self.id
+    }
+
+    pub fn walk(self) -> u16 {
+        self.walk
+    }
 }
 
 impl Row {
@@ -108,6 +135,7 @@ impl Row {
             links: Vec::new(),
             picture: None,
             sizes: Vec::new(),
+            fence: None,
         }
     }
 
@@ -133,7 +161,36 @@ impl Row {
             links: Vec::new(),
             picture: None,
             sizes: Vec::new(),
+            fence: None,
         }
+    }
+
+    /// This row as a line of fence `id`, its words set past `gutter` columns and walked nowhere yet.
+    pub fn fenced(mut self, id: usize, gutter: u16) -> Row {
+        self.fence = Some(Fence {
+            id,
+            gutter,
+            walk: 0,
+        });
+        self
+    }
+
+    pub fn fence(&self) -> Option<Fence> {
+        self.fence
+    }
+
+    /// This row walked `by` columns sideways, which only the rows of one fence ever are.
+    pub(crate) fn walked(&mut self, by: u16) {
+        if let Some(fence) = &mut self.fence {
+            fence.walk = by;
+        }
+    }
+
+    /// Whether a band `room` columns wide cuts this row's words at its edge, which only a fence's
+    /// line ever has more of than the band holds.
+    pub fn cut(&self, room: u16) -> bool {
+        self.fence
+            .is_some_and(|fence| u32::from(fence.walk) + u32::from(room) < u32::from(self.width()))
     }
 
     /// The run of this row's cells that begins `left` columns in and is `width` columns wide is a
@@ -173,6 +230,7 @@ impl Row {
             links: self.links.iter().map(|link| link.shifted(by)).collect(),
             sizes: self.sizes.iter().map(|run| run.shifted(by)).collect(),
             picture: self.picture,
+            fence: self.fence,
         }
     }
 
@@ -245,10 +303,87 @@ impl Row {
         links: &mut Links,
         sizes: &mut Sizes,
     ) {
-        pen::write(buffer, area, &self.spans, Clip::Edge, palette);
+        // A fence walked sideways keeps its gutter where it is and carries its words back by what
+        // the reader walked past, so the bar still stands in the column it always did.
+        match self.fence.filter(|fence| fence.walk > 0) {
+            Some(fence) => {
+                let (gutter, words) = gutter_and_words(&self.spans, fence.gutter);
+                let mut spans = gutter;
+                spans.extend(walked(&words, fence.walk));
+                pen::write(buffer, area, &spans, Clip::Edge, palette);
+            }
+            None => pen::write(buffer, area, &self.spans, Clip::Edge, palette),
+        }
+        if area.width > 0 && self.cut(area.width) {
+            pen::glyph(
+                buffer,
+                area.right().saturating_sub(1),
+                area.y,
+                CUT,
+                Ink::Dim,
+                palette,
+            );
+        }
         links.lay(area.y, area.x, &self.links);
         sizes.lay(area.y, area.x, &self.sizes);
     }
+}
+
+/// The words a row is drawn as, and the look each of them is written in.
+type Spans = Vec<(String, Look)>;
+
+/// `spans` split at `columns` of their left edge: the gutter before it and the words after, a span
+/// that straddles the column cut in two so no glyph is drawn twice.
+fn gutter_and_words(spans: &[(String, Look)], columns: u16) -> (Spans, Spans) {
+    let mut left = Vec::new();
+    let mut right = Vec::new();
+    let mut at = 0u16;
+    for (text, look) in spans {
+        let room = columns.saturating_sub(at);
+        if room == 0 {
+            right.push((text.clone(), *look));
+            continue;
+        }
+        let width = pen::cells(text);
+        if width <= room {
+            left.push((text.clone(), *look));
+            at = at.saturating_add(width);
+            continue;
+        }
+        let (head, tail) = split_at(text, usize::from(room));
+        left.push((head, *look));
+        right.push((String::from(tail), *look));
+        at = columns;
+    }
+    (left, right)
+}
+
+/// `spans` with the first `columns` of them dropped, whole glyphs only: a glyph that straddles the
+/// boundary goes with them rather than being drawn by halves.
+fn walked(spans: &[(String, Look)], columns: u16) -> Spans {
+    let mut past = columns;
+    let mut kept = Vec::new();
+    for (text, look) in spans {
+        let (dropped, rest) = drop_columns(text, past);
+        past = past.saturating_sub(dropped);
+        if !rest.is_empty() {
+            kept.push((String::from(rest), *look));
+        }
+    }
+    kept
+}
+
+/// `text` without its first `columns` columns, and how many columns that took: the glyph that
+/// straddles the boundary goes with the ones before it.
+fn drop_columns(text: &str, columns: u16) -> (u16, &str) {
+    let mut at = 0u16;
+    for (index, glyph) in text.char_indices() {
+        if at >= columns {
+            return (at, &text[index..]);
+        }
+        at = at.saturating_add(pen::cell(glyph));
+    }
+    (at, "")
 }
 
 pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
@@ -842,6 +977,16 @@ impl Thumb {
     }
 }
 
+/// Which way a sideways key walks a fence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sideways {
+    Back,
+    Forward,
+}
+
+/// How many columns one press of a sideways key walks a fence.
+const WALK: u16 = 8;
+
 /// Every entry a transcript holds, each with the rows it was laid out as at one width,
 /// and nothing it was not drawn as.
 #[derive(Clone, Debug, Default)]
@@ -1224,6 +1369,44 @@ impl Rows {
         }
         self.surface = surface;
         self.unlay();
+    }
+
+    /// Walks the fence `fence` of entry `at` one step sideways, answering whether it moved: every
+    /// row of that fence moves and no other row does, and a fence walked as far as its widest line
+    /// goes no further. A row laid again forgets the walk, which is what a width change is.
+    pub fn sideways(&mut self, at: usize, fence: usize, way: Sideways) -> bool {
+        let cols = self.cols;
+        let Some(rows) = self.held.get_mut(at).and_then(|held| held.rows.as_mut()) else {
+            return false;
+        };
+        let mut widest = 0u16;
+        let mut walk = None;
+        for row in rows.iter() {
+            if row.fence().map(Fence::id) != Some(fence) {
+                continue;
+            }
+            widest = widest.max(row.width());
+            walk = walk.or(row.fence().map(Fence::walk));
+        }
+        let Some(walk) = walk else {
+            return false;
+        };
+        // The widest line is the bound: walked past it, the tail would stand past the band's edge
+        // with nothing left to bring to it.
+        let most = widest.saturating_sub(cols);
+        let to = match way {
+            Sideways::Back => walk.saturating_sub(WALK),
+            Sideways::Forward => walk.saturating_add(WALK).min(most),
+        };
+        if to == walk {
+            return false;
+        }
+        for row in rows.iter_mut() {
+            if row.fence().map(Fence::id) == Some(fence) {
+                row.walked(to);
+            }
+        }
+        true
     }
 
     /// Drops every row: a fact a row was laid out against has moved, and a row is only a drawing

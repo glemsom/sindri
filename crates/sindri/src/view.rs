@@ -44,7 +44,7 @@ use crate::pointer::{Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{INDENT, Row, Rows, Scroll};
+use crate::rows::{INDENT, Row, Rows, Scroll, Sideways};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
@@ -69,6 +69,8 @@ enum When {
     Always,
     Draft(State),
     Queue,
+    /// A fence standing under the mark, which is the one frame the sideways keys walk.
+    Fence,
 }
 
 impl Hint {
@@ -87,7 +89,7 @@ impl Hint {
 /// The hints a frame can honour, in survival order, most valuable first: the order a narrower footer
 /// gives them up in. `End` is not among them: the row above the composer names it wherever the frame
 /// stands off the tail.
-const HINTS: [Hint; 8] = [
+const HINTS: [Hint; 10] = [
     Hint {
         key: "Enter",
         meaning: Meaning::Words("send"),
@@ -97,6 +99,16 @@ const HINTS: [Hint; 8] = [
         key: "Ctrl-C",
         meaning: Meaning::Words("cancel"),
         when: When::Draft(State::Running),
+    },
+    Hint {
+        key: "Shift+→",
+        meaning: Meaning::Words("the fence on"),
+        when: When::Fence,
+    },
+    Hint {
+        key: "Shift+←",
+        meaning: Meaning::Words("the fence back"),
+        when: When::Fence,
     },
     Hint {
         key: "↑",
@@ -381,6 +393,9 @@ pub struct View {
     /// the entries after that mark and no row is drawn twice.
     read: ReadMark,
     mark: Option<Mark>,
+    /// The entry and the fence of it the mark stands over in the frame the last pass drew, and none
+    /// while the mark covers no fence line: the one fence the sideways keys walk.
+    fence: Option<(usize, usize)>,
     /// The workspace's files, walked once and read by the count the edge hangs on its far corner.
     files: Files,
     picker: Picker,
@@ -453,6 +468,7 @@ impl View {
             facts: Facts::default(),
             read: ReadMark::default(),
             mark: None,
+            fence: None,
             files: Files::default(),
             picker: Picker::default(),
             loaded: Loaded::default(),
@@ -620,6 +636,8 @@ impl View {
             Act::Fold => self.fold(),
             Act::ExtendDown => self.extend(true),
             Act::ExtendUp => self.extend(false),
+            Act::SidewaysBack => self.sideways(Sideways::Back),
+            Act::SidewaysForward => self.sideways(Sideways::Forward),
             Act::Drop => self.drop_newest(),
             Act::Keys => self.keys(key),
             Act::Files => self.at(key),
@@ -681,6 +699,18 @@ impl View {
         self.mark = Some(grown);
         let opened = self.unfold(grown.head().row);
         match grew || opened {
+            true => Outcome::Edited,
+            false => Outcome::Unchanged,
+        }
+    }
+
+    /// `Shift+←` and `Shift+→`: the fence the mark stands on walks sideways, every row of it and no
+    /// other, so the reader reaches the rest of a line the band cut.
+    fn sideways(&mut self, way: Sideways) -> Outcome {
+        let Some((at, fence)) = self.fence else {
+            return Outcome::Unchanged;
+        };
+        match self.rows.sideways(at, fence, way) {
             true => Outcome::Edited,
             false => Outcome::Unchanged,
         }
@@ -750,6 +780,7 @@ impl View {
         self.scrolled(Scroll::Tail);
         self.facts = self.facts.clone().pulsed(None);
         self.mark = None;
+        self.fence = None;
         self.drawn = Drawn::none();
         self.loaded.clear();
         self.conversation.clear();
@@ -1375,6 +1406,7 @@ impl View {
         let window = self.rows.window(self.scroll, area.height);
         let mut y = area.y;
         let mut lines = Vec::new();
+        let mut fences = Vec::new();
         let mut drawn = Vec::new();
         for piece in window.pieces() {
             let top = y.saturating_sub(area.y);
@@ -1402,7 +1434,8 @@ impl View {
                 // Gathered only when there is a mark: a mark's cells are counted in the rows this
                 // band draws.
                 if self.mark.is_some() {
-                    lines.push(row.glyph_columns());
+                    lines.push((row.glyph_columns(), row.cut(area.width)));
+                    fences.push(row.fence().map(|fence| (piece.entry, fence.id())));
                 }
                 y += 1;
             }
@@ -1419,6 +1452,17 @@ impl View {
             Some(mark) => Span::of(mark, &lines),
             None => Span::default(),
         };
+        // The first tagged row from the mark's lower to its upper row is the fence it stands on.
+        self.fence = None;
+        if let Some(mark) = self.mark {
+            let first = usize::from(mark.anchor().row.min(mark.head().row));
+            let last = usize::from(mark.anchor().row.max(mark.head().row));
+            self.fence = fences
+                .iter()
+                .take(last.saturating_add(1))
+                .skip(first)
+                .find_map(|fence| *fence);
+        }
         Drawn {
             band: area.height,
             total: Some(total),
@@ -1837,6 +1881,7 @@ impl View {
             When::Always => true,
             When::Draft(state) => self.composer.state() == state,
             When::Queue => !self.queue.is_empty(),
+            When::Fence => self.fence.is_some(),
         }
     }
 

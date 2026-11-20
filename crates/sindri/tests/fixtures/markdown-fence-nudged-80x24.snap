@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-fence-nudged at 80x24
+00 |▏ rust                                                                          | dim:2 accent+faint:4 plain:74
+01 |▏ nce_line_that_is_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_the_…| mark:80
+02 |                                                                                | plain:80
+03 |                                                                                | plain:80
+04 |                                                                                | plain:80
+05 |                                                                                | plain:80
+06 |                                                                                | plain:80
+07 |                                                                                | plain:80
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |┌prompt ───────────────────────────────────────────────────────────────────────┐| accent+faint:80
+21 |│› what should the run do?                                                     │| dim:26 plain:53 dim:1
+22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
+23 |Enter send · Shift+→ the fence on · Shift+← the fence back · / commands         | plain+bold:5 muted:5 dim:3 plain+bold:7 muted:13 dim:3 plain+bold:7 muted:15 dim:3 plain+bold:1 muted:9 plain:9

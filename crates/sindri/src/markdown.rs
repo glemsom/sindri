@@ -297,6 +297,11 @@ struct Room {
     gathering: Option<Note>,
     /// Whether the answer is whole, which a definition still arriving is not drawn under.
     wholeness: Wholeness,
+    /// The code block in hand, counted off the blocks this answer has opened, and none outside one:
+    /// it is what tags the rows a fence's lines are drawn as.
+    fence: Option<usize>,
+    /// How many code blocks this answer has opened.
+    fences: usize,
 }
 
 impl Room {
@@ -330,6 +335,8 @@ impl Room {
             notes: Vec::new(),
             gathering: None,
             wholeness: Wholeness::Whole,
+            fence: None,
+            fences: 0,
         }
     }
 
@@ -417,7 +424,7 @@ impl Room {
                     let lines = code.highlight(&text);
                     for runs in lines {
                         for (text, look) in runs {
-                            self.verbatim(&text, look);
+                            self.extend(&text, look);
                         }
                         self.flush();
                     }
@@ -806,6 +813,9 @@ impl Room {
             self.place(&tag, FAINT_ACCENT, false);
             self.flush();
         }
+        // The tag row is no line of the fence: the lines under it are the ones the reader walks.
+        self.fence = Some(self.fences);
+        self.fences = self.fences.saturating_add(1);
         // A mermaid fence is a picture and not code: its source is kept so the drawing can be
         // made when the block closes, and so the reason it could not be drawn prints under it.
         if language(&tag) == "mermaid" {
@@ -829,6 +839,7 @@ impl Room {
     /// source, nothing while it is still arriving, one sentence under the source when it did not
     /// draw — because a diagram that is simply absent cannot be told from a build that cannot draw.
     fn close_code(&mut self) {
+        self.fence = None;
         self.flush_if_written();
         self.code = None;
         if let Some(mermaid) = self.mermaid.take() {
@@ -868,24 +879,6 @@ impl Room {
     fn caption(&mut self, reason: &str) {
         self.prose(reason, Look::plain(Ink::Dim));
         self.flush_if_written();
-    }
-
-    fn verbatim(&mut self, text: &str, look: Look) {
-        let mut rest = text;
-        while !rest.is_empty() {
-            // A row exactly full has no column left, and the room worked out below would give it one.
-            if self.used >= self.room() {
-                self.flush();
-            }
-            let room = self.room().saturating_sub(self.used).max(1);
-            let (head, tail) = split_at(rest, room);
-            self.extend(&head, look);
-            if tail.is_empty() {
-                return;
-            }
-            self.flush();
-            rest = tail;
-        }
     }
 
     fn open_quote(&mut self, kind: Option<BlockQuoteKind>) {
@@ -1026,6 +1019,9 @@ impl Room {
             });
         }
         let mut row = Row::of(self.spans());
+        if let Some(fence) = self.fence {
+            row = row.fenced(fence, pen::columns(gutter));
+        }
         let sized = !runs.is_empty();
         for run in runs {
             row = row.sized(run);
