@@ -44,7 +44,7 @@ use crate::pointer::{Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{Fence, INDENT, Row, Rows, Scroll, Sideways};
+use crate::rows::{Fence, INDENT, Measure, Row, Rows, Scroll, Sideways};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
@@ -1208,8 +1208,8 @@ impl View {
     }
 
     /// Paints this frame into `area`, and hands back what the pass told the terminal and where it
-    /// drew. Painting is what tells the row cache how wide the transcript is, so a resize
-    /// invalidates it here and the same pass reflows; the composer's rows are measured as it draws.
+    /// drew. Painting is what hands the row cache the band's measure, so a measure that moved drops
+    /// every row here and the same pass lays them again; the composer's rows are measured as it draws.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let mut painted = Painted::none();
         pen::claim(buffer, area, self.capabilities.palette().ground(None));
@@ -1389,13 +1389,11 @@ impl View {
         if let Some(cells) = under.map(|under| area.intersection(under)) {
             pen::claim(buffer, cells, palette.ground(None));
         }
-        // A narrower band lays the same history out in more rows, and that is no row landing.
-        let reflowed = self.rows.cols() != area.width;
-        self.rows.resize(area.width);
-        // How many rows a picture takes is part of the rows an entry was laid out as, so the
-        // surface reaches the cache before a window is measured.
-        self.rows.retune(self.surface());
-        self.rows.stand(self.facts.ground());
+        let reflowed = self.rows.measure(Measure::new(
+            area.width,
+            self.surface(),
+            self.facts.ground(),
+        ));
         // Laid into the rows it heads, so the prose the marker introduces is never cut by it. It
         // heads the turn in flight's answer while that has said a word or the run is live, and the
         // newest answer the record holds once the run is over — a band holding none gets a row.
@@ -1410,7 +1408,7 @@ impl View {
         let total = self.rows.height();
         // A window measured from the tail follows a run that grows; one the reader took back keeps
         // the rows it holds, so a row that lands is given back to the count rather than rolled
-        // under them.
+        // under them — and a narrower band's extra rows are no row landing.
         let grown = match self.drawn.total() {
             Some(seen) if !reflowed => total.saturating_sub(seen),
             _ => 0,
