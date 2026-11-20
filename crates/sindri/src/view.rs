@@ -44,7 +44,7 @@ use crate::pointer::{Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{INDENT, Row, Rows, Scroll, Sideways};
+use crate::rows::{Fence, INDENT, Row, Rows, Scroll, Sideways};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
@@ -682,10 +682,17 @@ impl View {
     /// is marked. A mark standing wholly on a fence takes the fence's source rather than the cells,
     /// because no band draws the line breaks it was written with.
     fn copy(&self) -> Outcome {
-        if let Some(marked) = self.fence.filter(|marked| marked.whole)
-            && let Some(source) = self.rows.source(marked.entry, marked.fence)
-        {
-            return Outcome::Copy(source);
+        if let Some(marked) = self.fence.filter(|marked| marked.whole) {
+            // A fence with no line drawn yet has nothing to hand back — and never the cells its
+            // name is drawn in.
+            let source = self
+                .rows
+                .source(marked.entry, marked.fence)
+                .unwrap_or_default();
+            return match source.is_empty() {
+                true => Outcome::Unchanged,
+                false => Outcome::Copy(source),
+            };
         }
         let span = self.drawn.span();
         if !span.is_empty() {
@@ -1425,7 +1432,8 @@ impl View {
         self.fence = None;
         let mut y = area.y;
         let mut lines = Vec::new();
-        let mut covered = false;
+        let mut lined = Vec::new();
+        let mut strays = false;
         let mut drawn = Vec::new();
         for piece in window.pieces() {
             let top = y.saturating_sub(area.y);
@@ -1454,19 +1462,27 @@ impl View {
                 // band draws.
                 if let Some(mark) = self.mark {
                     lines.push(Line::of(row.glyph_columns(), row.cut(area.width)));
+                    let here = row.fence_id().map(|fence| (piece.entry, fence));
+                    let line = row.fence();
+                    lined.push((
+                        line.map(|line| (piece.entry, line.id())),
+                        line.map_or(0, Fence::gutter),
+                    ));
                     let band = y.saturating_sub(area.y);
                     if (mark.first()..=mark.last()).contains(&band) {
-                        // A mark is settled on the fence its first covered row stands in, and kept
-                        // only while every row after that one stands in the same.
-                        let here = row.fence_id();
-                        self.fence = match covered {
-                            false => fence_under(piece.entry, rows, row, area.width),
-                            true => self.fence.map(|marked| MarkedFence {
-                                whole: marked.whole && here == Some(marked.fence),
+                        self.fence = match self.fence {
+                            None => fence_under(piece.entry, rows, row, area.width).map(|fence| {
+                                MarkedFence {
+                                    whole: !strays,
+                                    ..fence
+                                }
+                            }),
+                            Some(marked) => Some(MarkedFence {
+                                whole: marked.whole && here == Some((marked.entry, marked.fence)),
                                 ..marked
                             }),
                         };
-                        covered = true;
+                        strays |= here.is_none();
                     }
                 }
                 y += 1;
@@ -1480,8 +1496,13 @@ impl View {
         // What this band placed is all the cache keeps: a picture scrolled past is a raster
         // nobody is looking at.
         self.capabilities.pictures_mut().retain_shown();
+        // The highlight is the fence a copy takes whole, and the drag itself wherever it takes none.
+        let taken = match self.fence {
+            Some(marked) if marked.whole => extent(&lined, (marked.entry, marked.fence)),
+            _ => None,
+        };
         let span = match self.mark {
-            Some(mark) => Span::of(mark, &lines),
+            Some(mark) => Span::of(widened(mark, taken), &lines),
             None => Span::default(),
         };
         Drawn {
@@ -2186,6 +2207,38 @@ fn corners(
         look,
         palette,
     );
+}
+
+/// The first and last band rows that are lines of `fence`, and the columns its bar leaves: a band
+/// read row by row as the fence each row is a line of and the gutter it stands behind. Those rows
+/// run above and below the one the drag was made on, and they are the rows a copy takes whole.
+fn extent(
+    lined: &[(Option<(usize, usize)>, u16)],
+    fence: (usize, usize),
+) -> Option<(u16, u16, u16)> {
+    let mut taken: Option<(u16, u16, u16)> = None;
+    for (band, (here, gutter)) in lined.iter().enumerate() {
+        if *here != Some(fence) {
+            continue;
+        }
+        let band = u16::try_from(band).unwrap_or(u16::MAX);
+        taken = Some(match taken {
+            None => (band, band, *gutter),
+            Some((first, _, wide)) => (first, band, wide.max(*gutter)),
+        });
+    }
+    taken
+}
+
+/// The mark a fence the drag stands wholly on is taken as: every row of it the band drew, from the
+/// columns its bar leaves to the band's edge, so the highlight is the fence a copy hands back.
+fn widened(mark: Mark, taken: Option<(u16, u16, u16)>) -> Mark {
+    match taken {
+        Some((first, last, gutter)) => {
+            Mark::drag(Cell::new(first, gutter), Cell::new(last, u16::MAX))
+        }
+        None => mark,
+    }
 }
 
 /// The fence the row `at` of `entry` stands in, where one does, and whether the band cut a line of

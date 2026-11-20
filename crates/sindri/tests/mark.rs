@@ -253,6 +253,49 @@ fn a_blank_line_inside_a_marked_fence_is_a_line_of_the_copy() {
 }
 
 #[test]
+fn the_cells_a_marked_fence_is_highlighted_in_are_its_own_rows() {
+    let fence = "```rust\nfn one() {\n    let two = 2;\n}\n```";
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([answer(1, fence)]),
+    );
+    let (frame, laid) = painted(&mut view);
+    let row = row_of(&frame, laid.transcript, "two = 2");
+    view.drag(Cell::new(row, 2), Cell::new(row, 20));
+    let (marked, _) = painted(&mut view);
+    let lit = highlighted(&marked, &view.capabilities().palette(), laid.transcript);
+
+    for line in ["fn one()", "two = 2"] {
+        assert!(
+            lit.contains(line),
+            "the fence leaves whole, so the rows of it light up with the row the drag stands on, \
+             and {line:?} is one of them: {lit:?}"
+        );
+    }
+}
+
+#[test]
+fn a_copy_of_a_fence_is_no_other_fence_of_the_same_answer() {
+    let text = "```rust\nlet body = 1;\n```\n\nA claim[^1]\n\n[^1]: the note\n\n    ```rust\n    let foot = 2;\n    ```";
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of([answer(1, text)]),
+    );
+    let (frame, laid) = painted(&mut view);
+    let row = row_of(&frame, laid.transcript, "body = 1");
+    view.drag(Cell::new(row, 2), Cell::new(row, 20));
+    let taken = copied(&mut view);
+
+    assert_eq!(
+        taken, "let body = 1;",
+        "the fence at the foot of the answer is a block of its own, and a copy of the one above \
+         it is no line of the other: {taken:?}"
+    );
+}
+
+#[test]
 fn a_copy_of_a_fence_marked_on_its_name_hands_back_the_fence_whole() {
     let fence = "```rust crates/sindri/src/rows.rs\nfn one() {}\n```";
     let mut view = View::of(

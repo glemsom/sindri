@@ -4,7 +4,7 @@ expression: drawn
 ---
 markdown-fence-walked at 80x24
 00 |▏ rust                                                                          | dim:2 accent+faint:4 plain:74
-01 |▏ nce_line_that_is_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_the_…| mark:80
+01 |▏ nce_line_that_is_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_the_…| dim:2 mark:78
 02 |                                                                                | plain:80
 03 |                                                                                | plain:80
 04 |                                                                                | plain:80

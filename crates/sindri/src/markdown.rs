@@ -1240,8 +1240,9 @@ impl Room {
     /// Each definition laid in a room of its own, in the order its reference was read, under the
     /// number of that reference as its gutter: a wrapped definition hangs under its number and the
     /// answer's own bars stand behind it.
-    fn definitions(&self) -> Vec<Row> {
+    fn definitions(&mut self) -> Vec<Row> {
         let mut laid = Vec::new();
+        let mut opened = self.opened;
         for (at, name) in self.refs.iter().enumerate() {
             let Some(note) = self.notes.iter().find(|note| note.name == *name) else {
                 continue;
@@ -1253,6 +1254,9 @@ impl Room {
             let mut room = Room::new(self.wide, &self.surface);
             room.base.clone_from(&self.base);
             room.refs.clone_from(&self.refs);
+            // A definition's fences are numbered after the answer's, so no two blocks of one entry
+            // are a fence and its namesake.
+            room.opened = opened;
             room.marks.push(Mark {
                 text: format!("{} ", superscript(number)),
                 ink: Ink::Dim,
@@ -1266,8 +1270,10 @@ impl Room {
                 let gutter = room.gutter();
                 room.push(Row::of(gutter));
             }
+            opened = room.opened;
             laid.extend(room.rows);
         }
+        self.opened = opened;
         laid
     }
 }
@@ -1476,11 +1482,9 @@ fn info(tag: &str) -> Info<'_> {
     }
 }
 
-/// A fence's info string read: the language it is drawn as, and the file it names.
 struct Info<'a> {
     language: &'a str,
-    /// The file the fence names, and nothing where it names one word only: a fence that names no
-    /// file is drawn as its language alone.
+    /// The file the fence names, and nothing where its string names one word only.
     file: &'a str,
 }
 

@@ -119,6 +119,10 @@ impl Fence {
         self.id
     }
 
+    pub fn gutter(self) -> u16 {
+        self.gutter
+    }
+
     pub fn walk(self) -> u16 {
         self.walk
     }
@@ -1725,13 +1729,15 @@ impl Rows {
     }
 
     /// The source of fence `fence` in entry `at`, one line per row it was laid as and the line breaks
-    /// it was written with: nothing where no row of it is laid, or a row of it keeps no source.
+    /// it was written with, a row that keeps none standing as a blank line: nothing where no row of
+    /// the fence is laid, which is a fence that drew no line of its own.
     pub fn source(&self, at: usize, fence: usize) -> Option<String> {
         let rows = self.held.get(at)?.rows.as_ref()?;
-        let mut lines = Vec::new();
-        for row in rows.iter().filter(|row| row.line_of(fence)) {
-            lines.push(row.source()?);
-        }
+        let lines: Vec<&str> = rows
+            .iter()
+            .filter(|row| row.line_of(fence))
+            .map(|row| row.source().unwrap_or_default())
+            .collect();
         (!lines.is_empty()).then(|| lines.join("\n"))
     }
 

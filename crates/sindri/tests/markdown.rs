@@ -1782,7 +1782,6 @@ fn a_fences_tag_is_the_accent_drawn_faint_behind_a_dim_bar() {
 
 #[test]
 fn a_fence_naming_a_file_draws_the_name_faint_beside_its_language() {
-    // The info string's own spacing is no part of the picture: the name is set off by one space.
     let rows = markdown::rows("```rust   crates/sindri/src/rows.rs\nfn main() {}\n```", 80);
 
     assert_eq!(
