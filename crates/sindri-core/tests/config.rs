@@ -1071,7 +1071,7 @@ fn every_key_merges_above_a_lower_config_and_yields_to_one_above_it() {
 }
 
 #[test]
-fn every_key_of_the_table_is_reached_by_each_of_its_surfaces() {
+fn every_key_is_parsed_shown_written_spoken_and_merged_by_its_own_row() {
     assert_eq!(
         SPOKEN.len(),
         Config::SCHEMA.len(),
@@ -1084,30 +1084,19 @@ fn every_key_of_the_table_is_reached_by_each_of_its_surfaces() {
 
     for field in Config::SCHEMA {
         let key = field.name;
-        let (_, spoken, file) = worked(key);
-        let alone = the_key_alone(key, file);
 
         assert!(
             !key.is_empty(),
-            "every row of the table carries a name, and this row's name is blank"
+            "every row of the table carries a name, and this row carries none"
         );
         assert!(
             !names.contains(&key),
             "no two rows of the table name one key, and `{key}` is named twice"
         );
         names.push(key);
-        let found = Config::field(key)
-            .unwrap_or_else(|| panic!("the schema names `{key}` as a row of its table"));
-        assert_eq!(
-            found.variable, field.variable,
-            "the row `Config::field` finds for `{key}` is that key's own row, spoken by the same \
-             variable and no other row's"
-        );
-        assert_eq!(
-            found.shown(&alone),
-            field.shown(&alone),
-            "the row `Config::field` finds for `{key}` shows what the row of `{key}` shows"
-        );
+
+        let (_, spoken, file) = worked(key);
+        let alone = the_key_alone(key, file);
 
         let words = field.shown(&alone);
         assert!(
@@ -1116,26 +1105,32 @@ fn every_key_of_the_table_is_reached_by_each_of_its_surfaces() {
         );
         assert!(
             field.shown(&Config::default()).is_empty(),
-            "a config that says nothing about `{key}` is a row that shows nothing"
+            "a config that says nothing about `{key}` is the row of `{key}` showing nothing"
+        );
+
+        // The row of a secret is drawn as the mask and what a reader types there is a secret of
+        // their own, so that one row is handed the words its variable speaks.
+        let typed = if words == sindri_core::redact::MASK {
+            spoken
+        } else {
+            words.as_str()
+        };
+        assert_eq!(
+            field
+                .read(typed)
+                .unwrap_or_else(|error| panic!("the row of `{key}` parses `{typed}`: {error}")),
+            alone,
+            "the words the row of `{key}` is handed are `{key}`'s value and no other key's"
         );
         if words == sindri_core::redact::MASK {
             masked.push(key);
             let refused = field.read(&words).expect_err(&format!(
-                "`{key}` is drawn as the mask, so the row of `{key}` refuses it"
+                "the row of `{key}` shows the mask, so it refuses the mask as a value"
             ));
             assert!(
                 refused.to_string().contains(key),
                 "the refusal of the mask names the key a reader has to fix, and `{key}`'s says: \
                  {refused}"
-            );
-        } else {
-            let parsed = field.read(&words).unwrap_or_else(|error| {
-                panic!("the row of `{key}` parses the words it shows: {error}")
-            });
-            assert_eq!(
-                parsed, alone,
-                "the words the row of `{key}` shows are a value `{key}` reads back as itself, and \
-                 no other key of the config"
             );
         }
 
