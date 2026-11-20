@@ -74,18 +74,19 @@ How many tokens the model's window holds, when a reader names it in the config. 
 one and nothing here guesses, so a run with none named has a size and no share of it.
 _Avoid_: Context limit, token budget, max context
 
-**Phase**:
-The word a **status** holds for where its run stands — `idle`, `working`, `done`, `blocked` or `error`.
-A phase is what the document says of the run, never what the run is in: that is **State**'s question.
-_Avoid_: Status, state, step
-
 **Status**:
-The document a session publishes about its run: the phase, one redacted line of the run's own words —
-never the command, the prompt or the answer — the turn the run is on, and the workspace. A report
-about a run held by a session, and never the run's own word about itself, which is **State**'s alone.
-One is appended to `status.json` beside the transcript as the run goes, so the run of them reads back,
-and the same document is reported off the terminal, so a listener outside the frame reads it.
+The document a session publishes about its run: the phase, one redacted line of the run's own words,
+the turn the run is on, and the workspace's name. The line is never the command, the prompt or the
+answer. One is appended to `status.json` beside the transcript as the run goes, so the run of them
+reads back, and the same document is reported off the terminal, so a listener outside the frame reads
+it too. A report about a run held by a session, and never the run's own word about itself, which is
+**State**'s alone.
 _Avoid_: Progress, notice, indicator
+
+**Phase**:
+One of the four facts a **status** holds: `idle`, `working`, `done`, `blocked` or `error`. The five
+are the document's words, and none of them is the run's own word about itself, which is **State**'s.
+_Avoid_: Status, state, step
 
 ## Confinement
 
