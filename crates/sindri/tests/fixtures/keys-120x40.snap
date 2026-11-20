@@ -33,7 +33,7 @@ keys at 120x40
 27 |                        │ Home                 the start of the line                           │                        | dim:25 plain:1 plain+bold:21 muted:21 plain:27 dim:25
 28 |                        │ End                  the tail of the run, or the end of the line     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
 29 |                        │ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 plain+bold:21 muted:33 plain:15 dim:25
-30 |                        │ Ctrl-O               open or fold the newest result                  │                        | dim:25 plain:1 plain+bold:21 muted:30 plain:18 dim:25
+30 |                        │ Ctrl-O               open or fold the newest work                    │                        | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
 31 |                        │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
 32 |                        │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
 33 |                        │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25

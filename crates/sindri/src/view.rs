@@ -637,8 +637,8 @@ impl View {
         }
     }
 
-    /// `Ctrl-O`: the newest result's fold, a frame to paint where it moved and nothing where it
-    /// did not.
+    /// `Ctrl-O`: the fold of the newest settled work, a frame to paint where it moved and nothing
+    /// where it did not.
     fn fold(&mut self) -> Outcome {
         match self.rows.toggle_newest() {
             true => Outcome::Edited,
@@ -662,8 +662,9 @@ impl View {
         }
     }
 
-    /// The fold of the entry the band row `row` was drawn from, opened if it was folded: a row the
-    /// last paint drew nothing on, and a row of an entry with no fold, open nothing.
+    /// The fold of the band row `row`, opened if it was folded: the work the row stands on, or the
+    /// result's own fold inside a work the reader already opened. A row the last paint drew nothing
+    /// on, and a row of an entry with no fold, open nothing.
     fn unfold(&mut self, row: u16) -> bool {
         let Some(entry) = self.drawn.entry(row) else {
             return false;

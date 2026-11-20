@@ -2,6 +2,7 @@
 //! laid out at: either one changing drops them all, because a row's height is a fact
 //! about that measurement and about nothing else.
 
+use std::collections::BTreeSet;
 use std::ops::Range;
 
 use ratatui::buffer::Buffer;
@@ -19,7 +20,7 @@ use crate::markdown;
 use crate::palette::Palette;
 use crate::pen::{self, Clip};
 use crate::picture::{self, Surface};
-use crate::pulse::Head;
+use crate::pulse::{self, Head};
 use crate::size::{self, Sized, Sizes};
 use crate::spell;
 use crate::stream::Stream;
@@ -48,11 +49,29 @@ const FOLD_HEAD: usize = 4;
 /// keep back fewer is drawn whole rather than spending a row to hand the reader nothing.
 const FOLD_KEPT: usize = 3;
 
-/// Whether a result is drawn whole, or as the head a reader is handed to begin with.
+/// Whether what holds this fold is drawn whole, or as the head a reader is handed to begin with: a
+/// result's own, or the whole work a settled exchange's row stands for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fold {
     Closed,
     Open,
+}
+
+/// Where an entry stands in the work the band draws: a prompt, the answer a run ended on and a stop
+/// stand alone, and the thoughts, calls, results and answers the run went past are one work. Its
+/// fold is held on the entry that opens it, and is never the fold a result keeps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Place {
+    Alone,
+    Opens(Fold),
+    Within,
+}
+
+impl Place {
+    /// Whether this entry stands in a work at all: it opens one, or it is drawn in one.
+    fn in_work(self) -> bool {
+        matches!(self, Place::Opens(_) | Place::Within)
+    }
 }
 
 /// One row of the transcript: never wider than the width it was laid out at, bar the
@@ -324,6 +343,53 @@ fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>
 fn kept_back(kept: usize, cols: u16) -> Row {
     let words = format!("{kept} rows kept back");
     marked(&KEPT.to_string(), Ink::Dim, vec![(words, Ink::Dim)], cols)
+}
+
+/// What a work holds: the calls it made, the files its opens read and the time its results took, as
+/// the one row a settled work is drawn as says them.
+#[derive(Debug, Default)]
+struct Tally {
+    calls: usize,
+    files: BTreeSet<String>,
+    elapsed_ms: u64,
+}
+
+impl Tally {
+    /// The words the one row a settled work is drawn as says: each number only where the work holds
+    /// it, in the order a reader reads them.
+    fn words(&self) -> String {
+        let mut said: Vec<String> = Vec::new();
+        if self.calls > 0 {
+            said.push(format!("{} call{}", self.calls, plural(self.calls)));
+        }
+        if !self.files.is_empty() {
+            said.push(format!(
+                "{} file{}",
+                self.files.len(),
+                plural(self.files.len())
+            ));
+        }
+        if self.elapsed_ms > 0 {
+            said.push(took(self.elapsed_ms));
+        }
+        said.join(" · ")
+    }
+}
+
+/// The time a work took, in the words of a fact: a work under a second says the milliseconds it
+/// took, because a tenth of a second is no reading a reader can tell from none.
+fn took(ms: u64) -> String {
+    match ms {
+        ms if ms < 1_000 => format!("{ms} ms"),
+        ms => pulse::format_duration_spaced(ms),
+    }
+}
+
+fn plural(count: usize) -> &'static str {
+    match count {
+        1 => "",
+        _ => "s",
+    }
 }
 
 /// The rows a stop is drawn as: the mark it wears with its own word beside it, and one line of the
@@ -788,7 +854,10 @@ struct Held {
     /// layered over the rows, so a width change re-lays the settled row.
     result: Option<Entry>,
     rows: Option<Vec<Row>>,
-    /// The fold the reader left this entry in, which is theirs and survives every re-lay of the
+    /// Where this entry stands in the work around it, and the fold the reader left that whole work
+    /// in where this entry opens one.
+    place: Place,
+    /// The fold the reader left this result in, which is theirs and survives every re-lay of the
     /// rows under it.
     fold: Fold,
     /// How many rows this entry's closed fold keeps back, and nothing where its whole fold holds
@@ -873,13 +942,78 @@ impl Rows {
             return;
         }
         self.retire();
+        let place = self.land(&entry);
         self.held.push(Held {
             what: What::Fact(entry),
             result: None,
             rows: None,
+            place,
             fold: Fold::Closed,
             kept: None,
         });
+    }
+
+    /// Where an entry landing at the transcript's end stands, and what its landing does to the work
+    /// around it: a thought, call or result joins the work above it, and a prompt or a stop ends
+    /// that work.
+    fn land(&mut self, entry: &Entry) -> Place {
+        let of_work = work_entry(entry);
+        if of_work {
+            self.past();
+        }
+        let within = self.open_work().is_some();
+        if matches!(entry, Entry::Prompt { .. } | Entry::Stop { .. })
+            && let Some(at) = self.last_work()
+        {
+            self.held[at].rows = None;
+        }
+        match (of_work, within) {
+            (false, _) => Place::Alone,
+            (true, true) => Place::Within,
+            (true, false) => Place::Opens(Fold::Closed),
+        }
+    }
+
+    /// The entry that opens the last work the transcript holds, which is the work a prompt or a stop
+    /// landing now settles: the answer above it is the exchange's end and no row of that work.
+    fn last_work(&self) -> Option<usize> {
+        (0..self.held.len())
+            .rev()
+            .find(|at| matches!(self.held[*at].place, Place::Opens(_)))
+    }
+
+    /// The entry that opens the work the transcript ends in, and nothing where the entry it ends on
+    /// stands alone.
+    fn open_work(&self) -> Option<usize> {
+        let last = self.held.len().checked_sub(1)?;
+        if !self.held[last].place.in_work() {
+            return None;
+        }
+        (0..=last)
+            .rev()
+            .find(|at| matches!(self.held[*at].place, Place::Opens(_)))
+    }
+
+    /// An answer the run went past is work of its own: a thought, call or result after it says the
+    /// turn ended and the run went on, so the answer joins the work and the rows it drew are the
+    /// work's.
+    fn past(&mut self) {
+        let Some(at) = self.held.len().checked_sub(1) else {
+            return;
+        };
+        if self.held[at].place != Place::Alone
+            || !matches!(self.held[at].what, What::Fact(Entry::Assistant { .. }))
+        {
+            return;
+        }
+        let above = at
+            .checked_sub(1)
+            .is_some_and(|above| self.held[above].place.in_work());
+        self.held[at].place = match above {
+            true => Place::Within,
+            false => Place::Opens(Fold::Closed),
+        };
+        self.held[at].rows = None;
     }
 
     /// Holds the turn in flight as the cache's last entry. A stream asked again without
@@ -916,6 +1050,7 @@ impl Rows {
                     what: What::Live { revision, head },
                     result: None,
                     rows: Some(rows),
+                    place: Place::Alone,
                     fold: Fold::Closed,
                     kept: None,
                 };
@@ -1027,16 +1162,22 @@ impl Rows {
         }
     }
 
-    /// The rows of entry `at`, laid out now if they do not exist and kept for the next paint. A
-    /// settled entry is the call's rows and then the result's under them, so the words a call was
-    /// called with stay above what came of it. The live entry has no fact behind it: nothing here.
+    /// The rows of entry `at`, laid out now if they do not exist and kept for the next paint: a
+    /// settled call is its own rows and then the result's under them, a settled work is the one row
+    /// that counts it, and the live entry has no fact behind it, so nothing here.
     pub fn rows(&mut self, at: usize) -> &[Row] {
+        let work = self.work(at);
+        let one = self.one_row(&work);
+        if one && at != work.start {
+            return &[];
+        }
         let cols = self.cols;
         let surface = &self.surface;
         let ground = self.ground.as_ref();
         let held = &self.held[at];
         if held.rows.is_none() {
             let laid = match (&held.what, held.result.as_ref()) {
+                _ if one => Some((vec![self.work_row(&work, cols)], None)),
                 (What::Fact(entry), None) => {
                     let head = match self.newest_answer() == Some(at) {
                         true => self.head.as_ref(),
@@ -1058,34 +1199,134 @@ impl Rows {
         self.held[at].rows.as_deref().unwrap_or_default()
     }
 
-    /// The newest entry whose settled fact is a result, which is the one `Ctrl-O` answers for.
-    fn newest_result(&self) -> Option<usize> {
+    /// The entries of the work `at` stands in: the run of work entries around it, and an entry that
+    /// stands alone in a work of one.
+    fn work(&self, at: usize) -> Range<usize> {
+        let start = (0..=at)
+            .rev()
+            .find(|at| !matches!(self.held[*at].place, Place::Within))
+            .unwrap_or(at);
+        let mut end = start + 1;
+        while end < self.held.len() && matches!(self.held[end].place, Place::Within) {
+            end += 1;
+        }
+        start..end
+    }
+
+    /// Whether the record has written past `work`, which is a prompt or a stop standing after it: a
+    /// turn's answer and the turn in flight both leave the run filling the work it is in.
+    fn written_past(&self, work: &Range<usize>) -> bool {
+        self.held[work.end..].iter().any(|held| {
+            matches!(
+                held.what,
+                What::Fact(Entry::Prompt { .. } | Entry::Stop { .. })
+            )
+        })
+    }
+
+    /// What `work` holds, counted off the entries it stands in: the calls it made with the files
+    /// they read, and the time of every result, the result that settled a call included.
+    fn tally(&self, work: &Range<usize>) -> Tally {
+        let mut tally = Tally::default();
+        for held in &self.held[work.clone()] {
+            if let What::Fact(Entry::Call {
+                name, arguments, ..
+            }) = &held.what
+            {
+                tally.calls += 1;
+                if let Some(path) = spell::file(&name.to_string(), &arguments.to_string()) {
+                    tally.files.insert(path);
+                }
+            }
+            if let Some(Entry::Result { elapsed_ms, .. }) = result_of(held) {
+                tally.elapsed_ms = tally.elapsed_ms.saturating_add(*elapsed_ms);
+            }
+        }
+        tally
+    }
+
+    /// Whether `work` holds a number to say, counted without laying the row that says it: a row
+    /// that would count nothing is no row.
+    fn says_something(&self, work: &Range<usize>) -> bool {
+        self.held[work.clone()].iter().any(|held| {
+            matches!(held.what, What::Fact(Entry::Call { .. }))
+                || matches!(result_of(held), Some(Entry::Result { elapsed_ms, .. }) if *elapsed_ms > 0)
+        })
+    }
+
+    /// Whether `work` is a work the band draws as a row: the record has written past it and it
+    /// holds a number to say, so it is one row closed and the rows it stood for opened.
+    fn worth_a_row(&self, work: &Range<usize>) -> bool {
+        self.written_past(work) && self.says_something(work)
+    }
+
+    /// Whether `work` is drawn as the one row that counts it: a work worth a row the reader has not
+    /// opened.
+    fn one_row(&self, work: &Range<usize>) -> bool {
+        matches!(self.held[work.start].place, Place::Opens(Fold::Closed)) && self.worth_a_row(work)
+    }
+
+    /// The one row a settled work is drawn as: what it holds rather than how many rows it stands
+    /// in, in the dim ink of a fact.
+    fn work_row(&self, work: &Range<usize>, cols: u16) -> Row {
+        marked(
+            &KEPT.to_string(),
+            Ink::Dim,
+            vec![(self.tally(work).words(), Ink::Dim)],
+            cols,
+        )
+    }
+
+    /// The newest work a key may open: the newest one the band draws as a row, closed or open.
+    fn newest_work(&self) -> Option<Range<usize>> {
         (0..self.held.len())
             .rev()
-            .find(|at| holds_result(&self.held[*at]))
+            .filter(|at| matches!(self.held[*at].place, Place::Opens(_)))
+            .map(|at| self.work(at))
+            .find(|work| self.worth_a_row(work))
     }
 
-    /// The newest result's fold, opened if it is closed and folded if it is open: false where the
-    /// transcript holds no result, or where the newest one's whole fold holds it already.
+    /// The newest settled work's fold, opened if it is closed and folded if it is open: false where
+    /// the transcript holds no work drawn as a row.
     pub fn toggle_newest(&mut self) -> bool {
-        let Some(at) = self.newest_result() else {
+        let Some(work) = self.newest_work() else {
             return false;
         };
-        let to = match self.held[at].fold {
-            Fold::Closed => Fold::Open,
-            Fold::Open => Fold::Closed,
+        let to = match self.held[work.start].place {
+            Place::Opens(Fold::Closed) => Fold::Open,
+            _ => Fold::Closed,
         };
-        self.fold(at, to)
+        self.opened(work.start, to)
     }
 
-    /// Opens the fold of entry `at`, and answers whether this call is what opened it: an entry
-    /// that is no result, one whose whole fold holds it, and one already open answer nothing.
+    /// Opens the fold entry `at` stands on, and answers whether this call is what moved it: the work
+    /// where `at` belongs to a settled one the reader has not opened, and otherwise the fold the
+    /// result itself keeps. A work drawn as no row and an entry with no fold answer nothing.
     pub fn open(&mut self, at: usize) -> bool {
+        if at >= self.held.len() {
+            return false;
+        }
+        let work = self.work(at);
+        if self.one_row(&work) {
+            return self.opened(work.start, Fold::Open);
+        }
         self.fold(at, Fold::Open)
     }
 
-    /// Entry `at` left in the fold `to`, which is a frame to paint when this call moved it: one
-    /// already in `to` repaints nothing, and a result its whole fold holds is no key's.
+    /// The work opening at `at` left in the fold `to`, which is a frame to paint when this call
+    /// moved it: one already in `to` repaints nothing, and the rows it drew are laid once again.
+    fn opened(&mut self, at: usize, to: Fold) -> bool {
+        match self.held[at].place {
+            Place::Opens(fold) if fold != to => {}
+            _ => return false,
+        }
+        self.held[at].place = Place::Opens(to);
+        self.held[at].rows = None;
+        true
+    }
+
+    /// The result entry `at` left in the fold `to`, which is a frame to paint when this call moved
+    /// it: one already in `to` repaints nothing, and a result its whole fold holds is no key's.
     fn fold(&mut self, at: usize, to: Fold) -> bool {
         let Some(held) = self.held.get(at) else {
             return false;
@@ -1189,13 +1430,27 @@ impl Rows {
     }
 }
 
-/// Whether this entry is a result: either the fact itself, or the result that settled the call
-/// it holds.
-fn holds_result(held: &Held) -> bool {
+/// Whether this entry is the work of its exchange: a turn, a thought, a call or a result. A
+/// prompt, an answer and a stop are the exchange's ends and stand alone.
+fn work_entry(entry: &Entry) -> bool {
     matches!(
-        (&held.what, held.result.as_ref()),
-        (What::Fact(Entry::Result { .. }), _) | (_, Some(Entry::Result { .. }))
+        entry,
+        Entry::Turn { .. } | Entry::Reasoning { .. } | Entry::Call { .. } | Entry::Result { .. }
     )
+}
+
+/// The result this entry holds: either the fact itself, or the result that settled the call it
+/// holds.
+fn result_of(held: &Held) -> Option<&Entry> {
+    match &held.what {
+        What::Fact(result @ Entry::Result { .. }) => Some(result),
+        _ => held.result.as_ref(),
+    }
+}
+
+/// Whether this entry is a result, and so holds a fold of its own.
+fn holds_result(held: &Held) -> bool {
+    result_of(held).is_some()
 }
 
 #[derive(Clone, Debug, Default)]

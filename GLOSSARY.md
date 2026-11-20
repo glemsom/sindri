@@ -23,6 +23,14 @@ them, and the answer. One exchange to a prompt, and what the run did between the
 the prompt rather than under a name of its own.
 _Avoid_: Pair, round, item
 
+**Work**:
+What a run did between a prompt and the answer it ended on: the thoughts it thought, the calls it
+made, the results that came back and the answers it went past. It is no row of the band's while the
+run fills it — every entry of it stands as the rows it is drawn as — and one row counting its calls,
+its files and its time once its exchange has ended: `⋯ 12 calls · 3 files · 4.1 s`. That row is the
+reader's to open, and a result inside an opened work keeps the fold of its own.
+_Avoid_: Activity, step, trace, log
+
 **Prompt**:
 The reader's own words a run was asked with: the first fact of the session's transcript, and what the
 wire is asked last, after the turns that came before it.

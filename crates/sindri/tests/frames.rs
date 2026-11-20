@@ -80,12 +80,12 @@ fn tools_120x40_is_one_call_of_each_tool_settled_and_in_flight() {
 }
 
 #[test]
-fn fold_120x40_is_a_result_longer_than_the_head_it_is_drawn_as() {
+fn fold_120x40_is_a_settled_exchanges_work_drawn_as_one_row() {
     fixture::assert_frame("fold", 120, 40);
 }
 
 #[test]
-fn fold_open_120x40_is_that_result_after_the_key_that_opens_it() {
+fn fold_open_120x40_is_that_work_opened_and_the_fold_its_result_keeps() {
     fixture::assert_frame("fold-open", 120, 40);
 }
 

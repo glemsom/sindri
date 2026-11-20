@@ -283,11 +283,11 @@ fn ctrl_y_arrives_as_the_key_that_copies() {
 }
 
 #[test]
-fn ctrl_o_arrives_as_the_key_that_opens_the_newest_results_fold() {
+fn ctrl_o_arrives_as_the_key_that_opens_the_newest_works_fold() {
     assert_eq!(
         event(b"\x0f"),
         key(Key::Fold),
-        "`Ctrl-O` is one control byte and the key the newest result's fold is opened with, \
+        "`Ctrl-O` is one control byte and the key the newest settled work is opened with, \
          never a glyph of the draft"
     );
     assert_eq!(

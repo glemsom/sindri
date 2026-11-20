@@ -3,17 +3,17 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 fold at 120x40
-00 |  Every row of the run passes: the gutter holds one column for every entry, wire      anthropic                         | plain:76 dim:10 plain:34
-01 |  and a row of a command's output is set behind it rather than beside the   model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
-02 |  answer.                                                                   think     high                              | plain:76 dim:10 plain:34
-03 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
-04 |  cargo test -p sindri --test rows                                          turns                               6 /  250| plain:76 dim:10 plain:34
-05 |✓ exit 0  1800 ms · 640 bytes                                               ctx                      █░░░░░ 48.2k / 200k| ok:1 plain:1 dim:27 plain:47 dim:10 plain:16 dim:5 plain:13
-06 |  test rows::a_row_of_output_1 ... ok                                       cache                                    88%| muted:37 plain:39 dim:10 plain:34
-07 |  test rows::a_row_of_output_2 ... ok                                                                                   | muted:37 plain:83
-08 |  test rows::a_row_of_output_3 ... ok                                       workspace …/git/sindri/.worktrees/46-rail   | muted:37 plain:39 dim:10 plain:34
-09 |⋯ 16 rows kept back                                                         branch    spec/1-capability                 | dim:1 plain:1 dim:17 plain:57 dim:10 plain:34
-10 |  test rows::a_row_of_output_20 ... ok                                                                                  | muted:38 plain:82
+00 |─ prompt ───────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34
+01 |› why does the retry test fail?                                             model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
+02 |⋯ 1 call · 1.8 s                                                            think     high                              | dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
+03 |  Three rows of the fold are the whole of it: the head, the count and the                                               | plain:120
+04 |  last.                                                                     turns                               6 /  250| plain:76 dim:10 plain:34
+05 |                                                                            ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+06 |                                                                            cache                                    88%| plain:76 dim:10 plain:34
+07 |                                                                                                                        | plain:120
+08 |                                                                            workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
+09 |                                                                            branch    spec/1-capability                 | plain:76 dim:10 plain:34
+10 |                                                                                                                        | plain:120
 11 |                                                                            skills                                     2| plain:76 dim:10 plain:34
 12 |                                                                                                                        | plain:120
 13 |                                                                            sandbox   bwrap                             | plain:76 dim:10 plain:34

@@ -3,11 +3,11 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 queue-long at 120x24
-00 |✓ bash                                                                      wire      anthropic                         | ok:1 plain:1 dim:4 plain:70 dim:10 plain:34
-01 |  make check STAGES=frames                                                  model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
-02 |✓ exit 0  31 ms · 104 bytes                                                 think     high                              | ok:1 plain:1 dim:25 plain:49 dim:10 plain:34
-03 |  check: frame calls ... ok                                                                                             | muted:27 plain:93
-04 |  check: frame transcript ... ok                                            turns                               6 /  250| muted:32 plain:44 dim:10 plain:34
+00 |  code      │ behind a bar, highlighted                                     wire      anthropic                         | plain:11 dim:3 plain:62 dim:10 plain:34
+01 |  table     │ columns joined by a bar                                       model     claude-sonnet-4-5-20250929        | plain:11 dim:3 plain:62 dim:10 plain:34
+02 |─ prompt ───────────────────────────────────────────────────────────────────think     high                              | dim:86 plain:34
+03 |› what does a row of the band say?                                                                                      | plain:120
+04 |⋯ 1 call · 31 ms                                                            turns                               6 /  250| dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
 05 |  A row is one line                                                         ctx                      █░░░░░ 48.2k / 200k| plain:2 plain+bold:17 plain:57 dim:10 plain:16 dim:5 plain:13
 06 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
 07 |                                                                            workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34

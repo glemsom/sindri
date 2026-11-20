@@ -1607,79 +1607,19 @@ fn kept_back_row(laid: &[Row]) -> Option<String> {
 }
 
 #[test]
-fn one_key_opens_the_newest_results_fold_and_the_same_key_closes_it_again() {
-    let mut rows = Rows::new();
-    rows.resize(80);
-    rows.push(thought(1));
-    rows.push(long_result(1));
-
-    let folded: Vec<Row> = rows.rows(1).to_vec();
-    assert_eq!(
-        kept_back_row(&folded).as_deref(),
-        Some("⋯ 16 rows kept back"),
-        "the newest result is the one the key opens, and it begins folded"
-    );
-    let laid = rows.lays();
-
-    assert!(
-        rows.toggle_newest(),
-        "the newest result has a fold, so this key is one for the frame to answer"
-    );
-    assert_eq!(
-        rows.lays(),
-        laid,
-        "opening a fold lays nothing by itself: the next paint lays the one entry it opened"
-    );
-
-    let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
-    assert_eq!(
-        opened.len(),
-        21,
-        "the opened result is its verdict row and the twenty rows of output under it: {opened:?}"
-    );
-    assert_eq!(
-        kept_back_row(rows.rows(1)),
-        None,
-        "a fold that is open keeps nothing back, so it counts nothing"
-    );
-    assert_eq!(
-        rows.lays(),
-        laid + 1,
-        "the entry was laid out once, at the fold it was opened to"
-    );
-
-    assert!(
-        rows.toggle_newest(),
-        "the same key folds it again, because the build it opened is the one it closes"
-    );
-    assert_eq!(
-        rows.rows(1).to_vec(),
-        folded,
-        "and the rows it closes to are the rows the reader was handed before"
-    );
-    assert_eq!(
-        rows.lays(),
-        laid + 2,
-        "closing a fold is one layout of the one entry that closed"
-    );
-
-    let mut short = Rows::new();
-    short.resize(80);
-    short.push(result(1, Exit::Code(0)));
-    assert!(
-        !short.toggle_newest(),
-        "a result its whole fold holds has none to open, so the key answers nothing"
-    );
-}
-
-#[test]
-fn a_fold_a_reader_opened_stays_open_through_a_reflow_and_a_new_entry_beside_it() {
+fn a_results_fold_inside_an_opened_work_survives_a_reflow_and_a_new_entry_beside_it() {
     let mut rows = Rows::new();
     rows.resize(80);
     rows.push(long_result(1));
+    rows.push(answer(1));
+    rows.push(stop_entry(Stop::Final));
     assert!(
         rows.toggle_newest(),
-        "the result the reader reads has a fold"
+        "the work the result stands in is one the reader opens"
+    );
+    assert!(
+        rows.open(0),
+        "and the result inside that work keeps a fold of its own to open"
     );
     let opened: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
@@ -1694,7 +1634,7 @@ fn a_fold_a_reader_opened_stays_open_through_a_reflow_and_a_new_entry_beside_it(
     assert_eq!(
         rows.lays(),
         laid + 1,
-        "the narrower band re-lays the opened entry once"
+        "the narrower band re-lays the opened work once"
     );
     assert!(
         reflowed.len() > 21,
@@ -1706,15 +1646,9 @@ fn a_fold_a_reader_opened_stays_open_through_a_reflow_and_a_new_entry_beside_it(
         None,
         "a resize is no reader's hand on the fold, so it stays open and counts nothing back"
     );
-    assert!(
-        reflowed
-            .iter()
-            .any(|row| row.contains("a_row_of_output_20")),
-        "every row of the output is still drawn, its last one included: {reflowed:?}"
-    );
 
     rows.push(thought(2));
-    let beside: Vec<String> = rows.rows(1).iter().map(words).collect();
+    let beside: Vec<String> = rows.rows(3).iter().map(words).collect();
     assert_eq!(
         beside,
         vec![String::from("│ turn 2")],
@@ -1723,14 +1657,14 @@ fn a_fold_a_reader_opened_stays_open_through_a_reflow_and_a_new_entry_beside_it(
     assert_eq!(
         rows.lays(),
         laid + 2,
-        "a new entry beside an opened fold lays itself out and leaves the fold alone"
+        "a new entry beside an opened work lays itself out and leaves the work alone"
     );
     assert!(
         rows.rows(0)
             .iter()
             .map(words)
             .any(|row| row.contains("a_row_of_output_20")),
-        "the fold the reader opened is still open with a new entry beside it"
+        "the result the reader opened is still open with a new entry beside it"
     );
 }
 
@@ -1769,6 +1703,567 @@ fn a_session_read_back_is_folded_again() {
     assert!(
         !drawn.iter().any(|row| row.contains("a_row_of_output_12")),
         "and the rows it keeps back are kept back on the way in: {drawn:?}"
+    );
+}
+
+/// A result of the call it settles, saying how long that call took.
+fn timed(which: u32, elapsed_ms: u64) -> Entry {
+    Entry::Result {
+        turn: which,
+        id: None,
+        name: SecretSet::default().redact("bash"),
+        text: SecretSet::default().redact("exit 0\na.txt\n"),
+        bytes: 7,
+        elapsed_ms,
+        exit: Some(Exit::Code(0)),
+    }
+}
+
+/// An open call reading `path`.
+fn reading(which: u32, path: &str) -> Entry {
+    named(which, "open", &format!(r#"{{"path": "{path}"}}"#))
+}
+
+/// The reader's own words a run was asked with.
+fn asked_for(which: u32) -> Entry {
+    Entry::Prompt {
+        text: SecretSet::default().redact(format!("prompt {which}")),
+    }
+}
+
+/// The one row a settled exchange's work is drawn as, from the entries the work handed in.
+fn one_row_of(work: Vec<Entry>) -> Row {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(asked_for(1));
+    for entry in work {
+        rows.push(entry);
+    }
+    rows.push(answer(1));
+    rows.push(stop_entry(Stop::Final));
+    let laid: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        laid.len(),
+        1,
+        "a settled work is drawn as exactly one row: {laid:?}"
+    );
+    rows.rows(1)[0].clone()
+}
+
+#[test]
+fn a_settled_exchanges_work_is_one_row() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(Entry::Prompt {
+        text: SecretSet::default().redact("triage the retry test"),
+    });
+    rows.push(Entry::Turn { turn: 1 });
+    rows.push(thought(1));
+    rows.push(call(1));
+    rows.push(timed(1, 4_100));
+    rows.push(answer(1));
+    rows.push(stop_entry(Stop::Final));
+
+    let work: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        work,
+        ["⋯ 1 call · 4.1 s"],
+        "a settled exchange's work is one row standing where its work stood, between the prompt \
+         and the answer: {work:?}"
+    );
+    assert_eq!(
+        inks(&rows.rows(1)[0]),
+        vec![Ink::Dim, Ink::Plain, Ink::Dim],
+        "the mark and the words are in the dim ink of a fact"
+    );
+    for at in [2, 3] {
+        assert!(
+            rows.rows(at).is_empty(),
+            "the thought and the call under the work are drawn as its one row and no row of \
+             their own: {:?}",
+            rows.rows(at).iter().map(words).collect::<Vec<String>>()
+        );
+    }
+    assert_eq!(
+        rows.len(),
+        6,
+        "the prompt, the three entries of the work the result settled into, the answer and the \
+         stop the run ended on"
+    );
+}
+
+#[test]
+fn a_settled_works_row_counts_its_calls_its_files_and_its_time() {
+    let mut work = Vec::new();
+    for which in 0..12 {
+        work.push(reading(1, ["a.rs", "b.rs", "c.rs"][which % 3]));
+        work.push(timed(1, if which == 0 { 4_100 } else { 0 }));
+    }
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 12 calls · 3 files · 4.1 s",
+        "the work's row says how many calls it made, how many files it read and how long they \
+         took, in that order"
+    );
+}
+
+#[test]
+fn a_work_holding_no_file_says_no_file() {
+    let work = vec![call(1), timed(1, 4_100)];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 1 call · 4.1 s",
+        "a work that read no file says nothing of a file it does not hold"
+    );
+}
+
+#[test]
+fn a_count_of_one_is_a_singular() {
+    let work = vec![reading(1, "notes.md"), timed(1, 4_100)];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 1 call · 1 file · 4.1 s",
+        "one call and one file are said in the singular, the way a count of one is read"
+    );
+}
+
+#[test]
+fn two_calls_naming_one_path_count_one_file() {
+    let work = vec![
+        reading(1, "notes.html"),
+        timed(1, 0),
+        reading(1, "notes.html"),
+        timed(1, 2_000),
+    ];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 2 calls · 1 file · 2.0 s",
+        "the same path named twice is one file, however many calls read it"
+    );
+}
+
+#[test]
+fn a_work_under_a_second_says_the_milliseconds_it_took() {
+    let work = vec![call(1), timed(1, 23)];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 1 call · 23 ms",
+        "a work under a second says the milliseconds it took, and never a tenth of a second that \
+         reads as none"
+    );
+}
+
+#[test]
+fn a_work_taking_longer_than_a_minute_says_its_minutes_and_seconds() {
+    let work = vec![call(1), timed(1, 90_000)];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 1 call · 1m 30s",
+        "a work that took longer than a minute says its minutes and the seconds under them"
+    );
+}
+
+#[test]
+fn a_url_an_open_names_is_no_file() {
+    let work = vec![
+        named(1, "open", r#"{"url": "https://example.test/notes.html"}"#),
+        timed(1, 4_100),
+    ];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 1 call · 4.1 s",
+        "an open call that names a url read no file of this workspace, so the work counts none"
+    );
+}
+
+#[test]
+fn a_work_whose_results_carry_no_time_says_no_time() {
+    let work = vec![call(1), timed(1, 0)];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 1 call",
+        "a work whose results carry no time says no time rather than a time of nothing"
+    );
+}
+
+#[test]
+fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(Entry::Prompt {
+        text: SecretSet::default().redact("triage the retry test"),
+    });
+    rows.push(Entry::Turn { turn: 1 });
+    rows.push(thought(1));
+    rows.push(call(1));
+    rows.push(timed(1, 4_100));
+
+    let mut stream = Stream::new();
+    stream.text("the retry test is the one to read");
+    rows.live(&stream, None);
+
+    let laid: Vec<String> = rows
+        .window(Scroll::Back(0), 40)
+        .pieces()
+        .iter()
+        .flat_map(|piece| (0..piece.rows).map(move |row| (piece.entry, row)))
+        .map(|(entry, row)| words(&rows.rows(entry)[usize::from(row)]))
+        .collect();
+    assert!(
+        laid.iter().any(|row| row == "│ turn 1"),
+        "the run in flight draws its thought as it lands: {laid:?}"
+    );
+    assert!(
+        laid.iter().any(|row| row == "✓ bash"),
+        "and the call the result settled: {laid:?}"
+    );
+    assert!(
+        laid.iter().any(|row| row.starts_with("✓ exit 0  4100 ms")),
+        "and the result under it: {laid:?}"
+    );
+    assert!(
+        !laid
+            .iter()
+            .any(|row| row.starts_with("⋯") && row.contains("call")),
+        "and no work row of its own, because the work is not settled: {laid:?}"
+    );
+}
+
+#[test]
+fn a_run_of_two_turns_leaves_one_row_for_the_work_of_both() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    for entry in [
+        asked_for(1),
+        Entry::Turn { turn: 1 },
+        call(1),
+        timed(1, 4_000),
+        answer(1),
+        Entry::Turn { turn: 2 },
+        call(2),
+        timed(2, 100),
+        answer(2),
+        stop_entry(Stop::Final),
+    ] {
+        rows.push(entry);
+    }
+    // The result of each call is held under its call, so the prompt stands at 0, the first turn's
+    // work at 1, its answer at 2, and the second turn's work and answer under them.
+    let work: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        work,
+        ["⋯ 2 calls · 4.1 s"],
+        "the work of a run that took two turns is one row, counted across both of them: {work:?}"
+    );
+    for at in [2, 3, 4] {
+        assert!(
+            rows.rows(at).is_empty(),
+            "the answer the run went past and the second turn's call are drawn in that one row: \
+             {:?}",
+            rows.rows(at).iter().map(words).collect::<Vec<String>>()
+        );
+    }
+    let answer: Vec<String> = rows.rows(6).iter().map(words).collect();
+    assert!(
+        answer
+            .iter()
+            .any(|row| row.trim_start().starts_with("The closing fence")),
+        "and the answer the run ended on stands under it as the answer it is: {answer:?}"
+    );
+}
+
+#[test]
+fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    for entry in [
+        asked_for(1),
+        Entry::Turn { turn: 1 },
+        call(1),
+        timed(1, 4_000),
+        answer(1),
+        Entry::Turn { turn: 2 },
+        call(2),
+        timed(2, 100),
+    ] {
+        rows.push(entry);
+    }
+
+    let laid: Vec<(usize, String)> = rows
+        .window(Scroll::Back(0), 40)
+        .pieces()
+        .iter()
+        .flat_map(|piece| (0..piece.rows).map(move |row| (piece.entry, row)))
+        .map(|(entry, row)| (entry, words(&rows.rows(entry)[usize::from(row)])))
+        .collect();
+    let said: Vec<&String> = laid.iter().map(|(_, row)| row).collect();
+    assert!(
+        said.iter().any(|row| *row == "✓ bash"),
+        "the run in flight draws the call of the turn that ended: {said:?}"
+    );
+    assert!(
+        said.iter().any(|row| row
+            .trim_start()
+            .starts_with("The closing fence is what ends")),
+        "and the answer that turn wrote stands under it: {said:?}"
+    );
+    assert!(
+        !said.iter().any(|row| row.starts_with("⋯")),
+        "and no work row stands anywhere, because the exchange is the one being watched: {said:?}"
+    );
+}
+
+#[test]
+fn a_work_settles_under_the_answer_that_ended_it() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    for entry in [
+        asked_for(1),
+        Entry::Turn { turn: 1 },
+        call(1),
+        timed(1, 4_100),
+        answer(1),
+    ] {
+        rows.push(entry);
+    }
+    assert!(
+        !rows.rows(2).is_empty(),
+        "the exchange is the one being watched, so its work is drawn whole under the answer"
+    );
+
+    rows.push(stop_entry(Stop::Final));
+    let work: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        work,
+        ["⋯ 1 call · 4.1 s"],
+        "the stop that lands under the answer settles the work above it, and the rows the work was \
+         drawn as are laid again as its one row: {work:?}"
+    );
+}
+
+#[test]
+fn one_key_opens_the_newest_settled_works_row_and_the_same_key_closes_it_again() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(Entry::Prompt {
+        text: SecretSet::default().redact("triage the retry test"),
+    });
+    rows.push(call(1));
+    rows.push(timed(1, 4_100));
+    rows.push(answer(1));
+    rows.push(stop_entry(Stop::Final));
+
+    let closed: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        closed,
+        ["⋯ 1 call · 4.1 s"],
+        "the settled work begins as its one row: {closed:?}"
+    );
+    let laid = rows.lays();
+
+    assert!(
+        rows.toggle_newest(),
+        "the newest settled work has a row for the key to open"
+    );
+    assert_eq!(
+        rows.lays(),
+        laid,
+        "opening a work lays nothing by itself: the next paint lays the one entry it opened"
+    );
+
+    let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        opened[0], "✓ bash",
+        "the opened work is drawn under the prompt as its entries are: {opened:?}"
+    );
+    assert_eq!(
+        rows.lays(),
+        laid + 1,
+        "the entry was laid out once, at the fold it was opened to"
+    );
+
+    assert!(
+        rows.toggle_newest(),
+        "the same key closes it again, because the work it opened is the one it closes"
+    );
+    let reclosed: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        reclosed, closed,
+        "and the rows it closes to are the row the reader was handed before: {reclosed:?}"
+    );
+
+    let mut short = Rows::new();
+    short.resize(80);
+    short.push(result(1, Exit::Code(0)));
+    assert!(
+        !short.toggle_newest(),
+        "a work the record has not written past is no row, so the key answers nothing"
+    );
+}
+
+#[test]
+fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(Entry::Prompt {
+        text: SecretSet::default().redact("triage the retry test"),
+    });
+    rows.push(named(
+        1,
+        "bash",
+        r#"{"command": "cargo test -p sindri --test rows -- --nocapture"}"#,
+    ));
+    rows.push(long_result(1));
+    rows.push(answer(1));
+    rows.push(stop_entry(Stop::Final));
+    assert!(
+        rows.toggle_newest(),
+        "the settled work is one the key opens"
+    );
+    let opened = rows.rows(1).len();
+    let laid = rows.lays();
+
+    rows.resize(30);
+    let reflowed = rows.rows(1).len();
+    assert_eq!(
+        rows.lays(),
+        laid + 1,
+        "the narrower band re-lays the opened work once"
+    );
+    assert!(
+        reflowed > opened,
+        "the same work takes more rows at thirty columns than at eighty: {reflowed} against \
+         {opened}"
+    );
+
+    rows.push(thought(2));
+    let beside: Vec<String> = rows.rows(4).iter().map(words).collect();
+    assert_eq!(
+        beside,
+        vec![String::from("│ turn 2")],
+        "the entry beside it is the one row it is drawn as: {beside:?}"
+    );
+    let still: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        still[0], "✓ bash",
+        "the work the reader opened is still open with an entry landing after it: {still:?}"
+    );
+
+    rows.push(Entry::Prompt {
+        text: SecretSet::default().redact("and the prompt after it"),
+    });
+    let after: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        after[0], "✓ bash",
+        "and the prompt after it is a word of the exchange below, so the work stands as open as \
+         the reader left it: {after:?}"
+    );
+}
+
+/// A cache holding one settled exchange whose one call read a result longer than its fold.
+fn the_long_call() -> Rows {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(asked_for(1));
+    rows.push(call(1));
+    rows.push(long_result(1));
+    rows.push(answer(1));
+    rows.push(stop_entry(Stop::Final));
+    rows
+}
+
+#[test]
+fn a_row_the_mark_is_grown_over_opens_the_work_it_stands_on() {
+    let mut rows = the_long_call();
+    assert_eq!(
+        rows.rows(1).len(),
+        1,
+        "the settled work is one row before the reader opens it"
+    );
+    assert!(
+        rows.open(1),
+        "a row the mark is grown over opens the work it stands on"
+    );
+
+    let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        opened[..2],
+        ["✓ bash", "  ls"],
+        "the opened work keeps the call's head and the words it was called with: {opened:?}"
+    );
+    assert_eq!(
+        kept_back_row(rows.rows(1)).as_deref(),
+        Some("⋯ 16 rows kept back"),
+        "and the result inside it keeps its own fold, its count and the head it is handed by: \
+         {opened:?}"
+    );
+    assert_eq!(
+        opened.len(),
+        8,
+        "two rows of the call, four of the head, the count and the last row: {opened:?}"
+    );
+}
+
+#[test]
+fn a_result_inside_an_opened_work_keeps_its_own_fold() {
+    let mut rows = the_long_call();
+    assert!(rows.open(1), "the work the result stands in is open");
+    assert!(
+        rows.open(1),
+        "a row inside the opened work opens the fold of the result it stands on"
+    );
+
+    let whole: Vec<String> = rows.rows(1).iter().map(words).collect();
+    assert_eq!(
+        kept_back_row(rows.rows(1)),
+        None,
+        "so the result is drawn whole and counts nothing back: {whole:?}"
+    );
+    assert!(
+        whole.iter().any(|row| row.contains("a_row_of_output_12")),
+        "and every row the fold kept back is drawn: {whole:?}"
+    );
+}
+
+#[test]
+fn an_exchange_that_did_no_work_draws_no_work_row() {
+    let mut rows = Rows::new();
+    rows.resize(80);
+    rows.push(Entry::Prompt {
+        text: SecretSet::default().redact("triage the retry test"),
+    });
+    rows.push(Entry::Turn { turn: 1 });
+    rows.push(thought(1));
+    rows.push(answer(1));
+    rows.push(stop_entry(Stop::Final));
+
+    assert!(
+        rows.rows(1).is_empty(),
+        "the turn of an exchange that did no work draws no row, and no work row stands in its \
+         place: {:?}",
+        rows.rows(1).iter().map(words).collect::<Vec<String>>()
+    );
+    assert_eq!(
+        rows.rows(2).iter().map(words).collect::<Vec<String>>(),
+        ["│ turn 1"],
+        "its thought stands where it did, because a work that made no call and read no file has no \
+         number to count"
+    );
+    assert!(
+        !rows.open(1),
+        "a work that counts nothing is drawn as no row, so a row grown over it opens nothing"
+    );
+    assert!(
+        !rows.toggle_newest(),
+        "and the newest work's fold is no key's either"
     );
 }
 

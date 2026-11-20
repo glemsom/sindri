@@ -229,7 +229,7 @@ const COMPOSER: [Binding; 23] = [
     Binding {
         key: Key::Fold,
         name: "Ctrl-O",
-        does: "open or fold the newest result",
+        does: "open or fold the newest work",
         act: Act::Fold,
     },
     Binding {

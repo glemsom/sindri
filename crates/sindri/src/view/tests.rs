@@ -2275,35 +2275,56 @@ fn turns_taken(count: u32) -> View {
     )
 }
 
-/// A frame whose transcript is one turn and a `cargo test` run of `rows` rows, which is a
-/// result longer than its fold.
-fn folded_run(rows: u32) -> View {
+/// The entries of one turn and a `cargo test` run of `rows` rows, which is a result longer than
+/// its fold.
+fn run_entries(rows: u32) -> Vec<Entry> {
     let output: String = (1..=rows)
         .map(|line| format!("test rows::a_row_of_output_{line} ... ok"))
         .collect::<Vec<String>>()
         .join("\n");
+    vec![
+        thought(1),
+        Entry::Call {
+            turn: 1,
+            id: None,
+            name: SecretSet::default().redact("bash"),
+            arguments: SecretSet::default()
+                .redact(r#"{"command": "cargo test -p sindri --test rows"}"#),
+        },
+        Entry::Result {
+            turn: 1,
+            id: None,
+            name: SecretSet::default().redact("bash"),
+            text: SecretSet::default().redact(&output),
+            bytes: 640,
+            elapsed_ms: 1_800,
+            exit: Some(Exit::Code(0)),
+        },
+    ]
+}
+
+/// A frame whose transcript is that run while it is still in flight: the work has not settled, so
+/// the band draws its thought, its call and its result as they landed.
+fn folded_run(rows: u32) -> View {
     View::of(
         Capabilities::default(),
         Facts::default().asked(),
-        Transcript::of(vec![
-            thought(1),
-            Entry::Call {
-                turn: 1,
-                id: None,
-                name: SecretSet::default().redact("bash"),
-                arguments: SecretSet::default()
-                    .redact(r#"{"command": "cargo test -p sindri --test rows"}"#),
-            },
-            Entry::Result {
-                turn: 1,
-                id: None,
-                name: SecretSet::default().redact("bash"),
-                text: SecretSet::default().redact(&output),
-                bytes: 640,
-                elapsed_ms: 1_800,
-                exit: Some(Exit::Code(0)),
-            },
-        ]),
+        Transcript::of(run_entries(rows)),
+    )
+}
+
+/// The same frame once the run has ended, which settles the work into one row.
+fn settled_run(rows: u32) -> View {
+    let mut entries = run_entries(rows);
+    entries.push(Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact("Every row of the run passes."),
+    });
+    entries.push(Entry::Stop { stop: Stop::Final });
+    View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(entries),
     )
 }
 
@@ -2316,59 +2337,68 @@ fn frame_rows(buffer: &Buffer) -> Vec<String> {
 }
 
 #[test]
-fn one_key_opens_the_newest_results_fold_and_the_same_key_closes_it_again() {
-    let mut view = folded_run(20);
-    let folded = painted(&mut view, 120, 40);
+fn one_key_opens_the_newest_settled_work_and_the_same_key_closes_it_again() {
+    let mut view = settled_run(20);
+    let settled = painted(&mut view, 120, 40);
 
     assert!(
-        holds(&folded, "16 rows kept back"),
-        "the newest result is longer than its fold, so the band says how many rows it keeps \
-             back: {:?}",
-        frame_rows(&folded)
+        holds(&settled, "1 call · 1.8 s"),
+        "a settled exchange's work is one row between the prompt and the answer: {:?}",
+        frame_rows(&settled)
     );
     assert!(
-        !holds(&folded, "a_row_of_output_12"),
-        "and the rows it keeps back are the rows it does not draw: the head stops before \
-             them and only the last row is drawn"
+        !holds(&settled, "a_row_of_output_12"),
+        "and no row of its work is drawn under it until the reader asks"
     );
 
     assert_eq!(
         view.key(Key::Fold),
         Outcome::Edited,
-        "Ctrl-O opens the fold of the newest result, which is a frame to paint"
+        "Ctrl-O opens the work of the newest settled exchange, which is a frame to paint"
     );
     let open = painted(&mut view, 120, 40);
     assert!(
-        holds(&open, "a_row_of_output_20"),
-        "the opened fold draws every row of the output, its last one included: {:?}",
+        holds(&open, "cargo test -p sindri --test rows"),
+        "the opened work draws the call it stood for, under the thought that began it: {:?}",
         frame_rows(&open)
     );
     assert!(
-        !holds(&open, "rows kept back"),
-        "and an open fold keeps nothing back, so it counts nothing"
+        holds(&open, "16 rows kept back"),
+        "and the result inside it keeps the fold, the head and the count it was handed by: {:?}",
+        frame_rows(&open)
     );
 
     assert_eq!(
         view.key(Key::Fold),
         Outcome::Edited,
-        "and the same key folds the newest result again"
+        "and the same key closes the work again"
     );
     let closed = painted(&mut view, 120, 40);
     assert_eq!(
         frame_rows(&closed),
-        frame_rows(&folded),
-        "a fold closed by its own key is the frame the reader was handed before"
+        frame_rows(&settled),
+        "a work closed by its own key is the frame the reader was handed before"
     );
 }
 
 #[test]
-fn a_fold_a_reader_opened_stays_open_through_a_scroll_and_a_resize() {
-    let mut view = folded_run(60);
+fn a_fold_the_mark_opened_stays_open_through_a_scroll_and_a_resize() {
+    let mut view = settled_run(60);
     painted(&mut view, 120, 40);
     assert_eq!(
         view.key(Key::Fold),
         Outcome::Edited,
-        "the fold the reader opens is the newest result's"
+        "the work the reader opens is the newest settled one"
+    );
+    let opened = painted(&mut view, 120, 40);
+    let row = (0..opened.area.bottom())
+        .find(|y| drawn_row(&opened, *y).contains("56 rows kept back"))
+        .expect("the result inside the opened work draws the row that counts its fold");
+    view.drag(Cell::new(row, 2), Cell::new(row, 2));
+    assert_eq!(
+        view.key(Key::ShiftDown),
+        Outcome::Edited,
+        "a mark grown over a row of that result opens the fold the row stands in"
     );
     assert!(
         holds(&painted(&mut view, 120, 40), "a_row_of_output_60"),
@@ -2387,7 +2417,7 @@ fn a_fold_a_reader_opened_stays_open_through_a_scroll_and_a_resize() {
     let scrolled = painted(&mut view, 120, 40);
     assert!(
         holds(&scrolled, "a_row_of_output_30"),
-        "a scroll is no hand on the fold: a row only an opened one draws is still there: {:?}",
+        "a scroll is no hand on either fold: a row only an opened one draws is still there: {:?}",
         frame_rows(&scrolled)
     );
     assert!(
@@ -2398,8 +2428,8 @@ fn a_fold_a_reader_opened_stays_open_through_a_scroll_and_a_resize() {
     let resized = painted(&mut view, 100, 40);
     assert!(
         holds(&resized, "a_row_of_output_30"),
-        "a narrower band re-lays the opened result whole, rows past the fold's head alike: \
-             {:?}",
+        "a narrower band re-lays the opened work and its result whole, rows past the fold's head \
+             alike: {:?}",
         frame_rows(&resized)
     );
     assert!(
