@@ -185,10 +185,6 @@ fn ctrl_y_copies_a_struck_run_with_the_tildes_the_model_wrote() {
         "the copy is the answer as the model wrote it, so the tildes a struck run is written \
          with travel with it and no crossing is spelled out in their place"
     );
-    assert!(
-        taken.contains("~~struck~~"),
-        "a struck run is copied with its tildes: {taken:?}"
-    );
 }
 
 #[test]

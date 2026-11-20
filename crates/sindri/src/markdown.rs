@@ -324,15 +324,9 @@ impl Room {
             // A mark adds a face to a run and never an ink: the word keeps the colour the block
             // gave it.
             Event::Start(Tag::Strong) => self.faces.push(Face::Bold),
-            Event::End(TagEnd::Strong) => {
-                self.faces.pop();
-            }
             Event::Start(Tag::Emphasis) => self.faces.push(Face::Italic),
-            Event::End(TagEnd::Emphasis) => {
-                self.faces.pop();
-            }
             Event::Start(Tag::Strikethrough) => self.faces.push(Face::Crossed),
-            Event::End(TagEnd::Strikethrough) => {
+            Event::End(TagEnd::Strong | TagEnd::Emphasis | TagEnd::Strikethrough) => {
                 self.faces.pop();
             }
             Event::Start(Tag::CodeBlock(kind)) => self.open_code(kind, span),

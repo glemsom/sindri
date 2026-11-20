@@ -110,9 +110,9 @@ impl Face {
             Face::Plain => 0,
             Face::Bold => 1,
             Face::Italic => 1 << 1,
-            Face::Crossed => 1 << 4,
-            Face::Reversed => 1 << 2,
-            Face::Faint => 1 << 3,
+            Face::Crossed => 1 << 2,
+            Face::Reversed => 1 << 3,
+            Face::Faint => 1 << 4,
         }
     }
 }
@@ -126,6 +126,7 @@ impl Faces {
     pub const PLAIN: Faces = Faces(0);
     pub const BOLD: Faces = Faces::wearing(Face::Bold);
     pub const ITALIC: Faces = Faces::wearing(Face::Italic);
+    pub const CROSSED: Faces = Faces::wearing(Face::Crossed);
     pub const REVERSED: Faces = Faces::wearing(Face::Reversed);
     pub const FAINT: Faces = Faces::wearing(Face::Faint);
 

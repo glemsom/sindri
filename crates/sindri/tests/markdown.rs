@@ -837,7 +837,10 @@ fn a_struck_run_wears_the_crossed_face_in_the_ink_its_block_gave_it() {
         rows[0].spans(),
         [
             (String::from("a "), Look::plain(Ink::Plain)),
-            (String::from("struck"), Look::new(Ink::Plain, Face::Crossed)),
+            (
+                String::from("struck"),
+                Look::new(Ink::Plain, Faces::CROSSED)
+            ),
             (
                 String::from(" word and a plain one"),
                 Look::plain(Ink::Plain)
@@ -849,22 +852,49 @@ fn a_struck_run_wears_the_crossed_face_in_the_ink_its_block_gave_it() {
 }
 
 #[test]
+fn a_struck_run_inside_a_heading_wears_the_headings_weight_and_its_ink() {
+    let heading = [
+        Look::new(Ink::Accent, Face::Bold),
+        Look::new(Ink::Plain, Face::Bold),
+        Look::new(Ink::Muted, Face::Bold),
+        Look::plain(Ink::Muted),
+        Look::new(Ink::Dim, Face::Bold),
+        Look::new(Ink::Dim, Faces::BOLD.and(Faces::ITALIC)),
+    ];
+
+    for (at, look) in heading.into_iter().enumerate() {
+        let rows = markdown::rows(&format!("{} a ~~struck~~ word", "#".repeat(at + 1)), 40);
+        let said = rows
+            .iter()
+            .flat_map(Row::spans)
+            .find(|(text, _)| text.contains("struck"));
+        assert_eq!(
+            said.map(|(_, worn)| *worn),
+            Some(look.wearing(Faces::CROSSED)),
+            "the struck word on the level {} is {look:?} worn crossed, because the mark adds a \
+             face and the ink stays the level's: {rows:?}",
+            at + 1
+        );
+    }
+}
+
+#[test]
 fn a_struck_run_inside_strong_and_inside_emphasis_wears_those_faces_and_the_crossing() {
     let rows = markdown::rows(
-        "a **~~struck bold~~** word and a *~~struck slanted~~* one",
+        "a **~~struck heavy~~** word and a *~~struck slanted~~* one",
         60,
     );
-    let bold = Faces::BOLD.and(Faces::wearing(Face::Crossed));
-    let slanted = Faces::ITALIC.and(Faces::wearing(Face::Crossed));
+    let heavy = Faces::BOLD.and(Faces::CROSSED);
+    let slanted = Faces::ITALIC.and(Faces::CROSSED);
 
     assert_eq!(
         drawn(&rows),
-        ["a struck bold word and a struck slanted one"],
+        ["a struck heavy word and a struck slanted one"],
         "the marks are drawn and not spoken, and the words they hold still read"
     );
     assert!(
-        wears(&rows[0], "struck", Look::new(Ink::Plain, bold))
-            && wears(&rows[0], "bold", Look::new(Ink::Plain, bold)),
+        wears(&rows[0], "struck", Look::new(Ink::Plain, heavy))
+            && wears(&rows[0], "heavy", Look::new(Ink::Plain, heavy)),
         "a struck word inside a strong run is bold and crossed at once: {:?}",
         rows[0].spans()
     );
@@ -877,7 +907,7 @@ fn a_struck_run_inside_strong_and_inside_emphasis_wears_those_faces_and_the_cros
 
 #[test]
 fn a_struck_run_keeps_the_bar_of_a_quote_the_gutter_of_an_item_and_the_line_of_a_way() {
-    let struck = Look::new(Ink::Plain, Face::Crossed);
+    let struck = Look::new(Ink::Plain, Faces::CROSSED);
     let quoted = markdown::rows("> a ~~struck~~ word behind a bar", 40);
 
     for row in &quoted {
@@ -909,7 +939,7 @@ fn a_struck_run_keeps_the_bar_of_a_quote_the_gutter_of_an_item_and_the_line_of_a
         wears(
             &way[0],
             "the gate",
-            Look::new(Ink::Accent, Face::Crossed).underlined(Ink::Dim)
+            Look::new(Ink::Accent, Faces::CROSSED).underlined(Ink::Dim)
         ),
         "a struck word in a way is the accent worn crossed, under the line a way wears: {:?}",
         way[0].spans()
@@ -929,14 +959,17 @@ fn a_struck_mark_that_opens_and_never_closes_draws_its_words_and_crosses_nothing
     );
 
     assert!(
-        words(&rows[0]).contains("~~run"),
-        "a mark no closing mark answers is a glyph and not a face: {rows:?}"
+        drawn(&rows)
+            .join(" ")
+            .contains("~~run that never closes and the words after it"),
+        "a mark no closing mark answers is drawn as the words it was written as: {rows:?}"
     );
     assert!(
         rows.iter()
             .flat_map(Row::spans)
             .all(|(_, look)| *look == Look::plain(Ink::Plain)),
-        "and not one row of the answer is crossed, the block under it included: {rows:?}"
+        "and nothing is crossed, neither the words after the mark on its own row nor the block \
+         under it: {rows:?}"
     );
 }
 
@@ -1001,14 +1034,14 @@ fn a_fences_string_literal_is_drawn_in_the_ok_ink() {
 #[test]
 fn a_fences_words_are_drawn_as_the_fence_drew_them_and_a_mark_inside_one_stays_a_glyph() {
     let rows = markdown::rows(
-        "```\n**bold** and *italic* stay glyphs\n```\n\nand `a **b** c` in a span",
+        "```\n**b** and *i* and ~~s~~ stay glyphs\n```\n\nand `a **b** c` in a span",
         40,
     );
 
     assert_eq!(
         drawn(&rows),
         [
-            "▏ **bold** and *italic* stay glyphs",
+            "▏ **b** and *i* and ~~s~~ stay glyphs",
             "",
             "and a **b** c in a span"
         ],

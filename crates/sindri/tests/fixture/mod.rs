@@ -396,10 +396,10 @@ fn emphasised() -> &'static str {
 }
 
 fn struck() -> &'static str {
-    "A ~~struck~~ word is crossed out in the ink the prose around it gave it; a **~~bold~~** and \
-     an *~~slanted~~* run are crossed in the faces their marks gave them.\n\n## A heading keeps \
-     its level: ~~struck~~ and ***~~both~~*** inside it\n\n> a quote keeps its bar and its ink, \
-     ~~struck~~ word and all"
+    "A ~~struck~~ word is crossed out in the ink the prose around it gave it; a **~~bold~~** \
+     one and an *~~italic~~* one are crossed in the faces their marks gave them.\n\n## A heading \
+     keeps its level: ~~struck~~ and ***~~both~~*** inside it\n\n> a quote keeps its bar and its \
+     ink, ~~struck~~ word and all"
 }
 
 /// An answer's ways and the paths a call names: a link is its words with the destination travelling
