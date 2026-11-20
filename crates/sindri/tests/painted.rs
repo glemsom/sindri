@@ -3,6 +3,7 @@
 //! off the value rather than off the frame.
 
 mod caps; // the terminals these frames are drawn on
+mod frame;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
@@ -10,10 +11,11 @@ use ratatui::layout::{Position, Rect};
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
-use sindri::ink::{Ink, Look};
+use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger;
 use sindri::mark::Cell;
 use sindri::palette::Palette;
+use sindri::pen::{self, Clip};
 use sindri::pointer::Pointer;
 use sindri::rows::Scroll;
 use sindri::view::{Painted, Transcript, View};
@@ -960,4 +962,95 @@ fn a_width_change_drops_the_walk_a_fence_was_left_in() {
         narrow.contains("let a_fence_line"),
         "a row laid again forgets the walk, which is what a width change is: {narrow:?}"
     );
+}
+
+#[test]
+fn one_pass_hands_back_the_cells_the_rows_the_words_and_the_caret() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("a draft");
+
+    let frame = frame::painted(&mut view, 120, 40);
+
+    assert_eq!(
+        frame.cells().area,
+        Rect::new(0, 0, 120, 40),
+        "the cells the pass left cover the screen"
+    );
+    assert_eq!(frame.rows().len(), 40, "one row to a row of the screen");
+
+    let at = frame
+        .caret()
+        .expect("the pass places its caret in the draft it drew");
+    let laid = frame
+        .layout()
+        .expect("a pass that drew a frame laid it out");
+    assert!(
+        laid.composer.contains(at),
+        "the caret waits in the band the draft is typed on: {at:?} is outside {:?}",
+        laid.composer
+    );
+
+    let row = frame.row(at.y);
+    assert_eq!(row.chars().count(), 120, "a row is full width");
+    assert!(
+        row.contains("a draft"),
+        "the row the draft is typed on says it: {row:?}"
+    );
+    assert_eq!(
+        frame.words()[usize::from(at.y - frame.cells().area.y)],
+        row.trim_end(),
+        "a word is the row with the trailing blanks cut off"
+    );
+
+    let typed: String = row.chars().take(usize::from(at.x)).collect();
+    assert!(
+        typed.ends_with("a draft"),
+        "the caret waits in the cell after the words typed: {typed:?}"
+    );
+}
+
+#[test]
+fn the_text_a_golden_holds_names_every_cell_and_the_look_it_wears() {
+    let palette = Palette::TRUECOLOR;
+    let emphasis = Look::new(Ink::Accent, Faces::BOLD.and(Faces::ITALIC));
+    let linked = Look::new(Ink::Muted, Faces::ITALIC).underlined(Ink::Dim);
+    let area = Rect::new(0, 0, 2, 1);
+    let mut cells = Buffer::empty(area);
+    pen::write(
+        &mut cells,
+        area,
+        &[("a", emphasis), ("b", linked)],
+        Clip::Whole,
+        &palette,
+    );
+
+    let drawn = frame::holding(cells, palette, Painted::none()).text("two-faces");
+    let written = drawn.lines().nth(1).expect("the one row of the frame");
+    assert_eq!(
+        written,
+        format!(
+            "00 |ab| {}:1 {}:1",
+            "accent+bold+italic", "muted+italic~dim"
+        ),
+        "the faces a cell wears and the line under it are written in one order, so one frame has \
+         one picture of it"
+    );
+}
+
+#[test]
+#[should_panic(expected = "is not one glyph")]
+fn a_cell_holding_two_glyphs_is_no_frame() {
+    let palette = Palette::TRUECOLOR;
+    let area = Rect::new(0, 0, 1, 1);
+    let mut cells = Buffer::empty(area);
+    cells
+        .cell_mut((0, 0))
+        .expect("the one cell of the frame")
+        .set_symbol("ab");
+
+    frame::holding(cells, palette, Painted::none()).rows();
 }
