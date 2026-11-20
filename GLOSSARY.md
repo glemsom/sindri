@@ -173,24 +173,15 @@ _Avoid_: Region, pane, panel, viewport
 
 **Plane**:
 A band's ground drawn as one image placed under its cells, so a surface shades in pixels rather than
-in whole rows: the composer's rises out of the transcript's well over its first cell, eases into its
-head, the tone above the rail's own, and falls from there into that tone, with the glow under the
-caret, and the rail's carries the band at its head and falls continuously into the shadow at its
-foot, reaching back over the seam so the rail comes out of the transcript's edge rather than being
-parted from it. It is placed once per size, carries an identity of its own so one is taken away and
-the other stands, and is handed back with the pass that drew it. A terminal that places no picture is
-given none, and so is either band in a palette that draws no colour, where each band's own rows are
-the whole of its shading: the composer's fall from its head to the rail's tone, and the rail's ground
-with the lit column down its boundary and the shadow across its last one.
+in whole rows: placed once per size, carrying an identity of its own so one is taken away and the
+other stands, and handed back with the pass that drew it. The rail's plane reaches back over the
+transcript's last columns, so the rail comes out of the transcript's edge rather than being parted
+from it: no line is drawn there, the split costs neither band a column, and the words on both sides
+are drawn unshaded. A terminal that places no picture is given none, and so is either band in a
+palette that draws no colour, where each band's own rows are the whole of its shading; with no
+picture nothing widens, and the lit column down the rail's boundary and the shadow across its last
+row are what that frame draws.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
-
-**Seam**:
-The columns where the transcript and the rail meet, and the fall the rail's plane draws across them:
-out of the transcript's well, into the shadow in the crease, and back out over the rail's first
-columns. It is no line and claims no column — the split is the one it always was, so the seam costs
-neither band a column and the words on both sides are drawn unshaded. Where no picture is placed
-there is no seam: the lit column down the rail's boundary is what that frame draws.
-_Avoid_: Border, divider, gutter, rule
 
 **Alert**:
 A quote whose first line names a kind — `NOTE`, `TIP`, `IMPORTANT`, `WARNING` or `CAUTION` — and
