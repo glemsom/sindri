@@ -17,9 +17,14 @@ export CHECK_PROBE_RECORD="$scratch/make-saw.status"
 
 tree_before=$(cd "$repo_root" && git status --porcelain)
 
-for machine in blind mute runon honest hang; do
+for machine in blind mute runon honest loud hang; do
   mkdir -p "$scratch/machine-$machine"
 done
+
+# The box's own shell exports `out` (devbox's init hook sets it to the profile it built), so
+# the probe's assignment to that name is exported too: a stage's output past 128 KiB then
+# makes every exec it tries answer E2BIG. Said here so the hazard is live on any box.
+export out="$scratch/out"
 
 cat >"$scratch/machine-blind/make" <<'SH'
 #!/bin/sh
@@ -52,6 +57,19 @@ printf 'check: %s ... FAIL\n' "${1:-fmt}"
 exit 2
 SH
 
+cat >"$scratch/machine-loud/make" <<'SH'
+#!/bin/sh
+for arg in "$@"; do case $arg in STAGES=*) stages=${arg#STAGES=} ;; esac; done
+set -- $stages
+i=0
+while [ "$i" -lt 3000 ]; do
+  printf '%s\n' 'check-probe: a stage that says more than one environment string may carry'
+  i=$((i + 1))
+done
+printf 'check: %s ... FAIL\n' "${1:-fmt}"
+exit 2
+SH
+
 cat >"$scratch/machine-hang/make" <<'SH'
 #!/bin/sh
 for arg in "$@"; do case $arg in STAGES=*) stages=${arg#STAGES=} ;; esac; done
@@ -59,7 +77,7 @@ git status --porcelain >>"${CHECK_PROBE_RECORD:-/dev/null}" 2>/dev/null
 printf '%s\n' "$$" >"${CHECK_PROBE_PIDFILE:-/dev/null}"
 exec sleep 120
 SH
-chmod +x "$scratch"/machine-{blind,mute,runon,honest,hang}/make
+chmod +x "$scratch"/machine-{blind,mute,runon,honest,loud,hang}/make
 
 no_make="$scratch/machine-no-make"
 no_cargo="$scratch/machine-no-cargo"
@@ -139,6 +157,11 @@ assert_has 'ok   gate: test caught a panicking test' "honest make"
 assert_has 'ok   gate: the tree is left as it was found' "honest make"
 assert_has 'ok   gate: no defect file survives the run' "honest make"
 refute 'gate: FAIL' "honest make"
+
+run_probe "$scratch/machine-loud:$PATH"
+assert_code 0 "loud make"
+assert_line 'gate: ok (5 checks)' "loud make"
+refute 'gate: FAIL' "loud make"
 
 run_make "$scratch/machine-honest:$PATH"
 assert_code 0 "make gate-tier, honest make"

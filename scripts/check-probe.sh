@@ -13,6 +13,9 @@ cd "$repo" || exit 2
 checks=0
 status=0
 out=''
+# devbox's init hook exports `out`, so this shell's assignment to it would ride into every
+# child's environment, and one string past 128 KiB (MAX_ARG_STRLEN) is E2BIG for each exec.
+export -n out
 code=0
 ok()   { printf 'ok   gate: %s\n' "$*"; checks=$((checks + 1)); }
 skip() { printf 'skip gate: %s\n' "$*"; }
