@@ -4,7 +4,9 @@
 
 use std::sync::OnceLock;
 
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{
+    BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
+};
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
 use crate::graphics::Ceiling;
@@ -16,13 +18,15 @@ use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, split_at};
 use crate::size::{self, Sized};
 
-/// The parser's options: GFM tables, task lists, strikethrough and footnotes on, because
-/// CommonMark leaves all four out. A footnote is drawn as the marker a reference stands in and the
-/// definitions gathered at the foot, which the parser only tells apart once it has enabled them.
+/// The parser's options: GFM tables, task lists, strikethrough, footnotes and alerts on, because
+/// CommonMark leaves all five out. A footnote is drawn as the marker a reference stands in and the
+/// definitions gathered at the foot, which the parser only tells apart once it has enabled them, and
+/// an alert only carries the kind its quote names where the GFM option lets it read the marker.
 const OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_TASKLISTS)
     .union(Options::ENABLE_STRIKETHROUGH)
-    .union(Options::ENABLE_FOOTNOTES);
+    .union(Options::ENABLE_FOOTNOTES)
+    .union(Options::ENABLE_GFM);
 
 /// The line under a way's words: an ink of its own and never a face, so the words keep the
 /// weight the block and its marks gave them.
@@ -167,6 +171,18 @@ fn heading(level: HeadingLevel) -> (Look, Option<char>) {
     }
 }
 
+/// The name an alert is drawn under and the ink it is said in: one ink of the frame's own to each
+/// kind, from the note that says least to the caution that says most.
+fn alert(kind: BlockQuoteKind) -> (&'static str, Ink) {
+    match kind {
+        BlockQuoteKind::Note => ("Note", Ink::Muted),
+        BlockQuoteKind::Tip => ("Tip", Ink::Ok),
+        BlockQuoteKind::Important => ("Important", Ink::Accent),
+        BlockQuoteKind::Warning => ("Warning", Ink::Mark),
+        BlockQuoteKind::Caution => ("Caution", Ink::Err),
+    }
+}
+
 /// The rule under the heading in hand: the mark it is drawn with and the width of the widest row
 /// the heading has written, which is the width the rule is drawn at.
 struct Rule {
@@ -225,6 +241,9 @@ struct Room {
     first: bool,
     /// Whether the last row put down is a blank one, so two blocks never stand under two blanks.
     blank: bool,
+    /// How many rows the block an alert's label heads begins at, while that label is its head: the
+    /// block that opens there stands under the label itself and never under a blank row.
+    head: Option<usize>,
     /// The code block in hand: the highlighter's parse carries from one line of it to the next,
     /// so it lives with the block and not with the room.
     code: Option<Code>,
@@ -277,6 +296,7 @@ impl Room {
             lists: Vec::new(),
             first: true,
             blank: true,
+            head: None,
             destination: None,
             laid: Vec::new(),
             code: None,
@@ -305,10 +325,11 @@ impl Room {
             Event::End(TagEnd::Paragraph) => self.flush_if_written(),
             Event::Start(Tag::Heading { level, .. }) => self.open_heading(level),
             Event::End(TagEnd::Heading(_)) => self.close_heading(),
-            Event::Start(Tag::BlockQuote(_)) => self.open_quote(),
+            Event::Start(Tag::BlockQuote(kind)) => self.open_quote(kind),
             Event::End(TagEnd::BlockQuote(_)) => {
                 self.flush_if_written();
                 self.lead.pop();
+                self.head = None;
             }
             Event::Start(Tag::List(start)) => {
                 self.flush_if_written();
@@ -844,9 +865,30 @@ impl Room {
         }
     }
 
-    fn open_quote(&mut self) {
+    /// A quote opens behind its bar, and an alert's label stands on the first row of it.
+    fn open_quote(&mut self, kind: Option<BlockQuoteKind>) {
+        if kind.is_some() {
+            // The label is a row of the quote's own, so the words of the block before it are laid
+            // first, in the gutter they were written in.
+            self.flush_if_written();
+        }
         self.open_block();
         self.lead.push((String::from("▏ "), Look::plain(Ink::Dim)));
+        if let Some(kind) = kind {
+            self.draw_label(kind);
+        }
+    }
+
+    /// The row an alert names its kind on, in the quote's own gutter: the first row of the block, so
+    /// an item's mark stands beside it and the words under it are parted from it by nothing.
+    fn draw_label(&mut self, kind: BlockQuoteKind) {
+        let (name, ink) = alert(kind);
+        let (name, _) = split_at(name, self.room_cells());
+        let mut spans = self.gutter();
+        spans.push((name, Look::plain(ink)));
+        self.first = false;
+        self.push(Row::of(spans));
+        self.head = Some(self.rows.len());
     }
 
     fn open_item(&mut self) {
@@ -936,7 +978,8 @@ impl Room {
     /// One blank row between two blocks, nothing at the top of the answer and never two blank
     /// rows where a block already stands under one.
     fn gap(&mut self) {
-        if !self.rows.is_empty() && !self.blank {
+        // An alert's label is the head of the block it names, so no blank row parts the two.
+        if !self.rows.is_empty() && !self.blank && self.head.take() != Some(self.rows.len()) {
             self.push(Row::blank());
         }
     }

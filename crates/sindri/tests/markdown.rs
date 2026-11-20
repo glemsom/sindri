@@ -2437,3 +2437,175 @@ fn a_reference_in_a_quote_and_one_in_a_table_cell_both_gather_at_the_foot() {
          read and behind one hairline: {drawn:?}"
     );
 }
+
+/// Every kind of alert a quote can name, as the source spells it, as its label reads and the ink
+/// that label is drawn in.
+fn kinds() -> [(&'static str, &'static str, Ink); 5] {
+    [
+        ("NOTE", "Note", Ink::Muted),
+        ("TIP", "Tip", Ink::Ok),
+        ("IMPORTANT", "Important", Ink::Accent),
+        ("WARNING", "Warning", Ink::Mark),
+        ("CAUTION", "Caution", Ink::Err),
+    ]
+}
+
+#[test]
+fn an_alert_names_its_kind_on_the_row_above_its_words_in_the_kinds_own_ink() {
+    for (written, name, ink) in kinds() {
+        let rows = markdown::rows(&format!("> [!{written}]\n> the gate is open"), 40);
+
+        assert_eq!(
+            drawn(&rows),
+            [format!("▏ {name}"), String::from("▏ the gate is open")],
+            "{written} names its kind on the row above its words, behind the same bar: {rows:?}"
+        );
+        assert!(
+            wears(&rows[0], name, Look::plain(ink)),
+            "the name wears the kind's own ink and no face: {:?}",
+            rows[0].spans()
+        );
+    }
+}
+
+#[test]
+fn no_two_kinds_of_alert_are_drawn_in_one_ink() {
+    let inks: Vec<Look> = kinds()
+        .iter()
+        .map(|(written, name, _)| {
+            let rows = markdown::rows(&format!("> [!{written}]\n> words"), 40);
+            let looked: Vec<Look> = rows[0]
+                .spans()
+                .iter()
+                .filter(|(said, _)| said == name)
+                .map(|(_, look)| *look)
+                .collect();
+            assert_eq!(
+                looked.len(),
+                1,
+                "{written} names its kind once on the first row: {rows:?}"
+            );
+            looked[0]
+        })
+        .collect();
+
+    for (at, ink) in inks.iter().enumerate() {
+        assert!(
+            !inks[..at].contains(ink),
+            "every kind is told apart by its ink alone, and {at} wears one already read: {inks:?}"
+        );
+    }
+}
+
+#[test]
+fn a_quote_holding_nothing_but_the_marker_draws_its_label_row_and_its_bar() {
+    let rows = markdown::rows("> [!WARNING]", 40);
+    let bar = Look::plain(Ink::Dim);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ Warning"],
+        "the label is the head of a block with no words under it: {rows:?}"
+    );
+    assert!(
+        wears(&rows[0], "Warning", Look::plain(Ink::Mark)),
+        "the name wears the kind's ink and no face: {:?}",
+        rows[0].spans()
+    );
+    assert_eq!(looks(&rows[0])[0], bar, "and the bar stands beside it");
+}
+
+#[test]
+fn a_quote_that_held_nothing_but_its_label_leaves_the_block_under_it_a_row_of_its_own() {
+    let rows = markdown::rows("> [!NOTE]\n\nwords after the quote", 24);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ Note", "", "words after the quote"],
+        "the words of the block after the quote stand a row below it: {rows:?}"
+    );
+}
+
+#[test]
+fn an_alert_spelt_in_lower_or_mixed_case_draws_as_the_capitalised_one() {
+    let capital = said(&markdown::rows("> [!TIP]\n> the gate is open", 40));
+
+    for written in ["tip", "TiP", "tIp"] {
+        assert_eq!(
+            said(&markdown::rows(
+                &format!("> [!{written}]\n> the gate is open"),
+                40
+            )),
+            capital,
+            "{written} is the same kind as TIP, drawn the same way"
+        );
+    }
+}
+
+#[test]
+fn a_quote_whose_first_line_names_no_kind_draws_as_it_always_has() {
+    for line in ["[!GREETING] words", "[INFO] words", "Note: words"] {
+        let rows = markdown::rows(&format!("> {line}"), 40);
+
+        assert_eq!(
+            drawn(&rows),
+            [format!("▏ {line}")],
+            "a first line no kind answers to is the quote's own words, marker-like and all: \
+             {rows:?}"
+        );
+    }
+}
+
+#[test]
+fn an_items_words_are_laid_before_the_alert_that_stands_under_them() {
+    let rows = markdown::rows(
+        "- an item holding an alert\n  > [!CAUTION]\n  > its words hang under the item's gutter",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "• an item holding an alert",
+            "",
+            "▏   Caution",
+            "▏   its words hang under the item's",
+            "▏   gutter",
+        ],
+        "the item's words stand on their own row above the alert, and the label over the words it \
+         names: {rows:?}"
+    );
+}
+
+#[test]
+fn an_alert_inside_a_list_item_takes_the_bullet_and_its_words_wrap_under_the_bar() {
+    let rows = markdown::rows(
+        "- > [!TIP]\n  > the gate is open and the road under it runs away to the north",
+        20,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "▏ • Tip",
+            "▏   the gate is open",
+            "▏   and the road",
+            "▏   under it runs",
+            "▏   away to the",
+            "▏   north",
+        ],
+        "the label is the block's first row, so the bullet stands beside it, and every row under it \
+         hangs under the item's gutter and inside the quote's bar"
+    );
+    assert!(
+        wears(&rows[0], "Tip", Look::plain(Ink::Ok)),
+        "the label wears the kind's ink as it does at the frame's edge: {:?}",
+        rows[0].spans()
+    );
+    for row in &rows {
+        assert!(
+            row.width() <= 20,
+            "a row ran past the band it was laid out for: {row:?}"
+        );
+    }
+}

@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-alert-other at 80x24
+00 |▏ Tip                                                                           | dim:2 ok:3 plain:75
+01 |▏ a lowercase marker names the kind a capitalised one does                      | dim:2 plain:78
+02 |                                                                                | plain:80
+03 |▏ Warning                                                                       | dim:2 mark:7 plain:71
+04 |▏ and a mixed one names no third kind                                           | dim:2 plain:78
+05 |                                                                                | plain:80
+06 |▏ [!GREETING] a marker no kind answers to is the quote's own words              | dim:2 plain:78
+07 |  • an item holding an alert                                                    | plain:2 accent:2 plain:76
+08 |                                                                                | plain:80
+09 |▏   Caution                                                                     | dim:2 plain:2 err:7 plain:69
+10 |▏   its words hang under the item's gutter                                      | dim:2 plain:78
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |┌prompt ───────────────────────────────────────────────────────────────────────┐| accent+faint:80
+21 |│› what should the run do?                                                     │| dim:26 plain:53 dim:1
+22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
+23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7
