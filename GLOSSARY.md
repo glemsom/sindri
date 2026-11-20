@@ -285,17 +285,18 @@ _Avoid_: Block (a caret is no cell), insertion point
 **Terminal capabilities**:
 What the terminal a frame draws on can do — the cell it measures a picture against, the colours it
 holds, whether it draws text at more than one cell, whether it reports a **pointer**, whether it
-places pictures, whether this window is the one being read, which is **Focus**, and whether Sindri's
-**face** is drawn over the rail. Probed once before the first frame and handed to the frame whole; a
-terminal that reports nothing is drawn in the cells one that reports everything is, minus the facts
-it does not have. **Focus** is asked for when the screen is taken and given up on the way out, and it
-is one fact the frame draws from rather than a behaviour: the accent edge recedes while nobody is
-reading and returns when they are, and a terminal that reports nothing is being read.
+places pictures, whether this window is the one being read, which the code calls `Focus`, and whether
+Sindri's **face** is drawn over the rail. Probed once before the first frame and handed to the frame
+whole, except the focus: asked for when the screen is taken and given up on the way out, one fact the
+frame draws from rather than a behaviour, so the accent edge recedes while nobody is reading and
+returns when they are. A terminal that reports nothing is drawn in the cells one that reports
+everything is, minus the facts it does not have — and one that reports nothing of the focus is being
+read.
 _Avoid_: Terminal features, environment, detection, caps
 
 **Frame facts**: the workspace and the ground it is judged against, the home the skills are read from,
 the served name, the run's record, the state the run is in, the facts the rail lays, the marker at the
-head of the answer, and whether the window is being read, gathered as one value and handed to the
+head of the answer, and the focus the terminal reported, gathered as one value and handed to the
 frame whole. The value is also the screen the frame is drawn as: the **splash screen** until a prompt
 has been asked for — holding what the launch already knows and no run's fact, so no fact that lands
 ends it — and that run's frame from the prompt on. _Avoid_: View model, props, session state,
