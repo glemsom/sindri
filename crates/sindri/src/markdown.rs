@@ -16,9 +16,9 @@ use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, split_at};
 use crate::size::{self, Sized};
 
-/// The parser's options: GFM tables on, because CommonMark leaves tables out. No other extension
-/// is enabled, so a footnote, a strikethrough and a task list parse as plain prose.
-const OPTIONS: Options = Options::ENABLE_TABLES;
+/// The parser's options: GFM tables and task lists on, because CommonMark leaves both out. No
+/// other extension is enabled, so a footnote and a strikethrough parse as plain prose.
+const OPTIONS: Options = Options::ENABLE_TABLES.union(Options::ENABLE_TASKLISTS);
 
 /// The line under a way's words: an ink of its own and never a face, so the words keep the
 /// weight the block and its marks gave them.
@@ -164,6 +164,12 @@ impl Rule {
     }
 }
 
+/// A list item's marker: the run it is drawn as on the item's first row, and the ink it is drawn in.
+struct Mark {
+    text: String,
+    ink: Ink,
+}
+
 /// One run of the row in hand that is a way to somewhere: the column it begins at past the words'
 /// own edge, the columns it covers, and where it goes.
 struct Laid {
@@ -189,7 +195,7 @@ struct Room {
     base: Vec<(String, Look)>,
     /// The markers of the list items open, outermost first: every row is indented by the ones
     /// outside it and by the width of the innermost, so each depth costs the columns a `•` takes.
-    marks: Vec<String>,
+    marks: Vec<Mark>,
     lists: Vec<Option<u64>>,
     first: bool,
     /// Whether the last row put down is a blank one, so two blocks never stand under two blanks.
@@ -269,6 +275,7 @@ impl Room {
                 self.lists.pop();
             }
             Event::Start(Tag::Item) => self.open_item(),
+            Event::TaskListMarker(checked) => self.task(checked),
             Event::End(TagEnd::Item) => self.close_item(),
             Event::Start(Tag::Table(_)) => {
                 self.open_block();
@@ -752,8 +759,24 @@ impl Room {
             }
             _ => String::from("• "),
         };
-        self.marks.push(marker);
+        self.marks.push(Mark {
+            text: marker,
+            ink: Ink::Accent,
+        });
         self.first = true;
+    }
+
+    /// A task's mark stands in the bullet its item opened with, padded to the columns that bullet
+    /// took, because the words beside it are said with no leading blank.
+    fn task(&mut self, checked: bool) {
+        let (glyph, ink) = match checked {
+            true => ("✓", Ink::Ok),
+            false => ("☐", Ink::Dim),
+        };
+        if let Some(mark) = self.marks.last_mut() {
+            mark.text = pen::pad(glyph, pen::cells(&mark.text));
+            mark.ink = ink;
+        }
     }
 
     fn close_item(&mut self) {
@@ -916,8 +939,8 @@ impl Room {
         for (at, mark) in self.marks.iter().enumerate() {
             let innermost = at + 1 == self.marks.len();
             let (text, ink) = match innermost && self.first {
-                true => (mark.clone(), Ink::Accent),
-                false => (pen::blank(pen::cells(mark)), Ink::Plain),
+                true => (mark.text.clone(), mark.ink),
+                false => (pen::blank(pen::cells(&mark.text)), Ink::Plain),
             };
             spans.push((text, Look::plain(ink)));
         }
@@ -965,7 +988,7 @@ impl Room {
         let marks: usize = self
             .marks
             .iter()
-            .map(|mark| usize::from(pen::cells(mark)))
+            .map(|mark| usize::from(pen::cells(&mark.text)))
             .sum();
         // The reserve holds only while no row has been written: a marker stands beside the
         // first row alone.

@@ -987,6 +987,110 @@ fn an_ordered_list_numbers_its_items_and_hangs_its_wrapped_rows_under_them() {
 }
 
 #[test]
+fn a_task_draws_an_unchecked_box_in_dim_and_a_checked_tick_in_ok() {
+    let rows = markdown::rows("- [ ] open\n- [x] done", 40);
+    let word = Look::plain(Ink::Plain);
+
+    assert_eq!(drawn(&rows), ["☐ open", "✓ done"], "one row per task");
+    let said: Vec<Vec<(String, Look)>> = rows.iter().map(|row| row.spans().to_vec()).collect();
+    assert_eq!(
+        said,
+        [
+            vec![
+                (String::from("☐ "), Look::plain(Ink::Dim)),
+                (String::from("open"), word)
+            ],
+            vec![
+                (String::from("✓ "), Look::plain(Ink::Ok)),
+                (String::from("done"), word)
+            ],
+        ],
+        "an unchecked task's box is dim, a checked one's tick is the ok ink, and the words \
+         beside them the frame's own"
+    );
+}
+
+#[test]
+fn a_tasks_words_begin_where_a_bullets_do_and_its_wrapped_rows_hang_under_them() {
+    let rows = markdown::rows(
+        "- one two three four five six\n- [ ] one two three four five six",
+        16,
+    );
+    assert_eq!(
+        drawn(&rows),
+        [
+            "• one two three",
+            "  four five six",
+            "☐ one two three",
+            "  four five six"
+        ],
+        "a task's mark takes the bullet's columns, so its words and its hung rows line up"
+    );
+}
+
+#[test]
+fn a_task_written_with_an_uppercase_x_draws_as_checked() {
+    let rows = markdown::rows("- [X] done", 40);
+    assert_eq!(drawn(&rows), ["✓ done"], "a capital X is a checked task");
+    assert!(
+        wears(&rows[0], "✓ ", Look::plain(Ink::Ok)),
+        "and its tick is drawn in the ok ink: {:?}",
+        rows[0]
+    );
+}
+
+#[test]
+fn tasks_mixed_with_ordinary_items_indent_as_they_do_and_keep_their_own_marks() {
+    let rows = markdown::rows("- one\n- [ ] two\n  - three\n- [x] four", 40);
+    let accent = Look::plain(Ink::Accent);
+    let word = Look::plain(Ink::Plain);
+
+    assert_eq!(
+        drawn(&rows),
+        ["• one", "☐ two", "  • three", "✓ four"],
+        "an item is marked by what it is, and a deeper one two columns inside"
+    );
+    let said: Vec<Vec<(String, Look)>> = rows.iter().map(|row| row.spans().to_vec()).collect();
+    assert_eq!(
+        said,
+        [
+            vec![(String::from("• "), accent), (String::from("one"), word)],
+            vec![
+                (String::from("☐ "), Look::plain(Ink::Dim)),
+                (String::from("two"), word)
+            ],
+            vec![
+                (String::from("  "), word),
+                (String::from("• "), accent),
+                (String::from("three"), word)
+            ],
+            vec![
+                (String::from("✓ "), Look::plain(Ink::Ok)),
+                (String::from("four"), word)
+            ],
+        ],
+        "the indent under a task is plain, and the task's own box keeps its ink"
+    );
+}
+
+#[test]
+fn no_row_says_the_brackets_a_task_is_written_with() {
+    let text = "- [ ] open\n- [x] done\n* [X] a star\n1. [ ] numbered\n> - [x] quoted";
+    let rows = markdown::rows(text, 40);
+    for row in drawn(&rows) {
+        assert!(
+            !row.contains("[ ]") && !row.contains("[x]") && !row.contains("[X]"),
+            "a task's brackets are never drawn: {row:?}"
+        );
+    }
+    assert!(
+        drawn(&rows).iter().any(|row| row.contains('☐')),
+        "and the box stands where the brackets were: {:?}",
+        drawn(&rows)
+    );
+}
+
+#[test]
 fn a_blockquote_sets_its_words_behind_a_dim_bar() {
     let rows = markdown::rows("> a fence still open is a code block, never prose", 24);
     assert_eq!(

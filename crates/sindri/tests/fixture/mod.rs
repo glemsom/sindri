@@ -178,6 +178,7 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-headings" => construct(capabilities, headings()),
         "markdown-headings-large" => sized(headings()),
         "markdown-lists" => construct(capabilities, lists()),
+        "markdown-tasks" => construct(capabilities, tasks()),
         "markdown-table" => construct(capabilities, table()),
         "markdown-quote" => construct(capabilities, quoted()),
         "markdown-code" => construct(capabilities, code()),
@@ -340,6 +341,13 @@ fn lists() -> &'static str {
     "- a bullet per item\n- two spaces per depth\n  - a nested item\n    - and one \
      deeper\n- an ordered list underneath\n  1. numbered from one\n  2. and hung under \
      their own words when they wrap"
+}
+
+fn tasks() -> &'static str {
+    "- [ ] a task waiting on a decision\n- [x] a task that is done\n- [X] one written with a \
+     capital\n- an ordinary bullet among them\n- [ ] a task with one under it\n  - [x] the \
+     nested task\n- [ ] a task whose words are long enough that this row cannot hold them all \
+     and the rest hangs under them"
 }
 
 fn table() -> &'static str {

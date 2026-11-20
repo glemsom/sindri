@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-tasks at 80x24
+00 |  ☐ a task waiting on a decision                                                | plain:2 dim:2 plain:76
+01 |  ✓ a task that is done                                                         | plain:2 ok:2 plain:76
+02 |  ✓ one written with a capital                                                  | plain:2 ok:2 plain:76
+03 |  • an ordinary bullet among them                                               | plain:2 accent:2 plain:76
+04 |  ☐ a task with one under it                                                    | plain:2 dim:2 plain:76
+05 |    ✓ the nested task                                                           | plain:4 ok:2 plain:74
+06 |  ☐ a task whose words are long enough that this row cannot hold them all and   | plain:2 dim:2 plain:76
+07 |    the rest hangs under them                                                   | plain:80
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |┌prompt ───────────────────────────────────────────────────────────────────────┐| accent+faint:80
+21 |│› what should the run do?                                                     │| dim:26 plain:53 dim:1
+22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
+23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7
