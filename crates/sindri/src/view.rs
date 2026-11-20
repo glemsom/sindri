@@ -220,8 +220,18 @@ impl Drawn {
     fn first(&self, row: u16) -> Option<usize> {
         self.laid
             .iter()
-            .find(|laid| laid.band.start == row)
+            .find(|laid| laid.head && laid.band.start == row)
             .map(|laid| laid.entry)
+    }
+
+    /// The transcript's row the band's first row stands on, and none for a pass that drew no band.
+    fn top(&self, scroll: Scroll) -> Option<u32> {
+        let total = self.total()?;
+        Some(
+            total
+                .saturating_sub(u32::from(self.band))
+                .saturating_sub(scroll.back()),
+        )
     }
 
     /// The rows the entries `of` were drawn in, and none where the band drew none of them.
@@ -384,11 +394,13 @@ pub struct View {
     capabilities: Capabilities,
 }
 
-/// One entry the last paint drew, and the rows of the band it stands on.
+/// One entry the last paint drew, the rows of the band it stands on, and whether the band cut its
+/// first row off: an entry taller than the band is drawn without the row it opens with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Laid {
     entry: usize,
     band: Range<u16>,
+    head: bool,
 }
 
 /// The record a frame draws and the row the reader stands at in it: the third of the three values a
@@ -932,39 +944,34 @@ impl View {
         if !self.composer.text().is_empty() {
             return self.composer.key(key);
         }
-        let Some(back) = self.prompt_back(way) else {
-            return Outcome::Unchanged;
-        };
-        if Scroll::of(back) == self.scroll {
-            return Outcome::Unchanged;
+        match self.prompt_scroll(way) {
+            Some(scroll) if scroll != self.scroll => {
+                self.scrolled(scroll);
+                Outcome::Edited
+            }
+            _ => Outcome::Unchanged,
         }
-        self.scrolled(Scroll::of(back));
-        Outcome::Edited
     }
 
-    /// How far back the frame stands to put the prompt `way` prompts on from the one its first band
-    /// row stands in, and none where there is no prompt that way.
-    fn prompt_back(&mut self, way: Move) -> Option<u32> {
-        let total = self.drawn.total()?;
+    /// Where the frame stands to put the prompt `way` prompts on from the one its first band row
+    /// stands in, and none where there is no prompt that way. A prompt the rows under it are too few
+    /// to lift to the band's first row leaves the frame at the tail, and the key stops there.
+    fn prompt_scroll(&mut self, way: Move) -> Option<Scroll> {
         let tops = self.rows.prompts();
         let at = self.prompt_of(&self.drawn, &tops)?;
         let target = match way {
             Move::Previous => at.checked_sub(1)?,
             Move::Next => at.checked_add(1).filter(|next| *next < tops.len())?,
         };
-        // The band a frame at the tail is drawn in, and the last of it an off-tail frame reaches
-        // with its top on the transcript's first row.
-        let rows = self.drawn.band().saturating_add(self.notice_rows());
-        let deepest = total.saturating_sub(u32::from(rows).saturating_sub(1));
-        Some(deepest.saturating_sub(tops[target]))
+        let total = self.drawn.total()?;
+        // A frame off the tail spends one of the band's rows saying where it stands.
+        let deepest = total.saturating_sub(self.page_rows().saturating_sub(1));
+        Some(Scroll::of(deepest.saturating_sub(tops[target])))
     }
 
     /// The prompt the frame's first band row stands in, counted from zero.
     fn prompt_of(&self, drawn: &Drawn, tops: &[u32]) -> Option<usize> {
-        let total = drawn.total()?;
-        let top = total
-            .saturating_sub(u32::from(drawn.band()))
-            .saturating_sub(self.scroll.back());
+        let top = drawn.top(self.scroll)?;
         tops.iter().rposition(|row| *row <= top)
     }
 
@@ -978,9 +985,9 @@ impl View {
         Some(format!("prompt {} / {}", at.saturating_add(1), tops.len()))
     }
 
-    /// The rows a page moves: the band the transcript is drawn in at the tail, which is one row more
-    /// than while the row saying it is not is drawn over the band — so a page back and the page on
-    /// beside it are one band of rows.
+    /// The band the transcript is drawn in at the tail, one row more than while the row saying where
+    /// the frame stands is not drawn over it: a page moves by this many rows, and a prompt is lifted
+    /// to the band's first row against it.
     fn page_rows(&self) -> u32 {
         u32::from(self.drawn.band().saturating_add(self.notice_rows()))
     }
@@ -1120,7 +1127,10 @@ impl View {
     /// The work entry `at` stands in, folded or opened where the press landed on its head row: a
     /// frame to paint when the band draws one row of it and the press stood there.
     fn folded(&mut self, drawn: &Drawn, at: usize, row: u16) -> bool {
-        let Some(rows) = drawn.rows_of(self.rows.work_of(at)) else {
+        let Some(work) = self.rows.work_of(at) else {
+            return false;
+        };
+        let Some(rows) = drawn.rows_of(work) else {
             return false;
         };
         rows.start == row && self.rows.toggle(at)
@@ -1409,6 +1419,7 @@ impl View {
             drawn.push(Laid {
                 entry: piece.entry,
                 band: top..y.saturating_sub(area.y),
+                head: piece.skip == 0,
             });
         }
         // What this band placed is all the cache keeps: a picture scrolled past is a raster
@@ -1462,9 +1473,10 @@ impl View {
         counted(self.scroll.back(), "back")
     }
 
-    /// The row saying where the frame stands, how many rows have landed below it since and the key
-    /// that follows the run again, whole or not drawn at all: a frame too narrow for the words
-    /// leaves the cells blank rather than cutting the sentence it says.
+    /// The row saying which prompt the frame stands on, where it stands, how many rows have landed
+    /// below it since and the key that follows the run again. A frame too narrow for the whole of it
+    /// gives the prompt up first, and a frame too narrow for the rest draws none of it: the row is
+    /// whole or it is not there.
     fn notice_band(&mut self, area: Rect, buffer: &mut Buffer, drawn: &Drawn) {
         let Some(place) = self.notice() else {
             return;

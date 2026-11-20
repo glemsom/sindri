@@ -5494,8 +5494,7 @@ fn divider(row: &str) -> bool {
     row.contains("prompt ─") && row.ends_with('─')
 }
 
-/// A conversation of `count` exchanges, each a prompt of one row of words under its divider and an
-/// answer of one row, so a prompt's place in the transcript is a fact of its number.
+/// A frame on a transcript of `count` exchanges.
 fn conversation(count: u32) -> View {
     View::of(
         pointing(),
@@ -5505,17 +5504,17 @@ fn conversation(count: u32) -> View {
 }
 
 /// The entries of `count` exchanges, each a prompt of one row of words under its divider and an
-/// answer of one row.
+/// answer of one row, so a prompt's place in the band is a fact of its number.
 fn exchanges(count: u32) -> Vec<Entry> {
     (1..=count)
-        .flat_map(|turn| {
+        .flat_map(|asked| {
             [
                 Entry::Prompt {
-                    text: SecretSet::default().redact(format!("prompt {turn}")),
+                    text: SecretSet::default().redact(format!("prompt {asked}")),
                 },
                 Entry::Assistant {
-                    turn,
-                    text: SecretSet::default().redact(format!("answer {turn}")),
+                    turn: asked,
+                    text: SecretSet::default().redact(format!("answer {asked}")),
                 },
             ]
         })
@@ -5862,6 +5861,42 @@ fn a_press_on_an_answers_first_row_marks_the_exchange_it_ended() {
     assert!(
         !words.contains("prompt 2") && !words.contains("answer 2"),
         "and no exchange before it: {words:?}"
+    );
+}
+
+#[test]
+fn a_press_on_a_row_the_band_cut_from_the_middle_of_a_work_opens_nothing() {
+    let mut view = settled_run(60);
+    view.drawn_on(pointing());
+    painted(&mut view, 120, 40);
+    assert_eq!(
+        view.key(Key::Fold),
+        Outcome::Edited,
+        "the newest settled work is opened to begin with"
+    );
+    let opened = painted(&mut view, 120, 40);
+    let kept = row_holding(&opened, "rows kept back");
+    view.drag(Cell::new(kept, 2), Cell::new(kept, 2));
+    assert_eq!(
+        view.key(Key::ShiftDown),
+        Outcome::Edited,
+        "and the result inside it opened whole, so the work stands taller than the band"
+    );
+    let (drawn, told) = painted_and_told(&mut view, 120, 40);
+    assert!(
+        holds(&drawn, "a_row_of_output_30"),
+        "the band's first row is a row the middle of that work: {:?}",
+        frame_rows(&drawn)[..3].to_vec()
+    );
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(0, 10))),
+        Outcome::Unchanged,
+        "a row the band cut from the middle of a work is no work row, so a press on it is no act"
+    );
+    assert!(
+        holds(&painted(&mut view, 120, 40), "a_row_of_output_30"),
+        "and the work stands open as the reader left it"
     );
 }
 

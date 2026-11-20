@@ -1310,12 +1310,16 @@ impl Rows {
         self.opened(work.start, to)
     }
 
-    /// The work entry `at` stands in, which is the one row of it a press opens or folds.
-    pub fn work_of(&self, at: usize) -> Range<usize> {
-        match at < self.held.len() {
-            true => self.work(at),
-            false => at..at,
-        }
+    /// The work entry `at` stands in, which is the one row of it a press opens or folds, and none
+    /// for an entry the cache does not hold.
+    pub fn work_of(&self, at: usize) -> Option<Range<usize>> {
+        (at < self.held.len()).then(|| self.work(at))
+    }
+
+    /// The prompt that asked the exchange entry `at` belongs to: the one at it, or the last one
+    /// above it.
+    fn prompt_above(&self, at: usize) -> Option<usize> {
+        (0..=at).rev().find(|entry| is_prompt(&self.held[*entry]))
     }
 
     /// Whether entry `at` is the answer a run ended on rather than the work of one.
@@ -1331,10 +1335,9 @@ impl Rows {
         if at >= self.held.len() {
             return None;
         }
-        let prompt = |held: &Held| matches!(held.what, What::Fact(Entry::Prompt { .. }));
-        let start = (0..=at).rev().find(|entry| prompt(&self.held[*entry]))?;
+        let start = self.prompt_above(at)?;
         let end = (start + 1..self.held.len())
-            .find(|entry| prompt(&self.held[*entry]))
+            .find(|entry| is_prompt(&self.held[*entry]))
             .unwrap_or(self.held.len());
         Some(start..end)
     }
@@ -1404,12 +1407,12 @@ impl Rows {
         height
     }
 
-    /// The top row of every prompt the cache holds, counted from the transcript's first row.
+    /// The top row of every prompt the record holds, counted from the transcript's first row.
     pub fn prompts(&mut self) -> Vec<u32> {
         let mut tops = Vec::new();
         let mut at: u32 = 0;
         for entry in 0..self.held.len() {
-            if matches!(self.held[entry].what, What::Fact(Entry::Prompt { .. })) {
+            if is_prompt(&self.held[entry]) {
                 tops.push(at);
             }
             at = at.saturating_add(u32::try_from(self.rows(entry).len()).unwrap_or(u32::MAX));
@@ -1481,6 +1484,11 @@ impl Rows {
         pieces.reverse();
         Window { pieces }
     }
+}
+
+/// Whether this entry is the reader's own words, which is the row an exchange opens with.
+fn is_prompt(held: &Held) -> bool {
+    matches!(held.what, What::Fact(Entry::Prompt { .. }))
 }
 
 /// Whether this entry is the work of its exchange: a turn, a thought, a call or a result. A
