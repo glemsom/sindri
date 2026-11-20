@@ -214,6 +214,12 @@ with, and nothing the band drew into it — where the cells are what the band ma
 tag row is no line of its source, and a mark on it takes the fence whole all the same.
 _Avoid_: Body, content, raw text
 
+**Spine**:
+The one column a sent **Prompt**'s rows are quoted by: a dim bar down their left edge, with the
+prompt's sigil standing in the column beside it, so its words begin where an answer's prose does.
+Every row the words occupy carries it, and no row of an answer, a call, a result or a stop does.
+_Avoid_: Bar, quote mark, guide
+
 **Composer**:
 The draft a reader types: its words, the place the next glyph lands among them, the scroll they are
 read through, and the columns a frame has measured for them. The columns are measured before the

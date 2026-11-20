@@ -11,6 +11,7 @@ use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::ledger::{self, Boot};
 use sindri::mark;
+use sindri::palette::Palette;
 use sindri::pulse::Pulse;
 use sindri::rows::Scroll;
 use sindri::view::{Transcript, View};
@@ -170,6 +171,7 @@ fn named(name: &str, capabilities: Capabilities) -> View {
                 "the way the report does.",
             ],
         ),
+        "prompt-flat" => flat_prompt(),
         "scrolled" => typing(
             capabilities,
             &[
@@ -1143,6 +1145,41 @@ const STOP_ANSWER: [&str; 4] = [
 fn stopped_on(capabilities: Capabilities, stop: Stop) -> View {
     let mut view = with_pulse(capabilities, Pulse::settled(&stop, 1_240), &STOP_ANSWER);
     view.stopped(&stop);
+    view
+}
+
+/// A prompt laid over three rows of a terminal that spells no colour, the work it asked for settled
+/// under it, and the draft the reader is typing beside it: the spine and the sigil are the whole of
+/// what such a terminal draws of a quoted block, and no ground stands under either of them.
+fn flat_prompt() -> View {
+    let mut view = View::of(
+        crate::caps::inked(Palette::SLOTS),
+        Facts::default().asked(),
+        Transcript::of(vec![
+            prompt(
+                "triage the retry test, and say which line of the patch the test disagrees with: \
+                 the answer is one sentence, and it quotes the line the test fails on rather than \
+                 the line the patch moved, because a reader reads the failure and never the diff.",
+            ),
+            Entry::Turn { turn: 1 },
+            call(1, "bash", r#"{"command": "rg -n 'retry' src"}"#),
+            result(
+                1,
+                "bash",
+                Exit::Code(0),
+                "src/retry.rs: the test disagrees on the third line",
+                412,
+                23,
+            ),
+            answer(
+                1,
+                "The third line of the patch: the retry the test waits on never lands, because \
+                 the budget it counts is the turn's rather than the call's.",
+            ),
+            end(),
+        ]),
+    );
+    view.paste("why does the retry test fail");
     view
 }
 

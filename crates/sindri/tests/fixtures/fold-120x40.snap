@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 fold at 120x40
-00 |› why does the retry test fail?                                             wire      anthropic                         | plain:76 dim:10 plain:34
+00 |┃›why does the retry test fail?                                             wire      anthropic                         | dim:1 plain:75 dim:10 plain:34
 01 |⋯ 1 call · 1.8 s                                                            model     claude-sonnet-4-5-20250929        | dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
 02 |  Three rows of the fold are the whole of it: the head, the count and the   think     high                              | plain:76 dim:10 plain:34
 03 |  last.                                                                                                                 | plain:120

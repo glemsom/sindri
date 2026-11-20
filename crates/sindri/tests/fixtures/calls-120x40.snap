@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 calls at 120x40
-00 |› which calls settle well?                                                  wire      anthropic                         | plain:76 dim:10 plain:34
+00 |┃›which calls settle well?                                                  wire      anthropic                         | dim:1 plain:75 dim:10 plain:34
 01 |✓ bash                                                                      model     claude-sonnet-4-5-20250929        | ok:1 plain:1 dim:4 plain:70 dim:10 plain:34
 02 |  rg -n 'verdict' src                                                       think     high                              | plain:76 dim:10 plain:34
 03 |✓ exit 0  18 ms · 64 bytes                                                                                              | ok:1 plain:1 dim:24 plain:94
@@ -29,7 +29,7 @@ calls at 120x40
 23 |  the row says ✗ cancelled rather than leaving a spinner turning for a                                                  | plain:15 accent:11 plain:94
 24 |  result that will never come.                                                                                          | plain:120
 25 |                                                                                                                        | plain:120
-26 |› and the one that is still out?                                                                                        | plain:120
+26 |┃›and the one that is still out?                                                                                        | dim:1 plain:119
 27 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
 28 |  make check STAGES=test                                                                                                | plain:120
 29 |                                                                                                                        | plain:120

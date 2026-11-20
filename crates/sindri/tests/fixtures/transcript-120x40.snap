@@ -6,7 +6,7 @@ transcript at 120x40
 00 |  reaches are laid out, so a 250-turn history on a 40-row terminal pays for wire      anthropic                         | plain:76 dim:10 plain:34
 01 |  what it shows and no more.                                                model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
 02 |                                                                            think     high                              | plain:76 dim:10 plain:34
-03 |› what does the check cost?                                                                                             | plain:120
+03 |┃›what does the check cost?                                                                                             | dim:1 plain:119
 04 |⋯ 1 call · 118 ms                                                           turns                               6 /  250| dim:1 plain:1 dim:15 plain:59 dim:10 plain:34
 05 |  What that buys is the plain case and what it costs is the scrolled one: a ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
 06 |  window is a row offset from the tail, so resolving one walks the entries  cache                                    88%| plain:76 dim:10 plain:34
@@ -14,7 +14,7 @@ transcript at 120x40
 08 |  Each is laid out once and kept, so the whole history scrolled through     workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
 09 |  costs one layout per entry and scrolling it again costs none.             branch    spec/1-capability                 | plain:76 dim:10 plain:34
 10 |                                                                                                                        | plain:120
-11 |› what is the transcript's unit?                                            skills                                     2| plain:76 dim:10 plain:34
+11 |┃›what is the transcript's unit?                                            skills                                     2| dim:1 plain:75 dim:10 plain:34
 12 |⋯ 1 call · 9 ms                                                                                                         | dim:1 plain:1 dim:13 plain:105
 13 |  The transcript's unit is the entry. An entry never carries a formatted    sandbox   bwrap                             | plain:76 dim:10 plain:34
 14 |  line, so the same run is drawn the same way by the TUI, by a reader of the                                            | plain:120
@@ -26,7 +26,7 @@ transcript at 120x40
 20 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 21 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 22 |                                                                                                                        | plain:120
-23 |› what does a row of the band say?                                                                                      | plain:120
+23 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
 24 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 25 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
 26 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101

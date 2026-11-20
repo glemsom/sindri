@@ -1265,6 +1265,146 @@ fn a_frame_that_places_a_picture_claims_the_seam_as_the_terminals_own_ground() {
     }
 }
 
+/// The reader's own words a run was asked with.
+fn words_asked(text: &str) -> Entry {
+    Entry::Prompt {
+        text: SecretSet::default().redact(text),
+    }
+}
+
+/// A frame whose transcript holds the reader's own words and whose composer holds the draft they are
+/// typing beside them.
+fn asked_beside_a_draft() -> View {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(vec![words_asked("triage the retry test")]),
+    );
+    view.paste("what the reader is typing");
+    view
+}
+
+#[test]
+fn a_prompt_drawn_beside_a_live_draft_is_read_as_the_words_asked_and_not_the_draft() {
+    let palette = Palette::TRUECOLOR;
+    let (buffer, told) = painted_and_told(&mut asked_beside_a_draft(), 120, 40);
+    let laid = laid_out(&told);
+    let transcript = laid.transcript;
+    let asked = (transcript.y..transcript.bottom())
+        .find(|y| drawn_row(&buffer, *y).contains("triage the retry test"))
+        .expect("the frame draws the prompt in the transcript");
+    let composer = laid.composer;
+
+    for x in transcript.x..transcript.right() {
+        assert_eq!(
+            under(&buffer, x, asked),
+            palette.band(Band::Prompt),
+            "column {x} of the prompt's row stands on the band of the reader's own words, past \
+             its words and under them alike"
+        );
+    }
+    for x in composer.x..composer.right() {
+        assert_eq!(
+            under(&buffer, x, composer.y),
+            palette.band(Band::Composer),
+            "column {x} of the composer's head stands on the surface the draft takes the keys on"
+        );
+    }
+    assert_ne!(
+        palette.band(Band::Prompt),
+        palette.band(Band::Composer),
+        "the words the reader asked and the draft beside them stand on two grounds, so a reader \
+         reading the band is never in doubt which of the two they are reading"
+    );
+}
+
+/// A frame whose transcript opens on the reader's own words, on a terminal that places pictures and
+/// with a ledger rail beside it.
+fn asked_beside_a_rail() -> View {
+    View::of(
+        pictured().faced(false),
+        Facts::default().asked().railed(rail()),
+        Transcript::of(vec![words_asked("triage the retry test")]),
+    )
+}
+
+#[test]
+fn a_prompt_row_does_not_paint_its_band_over_the_seam() {
+    let palette = Palette::TRUECOLOR;
+    let (buffer, told) = painted_and_told(&mut asked_beside_a_rail(), 120, 40);
+    let laid = laid_out(&told);
+    let seam = seam_of(laid);
+    let asked = (seam.y..seam.bottom())
+        .find(|y| drawn_row(&buffer, *y).contains("triage the retry test"))
+        .expect("the frame draws the prompt the transcript opens on");
+
+    for y in seam.y..seam.bottom() {
+        for x in seam.x..seam.right() {
+            assert_eq!(
+                under(&buffer, x, y),
+                palette.ground(None).bg.expect("the terminal's own ground"),
+                "row {y}, column {x} of the seam is claimed in the prompt's own band, so the \
+                 reader's own words paint over the seam the rail's plane widens across and the \
+                 rail stops coming out of the transcript's edge"
+            );
+        }
+    }
+    assert!(
+        (seam.y..seam.bottom()).contains(&asked),
+        "the prompt is drawn on a row of the seam's own rows, so its band is a band of the rows \
+         this test reads: {asked} against {:?}",
+        seam
+    );
+}
+
+/// A frame whose answer holds a fence line wider than the band, so the band cuts it in the columns
+/// the rail's plane reaches back over.
+fn cut_beside_a_rail() -> View {
+    View::of(
+        pictured().faced(false),
+        Facts::default().asked().railed(rail()),
+        Transcript::of(vec![
+            words_asked("triage the retry test"),
+            Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact(
+                    "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_the_model_wrote_it\n```",
+                ),
+            },
+        ]),
+    )
+}
+
+#[test]
+fn the_seam_keeps_the_ink_the_row_wrote_there() {
+    let palette = Palette::TRUECOLOR;
+    let (buffer, told) = painted_and_told(&mut cut_beside_a_rail(), 120, 40);
+    let seam = seam_of(laid_out(&told));
+    let cut = (0..seam.height)
+        .find_map(|down| {
+            let y = seam.y + down;
+            let x = (seam.x..seam.right())
+                .find(|x| buffer.cell((*x, y)).expect("a cell of the seam").symbol() == "…")?;
+            Some((x, y))
+        })
+        .expect(
+            "the band cuts the fence line inside the columns the rail's plane reaches back over",
+        );
+
+    assert_eq!(
+        under(&buffer, cut.0, cut.1),
+        palette.ground(None).bg.expect("the terminal's own ground"),
+        "the cut mark at row {} column {} stands on the ground the rail's plane is drawn at",
+        cut.1,
+        cut.0
+    );
+    assert_eq!(
+        look_at(&buffer, &palette, cut.0, cut.1).ink(),
+        Ink::Dim,
+        "and it keeps the ink the band cut it in, because a row's ground takes no ink of its own"
+    );
+}
+
 #[test]
 fn the_seam_draws_the_same_words_in_the_same_inks_with_a_picture_placed_and_with_none() {
     let (pictured_frame, told) = painted_and_told(&mut seamed(true), 120, 40);

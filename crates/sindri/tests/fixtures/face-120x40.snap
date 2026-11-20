@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 face at 120x40
-00 |› where does rendering live?                                                                                            | plain:120
+00 |┃›where does rendering live?                                                                                            | dim:1 plain:119
 01 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
 02 |  rg -n 'fence' src                                                                                                     | plain:120
 03 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93

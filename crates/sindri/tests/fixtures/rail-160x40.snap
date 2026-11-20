@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 rail at 160x40
-00 |› where does rendering live?                                                                                        state     ⠹ running                         | plain:116 dim:10 accent:9 plain:25
+00 |┃›where does rendering live?                                                                                        state     ⠹ running                         | dim:1 plain:115 dim:10 accent:9 plain:25
 01 |✓ bash                                                                                                                                                          | ok:1 plain:1 dim:4 plain:154
 02 |  rg -n 'fence' src                                                                                                 wire      anthropic                         | plain:116 dim:10 plain:34
 03 |✓ exit 0  23 ms · 412 bytes                                                                                         model     claude-sonnet-4-5-20250929        | ok:1 plain:1 dim:25 plain:89 dim:10 plain:34

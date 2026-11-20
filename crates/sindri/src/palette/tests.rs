@@ -176,10 +176,29 @@ fn the_lit_edge_and_the_shadow_are_surfaces_no_ink_is_drawn_in() {
 }
 
 #[test]
-fn the_three_bands_are_three_elevations_the_composer_highest_and_the_well_lowest() {
+fn the_prompt_band_is_spelled_in_every_palette_and_flat_where_a_palette_spells_no_ground() {
+    assert_eq!(
+        Palette::SLOTS.band(Band::Prompt),
+        Color::Reset,
+        "a palette that spells no colour is the reader's own ground under the prompt too, because \
+         a palette that spells no ground draws none"
+    );
+    for (spelling, palette) in SPELLED {
+        assert_ne!(
+            palette.band(Band::Prompt),
+            Color::Reset,
+            "{spelling} spells the prompt band in a colour of its own, so the reader's own words \
+             are lifted off the conversation they were asked in"
+        );
+    }
+}
+
+#[test]
+fn every_band_is_an_elevation_the_composer_highest_and_the_well_lowest() {
     for (spelling, palette) in SPELLED {
         let composer = luminance(palette.band(Band::Composer));
         let rail = luminance(palette.band(Band::Rail));
+        let prompt = luminance(palette.band(Band::Prompt));
         let well = luminance(palette.band(Band::Well));
 
         assert!(
@@ -187,6 +206,12 @@ fn the_three_bands_are_three_elevations_the_composer_highest_and_the_well_lowest
             "{spelling} draws the composer, the rail and the well at {composer}, {rail} and \
                  {well}: three bands a frame paints, three elevations, and the well the darkest \
                  ground of them"
+        );
+        assert!(
+            well < prompt && prompt < composer,
+            "{spelling} draws the prompt at {prompt}, outside the two ends {well} and {composer}: \
+             the reader's own words are one rung above the conversation they were asked in and \
+             under the draft that takes the keys"
         );
     }
 }

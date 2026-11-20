@@ -26,6 +26,7 @@ struct Inks {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Bands {
     rail: Color,
+    prompt: Color,
     composer: Color,
     well: Color,
 }
@@ -53,6 +54,7 @@ impl Palette {
         },
         bands: Bands {
             rail: Color::Reset,
+            prompt: Color::Reset,
             composer: Color::Reset,
             well: Color::Reset,
         },
@@ -75,6 +77,7 @@ impl Palette {
         },
         bands: Bands {
             rail: Color::Indexed(235),
+            prompt: Color::Indexed(235),
             composer: Color::Indexed(236),
             well: Color::Indexed(234),
         },
@@ -97,6 +100,7 @@ impl Palette {
         },
         bands: Bands {
             rail: Color::Rgb(19, 27, 37),
+            prompt: Color::Rgb(22, 31, 42),
             composer: Color::Rgb(25, 35, 47),
             well: Color::Rgb(14, 21, 29),
         },
@@ -203,6 +207,7 @@ impl Palette {
     pub fn band(&self, band: Band) -> Color {
         match band {
             Band::Rail => self.bands.rail,
+            Band::Prompt => self.bands.prompt,
             Band::Composer => self.bands.composer,
             Band::Well => self.bands.well,
         }
@@ -251,16 +256,19 @@ impl Default for Palette {
     }
 }
 
-/// The three places a frame paints a background under its cells.
+/// The four places a frame paints a ground under its cells: the well a transcript is read in, the
+/// band the reader's own words stand on above it, the composer's raised surface above that, and the
+/// rail beside them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Band {
     Rail,
     Composer,
     Well,
+    Prompt,
 }
 
 impl Band {
-    pub const ALL: [Band; 3] = [Band::Rail, Band::Composer, Band::Well];
+    pub const ALL: [Band; 4] = [Band::Rail, Band::Composer, Band::Well, Band::Prompt];
 }
 
 /// A boundary's share of the light, painted under a row: never an ink, so a cell on an edge still

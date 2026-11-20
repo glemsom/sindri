@@ -1227,7 +1227,7 @@ impl View {
         layout.transcript = share.transcript;
         layout.rail = share.rail;
         // The band the rail's plane is drawn under, which the transcript claims as the terminal's
-        // own ground before it writes a word on it.
+        // own ground once its rows are down.
         let mut under = None;
         if let Some((shape, band)) = share.rail {
             // A ledger carries the face wherever it is drawn, and a strip is one row of facts with
@@ -1373,9 +1373,9 @@ impl View {
         ledger::split(self.facts.rail(), band)
     }
 
-    /// The transcript is drawn in the well, the darkest of the three bands. The turn in flight is
-    /// the one entry laid out again on every paint; every other row comes from the window of the
-    /// cache this band reaches.
+    /// The transcript is drawn in the well, the darkest of the grounds a frame lays down. The turn in
+    /// flight is the one entry laid out again on every paint; every other row comes from the window
+    /// of the cache this band reaches.
     fn transcript(
         &mut self,
         area: Rect,
@@ -1386,9 +1386,6 @@ impl View {
     ) -> Drawn {
         let palette = self.capabilities.palette();
         pen::claim(buffer, area, palette.ground(Some(Band::Well)));
-        if let Some(cells) = under.map(|under| area.intersection(under)) {
-            pen::claim(buffer, cells, palette.ground(None));
-        }
         let reflowed = self.rows.measure(Measure::new(
             area.width,
             self.surface(),
@@ -1490,6 +1487,11 @@ impl View {
                 band: top..y.saturating_sub(area.y),
                 head: piece.skip == 0,
             });
+        }
+        // Set now the rows and their pictures are down, so a row standing on a band of its own never
+        // paints over the seam the rail's plane widens across, and never the ink it wrote there.
+        if let Some(cells) = under.map(|under| area.intersection(under)) {
+            pen::beneath(buffer, cells, palette.ground(None));
         }
         // What this band placed is all the cache keeps: a picture scrolled past is a raster
         // nobody is looking at.
