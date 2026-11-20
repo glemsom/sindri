@@ -1571,6 +1571,174 @@ fn a_language_no_syntax_definition_names_is_drawn_plain_and_says_nothing() {
 }
 
 #[test]
+fn a_diffs_removed_row_is_drawn_err_and_its_added_row_ok() {
+    let rows = markdown::rows("```diff\n-gone\n+here\n```", 40);
+
+    assert_eq!(
+        rows[1].spans(),
+        [
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+            (String::from("-gone"), Look::plain(Ink::Err)),
+        ],
+        "a removed row is the err ink over the whole line, its marker in the column it was written in"
+    );
+    assert_eq!(
+        rows[2].spans(),
+        [
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+            (String::from("+here"), Look::plain(Ink::Ok)),
+        ],
+        "and an added row is the ok ink over the whole line, so a diff still reads as a diff"
+    );
+}
+
+#[test]
+fn a_diff_rows_tint_carries_over_every_row_a_narrow_band_cuts_it_to() {
+    let rows = markdown::rows(
+        "```diff\n+a row long enough that a narrow band cannot hold it\n```",
+        24,
+    );
+    let cut = &rows[1..];
+
+    assert!(
+        cut.len() > 1,
+        "the row was cut to more than one row of the band: {}",
+        drawn(&rows).join("|")
+    );
+    for row in cut {
+        assert_eq!(
+            row.spans()[0],
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+            "the bar stands before every row a fence is cut to: {:?}",
+            row.spans()
+        );
+        assert!(
+            row.spans()[1..]
+                .iter()
+                .all(|(_, look)| *look == Look::plain(Ink::Ok)),
+            "every row the band cuts an added line to is added, so the tint is never left on the \
+             first: {:?}",
+            row.spans()
+        );
+    }
+}
+
+#[test]
+fn a_diffs_context_row_keeps_the_looks_the_fence_itself_gave_it() {
+    let rows = markdown::rows("```diff\n  fn open() {\n```", 40);
+
+    assert_eq!(
+        rows[1].spans(),
+        [
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+            (String::from(" "), Look::plain(Ink::Plain)),
+            (String::from("│"), Look::plain(Ink::Dim)),
+            (String::from("fn open() {"), Look::plain(Ink::Plain)),
+        ],
+        "a context row is a row of the file both sides share, so it keeps the guide of its depth \
+         and the ink the parse gave its words"
+    );
+}
+
+#[test]
+fn a_fence_of_another_language_is_never_tinted_by_what_its_rows_begin_with() {
+    let rows = markdown::rows("```rust\n- let x = 1;\n```", 40);
+
+    assert!(
+        !rows[1]
+            .spans()
+            .iter()
+            .any(|(_, look)| *look == Look::plain(Ink::Err)),
+        "only a diff is read a row at a time, so a line of rust that opens with a marker is no \
+         removal: {:?}",
+        rows[1].spans()
+    );
+    assert!(
+        wears(&rows[1], "let", Look::new(Ink::Accent, Face::Bold)),
+        "and its words keep the inks the parse gave them: {:?}",
+        rows[1].spans()
+    );
+}
+
+#[test]
+fn a_diff_inside_a_quote_keeps_the_quotes_bar_and_its_tint() {
+    let rows = markdown::rows("> ```diff\n> -gone\n> +here\n> ```", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ ▏ diff", "▏ ▏ -gone", "▏ ▏ +here"],
+        "a quoted diff keeps the quote's bar down every row of it"
+    );
+    for (at, line, ink) in [(1, "-gone", Ink::Err), (2, "+here", Ink::Ok)] {
+        assert_eq!(
+            rows[at].spans(),
+            [
+                (String::from("▏ "), Look::plain(Ink::Dim)),
+                (String::from("▏ "), Look::plain(Ink::Dim)),
+                (String::from(line), Look::plain(ink)),
+            ],
+            "the tint is the source row's alone, so the quote's bar keeps the ink the quote gave it"
+        );
+    }
+}
+
+#[test]
+fn a_diff_inside_an_item_keeps_the_items_gutter_and_its_tint() {
+    let rows = markdown::rows("- ```diff\n  -gone\n  +here\n  ```", 40);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ • diff", "▏   -gone", "▏   +here"],
+        "a diff in an item hangs under the item's gutter"
+    );
+    for (at, line, ink) in [(1, "-gone", Ink::Err), (2, "+here", Ink::Ok)] {
+        assert_eq!(
+            rows[at].spans(),
+            [
+                (String::from("▏ "), Look::plain(Ink::Dim)),
+                (String::from("  "), Look::plain(Ink::Plain)),
+                (String::from(line), Look::plain(ink)),
+            ],
+            "the tint is the source row's alone, so the gutter keeps the ink the item gave it"
+        );
+    }
+}
+
+#[test]
+fn a_diffs_hunk_header_is_drawn_dim() {
+    let rows = markdown::rows("```diff\n@@ -1,3 +1,3 @@ fn open()\n```", 40);
+
+    assert_eq!(
+        rows[1].spans(),
+        [
+            (String::from("▏ "), Look::plain(Ink::Dim)),
+            (
+                String::from("@@ -1,3 +1,3 @@ fn open()"),
+                Look::plain(Ink::Dim)
+            ),
+        ],
+        "a hunk header says where the reader is in the file, so it recedes behind the rows it heads"
+    );
+}
+
+#[test]
+fn a_diffs_file_headers_are_muted_so_neither_reads_as_an_addition_or_a_removal() {
+    let rows = markdown::rows("```diff\n--- a/x.rs\n+++ b/x.rs\n```", 40);
+
+    for (at, line) in [(1, "--- a/x.rs"), (2, "+++ b/x.rs")] {
+        assert_eq!(
+            rows[at].spans(),
+            [
+                (String::from("▏ "), Look::plain(Ink::Dim)),
+                (String::from(line), Look::plain(Ink::Muted)),
+            ],
+            "a file header names the file both sides of a diff are of, so it is drawn muted rather \
+             than as the removal and the addition its marker would read as"
+        );
+    }
+}
+
+#[test]
 fn a_fences_tag_is_the_accent_drawn_faint_behind_a_dim_bar() {
     let rows = markdown::rows("```rust\nfn main() {}\n```", 40);
 

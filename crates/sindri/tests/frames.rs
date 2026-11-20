@@ -331,6 +331,16 @@ fn markdown_fence_unknown_80x24_is_a_tag_and_plain_words_no_definition_names() {
 }
 
 #[test]
+fn markdown_diff_80x24_is_a_diff_whose_every_row_is_tinted_by_what_it_holds() {
+    fixture::assert_frame("markdown-diff", 80, 24);
+}
+
+#[test]
+fn markdown_diff_quoted_80x24_is_the_same_diff_behind_a_quote_bar() {
+    fixture::assert_frame("markdown-diff-quoted", 80, 24);
+}
+
+#[test]
 fn markdown_inline_80x24_is_a_chip_of_accent_ink_in_a_paragraph() {
     fixture::assert_frame("markdown-inline", 80, 24);
 }

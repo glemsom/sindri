@@ -189,6 +189,8 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-code" => construct(capabilities, code()),
         "markdown-fence-nested" => construct(capabilities, nested()),
         "markdown-fence-unknown" => construct(capabilities, unknown()),
+        "markdown-diff" => construct(capabilities, diff()),
+        "markdown-diff-quoted" => construct(capabilities, &diff_quoted()),
         "markdown-inline" => construct(capabilities, inline()),
         "markdown-emphasis" => construct(capabilities, emphasised()),
         "markdown-struck" => construct(capabilities, struck()),
@@ -458,6 +460,31 @@ fn nested() -> &'static str {
 fn unknown() -> &'static str {
     "```frobnicate\n// a comment stays the glyphs it was written as\nlet x = 1; # not rust\n\
      \"a string\" is a word too\n```"
+}
+
+/// A diff fence with a file header, a hunk header, the rows both sides share and one row each
+/// side changed: every kind of row a diff is read by, its marker in the column it was written in.
+fn diff() -> &'static str {
+    concat!(
+        "```diff\n",
+        "--- a/crates/sindri/src/rows.rs\n",
+        "+++ b/crates/sindri/src/rows.rs\n",
+        "@@ -12,7 +12,9 @@ impl Row {\n",
+        "     pub fn spans(&self) -> &[(String, Look)] {\n",
+        "-        &self.spans\n",
+        "+        self.spans.as_slice()\n",
+        "     }\n",
+        "```"
+    )
+}
+
+/// The very diff a fence holds, drawn behind a quote's bar.
+fn diff_quoted() -> String {
+    diff()
+        .lines()
+        .map(|line| format!("> {line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn inline() -> &'static str {

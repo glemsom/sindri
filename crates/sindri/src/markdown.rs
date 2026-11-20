@@ -1345,6 +1345,8 @@ fn fence_line(line: &str) -> Option<(char, usize, &str)> {
 struct Code {
     /// Nothing when the language is one no syntax definition names: the block is drawn plain.
     parse: Option<(ParseState, ScopeStack)>,
+    /// A `diff` fence is tinted a row at a time by what each row holds, and its parse is never read.
+    diff: bool,
 }
 
 impl Code {
@@ -1355,7 +1357,8 @@ impl Code {
                 .find_syntax_by_token(tag)
                 .map(|syntax| (ParseState::new(syntax), ScopeStack::new())),
         };
-        Code { parse }
+        let diff = tag.split_whitespace().next() == Some("diff");
+        Code { parse, diff }
     }
 
     fn highlight(&mut self, text: &str) -> Vec<Vec<(String, Look)>> {
@@ -1375,6 +1378,11 @@ impl Code {
     /// One line of code as the runs it is drawn as. A parse that fails is a line drawn plain
     /// rather than a run that stops.
     fn line(&mut self, line: &str) -> Vec<(String, Look)> {
+        if self.diff
+            && let Some(ink) = tint(line)
+        {
+            return vec![(String::from(line), Look::plain(ink))];
+        }
         let Some((parse, scopes)) = &mut self.parse else {
             return guided(vec![(String::from(line), Look::plain(Ink::Plain))]);
         };
@@ -1397,6 +1405,19 @@ impl Code {
             runs.push((String::from(&line[at..]), look_of(scopes)));
         }
         guided(runs)
+    }
+}
+
+/// The ink a row of a `diff` fence is drawn in, read off the row itself so no state is carried
+/// across rows: a file header is muted before `+++` and `---` can be read as an addition and a
+/// removal, and a row that is none of these keeps the looks the parse gave it.
+fn tint(line: &str) -> Option<Ink> {
+    match line {
+        _ if line.starts_with("@@") => Some(Ink::Dim),
+        _ if line.starts_with("+++") || line.starts_with("---") => Some(Ink::Muted),
+        _ if line.starts_with('+') => Some(Ink::Ok),
+        _ if line.starts_with('-') => Some(Ink::Err),
+        _ => None,
     }
 }
 
