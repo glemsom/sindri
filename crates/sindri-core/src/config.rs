@@ -114,16 +114,16 @@ impl Config {
     pub fn load(environment: &impl Environment) -> Result<Config, ConfigError> {
         Config::load_from(&config_path(environment)?)
     }
-    pub fn save_to(path: &Path, touched: &Flags) -> Result<(), ConfigError> {
-        Config::repatch(path, |document| touched.patch_into(document))
+    pub fn save_to(path: &Path, given: &Config) -> Result<(), ConfigError> {
+        Config::repatch(path, |document| given.patch_into(document))
     }
     pub fn save_touched_to(path: &Path, touched: &Touched) -> Result<(), ConfigError> {
-        let (flags, emptied) = touched.patch()?;
+        let (written, emptied) = touched.patch()?;
         Config::repatch(path, |document| {
             for key in &emptied {
                 document.remove(key);
             }
-            flags.patch_into(document)
+            written.patch_into(document)
         })
     }
     fn repatch(
@@ -150,14 +150,81 @@ impl Config {
         patch(&mut document)?;
         write_atomically(path, &document.to_string())
     }
-    pub fn save(environment: &impl Environment, touched: &Flags) -> Result<(), ConfigError> {
-        Config::save_to(&config_path(environment)?, touched)
+    pub fn save(environment: &impl Environment, given: &Config) -> Result<(), ConfigError> {
+        Config::save_to(&config_path(environment)?, given)
     }
     pub fn save_touched(
         environment: &impl Environment,
         touched: &Touched,
     ) -> Result<(), ConfigError> {
         Config::save_touched_to(&config_path(environment)?, touched)
+    }
+    fn patch_into(&self, document: &mut DocumentMut) -> Result<(), ConfigError> {
+        if let Some(wire) = self.provider {
+            write_key(document, "provider", Value::from(wire.word()));
+        }
+        if let Some(value) = &self.model {
+            write_string(document, "model", value);
+        }
+        if let Some(route) = self.route {
+            write_key(document, "route", Value::from(route.word()));
+        }
+        if let Some(value) = &self.base_url {
+            write_string(document, "base_url", value);
+        }
+        if let Some(value) = &self.api_key {
+            write_string(document, "api_key", value);
+        }
+        if let Some(value) = self.thinking {
+            write_key(document, "thinking", Value::from(value));
+        }
+        if let Some(paths) = &self.extra_writable_paths {
+            let strings: Vec<String> = paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect();
+            write_key(document, "extra_writable_paths", array(strings));
+        }
+        if let Some(headers) = &self.extra_headers {
+            write_key(document, "extra_headers", array(headers.clone()));
+        }
+        if let Some(tokens) = self.context_window {
+            write_key(
+                document,
+                "context_window",
+                integer("context_window", nonzero_window("context_window", tokens)?)?,
+            );
+        }
+        if let Some(turns) = self.max_turns {
+            write_key(document, "max_turns", Value::from(i64::from(turns)));
+        }
+        if let Some(seconds) = self.timeout {
+            write_key(document, "timeout", integer("timeout", seconds)?);
+        }
+        if let Some(milliseconds) = self.command_budget_ms {
+            write_key(
+                document,
+                "command_budget_ms",
+                integer("command_budget_ms", milliseconds)?,
+            );
+        }
+        if let Some(bytes) = self.output_budget_bytes {
+            write_key(
+                document,
+                "output_budget_bytes",
+                integer("output_budget_bytes", bytes)?,
+            );
+        }
+        if let Some(value) = self.status {
+            write_key(document, "status", Value::from(value));
+        }
+        if let Some(value) = self.face {
+            write_key(document, "face", Value::from(value));
+        }
+        if let Some(value) = self.ssh_agent {
+            write_key(document, "ssh_agent", Value::from(value));
+        }
+        Ok(())
     }
     pub fn text(&self, key: &str) -> String {
         let shown = |value: &Option<String>| value.clone().unwrap_or_default();
@@ -278,9 +345,9 @@ impl Config {
         }
         secrets
     }
-    pub fn resolve(environment: &impl Environment, flags: Flags) -> Result<Config, ConfigError> {
+    pub fn resolve(environment: &impl Environment, given: Config) -> Result<Config, ConfigError> {
         let file = Config::load(environment)?;
-        let above = Config::from(flags).above(Config::from_environment(environment)?);
+        let above = given.above(Config::from_environment(environment)?);
         let wire_key = above
             .provider
             .or(file.provider)
@@ -344,139 +411,6 @@ impl fmt::Debug for Config {
             .finish()
     }
 }
-#[derive(Clone, Default)]
-pub struct Flags {
-    pub provider: Option<Wire>,
-    pub model: Option<String>,
-    pub route: Option<Route>,
-    pub base_url: Option<String>,
-    pub api_key: Option<String>,
-    pub thinking: Option<bool>,
-    pub extra_writable_paths: Option<Vec<PathBuf>>,
-    pub extra_headers: Option<Vec<String>>,
-    pub context_window: Option<u64>,
-    pub max_turns: Option<u32>,
-    pub timeout: Option<u64>,
-    pub command_budget_ms: Option<u64>,
-    pub output_budget_bytes: Option<u64>,
-    pub status: Option<bool>,
-    pub face: Option<bool>,
-    pub ssh_agent: Option<bool>,
-}
-impl Flags {
-    fn patch_into(&self, document: &mut DocumentMut) -> Result<(), ConfigError> {
-        if let Some(wire) = self.provider {
-            write_key(document, "provider", Value::from(wire.word()));
-        }
-        if let Some(value) = &self.model {
-            write_string(document, "model", value);
-        }
-        if let Some(route) = self.route {
-            write_key(document, "route", Value::from(route.word()));
-        }
-        if let Some(value) = &self.base_url {
-            write_string(document, "base_url", value);
-        }
-        if let Some(value) = &self.api_key {
-            write_string(document, "api_key", value);
-        }
-        if let Some(value) = self.thinking {
-            write_key(document, "thinking", Value::from(value));
-        }
-        if let Some(paths) = &self.extra_writable_paths {
-            let strings: Vec<String> = paths
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect();
-            write_key(document, "extra_writable_paths", array(strings));
-        }
-        if let Some(headers) = &self.extra_headers {
-            write_key(document, "extra_headers", array(headers.clone()));
-        }
-        if let Some(tokens) = self.context_window {
-            write_key(
-                document,
-                "context_window",
-                integer("context_window", nonzero_window("context_window", tokens)?)?,
-            );
-        }
-        if let Some(turns) = self.max_turns {
-            write_key(document, "max_turns", Value::from(i64::from(turns)));
-        }
-        if let Some(seconds) = self.timeout {
-            write_key(document, "timeout", integer("timeout", seconds)?);
-        }
-        if let Some(milliseconds) = self.command_budget_ms {
-            write_key(
-                document,
-                "command_budget_ms",
-                integer("command_budget_ms", milliseconds)?,
-            );
-        }
-        if let Some(bytes) = self.output_budget_bytes {
-            write_key(
-                document,
-                "output_budget_bytes",
-                integer("output_budget_bytes", bytes)?,
-            );
-        }
-        if let Some(value) = self.status {
-            write_key(document, "status", Value::from(value));
-        }
-        if let Some(value) = self.face {
-            write_key(document, "face", Value::from(value));
-        }
-        if let Some(value) = self.ssh_agent {
-            write_key(document, "ssh_agent", Value::from(value));
-        }
-        Ok(())
-    }
-}
-impl From<Flags> for Config {
-    fn from(flags: Flags) -> Config {
-        Config {
-            provider: flags.provider,
-            model: flags.model,
-            route: flags.route,
-            base_url: flags.base_url,
-            api_key: flags.api_key,
-            thinking: flags.thinking,
-            extra_writable_paths: flags.extra_writable_paths,
-            extra_headers: flags.extra_headers,
-            context_window: flags.context_window,
-            max_turns: flags.max_turns,
-            timeout: flags.timeout,
-            command_budget_ms: flags.command_budget_ms,
-            output_budget_bytes: flags.output_budget_bytes,
-            status: flags.status,
-            face: flags.face,
-            ssh_agent: flags.ssh_agent,
-        }
-    }
-}
-impl fmt::Debug for Flags {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("Flags")
-            .field("provider", &self.provider)
-            .field("model", &self.model)
-            .field("route", &self.route)
-            .field("base_url", &self.base_url)
-            .field("api_key", &self.api_key.as_ref().map(|_| MASK))
-            .field("thinking", &self.thinking)
-            .field("extra_writable_paths", &self.extra_writable_paths)
-            .field("extra_headers", &self.extra_headers.as_ref().map(|_| MASK))
-            .field("context_window", &self.context_window)
-            .field("max_turns", &self.max_turns)
-            .field("timeout", &self.timeout)
-            .field("command_budget_ms", &self.command_budget_ms)
-            .field("output_budget_bytes", &self.output_budget_bytes)
-            .field("status", &self.status)
-            .field("face", &self.face)
-            .field("ssh_agent", &self.ssh_agent)
-            .finish()
-    }
-}
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Touched {
     keys: BTreeMap<&'static str, String>,
@@ -495,8 +429,8 @@ impl Touched {
     pub fn rows(&self) -> impl Iterator<Item = (&'static str, &str)> {
         self.keys.iter().map(|(key, text)| (*key, text.as_str()))
     }
-    fn patch(&self) -> Result<(Flags, Vec<&'static str>), ConfigError> {
-        let mut flags = Flags::default();
+    fn patch(&self) -> Result<(Config, Vec<&'static str>), ConfigError> {
+        let mut written = Config::default();
         let mut emptied: Vec<&'static str> = Vec::new();
         for (key, held) in &self.keys {
             let text = held.trim();
@@ -505,25 +439,25 @@ impl Touched {
                 continue;
             }
             match *key {
-                "provider" => flags.provider = Some(as_wire(key, text)?),
-                "model" => flags.model = Some(text.to_owned()),
-                "route" => flags.route = Some(as_route(key, text)?),
-                "base_url" => flags.base_url = Some(text.to_owned()),
-                "api_key" => flags.api_key = Some(text.to_owned()),
-                "thinking" => flags.thinking = Some(parsed(key, text)?),
+                "provider" => written.provider = Some(as_wire(key, text)?),
+                "model" => written.model = Some(text.to_owned()),
+                "route" => written.route = Some(as_route(key, text)?),
+                "base_url" => written.base_url = Some(text.to_owned()),
+                "api_key" => written.api_key = Some(text.to_owned()),
+                "thinking" => written.thinking = Some(parsed(key, text)?),
                 "extra_writable_paths" => {
-                    flags.extra_writable_paths =
+                    written.extra_writable_paths =
                         Some(listed(text).into_iter().map(PathBuf::from).collect());
                 }
-                "extra_headers" => flags.extra_headers = Some(headers_of(key, text)?),
-                "context_window" => flags.context_window = Some(parsed(key, text)?),
-                "max_turns" => flags.max_turns = Some(parsed(key, text)?),
-                "timeout" => flags.timeout = Some(parsed(key, text)?),
-                "command_budget_ms" => flags.command_budget_ms = Some(parsed(key, text)?),
-                "output_budget_bytes" => flags.output_budget_bytes = Some(parsed(key, text)?),
-                "status" => flags.status = Some(parsed(key, text)?),
-                "face" => flags.face = Some(parsed(key, text)?),
-                "ssh_agent" => flags.ssh_agent = Some(parsed(key, text)?),
+                "extra_headers" => written.extra_headers = Some(headers_of(key, text)?),
+                "context_window" => written.context_window = Some(parsed(key, text)?),
+                "max_turns" => written.max_turns = Some(parsed(key, text)?),
+                "timeout" => written.timeout = Some(parsed(key, text)?),
+                "command_budget_ms" => written.command_budget_ms = Some(parsed(key, text)?),
+                "output_budget_bytes" => written.output_budget_bytes = Some(parsed(key, text)?),
+                "status" => written.status = Some(parsed(key, text)?),
+                "face" => written.face = Some(parsed(key, text)?),
+                "ssh_agent" => written.ssh_agent = Some(parsed(key, text)?),
                 _ => {
                     return Err(ConfigError::BadValue {
                         origin: (*key).to_owned(),
@@ -532,7 +466,7 @@ impl Touched {
                 }
             }
         }
-        Ok((flags, emptied))
+        Ok((written, emptied))
     }
 }
 fn listed(text: &str) -> Vec<String> {

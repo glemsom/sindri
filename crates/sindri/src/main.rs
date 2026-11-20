@@ -19,7 +19,7 @@ mod window; // the terminal outside the frame: its title, its mark, its notifica
 use std::process::ExitCode;
 
 use clap::Parser;
-use sindri_core::config::{Config, Flags, Process};
+use sindri_core::config::{Config, Process};
 use sindri_core::first_run::FirstRun;
 
 use crate::cli::{Cli, Command};
@@ -66,14 +66,14 @@ fn main() -> ExitCode {
             return refuse(&short_of(&first_run), USAGE);
         }
         // The flag layer is dropped after the save: the file is the only copy of the key.
-        let touched = Flags {
+        let touched = Config {
             api_key: Some(pasted),
-            ..Flags::default()
+            ..Config::default()
         };
         if let Err(error) = Config::save(&Process, &touched) {
             return refuse(&error.to_string(), error.exit_code());
         }
-        first_run = match FirstRun::resolve(&Process, Flags::default()) {
+        first_run = match FirstRun::resolve(&Process, Config::default()) {
             Ok(first_run) => first_run,
             Err(error) => return refuse(&error.to_string(), error.exit_code()),
         };

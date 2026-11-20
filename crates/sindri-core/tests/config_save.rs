@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use sindri_core::config::{Config, Flags, Touched};
+use sindri_core::config::{Config, Touched};
 use sindri_core::provider::Route;
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
@@ -87,9 +87,9 @@ fn a_file_with_comments_and_unusual_key_order_keeps_both() {
 
     Config::save_to(
         &path,
-        &Flags {
+        &Config {
             model: Some(String::from("new-model")),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("the save lands");
@@ -121,10 +121,10 @@ fn only_the_touched_keys_change_and_every_other_byte_is_identical() {
 
     Config::save_to(
         &path,
-        &Flags {
+        &Config {
             thinking: Some(false),
             max_turns: Some(400),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("the save lands");
@@ -162,9 +162,9 @@ fn a_key_the_file_never_had_is_appended_after_the_ones_it_has() {
 
     Config::save_to(
         &path,
-        &Flags {
+        &Config {
             provider: Some(Wire::Openai),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("the save lands");
@@ -185,9 +185,9 @@ fn a_save_leaves_the_config_readable_by_its_owner_alone() {
 
     Config::save_to(
         &path,
-        &Flags {
+        &Config {
             model: Some(String::from("new-model")),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("the save lands");
@@ -202,9 +202,9 @@ fn a_save_leaves_the_config_readable_by_its_owner_alone() {
     let created = first_run.path().join("sindri").join("config.toml");
     Config::save_to(
         &created,
-        &Flags {
+        &Config {
             max_turns: Some(10),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("a first run needs no file to start from");
@@ -220,9 +220,9 @@ fn an_emptied_key_leaves_the_file_so_the_environment_speaks() {
 
     Config::save_to(
         &path,
-        &Flags {
+        &Config {
             model: Some(String::new()),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("the save lands");
@@ -254,9 +254,9 @@ fn a_save_replaces_the_file_rather_than_writing_into_it() {
 
     Config::save_to(
         &path,
-        &Flags {
+        &Config {
             model: Some(String::from("new-model")),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("the save lands");
@@ -291,9 +291,9 @@ fn a_save_that_cannot_stage_leaves_the_old_config_untouched() {
 
     let outcome = Config::save_to(
         &path,
-        &Flags {
+        &Config {
             model: Some(String::from("new-model")),
-            ..Flags::default()
+            ..Config::default()
         },
     );
     let untouched = read(&path);
@@ -324,9 +324,9 @@ fn a_save_whose_rename_cannot_land_discards_what_it_staged() {
 
     let outcome = Config::save_to(
         &path,
-        &Flags {
+        &Config {
             model: Some(String::from("new-model")),
-            ..Flags::default()
+            ..Config::default()
         },
     );
 
@@ -356,9 +356,9 @@ fn a_file_that_is_not_toml_is_never_rewritten() {
 
     let error = Config::save_to(
         &path,
-        &Flags {
+        &Config {
             max_turns: Some(10),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect_err("a file that will not parse cannot be patched");
@@ -375,8 +375,8 @@ fn a_file_that_is_not_toml_is_never_rewritten() {
     );
 }
 
-fn every_key_touched() -> Flags {
-    Flags {
+fn every_key_touched() -> Config {
+    Config {
         provider: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-5")),
         route: Some(Route::Responses),
@@ -421,7 +421,7 @@ fn a_save_writes_the_keys_the_schema_has_and_invents_none() {
     );
     assert_eq!(
         Config::load_from(&path).expect("the file still reads"),
-        Config::from(touched),
+        touched,
         "every key written is the key the save was handed"
     );
 }
@@ -464,9 +464,9 @@ fn a_sindri_toml_in_the_working_directory_is_never_written() {
         let _standing = Standing::in_directory(workspace.path());
         Config::save(
             &environment,
-            &Flags {
+            &Config {
                 max_turns: Some(10),
-                ..Flags::default()
+                ..Config::default()
             },
         )
         .expect("the save lands");
@@ -496,9 +496,9 @@ fn a_save_writes_the_file_the_environment_points_at() {
 
     Config::save(
         &environment,
-        &Flags {
+        &Config {
             model: Some(String::from("claude-sonnet-4-5")),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect("the save lands");
@@ -581,9 +581,9 @@ fn a_context_window_of_nothing_a_save_is_handed_is_refused_and_writes_nothing() 
 
     let error = Config::save_to(
         &path,
-        &Flags {
+        &Config {
             context_window: Some(0),
-            ..Flags::default()
+            ..Config::default()
         },
     )
     .expect_err("a window of no tokens is a share nothing can be taken of");
@@ -672,7 +672,7 @@ fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
     let home = bare_home();
     let path = file_in(&home);
     let written = every_key_touched();
-    let shown = Config::from(written.clone());
+    let shown = written.clone();
 
     // The one key a screen may not show: a secret is masked wherever it is drawn, so its row is a
     // mask and never the text a file would hold.
@@ -693,7 +693,7 @@ fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
         Config::load_from(&path).expect("the file still reads"),
         Config {
             api_key: None,
-            ..Config::from(written)
+            ..written
         },
         "the text a row shows is the text a save of that row reads back, so a visit that \
          touched every row hands the file what the screen said it held"

@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand, ValueEnum};
-use sindri_core::config::{Flags, WINDOW_REFUSAL};
+use sindri_core::config::{Config, WINDOW_REFUSAL};
 use sindri_core::policy::Enforcement;
 use sindri_core::provider::Route;
 
@@ -149,12 +149,12 @@ impl RouteWord {
 }
 
 impl Cli {
-    pub fn flags(&self) -> Flags {
-        Flags {
+    pub fn flags(&self) -> Config {
+        Config {
             api_key: self.api_key.clone(),
             route: self.route.map(RouteWord::route),
             context_window: self.context_window,
-            ..Flags::default()
+            ..Config::default()
         }
     }
 
