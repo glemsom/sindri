@@ -41,6 +41,9 @@ const ANSWER: &str =
 const OPEN_TOOL_USE: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_open_tool_use.sse");
 
+const OPEN_TOOL_USE_REFUSED: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_open_tool_use_refused.sse");
+
 const ANSWER_CACHED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream_cached.sse");
 
@@ -3597,6 +3600,70 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
         session.wait().code(),
         Some(0),
         "the launch outlives the run it opened a target for: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn a_refused_open_call_is_drawn_under_its_call_and_the_run_answers_on() {
+    let ground = Ground::new();
+    let wire = Wire::scripted([OPEN_TOOL_USE_REFUSED, ANSWER]);
+    let mut command = ground.command();
+    command
+        .arg("--yolo-unsafe")
+        .env("SINDRI_BASE_URL", wire.base_url())
+        // `/usr/bin` and `/bin`, because the launch asks `git` for the branch and nothing here
+        // is spawned to open a target the ground refused.
+        .env("PATH", "/usr/bin:/bin");
+    let (session, mut pty, drawn) = Session::starting(command);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    wire.release();
+
+    assert!(
+        drawn.wait_until(|drawn| {
+            let rows = frame::read(drawn, COLS, ROWS).rows();
+            rows.iter().any(|row| row.contains("\u{2717} exit 1"))
+                && rows
+                    .iter()
+                    .any(|row| row.contains("refused:") && row.contains("handbook"))
+        }),
+        "the band draws the refused call settled with its failing exit, in the refusal's own words: \
+         {:?}",
+        drawn.text()
+    );
+
+    let opened = drawn.text();
+    let rows = frame::read(&opened, COLS, ROWS).rows();
+    let at = |needle: &str| rows.iter().position(|row| row.contains(needle));
+    let (call, settled, refused) = (
+        at("open").expect("the call is drawn"),
+        at("\u{2717} exit 1").expect("its verdict is drawn"),
+        at("refused:").expect("the refusal is drawn"),
+    );
+    assert!(
+        call < settled && settled < refused,
+        "the refusal is drawn under the call it belongs to: {rows:?}"
+    );
+    assert!(
+        at("\u{2717} error").is_none(),
+        "no stop row says the run could not run a tool: {rows:?}"
+    );
+
+    wire.wait_for_request();
+    wire.release();
+    answered(&drawn);
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run whose call the ground refused: {:?}",
         drawn.text()
     );
 }

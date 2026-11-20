@@ -1152,6 +1152,34 @@ impl OpenGround {
         path
     }
 
+    /// A file in the workspace: the place a run stands and may write to.
+    fn inside(&self, name: &str) -> PathBuf {
+        let path = self.workspace.join(name);
+        std::fs::write(&path, "the page").expect("the file");
+        path
+    }
+
+    /// A file above both places, resolved: a target no ground holds.
+    fn outside(&self, name: &str) -> PathBuf {
+        let path = self._root.path().join(name);
+        std::fs::write(&path, "the page").expect("the file");
+        std::fs::canonicalize(&path).expect("the file resolves")
+    }
+
+    /// A link in the workspace to `target`: what a judgement resolves before it judges.
+    fn link(&self, name: &str, target: &Path) -> PathBuf {
+        let path = self.workspace.join(name);
+        std::os::unix::fs::symlink(target, &path).expect("the link");
+        path
+    }
+
+    /// A directory in the workspace whose name claims an extension a file may carry.
+    fn directory(&self, name: &str) -> PathBuf {
+        let path = self.workspace.join(name);
+        std::fs::create_dir_all(&path).expect("the directory");
+        path
+    }
+
     fn shell(&self) -> Shell {
         let ground =
             Ground::new(&self.boundary, &self.temp, &self.workspace).expect("the ground resolves");
@@ -1189,6 +1217,15 @@ impl Opener for Logged {
 fn shared(logged: &Arc<Logged>) -> Arc<dyn Opener> {
     let held: Arc<Logged> = Arc::clone(logged);
     held
+}
+
+#[derive(Debug)]
+struct Broken;
+
+impl Opener for Broken {
+    fn open(&self, _opening: &Opening) -> Result<(), String> {
+        Err(String::from("cannot run /nonexistent/opener: no such file"))
+    }
 }
 
 fn opening(arguments: &str) -> Call {
@@ -1246,22 +1283,24 @@ fn an_open_call_naming_a_page_on_the_allowlist_hands_the_url_over() {
 }
 
 #[test]
-fn an_open_call_outside_the_ground_is_refused_and_nothing_is_handed_over() {
+fn an_open_call_outside_the_ground_is_refused_as_the_calls_own_answer() {
     let ground = OpenGround::new();
     let logged = Arc::new(Logged::default());
     let shell = ground.shell().opener(Some(shared(&logged)));
 
-    let refused = shell
+    let acted = shell
         .execute(
             &opening(r#"{"path":"/etc/handbook.html"}"#),
             &mut Loaded::default(),
         )
-        .expect_err("a file outside the writable paths and the session temp is no target");
+        .expect("a refused target is the call's own answer");
 
     assert!(
-        refused.to_string().contains("outside the writable paths"),
-        "the refusal says where a target may come from: {refused}"
+        acted.text.contains("outside the writable paths"),
+        "the refusal says where a target may come from: {}",
+        acted.text
     );
+    assert_eq!(acted.exit, Exit::Code(1), "and the call exited failing");
     assert!(
         logged.openings().is_empty(),
         "a target the ground refused never reaches the browser"
@@ -1269,21 +1308,204 @@ fn an_open_call_outside_the_ground_is_refused_and_nothing_is_handed_over() {
 }
 
 #[test]
-fn a_shell_given_no_opener_cannot_run_an_open_call() {
+fn an_open_call_a_shell_has_no_opener_for_is_refused_as_its_own_answer() {
     let ground = OpenGround::new();
     let target = ground.file("page.html");
 
-    let refused = ground
+    let acted = ground
         .shell()
         .execute(
             &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
             &mut Loaded::default(),
         )
-        .expect_err("nothing here can hand a target to a browser");
+        .expect("a refusal is the call's own answer and no error of the run");
+
+    assert_eq!(
+        acted.text,
+        "refused: this run was handed no opener, so no target can leave it; the front end \
+         supplies the program that opens one",
+        "the refusal names what the run is short of"
+    );
+    assert_eq!(acted.exit, Exit::Code(1), "and the call exited failing");
+}
+
+#[test]
+fn an_open_call_a_shell_stands_on_no_ground_for_is_refused_as_its_own_answer() {
+    let ground = OpenGround::new();
+    let shell = Shell::new(ground.boundary.clone(), &ground.temp, Catalog::default())
+        .opener(Some(Arc::new(Logged::default())));
+
+    let acted = shell
+        .execute(
+            &opening(r#"{"url":"https://localhost/notes"}"#),
+            &mut Loaded::default(),
+        )
+        .expect("a refusal is the call's own answer and no error of the run");
+
+    assert_eq!(
+        acted.text, "refused: this run stands on no ground to judge a target by",
+        "the refusal names what the run is short of"
+    );
+    assert_eq!(acted.exit, Exit::Code(1), "and the call exited failing");
+}
+
+#[test]
+fn an_opener_that_will_not_start_is_the_calls_answer_in_its_own_words() {
+    let ground = OpenGround::new();
+    let target = ground.file("page.html");
+    let shell = ground.shell().opener(Some(Arc::new(Broken)));
+
+    let acted = shell
+        .execute(
+            &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
+            &mut Loaded::default(),
+        )
+        .expect("an opener that will not start is the call's own answer");
+
+    assert_eq!(
+        acted.text, "cannot run /nonexistent/opener: no such file",
+        "the front end's words are the call's, with nothing of the core's put in front of them"
+    );
+    assert_eq!(acted.exit, Exit::Code(1), "and the call exited failing");
+}
+
+#[test]
+fn every_refusal_the_ground_makes_is_that_calls_answer() {
+    let ground = OpenGround::new();
+    let logged = Arc::new(Logged::default());
+    let shell = ground.shell().opener(Some(shared(&logged)));
+
+    let off_the_list = ground.inside("notes.exe");
+    let renamed = ground.link("alias.html", &off_the_list);
+    let beyond = ground.outside("handbook.html");
+    let leaking = ground.link("leak.html", &beyond);
+    let folder = ground.directory("pages.html");
+
+    for (arguments, needle) in [
+        (
+            String::from("not json at all"),
+            "not the JSON this tool takes",
+        ),
+        (String::from("{}"), "named no target"),
+        (
+            String::from(r#"{"url":"https://localhost/x","path":"a.html"}"#),
+            "named both",
+        ),
+        (
+            String::from(r#"{"url":"file:///etc/passwd"}"#),
+            "allowed schemes",
+        ),
+        (
+            String::from(r#"{"url":"https://example.com/page.html"}"#),
+            "example.com",
+        ),
+        (
+            String::from(r#"{"path":"notes.exe"}"#),
+            "allowed extensions",
+        ),
+        (
+            format!(r#"{{"path":"{}"}}"#, renamed.display()),
+            "resolves to",
+        ),
+        (
+            String::from(r#"{"path":"/etc/handbook.html"}"#),
+            "outside the writable paths",
+        ),
+        (
+            format!(r#"{{"path":"{}"}}"#, leaking.display()),
+            "resolves to",
+        ),
+        (
+            format!(r#"{{"path":"{}"}}"#, folder.display()),
+            "not a regular file",
+        ),
+        (
+            String::from(r#"{"path":"missing.html"}"#),
+            "cannot be resolved",
+        ),
+    ] {
+        let acted = shell
+            .execute(&opening(&arguments), &mut Loaded::default())
+            .unwrap_or_else(|refused| {
+                panic!("a refusal is the call's own answer, and `{arguments}` gave {refused}")
+            });
+
+        assert_eq!(
+            acted.exit,
+            Exit::Code(1),
+            "a refused call exited failing: {arguments}"
+        );
+        assert!(
+            acted.text.starts_with("refused: "),
+            "a refusal says so in its first words: {arguments}: {}",
+            acted.text
+        );
+        assert!(
+            acted.text.contains(needle),
+            "the refusal names what it refused, {needle:?}: {arguments}: {}",
+            acted.text
+        );
+    }
 
     assert!(
-        refused.to_string().contains("open") && refused.to_string().contains("opener"),
-        "the refusal names the tool and what the run is short of: {refused}"
+        logged.openings().is_empty(),
+        "no target any judgement refused ever reaches the browser"
+    );
+}
+
+#[test]
+fn a_run_whose_open_call_is_refused_answers_on() {
+    let ground = OpenGround::new();
+    let logged = Arc::new(Logged::default());
+    let model = Scripted::answering([
+        Reply::asking(
+            "opening it",
+            [Call::new(
+                "toolu_1",
+                "open",
+                r#"{"path":"/etc/handbook.html"}"#,
+            )],
+        ),
+        Reply::answer("I will keep to the workspace instead."),
+    ]);
+    let mut run = Run::new(
+        "open the handbook",
+        model,
+        ground.shell().opener(Some(shared(&logged))),
+    );
+
+    let state = run.drive(&mut Transcript::default());
+
+    assert_eq!(
+        state.stop(),
+        Some(&Stop::Final),
+        "a refused call is no reason for the run to end"
+    );
+    assert_eq!(
+        run.kept().text,
+        "I will keep to the workspace instead.",
+        "the run went on and answered"
+    );
+    let called = run
+        .history()
+        .first()
+        .expect("the run kept the turn that asked for the call");
+    assert_eq!(called.results.len(), 1, "the call has its one result");
+    assert!(
+        called.results[0]
+            .text
+            .contains("outside the writable paths"),
+        "the result carries the refusal's own words: {}",
+        called.results[0].text
+    );
+    assert_eq!(
+        called.results[0].exit,
+        Exit::Code(1),
+        "and says the call failed"
+    );
+    assert!(
+        logged.openings().is_empty(),
+        "nothing the ground refused reached the browser"
     );
 }
 
