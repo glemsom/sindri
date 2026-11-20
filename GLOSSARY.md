@@ -75,9 +75,18 @@ one and nothing here guesses, so a run with none named has a size and no share o
 _Avoid_: Context limit, token budget, max context
 
 **Status**:
-`idle`, `working`, `done`, `blocked`, `error`, with one coarse line of the run's own words — never
-the command, the prompt or the answer.
+The document a session publishes about its run: the phase, one redacted line of the run's own words,
+the turn the run is on, and the workspace's name. The line is never the command, the prompt or the
+answer. One is appended to `status.json` beside the transcript as the run goes, so the run of them
+reads back, and the same document is reported off the terminal, so a listener outside the frame reads
+it too. A report about a run held by a session, and never the run's own word about itself, which is
+**State**'s alone.
 _Avoid_: Progress, notice, indicator
+
+**Phase**:
+One of the four facts a **status** holds: `idle`, `working`, `done`, `blocked` or `error`. The five
+are the document's words, and none of them is the run's own word about itself, which is **State**'s.
+_Avoid_: Status, state, step
 
 ## Confinement
 
