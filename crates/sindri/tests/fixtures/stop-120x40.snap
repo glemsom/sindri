@@ -3,18 +3,18 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 stop at 120x40
-00 |─ prompt ───────────────────────────────────────────────────────────────────state     ✗ error                           | dim:86 err:7 plain:27
-01 |› where does rendering live?                                                                                            | plain:120
-02 |⋯ 1 call · 23 ms                                                            wire      anthropic                         | dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
-03 |│ The marker is a clock, so the row it heads is laid out again whenever the model     claude-sonnet-4-5-20250929        | dim:2 muted:73 plain:1 dim:10 plain:34
-04 |│ mark it wears moves, and a step that changes nothing costs nothing.       think     high                              | dim:2 muted:67 plain:7 dim:10 plain:34
-05 |✗ error 1.2s A run that stopped for a reason says the reason, and it says it                                            | err:1 plain:1 muted:10 plain:108
-06 |  twice: once in the marker beside the answer it ended on, and once in the  turns                               6 /  250| plain:76 dim:10 plain:34
-07 |  entry the record keeps where the run ended. A failure carries one line of ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
-08 |  the run's own words about it, and a final answer and a cancellation carry cache                                    88%| plain:76 dim:10 plain:34
-09 |  no line they do not have.                                                                                             | plain:120
-10 |✗ error                                                                     workspace …/git/sindri/.worktrees/46-rail   | err:1 plain:1 dim:5 plain:69 dim:10 plain:34
-11 |  the wire refused the request: 401 unauthorized                            branch    spec/1-capability                 | muted:48 plain:28 dim:10 plain:34
+00 |› where does rendering live?                                                state     ✗ error                           | plain:76 dim:10 err:7 plain:27
+01 |⋯ 1 call · 23 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
+02 |│ The marker is a clock, so the row it heads is laid out again whenever the wire      anthropic                         | dim:2 muted:73 plain:1 dim:10 plain:34
+03 |│ mark it wears moves, and a step that changes nothing costs nothing.       model     claude-sonnet-4-5-20250929        | dim:2 muted:67 plain:7 dim:10 plain:34
+04 |✗ error 1.2s A run that stopped for a reason says the reason, and it says itthink     high                              | err:1 plain:1 muted:10 plain:64 dim:10 plain:34
+05 |  twice: once in the marker beside the answer it ended on, and once in the                                              | plain:120
+06 |  entry the record keeps where the run ended. A failure carries one line of turns                               6 /  250| plain:76 dim:10 plain:34
+07 |  the run's own words about it, and a final answer and a cancellation carry ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+08 |  no line they do not have.                                                 cache                                    88%| plain:76 dim:10 plain:34
+09 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
+10 |  the wire refused the request: 401 unauthorized                            workspace …/git/sindri/.worktrees/46-rail   | muted:48 plain:28 dim:10 plain:34
+11 |                                                                            branch    spec/1-capability                 | plain:76 dim:10 plain:34
 12 |                                                                                                                        | plain:120
 13 |                                                                            skills                                     2| plain:76 dim:10 plain:34
 14 |                                                                                                                        | plain:120

@@ -3,11 +3,11 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 fold at 120x40
-00 |─ prompt ───────────────────────────────────────────────────────────────────wire      anthropic                         | dim:86 plain:34
-01 |› why does the retry test fail?                                             model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
-02 |⋯ 1 call · 1.8 s                                                            think     high                              | dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
-03 |  Three rows of the fold are the whole of it: the head, the count and the                                               | plain:120
-04 |  last.                                                                     turns                               6 /  250| plain:76 dim:10 plain:34
+00 |› why does the retry test fail?                                             wire      anthropic                         | plain:76 dim:10 plain:34
+01 |⋯ 1 call · 1.8 s                                                            model     claude-sonnet-4-5-20250929        | dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
+02 |  Three rows of the fold are the whole of it: the head, the count and the   think     high                              | plain:76 dim:10 plain:34
+03 |  last.                                                                                                                 | plain:120
+04 |                                                                            turns                               6 /  250| plain:76 dim:10 plain:34
 05 |                                                                            ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
 06 |                                                                            cache                                    88%| plain:76 dim:10 plain:34
 07 |                                                                                                                        | plain:120

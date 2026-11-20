@@ -5,7 +5,7 @@ expression: self.text(name)
 streaming at 120x40
 00 |  Each is laid out once and kept, so the whole history scrolled through     wire      anthropic                         | plain:76 dim:10 plain:34
 01 |  costs one layout per entry and scrolling it again costs none.             model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
-02 |─ prompt ───────────────────────────────────────────────────────────────────think     high                              | dim:86 plain:34
+02 |                                                                            think     high                              | plain:76 dim:10 plain:34
 03 |› what is the transcript's unit?                                                                                        | plain:120
 04 |⋯ 1 call · 9 ms                                                             turns                               6 /  250| dim:1 plain:1 dim:13 plain:61 dim:10 plain:34
 05 |  The transcript's unit is the entry. An entry never carries a formatted    ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
@@ -17,7 +17,7 @@ streaming at 120x40
 11 |  heading   │ in the answer's own gutter                                    skills                                     2| plain:11 dim:3 plain:62 dim:10 plain:34
 12 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 13 |  table     │ columns joined by a bar                                       sandbox   bwrap                             | plain:11 dim:3 plain:62 dim:10 plain:34
-14 |─ prompt ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+14 |                                                                                                                        | plain:120
 15 |› what does a row of the band say?                                          session   9f2c7a41                          | plain:76 dim:10 plain:34
 16 |⋯ 1 call · 31 ms                                                            temp      …/sindri/sessions/9f2c7a41/tmp    | dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
 17 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
