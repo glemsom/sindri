@@ -632,25 +632,35 @@ impl Shell {
         })
     }
 
+    /// A refusal is `Ok`: the call failed and the run did not.
     fn open(&self, arguments: &str) -> Result<Acted, Redacted> {
-        let opener = self.opener.as_ref().ok_or_else(|| {
-            SecretSet::default().redact(format!(
-                "this run cannot run an `{OPEN}` call: it was handed no opener to give a target to"
-            ))
-        })?;
-        let ground = self.ground.as_ref().ok_or_else(|| {
-            SecretSet::default().redact(format!(
-                "this run cannot run an `{OPEN}` call: it stands on no ground to judge a target by"
-            ))
-        })?;
-        let opening = ground
-            .judge(arguments)
-            .map_err(|refusal| SecretSet::default().redact(refusal.to_string()))?;
-
         let started = Instant::now();
-        opener
-            .open(&opening)
-            .map_err(|reason| SecretSet::default().redact(reason))?;
+        let refused = |words: String| Acted {
+            text: SecretSet::default().redact(words).to_string(),
+            bytes: 0,
+            elapsed: started.elapsed(),
+            exit: Exit::Code(1),
+        };
+
+        let Some(ground) = self.ground.as_ref() else {
+            return Ok(refused(String::from(
+                "refused: this run stands on no ground to judge a target by",
+            )));
+        };
+        let opening = match ground.judge(arguments) {
+            Ok(opening) => opening,
+            Err(refusal) => return Ok(refused(refusal.to_string())),
+        };
+        let Some(opener) = self.opener.as_ref() else {
+            return Ok(refused(String::from(
+                "refused: this run was handed no opener, so no target can leave it; the front end \
+                 supplies the program that opens one",
+            )));
+        };
+        if let Err(reason) = opener.open(&opening) {
+            return Ok(refused(reason));
+        }
+
         Ok(Acted {
             text: format!("opened {opening}"),
             bytes: 0,
