@@ -266,12 +266,6 @@ pushed on the terminal's own stack and popped first on every way out, and a term
 is handed the same frame and the same keys.
 _Avoid_: Keyboard enhancement, CSI u, key encoding
 
-**Focus**:
-Whether the terminal says this window is the one being read: asked for when the screen is taken and
-given up on the way out, and the one fact the frame draws from it — the accent edge recedes while
-nobody is reading and returns when they are. A terminal that reports nothing is being read.
-_Avoid_: Active, selected, current window
-
 **Pointer**:
 The wheel's notch and the cell a press landed on. A launch asks whether its terminal reports one when
 it takes the screen, and a terminal nobody can vouch for is handed a frame that takes none. Where it
@@ -291,9 +285,12 @@ _Avoid_: Block (a caret is no cell), insertion point
 **Terminal capabilities**:
 What the terminal a frame draws on can do — the cell it measures a picture against, the colours it
 holds, whether it draws text at more than one cell, whether it reports a **pointer**, whether it
-places pictures, and whether Sindri's **face** is drawn over the rail. Probed once before the first
-frame and handed to the frame whole; a terminal that reports nothing is drawn in the cells one that
-reports everything is, minus the facts it does not have.
+places pictures, whether this window is the one being read, which is **Focus**, and whether Sindri's
+**face** is drawn over the rail. Probed once before the first frame and handed to the frame whole; a
+terminal that reports nothing is drawn in the cells one that reports everything is, minus the facts
+it does not have. **Focus** is asked for when the screen is taken and given up on the way out, and it
+is one fact the frame draws from rather than a behaviour: the accent edge recedes while nobody is
+reading and returns when they are, and a terminal that reports nothing is being read.
 _Avoid_: Terminal features, environment, detection, caps
 
 **Frame facts**: the workspace and the ground it is judged against, the home the skills are read from,
