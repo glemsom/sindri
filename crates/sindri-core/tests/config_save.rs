@@ -854,3 +854,33 @@ fn a_word_a_key_cannot_hold_is_refused_naming_that_key() {
         );
     }
 }
+
+#[test]
+fn the_mask_a_frame_shows_is_no_word_a_secret_can_hold() {
+    let field = Config::field("api_key").expect("the schema names the key a secret is set under");
+    let mask = field.shown(&every_key_set());
+
+    let error = field
+        .read(&mask)
+        .expect_err("a row of bullets saved as a key would be a key of bullets");
+
+    assert!(
+        error.to_string().contains("api_key"),
+        "the refusal names the key a reader has to go and fix, and it says: {error}"
+    );
+}
+
+#[test]
+fn a_key_the_table_does_not_hold_is_refused_even_when_the_visit_emptied_it() {
+    let home = config_home(HAND_WRITTEN);
+    let path = file_in(&home);
+
+    let error = Config::save_touched_to(&path, &touched(&[("yolo_unsafe", "")]))
+        .expect_err("the escape hatch is no key of the table, so no visit can clear it");
+
+    assert!(
+        error.to_string().contains("yolo_unsafe"),
+        "the refusal names the key the table does not hold, and it says: {error}"
+    );
+    assert_eq!(read(&path), HAND_WRITTEN, "and nothing was written");
+}

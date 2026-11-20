@@ -36,7 +36,7 @@ pub struct Config {
 }
 
 type Shown = fn(&Config) -> String;
-type Reading = fn(&'static str, &str) -> Result<Config, ConfigError>;
+type Reading = fn(&'static str, &mut Config, &str) -> Result<(), ConfigError>;
 type Writing = fn(&'static str, &Config, &mut DocumentMut) -> Result<(), ConfigError>;
 
 #[derive(Debug)]
@@ -82,12 +82,14 @@ impl Field {
         (self.shown)(config)
     }
 
-    /// The config a reader's text names for this key alone, or the refusal that names this key.
+    /// The config a reader's words name for this key alone, every other key left unset.
     pub fn read(&self, text: &str) -> Result<Config, ConfigError> {
-        (self.reading)(self.name, text)
+        let mut config = Config::default();
+        (self.reading)(self.name, &mut config, text)?;
+        Ok(config)
     }
 
-    /// Writes this key into the document, or leaves the document untouched when it holds no value.
+    /// Leaves the document untouched when the config names no value for this key.
     pub fn write(&self, config: &Config, document: &mut DocumentMut) -> Result<(), ConfigError> {
         (self.writing)(self.name, config, document)
     }
@@ -98,46 +100,38 @@ impl Config {
         Field::typed(
             "provider",
             |config| word_or_empty(config.provider.map(Wire::word)),
-            |key, text| {
-                Ok(Config {
-                    provider: Some(as_wire(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.provider = Some(as_wire(key, text)?);
+                Ok(())
             },
-            |key, config, document| write_word(key, config.provider.map(Wire::word), document),
+            |key, config, document| write_value(key, config.provider.map(Wire::word), document),
         ),
         Field::typed(
             "model",
             |config| string_or_empty(&config.model),
-            |_, text| {
-                Ok(Config {
-                    model: Some(text.to_owned()),
-                    ..Config::default()
-                })
+            |_, config, text| {
+                config.model = Some(text.to_owned());
+                Ok(())
             },
-            |key, config, document| write_words(key, config.model.as_ref(), document),
+            |key, config, document| write_text(key, config.model.as_ref(), document),
         ),
         Field::typed(
             "route",
             |config| word_or_empty(config.route.map(Route::word)),
-            |key, text| {
-                Ok(Config {
-                    route: Some(as_route(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.route = Some(as_route(key, text)?);
+                Ok(())
             },
-            |key, config, document| write_word(key, config.route.map(Route::word), document),
+            |key, config, document| write_value(key, config.route.map(Route::word), document),
         ),
         Field::typed(
             "base_url",
             |config| string_or_empty(&config.base_url),
-            |_, text| {
-                Ok(Config {
-                    base_url: Some(text.to_owned()),
-                    ..Config::default()
-                })
+            |_, config, text| {
+                config.base_url = Some(text.to_owned());
+                Ok(())
             },
-            |key, config, document| write_words(key, config.base_url.as_ref(), document),
+            |key, config, document| write_text(key, config.base_url.as_ref(), document),
         ),
         Field::typed(
             "api_key",
@@ -148,24 +142,20 @@ impl Config {
                     String::new()
                 }
             },
-            |_, text| {
-                Ok(Config {
-                    api_key: Some(text.to_owned()),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.api_key = Some(secret(key, text)?);
+                Ok(())
             },
-            |key, config, document| write_words(key, config.api_key.as_ref(), document),
+            |key, config, document| write_text(key, config.api_key.as_ref(), document),
         ),
         Field::switched(
             "thinking",
             |config| on_or_empty(config.thinking),
-            |key, text| {
-                Ok(Config {
-                    thinking: Some(parsed(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.thinking = Some(parsed(key, text)?);
+                Ok(())
             },
-            |key, config, document| write_switch(key, config.thinking, document),
+            |key, config, document| write_value(key, config.thinking, document),
         ),
         Field::typed(
             "extra_writable_paths",
@@ -177,13 +167,10 @@ impl Config {
                     .collect::<Vec<String>>()
                     .join(LIST_SEPARATOR)
             },
-            |_, text| {
-                Ok(Config {
-                    extra_writable_paths: Some(
-                        listed(text).into_iter().map(PathBuf::from).collect(),
-                    ),
-                    ..Config::default()
-                })
+            |_, config, text| {
+                config.extra_writable_paths =
+                    Some(listed(text).into_iter().map(PathBuf::from).collect());
+                Ok(())
             },
             |key, config, document| {
                 write_paths(key, config.extra_writable_paths.as_deref(), document)
@@ -198,101 +185,83 @@ impl Config {
                     .unwrap_or_default()
                     .join(LIST_SEPARATOR)
             },
-            |key, text| {
-                Ok(Config {
-                    extra_headers: Some(headers_of(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.extra_headers = Some(headers_of(key, text)?);
+                Ok(())
             },
             |key, config, document| write_headers(key, config.extra_headers.as_deref(), document),
         ),
         Field::typed(
             "context_window",
             |config| number_or_empty(config.context_window),
-            |key, text| {
-                Ok(Config {
-                    context_window: Some(nonzero_window(key, parsed(key, text)?)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.context_window = Some(nonzero_window(key, parsed(key, text)?)?);
+                Ok(())
             },
             |key, config, document| write_window(key, config.context_window, document),
         ),
         Field::typed(
             "max_turns",
             |config| number_or_empty(config.max_turns),
-            |key, text| {
-                Ok(Config {
-                    max_turns: Some(parsed(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.max_turns = Some(parsed(key, text)?);
+                Ok(())
             },
             |key, config, document| write_number(key, config.max_turns.map(u64::from), document),
         ),
         Field::typed(
             "timeout",
             |config| number_or_empty(config.timeout),
-            |key, text| {
-                Ok(Config {
-                    timeout: Some(parsed(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.timeout = Some(parsed(key, text)?);
+                Ok(())
             },
             |key, config, document| write_number(key, config.timeout, document),
         ),
         Field::typed(
             "command_budget_ms",
             |config| number_or_empty(config.command_budget_ms),
-            |key, text| {
-                Ok(Config {
-                    command_budget_ms: Some(parsed(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.command_budget_ms = Some(parsed(key, text)?);
+                Ok(())
             },
             |key, config, document| write_number(key, config.command_budget_ms, document),
         ),
         Field::typed(
             "output_budget_bytes",
             |config| number_or_empty(config.output_budget_bytes),
-            |key, text| {
-                Ok(Config {
-                    output_budget_bytes: Some(parsed(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.output_budget_bytes = Some(parsed(key, text)?);
+                Ok(())
             },
             |key, config, document| write_number(key, config.output_budget_bytes, document),
         ),
         Field::switched(
             "status",
             |config| on_or_empty(config.status),
-            |key, text| {
-                Ok(Config {
-                    status: Some(parsed(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.status = Some(parsed(key, text)?);
+                Ok(())
             },
-            |key, config, document| write_switch(key, config.status, document),
+            |key, config, document| write_value(key, config.status, document),
         ),
         Field::switched(
             "face",
             |config| on_or_empty(config.face),
-            |key, text| {
-                Ok(Config {
-                    face: Some(parsed(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.face = Some(parsed(key, text)?);
+                Ok(())
             },
-            |key, config, document| write_switch(key, config.face, document),
+            |key, config, document| write_value(key, config.face, document),
         ),
         Field::switched(
             "ssh_agent",
             |config| on_or_empty(config.ssh_agent),
-            |key, text| {
-                Ok(Config {
-                    ssh_agent: Some(parsed(key, text)?),
-                    ..Config::default()
-                })
+            |key, config, text| {
+                config.ssh_agent = Some(parsed(key, text)?);
+                Ok(())
             },
-            |key, config, document| write_switch(key, config.ssh_agent, document),
+            |key, config, document| write_value(key, config.ssh_agent, document),
         ),
     ];
 
@@ -573,16 +542,16 @@ impl Touched {
         let mut written = Config::default();
         let mut emptied: Vec<&'static str> = Vec::new();
         for (key, held) in &self.keys {
-            let text = held.trim();
-            if text.is_empty() {
-                emptied.push(key);
-                continue;
-            }
             let field = Config::field(key).ok_or_else(|| ConfigError::BadValue {
                 origin: (*key).to_owned(),
                 reason: String::from("not a key of the config file"),
             })?;
-            written = written.above(field.read(text)?);
+            let text = held.trim();
+            if text.is_empty() {
+                emptied.push(field.name);
+                continue;
+            }
+            written = field.read(text)?.above(written);
         }
         Ok((written, emptied))
     }
@@ -599,6 +568,15 @@ fn headers_of(key: &str, text: &str) -> Result<Vec<String>, ConfigError> {
     let headers = listed(text);
     header_shape(key, &headers)?;
     Ok(headers)
+}
+fn secret(key: &str, text: &str) -> Result<String, ConfigError> {
+    if text == MASK {
+        return Err(ConfigError::BadValue {
+            origin: key.to_owned(),
+            reason: String::from("the mask a frame shows for a secret is not a secret"),
+        });
+    }
+    Ok(text.to_owned())
 }
 fn string_or_empty(value: &Option<String>) -> String {
     value.clone().unwrap_or_default()
@@ -633,33 +611,23 @@ fn write_string(document: &mut DocumentMut, key: &str, value: &str) {
         write_key(document, key, Value::from(value));
     }
 }
-fn write_word(
+fn write_value(
     key: &str,
-    word: Option<&'static str>,
+    value: Option<impl Into<Value>>,
     document: &mut DocumentMut,
 ) -> Result<(), ConfigError> {
-    if let Some(word) = word {
-        write_key(document, key, Value::from(word));
+    if let Some(value) = value {
+        write_key(document, key, value.into());
     }
     Ok(())
 }
-fn write_words(
+fn write_text(
     key: &str,
     value: Option<&String>,
     document: &mut DocumentMut,
 ) -> Result<(), ConfigError> {
     if let Some(value) = value {
         write_string(document, key, value);
-    }
-    Ok(())
-}
-fn write_switch(
-    key: &str,
-    value: Option<bool>,
-    document: &mut DocumentMut,
-) -> Result<(), ConfigError> {
-    if let Some(value) = value {
-        write_key(document, key, Value::from(value));
     }
     Ok(())
 }
