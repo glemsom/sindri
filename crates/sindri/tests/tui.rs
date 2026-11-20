@@ -2,11 +2,14 @@
 //! and the bytes a key makes it give back — are read off the master. Every child gets `env_clear`
 //! and homes of its own, so nothing of this process's environment, least of all a real key, reaches it.
 
+mod frame; // one paint-and-read for every test
+
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -27,16 +30,16 @@ use sindri::plane::SEAM;
 /// because a test that is merely slow must not read as a program that never drew.
 const PATIENCE: Duration = Duration::from_secs(10);
 
+/// The size the pty is told it has, and so the size every frame here is read at: the two cannot
+/// disagree about what a launch drew.
+const COLS: u16 = 120;
+const ROWS: u16 = 40;
+
 const ANSWER: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
 
 const ANSWER_CACHED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream_cached.sse");
-
-/// The footer's first hint, as the glyphs a terminal paints and as the bytes that carry them: a key
-/// and the word that says what it does are two looks, so the escape between them stands inside the
-/// row's bytes and not inside the glyphs it is read back as.
-const FIRST_HINT: &str = "Enter send";
 
 const FIRST_KEY: &[u8] = b"Enter";
 
@@ -322,8 +325,8 @@ impl Pty {
             // fields is the shape `the_cell_size_is_asked_of_the_terminal_once` needs, and it
             // is the common case — most terminals fill neither field.
             Winsize {
-                ws_row: 40,
-                ws_col: 120,
+                ws_row: ROWS,
+                ws_col: COLS,
                 ws_xpixel: 0,
                 ws_ypixel: 0,
             },
@@ -477,6 +480,14 @@ impl Session {
 
     fn starting(mut command: Command) -> (Session, Pty, Drawn) {
         let pty = Pty::open();
+        // A child sharing this session would ask a controlling terminal for a size and paint a
+        // frame the pty never heard of.
+        unsafe {
+            command.pre_exec(|| {
+                rustix::process::setsid().map_err(std::io::Error::from)?;
+                Ok(())
+            });
+        }
         let child = command
             .stdin(Stdio::from(pty.child_end()))
             .stdout(Stdio::from(pty.child_end()))
@@ -1014,184 +1025,39 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
     );
 }
 
-/// A frame's bytes, read the way a terminal reads them: where the cursor was moved to, and which
-/// glyph was painted there. A frame writes its geometry down nowhere but its escape sequences, so
-/// this is how a test reads a row of it back.
-enum Painted {
-    Moved(u16, u16),
-    Glyph(char),
-    /// The terminal's own cursor shown or hidden, which is the mark a placing frame leaves.
-    Shown(bool),
-}
-
-fn painted(drawn: &str) -> Vec<Painted> {
-    let mut painted = Vec::new();
-    let mut rest = drawn;
-    while let Some(glyph) = rest.chars().next() {
-        if glyph == '\u{1b}'
-            && let Some(sequence) = sequence(rest)
-        {
-            if let Some((row, column)) = sequence.move_to {
-                painted.push(Painted::Moved(row, column));
-            }
-            if let Some(shown) = sequence.shown {
-                painted.push(Painted::Shown(shown));
-            }
-            rest = &rest[sequence.taken..];
-            continue;
-        }
-        painted.push(Painted::Glyph(glyph));
-        rest = &rest[glyph.len_utf8()..];
-    }
-    painted
-}
-
-struct Sequence {
-    move_to: Option<(u16, u16)>,
-    /// Whether the sequence shows the terminal's own cursor or hides it, and none for a sequence
-    /// that says nothing about it.
-    shown: Option<bool>,
-    taken: usize,
-}
-
-/// How much of a sequence a terminal swallows and paints no cell of: an `OSC`, `DCS`, `APC`, `PM` or
-/// `SOS` hands over words of its own, closing on `ST` and for `OSC` alone on `BEL`. One still open is
-/// held to the end of what was drawn, so a document read in halves puts no word in a row.
-fn swallowed(rest: &str) -> Option<usize> {
-    let introducer = rest.chars().next()?;
-    let bel = introducer == ']';
-    if !bel && !matches!(introducer, 'P' | '_' | '^' | 'X') {
-        return None;
-    }
-    let words = &rest[introducer.len_utf8()..];
-    let opened = introducer.len_utf8();
-    let closing = words.find(|glyph: char| glyph == '\u{1b}' || (bel && glyph == '\u{7}'));
-    Some(match closing {
-        Some(at) if words[at..].starts_with('\u{7}') => opened + at + 1,
-        Some(at) if words[at..].starts_with("\u{1b}\\") => opened + at + 2,
-        _ => opened + words.len(),
-    })
-}
-
-fn sequence(drawn: &str) -> Option<Sequence> {
-    let rest = drawn.strip_prefix('\u{1b}')?;
-    let Some(params) = rest.strip_prefix('[') else {
-        if let Some(taken) = swallowed(rest) {
-            return Some(Sequence {
-                move_to: None,
-                shown: None,
-                taken: taken + 1,
-            });
-        }
-        // `ESC O A` and the single-shift keys: no move, and as long as its last byte.
-        let taken = 1 + rest.chars().next().map_or(0, char::len_utf8);
-        return Some(Sequence {
-            move_to: None,
-            shown: None,
-            taken,
-        });
-    };
-    let end = params.find(|glyph: char| ('\u{40}'..='\u{7e}').contains(&glyph))?;
-    let last = params[end..].chars().next()?;
-    let taken = 2 + end + last.len_utf8();
-    let move_to = (last == 'H')
-        .then(|| {
-            let (row, column) = params[..end].split_once(';')?;
-            Some((row.parse().ok()?, column.parse().ok()?))
-        })
-        .flatten();
-    let shown = match (last, &params[..end]) {
-        ('h', "?25") => Some(true),
-        ('l', "?25") => Some(false),
-        _ => None,
-    };
-    Some(Sequence {
-        move_to,
-        shown,
-        taken,
-    })
-}
-
-/// One run of glyphs the stream wrote without the cursor leaving them. A frame paints only the cells
-/// that changed, so a picture is replayed from these rather than read off the bytes that carried it.
-struct Run {
-    row: u16,
-    column: u16,
-    glyphs: String,
-}
-
-fn runs(drawn: &str) -> Vec<Run> {
-    let (mut row, mut column) = (0u16, 0u16);
-    let mut moved = false;
-    let mut runs: Vec<Run> = Vec::new();
-    for mark in painted(drawn) {
-        match mark {
-            Painted::Moved(at, col) => {
-                row = at;
-                column = col;
-                moved = true;
-            }
-            Painted::Glyph(glyph) => {
-                match runs.last_mut() {
-                    Some(run) if !moved => run.glyphs.push(glyph),
-                    _ => runs.push(Run {
-                        row,
-                        column,
-                        glyphs: glyph.to_string(),
-                    }),
-                }
-                moved = false;
-                column = column.saturating_add(1);
-            }
-            Painted::Shown(_) => {}
-        }
-    }
-    runs
-}
-
 /// The rows the composer's band took in the last frame that painted it: the gap between the row of
-/// its corner and the row of the footer's first hint. The corner is the one drawn in the frame's
-/// first column: a rail and a transcript both draw rules of their own after the composer's.
+/// its corner and the footer's, which is the frame's last. The corner is the one drawn in the
+/// frame's first column: a rail and a transcript both draw rules of their own.
 fn composer_rows(drawn: &str) -> Option<u16> {
-    let (mut edge, mut footer) = (None, None);
-    for run in runs(drawn) {
-        if run.glyphs.starts_with('┌') && run.column == 1 {
-            edge = Some(run.row);
-        }
-        if run.glyphs.contains(FIRST_HINT) {
-            footer = Some(run.row);
-        }
-    }
-    Some(footer? - edge?)
+    let corner = frame::read(drawn, COLS, ROWS)
+        .rows()
+        .iter()
+        .rposition(|row| row.starts_with('\u{250c}'))?;
+    usize::from(ROWS)
+        .checked_sub(1)?
+        .checked_sub(corner)
+        .and_then(|band| u16::try_from(band).ok())
 }
 
+/// The last row of the screen that says `needle`, counted from the frame's first row.
 fn row_of(drawn: &str, needle: &str) -> Option<u16> {
-    runs(drawn)
+    frame::read(drawn, COLS, ROWS)
+        .rows()
         .into_iter()
-        .rfind(|run| run.glyphs.contains(needle))
-        .map(|run| run.row)
+        .rposition(|row| row.contains(needle))
+        .and_then(|at| u16::try_from(at).ok())
 }
 
-/// The frame as the terminal holds it after every frame drawn so far: each row that has a glyph on it,
-/// and the last write to a cell winning over the ones before it.
+/// The screen the terminal holds after every frame drawn so far: each row that has a glyph on it,
+/// cut at the trailing blanks the screen pads it with.
 fn picture(drawn: &str) -> BTreeMap<u16, String> {
-    let mut rows: BTreeMap<u16, BTreeMap<u16, char>> = BTreeMap::new();
-    for run in runs(drawn) {
-        let cells = rows.entry(run.row).or_default();
-        let mut column = run.column;
-        for glyph in run.glyphs.chars() {
-            cells.insert(column, glyph);
-            column = column.saturating_add(1);
-        }
-    }
-    rows.into_iter()
-        .map(|(row, cells)| {
-            let first = *cells.keys().next().expect("a row holds a glyph");
-            let last = *cells.keys().next_back().expect("a row holds a glyph");
-            let text = (first..=last)
-                .map(|column| cells.get(&column).copied().unwrap_or(' '))
-                .collect();
-            (row, text)
+    frame::read(drawn, COLS, ROWS)
+        .rows()
+        .into_iter()
+        .enumerate()
+        .filter_map(|(row, glyphs)| {
+            let glyphs = glyphs.trim_end();
+            (!glyphs.is_empty()).then(|| (u16::try_from(row).expect("a row"), glyphs.to_owned()))
         })
         .collect()
 }
@@ -1224,33 +1090,56 @@ fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
     })
 }
 
-/// The cell the last frame placed the terminal's own cursor in: a show, and then the move that
-/// follows it with no glyph painted between them, which is how a frame that places a cursor ends.
+/// The cell the terminal's own cursor stands in after the last frame, and none where the frame hid
+/// it: a frame that places a caret shows it in the cell it places it in.
 fn placed(drawn: &str) -> Option<(u16, u16)> {
-    let (mut shown, mut placed) = (false, None);
-    for mark in painted(drawn) {
-        match mark {
-            Painted::Shown(on) => shown = on,
-            Painted::Moved(row, column) if shown => {
-                placed = Some((row, column));
-                shown = false;
-            }
-            Painted::Moved(..) => {}
-            Painted::Glyph(_) => shown = false,
-        }
-    }
-    placed
+    frame::read(drawn, COLS, ROWS).caret()
 }
 
-/// Whether the bytes ask the terminal for a cursor shape or a cursor colour: the one thing a launch
-/// never says, because the shape and the colour of its cursor are the reader's to choose.
+/// Whether the bytes ask the terminal for a cursor colour, `OSC 12`, or one of the seven shapes
+/// `DECSCUSR` names: the one thing a launch never says, the shape and the colour of the cursor being
+/// the reader's to choose.
 fn asked_a_cursor(drawn: &str) -> bool {
     drawn.contains("\u{1b}]12;")
-        || drawn.match_indices("\u{1b}[").any(|(at, _)| {
-            let params = &drawn[at + 2..];
-            let end = params.find(|glyph: char| ('\u{40}'..='\u{7e}').contains(&glyph));
-            end.is_some_and(|end| params.as_bytes()[end] == b'q')
+        || (0..=6).any(|shape| {
+            drawn.contains(&format!("\u{1b}[{shape} q")) || drawn.contains("\u{1b}[ q")
         })
+}
+
+/// The one claim no painted frame can make: the cells a launch's own bytes leave, glyph by glyph.
+#[test]
+fn the_boot_frame_is_read_as_the_cells_and_the_caret_its_terminal_holds() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    let boot = frame::read(&drawn.text(), COLS, ROWS);
+    let corner = (0..ROWS)
+        .find(|y| boot.glyph(0, *y) == '\u{250c}')
+        .expect("the composer's band draws its corner in the frame's first column");
+    assert_eq!(
+        (boot.glyph(1, corner + 1), boot.glyph(GUTTER, corner + 1)),
+        ('\u{203a}', 'w'),
+        "the draft's row carries the sigil one column in and the placeholder's first glyph at \
+         the gutter, as cells and not as the escapes that wrote them: {:?}",
+        boot.row(corner + 1)
+    );
+    assert_eq!(
+        boot.caret(),
+        Some((corner + 1, GUTTER)),
+        "and the terminal's own caret stands in the cell that glyph is drawn at"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
 }
 
 #[test]
@@ -1281,7 +1170,7 @@ fn the_launch_places_the_terminals_own_caret_on_the_cell_the_draft_waits_in() {
         .expect("the draft's glyphs are drawn on its row");
     assert_eq!(
         placed(&frame),
-        Some((row, GUTTER + 8)),
+        Some((row, GUTTER + 7)),
         "the terminal's own caret is placed one column past the seven glyphs typed, on the \
          draft's own row: {frame:?}"
     );
@@ -1312,13 +1201,13 @@ fn a_typed_glyph_and_an_erasure_move_the_placed_caret() {
 
     pty.type_bytes(b"abc");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 4)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 3)),
         "three glyphs typed wait the caret one column past the last: {:?}",
         drawn.text()
     );
     pty.type_bytes(&[0x7f]);
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 3)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 2)),
         "an erased glyph takes the caret back with it: {:?}",
         drawn.text()
     );
@@ -1344,7 +1233,7 @@ fn a_move_along_the_draft_moves_the_placed_caret_and_no_glyph() {
 
     pty.type_bytes(b"abc");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 4)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 3)),
         "three glyphs typed wait the caret one column past the last: {:?}",
         drawn.text()
     );
@@ -1352,7 +1241,7 @@ fn a_move_along_the_draft_moves_the_placed_caret_and_no_glyph() {
 
     pty.type_bytes(b"\x1b[D");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 3)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 2)),
         "a step back along the draft takes the caret back over a glyph: {:?}",
         drawn.text()
     );
@@ -1429,22 +1318,11 @@ fn a_card_that_takes_a_query_places_the_caret_past_the_glyphs_typed_at_it() {
         drawn.text()
     );
     let opened = drawn.text();
-    let query = row_of(&opened, "query: ").expect("the card draws the row its query is typed at");
-    let (row, column) = placed(&opened).expect("a card that takes a query places the caret in it");
-    let words = runs(&opened)
-        .into_iter()
-        .find(|run| run.glyphs.contains("query: "))
-        .expect("the card draws the words its query is typed after");
-    let at = words
-        .glyphs
-        .find("query: ")
-        .expect("the words open the run they are drawn in");
+    let (query, at) = frame::read(&opened, COLS, ROWS).drawn_at("query: ");
+    let column = at + pen::cells("query: ");
     assert_eq!(
-        (row, column),
-        (
-            words.row,
-            words.column + pen::cells(&words.glyphs[..at]) + pen::cells("query: ")
-        ),
+        placed(&opened),
+        Some((query, column)),
         "the caret waits on the row the query is typed at, one column past the words `query: `: \
          {opened:?}"
     );
@@ -1502,19 +1380,10 @@ fn the_placed_caret_follows_the_row_the_draft_window_scrolls_to() {
         drawn.text()
     );
     let frame = drawn.text();
-    let last = runs(&frame)
-        .into_iter()
-        .rfind(|run| run.glyphs.contains("line nine"))
-        .expect("the last line of the draft is drawn");
-    let words = pen::cells(
-        &last.glyphs[..last
-            .glyphs
-            .find("line nine")
-            .expect("the words of the last line")],
-    );
+    let (row, column) = frame::read(&frame, COLS, ROWS).drawn_at("line nine");
     assert_eq!(
         placed(&frame),
-        Some((last.row, last.column + words + 9)),
+        Some((row, column + 9)),
         "and the caret stands one column past the words of that last line, on the row they are \
          drawn on: {frame:?}"
     );
@@ -1538,15 +1407,16 @@ fn a_caret_at_the_boxes_right_margin_waits_on_that_column() {
         drawn.text()
     );
 
-    let edge = runs(&drawn.text())
-        .into_iter()
-        .find(|run| run.glyphs.starts_with('\u{250c}'))
+    let boot = frame::read(&drawn.text(), COLS, ROWS);
+    let corner = (0..ROWS)
+        .find(|y| boot.glyph(0, *y) == '\u{250c}')
         .expect("the box's edge is drawn on the boot frame");
-    let upright =
-        edge.column + u16::try_from(edge.glyphs.chars().count()).expect("a count of glyphs") - 1;
-    // A draft as wide as the box's room: the box less its two uprights and the two cells the gutter
-    // is set from.
-    let room = upright - pen::cells("  ") - 2;
+    let upright = boot
+        .column_of(corner, '\u{2510}')
+        .expect("the box's edge is closed by its right upright");
+    // A draft as wide as the room the box leaves it: from the gutter the draft is set in to the
+    // cell just inside the right upright.
+    let room = upright - GUTTER;
     let draft = format!("\u{1b}[200~{}\u{1b}[201~", "x".repeat(usize::from(room)));
     pty.type_bytes(draft.as_bytes());
 
@@ -1726,7 +1596,7 @@ fn a_key_the_protocol_reports_by_name_is_the_key_the_terminal_speaks() {
 
     pty.type_bytes(b"abc");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 4)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 3)),
         "three glyphs typed, so the caret waits one column past the last: {:?}",
         drawn.text()
     );
@@ -1873,7 +1743,7 @@ fn ctrl_c_when_idle_clears_the_draft_and_leaves_the_launch_running() {
     );
     pty.type_bytes(b"a draft nobody sent");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == 20 + GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == 19 + GUTTER)),
         "nineteen glyphs typed, so the caret waits one column past the last: {:?}",
         drawn.text()
     );
@@ -2006,16 +1876,15 @@ fn recorded(state: &std::path::Path, needle: &str) -> bool {
 /// sigil and the blank after it.
 const GUTTER: u16 = 3;
 
-/// The column an empty draft's caret waits in: the placeholder's first glyph, one past the gutter's
-/// blank cell.
-const EMPTY_CARET: u16 = GUTTER + 1;
+/// The cell an empty draft's caret waits in: the placeholder's first glyph, at the gutter's edge.
+const EMPTY_CARET: u16 = GUTTER;
 
 /// Types a draft and sends it, and waits until the run it started has a request in flight. The caret
 /// is what the draft is waited on and not the words: a glyph typed is a glyph painted, so a caret
 /// past the last of them is the one drawing that says the whole draft is in the box.
 fn ask_words(pty: &mut Pty, drawn: &Drawn, wire: &Wire, words: &str) {
     pty.type_bytes(words.as_bytes());
-    let typed = pen::cells(words) + 1 + GUTTER;
+    let typed = pen::cells(words) + GUTTER;
     assert!(
         drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == typed)),
         "{words:?} typed, so the caret waits one column past its last glyph: {:?}",
@@ -2056,7 +1925,7 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
 
     pty.type_bytes(b"a second thought");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == 17 + GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == 16 + GUTTER)),
         "sixteen glyphs of a new draft, and the caret one column past them: {:?}",
         drawn.text()
     );
@@ -2065,7 +1934,7 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
 
     thread::sleep(Duration::from_millis(300));
     assert!(
-        placed(&drawn.text()).is_some_and(|(_, column)| column == 17 + GUTTER),
+        placed(&drawn.text()).is_some_and(|(_, column)| column == 16 + GUTTER),
         "the draft a cancel found is still in the composer: {:?}",
         drawn.text()
     );
@@ -2445,7 +2314,7 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
 /// while a run is live leaves when it goes into the queue instead of dying with the draft.
 fn queue(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
     pty.type_bytes(prompt.as_bytes());
-    let typed = pen::cells(prompt) + 1 + GUTTER;
+    let typed = pen::cells(prompt) + GUTTER;
     assert!(
         drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == typed)),
         "{prompt:?} is in the box, the caret one column past its last glyph: {:?}",
@@ -2561,7 +2430,7 @@ fn ctrl_x_drops_the_newest_prompt_the_queue_holds() {
     pty.type_bytes(&[0x18]);
     pty.type_bytes(b"x");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 2)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
         "the glyph typed after Ctrl-X is in the draft, so the drop has happened: {:?}",
         drawn.text()
     );
@@ -2603,7 +2472,7 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
 
     pty.type_bytes(b"\x1b[A");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == 11 + GUTTER)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == 10 + GUTTER)),
         "the recalled prompt is the whole draft again: {:?}",
         drawn.text()
     );
@@ -2633,7 +2502,7 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
 /// send, so a command line is only sent by letting the draft land first.
 fn command(pty: &mut Pty, drawn: &Drawn, line: &str) {
     pty.type_bytes(line.as_bytes());
-    let column = pen::cells(line) + 1 + GUTTER;
+    let column = pen::cells(line) + GUTTER;
     assert!(
         drawn.wait_until(|frame| placed(frame).is_some_and(|(_, at)| at == column)),
         "the command line is the draft before it is sent, so the caret waits one column \
@@ -3427,7 +3296,7 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
     // the cancel was answered, because the loop answers one key before the next.
     pty.type_bytes(b"x");
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 2)),
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
         "the cancel was answered, so the draft has the glyph typed after it: {:?}",
         drawn.text()
     );
@@ -3570,8 +3439,8 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
 /// the turns the launch had counted.
 fn rail_picture() -> BTreeMap<u16, String> {
     BTreeMap::from([
-        (1, String::from("temp  41b0c336/tmp")),
-        (3, String::from("turns  2 / 250")),
+        (0, String::from("temp  41b0c336/tmp")),
+        (2, String::from("turns  2 / 250")),
     ])
 }
 
