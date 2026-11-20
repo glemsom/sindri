@@ -5,7 +5,7 @@
 use std::sync::OnceLock;
 
 use pulldown_cmark::{
-    BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
+    Alignment, BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
 };
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxSet};
 
@@ -341,9 +341,12 @@ impl Room {
             Event::Start(Tag::Item) => self.open_item(),
             Event::TaskListMarker(checked) => self.mark_task(checked),
             Event::End(TagEnd::Item) => self.close_item(),
-            Event::Start(Tag::Table(_)) => {
+            Event::Start(Tag::Table(aligns)) => {
                 self.open_block();
-                self.table = Some(Table::default());
+                self.table = Some(Table {
+                    aligns,
+                    ..Table::default()
+                });
             }
             Event::End(TagEnd::Table) => self.draw_table(),
             Event::Start(Tag::TableHead) => {
@@ -727,14 +730,14 @@ impl Room {
         };
 
         for line in table.lines(&widths) {
-            let row = joined(&line, &widths);
+            let row = joined(&line, &widths, &table.aligns);
             self.guttered(row);
         }
         let rule = header_rule(&widths);
         self.guttered(rule);
         for cells in table.body() {
             for line in lines_of(cells, &widths) {
-                let row = joined(&line, &widths);
+                let row = joined(&line, &widths, &table.aligns);
                 self.guttered(row);
             }
         }
@@ -751,8 +754,9 @@ impl Room {
                 std::iter::once(table.head.get(at)).chain(table.rows.iter().map(|row| row.get(at)));
             for (position, cell) in cells.enumerate() {
                 if let Some(cell) = cell {
+                    let align = table.aligns.get(at..).unwrap_or_default();
                     for line in lines_of(std::slice::from_ref(cell), &[available]) {
-                        let row = joined(&line, &[available]);
+                        let row = joined(&line, &[available], align);
                         self.guttered(row);
                     }
                 }
@@ -1395,6 +1399,7 @@ struct Table {
     row: Vec<Cell>,
     cell: Cell,
     heading: bool,
+    aligns: Vec<Alignment>,
 }
 
 type Cell = Vec<Said>;
@@ -1557,7 +1562,7 @@ fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Row>> {
         .collect()
 }
 
-fn joined(line: &[Row], widths: &[usize]) -> Row {
+fn joined(line: &[Row], widths: &[usize], aligns: &[Alignment]) -> Row {
     let mut row = Row::blank();
     for (at, width) in widths.iter().enumerate() {
         if at > 0 {
@@ -1565,22 +1570,38 @@ fn joined(line: &[Row], widths: &[usize]) -> Row {
         }
         let cell = line.get(at);
         let wrote = cell.map_or(0, Row::width);
-        if let Some(cell) = cell {
-            row = row.followed_by(cell);
-        }
-        // The last column keeps no blank past its words: padding it would draw cells that
-        // say nothing, and a row is a run of glyphs and not a box.
         let last = at + 1 == widths.len();
-        let pad = match last {
+        // The last column keeps no blank past its words, nor any where it wrote nothing: padding
+        // either would draw cells that say nothing, and a row is a run of glyphs and not a box.
+        let spare = match last && wrote == 0 {
             true => 0,
             false => width.saturating_sub(usize::from(wrote)),
         };
-        if pad > 0 {
-            let blank = pen::blank(pen::columns(pad));
-            row = row.followed_by(&Row::of([(blank, Look::plain(Ink::Plain))]));
+        let before = match aligns.get(at).copied().unwrap_or(Alignment::None) {
+            Alignment::Right => spare,
+            Alignment::Center => spare / 2,
+            _ => 0,
+        };
+        if before > 0 {
+            row = row.followed_by(&blanks(before));
+        }
+        if let Some(cell) = cell {
+            row = row.followed_by(cell);
+        }
+        let after = match last {
+            true => 0,
+            false => spare - before,
+        };
+        if after > 0 {
+            row = row.followed_by(&blanks(after));
         }
     }
     row
+}
+
+/// A run of blank cells worn as a row's own words are, so a pad is drawn in the frame's ink.
+fn blanks(cells: usize) -> Row {
+    Row::of([(pen::blank(pen::columns(cells)), Look::plain(Ink::Plain))])
 }
 
 /// The rule under a header: the header's own row with every word spent as `─` and every bar

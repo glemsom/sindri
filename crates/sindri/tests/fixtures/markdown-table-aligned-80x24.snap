@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-table-aligned at 80x24
+00 |  construct │            rendering            │ count                           | plain:2 plain+bold:9 dim:3 plain:11 plain+bold:9 plain:11 dim:3 plain+bold:5 plain:27
+01 |  ──────────┼─────────────────────────────────┼──────                           | plain:2 dim:51 plain:27
+02 |  heading   │    bold, one blank row above    │     3                           | plain:11 dim:3 plain:31 dim:3 plain:32
+03 |  table     │ columns joined by a bar, a rule │    12                           | plain:11 dim:3 plain:31 dim:3 plain:32
+04 |  code      │       a bar down its left       │   128                           | plain:11 dim:3 plain:31 dim:3 plain:32
+05 |                                                                                | plain:80
+06 |                                                                                | plain:80
+07 |                                                                                | plain:80
+08 |                                                                                | plain:80
+09 |                                                                                | plain:80
+10 |                                                                                | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |┌prompt ───────────────────────────────────────────────────────────────────────┐| accent+faint:80
+21 |│› what should the run do?                                                     │| dim:26 plain:53 dim:1
+22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
+23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7

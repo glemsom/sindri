@@ -341,6 +341,21 @@ fn markdown_link_80x24_is_a_link_drawn_as_its_words_and_a_path_the_run_judged_op
 }
 
 #[test]
+fn markdown_table_aligned_80x24_is_every_column_drawn_on_the_edge_it_was_written_to() {
+    fixture::assert_frame("markdown-table-aligned", 80, 24);
+}
+
+#[test]
+fn markdown_table_unaligned_80x24_is_the_same_table_written_with_no_alignment() {
+    fixture::assert_frame("markdown-table-unaligned", 80, 24);
+}
+
+#[test]
+fn markdown_table_aligned_narrow_40x24_is_an_aligned_table_wrapping_on_its_columns_edges() {
+    fixture::assert_frame("markdown-table-aligned-narrow", 40, 24);
+}
+
+#[test]
 fn markdown_table_narrow_40x24_is_a_wide_table_wrapped_inside_its_cells() {
     fixture::assert_frame("markdown-table-narrow", 40, 24);
 }
