@@ -263,13 +263,6 @@ pushed on the terminal's own stack and popped first on every way out, and a term
 is handed the same frame and the same keys.
 _Avoid_: Keyboard enhancement, CSI u, key encoding
 
-**Progress mark**:
-The terminal's own indeterminate progress indicator, worn while a run streams and taken away by every
-stop, by a telling turned off, and by the way out — a mark left on a finished run says a run is
-working that has ended.
-_Avoid_: Progress bar (that is a share, and a run's turns are a count), spinner, pulse (that one is
-the marker at the head of an answer)
-
 **Focus**:
 Whether the terminal says this window is the one being read: asked for when the screen is taken and
 given up on the way out, and the one fact the frame draws from it — the accent edge recedes while
@@ -301,7 +294,7 @@ reports everything is, minus the facts it does not have.
 _Avoid_: Terminal features, environment, detection, caps
 
 **Frame facts**: the workspace and the ground it is judged against, the home the skills are read from,
-the served name, the run's record, the state the run is in, the facts the rail lays, the pulse at the
+the served name, the run's record, the state the run is in, the facts the rail lays, the marker at the
 head of the answer, and whether the window is being read, gathered as one value and handed to the
 frame whole. The value is also the screen the frame is drawn as: the **splash screen** until a prompt
 has been asked for — holding what the launch already knows and no run's fact, so no fact that lands
