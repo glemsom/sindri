@@ -16,9 +16,9 @@ use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, split_at};
 use crate::size::{self, Sized};
 
-/// The parser's options: GFM tables on, because CommonMark leaves tables out. No other extension
-/// is enabled, so a footnote, a strikethrough and a task list parse as plain prose.
-const OPTIONS: Options = Options::ENABLE_TABLES;
+/// The parser's options: GFM tables and task lists on, because CommonMark leaves both out. No
+/// other extension is enabled, so a footnote and a strikethrough parse as plain prose.
+const OPTIONS: Options = Options::ENABLE_TABLES.union(Options::ENABLE_TASKLISTS);
 
 /// The line under a way's words: an ink of its own and never a face, so the words keep the
 /// weight the block and its marks gave them.
@@ -29,6 +29,13 @@ const UNDERLINE: Ink = Ink::Dim;
 const FAINT_ACCENT: Look = Look::plain(Ink::Accent).wearing(Faces::FAINT);
 
 const HAIRLINE: char = '─';
+
+/// The bullet a list item's mark is: the two columns a task's box stands in the place of, so a
+/// task's words begin where an ordinary item's do.
+const BULLET: &str = "• ";
+
+const TICK: char = '✓';
+const BOX: char = '☐';
 
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
@@ -164,6 +171,12 @@ impl Rule {
     }
 }
 
+/// A list item's marker: the run that stands beside its words on its first row, and the ink it wears.
+struct Mark {
+    text: String,
+    ink: Ink,
+}
+
 /// One run of the row in hand that is a way to somewhere: the column it begins at past the words'
 /// own edge, the columns it covers, and where it goes.
 struct Laid {
@@ -188,8 +201,8 @@ struct Room {
     /// The gutter every row of the entry opens with, which a block's own bar stands in the place of.
     base: Vec<(String, Look)>,
     /// The markers of the list items open, outermost first: every row is indented by the ones
-    /// outside it and by the width of the innermost, so each depth costs the columns a `•` takes.
-    marks: Vec<String>,
+    /// outside it and by the width of the innermost.
+    marks: Vec<Mark>,
     lists: Vec<Option<u64>>,
     first: bool,
     /// Whether the last row put down is a blank one, so two blocks never stand under two blanks.
@@ -269,6 +282,7 @@ impl Room {
                 self.lists.pop();
             }
             Event::Start(Tag::Item) => self.open_item(),
+            Event::TaskListMarker(checked) => self.mark_task(checked),
             Event::End(TagEnd::Item) => self.close_item(),
             Event::Start(Tag::Table(_)) => {
                 self.open_block();
@@ -750,10 +764,32 @@ impl Room {
                 *next = next.saturating_add(1);
                 marker
             }
-            _ => String::from("• "),
+            _ => String::from(BULLET),
         };
-        self.marks.push(marker);
+        self.marks.push(Mark {
+            text: marker,
+            ink: Ink::Accent,
+        });
         self.first = true;
+    }
+
+    /// A task's mark stands in the bullet its item opened with, where the words beside it are said
+    /// with no leading blank; an ordinal mark keeps its number and the box stands beside it.
+    fn mark_task(&mut self, checked: bool) {
+        let (glyph, ink) = match checked {
+            true => (TICK, Ink::Ok),
+            false => (BOX, Ink::Dim),
+        };
+        let Some(mark) = self.marks.last_mut() else {
+            return;
+        };
+        let boxed = pen::pad(&glyph.to_string(), pen::cells(BULLET));
+        let bullet = mark.text == BULLET;
+        mark.text = match bullet {
+            true => boxed,
+            false => format!("{}{boxed}", mark.text),
+        };
+        mark.ink = ink;
     }
 
     fn close_item(&mut self) {
@@ -916,8 +952,8 @@ impl Room {
         for (at, mark) in self.marks.iter().enumerate() {
             let innermost = at + 1 == self.marks.len();
             let (text, ink) = match innermost && self.first {
-                true => (mark.clone(), Ink::Accent),
-                false => (pen::blank(pen::cells(mark)), Ink::Plain),
+                true => (mark.text.clone(), mark.ink),
+                false => (pen::blank(pen::cells(&mark.text)), Ink::Plain),
             };
             spans.push((text, Look::plain(ink)));
         }
@@ -965,7 +1001,7 @@ impl Room {
         let marks: usize = self
             .marks
             .iter()
-            .map(|mark| usize::from(pen::cells(mark)))
+            .map(|mark| usize::from(pen::cells(&mark.text)))
             .sum();
         // The reserve holds only while no row has been written: a marker stands beside the
         // first row alone.

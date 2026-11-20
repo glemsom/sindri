@@ -290,6 +290,11 @@ fn markdown_lists_80x24_is_a_bullet_and_an_ordinal_two_spaces_per_depth() {
 }
 
 #[test]
+fn markdown_tasks_80x24_is_boxes_in_dim_and_ticks_in_ok_beside_an_ordinary_bullet() {
+    fixture::assert_frame("markdown-tasks", 80, 24);
+}
+
+#[test]
 fn markdown_table_80x24_is_a_bold_header_ruled_in_dim_and_never_bordered() {
     fixture::assert_frame("markdown-table", 80, 24);
 }
