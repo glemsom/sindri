@@ -164,11 +164,11 @@ stands off the tail, and the footer's — each drawn in the rows it was given an
 queued prompt has no band of its own: it stands in the composer's, under the draft, one prompt to a
 row and the newest at the foot. What a band cannot hold it counts: the rows of a draft past the
 composer's ceiling, and the prompts of a queue past the rows it was given. A fence is not counted
-that way: it is kept in the shape it was written in, so a band never reflows one — a line past its
-edge is dropped, the band's last cell says more stands there, and a reader walks the fence sideways
-for the rest. The **caret** is no cell of a band: it is placed in the cell the draft waits in
-wherever a reader can type there, and in the query row of a card that draws one. No answer and no
-prompt carries one.
+that way: it is kept in the shape it was written in, so a band never reflows one — the words of a
+fence line past the band's edge are dropped, that row's last cell says more stands there, and a
+reader walks the fence sideways for the rest. The **caret** is no cell of a band: it is placed in
+the cell the draft waits in wherever a reader can type there, and in the query row of a card that
+draws one. No answer and no prompt carries one.
 _Avoid_: Region, pane, panel, viewport
 
 **Plane**:
@@ -195,8 +195,8 @@ _Avoid_: Border, divider, gutter, rule
 **Alert**:
 A quote whose first line names a kind — `NOTE`, `TIP`, `IMPORTANT`, `WARNING` or `CAUTION` — and
 that draws that kind as a **label**: the name on a row of its own, in an ink of its own, with the
-quote's words under that row, drawn as the quote already draws them. A quote whose first line
-names no kind is a quote and nothing more, marker-like words and all.
+quote's words under it in the same column. A quote whose first line names no kind is a quote and
+nothing more, marker-like words and all.
 _Avoid_: Callout, admonition, banner, badge, note (that one is a kind)
 
 **Source**:
