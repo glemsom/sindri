@@ -2849,17 +2849,16 @@ fn a_row_that_lands_while_the_reader_is_scrolled_back_holds_the_window_still() {
              is reading back"
     );
     let (now, _) = notice_of(&after);
-    assert_eq!(
-        now.trim_end(),
-        "38 rows back \u{b7} 2 rows landed \u{b7} End follows the run",
-        "the two rows the answer landed are added to the count of rows back and counted as \
-             landed below the frame: it holds the rows it was reading rather than sliding with \
-             the tail"
+    assert!(
+        now.trim_end().starts_with("38 rows back"),
+        "the two rows the answer landed are added to the count of rows back: the frame holds \
+             the rows it was reading rather than sliding with the tail, and what the row says \
+             of them is its own test: {now:?}"
     );
 }
 
 #[test]
-fn the_notice_counts_the_rows_that_landed_below_a_frame_off_the_tail() {
+fn a_frame_off_the_tail_counts_the_rows_that_landed_below_it() {
     let mut view = turns(100);
     view.text("a first word of an answer");
     painted(&mut view, 120, 40);
