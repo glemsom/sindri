@@ -375,7 +375,7 @@ fn a_file_that_is_not_toml_is_never_rewritten() {
     );
 }
 
-fn every_key_touched() -> Config {
+fn every_key_set() -> Config {
     Config {
         provider: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-5")),
@@ -400,9 +400,9 @@ fn every_key_touched() -> Config {
 fn a_save_writes_the_keys_the_schema_has_and_invents_none() {
     let home = bare_home();
     let path = file_in(&home);
-    let touched = every_key_touched();
+    let named = every_key_set();
 
-    Config::save_to(&path, &touched).expect("the save lands");
+    Config::save_to(&path, &named).expect("the save lands");
 
     let text = read(&path);
     let document: toml::Table = text.parse().expect("the file it wrote is TOML");
@@ -421,7 +421,7 @@ fn a_save_writes_the_keys_the_schema_has_and_invents_none() {
     );
     assert_eq!(
         Config::load_from(&path).expect("the file still reads"),
-        touched,
+        named,
         "every key written is the key the save was handed"
     );
 }
@@ -671,17 +671,17 @@ fn a_screens_save_lands_owner_only_and_leaves_no_temp_file_behind() {
 fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
     let home = bare_home();
     let path = file_in(&home);
-    let written = every_key_touched();
-    let shown = written.clone();
+    let written = every_key_set();
 
     // The one key a screen may not show: a secret is masked wherever it is drawn, so its row is a
     // mask and never the text a file would hold.
     let mut readers = Vec::new();
     for key in Config::KEYS {
         if key != "api_key" {
-            readers.push((key, shown.text(key)));
+            readers.push((key, written.text(key)));
         }
     }
+    let masked = written.text("api_key");
     let mut patch = Touched::new();
     for (key, text) in &readers {
         patch.set(key, text.as_str());
@@ -699,7 +699,7 @@ fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
          touched every row hands the file what the screen said it held"
     );
     assert_eq!(
-        shown.text("api_key"),
+        masked,
         String::from(sindri_core::redact::MASK),
         "a secret is never in a frame: the row says a key is set and not which one"
     );

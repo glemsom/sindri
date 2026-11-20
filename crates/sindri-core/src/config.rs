@@ -114,8 +114,8 @@ impl Config {
     pub fn load(environment: &impl Environment) -> Result<Config, ConfigError> {
         Config::load_from(&config_path(environment)?)
     }
-    pub fn save_to(path: &Path, given: &Config) -> Result<(), ConfigError> {
-        Config::repatch(path, |document| given.patch_into(document))
+    pub fn save_to(path: &Path, overrides: &Config) -> Result<(), ConfigError> {
+        Config::repatch(path, |document| overrides.patch_into(document))
     }
     pub fn save_touched_to(path: &Path, touched: &Touched) -> Result<(), ConfigError> {
         let (written, emptied) = touched.patch()?;
@@ -150,8 +150,8 @@ impl Config {
         patch(&mut document)?;
         write_atomically(path, &document.to_string())
     }
-    pub fn save(environment: &impl Environment, given: &Config) -> Result<(), ConfigError> {
-        Config::save_to(&config_path(environment)?, given)
+    pub fn save(environment: &impl Environment, overrides: &Config) -> Result<(), ConfigError> {
+        Config::save_to(&config_path(environment)?, overrides)
     }
     pub fn save_touched(
         environment: &impl Environment,
@@ -345,9 +345,12 @@ impl Config {
         }
         secrets
     }
-    pub fn resolve(environment: &impl Environment, given: Config) -> Result<Config, ConfigError> {
+    pub fn resolve(
+        environment: &impl Environment,
+        overrides: Config,
+    ) -> Result<Config, ConfigError> {
         let file = Config::load(environment)?;
-        let above = given.above(Config::from_environment(environment)?);
+        let above = overrides.above(Config::from_environment(environment)?);
         let wire_key = above
             .provider
             .or(file.provider)

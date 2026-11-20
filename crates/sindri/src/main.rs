@@ -66,11 +66,11 @@ fn main() -> ExitCode {
             return refuse(&short_of(&first_run), USAGE);
         }
         // The flag layer is dropped after the save: the file is the only copy of the key.
-        let touched = Config {
+        let pasted_key = Config {
             api_key: Some(pasted),
             ..Config::default()
         };
-        if let Err(error) = Config::save(&Process, &touched) {
+        if let Err(error) = Config::save(&Process, &pasted_key) {
             return refuse(&error.to_string(), error.exit_code());
         }
         first_run = match FirstRun::resolve(&Process, Config::default()) {

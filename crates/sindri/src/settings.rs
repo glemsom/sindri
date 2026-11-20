@@ -182,10 +182,10 @@ impl Kept for Settings {
 pub fn persist(
     environment: &impl Environment,
     touched: &Touched,
-    given: Config,
+    overrides: Config,
 ) -> Result<Config, ConfigError> {
     Config::save_touched(environment, touched)?;
-    Config::resolve(environment, given)
+    Config::resolve(environment, overrides)
 }
 
 #[cfg(test)]

@@ -9,11 +9,11 @@ pub struct FirstRun {
 impl FirstRun {
     pub fn resolve(
         environment: &impl Environment,
-        given: Config,
+        overrides: Config,
     ) -> Result<FirstRun, ConfigError> {
         let path = config_path(environment)?;
         Ok(FirstRun {
-            config: Config::resolve(environment, given)?,
+            config: Config::resolve(environment, overrides)?,
             path,
         })
     }
