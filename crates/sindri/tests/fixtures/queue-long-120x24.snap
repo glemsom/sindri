@@ -6,7 +6,7 @@ queue-long at 120x24
 00 |  code      │ behind a bar, highlighted                                     wire      anthropic                         | plain:11 dim:3 plain:62 dim:10 plain:34
 01 |  table     │ columns joined by a bar                                       model     claude-sonnet-4-5-20250929        | plain:11 dim:3 plain:62 dim:10 plain:34
 02 |                                                                            think     high                              | plain:76 dim:10 plain:34
-03 |› what does a row of the band say?                                                                                      | plain:120
+03 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
 04 |⋯ 1 call · 31 ms                                                            turns                               6 /  250| dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
 05 |  A row is one line                                                         ctx                      █░░░░░ 48.2k / 200k| plain:2 plain+bold:17 plain:57 dim:10 plain:16 dim:5 plain:13
 06 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101

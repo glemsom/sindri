@@ -26,6 +26,11 @@ fn boot_face_small_120x14_is_the_splash_screens_block_beside_a_rail_whose_face_t
 }
 
 #[test]
+fn prompt_flat_120x40_is_a_prompt_and_the_draft_beside_it_on_a_terminal_that_spells_no_colour() {
+    fixture::assert_frame("prompt-flat", 120, 40);
+}
+
+#[test]
 fn transcript_120x40_is_a_run_laid_out_at_the_tail() {
     fixture::assert_frame("transcript", 120, 40);
 }

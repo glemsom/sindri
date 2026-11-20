@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 gutter at 80x24
 00 |                                                                                | plain:80
-01 |› triage the retry test                                                         | plain:80
+01 |┃›triage the retry test                                                         | dim:1 plain:79
 02 |✓ bash                                                                          | ok:1 plain:1 dim:4 plain:74
 03 |  rg -n 'gutter' src                                                            | plain:80
 04 |✓ exit 0  23 ms · 412 bytes                                                     | ok:1 plain:1 dim:25 plain:53

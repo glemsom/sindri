@@ -673,10 +673,11 @@ fn the_readers_own_words_open_the_exchange_and_no_row_names_them() {
     );
     assert_eq!(
         words(&rows[1]),
-        "› triage this",
-        "and its own words follow, the prompt's sigil in the gutter an answer is set from"
+        "┃›triage this",
+        "and its own words follow down the spine they are quoted by, with the sigil in the column \
+         beside it"
     );
-    assert_eq!(inks(&rows[1]), [Ink::Plain, Ink::Plain]);
+    assert_eq!(inks(&rows[1]), [Ink::Dim, Ink::Plain, Ink::Plain]);
     assert_eq!(
         rows.len(),
         2,
@@ -687,6 +688,175 @@ fn the_readers_own_words_open_the_exchange_and_no_row_names_them() {
         "no row of the exchange draws a rule: {:?}",
         rows.iter().map(words).collect::<Vec<String>>()
     );
+}
+
+#[test]
+fn a_row_handed_a_band_is_claimed_in_its_ground_across_the_whole_band_before_its_words() {
+    let palette = Palette::TRUECOLOR;
+    let area = Rect::new(0, 0, 40, 1);
+    let well = Row::of([(String::from("a word of the conversation"), Ink::Muted)]);
+    let asked =
+        Row::of([(String::from("the reader's own words"), Ink::Plain)]).standing(Band::Prompt);
+
+    assert_eq!(
+        asked.stands_on(),
+        Some(Band::Prompt),
+        "a row handed a band stands on it"
+    );
+    assert_eq!(
+        well.stands_on(),
+        None,
+        "and a row handed none stands on none"
+    );
+
+    for (row, ground) in [
+        (&asked, palette.band(Band::Prompt)),
+        (&well, palette.band(Band::Well)),
+    ] {
+        let mut buffer = Buffer::empty(area);
+        pen::claim(&mut buffer, area, palette.ground(Some(Band::Well)));
+        row.paint(
+            area,
+            &mut buffer,
+            &palette,
+            &mut Links::none(),
+            &mut Sizes::none(),
+        );
+        for x in area.x..area.right() {
+            let cell = buffer.cell((x, 0)).expect("a cell of the band");
+            assert_eq!(
+                cell.bg, ground,
+                "column {x} of {row:?} is drawn on {:?}: a row handed a band claims the whole \
+                 width of it before its words, and a row handed none is drawn exactly as it was, \
+                 over the ground it found",
+                cell.bg
+            );
+        }
+    }
+}
+
+#[test]
+fn a_sent_prompt_draws_its_spine_down_every_row_it_occupies() {
+    let rows = layout(
+        &Entry::Prompt {
+            text: SecretSet::default().redact(
+                "triage the retry test, and say which line of the patch the test disagrees with",
+            ),
+        },
+        40,
+    );
+    let said: Vec<String> = rows.iter().map(words).collect();
+    assert!(
+        rows.len() > 2,
+        "a prompt wider than the band is more than one row of words: {said:?}"
+    );
+    assert_eq!(
+        rows[0].glyph_columns(),
+        Vec::new(),
+        "the row that separates the exchange from the one above it is a blank row of the well, \
+         with no spine and no sigil: {:?}",
+        rows[0]
+    );
+
+    for (at, row) in rows[1..].iter().enumerate() {
+        assert_eq!(
+            drawn_at(row, 0),
+            Some('┃'),
+            "row {at} of the prompt's words opens on the spine every row of them is quoted by: \
+             {said:?}"
+        );
+        assert_eq!(
+            words_column(row),
+            Some(2),
+            "and its words begin in the column an answer's prose begins in: {row:?}"
+        );
+        assert_eq!(
+            inks(row),
+            [Ink::Dim, Ink::Plain, Ink::Plain],
+            "the spine is drawn dim and the reader's own words in the plain ink: {row:?}"
+        );
+    }
+    assert_eq!(
+        drawn_at(&rows[1], 1),
+        Some('›'),
+        "the sigil stands in the column beside the spine on the row the prompt is asked on: {:?}",
+        rows[1]
+    );
+    for (at, row) in rows[2..].iter().enumerate() {
+        assert_eq!(
+            drawn_at(row, 1),
+            Some(' '),
+            "and every row under it holds a blank in that column, so the prompt reads as one \
+             quoted block: row {at} is {row:?}"
+        );
+    }
+}
+
+#[test]
+fn no_row_of_an_answer_a_call_a_result_or_a_stop_draws_a_spine_in_its_first_column() {
+    let entries = [
+        answer(1),
+        call(1),
+        result(1, Exit::Code(0)),
+        result(1, Exit::Code(1)),
+        stop_entry(Stop::Cancelled),
+        stop_entry(failed()),
+    ];
+
+    for entry in entries {
+        for row in layout(&entry, 40) {
+            assert_ne!(
+                drawn_at(&row, 0),
+                Some('┃'),
+                "a row of {entry:?} draws the spine a prompt's words are quoted by, and the \
+                 spine belongs to the reader's own words alone: {row:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_prompt_stands_on_the_prompt_band_and_no_other_row_stands_on_one() {
+    let secrets = SecretSet::default();
+    for cols in [40, 8, 3, 2] {
+        let rows = layout(
+            &Entry::Prompt {
+                text: secrets.redact(
+                    "triage the retry test, and say which line of the patch it disagrees with",
+                ),
+            },
+            cols,
+        );
+        assert_eq!(
+            rows[0].stands_on(),
+            None,
+            "the blank row that separates an exchange from the one above it is a row of the well \
+             and never of the prompt at {cols} columns: {:?}",
+            rows[0]
+        );
+        for row in &rows[1..] {
+            assert_eq!(
+                row.stands_on(),
+                Some(Band::Prompt),
+                "every row the prompt's words occupy stands on the prompt band at {cols} \
+                 columns, a band too narrow for the gutter included: {row:?}"
+            );
+        }
+    }
+
+    for entry in every_kind(&secrets) {
+        if matches!(entry, Entry::Prompt { .. }) {
+            continue;
+        }
+        for row in layout(&entry, 40) {
+            assert_eq!(
+                row.stands_on(),
+                None,
+                "a row of {entry:?} stands on the ground the band it is read in lays under it, \
+                 and a band of its own is what the reader's own words alone wear: {row:?}"
+            );
+        }
+    }
 }
 
 /// The rows a band paints of `entries` at the tail, read from the screen's first row down.
@@ -727,7 +897,7 @@ fn a_prompt_opens_under_a_blank_row_unless_it_opens_the_band() {
     );
     let whole = drawn.join("\n");
     let prompt = |which: u32| {
-        let said = format!("› prompt {which}");
+        let said = format!("┃›prompt {which}");
         drawn
             .iter()
             .position(|row| row.contains(&said))
@@ -740,7 +910,7 @@ fn a_prompt_opens_under_a_blank_row_unless_it_opens_the_band() {
         "the first exchange of a conversation has nothing above it to be separated from: {whole}"
     );
     assert_eq!(
-        drawn[0], "› prompt 1",
+        drawn[0], "┃›prompt 1",
         "so the prompt's own words open the band: {whole}"
     );
     for (which, after) in [
@@ -820,7 +990,7 @@ fn three_exchanges_are_three_prompts_and_three_answers_and_no_row_saying_a_run_e
 
     let asked = drawn
         .iter()
-        .filter(|row| row.starts_with("› prompt "))
+        .filter(|row| row.starts_with("┃›prompt "))
         .count();
     assert_eq!(
         asked, 3,
@@ -1025,7 +1195,6 @@ fn the_marker_that_says_what_a_row_is_stands_in_the_gutter() {
         .expect("the fence is rows of its own");
 
     let marked = [
-        (&prompt[1], '›'),
         (&flight[0], '…'),
         (&ok[0], '✓'),
         (&failed[0], '✗'),
@@ -1050,6 +1219,26 @@ fn the_marker_that_says_what_a_row_is_stands_in_the_gutter() {
             "and the words begin past it: {row:?}"
         );
     }
+
+    assert_eq!(
+        drawn_at(&prompt[1], 0),
+        Some('┃'),
+        "the reader's own words are quoted by a spine of their own rather than set in the gutter \
+         an answer is: {:?}",
+        prompt[1]
+    );
+    assert_eq!(
+        drawn_at(&prompt[1], 1),
+        Some('›'),
+        "and the sigil stands in the column beside it: {:?}",
+        prompt[1]
+    );
+    assert_eq!(
+        words_column(&prompt[1]),
+        Some(2),
+        "so the prompt's words begin where an answer's prose does: {:?}",
+        prompt[1]
+    );
 }
 
 #[test]
@@ -1064,12 +1253,6 @@ fn a_row_too_narrow_for_a_marker_gives_up_the_marker_before_it_cuts_a_word() {
         (result(1, Exit::Code(1)), '✗'),
         (call(1), '…'),
         (thought, '│'),
-        (
-            Entry::Prompt {
-                text: secrets.redact("prompt"),
-            },
-            '›',
-        ),
         (
             Entry::Assistant {
                 turn: 1,
@@ -1121,6 +1304,33 @@ fn a_row_too_narrow_for_a_marker_gives_up_the_marker_before_it_cuts_a_word() {
             "the words follow the marker: {head:?}"
         );
     }
+
+    let prompt = Entry::Prompt {
+        text: secrets.redact("prompt"),
+    };
+    for row in layout(&prompt, 2) {
+        assert!(
+            !row.glyphs().contains('┃') && !row.glyphs().contains('›'),
+            "a band of two columns gives up the spine and the sigil rather than a word: {row:?}"
+        );
+    }
+    let narrow = layout(&prompt, 3);
+    let head = &narrow[1];
+    assert_eq!(
+        drawn_at(head, 0),
+        Some('┃'),
+        "three columns hold the spine of a prompt beside its sigil and one word: {head:?}"
+    );
+    assert_eq!(
+        drawn_at(head, 1),
+        Some('›'),
+        "and the sigil stands in the column past the spine: {head:?}"
+    );
+    assert_eq!(
+        words_column(head),
+        Some(2),
+        "so the words begin where an answer's prose does: {head:?}"
+    );
 }
 
 #[test]

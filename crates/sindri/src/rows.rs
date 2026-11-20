@@ -17,7 +17,7 @@ use crate::ink::{Ink, Look};
 use crate::link::{Link, Links, Way};
 use crate::mark;
 use crate::markdown;
-use crate::palette::Palette;
+use crate::palette::{Band, Palette};
 use crate::pen::{self, Clip};
 use crate::picture::{self, Surface};
 use crate::pulse::{self, Head};
@@ -32,6 +32,9 @@ pub(crate) const INDENT: &str = "  ";
 /// The sigil the reader's own words are set from, two columns of it: the row a prompt is asked on and
 /// the draft that asks the next one alike.
 pub(crate) const SIGIL: &str = "› ";
+
+/// The spine a prompt's words are quoted by: one column down the left edge of every row they occupy.
+const SPINE: &str = "┃";
 
 const THOUGHT: &str = "│ ";
 
@@ -99,6 +102,9 @@ pub struct Row {
     /// The fence whose tag row this is, on that row and no other: a mark over a fence's name takes
     /// the fence whole, where the row itself is no line of it — it never walks and is never cut.
     names: Option<usize>,
+    /// The band this row is drawn on, when it stands on one of its own rather than on the ground
+    /// the band it is read in lays under every row of it.
+    band: Option<Band>,
 }
 
 /// A fence line: the block it is a line of, the columns of gutter its words are set past, and how
@@ -145,6 +151,7 @@ impl Row {
             fence: None,
             source: None,
             names: None,
+            band: None,
         }
     }
 
@@ -173,7 +180,20 @@ impl Row {
             fence: None,
             source: None,
             names: None,
+            band: None,
         }
+    }
+
+    /// This row standing on `band`: its whole width is claimed in that band's ground before its
+    /// words are written, so the row is read as a surface of its own.
+    pub fn standing(mut self, band: Band) -> Row {
+        self.band = Some(band);
+        self
+    }
+
+    /// The band this row stands on, and none for a row drawn on the ground it was handed.
+    pub fn stands_on(&self) -> Option<Band> {
+        self.band
     }
 
     /// This row as a line of fence `id`, its words set past `gutter` columns and walked nowhere yet.
@@ -272,6 +292,7 @@ impl Row {
             fence: self.fence,
             source: self.source,
             names: self.names,
+            band: self.band,
         }
     }
 
@@ -344,6 +365,9 @@ impl Row {
         links: &mut Links,
         sizes: &mut Sizes,
     ) {
+        if let Some(band) = self.band {
+            pen::claim(buffer, area, palette.ground(Some(band)));
+        }
         // A fence walked sideways keeps its gutter where it is and carries its words back by what
         // the reader walked past, so the bar still stands in the column it always did.
         match self.fence.filter(|fence| fence.walk > 0) {
@@ -597,21 +621,39 @@ fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
 }
 
 /// The rows a prompt is drawn as: the blank row that separates its exchange from the one above it,
-/// and then the reader's own words under the sigil — the blank row `Rows` drops for the first
-/// exchange, which has nothing above it.
+/// and then the reader's own words down the spine of a quoted block — the blank row `Rows` drops for
+/// the first exchange, which has nothing above it.
 fn asked(text: &str, cols: u16) -> Vec<Row> {
-    let (gutter, room) = margin(SIGIL, cols);
-    let blanks = match gutter.is_empty() {
-        true => "",
-        false => INDENT,
-    };
+    let opening = format!("{SPINE}{}", SIGIL.trim_end());
+    let (gutter, room) = margin(&opening, cols);
     let mut rows = vec![Row::blank()];
-    let mut lines = wrap(text, room).into_iter();
-    if let Some(first) = lines.next() {
-        rows.push(words_past(gutter, Ink::Plain, Ink::Plain, first, cols));
-    }
-    rows.extend(lines.map(|line| words_past(blanks, Ink::Plain, Ink::Plain, line, cols)));
+    rows.extend(
+        wrap(text, room)
+            .into_iter()
+            .enumerate()
+            .map(|(at, line)| quoted(at == 0 && !gutter.is_empty(), line, cols)),
+    );
     rows
+}
+
+/// One row of a prompt's words: the spine down its left edge, the sigil standing in the column
+/// beside it on the row the prompt is asked on and a blank on every row under it, and the words set
+/// past both. A band too narrow to hold that gutter beside one word gives the gutter up.
+fn quoted(opens: bool, line: String, cols: u16) -> Row {
+    let marker = match opens {
+        true => SIGIL.trim_end(),
+        false => " ",
+    };
+    let gutter = pen::cells(SPINE).saturating_add(pen::cells(marker));
+    let row = match gutter.saturating_add(pen::cells(&line)) > cols {
+        true => Row::of([(line, Ink::Plain)]),
+        false => Row::of([
+            (String::from(SPINE), Ink::Dim),
+            (String::from(marker), Ink::Plain),
+            (line, Ink::Plain),
+        ]),
+    };
+    row.standing(Band::Prompt)
 }
 
 fn thought(text: &str, cols: u16) -> Vec<Row> {
