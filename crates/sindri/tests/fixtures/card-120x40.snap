@@ -3,26 +3,26 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 card at 120x40
-00 |  window is a row offset from the tail, so resolving one walks the entries  wire      anthropic                         | dim:120
-01 |  between the tail and the window and lays out every one of them on the way.model     claude-sonnet-4-5-20250929        | dim:120
-02 |  Each is laid out once and kept, so the whole history scrolled through     think     high                              | dim:120
-03 |  costs one layout per entry and scrolling it again costs none.                                                         | dim:120
-04 |─ turn 5 ───────────────╭─ ? keys ─────────────────────────────────────────────────────────────╮                6 /  250| dim:24 accent+faint:72 dim:24
-05 |✓ bash                  │ keys                                                                 │     █░░░░░ 48.2k / 200k| dim:25 plain:1 dim:4 plain:65 dim:25
-06 |  git diff --stat       │ Esc                  close this screen                               │                     88%| dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-07 |✓ exit 0  9 ms · 128 byt│ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-08 |  crates/sindri/src/rows│ composer                                                             │ri/.worktrees/46-rail   | dim:25 plain:1 dim:8 plain:61 dim:25
-09 |  crates/sindri/tests/ro│ ?                    the keys, while the draft is empty              │ability                 | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
-10 |  The transcript's unit │ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
-11 |  line, so the same run │                      word                                            │                       2| dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
-12 |  transcript and by what│ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
-13 |                        │ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
-14 |  construct │ where it s│                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
-15 |  ──────────┼───────────│ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
-16 |  heading   │ in the ans│ ↑                    the newest queued prompt, or the line above     │essions/9f2c7a41/tmp    | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
-17 |  code      │ behind a b│ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
-18 |  table     │ columns jo│ ↓                    the line below                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
-19 |─ turn 6 ───────────────│ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
+00 |  check: frames ... ok                                                      wire      anthropic                         | dim:120
+01 |  What that buys is the plain case and what it costs is the scrolled one: a model     claude-sonnet-4-5-20250929        | dim:120
+02 |  window is a row offset from the tail, so resolving one walks the entries  think     high                              | dim:120
+03 |  between the tail and the window and lays out every one of them on the way.                                            | dim:120
+04 |  Each is laid out once ╭─ ? keys ─────────────────────────────────────────────────────────────╮                6 /  250| dim:24 accent+faint:72 dim:24
+05 |  costs one layout per e│ keys                                                                 │     █░░░░░ 48.2k / 200k| dim:25 plain:1 dim:4 plain:65 dim:25
+06 |✓ bash                  │ Esc                  close this screen                               │                     88%| dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+07 |  git diff --stat       │ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+08 |✓ exit 0  9 ms · 128 byt│ composer                                                             │ri/.worktrees/46-rail   | dim:25 plain:1 dim:8 plain:61 dim:25
+09 |  crates/sindri/src/rows│ ?                    the keys, while the draft is empty              │ability                 | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+10 |  crates/sindri/tests/ro│ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
+11 |  The transcript's unit │                      word                                            │                       2| dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+12 |  line, so the same run │ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
+13 |  transcript and by what│ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+14 |                        │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
+15 |  construct │ where it s│ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
+16 |  ──────────┼───────────│ ↑                    the newest queued prompt, or the line above     │essions/9f2c7a41/tmp    | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+17 |  heading   │ in the ans│ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
+18 |  code      │ behind a b│ ↓                    the line below                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
+19 |  table     │ columns jo│ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 20 |✓ bash                  │ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 21 |  make check STAGES=fram│ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
 22 |✓ exit 0  31 ms · 104 by│ Ctrl-D               the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25

@@ -620,13 +620,23 @@ pub fn document() -> SessionDocument {
     }
 }
 
-/// A transcript of eighty turn dividers, one row each, so the rows of the band the thumb covers are
-/// counted off the frame.
+/// One row of the band that says which turn it is: a turn draws no row of its own, so a fixture
+/// that counts the rows of the band off the frame says which one each row stands on with a
+/// thought in the reasoning gutter.
+fn note(turn: u32) -> Entry {
+    Entry::Reasoning {
+        turn,
+        text: SecretSet::default().redact(format!("turn {turn}")),
+    }
+}
+
+/// A transcript of eighty one-row entries, each saying which turn it is, so the rows of the band
+/// the thumb covers are counted off the frame.
 fn thumbing(capabilities: Capabilities, scroll: Scroll) -> View {
     View::of(
         capabilities,
         Facts::default().asked(),
-        Transcript::of((1..=80).map(|turn| Entry::Turn { turn })).scrolled(scroll),
+        Transcript::of((1..=80).map(note)).scrolled(scroll),
     )
 }
 

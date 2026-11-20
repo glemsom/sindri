@@ -3,24 +3,24 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 refused at 120x40
-00 |  Each is laid out once and kept, so the whole history scrolled through     wire      anthropic                         | plain:76 dim:10 plain:34
-01 |  costs one layout per entry and scrolling it again costs none.             model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
-02 |─ turn 5 ───────────────────────────────────────────────────────────────────think     high                              | dim:86 plain:34
-03 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
-04 |  git diff --stat                                                           turns                               6 /  250| plain:76 dim:10 plain:34
-05 |✓ exit 0  9 ms · 128 bytes                                                  ctx                      █░░░░░ 48.2k / 200k| ok:1 plain:1 dim:24 plain:50 dim:10 plain:16 dim:5 plain:13
-06 |  crates/sindri/src/rows.rs | 412 +++++++++++++                             cache                                    88%| muted:47 plain:29 dim:10 plain:34
-07 |  crates/sindri/tests/rows.rs | 198 +++++++++                                                                           | muted:45 plain:75
-08 |  The transcript's unit is the entry. An entry never carries a formatted    workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
-09 |  line, so the same run is drawn the same way by the TUI, by a reader of thebranch    spec/1-capability                 | plain:76 dim:10 plain:34
-10 |  transcript and by whatever front end comes next.                                                                      | plain:120
-11 |                                                                            skills                                     2| plain:76 dim:10 plain:34
-12 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
-13 |  ──────────┼───────────────────────────                                    sandbox   bwrap                             | plain:2 dim:38 plain:36 dim:10 plain:34
-14 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
-15 |  code      │ behind a bar, highlighted                                     session   9f2c7a41                          | plain:11 dim:3 plain:62 dim:10 plain:34
-16 |  table     │ columns joined by a bar                                       temp      …/sindri/sessions/9f2c7a41/tmp    | plain:11 dim:3 plain:62 dim:10 plain:34
-17 |─ turn 6 ───────────────────────────────────────────────────────────────────                                            | dim:76 plain:44
+00 |  window is a row offset from the tail, so resolving one walks the entries  wire      anthropic                         | plain:76 dim:10 plain:34
+01 |  between the tail and the window and lays out every one of them on the way.model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
+02 |  Each is laid out once and kept, so the whole history scrolled through     think     high                              | plain:76 dim:10 plain:34
+03 |  costs one layout per entry and scrolling it again costs none.                                                         | plain:120
+04 |✓ bash                                                                      turns                               6 /  250| ok:1 plain:1 dim:4 plain:70 dim:10 plain:34
+05 |  git diff --stat                                                           ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+06 |✓ exit 0  9 ms · 128 bytes                                                  cache                                    88%| ok:1 plain:1 dim:24 plain:50 dim:10 plain:34
+07 |  crates/sindri/src/rows.rs | 412 +++++++++++++                                                                         | muted:47 plain:73
+08 |  crates/sindri/tests/rows.rs | 198 +++++++++                               workspace …/git/sindri/.worktrees/46-rail   | muted:45 plain:31 dim:10 plain:34
+09 |  The transcript's unit is the entry. An entry never carries a formatted    branch    spec/1-capability                 | plain:76 dim:10 plain:34
+10 |  line, so the same run is drawn the same way by the TUI, by a reader of the                                            | plain:120
+11 |  transcript and by whatever front end comes next.                          skills                                     2| plain:76 dim:10 plain:34
+12 |                                                                                                                        | plain:120
+13 |  construct │ where it stands                                               sandbox   bwrap                             | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:47 dim:10 plain:34
+14 |  ──────────┼───────────────────────────                                                                                | plain:2 dim:38 plain:80
+15 |  heading   │ in the answer's own gutter                                    session   9f2c7a41                          | plain:11 dim:3 plain:62 dim:10 plain:34
+16 |  code      │ behind a bar, highlighted                                     temp      …/sindri/sessions/9f2c7a41/tmp    | plain:11 dim:3 plain:62 dim:10 plain:34
+17 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 18 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
 19 |  make check STAGES=frames                                                                                              | plain:120
 20 |✓ exit 0  31 ms · 104 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93

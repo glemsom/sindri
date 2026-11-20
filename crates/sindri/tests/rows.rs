@@ -34,8 +34,13 @@ use sindri_core::run::{Budget, Exit, Limits, Stop, Turn};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 
-fn turn(which: u32) -> Entry {
-    Entry::Turn { turn: which }
+/// One row of the band that says which turn it is: a turn draws no row of its own, so the tests
+/// that count rows say which one they stand on with a thought in the reasoning gutter.
+fn note(which: u32) -> Entry {
+    Entry::Reasoning {
+        turn: which,
+        text: SecretSet::default().redact(format!("turn {which}")),
+    }
 }
 
 fn answer(which: u32) -> Entry {
@@ -52,7 +57,7 @@ fn answer(which: u32) -> Entry {
 fn transcript() -> Vec<Entry> {
     let mut entries = Vec::new();
     for which in 1..=3 {
-        entries.push(turn(which));
+        entries.push(note(which));
         entries.push(answer(which));
     }
     entries
@@ -180,8 +185,9 @@ fn a_surface_that_changed_relays_the_band_once_and_one_that_did_not_relays_nothi
 fn scrolling_the_whole_transcript_lays_each_entry_out_once() {
     let history = 260;
     let mut rows = Rows::new();
+    rows.resize(80);
     for which in 1..=history {
-        rows.push(turn(which));
+        rows.push(note(which));
     }
 
     let room = 40;
@@ -231,15 +237,16 @@ fn scrolling_the_whole_transcript_lays_each_entry_out_once() {
 #[test]
 fn an_entry_above_the_window_is_never_laid_out() {
     let mut rows = Rows::new();
+    rows.resize(80);
     for which in 1..=250 {
-        rows.push(turn(which));
+        rows.push(note(which));
     }
 
     let window = rows.window(Scroll::Tail, 40);
     let shown = window.pieces().len();
     assert_eq!(
         shown, 40,
-        "a one-row turn each, so the last 40 are the window"
+        "a one-row entry each, so the last 40 are the window"
     );
     assert_eq!(rows.lays(), shown, "and nothing above them was laid out");
     assert!(
@@ -252,8 +259,9 @@ fn an_entry_above_the_window_is_never_laid_out() {
 #[test]
 fn the_whole_height_costs_a_layout_only_for_what_it_has_not_seen() {
     let mut rows = Rows::new();
+    rows.resize(80);
     for which in 1..=250 {
-        rows.push(turn(which));
+        rows.push(note(which));
     }
     rows.window(Scroll::Tail, 40);
 
@@ -350,6 +358,157 @@ fn the_readers_own_words_are_drawn_under_the_row_that_names_them() {
     assert_eq!(inks(&rows[1]), [Ink::Plain, Ink::Plain]);
 }
 
+#[test]
+fn a_turn_draws_no_row_at_any_width() {
+    for cols in [120, 40, 20, 8, 3, 1] {
+        let drawn = layout(&Entry::Turn { turn: 3 }, cols);
+        assert!(
+            drawn.is_empty(),
+            "a turn is a seam in the exchange and no row of it at {cols} columns: {drawn:?}"
+        );
+    }
+}
+
+/// A view of `entries` whose run settled on `stop` after 1.2 seconds, drawn through the one seam.
+fn settled_frame(entries: Vec<Entry>, stop: &Stop, cols: u16, rows: u16) -> Vec<String> {
+    let mut view = View::of(
+        Capabilities::default(),
+        facts::Facts::default()
+            .asked()
+            .pulsed(Some(Pulse::settled(stop, 1_200))),
+        Transcript::of(entries),
+    );
+    view.stopped(stop);
+    frame(&mut view, cols, rows)
+}
+
+#[test]
+fn three_exchanges_are_three_prompts_and_three_answers_and_no_row_saying_a_run_ended() {
+    let secrets = SecretSet::default();
+    let mut entries = Vec::new();
+    for turn in 1..=3 {
+        entries.push(Entry::Prompt {
+            text: secrets.redact(format!("prompt {turn}")),
+        });
+        entries.push(Entry::Turn { turn });
+        entries.push(Entry::Assistant {
+            turn,
+            text: secrets.redact(format!("answer {turn}")),
+        });
+        entries.push(Entry::Stop { stop: Stop::Final });
+    }
+    let drawn = settled_frame(entries, &Stop::Final, 60, 20);
+    let whole = drawn.join("\n");
+
+    let asked = drawn
+        .iter()
+        .filter(|row| row.starts_with("─ prompt "))
+        .count();
+    assert_eq!(
+        asked, 3,
+        "a conversation of three prompts opens on three prompts: {whole}"
+    );
+    for turn in 1..=3 {
+        assert_eq!(
+            drawn
+                .iter()
+                .filter(|row| row.contains(&format!("answer {turn}")))
+                .count(),
+            1,
+            "and each answer the run gave stands once: {whole}"
+        );
+    }
+    let ended = ["turn", "final", "cancelled", "max_turns", "budget", "error"];
+    assert!(
+        !drawn.iter().any(|row| ended
+            .iter()
+            .any(|word| row.contains(word) && row.starts_with(&['─', '✓', '✗'][..]))),
+        "no row of the band says a run ended: {whole}"
+    );
+    let answer = drawn
+        .iter()
+        .position(|row| row == "✓ 1.2s answer 3")
+        .unwrap_or_else(|| panic!("the last answer wears the check the run ended on: {whole}"));
+    assert_eq!(
+        drawn[answer..]
+            .iter()
+            .take_while(|row| !row.is_empty())
+            .count(),
+        1,
+        "and no row is drawn under it, so the answer is the last row of the exchange: {whole}"
+    );
+}
+
+#[test]
+fn every_stop_that_draws_its_row_wears_the_word_its_answer_is_marked_with() {
+    let secrets = SecretSet::default();
+    for stop in [
+        Stop::MaxTurns,
+        Stop::Budget(Budget::Clock),
+        Stop::Cancelled,
+        failed(),
+    ] {
+        let entries = vec![
+            Entry::Prompt {
+                text: secrets.redact("triage this"),
+            },
+            Entry::Assistant {
+                turn: 1,
+                text: secrets.redact("the retry test is the question"),
+            },
+        ];
+        let drawn = settled_frame(entries, &stop, 60, 12);
+        let whole = drawn.join("\n");
+        let word = stop.word();
+
+        assert!(
+            drawn
+                .iter()
+                .any(|row| row.starts_with(&format!("✗ {word} "))
+                    && row.contains("the retry test is the question")),
+            "{word} is on the mark at the head of the answer it ended: {whole}"
+        );
+        assert!(
+            drawn.iter().any(|row| row == &format!("✗ {word}")),
+            "and under it the stop says the same word: {whole}"
+        );
+    }
+}
+
+#[test]
+fn a_final_stop_lays_no_row_where_the_answer_it_ended_on_wears_the_check() {
+    let secrets = SecretSet::default();
+    let entries = vec![Entry::Assistant {
+        turn: 1,
+        text: secrets.redact("the retry test is the question"),
+    }];
+    let drawn = settled_frame(entries, &Stop::Final, 60, 8);
+    let whole = drawn.join("\n");
+
+    assert!(
+        !drawn.iter().any(|row| row.contains("final")),
+        "a run that ended on its answer says no row about ending: {whole}"
+    );
+    assert!(
+        drawn
+            .iter()
+            .any(|row| row == "✓ 1.2s the retry test is the question"),
+        "the answer stands under the check and the time the run took: {whole}"
+    );
+}
+
+#[test]
+fn a_run_that_drew_no_answer_draws_the_row_of_the_stop_it_ended_on() {
+    let drawn = settled_frame(Vec::new(), &Stop::Cancelled, 60, 8);
+    let whole = drawn.join("\n");
+
+    assert!(
+        drawn.iter().any(|row| row == "✗ cancelled"),
+        "a run stopped before it answered has no answer to wear its mark, so the stop is a row \
+         of its own: {whole}"
+    );
+}
+
 /// The column a row's words begin in: the first glyph of it that is a letter, a digit or a bullet,
 /// and nothing for a row that says no word at all.
 fn words_column(row: &Row) -> Option<u16> {
@@ -361,7 +520,6 @@ fn words_column(row: &Row) -> Option<u16> {
 
 fn every_kind(secrets: &SecretSet) -> Vec<Entry> {
     vec![
-        turn(5),
         Entry::Prompt {
             text: secrets.redact("triage the retry test"),
         },
@@ -416,7 +574,6 @@ fn drawn_at(row: &Row, column: u16) -> Option<char> {
 #[test]
 fn the_marker_that_says_what_a_row_is_stands_in_the_gutter() {
     let secrets = SecretSet::default();
-    let turn_row = layout(&turn(5), 40);
     let prompt = layout(
         &Entry::Prompt {
             text: secrets.redact("triage this"),
@@ -446,7 +603,6 @@ fn the_marker_that_says_what_a_row_is_stands_in_the_gutter() {
         .expect("the fence is rows of its own");
 
     let marked = [
-        (&turn_row[0], '─'),
         (&prompt[0], '─'),
         (&prompt[1], '›'),
         (&flight[0], '…'),
@@ -487,7 +643,6 @@ fn a_row_too_narrow_for_a_marker_gives_up_the_marker_before_it_cuts_a_word() {
         (result(1, Exit::Code(1)), '✗'),
         (call(1), '…'),
         (thought, '│'),
-        (turn(5), '─'),
         (
             Entry::Prompt {
                 text: secrets.redact("prompt"),
@@ -838,7 +993,7 @@ fn a_live_entry_is_laid_out_alone_as_its_fragments_land() {
 fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
     let secrets = SecretSet::default();
     let mut rows = Rows::new();
-    rows.push(turn(1));
+    rows.push(note(1));
     rows.resize(40);
 
     let mut stream = Stream::new();
@@ -1451,7 +1606,7 @@ fn kept_back_row(laid: &[Row]) -> Option<String> {
 fn one_key_opens_the_newest_results_fold_and_the_same_key_closes_it_again() {
     let mut rows = Rows::new();
     rows.resize(80);
-    rows.push(turn(1));
+    rows.push(note(1));
     rows.push(long_result(1));
 
     let folded: Vec<Row> = rows.rows(1).to_vec();
@@ -1554,11 +1709,12 @@ fn a_fold_a_reader_opened_stays_open_through_a_reflow_and_a_new_entry_beside_it(
         "every row of the output is still drawn, its last one included: {reflowed:?}"
     );
 
-    rows.push(turn(2));
+    rows.push(note(2));
     let beside: Vec<String> = rows.rows(1).iter().map(words).collect();
-    assert!(
-        beside.iter().any(|row| row.starts_with("─ turn 2")),
-        "the entry beside it is the divider a turn is drawn as: {beside:?}"
+    assert_eq!(
+        beside,
+        vec![String::from("│ turn 2")],
+        "the entry beside it is the one row it is drawn as, and no row of the fold's: {beside:?}"
     );
     assert_eq!(
         rows.lays(),
@@ -1577,7 +1733,7 @@ fn a_fold_a_reader_opened_stays_open_through_a_reflow_and_a_new_entry_beside_it(
 #[test]
 fn a_session_read_back_is_folded_again() {
     let directory = tempfile::tempdir().expect("a session directory");
-    let lines: Vec<String> = [turn(1), long_result(1)]
+    let lines: Vec<String> = [note(1), long_result(1)]
         .iter()
         .map(|entry| serde_json::to_string(entry).expect("an entry is one line of a transcript"))
         .collect();
@@ -1686,10 +1842,80 @@ fn a_reasoning_entry_a_run_wrote_is_drawn_from_the_transcript_it_left() {
 }
 
 #[test]
+fn the_record_writes_a_turn_for_every_turn_while_the_band_draws_no_row_for_one() {
+    let root = tempfile::tempdir().expect("a temp ground");
+    let workspace = root.path().join("workspace");
+    let state = root.path().join("state");
+    for path in [&workspace, &state] {
+        std::fs::create_dir_all(path).expect("a directory");
+    }
+    let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Unsafe)
+        .expect("the boundary holds");
+    let limits = Limits::default();
+    let secrets = SecretSet::default();
+    let session = Session::create(&state).expect("a session");
+    let mut record = Record::open(
+        &session,
+        Facts {
+            wire: Wire::Anthropic,
+            model: "claude-sonnet-4",
+            route: None,
+            thinking: false,
+            boundary: &boundary,
+            limits: &limits,
+            workspace: &workspace,
+            secrets: &secrets,
+        },
+    )
+    .expect("a record");
+    for (turn, prompt, answer) in [
+        (1, "read the fence rule", "a fence still open is code"),
+        (2, "and the retry rule", "a retry is the run's own word"),
+    ] {
+        record
+            .wrote(&Turn::answered(turn, prompt, answer))
+            .expect("a turn is written whole");
+    }
+    drop(record);
+
+    let read = read_transcript(session.directory()).expect("the transcript reads back");
+    let turns: Vec<u32> = read
+        .entries()
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Turn { turn } => Some(*turn),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        turns,
+        vec![1, 2],
+        "the record writes a turn for every turn the run took: {:?}",
+        read.entries()
+    );
+
+    let mut rows = Rows::new();
+    rows.resize(80);
+    for entry in read.entries().iter().cloned() {
+        rows.push(entry);
+    }
+    for (at, entry) in read.entries().iter().enumerate() {
+        if matches!(entry, Entry::Turn { .. }) {
+            assert_eq!(
+                rows.rows(at).len(),
+                0,
+                "and the band draws no row of any of them: {:?}",
+                rows.rows(at)
+            );
+        }
+    }
+}
+
+#[test]
 fn a_transcript_whose_calls_hold_no_identity_pairs_each_result_with_the_call_before_it() {
     let directory = tempfile::tempdir().expect("a session directory");
     let written = [
-        turn(1),
+        note(1),
         call(1),
         call(1),
         result(1, Exit::Code(0)),
@@ -1734,7 +1960,7 @@ fn a_transcript_whose_calls_hold_no_identity_pairs_each_result_with_the_call_bef
 fn a_transcript_of_two_calls_pairs_them_by_identity_when_it_is_read_back() {
     let directory = tempfile::tempdir().expect("a session directory");
     let written = [
-        turn(1),
+        note(1),
         call_of(1, Some("toolu_1")),
         call_of(1, Some("toolu_2")),
         result_of(1, Some("toolu_2"), Exit::Code(1)),
@@ -1980,7 +2206,7 @@ fn a_settled_call_keeps_its_words_above_the_row_that_says_how_it_ended() {
 fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
     let mut rows = Rows::new();
     for which in 1..=3 {
-        rows.push(turn(which));
+        rows.push(note(which));
         rows.push(answer(which));
     }
     rows.push(call(4));
@@ -2316,17 +2542,18 @@ fn a_row_set_under_a_gutter_keeps_the_picture_it_stands_on() {
     );
 }
 
-/// The thumb a transcript of `turns` rows draws in a band `band` rows tall, read at `scroll`.
+/// The thumb a transcript of `turns` one-row entries draws in a band `band` rows tall, read at
+/// `scroll`.
 fn thumb_of(turns: u32, band: u16, scroll: Scroll) -> Option<sindri::rows::Thumb> {
     let mut rows = Rows::new();
     rows.resize(120);
     for which in 1..=turns {
-        rows.push(turn(which));
+        rows.push(note(which));
     }
     assert_eq!(
         rows.height(),
         turns,
-        "one turn divider is one row of a 120-column band"
+        "one note is one row of a 120-column band"
     );
     rows.thumb(scroll, band)
 }
@@ -2397,7 +2624,7 @@ fn a_band_with_nothing_to_point_at_draws_no_thumb() {
         let mut narrow = Rows::new();
         narrow.resize(cols);
         for which in 1..=80 {
-            narrow.push(turn(which));
+            narrow.push(note(which));
         }
         assert_eq!(
             narrow.thumb(Scroll::Back(44), 36),
@@ -2410,7 +2637,7 @@ fn a_band_with_nothing_to_point_at_draws_no_thumb() {
     let mut roomy = Rows::new();
     roomy.resize(4);
     for which in 1..=80 {
-        roomy.push(turn(which));
+        roomy.push(note(which));
     }
     assert!(
         roomy.thumb(Scroll::Back(44), 36).is_some(),
@@ -2430,7 +2657,6 @@ fn failed() -> Stop {
 #[test]
 fn every_stop_is_drawn_under_its_own_word_on_the_mark_it_wears() {
     let stops = [
-        (Stop::Final, "✓ final", Ink::Ok),
         (Stop::MaxTurns, "✗ max_turns", Ink::Err),
         (Stop::Budget(Budget::Clock), "✗ budget", Ink::Err),
         (Stop::Budget(Budget::Output), "✗ budget", Ink::Err),
@@ -2466,12 +2692,7 @@ fn an_error_stop_carries_one_line_of_its_words_and_no_other_stop_carries_a_line(
          {drawn:?}"
     );
 
-    for stop in [
-        Stop::Final,
-        Stop::MaxTurns,
-        Stop::Budget(Budget::Clock),
-        Stop::Cancelled,
-    ] {
+    for stop in [Stop::MaxTurns, Stop::Budget(Budget::Clock), Stop::Cancelled] {
         let rows = layout(&stop_entry(stop.clone()), 60);
         assert_eq!(
             rows.len(),
@@ -2572,17 +2793,17 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
     view.handed(
         view.facts()
             .clone()
-            .pulsed(Some(Pulse::settled(&Stop::Final, 1_200))),
+            .pulsed(Some(Pulse::settled(&Stop::Cancelled, 1_200))),
     );
-    view.stopped(&Stop::Final);
+    view.stopped(&Stop::Cancelled);
     let ended = frame(&mut view, 60, 12);
 
     assert_eq!(
-        ended[0], "✓ 1.2s the first run's answer",
+        ended[0], "✗ cancelled 1.2s the first run's answer",
         "the marker settles on the answer the run ended on: {ended:?}"
     );
     assert_eq!(
-        ended[1], "✓ final",
+        ended[1], "✗ cancelled",
         "and the stop it ended on is the transcript's last entry till a run follows it: {ended:?}"
     );
 
@@ -2598,7 +2819,7 @@ fn a_run_that_starts_after_a_stop_says_its_words_below_that_stops_entry() {
     };
 
     assert!(
-        at("✓ final") < at("⠋ 0.0s the second run is working"),
+        at("✗ cancelled") < at("⠋ 0.0s the second run is working"),
         "the run after it says its words under that stop rather than above it: {after:?}"
     );
 }

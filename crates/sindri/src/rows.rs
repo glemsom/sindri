@@ -254,7 +254,7 @@ fn laid(
 ) -> (Vec<Row>, Option<usize>) {
     let cols = cols.max(1);
     match entry {
-        Entry::Turn { turn } => (vec![divider(&format!("turn {turn} "), cols)], None),
+        Entry::Turn { .. } => (Vec::new(), None),
         Entry::Call {
             name, arguments, ..
         } => (
@@ -289,6 +289,7 @@ fn laid(
         Entry::Assistant { text, .. } => (answer_on(&text.to_string(), cols, head, surface), None),
         Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
         Entry::Prompt { text } => (asked(&text.to_string(), cols), None),
+        Entry::Stop { stop: Stop::Final } => (Vec::new(), None),
         Entry::Stop { stop } => (stopped(stop, cols), None),
     }
 }

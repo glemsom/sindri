@@ -1503,7 +1503,7 @@ fn a_frame_draws_the_three_values_it_was_built_from() {
     let mut view = View::of(
         inked(Palette::ANSI),
         Facts::default().asked().railed(rail()),
-        Transcript::of([Entry::Turn { turn: 1 }]),
+        Transcript::of([note(1)]),
     );
     let buffer = painted(&mut view, 120, 40);
 
@@ -1526,7 +1526,7 @@ fn a_frame_draws_the_three_values_it_was_built_from() {
 
 #[test]
 fn a_frame_draws_the_record_from_the_row_the_reader_stands_at() {
-    let turns = (1..=80).map(|turn| Entry::Turn { turn });
+    let turns = (1..=80).map(note);
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -2247,13 +2247,22 @@ fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_ex
     );
 }
 
-/// A frame whose transcript is `count` rows of turn dividers, each saying which turn it is:
-/// where a row stands in the frame is then a fact of what the row says.
+/// One row of the band that says which turn it is: a turn draws no row of its own, so the frames
+/// these tests count rows with say which one each row stands on with a thought in its gutter.
+fn note(turn: u32) -> Entry {
+    Entry::Reasoning {
+        turn,
+        text: SecretSet::default().redact(format!("turn {turn}")),
+    }
+}
+
+/// A frame whose transcript is `count` one-row entries, each saying which turn it is: where a row
+/// stands in the frame is then a fact of what the row says.
 fn turns(count: u32) -> View {
     View::of(
         Capabilities::default(),
         Facts::default().asked(),
-        Transcript::of((1..=count).map(|turn| Entry::Turn { turn })),
+        Transcript::of((1..=count).map(note)),
     )
 }
 
@@ -2262,7 +2271,7 @@ fn turns_taken(count: u32) -> View {
     View::of(
         pointing(),
         Facts::default().asked(),
-        Transcript::of((1..=count).map(|turn| Entry::Turn { turn })),
+        Transcript::of((1..=count).map(note)),
     )
 }
 
@@ -2277,7 +2286,7 @@ fn folded_run(rows: u32) -> View {
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::of(vec![
-            Entry::Turn { turn: 1 },
+            note(1),
             Entry::Call {
                 turn: 1,
                 id: None,
@@ -2800,7 +2809,7 @@ fn one_row_back_is_said_in_the_singular() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
-        Transcript::of((1..=100).map(|turn| Entry::Turn { turn })).scrolled(Scroll::Back(1)),
+        Transcript::of((1..=100).map(note)).scrolled(Scroll::Back(1)),
     );
     let buffer = painted(&mut view, 120, 40);
 
@@ -2989,7 +2998,7 @@ fn a_frame_too_short_for_the_row_gives_it_up_before_the_transcript_loses_its_las
             .collect::<Vec<_>>()
     );
     assert!(
-        drawn_row(&close, 0).starts_with("─ turn "),
+        drawn_row(&close, 0).starts_with("│ turn "),
         "and the transcript's one row is still drawn in the row above the composer: {:?}",
         drawn_row(&close, 0)
     );
@@ -3530,12 +3539,12 @@ fn thumb_rows(buffer: &Buffer) -> Vec<u16> {
         .collect()
 }
 
-/// A frame whose transcript is `count` rows of turn dividers, read from `scroll`.
+/// A frame whose transcript is `count` one-row entries, read from `scroll`.
 fn scrolled(count: u32, scroll: Scroll) -> View {
     View::of(
         Capabilities::default(),
         Facts::default().asked(),
-        Transcript::of((1..=count).map(|turn| Entry::Turn { turn })).scrolled(scroll),
+        Transcript::of((1..=count).map(note)).scrolled(scroll),
     )
 }
 
@@ -3614,11 +3623,11 @@ fn a_frame_too_narrow_for_a_gutter_draws_no_thumb() {
         Vec::<u16>::new(),
         "a band too narrow for a gutter keeps its words and gives the thumb up"
     );
+    let first = drawn_row(&narrow, 0);
     assert!(
-        drawn_row(&narrow, 0).starts_with("tu"),
-        "the band of two columns holds no gutter and sets the turn's own words in its first \
-             column, which the thumb has left alone: {:?}",
-        drawn_row(&narrow, 0)
+        !first.trim().is_empty() && !first.starts_with(' ') && !first.contains(THUMB),
+        "the band of two columns holds no gutter and sets the entry's own words in its first \
+             column, which the thumb has left alone: {first:?}"
     );
 }
 
@@ -3629,7 +3638,7 @@ fn wide(cols: u16) -> Buffer {
         turn: 1,
         text: SecretSet::default().redact("\u{8003}"),
     }];
-    entries.extend((1..=79).map(|turn| Entry::Turn { turn }));
+    entries.extend((1..=79).map(note));
     // A window taken further back than the transcript reaches lands on its first row.
     painted(
         &mut View::of(
@@ -4677,7 +4686,7 @@ fn the_band_alone_places_the_caret_and_no_answer_or_prompt_does() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().running(),
-        Transcript::of((1..=3).map(|turn| Entry::Turn { turn })),
+        Transcript::of((1..=3).map(note)),
     );
     view.enqueue(prompt("a prompt behind the draft"));
     view.paste("a draft");
@@ -4923,14 +4932,16 @@ fn a_stop_the_record_holds_is_drawn_once() {
                     turn: 1,
                     text: SecretSet::default().redact("Hello world"),
                 },
-                Entry::Stop { stop: Stop::Final },
+                Entry::Stop {
+                    stop: Stop::Cancelled,
+                },
             ]),
     );
-    view.stopped(&Stop::Final);
+    view.stopped(&Stop::Cancelled);
     let drawn = painted(&mut view, 100, 30);
 
     assert_eq!(
-        rows_holding(&drawn, "final").len(),
+        rows_holding(&drawn, "cancelled").len(),
         1,
         "the record draws the stop it wrote, so the frame draws it once: {:?}",
         frame_rows(&drawn)

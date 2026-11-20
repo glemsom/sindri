@@ -3,25 +3,25 @@ source: crates/sindri/tests/fixture/mod.rs
 expression: drawn
 ---
 tools at 120x40
-00 |─ turn 1 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-01 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
-02 |  rg -n 'the gutter' crates/sindri/src                                                                                  | plain:120
-03 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
-04 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
-05 |✓ open                                                                                                                  | ok:1 plain:1 dim:4 plain:114
-06 |  GLOSSARY.md                                                                                                           | plain:2 plain~dim:11 plain:107
-07 |✓ exit 0  4 ms · 0 bytes                                                                                                | ok:1 plain:1 dim:22 plain:96
-08 |✓ skill                                                                                                                 | ok:1 plain:1 dim:5 plain:113
-09 |  rust-review                                                                                                           | plain:120
-10 |✓ exit 0  2 ms · 33 bytes                                                                                               | ok:1 plain:1 dim:23 plain:95
-11 |  the rust-review skill is loaded                                                                                       | muted:33 plain:87
-12 |─ turn 2 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-13 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
-14 |  cargo test --workspace                                                                                                | plain:120
-15 |… open                                                                                                                  | dim:1 plain:1 dim:4 plain:114
-16 |  docs/agents/domain.md                                                                                                 | plain:2 plain~dim:21 plain:97
-17 |… skill                                                                                                                 | dim:1 plain:1 dim:5 plain:113
-18 |  code-review                                                                                                           | plain:120
+00 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+01 |  rg -n 'the gutter' crates/sindri/src                                                                                  | plain:120
+02 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
+03 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
+04 |✓ open                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+05 |  GLOSSARY.md                                                                                                           | plain:2 plain~dim:11 plain:107
+06 |✓ exit 0  4 ms · 0 bytes                                                                                                | ok:1 plain:1 dim:22 plain:96
+07 |✓ skill                                                                                                                 | ok:1 plain:1 dim:5 plain:113
+08 |  rust-review                                                                                                           | plain:120
+09 |✓ exit 0  2 ms · 33 bytes                                                                                               | ok:1 plain:1 dim:23 plain:95
+10 |  the rust-review skill is loaded                                                                                       | muted:33 plain:87
+11 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+12 |  cargo test --workspace                                                                                                | plain:120
+13 |… open                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+14 |  docs/agents/domain.md                                                                                                 | plain:2 plain~dim:21 plain:97
+15 |… skill                                                                                                                 | dim:1 plain:1 dim:5 plain:113
+16 |  code-review                                                                                                           | plain:120
+17 |                                                                                                                        | plain:120
+18 |                                                                                                                        | plain:120
 19 |                                                                                                                        | plain:120
 20 |                                                                                                                        | plain:120
 21 |                                                                                                                        | plain:120
