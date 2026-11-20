@@ -96,6 +96,16 @@ fn fold_open_120x40_is_that_work_opened_and_the_fold_its_result_keeps() {
 }
 
 #[test]
+fn prompt_fold_120x40_is_a_prompt_longer_than_its_head_drawn_as_that_head_and_a_count() {
+    fixture::assert_frame("prompt-fold", 120, 40);
+}
+
+#[test]
+fn prompt_fold_open_120x40_is_that_prompt_opened_to_every_word_the_reader_typed() {
+    fixture::assert_frame("prompt-fold-open", 120, 40);
+}
+
+#[test]
 fn fold_answer_120x40_is_an_answer_drawn_whole_beside_a_folded_result() {
     fixture::assert_frame("fold-answer", 120, 40);
 }

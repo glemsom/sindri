@@ -5,7 +5,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use ratatui::layout::Position;
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Position, Rect};
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
@@ -133,19 +134,19 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "face" => faced(true),
         "face-off" => faced(false),
         "streaming" => streaming(capabilities),
-        "calls" => {
-            let mut view = running(capabilities, calls(), Scroll::Tail);
-            assert_eq!(
-                view.key(Key::Fold),
-                Outcome::Edited,
-                "the four calls the newest settled exchange made are opened, so a frame draws each \
-                 verdict the work holds"
-            );
-            view
-        }
+        "calls" => pressed(
+            running(capabilities, calls(), Scroll::Tail),
+            Key::Fold,
+            120,
+            40,
+            "the four calls the newest settled exchange made are opened, so a frame draws each \
+             verdict the work holds",
+        ),
         "tools" => tools(capabilities),
         "fold" => fold(capabilities, false),
         "fold-open" => fold(capabilities, true),
+        "prompt-fold" => prompt_fold(capabilities, false),
+        "prompt-fold-open" => prompt_fold(capabilities, true),
         "fold-answer" => folded_beside_an_answer(capabilities),
         "empty" => View::of(capabilities, Facts::default().asked(), Transcript::none()),
         // One draft drawn twice, a run live in the second: the edge is the one row they disagree
@@ -1322,6 +1323,71 @@ fn folded_run() -> Vec<Entry> {
             "Three rows of the fold are the whole of it: the head, the count and the last.",
         ),
         end(),
+    ]
+}
+
+/// A transcript whose newest prompt is longer than the head its fold keeps, under a settled call and
+/// the answer it ended on: folded it draws that head and the count, and opened every word the reader
+/// typed.
+fn prompt_fold(capabilities: Capabilities, open: bool) -> View {
+    let view = running(capabilities, prompt_fold_run(), Scroll::Tail);
+    match open {
+        true => pressed(
+            view,
+            Key::Fold,
+            120,
+            40,
+            "Ctrl-O opens the newest fold a reader may move, which is this prompt's where no work \
+             stands after it",
+        ),
+        false => view,
+    }
+}
+
+/// `view` with `key` pressed after a pass at `cols` by `rows`, which is the order a reader sends one
+/// in: the fold a key moves is read off the band the last pass laid, and never off no band at all.
+fn pressed(mut view: View, key: Key, cols: u16, rows: u16, why: &str) -> View {
+    let area = Rect::new(0, 0, cols, rows);
+    let mut buffer = Buffer::empty(area);
+    view.paint(area, &mut buffer);
+    assert_eq!(view.key(key), Outcome::Edited, "{why}");
+    view
+}
+
+/// The words of the prompt the fold is drawn on, a line a row at the band's width: a reader reads
+/// which of them the fold draws and which it keeps back.
+const FOLDED_PROMPT: &str = "the retry test fails on the line the patch moved, and only there\
+\nsay which line the patch moved, and which row of the output disagrees\
+\nthe report names the file it read and the line it stopped on\
+\ngive me the test name and the assertion it failed on\
+\nthen say whether the retry that hid it was the one the run recorded\
+\nkeep every line one sentence long, so the transcript stays readable\
+\nno need to paste the whole output, the head of it is enough\
+\nand end with the one thing you would change first";
+
+fn prompt_fold_run() -> Vec<Entry> {
+    vec![
+        prompt("why does the retry test fail?"),
+        Entry::Turn { turn: 1 },
+        call(
+            1,
+            "bash",
+            r#"{"command": "cargo test -p sindri --test rows"}"#,
+        ),
+        result(
+            1,
+            "bash",
+            Exit::Code(0),
+            "test rows::a_row_of_output_1 ... ok\ntest result: ok. 4 passed; 0 failed",
+            208,
+            97,
+        ),
+        answer(
+            1,
+            "The retry test fails on the line the patch moved, and the output under it says which.",
+        ),
+        end(),
+        prompt(FOLDED_PROMPT),
     ]
 }
 

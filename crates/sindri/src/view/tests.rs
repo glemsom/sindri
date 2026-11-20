@@ -2487,6 +2487,30 @@ fn settled_run(rows: u32) -> View {
     )
 }
 
+/// The words of a prompt long enough to fold, a line to a row at the band's width.
+fn long_prompt_words() -> String {
+    (1..=12)
+        .map(|line| format!("words {line} of the prompt"))
+        .collect::<Vec<String>>()
+        .join("\n")
+}
+
+/// That prompt as the reader typed it.
+fn long_prompt() -> Entry {
+    Entry::Prompt {
+        text: SecretSet::default().redact(long_prompt_words()),
+    }
+}
+
+/// A frame holding that prompt on a terminal that reports a pointer.
+fn folded_prompt() -> View {
+    View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(vec![long_prompt()]),
+    )
+}
+
 /// Every row the frame draws, top to bottom.
 fn frame_rows(buffer: &Buffer) -> Vec<String> {
     let area = buffer.area;
@@ -5746,6 +5770,79 @@ fn a_bracket_takes_the_frame_to_the_prompt_after_the_one_it_stands_on() {
 }
 
 #[test]
+fn a_bracket_and_the_prompt_notice_count_the_rows_a_folded_prompt_draws() {
+    let mut entries = vec![
+        long_prompt(),
+        Entry::Assistant {
+            turn: 1,
+            text: SecretSet::default().redact("the answer under it"),
+        },
+    ];
+    entries.extend(exchanges(20));
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(entries).scrolled(Scroll::Back(999)),
+    );
+    let buffer = painted(&mut view, 120, 40);
+    assert!(
+        drawn_row(&buffer, 0).contains("words 1 of the prompt"),
+        "the frame stands on the folded prompt's head row: {:?}",
+        frame_rows(&buffer)
+    );
+    assert!(
+        drawn_row(&buffer, 4).contains("rows kept back"),
+        "which is five rows of the transcript, the count standing on the fifth: {:?}",
+        frame_rows(&buffer)[..6].to_vec()
+    );
+    assert!(
+        !holds(&buffer, "words 12 of the prompt"),
+        "and the rows it keeps back are not drawn, so no jump may count them"
+    );
+    let (notice, _) = notice_of(&buffer);
+    assert!(
+        notice.starts_with("prompt 1 / 21"),
+        "the notice names the folded prompt as the first of the twenty-one the conversation \
+         holds: {notice:?}"
+    );
+
+    assert_eq!(
+        view.key(Key::Char(']')),
+        Outcome::Edited,
+        "`]` takes the frame to the prompt after it"
+    );
+    let buffer = painted(&mut view, 120, 40);
+    assert!(
+        blank(&drawn_row(&buffer, 0)),
+        "the exchange after a folded prompt opens on the blank row above its words, so the jump \
+         measured the four rows the prompt draws and not the twelve it kept back: {:?}",
+        frame_rows(&buffer)[..5].to_vec()
+    );
+    assert!(
+        drawn_row(&buffer, 1).contains("prompt 1"),
+        "and the prompt it asked is the row under it: {:?}",
+        frame_rows(&buffer)[..5].to_vec()
+    );
+    let (notice, _) = notice_of(&buffer);
+    assert!(
+        notice.starts_with("prompt 2 / 21"),
+        "and the notice names the second: {notice:?}"
+    );
+
+    assert_eq!(
+        view.key(Key::Char('[')),
+        Outcome::Edited,
+        "`[` takes the frame back to the folded prompt"
+    );
+    let buffer = painted(&mut view, 120, 40);
+    assert!(
+        drawn_row(&buffer, 0).contains("words 1 of the prompt"),
+        "standing it on the head row the fold draws: {:?}",
+        frame_rows(&buffer)[..5].to_vec()
+    );
+}
+
+#[test]
 fn both_brackets_stop_at_the_first_and_the_last_prompt() {
     let tall = (1..=60)
         .map(|line| format!("line {line} of the answer"))
@@ -5993,6 +6090,122 @@ fn a_press_on_a_settled_works_row_opens_it_and_a_press_on_its_head_folds_it() {
         frame_rows(&folded)
     );
     assert!(!holds(&folded, "test rows::a_row_of_output_1 ... ok"));
+}
+
+#[test]
+fn a_press_on_the_row_counting_a_prompts_rows_opens_it_and_a_press_on_its_head_folds_it() {
+    let mut view = folded_prompt();
+    let (drawn, told) = painted_and_told(&mut view, 120, 40);
+    let count = row_holding(&drawn, "rows kept back");
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(count, 10))),
+        Outcome::Edited,
+        "a press on the row counting the rows a prompt keeps back opens it, the way a press on a \
+         folded result's count opens that"
+    );
+    let opened = painted(&mut view, 120, 40);
+    assert!(
+        holds(&opened, "words 12 of the prompt"),
+        "the opened prompt draws every word the reader typed: {:?}",
+        frame_rows(&opened)
+    );
+    assert!(
+        !holds(&opened, "rows kept back"),
+        "and keeps nothing back, so it counts nothing back: {:?}",
+        frame_rows(&opened)
+    );
+
+    let head = row_holding(&opened, "words 1 of the prompt");
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(head, 10))),
+        Outcome::Edited,
+        "and a press on the prompt's head row folds it again, giving its rows back to the \
+         conversation"
+    );
+    let folded = painted(&mut view, 120, 40);
+    assert!(
+        holds(&folded, "rows kept back"),
+        "the prompt is drawn as its head and one row counting the rows kept back: {:?}",
+        frame_rows(&folded)
+    );
+    assert!(
+        !holds(&folded, "words 12 of the prompt"),
+        "and the rows it keeps back are not drawn: {:?}",
+        frame_rows(&folded)
+    );
+}
+
+#[test]
+fn a_press_folds_a_prompt_that_stands_under_the_blank_row_a_prompt_opens_on() {
+    let mut entries = exchanges(1);
+    entries.push(long_prompt());
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(entries),
+    );
+    let (drawn, told) = painted_and_told(&mut view, 120, 40);
+    let count = row_holding(&drawn, "rows kept back");
+    let folded_head = row_holding(&drawn, "words 1 of the prompt");
+    assert!(
+        blank(&drawn_row(&drawn, folded_head - 1)),
+        "the blank row that separates the prompt from the exchange above it is a row of the prompt: \
+         {:?}",
+        frame_rows(&drawn)
+    );
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(folded_head - 1, 10))),
+        Outcome::Unchanged,
+        "a press on that blank row is no act, because the blank is no word of the prompt"
+    );
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(count, 10))),
+        Outcome::Edited,
+        "a press on the row counting the rows kept back opens the prompt"
+    );
+    let opened = painted(&mut view, 120, 40);
+    let head = row_holding(&opened, "words 1 of the prompt");
+    assert!(
+        blank(&drawn_row(&opened, head - 1)),
+        "the opened prompt still opens under the blank row: {:?}",
+        frame_rows(&opened)
+    );
+
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(head, 10))),
+        Outcome::Edited,
+        "and a press on the first row of its words folds it again, the blank row above them \
+         standing in no gutter a press may reach"
+    );
+    assert!(
+        holds(&painted(&mut view, 120, 40), "rows kept back"),
+        "so the rows the prompt kept back are its own again"
+    );
+}
+
+#[test]
+fn a_copy_of_a_folded_prompt_takes_every_word_the_reader_typed() {
+    let mut view = folded_prompt();
+    let (drawn, _) = painted_and_told(&mut view, 120, 40);
+    let head = row_holding(&drawn, "words 1 of the prompt");
+    let count = row_holding(&drawn, "rows kept back");
+    view.drag(Cell::new(head, 0), Cell::new(count, 40));
+    painted(&mut view, 120, 40);
+
+    let words = match view.key(Key::Copy) {
+        Outcome::Copy(words) => words,
+        outcome => panic!("`Ctrl-Y` over a folded prompt copies its words, not {outcome:?}"),
+    };
+    assert_eq!(
+        words,
+        long_prompt_words(),
+        "a copy of a folded prompt takes every word the reader typed, without the spine the band \
+         drew beside them and never the row counting what it keeps back"
+    );
 }
 
 #[test]

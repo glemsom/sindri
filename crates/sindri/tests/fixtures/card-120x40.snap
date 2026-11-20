@@ -35,7 +35,7 @@ card at 120x40
 29 |  fact the record holds │ Home                 the start of the line                           │                        | dim:25 plain:1 plain+bold:21 muted:21 plain:27 dim:25
 30 |                        │ End                  the tail of the run, or the end of the line     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
 31 |▏ rust                  │ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 plain+bold:21 muted:33 plain:15 dim:25
-32 |▏ fn main() {           │ Ctrl-O               open or fold the newest work                    │                        | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
+32 |▏ fn main() {           │ Ctrl-O               open or fold the newest work or prompt          │                        | dim:25 plain:1 plain+bold:21 muted:38 plain:10 dim:25
 33 |▏    │let row = Row::of(│ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
 34 |▏    │row.paint(area, bu│ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
 35 |▏ }                     │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
