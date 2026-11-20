@@ -808,7 +808,7 @@ impl Room {
         }
         // A mermaid fence is a picture and not code: its source is kept so the drawing can be
         // made when the block closes, and so the reason it could not be drawn prints under it.
-        if tag.split_whitespace().next() == Some("mermaid") {
+        if language(&tag) == "mermaid" {
             let fence = match closed(span) {
                 true => Fence::Closed,
                 false => Fence::Streaming,
@@ -1345,6 +1345,9 @@ fn fence_line(line: &str) -> Option<(char, usize, &str)> {
 struct Code {
     /// Nothing when the language is one no syntax definition names: the block is drawn plain.
     parse: Option<(ParseState, ScopeStack)>,
+    /// Whether the block is a `diff`, whose rows wear one ink for the marker each opens with: a
+    /// tinted row never reaches the parse, and the rows the tint does not claim are its own.
+    diff: bool,
 }
 
 impl Code {
@@ -1355,7 +1358,8 @@ impl Code {
                 .find_syntax_by_token(tag)
                 .map(|syntax| (ParseState::new(syntax), ScopeStack::new())),
         };
-        Code { parse }
+        let diff = language(tag) == "diff";
+        Code { parse, diff }
     }
 
     fn highlight(&mut self, text: &str) -> Vec<Vec<(String, Look)>> {
@@ -1375,6 +1379,11 @@ impl Code {
     /// One line of code as the runs it is drawn as. A parse that fails is a line drawn plain
     /// rather than a run that stops.
     fn line(&mut self, line: &str) -> Vec<(String, Look)> {
+        if self.diff
+            && let Some(ink) = ink_of(line)
+        {
+            return vec![(String::from(line), Look::plain(ink))];
+        }
         let Some((parse, scopes)) = &mut self.parse else {
             return guided(vec![(String::from(line), Look::plain(Ink::Plain))]);
         };
@@ -1398,6 +1407,29 @@ impl Code {
         }
         guided(runs)
     }
+}
+
+/// The one ink a row of a `diff` fence wears for what it holds, read off the row itself so no state
+/// is carried across rows: a file header is its marker and the space and name after it, so `+++`
+/// and `---` are never an addition and a removal, and a row that is neither is the parse's to draw.
+fn ink_of(line: &str) -> Option<Ink> {
+    if line.starts_with("@@") {
+        return Some(Ink::Dim);
+    }
+    if line.starts_with("--- ") || line.starts_with("+++ ") {
+        return Some(Ink::Muted);
+    }
+    match line.as_bytes().first()? {
+        b'+' => Some(Ink::Ok),
+        b'-' => Some(Ink::Err),
+        _ => None,
+    }
+}
+
+/// The one word an info string names its language with: a tag carries more than that word, as
+/// `diff path/to/file` does, and the rest of it says nothing about how the block is drawn.
+fn language(tag: &str) -> &str {
+    tag.split_whitespace().next().unwrap_or_default()
 }
 
 /// `runs` with the last of the line's leading whitespace drawn as the frame's dim guide. Only a
