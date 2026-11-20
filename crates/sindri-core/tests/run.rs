@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sindri_core::config::Config;
+use sindri_core::open::{Ground, Opener, Opening};
 use sindri_core::policy::{
     Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES, Enforcement,
 };
@@ -1107,11 +1108,212 @@ fn a_bash_call_that_names_no_command_is_an_error() {
     );
 
     let unimplemented = shell
-        .execute(&Call::new("toolu_1", "open", "{}"), &mut Loaded::default())
+        .execute(&Call::new("toolu_1", "web", "{}"), &mut Loaded::default())
         .expect_err("this executor answers bash and skill and nothing else");
     assert!(
-        unimplemented.to_string().contains("open"),
+        unimplemented.to_string().contains("web"),
         "the refusal names the tool it cannot run: {unimplemented}"
+    );
+}
+
+/// A shell standing on a ground of real directories, and the opener it was handed: a run's own
+/// work lands in the session temp, which is beside the workspace and not inside it.
+struct OpenGround {
+    _root: tempfile::TempDir,
+    workspace: PathBuf,
+    temp: PathBuf,
+    boundary: Boundary,
+}
+
+impl OpenGround {
+    fn new() -> OpenGround {
+        let root = tempfile::tempdir().expect("a temp ground");
+        let temp = root.path().join("temp");
+        let workspace = root.path().join("workspace");
+        for place in [&workspace, &temp] {
+            std::fs::create_dir_all(place).expect("the directory");
+        }
+        let workspace = std::fs::canonicalize(&workspace).expect("the ground resolves");
+        let temp = std::fs::canonicalize(&temp).expect("the temp resolves");
+        let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Unsafe)
+            .expect("the boundary holds");
+        OpenGround {
+            _root: root,
+            workspace,
+            temp,
+            boundary,
+        }
+    }
+
+    /// A file in the session temp, resolved: what a run's own work is written to.
+    fn file(&self, name: &str) -> PathBuf {
+        let path = self.temp.join(name);
+        std::fs::write(&path, "the page").expect("the file");
+        path
+    }
+
+    fn shell(&self) -> Shell {
+        let ground =
+            Ground::new(&self.boundary, &self.temp, &self.workspace).expect("the ground resolves");
+        Shell::new(self.boundary.clone(), &self.temp, Catalog::default()).ground(Some(ground))
+    }
+}
+
+/// An opener that hands nothing anywhere and keeps what it was handed, so a test reads the target
+/// the run judged rather than what a browser did with it.
+#[derive(Debug, Default)]
+struct Logged {
+    openings: Mutex<Vec<Opening>>,
+}
+
+impl Logged {
+    fn openings(&self) -> Vec<Opening> {
+        self.openings
+            .lock()
+            .expect("the log is not poisoned")
+            .clone()
+    }
+}
+
+impl Opener for Logged {
+    fn open(&self, opening: &Opening) -> Result<(), String> {
+        self.openings
+            .lock()
+            .expect("the log is not poisoned")
+            .push(opening.clone());
+        Ok(())
+    }
+}
+
+/// The same log, as the seam a shell is handed.
+fn shared(logged: &Arc<Logged>) -> Arc<dyn Opener> {
+    let held: Arc<Logged> = Arc::clone(logged);
+    held
+}
+
+fn opening(arguments: &str) -> Call {
+    Call::new("toolu_1", "open", arguments)
+}
+
+#[test]
+fn an_open_call_hands_the_judged_file_to_the_opener_the_run_was_given() {
+    let ground = OpenGround::new();
+    let target = ground.file("page.html");
+    let logged = Arc::new(Logged::default());
+    let shell = ground.shell().opener(Some(shared(&logged)));
+
+    let acted = shell
+        .execute(
+            &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
+            &mut Loaded::default(),
+        )
+        .expect("a file in the session temp is a target the run may open");
+
+    assert_eq!(
+        logged.openings(),
+        vec![Opening::File(target.clone())],
+        "the opener is handed the path the ground resolved, not the words the call wrote"
+    );
+    assert_eq!(
+        acted.text,
+        format!("opened {}", target.display()),
+        "the result carries the target it opened"
+    );
+    assert_eq!(acted.bytes, 0, "an opener writes no output back");
+    assert_eq!(acted.exit, Exit::Code(0), "and the call exited well");
+}
+
+#[test]
+fn an_open_call_naming_a_page_on_the_allowlist_hands_the_url_over() {
+    let ground = OpenGround::new();
+    let logged = Arc::new(Logged::default());
+    let shell = ground.shell().opener(Some(shared(&logged)));
+
+    let acted = shell
+        .execute(
+            &opening(r#"{"url":"https://localhost/notes"}"#),
+            &mut Loaded::default(),
+        )
+        .expect("a page on the allowlist is a target the run may open");
+
+    assert_eq!(
+        logged.openings(),
+        vec![Opening::Url(String::from("https://localhost/notes"))],
+        "a url reaches the opener as the url it was judged to be"
+    );
+    assert_eq!(acted.text, "opened https://localhost/notes");
+    assert_eq!(acted.exit, Exit::Code(0));
+}
+
+#[test]
+fn an_open_call_outside_the_ground_is_refused_and_nothing_is_handed_over() {
+    let ground = OpenGround::new();
+    let logged = Arc::new(Logged::default());
+    let shell = ground.shell().opener(Some(shared(&logged)));
+
+    let refused = shell
+        .execute(
+            &opening(r#"{"path":"/etc/handbook.html"}"#),
+            &mut Loaded::default(),
+        )
+        .expect_err("a file outside the writable paths and the session temp is no target");
+
+    assert!(
+        refused.to_string().contains("outside the writable paths"),
+        "the refusal says where a target may come from: {refused}"
+    );
+    assert!(
+        logged.openings().is_empty(),
+        "a target the ground refused never reaches the browser"
+    );
+}
+
+#[test]
+fn a_shell_given_no_opener_cannot_run_an_open_call() {
+    let ground = OpenGround::new();
+    let target = ground.file("page.html");
+
+    let refused = ground
+        .shell()
+        .execute(
+            &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
+            &mut Loaded::default(),
+        )
+        .expect_err("nothing here can hand a target to a browser");
+
+    assert!(
+        refused.to_string().contains("open") && refused.to_string().contains("opener"),
+        "the refusal names the tool and what the run is short of: {refused}"
+    );
+}
+
+#[test]
+fn the_tool_list_a_refusal_writes_holds_open_only_when_the_shell_holds_an_opener() {
+    let ground = OpenGround::new();
+    let mut loaded = Loaded::default();
+    let unknown = Call::new("toolu_1", "web", "{}");
+
+    let bare = ground
+        .shell()
+        .execute(&unknown, &mut loaded)
+        .expect_err("a shell holding no opener answers bash and skill");
+    assert!(
+        bare.to_string().contains("`bash`") && bare.to_string().contains("`skill`"),
+        "the tools it does answer are named: {bare}"
+    );
+    assert!(
+        !bare.to_string().contains("`open`"),
+        "and a tool it cannot run is not named among them: {bare}"
+    );
+
+    let opened = ground
+        .shell()
+        .opener(Some(Arc::new(Logged::default())))
+        .execute(&unknown, &mut loaded)
+        .expect_err("a shell holding an opener still answers no `web`");
+    assert!(
+        opened.to_string().contains("`open`"),
+        "a shell that can run an `open` call says so: {opened}"
     );
 }
 

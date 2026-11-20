@@ -14,11 +14,12 @@ use serde_json::Value;
 
 use crate::bash::{self, Outcome};
 use crate::config::Config;
+use crate::open::{Ground, Opener};
 use crate::policy::{Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES};
 use crate::provider::{Deltas, Failure};
 use crate::redact::{Redacted, SecretSet};
 use crate::skills::Catalog;
-use crate::tools::{BASH, SKILL, ToolSet};
+use crate::tools::{BASH, OPEN, SKILL, ToolSet};
 use crate::turn::Usage;
 
 pub use crate::turn::{Acted, Call, Exit, Turn};
@@ -578,6 +579,8 @@ pub struct Shell {
     temp: PathBuf,
     catalog: Catalog,
     cancel: Cancel,
+    ground: Option<Ground>,
+    opener: Option<Arc<dyn Opener>>,
 }
 
 impl Shell {
@@ -587,12 +590,28 @@ impl Shell {
             temp: temp.into(),
             catalog,
             cancel: Cancel::new(),
+            ground: None,
+            opener: None,
         }
     }
 
     pub fn cancel(mut self, cancel: Cancel) -> Shell {
         self.cancel = cancel;
         self
+    }
+
+    pub fn ground(mut self, ground: Option<Ground>) -> Shell {
+        self.ground = ground;
+        self
+    }
+
+    pub fn opener(mut self, opener: Option<Arc<dyn Opener>>) -> Shell {
+        self.opener = opener;
+        self
+    }
+
+    pub(crate) fn grounded(&self) -> Option<&Ground> {
+        self.ground.as_ref()
     }
 
     fn bash(&self, arguments: &str) -> Result<Acted, Redacted> {
@@ -610,6 +629,33 @@ impl Shell {
             bytes: u64::try_from(outcome.stdout.len() + outcome.stderr.len()).unwrap_or(u64::MAX),
             elapsed: started.elapsed(),
             exit: exit_of(&outcome),
+        })
+    }
+
+    fn open(&self, arguments: &str) -> Result<Acted, Redacted> {
+        let opener = self.opener.as_ref().ok_or_else(|| {
+            SecretSet::default().redact(format!(
+                "this run cannot run an `{OPEN}` call: it was handed no opener to give a target to"
+            ))
+        })?;
+        let ground = self.ground.as_ref().ok_or_else(|| {
+            SecretSet::default().redact(format!(
+                "this run cannot run an `{OPEN}` call: it stands on no ground to judge a target by"
+            ))
+        })?;
+        let opening = ground
+            .judge(arguments)
+            .map_err(|refusal| SecretSet::default().redact(refusal.to_string()))?;
+
+        let started = Instant::now();
+        opener
+            .open(&opening)
+            .map_err(|reason| SecretSet::default().redact(reason))?;
+        Ok(Acted {
+            text: format!("opened {opening}"),
+            bytes: 0,
+            elapsed: started.elapsed(),
+            exit: Exit::Code(0),
         })
     }
 
@@ -652,10 +698,29 @@ impl Executor for Shell {
         match call.name.as_str() {
             BASH => self.bash(&call.arguments),
             SKILL => self.skill(&call.arguments, loaded),
-            other => Err(SecretSet::default().redact(format!(
-                "this run cannot run `{other}`: its tools are `{BASH}` and `{SKILL}`"
-            ))),
+            OPEN => self.open(&call.arguments),
+            other => {
+                let mut named = vec![BASH, SKILL];
+                if self.opener.is_some() {
+                    named.push(OPEN);
+                }
+                Err(SecretSet::default().redact(format!(
+                    "this run cannot run `{other}`: its tools are {}",
+                    listed(&named)
+                )))
+            }
         }
+    }
+}
+
+fn listed(names: &[&str]) -> String {
+    let quoted: Vec<String> = names.iter().map(|name| format!("`{name}`")).collect();
+    match quoted.split_last() {
+        Some((last, held)) => match held.is_empty() {
+            true => last.clone(),
+            false => format!("{} and {last}", held.join(", ")),
+        },
+        None => String::new(),
     }
 }
 

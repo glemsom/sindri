@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use sindri_core::config::Config;
-use sindri_core::open::Ground;
+use sindri_core::open::{Ground, Opener};
 use sindri_core::policy::{Boundary, Enforcement};
 use tempfile::TempDir;
 
@@ -59,7 +59,7 @@ impl Tree {
 
     /// A fake opener that writes each of its argv words on a line of its own,
     /// so a test reads the argv the process was really spawned with.
-    fn recording_opener(&self) -> Opener {
+    fn recording_opener(&self) -> HostOpener {
         let record = self.root.path().join("argv");
         let script = self.root.path().join("fake-opener");
         std::fs::write(
@@ -72,7 +72,7 @@ impl Tree {
         .expect("the script");
         std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
             .expect("the script is executable");
-        Opener::new(script)
+        HostOpener::new(script)
     }
 
     /// The argv the fake opener recorded, one word per line, once it has
@@ -95,18 +95,15 @@ impl Tree {
     }
 }
 
-impl Opener {
+impl HostOpener {
     /// Spawns the fake opener, retrying while the script it was handed is
     /// still open for writing elsewhere in this process: tests run on forked
     /// threads, so a fixture written a moment ago can be `ETXTBSY`.
-    fn open_patiently(&self, opening: &Opening) -> Result<(), OpenError> {
+    fn open_patiently(&self, opening: &Opening) -> Result<(), String> {
         let deadline = Instant::now() + PATIENCE;
         loop {
-            match self.open(opening) {
-                Err(error)
-                    if error.kind() == ErrorKind::ExecutableFileBusy
-                        && Instant::now() < deadline =>
-                {
+            match Opener::open(self, opening) {
+                Err(reason) if reason.contains("busy") && Instant::now() < deadline => {
                     std::thread::sleep(Duration::from_millis(10));
                 }
                 outcome => return outcome,
@@ -158,7 +155,7 @@ fn a_target_holding_shell_metacharacters_reaches_the_opener_whole() {
 #[test]
 fn the_host_opener_is_the_one_this_machine_opens_targets_with() {
     assert_eq!(
-        Opener::host().program(),
+        HostOpener::host().program(),
         OsStr::new(HOST_OPENER),
         "the host's opener is a fact about the machine, not about the target"
     );
@@ -173,12 +170,11 @@ fn an_opener_that_cannot_be_spawned_is_an_error_naming_the_program() {
         .judge(r#"{"path":"notes.html"}"#)
         .expect("the file is inside the workspace");
 
-    let failure = Opener::new("/nonexistent/opener")
-        .open(&opening)
+    let failure = Opener::open(&HostOpener::new("/nonexistent/opener"), &opening)
         .expect_err("there is no such program");
 
     assert!(
-        failure.to_string().contains("/nonexistent/opener"),
+        failure.contains("/nonexistent/opener"),
         "the error says which program would not run: {failure}"
     );
 }

@@ -26,6 +26,7 @@ use sindri_core::session::Session;
 use sindri_core::tools::FrontEnd;
 
 use crate::cli::Cli;
+use crate::open::HostOpener;
 use crate::reports::{Asking, Report, Running, ask};
 use crate::signal::{Signals, Wake};
 use crate::term::{Canvas, Screen, Terminal, missing_terminal, paint, tell};
@@ -182,6 +183,8 @@ struct Loop<'a> {
     asking: Option<Asking>,
     painted: Painted,
     wake: Arc<Wake>,
+    /// The opener this front end supplies, held for every run the launch starts.
+    opener: HostOpener,
 }
 
 impl<'a> Loop<'a> {
@@ -235,6 +238,7 @@ impl<'a> Loop<'a> {
             asking: None,
             painted: Painted::none(),
             wake,
+            opener: HostOpener::host(),
         })
     }
 
@@ -479,6 +483,7 @@ impl<'a> Loop<'a> {
                     &self.config,
                     self.cli.enforcement(),
                     FrontEnd::Terminal,
+                    Some(Arc::new(self.opener.clone())),
                 ) {
                     Ok(opened) => opened,
                     Err(refusal) => {

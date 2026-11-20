@@ -3,12 +3,13 @@
 //! before the sandbox has proved the boundary.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::asking::Asking;
 use crate::bash::BWRAP;
 use crate::config::{Config, Environment, Process};
-use crate::open::Ground;
+use crate::open::{Ground, Opener};
 use crate::outcome::{Facts as Reported, Outcome};
 use crate::policy::{Boundary, Enforcement};
 use crate::preamble::Preamble;
@@ -112,6 +113,7 @@ impl Launch {
         config: &Config,
         enforcement: Enforcement,
         front_end: FrontEnd,
+        opener: Option<Arc<dyn Opener>>,
     ) -> Result<Launch, Refusal> {
         let (Some(endpoint), Some(model)) = (config.endpoint(), config.model.clone()) else {
             return Err(Refusal::new(
@@ -131,10 +133,12 @@ impl Launch {
             endpoint,
             model,
             &session,
+            opener,
         )
         .inspect_err(|_| session.discard())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn assemble(
         machine: &Machine<'_>,
         config: &Config,
@@ -143,6 +147,7 @@ impl Launch {
         endpoint: Endpoint,
         model: String,
         session: &Session,
+        opener: Option<Arc<dyn Opener>>,
     ) -> Result<Launch, Refusal> {
         let wire = endpoint.wire();
         let workspace = std::env::current_dir().map_err(|error| {
@@ -187,7 +192,11 @@ impl Launch {
         )
         .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
         let asking = Asking::new(client, ask, tools.clone());
-        let shell = Shell::new(boundary.clone(), session.temp(), catalog.clone());
+        // Resolved once: the ground a frame draws a path against is the one the run judges by.
+        let ground = Ground::new(&boundary, session.temp(), &workspace).ok();
+        let shell = Shell::new(boundary.clone(), session.temp(), catalog.clone())
+            .ground(ground)
+            .opener(opener);
 
         Ok(Launch {
             session: session.clone(),
@@ -223,12 +232,7 @@ impl Launch {
     /// Where this run stands when it judges a target, or nothing when a session has no temp to
     /// resolve: a frame handed none draws every path as the words it was written as.
     pub fn ground(&self) -> Option<Ground> {
-        Ground::new(
-            &self.boundary,
-            self.session.temp(),
-            &self.record.document().workspace,
-        )
-        .ok()
+        self.shell.grounded().cloned()
     }
 
     /// The words a run on this launch hands the model about `bash`, the one tool every run

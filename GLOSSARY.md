@@ -96,6 +96,12 @@ relative path is read from, held resolved and sorted. The frame asks the same gr
 a path a call names as a way to the file, so a reader is never handed a target the run would refuse.
 _Avoid_: Context, environment, base path, root
 
+**Opener**:
+What hands a judged target to the browser on this machine, as the one argv word the **Ground** allowed:
+the front end supplies it, because the sandbox has no display and the core never spawns, and a front end
+with no browser to hand a target to supplies none.
+_Avoid_: Launcher, browser, spawner
+
 ## Words from the wire
 
 **Wire**:

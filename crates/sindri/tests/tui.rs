@@ -38,6 +38,9 @@ const ROWS: u16 = 40;
 const ANSWER: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
 
+const OPEN_TOOL_USE: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_open_tool_use.sse");
+
 const ANSWER_CACHED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream_cached.sse");
 
@@ -127,6 +130,12 @@ impl Ground {
         ground
     }
 
+    /// A path under the ground's own root: the bin directory a fake opener lives in, and the file
+    /// it records its argv in.
+    fn at(&self, relative: &str) -> PathBuf {
+        self._root.path().join(relative)
+    }
+
     fn command(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
         command
@@ -188,6 +197,17 @@ impl Wire {
     }
 
     fn answering(reply: &'static str) -> Wire {
+        Wire::scripted([reply])
+    }
+
+    /// A wire holding a script: each request is answered by the next reply, and a request past the
+    /// end of the script by its last, so a run that asks again is never left waiting for one.
+    fn scripted(replies: impl IntoIterator<Item = &'static str>) -> Wire {
+        let replies: Vec<&'static str> = replies.into_iter().collect();
+        assert!(
+            !replies.is_empty(),
+            "a wire holds at least one reply to answer with"
+        );
         let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
         let port = listener.local_addr().expect("a bound address").port();
         let (arrived, arrivals) = channel();
@@ -195,6 +215,7 @@ impl Wire {
         let heard = Arc::new(Mutex::new(Vec::new()));
         let listening = Arc::clone(&heard);
         thread::spawn(move || {
+            let mut asked = 0;
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { break };
                 let request = read_request(&mut stream).unwrap_or_default();
@@ -208,6 +229,8 @@ impl Wire {
                 }
                 let _ = arrived.send(());
                 let _ = released.recv_timeout(PATIENCE);
+                let reply = replies[asked.min(replies.len() - 1)];
+                asked += 1;
                 let _ = answer(&mut stream, reply);
             }
         });
@@ -3491,5 +3514,89 @@ fn a_document_a_frame_was_read_in_the_middle_of_paints_no_cell_of_its_words() {
         rail_picture(),
         "a frame is read as fast as it is drawn and a document can arrive in halves: a terminal \
          holds one it is still reading and paints none of its words {drawn:?}"
+    );
+}
+
+/// The argv a recording opener wrote, one word per line, once the last word is down.
+fn argv_from(record: &Path) -> Option<Vec<String>> {
+    let written = std::fs::read_to_string(record).ok()?;
+    written
+        .ends_with('\n')
+        .then(|| written.lines().map(str::to_owned).collect())
+}
+
+#[test]
+fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machines_opener() {
+    let ground = Ground::new();
+    let page = ground.workspace.join("opened.html");
+    std::fs::write(&page, "<p>the page</p>").expect("the page");
+    let target = std::fs::canonicalize(&page).expect("the page resolves");
+
+    // `Opener::host()` finds the opener through `PATH`, so the first entry is a script of this
+    // test's own and the argv it records is the argv the host opener really received.
+    let bin = ground.at("bin");
+    std::fs::create_dir_all(&bin).expect("the bin directory");
+    let argv = ground.at("argv");
+    let opener = bin.join("xdg-open");
+    std::fs::write(
+        &opener,
+        format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n", argv.display()),
+    )
+    .expect("the recording opener");
+    std::fs::set_permissions(&opener, PermissionsExt::from_mode(0o755)).expect("it is executable");
+
+    let wire = Wire::scripted([OPEN_TOOL_USE, ANSWER]);
+    let mut command = ground.command();
+    command
+        .arg("--yolo-unsafe")
+        .env("SINDRI_BASE_URL", wire.base_url())
+        // `/usr/bin` and `/bin` behind the script, because the launch asks `git` for the branch.
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()));
+    let (session, mut pty, drawn) = Session::starting(command);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    wire.release();
+
+    let deadline = Instant::now() + PATIENCE;
+    let handed = loop {
+        if let Some(words) = argv_from(&argv) {
+            break words;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the opener was spawned with no argv: {:?}",
+            drawn.text()
+        );
+        thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(
+        handed,
+        vec![target.display().to_string()],
+        "the target arrives as exactly one word, and it is the path the ground resolved"
+    );
+
+    // The call has settled and the run is asking again: the band draws its work while it is live,
+    // and one row once the run has ended.
+    assert!(
+        drawn.wait_until(|frame| frame.contains("exit 0") && frame.contains("opened.html")),
+        "the band draws the call settled with the target it opened and its exit: {:?}",
+        drawn.text()
+    );
+
+    wire.wait_for_request();
+    wire.release();
+    answered(&drawn);
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run it opened a target for: {:?}",
+        drawn.text()
     );
 }
