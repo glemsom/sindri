@@ -1617,6 +1617,169 @@ fn a_table_too_narrow_for_one_row_wraps_each_column_under_its_own_heading() {
 }
 
 #[test]
+fn every_wrapped_row_of_a_right_aligned_column_ends_on_its_columns_edge() {
+    let rows = markdown::rows(
+        "| bond | words |\n| --- | ---: |\n| one | the words of a cell that wraps |",
+        24,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "bond │             words",
+            "─────┼──────────────────",
+            "one  │    the words of a",
+            "     │   cell that wraps",
+        ],
+        "each row a wrapped cell is drawn on takes the pad of its own words"
+    );
+    for row in &rows {
+        assert_eq!(
+            row.width(),
+            24,
+            "a wrapped row ends on its column's edge like every row above it: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn a_chip_in_an_aligned_cell_is_placed_where_the_words_of_its_cell_go() {
+    let rows = markdown::rows(
+        "| bond | command |\n| --- | ---: |\n| one | `go` |\n| two | `make check` |",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "bond │    command",
+            "─────┼───────────",
+            "one  │         go",
+            "two  │ make check",
+        ],
+        "a chip takes the pad its cell takes, drawn before it as the words of the cell are"
+    );
+    assert!(
+        wears(&rows[2], "go", Look::plain(Ink::Accent))
+            && wears(&rows[3], "make", Look::plain(Ink::Accent)),
+        "and every word of it stays the accent it was written as: {:?}",
+        rows[2].spans()
+    );
+    for (text, look) in rows[2].spans() {
+        assert!(
+            !text.trim().is_empty() || *look == Look::plain(Ink::Plain),
+            "the pad an aligned cell takes is the frame's ink and never the chip's: {text:?}"
+        );
+    }
+}
+
+#[test]
+fn a_cell_wider_than_the_frame_wraps_in_the_room_it_has_and_keeps_its_alignment() {
+    let rows = markdown::rows(
+        "| one two three four five |\n| ---: |\n| six seven eight nine ten |",
+        12,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "     one two",
+            "  three four",
+            "        five",
+            "────────────",
+            "   six seven",
+            "  eight nine",
+            "         ten",
+        ],
+        "a cell past the whole frame wraps to it and every row of it ends on that edge"
+    );
+}
+
+#[test]
+fn a_cell_wider_than_the_room_a_column_has_wraps_aligned_under_its_own_heading() {
+    let rows = markdown::rows("| ab cd | ef gh |\n| ---: | :---: |\n| ij kl | mn op |", 4);
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "  ab",
+            "  cd",
+            "────",
+            "  ij",
+            "  kl",
+            "",
+            " ef",
+            " gh",
+            "────",
+            " mn",
+            " op",
+        ],
+        "no row of the table fits, so each column is drawn under its heading in its alignment"
+    );
+}
+
+#[test]
+fn a_centred_columns_words_sit_in_the_middle_of_its_column() {
+    let rows = markdown::rows(
+        "| n | when |\n| :---: | --- |\n| abcde | one |\n| abcd | two |\n| abcdefg | three |",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "   n    │ when",
+            "────────┼──────",
+            " abcde  │ one",
+            " abcd   │ two",
+            "abcdefg │ three",
+        ],
+        "a centred column takes half its spare cells each side, and the odd one after"
+    );
+}
+
+#[test]
+fn a_left_aligned_column_is_drawn_as_a_column_that_names_no_alignment() {
+    let written = drawn(&markdown::rows(
+        "| when | count |\n| --- | :--- |\n| one | 1 |",
+        40,
+    ));
+    let today = drawn(&markdown::rows(
+        "| when | count |\n| --- | --- |\n| one | 1 |",
+        40,
+    ));
+
+    assert_eq!(
+        written,
+        ["when │ count", "─────┼──────", "one  │ 1"],
+        "a left aligned column keeps its words first and every spare cell after them"
+    );
+    assert_eq!(
+        written, today,
+        "a column written left is drawn as a column that names nothing"
+    );
+}
+
+#[test]
+fn a_right_aligned_columns_words_end_on_its_columns_last_cell() {
+    let rows = markdown::rows(
+        "| when | count |\n| --- | ---: |\n| one | 1 |\n| two | 22 |",
+        40,
+    );
+
+    assert_eq!(
+        drawn(&rows),
+        [
+            "when │ count",
+            "─────┼──────",
+            "one  │     1",
+            "two  │    22",
+        ],
+        "a right aligned column is drawn hard against its own last cell"
+    );
+}
+
+#[test]
 fn a_cell_wider_than_a_frame_that_holds_no_row_wraps_inside_the_room_it_has() {
     let rows = markdown::rows(
         "| a construct | b | c |\n| --- | --- | --- |\n| a cell that wraps | two | three |",
