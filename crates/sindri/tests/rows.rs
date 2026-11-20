@@ -22,7 +22,6 @@ use sindri::picture::Surface;
 use sindri::pulse::Pulse;
 use sindri::rows::{Row, Rows, Scroll, Window, layout, layout_on};
 use sindri::size::Sizes;
-use sindri::stream::Stream;
 use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::open::Ground;
@@ -324,9 +323,8 @@ fn every_row_fits_the_width_it_was_laid_out_for() {
         let mut live = Rows::new();
         live.resize(cols);
         let head = Pulse::live(4_200).head();
-        let mut stream = Stream::new();
-        stream.text("a braille marker at the head of the newest answer, and its words");
-        live.live(&stream, Some(&head));
+        live.text("a braille marker at the head of the newest answer, and its words");
+        live.live(Some(&head));
         for row in live.rows(0) {
             let drawn = row.width();
             assert!(
@@ -702,15 +700,14 @@ fn a_row_too_narrow_for_a_marker_gives_up_the_marker_before_it_cuts_a_word() {
 #[test]
 fn a_marker_no_band_holds_beside_a_word_leaves_the_answer_its_columns() {
     let head = Pulse::live(4_200).head();
-    let mut stream = Stream::new();
-    stream.text("the answer's own words");
     let mut rows = Rows::new();
+    rows.text("the answer's own words");
 
     for cols in 6..=7 {
         rows.resize(cols);
-        rows.live(&stream, Some(&head));
+        rows.live(Some(&head));
         let marked: Vec<String> = rows.rows(0).iter().map(words).collect();
-        rows.live(&stream, None);
+        rows.live(None);
         let bare: Vec<String> = rows.rows(0).iter().map(words).collect();
         assert_eq!(
             marked, bare,
@@ -964,22 +961,16 @@ fn a_live_entry_is_laid_out_alone_as_its_fragments_land() {
     );
     let held = rows.len();
 
-    let mut stream = Stream::new();
     for fragment in [
         "a fence ", "still ", "open ", "is ", "a ", "code ", "block. ",
     ]
     .repeat(15)
     {
-        stream.text(fragment);
-        rows.live(&stream, None);
+        rows.text(fragment);
+        rows.live(None);
         rows.window(Scroll::Tail, 20);
     }
 
-    assert_eq!(
-        stream.revision(),
-        105,
-        "a hundred and five fragments landed in the live entry"
-    );
     assert_eq!(
         rows.len(),
         held + 1,
@@ -996,12 +987,11 @@ fn a_live_entry_is_laid_out_alone_as_its_fragments_land() {
 fn the_rows_module_lays_the_turn_in_flight_from_the_words_it_has_said() {
     let mut rows = Rows::new();
     rows.resize(60);
-    let mut stream = Stream::new();
-    stream.reasoning("the fence is the question. ");
-    stream.text("A fence still open ");
-    stream.reasoning("so its tail is code. ");
-    stream.text("is a code block.");
-    rows.live(&stream, None);
+    rows.reasoning("the fence is the question. ");
+    rows.text("A fence still open ");
+    rows.reasoning("so its tail is code. ");
+    rows.text("is a code block.");
+    rows.live(None);
 
     let laid = rows.rows(0);
     assert_eq!(
@@ -1030,15 +1020,14 @@ fn the_rows_module_lays_the_turn_in_flight_from_the_words_it_has_said() {
 fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
     let mut rows = Rows::new();
     rows.resize(40);
-    let mut stream = Stream::new();
-    stream.reasoning("read the fence rule first. ");
-    stream.text("The rule is one line: ");
-    rows.live(&stream, None);
+    rows.reasoning("read the fence rule first. ");
+    rows.text("The rule is one line: ");
+    rows.live(None);
     let drawn = rows.rows(0).to_vec();
     assert!(!drawn.is_empty(), "a fragment of prose is rows");
 
-    stream.text("a fence still open is a code block, never prose.\n```rust\nfn main() {");
-    rows.live(&stream, None);
+    rows.text("a fence still open is a code block, never prose.\n```rust\nfn main() {");
+    rows.live(None);
     let more = rows.rows(0).to_vec();
     assert_eq!(
         &more[..drawn.len() - 1],
@@ -1073,13 +1062,12 @@ fn a_streaming_answer_adds_rows_and_a_fence_still_open_is_code() {
 fn the_marker_heads_the_newest_answers_first_row_and_no_other() {
     let mut rows = Rows::new();
     rows.resize(60);
-    let mut stream = Stream::new();
-    stream.text("the first thing said. ");
-    stream.reasoning("and then a thought. ");
-    stream.text("and the answer being read now.");
+    rows.text("the first thing said. ");
+    rows.reasoning("and then a thought. ");
+    rows.text("and the answer being read now.");
 
     let head = Pulse::live(4_200).head();
-    rows.live(&stream, Some(&head));
+    rows.live(Some(&head));
     let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
 
     assert_eq!(
@@ -1097,11 +1085,10 @@ fn the_marker_heads_the_newest_answers_first_row_and_no_other() {
 fn a_turn_that_has_only_reasoned_opens_the_answers_row_under_its_thought() {
     let mut rows = Rows::new();
     rows.resize(60);
-    let mut stream = Stream::new();
-    stream.reasoning("thinking it over.");
+    rows.reasoning("thinking it over.");
 
     let head = Pulse::live(4_200).head();
-    rows.live(&stream, Some(&head));
+    rows.live(Some(&head));
     let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
 
     assert_eq!(drawn, ["│ thinking it over.", "⠹ 4.2s"]);
@@ -1114,9 +1101,8 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
     rows.push(thought(1));
     rows.resize(40);
 
-    let mut stream = Stream::new();
-    stream.text("a fence still open is a code block.");
-    rows.live(&stream, None);
+    rows.text("a fence still open is a code block.");
+    rows.live(None);
     let live = rows.window(Scroll::Tail, 20);
     assert_eq!(
         rows.len(),
@@ -1140,11 +1126,11 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
         "one row for the turn and one for the answer, and no third for a block that was never a fact"
     );
 
-    rows.live(&Stream::new(), None);
+    rows.live(None);
     assert_eq!(
         rows.len(),
         2,
-        "an empty stream adds nothing to the transcript"
+        "a turn the record holds as entries adds nothing to the transcript"
     );
     assert_eq!(rows_shown(&rows.window(Scroll::Tail, 20)), 2);
 }
@@ -1153,28 +1139,27 @@ fn a_settled_turn_is_drawn_from_its_facts_and_never_twice() {
 fn a_live_entry_is_laid_out_again_when_the_marker_moves() {
     let mut rows = Rows::new();
     rows.resize(40);
-    let mut stream = Stream::new();
-    stream.text("an answer arriving");
-    rows.live(&stream, Some(&Pulse::live(4_200).head()));
+    rows.text("an answer arriving");
+    rows.live(Some(&Pulse::live(4_200).head()));
     let laid = rows.lays();
     assert_eq!(laid, 1, "the live entry, laid out once to be drawn");
 
-    rows.live(&stream, Some(&Pulse::live(4_200).head()));
+    rows.live(Some(&Pulse::live(4_200).head()));
     assert_eq!(
         rows.lays(),
         laid,
         "the same mark at the same time is the same picture"
     );
 
-    rows.live(&stream, Some(&Pulse::live(4_280).head()));
+    rows.live(Some(&Pulse::live(4_280).head()));
     assert_eq!(
         rows.lays(),
         laid + 1,
         "a moved marker is one layout of the live entry"
     );
 
-    stream.text(" and settling");
-    rows.live(&stream, Some(&Pulse::live(4_280).head()));
+    rows.text(" and settling");
+    rows.live(Some(&Pulse::live(4_280).head()));
     assert_eq!(
         rows.lays(),
         laid + 2,
@@ -1183,16 +1168,46 @@ fn a_live_entry_is_laid_out_again_when_the_marker_moves() {
 }
 
 #[test]
+fn a_reflow_lays_the_live_entry_once_and_a_pass_that_moved_nothing_lays_none() {
+    let mut rows = Rows::new();
+    rows.resize(40);
+    rows.text("an answer arriving");
+    let head = Pulse::live(4_200).head();
+    rows.live(Some(&head));
+    let laid = rows.lays();
+    assert_eq!(laid, 1, "the live entry, laid out once to be drawn");
+
+    rows.resize(30);
+    rows.live(Some(&head));
+    rows.window(Scroll::Tail, 20);
+
+    assert_eq!(
+        rows.lays(),
+        laid + 1,
+        "a new width lays the live entry once, and the pass over it lays nothing"
+    );
+
+    rows.live(Some(&head));
+    rows.window(Scroll::Tail, 20);
+
+    assert_eq!(
+        rows.lays(),
+        laid + 1,
+        "a pass that moved neither the fragments nor the mark lays nothing"
+    );
+}
+
+#[test]
 fn a_live_run_opens_the_answers_row_before_it_has_said_anything() {
     let mut rows = Rows::new();
     rows.resize(40);
-    rows.live(&Stream::new(), Some(&Pulse::live(0).head()));
+    rows.live(Some(&Pulse::live(0).head()));
 
     assert_eq!(rows.len(), 1, "the answer's row, opened by its marker");
     assert_eq!(rows_shown(&rows.window(Scroll::Tail, 20)), 1);
     assert_eq!(said(&painted(&rows.rows(0)[0], 40)), "⠋ 0.0s");
 
-    rows.live(&Stream::new(), None);
+    rows.live(None);
     assert_eq!(rows.len(), 0);
 }
 
@@ -1619,9 +1634,8 @@ fn a_live_answer_that_opens_on_a_large_heading_keeps_the_cells_the_sizing_leaves
     let mut rows = Rows::new();
     rows.resize(40);
     rows.retune(Surface::of(None, CellSize::new(10, 20), false, true));
-    let mut stream = Stream::new();
-    stream.text("# A gate rule");
-    rows.live(&stream, Some(&Pulse::live(4_200).head()));
+    rows.text("# A gate rule");
+    rows.live(Some(&Pulse::live(4_200).head()));
 
     let heading = rows.rows(0)[1].clone();
     assert_eq!(
@@ -2024,9 +2038,8 @@ fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
     rows.push(call(1));
     rows.push(timed(1, 4_100));
 
-    let mut stream = Stream::new();
-    stream.text("the retry test is the one to read");
-    rows.live(&stream, None);
+    rows.text("the retry test is the one to read");
+    rows.live(None);
 
     let laid: Vec<String> = rows
         .window(Scroll::Back(0), 40)
@@ -2870,9 +2883,8 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
 fn a_fence_that_opens_a_live_answer_claims_no_ground_of_its_own() {
     let mut rows = Rows::new();
     rows.resize(40);
-    let mut stream = Stream::new();
-    stream.text("```rust\nfn main() {\n");
-    rows.live(&stream, Some(&Pulse::live(4_200).head()));
+    rows.text("```rust\nfn main() {\n");
+    rows.live(Some(&Pulse::live(4_200).head()));
 
     let laid = rows.rows(0);
     assert!(
@@ -2910,10 +2922,9 @@ fn a_fence_that_opens_a_live_answer_keeps_its_picture_under_the_marker() {
     let mut rows = Rows::new();
     rows.resize(40);
     rows.retune(surface.clone());
-    let mut stream = Stream::new();
-    stream.text(text);
+    rows.text(text);
     let head = Pulse::live(4_200).head();
-    rows.live(&stream, Some(&head));
+    rows.live(Some(&head));
 
     let laid = rows.rows(0);
     let picture = laid[0]
@@ -2951,10 +2962,9 @@ fn a_fence_that_opens_a_live_answer_keeps_its_picture_under_the_marker() {
 fn a_row_set_under_a_marker_moves_the_run_it_names_with_its_words() {
     let mut rows = Rows::new();
     rows.resize(40);
-    let mut stream = Stream::new();
-    stream.text("[the spec](https://example.test/spec) and the prose under it\n");
+    rows.text("[the spec](https://example.test/spec) and the prose under it\n");
     let head = Pulse::live(4_200).head();
-    rows.live(&stream, Some(&head));
+    rows.live(Some(&head));
 
     let marked = rows.rows(0)[0].clone();
     let (buffer, links) = laid(&marked, Rect::new(0, 0, 40, 1));

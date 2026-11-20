@@ -48,7 +48,6 @@ use crate::rows::{INDENT, Row, Rows, Scroll};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
-use crate::stream::Stream;
 
 #[derive(Clone, Copy)]
 struct Hint {
@@ -372,7 +371,6 @@ pub struct View {
     /// transcript out a second time.
     drawn: Drawn,
     composer: Composer,
-    stream: Stream,
     queue: Queue,
     conversation: Conversation,
     superseded: bool,
@@ -447,7 +445,6 @@ impl View {
             landed: 0,
             drawn: Drawn::none(),
             composer: Composer::new(),
-            stream: Stream::new(),
             queue: Queue::default(),
             conversation: Conversation::default(),
             superseded: false,
@@ -497,10 +494,6 @@ impl View {
         self.queue.next_to_run()
     }
 
-    pub fn stream(&self) -> &Stream {
-        &self.stream
-    }
-
     /// The turns the run a draft is about to start joins, in the order they ended.
     pub fn earlier(&self) -> Vec<Turn> {
         self.conversation.turns().to_vec()
@@ -515,12 +508,11 @@ impl View {
         }
     }
 
-    /// The turn in flight is over: what it said is written down as entries, so the live entry it
-    /// was drawn as goes, and the splash screen with it. A run starting now is asked under the
-    /// conversation that stands, so whatever `/new` superseded is behind it.
+    /// The turn in flight is over: what it said is written down as entries, so the turn and the
+    /// live entry it was drawn as go, and the splash screen with them. A run starting now is asked
+    /// under the conversation that stands, so whatever `/new` superseded is behind it.
     pub fn settle(&mut self) {
         self.rows.retire();
-        self.stream = Stream::new();
         self.scrolled(Scroll::Tail);
         self.composer.set_state(State::Idle);
         self.facts = self.facts.clone().asked();
@@ -756,7 +748,6 @@ impl View {
         // to the document's end and no row of them comes back.
         self.read.entries = self.facts.transcript().map_or(0, <[Entry]>::len);
         self.scrolled(Scroll::Tail);
-        self.stream = Stream::new();
         self.facts = self.facts.clone().pulsed(None);
         self.mark = None;
         self.drawn = Drawn::none();
@@ -1061,9 +1052,8 @@ impl View {
         if fresh.is_empty() {
             return;
         }
-        // The words the stream was drawing are rows once the record holds them: one word in one row.
+        // The words the turn was drawing are rows once the record holds them: one word in one row.
         self.rows.retire();
-        self.stream = Stream::new();
         for entry in fresh {
             self.rows.push(entry);
         }
@@ -1354,13 +1344,13 @@ impl View {
         // heads the turn in flight's answer while that has said a word or the run is live, and the
         // newest answer the record holds once the run is over — a band holding none gets a row.
         let head = self.facts.pulse().map(Pulse::head);
-        let own = self.facts.live() || self.stream.says_answer() || !self.rows.holds_answer();
+        let own = self.facts.live() || self.rows.says_answer() || !self.rows.holds_answer();
         let (recorded, streamed) = match own {
             true => (None, head),
             false => (head, None),
         };
         self.rows.heading(recorded);
-        self.rows.live(&self.stream, streamed.as_ref());
+        self.rows.live(streamed.as_ref());
         let total = self.rows.height();
         // A window measured from the tail follows a run that grows; one the reader took back keeps
         // the rows it holds, so a row that lands is given back to the count rather than rolled
@@ -1864,11 +1854,11 @@ impl View {
 
 impl Deltas for View {
     fn text(&mut self, fragment: &str) {
-        self.stream.text(fragment);
+        self.rows.text(fragment);
     }
 
     fn reasoning(&mut self, fragment: &str) {
-        self.stream.reasoning(fragment);
+        self.rows.reasoning(fragment);
     }
 }
 
