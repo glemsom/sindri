@@ -19,9 +19,8 @@ use crate::rows::{Row, split_at};
 use crate::size::{self, Sized};
 
 /// The parser's options: GFM tables, task lists, strikethrough, footnotes and alerts on, because
-/// CommonMark leaves all five out. A footnote is drawn as the marker a reference stands in and the
-/// definitions gathered at the foot, which the parser only tells apart once it has enabled them, and
-/// an alert only carries the kind its quote names where the GFM option lets it read the marker.
+/// CommonMark leaves all five out. Alerts ride the GFM option alone: it is what reads the marker a
+/// quote opens with, and what makes a footnote a reference to a definition rather than three runs.
 const OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_TASKLISTS)
     .union(Options::ENABLE_STRIKETHROUGH)
@@ -172,13 +171,13 @@ fn heading(level: HeadingLevel) -> (Look, Option<char>) {
 }
 
 /// The name an alert is drawn under and the ink it is said in: one ink of the frame's own to each
-/// kind, from the note that says least to the caution that says most.
+/// kind, quiet for a note and the frame's alarm for a caution.
 fn alert(kind: BlockQuoteKind) -> (&'static str, Ink) {
     match kind {
         BlockQuoteKind::Note => ("Note", Ink::Muted),
         BlockQuoteKind::Tip => ("Tip", Ink::Ok),
         BlockQuoteKind::Important => ("Important", Ink::Accent),
-        BlockQuoteKind::Warning => ("Warning", Ink::Mark),
+        BlockQuoteKind::Warning => ("Warning", Ink::Plain),
         BlockQuoteKind::Caution => ("Caution", Ink::Err),
     }
 }
@@ -241,9 +240,9 @@ struct Room {
     first: bool,
     /// Whether the last row put down is a blank one, so two blocks never stand under two blanks.
     blank: bool,
-    /// How many rows the block an alert's label heads begins at, while that label is its head: the
-    /// block that opens there stands under the label itself and never under a blank row.
-    head: Option<usize>,
+    /// How many rows stood laid when an alert's label was drawn, while that label is still the last
+    /// of them.
+    labelled: Option<usize>,
     /// The code block in hand: the highlighter's parse carries from one line of it to the next,
     /// so it lives with the block and not with the room.
     code: Option<Code>,
@@ -296,7 +295,7 @@ impl Room {
             lists: Vec::new(),
             first: true,
             blank: true,
-            head: None,
+            labelled: None,
             destination: None,
             laid: Vec::new(),
             code: None,
@@ -329,7 +328,7 @@ impl Room {
             Event::End(TagEnd::BlockQuote(_)) => {
                 self.flush_if_written();
                 self.lead.pop();
-                self.head = None;
+                self.labelled = None;
             }
             Event::Start(Tag::List(start)) => {
                 self.flush_if_written();
@@ -865,7 +864,6 @@ impl Room {
         }
     }
 
-    /// A quote opens behind its bar, and an alert's label stands on the first row of it.
     fn open_quote(&mut self, kind: Option<BlockQuoteKind>) {
         if kind.is_some() {
             // The label is a row of the quote's own, so the words of the block before it are laid
@@ -879,16 +877,23 @@ impl Room {
         }
     }
 
-    /// The row an alert names its kind on, in the quote's own gutter: the first row of the block, so
-    /// an item's mark stands beside it and the words under it are parted from it by nothing.
+    /// The row an alert names its kind on, in the quote's own gutter: the block's first row, so an
+    /// item's mark stands beside it.
     fn draw_label(&mut self, kind: BlockQuoteKind) {
         let (name, ink) = alert(kind);
-        let (name, _) = split_at(name, self.room_cells());
+        let (kept, cut) = split_at(name, self.room_cells());
+        let name = match cut.is_empty() {
+            true => kept,
+            false => {
+                let (kept, _) = split_at(name, self.room_cells().saturating_sub(1));
+                format!("{kept}…")
+            }
+        };
         let mut spans = self.gutter();
         spans.push((name, Look::plain(ink)));
         self.first = false;
         self.push(Row::of(spans));
-        self.head = Some(self.rows.len());
+        self.labelled = Some(self.rows.len());
     }
 
     fn open_item(&mut self) {
@@ -978,8 +983,8 @@ impl Room {
     /// One blank row between two blocks, nothing at the top of the answer and never two blank
     /// rows where a block already stands under one.
     fn gap(&mut self) {
-        // An alert's label is the head of the block it names, so no blank row parts the two.
-        if !self.rows.is_empty() && !self.blank && self.head.take() != Some(self.rows.len()) {
+        let under_label = self.labelled.take() == Some(self.rows.len());
+        if !self.rows.is_empty() && !self.blank && !under_label {
             self.push(Row::blank());
         }
     }

@@ -12,8 +12,8 @@ markdown-alert at 80x24
 06 |▏ Important                                                                     | dim:2 accent:9 plain:69
 07 |▏ what is important is said in the accent                                       | dim:2 plain:78
 08 |                                                                                | plain:80
-09 |▏ Warning                                                                       | dim:2 mark:7 plain:71
-10 |▏ a warning wears the ink the eye lands on                                      | dim:2 plain:78
+09 |▏ Warning                                                                       | dim:2 plain:78
+10 |▏ a warning is said in the ink the prose is                                     | dim:2 plain:78
 11 |                                                                                | plain:80
 12 |▏ Caution                                                                       | dim:2 err:7 plain:71
 13 |▏ and a caution is the frame's own alarm                                        | dim:2 plain:78

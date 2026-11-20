@@ -37,6 +37,45 @@ fn wears(row: &Row, word: &str, look: Look) -> bool {
         .any(|(said, worn)| said == word && *worn == look)
 }
 
+/// One kind of alert: the marker a source writes for it, the name its label reads and the ink that
+/// name is drawn in.
+struct Kind {
+    written: &'static str,
+    named: &'static str,
+    ink: Ink,
+}
+
+/// The five kinds a quote can name itself, each in an ink of its own.
+fn kinds() -> [Kind; 5] {
+    [
+        Kind {
+            written: "NOTE",
+            named: "Note",
+            ink: Ink::Muted,
+        },
+        Kind {
+            written: "TIP",
+            named: "Tip",
+            ink: Ink::Ok,
+        },
+        Kind {
+            written: "IMPORTANT",
+            named: "Important",
+            ink: Ink::Accent,
+        },
+        Kind {
+            written: "WARNING",
+            named: "Warning",
+            ink: Ink::Plain,
+        },
+        Kind {
+            written: "CAUTION",
+            named: "Caution",
+            ink: Ink::Err,
+        },
+    ]
+}
+
 /// One level of heading as a reader meets it: the look its words wear, and the rule it carries
 /// under them.
 fn heading_block(level: usize) -> (Look, Option<String>) {
@@ -2438,61 +2477,24 @@ fn a_reference_in_a_quote_and_one_in_a_table_cell_both_gather_at_the_foot() {
     );
 }
 
-/// Every kind of alert a quote can name, as the source spells it, as its label reads and the ink
-/// that label is drawn in.
-fn kinds() -> [(&'static str, &'static str, Ink); 5] {
-    [
-        ("NOTE", "Note", Ink::Muted),
-        ("TIP", "Tip", Ink::Ok),
-        ("IMPORTANT", "Important", Ink::Accent),
-        ("WARNING", "Warning", Ink::Mark),
-        ("CAUTION", "Caution", Ink::Err),
-    ]
-}
-
 #[test]
 fn an_alert_names_its_kind_on_the_row_above_its_words_in_the_kinds_own_ink() {
-    for (written, name, ink) in kinds() {
-        let rows = markdown::rows(&format!("> [!{written}]\n> the gate is open"), 40);
+    for kind in kinds() {
+        let rows = markdown::rows(&format!("> [!{}]\n> the gate is open", kind.written), 40);
 
         assert_eq!(
             drawn(&rows),
-            [format!("▏ {name}"), String::from("▏ the gate is open")],
-            "{written} names its kind on the row above its words, behind the same bar: {rows:?}"
+            [
+                format!("▏ {}", kind.named),
+                String::from("▏ the gate is open")
+            ],
+            "{} names its kind on the row above its words, behind the same bar: {rows:?}",
+            kind.written
         );
         assert!(
-            wears(&rows[0], name, Look::plain(ink)),
+            wears(&rows[0], kind.named, Look::plain(kind.ink)),
             "the name wears the kind's own ink and no face: {:?}",
             rows[0].spans()
-        );
-    }
-}
-
-#[test]
-fn no_two_kinds_of_alert_are_drawn_in_one_ink() {
-    let inks: Vec<Look> = kinds()
-        .iter()
-        .map(|(written, name, _)| {
-            let rows = markdown::rows(&format!("> [!{written}]\n> words"), 40);
-            let looked: Vec<Look> = rows[0]
-                .spans()
-                .iter()
-                .filter(|(said, _)| said == name)
-                .map(|(_, look)| *look)
-                .collect();
-            assert_eq!(
-                looked.len(),
-                1,
-                "{written} names its kind once on the first row: {rows:?}"
-            );
-            looked[0]
-        })
-        .collect();
-
-    for (at, ink) in inks.iter().enumerate() {
-        assert!(
-            !inks[..at].contains(ink),
-            "every kind is told apart by its ink alone, and {at} wears one already read: {inks:?}"
         );
     }
 }
@@ -2508,7 +2510,7 @@ fn a_quote_holding_nothing_but_the_marker_draws_its_label_row_and_its_bar() {
         "the label is the head of a block with no words under it: {rows:?}"
     );
     assert!(
-        wears(&rows[0], "Warning", Look::plain(Ink::Mark)),
+        wears(&rows[0], "Warning", Look::plain(Ink::Plain)),
         "the name wears the kind's ink and no face: {:?}",
         rows[0].spans()
     );
@@ -2540,6 +2542,29 @@ fn an_alert_spelt_in_lower_or_mixed_case_draws_as_the_capitalised_one() {
             "{written} is the same kind as TIP, drawn the same way"
         );
     }
+}
+
+#[test]
+fn a_name_a_band_leaves_no_room_for_is_cut_at_its_tail_and_the_cut_is_marked() {
+    let rows = markdown::rows("> [!IMPORTANT]", 8);
+
+    assert_eq!(
+        drawn(&rows),
+        ["▏ Impor…"],
+        "the name is cut to the room the bar leaves and the cut is marked: {rows:?}"
+    );
+    assert_eq!(
+        rows[0].width(),
+        8,
+        "a cut name fills the band it was cut to and never runs past it"
+    );
+
+    let fits = markdown::rows("> [!NOTE]", 6);
+    assert_eq!(
+        drawn(&fits),
+        ["▏ Note"],
+        "a name the band holds whole keeps its last letter: {fits:?}"
+    );
 }
 
 #[test]

@@ -189,6 +189,13 @@ neither band a column and the words on both sides are drawn unshaded. Where no p
 there is no seam: the lit column down the rail's boundary is what that frame draws.
 _Avoid_: Border, divider, gutter, rule
 
+**Alert**:
+A quote whose first line names a kind — `NOTE`, `TIP`, `IMPORTANT`, `WARNING` or `CAUTION` — and
+that draws that kind as a **label**: the name on a row of its own, in an ink of its own, with the
+quote's words under it behind the bar the quote already had. A quote whose first line names no kind
+is a quote and nothing more, marker-like words and all.
+_Avoid_: Callout, admonition, banner, badge, note (that one is a kind)
+
 **Chip**:
 An inline code span, drawn in the accent ink with no band behind it and in the spacing it was written
 with. Inside a way it keeps the way's own dim line under it; inside a heading it is told from the
