@@ -4227,20 +4227,21 @@ fn a_prompt_longer_than_its_head_draws_its_head_and_the_count_of_rows_kept_back(
             String::from("┃›line 1"),
             String::from("┃ line 2"),
             String::from("┃ line 3"),
-            String::from("⋯ 9 rows kept back"),
+            String::from("┃ line 4"),
+            String::from("⋯ 8 rows kept back"),
         ],
         "a prompt past the head a fold keeps is drawn as that head and one row counting the rows \
          kept back, and never a last row to stand beside them: {drawn:?}"
     );
     assert_eq!(
-        rows[4].stands_on(),
+        rows[5].stands_on(),
         Some(Band::Prompt),
         "the row counting a prompt's rows kept back stands on the prompt's own band, so a press on \
          it is read as a row of that prompt: {:?}",
-        rows[4]
+        rows[5]
     );
     assert_eq!(
-        inks(&rows[4]),
+        inks(&rows[5]),
         vec![Ink::Dim, Ink::Plain, Ink::Dim],
         "and its marker and its words wear the dim ink a folded result's count wears, so a reader \
          meets one kind of fold"
@@ -4282,12 +4283,12 @@ fn one_key_opens_a_folded_prompt_where_no_work_is_drawn_as_a_row_and_closes_it_a
     let folded: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         folded.len(),
-        4,
+        5,
         "the prompt that opens the conversation draws the head of its fold with no blank row above \
          it: {folded:?}"
     );
     assert!(
-        folded[3].contains("kept back"),
+        folded[4].contains("kept back"),
         "and the count of the rows it keeps back closes it: {folded:?}"
     );
 
@@ -4346,9 +4347,9 @@ fn a_prompt_a_reader_folded_survives_a_reflow_and_counts_the_rows_the_narrower_b
 
     assert_eq!(
         kept_back_row(rows.rows(2)).as_deref(),
-        Some("⋯ 9 rows kept back"),
-        "at eighty columns a line of the prompt is one row, and the fold counts the nine under the \
-         head it draws"
+        Some("⋯ 8 rows kept back"),
+        "at eighty columns a line of the prompt is one row, and the fold counts the eight under the \
+         head it draws — the blank row above it no word of the prompt's"
     );
     assert!(
         rows.toggle_newest(),
@@ -4381,15 +4382,30 @@ fn a_prompt_a_reader_folded_survives_a_reflow_and_counts_the_rows_the_narrower_b
     let folded: Vec<String> = rows.rows(2).iter().map(words).collect();
     assert_eq!(
         kept_back_row(rows.rows(2)),
-        Some(format!("⋯ {} rows kept back", reflowed - 4)),
-        "so the count is the rows the narrower band keeps back and never the count the wider one \
+        Some(format!("⋯ {} rows kept back", reflowed - 5)),
+        "so the count is the rows the narrower band keeps back, and never the count the wider one \
          told: {folded:?}"
     );
     assert_eq!(
         folded.len(),
-        5,
-        "the head of four rows and the count under it are all it draws, and no last row beside \
-         them: {folded:?}"
+        6,
+        "the blank row above it, the head of four rows and the count under them are all it draws, \
+         and no last row beside them: {folded:?}"
+    );
+
+    rows.measure(Measure::new(120, Surface::none(), None));
+    let wider: Vec<String> = rows.rows(2).iter().map(words).collect();
+    assert_eq!(
+        kept_back_row(rows.rows(2)).as_deref(),
+        Some("⋯ 8 rows kept back"),
+        "and a prompt the reader left folded is still folded at the next width, counting the eight \
+         rows that width keeps back: {wider:?}"
+    );
+    assert_eq!(
+        wider.len(),
+        6,
+        "so the head it draws is four rows of its own words at every width, under the blank row \
+         that separates it from the exchange above: {wider:?}"
     );
 }
 
@@ -4403,7 +4419,7 @@ fn a_copy_of_a_folded_prompt_takes_its_whole_where_a_prompt_drawn_whole_keeps_no
     rows.push(stop_entry(Stop::Final));
     rows.rows(0);
     assert_eq!(
-        rows.prompt_source(0).as_deref(),
+        rows.folded_prompt(0).as_deref(),
         Some(whole.join("\n").as_str()),
         "a folded prompt hands a copy every line the reader typed, the line breaks they typed \
          among them, and never the head it draws or the count of what it keeps back"
@@ -4414,10 +4430,22 @@ fn a_copy_of_a_folded_prompt_takes_its_whole_where_a_prompt_drawn_whole_keeps_no
     short.push(prompt_of_lines(3));
     short.rows(0);
     assert_eq!(
-        short.prompt_source(0),
+        short.folded_prompt(0),
         None,
         "a prompt short enough to draw whole keeps nothing back, so a copy takes the cells the band \
          drew rather than a whole there is none of"
+    );
+
+    assert!(
+        rows.toggle_newest(),
+        "the fold a reader opens is this prompt's"
+    );
+    rows.rows(0);
+    assert_eq!(
+        rows.folded_prompt(0),
+        None,
+        "and a prompt drawn open is the words themselves, so a copy takes the cells the band drew \
+         rather than a whole there is nothing left back of"
     );
 
     assert!(

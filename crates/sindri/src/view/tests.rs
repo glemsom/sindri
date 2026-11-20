@@ -5791,9 +5791,9 @@ fn a_bracket_and_the_prompt_notice_count_the_rows_a_folded_prompt_draws() {
         frame_rows(&buffer)
     );
     assert!(
-        drawn_row(&buffer, 3).contains("rows kept back"),
-        "which is four rows of the transcript, the count standing on the fourth: {:?}",
-        frame_rows(&buffer)[..5].to_vec()
+        drawn_row(&buffer, 4).contains("rows kept back"),
+        "which is five rows of the transcript, the count standing on the fifth: {:?}",
+        frame_rows(&buffer)[..6].to_vec()
     );
     assert!(
         !holds(&buffer, "words 12 of the prompt"),
@@ -6134,6 +6134,56 @@ fn a_press_on_the_row_counting_a_prompts_rows_opens_it_and_a_press_on_its_head_f
         !holds(&folded, "words 12 of the prompt"),
         "and the rows it keeps back are not drawn: {:?}",
         frame_rows(&folded)
+    );
+}
+
+#[test]
+fn a_press_folds_a_prompt_that_stands_under_the_blank_row_a_prompt_opens_on() {
+    let mut entries = exchanges(1);
+    entries.push(long_prompt());
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(entries),
+    );
+    let (drawn, told) = painted_and_told(&mut view, 120, 40);
+    let count = row_holding(&drawn, "rows kept back");
+    let folded_head = row_holding(&drawn, "words 1 of the prompt");
+    assert!(
+        blank(&drawn_row(&drawn, folded_head - 1)),
+        "the blank row that separates the prompt from the exchange above it is a row of the prompt: \
+         {:?}",
+        frame_rows(&drawn)
+    );
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(folded_head - 1, 10))),
+        Outcome::Unchanged,
+        "a press on that blank row is no act, because the blank is no word of the prompt"
+    );
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(count, 10))),
+        Outcome::Edited,
+        "a press on the row counting the rows kept back opens the prompt"
+    );
+    let opened = painted(&mut view, 120, 40);
+    let head = row_holding(&opened, "words 1 of the prompt");
+    assert!(
+        blank(&drawn_row(&opened, head - 1)),
+        "the opened prompt still opens under the blank row: {:?}",
+        frame_rows(&opened)
+    );
+
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        view.pointer(&told, Pointer::Press(Cell::new(head, 10))),
+        Outcome::Edited,
+        "and a press on the first row of its words folds it again, the blank row above them \
+         standing in no gutter a press may reach"
+    );
+    assert!(
+        holds(&painted(&mut view, 120, 40), "rows kept back"),
+        "so the rows the prompt kept back are its own again"
     );
 }
 

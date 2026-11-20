@@ -680,8 +680,8 @@ impl View {
 
     /// `Ctrl-Y`: the words the mark covers leave the frame, or the newest answer does when nothing
     /// is marked. A mark standing wholly on a fence takes the fence's source rather than the cells,
-    /// because no band draws the line breaks it was written with, and one standing wholly on a prompt
-    /// that keeps rows back takes every word the reader typed rather than the slice it draws.
+    /// because no band draws the line breaks it was written with, and one standing wholly on a folded
+    /// prompt takes every word the reader typed rather than the head it draws.
     fn copy(&self) -> Outcome {
         if let Some(marked) = self.fence.filter(|marked| marked.whole) {
             // A fence with no line drawn yet has nothing to hand back — and never the cells its
@@ -698,7 +698,7 @@ impl View {
         let span = self.drawn.span();
         if !span.is_empty() {
             if let Some(entry) = self.covered(span)
-                && let Some(words) = self.rows.prompt_source(entry)
+                && let Some(words) = self.rows.folded_prompt(entry)
             {
                 return Outcome::Copy(words);
             }
@@ -711,7 +711,7 @@ impl View {
     }
 
     /// The one entry every row of `span` is drawn from, and none where the mark crosses from one
-    /// entry into another: a copy takes a prompt's own words only where the mark stands on it.
+    /// entry into another: a copy takes a folded prompt whole only where the mark stands on it.
     fn covered(&self, span: &Span) -> Option<usize> {
         let mut one = None;
         for marked in span.rows() {

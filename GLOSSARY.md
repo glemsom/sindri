@@ -32,7 +32,8 @@ _Avoid_: Pair, round, item, Activity, Trace, Log
 
 **Prompt**:
 The reader's own words a run was asked with: the first fact of the session's transcript, and what the
-wire is asked last, after the turns that came before it.
+wire is asked last, after the turns that came before it. Words longer than a **Fold**'s head are the
+reader's own to open, under a count of the rows it keeps back.
 _Avoid_: Query, question, input
 
 **Turn**:
@@ -186,6 +187,15 @@ measured against, and the **Ground** a call's path is judged against. Any one of
 every row laid, and only the width moving is a reflow — a narrower band lays the same history out in
 more rows, and that is no row landing.
 _Avoid_: Layout, size, metrics, measurement
+
+**Fold**:
+An entry drawn as its head and one row counting the rows kept back, which the reader opens and folds
+again: a result's body and a **Prompt**'s words under it, and the one row a settled **Exchange**'s
+work is drawn as. The head and the count are the same shape and the same words for every kind, and
+the count is a fact of the **Measure** the rows were last laid at — so a width change re-lays it and
+never leaves a count that lies. A fold the reader opened is theirs, held on the entry, and no reflow
+closes it.
+_Avoid_: Collapse, truncate, expand (that one is the other half), summary, preview
 
 **Plane**:
 A band's surface drawn as one image placed under its cells, so it shades in pixels rather than in

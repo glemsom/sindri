@@ -46,19 +46,30 @@ const KEPT: char = '⋯';
 /// The one cell that says a fence's line carries more words past the band's edge.
 const CUT: char = '…';
 
-/// The rows of a result's head that a folded result keeps.
+/// The rows of its own head that a fold keeps: four of a result's output, and four of a prompt's
+/// words.
 const FOLD_HEAD: usize = 4;
 
-/// The fewest rows a fold is worth keeping back, so a count is always a plural: a result that would
+/// The fewest rows a fold is worth keeping back, so a count is always a plural: an entry that would
 /// keep back fewer is drawn whole rather than spending a row to hand the reader nothing.
 const FOLD_KEPT: usize = 3;
 
 /// Whether what holds this fold is drawn whole, or as the head a reader is handed to begin with: a
-/// result's own, or the whole work a settled exchange's row stands for.
+/// result's own, a prompt's, or the whole work a settled exchange's row stands for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fold {
     Closed,
     Open,
+}
+
+impl Fold {
+    /// The fold this one is not: what the reader's key or press leaves the entry in.
+    fn other(self) -> Fold {
+        match self {
+            Fold::Closed => Fold::Open,
+            Fold::Open => Fold::Closed,
+        }
+    }
 }
 
 /// Where an entry stands in the work the band draws: a prompt, the answer a run ended on and a stop
@@ -519,7 +530,13 @@ fn laid(
             None,
         ),
         Entry::Reasoning { text, .. } => (thought(&text.to_string(), cols), None),
-        Entry::Prompt { text } => folded_prompt(asked(&text.to_string(), cols), cols, fold),
+        Entry::Prompt { text } => {
+            let (lead, words) = asked(&text.to_string(), cols);
+            let (words, kept) = folded_prompt(words, cols, fold);
+            let mut rows = vec![lead];
+            rows.extend(words);
+            (rows, kept)
+        }
         Entry::Stop { stop } => (stopped(stop, cols), None),
     }
 }
@@ -547,23 +564,23 @@ fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>
     (rows, Some(kept))
 }
 
-/// A prompt's rows as the reader is handed them: the rows of its head and one row counting the rows
+/// A prompt's words as the reader is handed them: the rows of its head and one row counting the rows
 /// kept back, in the shape and the word a folded result's count wears — and no last row, because a
 /// prompt has none to keep. The count comes back beside them for as long as the prompt has a fold.
-fn folded_prompt(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>) {
-    let Some(kept) = rows
+fn folded_prompt(mut words: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>) {
+    let Some(kept) = words
         .len()
         .checked_sub(FOLD_HEAD)
         .filter(|kept| *kept > FOLD_KEPT)
     else {
-        return (rows, None);
+        return (words, None);
     };
     if fold == Fold::Open {
-        return (rows, Some(kept));
+        return (words, Some(kept));
     }
-    rows.truncate(FOLD_HEAD);
-    rows.push(kept_back(kept, cols).standing(Band::Prompt));
-    (rows, Some(kept))
+    words.truncate(FOLD_HEAD);
+    words.push(kept_back(kept, cols).standing(Band::Prompt));
+    (words, Some(kept))
 }
 
 /// The row that says how many rows of a result the fold keeps back, drawn as any other row of that
@@ -639,20 +656,19 @@ fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
     rows
 }
 
-/// The rows a prompt is drawn as: the blank row that separates its exchange from the one above it,
-/// and then the reader's own words down the spine of a quoted block — the blank row `Rows` drops for
-/// the first exchange, which has nothing above it.
-fn asked(text: &str, cols: u16) -> Vec<Row> {
+/// The rows a prompt is drawn as: the blank row that separates its exchange from the one above it —
+/// the one `Rows` drops for the first exchange, which has nothing above it — and the reader's own
+/// words down the spine of a quoted block. The blank row is no word of the prompt, so no fold counts
+/// it.
+fn asked(text: &str, cols: u16) -> (Row, Vec<Row>) {
     let opening = format!("{SPINE}{}", SIGIL.trim_end());
     let (gutter, room) = margin(&opening, cols);
-    let mut rows = vec![Row::blank()];
-    rows.extend(
-        wrap(text, room)
-            .into_iter()
-            .enumerate()
-            .map(|(at, line)| quoted(at == 0 && !gutter.is_empty(), line, cols)),
-    );
-    rows
+    let words = wrap(text, room)
+        .into_iter()
+        .enumerate()
+        .map(|(at, line)| quoted(at == 0 && !gutter.is_empty(), line, cols))
+        .collect();
+    (Row::blank(), words)
 }
 
 /// One row of a prompt's words: the spine down its left edge, the sigil standing in the column
@@ -1692,19 +1708,9 @@ impl Rows {
             return false;
         };
         match is_prompt(&self.held[at]) {
-            true => self.flipped(at),
+            true => self.fold(at, self.held[at].fold.other()),
             false => self.toggle(at),
         }
-    }
-
-    /// The fold the entry `at` keeps, left in the one it is not: a key that names no row moves a
-    /// prompt's fold wherever it stands, so it stands where the reader has not left it.
-    fn flipped(&mut self, at: usize) -> bool {
-        let to = match self.held[at].fold {
-            Fold::Closed => Fold::Open,
-            Fold::Open => Fold::Closed,
-        };
-        self.fold(at, to)
     }
 
     /// The fold of the work `at` stands in, opened if closed and folded if open: what a press on a
@@ -1714,17 +1720,15 @@ impl Rows {
         if !self.worth_a_row(&work) {
             return false;
         }
-        let to = match self.held[work.start].place {
-            Place::Opens(Fold::Closed) => Fold::Open,
-            Place::Opens(Fold::Open) => Fold::Closed,
-            _ => return false,
+        let Place::Opens(fold) = self.held[work.start].place else {
+            return false;
         };
-        self.opened(work.start, to)
+        self.opened(work.start, fold.other())
     }
 
     /// The fold the row `row` of entry `at` answers to, opened or folded where that row is the one a
-    /// press stands on: a prompt opens on the row counting what it keeps back and folds on its head
-    /// row, and a work opens or folds on the one row it is drawn as.
+    /// press stands on: a prompt opens on the row counting what it keeps back and folds on the row its
+    /// words begin, and a work opens or folds on the one row it is drawn as.
     pub fn press(&mut self, at: usize, row: u16) -> bool {
         let Some(held) = self.held.get(at) else {
             return false;
@@ -1732,13 +1736,16 @@ impl Rows {
         if !is_prompt(held) {
             return row == 0 && self.work(at).start == at && self.toggle(at);
         }
-        let drawn = u16::try_from(self.rows(at).len()).unwrap_or(u16::MAX);
-        let to = match self.held[at].fold {
-            Fold::Closed if row == drawn.saturating_sub(1) => Fold::Open,
-            Fold::Open if row == 0 => Fold::Closed,
-            _ => return false,
+        let fold = self.held[at].fold;
+        let rows = self.rows(at);
+        let words = rows
+            .iter()
+            .position(|row| row.stands_on() == Some(Band::Prompt));
+        let moves = match fold {
+            Fold::Closed => usize::from(row).checked_add(1) == Some(rows.len()),
+            Fold::Open => words == Some(usize::from(row)),
         };
-        self.fold(at, to)
+        moves && self.fold(at, fold.other())
     }
 
     /// The work entry `at` stands in, which is the one row of it a press opens or folds, and none
@@ -1819,13 +1826,13 @@ impl Rows {
         true
     }
 
-    /// The words the reader typed as the prompt entry `at`, where the band keeps rows of them back:
-    /// the drawn cells are then a slice of these, so a copy takes these and never that slice.
-    pub fn prompt_source(&self, at: usize) -> Option<String> {
-        match &self.held.get(at)?.what {
-            What::Fact(Entry::Prompt { text }) if self.held[at].kept.is_some() => {
-                Some(text.to_string())
-            }
+    /// The whole of the prompt entry `at` where its fold is closed, which is what a copy takes in
+    /// place of the head and the count it draws.
+    pub fn folded_prompt(&self, at: usize) -> Option<String> {
+        let held = self.held.get(at)?;
+        let closed = held.fold == Fold::Closed && held.kept.is_some();
+        match &held.what {
+            What::Fact(Entry::Prompt { text }) if closed => Some(text.to_string()),
             _ => None,
         }
     }

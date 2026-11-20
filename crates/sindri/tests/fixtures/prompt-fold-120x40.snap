@@ -11,8 +11,8 @@ prompt-fold at 120x40
 05 |┃›the retry test fails on the line the patch moved, and only there          ctx                      █░░░░░ 48.2k / 200k| dim:1 plain:75 dim:10 plain:16 dim:5 plain:13
 06 |┃ say which line the patch moved, and which row of the output disagrees     cache                                    88%| dim:1 plain:75 dim:10 plain:34
 07 |┃ the report names the file it read and the line it stopped on                                                          | dim:1 plain:119
-08 |⋯ 5 rows kept back                                                          workspace …/git/sindri/.worktrees/46-rail   | dim:1 plain:1 dim:16 plain:58 dim:10 plain:34
-09 |                                                                            branch    spec/1-capability                 | plain:76 dim:10 plain:34
+08 |┃ give me the test name and the assertion it failed on                      workspace …/git/sindri/.worktrees/46-rail   | dim:1 plain:75 dim:10 plain:34
+09 |⋯ 4 rows kept back                                                          branch    spec/1-capability                 | dim:1 plain:1 dim:16 plain:58 dim:10 plain:34
 10 |                                                                                                                        | plain:120
 11 |                                                                            skills                                     2| plain:76 dim:10 plain:34
 12 |                                                                                                                        | plain:120
