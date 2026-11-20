@@ -28,6 +28,10 @@ const UNDERLINE: Ink = Ink::Dim;
 /// a fence's tag read as the accent of the frame they sit in.
 const FAINT_ACCENT: Look = Look::plain(Ink::Accent).wearing(Faces::FAINT);
 
+/// The mark a horizontal rule fills the room of the block that holds it with: one hairline, in
+/// the ink every other hairline of this front end wears.
+const HAIRLINE: char = '─';
+
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
 }
@@ -380,7 +384,20 @@ impl Room {
                     },
                 }
             }
-            Event::HardBreak => self.flush_if_written(),
+            Event::Rule => self.draw_rule(),
+            Event::InlineHtml(tag) => {
+                if breaking(&tag) {
+                    self.end_row();
+                }
+            }
+            Event::Html(html) => {
+                for line in html.lines() {
+                    if breaking(line) {
+                        self.end_row();
+                    }
+                }
+            }
+            Event::HardBreak => self.end_row(),
             _ => {}
         }
     }
@@ -412,6 +429,29 @@ impl Room {
             spans.push((run, FAINT_ACCENT));
             self.push(Row::of(spans));
         }
+    }
+
+    /// A break ends the row in hand. A cell is the exception: it is collected whole before a row of
+    /// it is drawn, so its break is kept in the runs the cell holds.
+    fn end_row(&mut self) {
+        match &mut self.table {
+            Some(table) => table.brk(),
+            None => self.flush_if_written(),
+        }
+    }
+
+    /// A horizontal rule is one hairline across the room the block has, drawn in the block's own
+    /// gutter, so a rule in a quote keeps the bar and one in an item hangs under its mark.
+    fn draw_rule(&mut self) {
+        self.flush_if_written();
+        self.open_block();
+        let mut spans = self.gutter();
+        spans.push((
+            pen::filled(pen::columns(self.room_cells()), HAIRLINE),
+            Look::plain(Ink::Dim),
+        ));
+        self.first = false;
+        self.push(Row::of(spans));
     }
 
     /// The words of a paragraph, heading or item, placed one at a time, so a word the row
@@ -991,6 +1031,24 @@ fn closed(span: &str) -> bool {
     }
 }
 
+/// Whether a tag is a break: `br` in either case, carrying nothing but whitespace and a slash
+/// before its closing mark.
+fn breaking(tag: &str) -> bool {
+    let Some(inner) = tag
+        .trim()
+        .strip_prefix('<')
+        .and_then(|tag| tag.strip_suffix('>'))
+    else {
+        return false;
+    };
+    match inner.get(..2) {
+        Some(name) if name.eq_ignore_ascii_case("br") => inner[2..]
+            .chars()
+            .all(|glyph| glyph == '/' || glyph.is_whitespace()),
+        _ => false,
+    }
+}
+
 /// `None` for a line that is not a fence: indented more than the three columns a fence may
 /// be, or carrying a run shorter than three.
 fn fence_line(line: &str) -> Option<(char, usize, &str)> {
@@ -1094,13 +1152,17 @@ struct Table {
 
 type Cell = Vec<Said>;
 
-/// One run of a cell's words, and where it goes when it is a way somewhere: a cell is measured
-/// whole before a row of it is drawn, so what it names travels with the words it was written as.
+/// One run of a cell, and where a run of words goes when it is a way somewhere: a cell is
+/// measured whole before a row of it is drawn, so what it names travels with the words it was
+/// written as, and a break it holds is a run of its own rather than a row of the block's.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Said {
-    text: String,
-    look: Look,
-    destination: Option<String>,
+enum Said {
+    Words {
+        text: String,
+        look: Look,
+        destination: Option<String>,
+    },
+    Break,
 }
 
 impl Table {
@@ -1115,14 +1177,24 @@ impl Table {
         };
         let destination = destination.map(str::to_owned);
         match self.cell.last_mut() {
-            Some(said) if said.look == look && said.destination == destination => {
-                said.text.push_str(text);
-            }
-            _ => self.cell.push(Said {
+            Some(Said::Words {
+                text: said,
+                look: at,
+                destination: way,
+            }) if *at == look && *way == destination => said.push_str(text),
+            _ => self.cell.push(Said::Words {
                 text: String::from(text),
                 look,
                 destination,
             }),
+        }
+    }
+
+    /// A break in the cell in hand, kept where it was written: a cell is measured before a row of
+    /// it is drawn, so the break is a run of the cell's rather than a row of the block's.
+    fn brk(&mut self) {
+        if !self.cell.is_empty() {
+            self.cell.push(Said::Break);
         }
     }
 
@@ -1212,8 +1284,17 @@ fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Row>> {
             // one: a cell is measured for the words that fit it.
             let mut room = Room::new(u16::try_from(*width).unwrap_or(u16::MAX), &Surface::none());
             for said in cells.get(at).into_iter().flatten() {
-                room.destination = said.destination.clone();
-                room.prose(&said.text, said.look);
+                match said {
+                    Said::Words {
+                        text,
+                        look,
+                        destination,
+                    } => {
+                        room.destination = destination.clone();
+                        room.prose(text, *look);
+                    }
+                    Said::Break => room.flush_if_written(),
+                }
             }
             room.destination = None;
             room.flush_if_written();
@@ -1270,8 +1351,16 @@ fn header_rule(widths: &[usize]) -> Row {
     Row::of([(text, Look::plain(Ink::Dim))])
 }
 
+/// The widest line of a cell: its runs are added up to a break and no further, because the rows
+/// a cell is drawn as are the lines its break leaves.
 fn measured(cell: &[Said]) -> usize {
-    cell.iter()
-        .map(|said| usize::from(pen::cells(&said.text)))
-        .sum()
+    let mut lines = vec![0usize];
+    for said in cell {
+        let line = lines.last_mut().expect("a line is always in hand");
+        match said {
+            Said::Words { text, .. } => *line += usize::from(pen::cells(text)),
+            Said::Break => lines.push(0),
+        }
+    }
+    lines.into_iter().max().unwrap_or(0)
 }

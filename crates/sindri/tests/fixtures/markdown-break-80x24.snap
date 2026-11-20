@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/fixture/mod.rs
+expression: drawn
+---
+markdown-break at 80x24
+00 |  The words before a break                                                      | plain:80
+01 |  and the words after it are two rows of one paragraph.                         | plain:80
+02 |                                                                                | plain:80
+03 |  The tag around these words draws no cell of its own, and neither does this    | plain:80
+04 |  one.                                                                          | plain:80
+05 |  • an item's words break here                                                  | plain:2 accent:2 plain:76
+06 |    and carry on under its gutter                                               | plain:80
+07 |                                                                                | plain:80
+08 |  row │ words                                                                   | plain:2 plain+bold:3 dim:3 plain+bold:5 plain:67
+09 |  ────┼──────                                                                   | plain:2 dim:11 plain:67
+10 |  one │ above                                                                   | plain:5 dim:3 plain:72
+11 |      │ below                                                                   | plain:5 dim:3 plain:72
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |┌prompt ───────────────────────────────────────────────────────────────────────┐| accent+faint:80
+21 |│› what should the run do?                                                     │| dim:26 plain:53 dim:1
+22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
+23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7
