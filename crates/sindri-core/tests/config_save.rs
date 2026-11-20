@@ -749,3 +749,138 @@ fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
         "a secret is never in a frame: the row says a key is set and not which one"
     );
 }
+
+#[test]
+fn every_key_a_row_is_handed_is_the_key_a_save_of_that_row_reads_back() {
+    let set = every_key_set();
+
+    for field in Config::SCHEMA {
+        let home = bare_home();
+        let path = file_in(&home);
+        // The secret's row is a mask and never the secret, so what is typed into it is a value of
+        // its own; the row of the config read back shows that value as the same mask.
+        let typed = match field.name {
+            "api_key" => String::from("sk-not-a-real-key"),
+            _ => field.shown(&set),
+        };
+
+        Config::save_touched_to(&path, &touched(&[(field.name, typed.as_str())]))
+            .expect("the save lands");
+
+        let written = read(&path);
+        let document: toml::Table = written.parse().expect("the file it wrote is TOML");
+        let named: Vec<&str> = document.keys().map(String::as_str).collect();
+
+        assert_eq!(
+            named,
+            [field.name],
+            "a save of the row of `{}` writes that key and no other key, and the file is:\n{written}",
+            field.name
+        );
+        let back = Config::load_from(&path).expect("the file it wrote still reads");
+        assert!(
+            !field.shown(&back).is_empty(),
+            "the key the row is handed is one the file holds a value for, and the file is:\n{written}"
+        );
+        assert_eq!(
+            field.shown(&back),
+            field.shown(&set),
+            "the row of `{}` shows what the file it wrote reads back, and the file is:\n{written}",
+            field.name
+        );
+    }
+}
+
+#[test]
+fn every_key_cleared_leaves_the_file_instead_of_a_blank_value() {
+    let set = every_key_set();
+
+    for field in Config::SCHEMA {
+        let home = bare_home();
+        let path = file_in(&home);
+        Config::save_to(&path, &set).expect("the save lands");
+
+        Config::save_touched_to(&path, &touched(&[(field.name, "")])).expect("the clear lands");
+
+        let written = read(&path);
+        let document: toml::Table = written.parse().expect("the file it cleared is TOML");
+        assert!(
+            document.get(field.name).is_none(),
+            "a cleared row leaves the file rather than blanking it, and the file is:\n{written}"
+        );
+        let back = Config::load_from(&path).expect("the file it cleared still reads");
+        assert_eq!(
+            field.shown(&back),
+            String::new(),
+            "the key `{}` is the one the clear left out, so nothing reads back for it",
+            field.name
+        );
+        for other in Config::SCHEMA
+            .iter()
+            .filter(|other| other.name != field.name)
+        {
+            assert_eq!(
+                other.shown(&back),
+                other.shown(&set),
+                "clearing `{}` leaves `{}` holding what it held, and the file is:\n{written}",
+                field.name,
+                other.name
+            );
+        }
+    }
+}
+
+#[test]
+fn a_word_a_key_cannot_hold_is_refused_naming_that_key() {
+    for word in ["sideways", "perhaps", "ten", "-1", "0x10", "1.5"] {
+        let mut refused_by: Vec<&str> = Vec::new();
+
+        for field in Config::SCHEMA {
+            let Err(error) = field.read(word) else {
+                continue;
+            };
+            let message = error.to_string();
+            assert!(
+                message.contains(field.name),
+                "a refusal of `{word}` names the key it refuses it for, and it says: {message}"
+            );
+            refused_by.push(field.name);
+        }
+
+        assert!(
+            !refused_by.is_empty(),
+            "some key in the table refuses `{word}`, so rows that hold any word cannot hide a \
+             broken refusal"
+        );
+    }
+}
+
+#[test]
+fn the_mask_a_frame_shows_is_no_word_a_secret_can_hold() {
+    let field = Config::field("api_key").expect("the schema names the key a secret is set under");
+    let mask = field.shown(&every_key_set());
+
+    let error = field
+        .read(&mask)
+        .expect_err("a row of bullets saved as a key would be a key of bullets");
+
+    assert!(
+        error.to_string().contains("api_key"),
+        "the refusal names the key a reader has to go and fix, and it says: {error}"
+    );
+}
+
+#[test]
+fn a_key_the_table_does_not_hold_is_refused_even_when_the_visit_emptied_it() {
+    let home = config_home(HAND_WRITTEN);
+    let path = file_in(&home);
+
+    let error = Config::save_touched_to(&path, &touched(&[("yolo_unsafe", "")]))
+        .expect_err("the escape hatch is no key of the table, so no visit can clear it");
+
+    assert!(
+        error.to_string().contains("yolo_unsafe"),
+        "the refusal names the key the table does not hold, and it says: {error}"
+    );
+    assert_eq!(read(&path), HAND_WRITTEN, "and nothing was written");
+}
