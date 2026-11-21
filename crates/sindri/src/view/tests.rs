@@ -2954,7 +2954,7 @@ fn painted_and_told(view: &mut View, cols: u16, rows: u16) -> (Buffer, Painted) 
 }
 
 #[test]
-fn a_notch_of_the_wheel_takes_the_transcript_back_exactly_as_the_page_key_does() {
+fn a_notch_of_the_wheel_moves_the_transcript_three_rows() {
     let mut view = turns_taken(100);
     let (_, told) = painted_and_told(&mut view, 120, 40);
 
@@ -2965,8 +2965,8 @@ fn a_notch_of_the_wheel_takes_the_transcript_back_exactly_as_the_page_key_does()
     );
     assert_eq!(
         view.scroll(),
-        Scroll::Back(37),
-        "and it moves it by the band the transcript is drawn in, exactly as `PgUp` does"
+        Scroll::Back(3),
+        "and it moves it three rows, never the band the page keys move"
     );
     let (_, told) = painted_and_told(&mut view, 120, 40);
     assert_eq!(
@@ -2982,6 +2982,29 @@ fn a_notch_of_the_wheel_takes_the_transcript_back_exactly_as_the_page_key_does()
 }
 
 #[test]
+fn a_notch_of_the_wheel_moves_the_transcript_and_never_the_draft() {
+    let mut view = turns_taken(100);
+    view.paste("hello");
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Wheel(Notch::Up)),
+        Outcome::Edited,
+        "a notch moves the transcript whatever words the draft holds"
+    );
+    assert_eq!(
+        view.scroll(),
+        Scroll::Back(3),
+        "and moves the transcript its three rows"
+    );
+    assert_eq!(
+        view.composer().text(),
+        "hello",
+        "while the draft is the words the reader typed, unmoved"
+    );
+}
+
+#[test]
 fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
     let mut view = turns_taken(40);
     let (_, told) = painted_and_told(&mut view, 120, 40);
@@ -2989,19 +3012,33 @@ fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
     assert_eq!(
         view.pointer(&told, Pointer::Wheel(Notch::Up)),
         Outcome::Edited,
-        "a transcript four rows taller than its band is a notch back"
+        "a transcript three rows taller than its band is a notch back"
     );
     assert_eq!(
         view.scroll(),
         Scroll::Back(3),
-        "but only as far as its first row, which one page reaches"
+        "and the notch moves the three rows it moves, whole"
     );
+
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        view.pointer(&told, Pointer::Wheel(Notch::Up)),
+        Outcome::Edited,
+        "the row the notice takes off the band leaves one row above the frame, which a notch takes"
+    );
+    assert_eq!(
+        view.scroll(),
+        Scroll::Back(4),
+        "and no further: the first row of the transcript is where it stops"
+    );
+
+    let (_, told) = painted_and_told(&mut view, 120, 40);
     assert_eq!(
         view.pointer(&told, Pointer::Wheel(Notch::Up)),
         Outcome::Unchanged,
-        "and a notch up already at the first row moves nothing"
+        "and a notch up already at the first row moves nothing, so nothing is repainted"
     );
-    assert_eq!(view.scroll(), Scroll::Back(3), "the row it stopped on");
+    assert_eq!(view.scroll(), Scroll::Back(4), "the row it stopped on");
 
     let mut tail = turns_taken(40);
     let (_, told) = painted_and_told(&mut tail, 120, 40);
@@ -3011,6 +3048,68 @@ fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
         "a notch down at the tail is a frame that does not move"
     );
     assert_eq!(tail.scroll(), Scroll::Tail);
+}
+
+#[test]
+fn a_page_key_still_moves_a_whole_band_where_a_notch_moves_three_rows() {
+    let mut paged = turns_taken(100);
+    painted(&mut paged, 120, 40);
+
+    assert_eq!(
+        paged.key(Key::PageUp),
+        Outcome::Edited,
+        "a page key moves the transcript, which is a frame to paint"
+    );
+    assert_eq!(
+        paged.scroll(),
+        Scroll::Back(37),
+        "and it moves it by the band the transcript is drawn in and the row the notice takes"
+    );
+    assert_eq!(
+        paged.key(Key::PageDown),
+        Outcome::Edited,
+        "`PgDn` moves the frame a band on, as its footer says it does"
+    );
+    assert_eq!(
+        paged.scroll(),
+        Scroll::Tail,
+        "which is the tail it started at"
+    );
+
+    let mut notched = turns_taken(100);
+    let (_, told) = painted_and_told(&mut notched, 120, 40);
+    assert_eq!(
+        notched.pointer(&told, Pointer::Wheel(Notch::Up)),
+        Outcome::Edited,
+        "a notch on the same frame moves it too"
+    );
+    assert_eq!(
+        notched.scroll(),
+        Scroll::Back(3),
+        "but three rows, not the band a page key moves"
+    );
+}
+
+#[test]
+fn a_card_over_the_frame_takes_the_notch_as_it_takes_the_page_key() {
+    let mut view = turns_taken(100);
+    assert_eq!(
+        view.key(Key::Char('?')),
+        Outcome::Edited,
+        "`?` on an empty draft opens the card that lists the keys"
+    );
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+
+    assert_eq!(
+        view.pointer(&told, Pointer::Wheel(Notch::Up)),
+        Outcome::Unchanged,
+        "a card standing over the frame takes the notch as it takes the key, which is not at all"
+    );
+    assert_eq!(
+        view.scroll(),
+        Scroll::Tail,
+        "so the frame behind it stays the tail it was drawn at"
+    );
 }
 
 #[test]

@@ -15,11 +15,15 @@ pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> b
 /// press chooses and neither is typed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pointer {
-    /// One notch of the wheel, which moves the transcript the way the page keys move it.
+    /// One notch of the wheel, which moves the transcript three rows: the notch's measure, where a
+    /// page key moves it a band.
     Wheel(Notch),
     /// A press landed on one cell of the frame.
     Press(Cell),
 }
+
+/// How many rows of the transcript one notch of the wheel moves.
+pub(crate) const ROWS: u32 = 3;
 
 /// The way the wheel turned.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -40,7 +40,7 @@ use crate::picker::Picker;
 use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::plane::Plane;
-use crate::pointer::{Notch, Pointer};
+use crate::pointer::{self, Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
@@ -957,10 +957,17 @@ impl View {
         Outcome::Edited
     }
 
-    /// A band of the transcript in one direction: the frame is moved where there is a row to move
-    /// it to, and a key pressed at the first row or at the tail repaints nothing.
+    /// A band of the transcript in one direction: the rows the band was drawn in, and the row the
+    /// notice takes while it stands over it.
     fn page(&mut self, by: Page) -> Outcome {
         let rows = self.page_rows();
+        self.travel(by, rows)
+    }
+
+    /// The transcript `rows` rows in one direction: moved where there is a row to move it to, never
+    /// further back than the band's first row and never on past the tail, and repainting nothing
+    /// when it moves nothing. A page key and a notch of the wheel both come through this one move.
+    fn travel(&mut self, by: Page, rows: u32) -> Outcome {
         let at = match by {
             Page::Back => self
                 .scroll
@@ -1111,16 +1118,29 @@ impl View {
         &self.facts
     }
 
-    /// What the terminal's pointer report is answered with: a notch moves the transcript through the
-    /// one key table, and a press chooses the row it landed on.
+    /// What the terminal's pointer report is answered with: a notch moves the transcript three rows
+    /// and a press chooses the row it landed on.
     pub fn pointer(&mut self, painted: &Painted, report: Pointer) -> Outcome {
         if !self.capabilities.reports_pointer() {
             return Outcome::Unchanged;
         }
         match report {
-            Pointer::Wheel(Notch::Up) => self.key(Key::PageUp),
-            Pointer::Wheel(Notch::Down) => self.key(Key::PageDown),
+            Pointer::Wheel(notch) => self.notch(notch),
             Pointer::Press(at) => self.pressed(painted, at),
+        }
+    }
+
+    /// A notch of the wheel, moved the `pointer::ROWS` rows a notch moves where the page key it is
+    /// read through moves a band: taken only where that key is, so a card over the frame takes neither.
+    fn notch(&mut self, notch: Notch) -> Outcome {
+        let key = match notch {
+            Notch::Up => Key::PageUp,
+            Notch::Down => Key::PageDown,
+        };
+        match self.stack.act(key) {
+            Some(Act::Back) => self.travel(Page::Back, pointer::ROWS),
+            Some(Act::Forward) => self.travel(Page::Forward, pointer::ROWS),
+            _ => Outcome::Unchanged,
         }
     }
 
@@ -1883,7 +1903,7 @@ impl Deltas for View {
     }
 }
 
-/// The direction a page of the transcript moves the frame.
+/// The direction the transcript moves: back towards its first row, or on towards the tail.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Page {
     Back,
