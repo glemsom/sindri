@@ -1712,29 +1712,29 @@ fn assert_laid_inside(facts: &Facts, shape: Shape, area: Rect, room: u16) {
 }
 
 #[test]
-fn the_rail_holds_the_frames_right_edge_to_its_floor_and_takes_no_row_of_the_transcript() {
+fn the_rail_holds_the_frames_right_edge_down_to_the_row_above_the_composer() {
     let area = band(120, 40);
     let share = split(&frame(), area);
     assert_eq!(
         share.bands,
         band(120 - CEILING, 40),
-        "the bands beside a ledger are the frame less the rail's columns, and the frame's own \
+        "the transcript is laid in the frame less the rail's columns, and the frame's own \
              height"
     );
     assert_eq!(share.rail, Some(Rail::Ledger));
 
     let mut transcript = band(120 - CEILING, 37);
     assert_eq!(
-        share.rail_band(area, &mut transcript),
+        share.rail_band(area, 37, &mut transcript),
         Some((
             Rail::Ledger,
             RailBand::of(Rect {
                 x: 120 - CEILING,
-                ..band(CEILING, 40)
+                ..band(CEILING, 37)
             })
         )),
-        "the rail's band is the frame's own floor at its right edge, and a ledger takes no row \
-             of the transcript's band"
+        "the rail's band is the frame's own floor at its right edge, down to the composer's head \
+             row and no row past it"
     );
     assert_eq!(
         transcript,
@@ -1744,16 +1744,23 @@ fn the_rail_holds_the_frames_right_edge_to_its_floor_and_takes_no_row_of_the_tra
 
     let mut transcript = band(NARROW - FLOOR, 21);
     assert_eq!(
-        split(&frame(), band(NARROW, 37)).rail_band(band(NARROW, 37), &mut transcript),
+        split(&frame(), band(NARROW, 37)).rail_band(band(NARROW, 37), 21, &mut transcript),
         Some((
             Rail::Ledger,
             RailBand::of(Rect {
                 x: NARROW - FLOOR,
-                ..band(FLOOR, 37)
+                ..band(FLOOR, 21)
             })
         )),
         "and the narrowest frame that holds a ledger is the transcript's own floor beside the \
              rail's"
+    );
+
+    assert_eq!(
+        share.rail_band(area, area.y, &mut transcript),
+        None,
+        "a composer headed by the frame's own first row leaves the rail no row, so no rail is \
+             drawn at all"
     );
 }
 
@@ -1769,7 +1776,7 @@ fn a_strip_takes_the_transcripts_last_row_and_leaves_the_bands_their_columns() {
 
     let mut transcript = band(NARROW - 1, 21);
     assert_eq!(
-        share.rail_band(area, &mut transcript),
+        share.rail_band(area, 21, &mut transcript),
         Some((
             Rail::Strip,
             RailBand::of(Rect {
@@ -1788,7 +1795,7 @@ fn a_strip_takes_the_transcripts_last_row_and_leaves_the_bands_their_columns() {
 
     let mut nothing = band(NARROW - 1, 0);
     assert_eq!(
-        share.rail_band(area, &mut nothing),
+        share.rail_band(area, 21, &mut nothing),
         None,
         "and a band with no row to give hands the strip none"
     );
@@ -1856,7 +1863,7 @@ fn a_frame_that_knows_no_fact_leaves_the_whole_frame_to_the_bands() {
             bands: area,
             rail: None
         }
-        .rail_band(area, &mut transcript),
+        .rail_band(area, area.bottom(), &mut transcript),
         None,
         "and a frame with no rail cuts no band of its own"
     );
@@ -1935,7 +1942,7 @@ fn model_drawn(facts: &Facts, frame: u16) -> String {
     let share = split(facts, area);
     let mut transcript = share.bands;
     let (shape, rail) = share
-        .rail_band(area, &mut transcript)
+        .rail_band(area, area.bottom(), &mut transcript)
         .expect("a rail in a frame that knows a fact");
     rows(facts, shape.into(), rail.facts, None)
         .iter()

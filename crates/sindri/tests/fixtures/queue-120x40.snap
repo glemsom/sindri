@@ -34,12 +34,12 @@ queue at 120x40
 28 |                                                                                                                        | plain:120
 29 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
 30 |▏ fn main() {                                                                                                           | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:111
-31 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
-32 |▏    │row.paint(area, buffer);                                                                                          | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:105
-33 |▏ }                                                                                                                     | dim:2 plain:118
+31 |▏    │let row = Row::of(spans);                                             input                                  48.2k| dim:2 plain:3 dim:1 accent+bold:3 plain:67 dim:10 plain:34
+32 |▏    │row.paint(area, buffer);                                              output                                  3.1k| dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:61 dim:10 plain:34
+33 |▏ }                                                                         total                                  51.3k| dim:2 plain:74 dim:10 plain:34
 34 |━                                                                                                                       | accent+faint:1 plain:119
 35 | ›and this one while they wait                                                                                          | dim:1 accent:1 plain:118
 36 | ›run the test that failed and read it                                                                                  | dim:38 plain:82
-37 | ›then the fmt check                                                        input                                  48.2k| dim:20 plain:56 dim:10 plain:34
-38 | ›and say why the retry hid it                                              output                                  3.1k| dim:30 plain:46 dim:10 plain:34
-39 |Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys · Ctrl-Q quit    total                                  51.3k| plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 plain:4 dim:10 plain:34
+37 | ›then the fmt check                                                                                                    | dim:20 plain:100
+38 | ›and say why the retry hid it                                                                                          | dim:30 plain:90
+39 |Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                               | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:31

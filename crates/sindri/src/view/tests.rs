@@ -1336,6 +1336,57 @@ fn the_transcript_sits_in_the_well_and_the_rail_beside_it_carries_the_light() {
     }
 }
 
+#[test]
+fn the_band_beside_a_rail_is_drawn_in_the_frames_whole_width_and_the_rail_closes_above_it() {
+    let palette = Palette::TRUECOLOR;
+    for (cols, rows) in [(120, 40), (100, 40)] {
+        let room = cols - pen::cells(INDENT);
+        let mut view = View::of(
+            inked(palette),
+            Facts::default().asked().railed(rail()),
+            Transcript::none(),
+        );
+        view.paste(&pen::filled(room, 'x'));
+        let (buffer, told) = painted_and_told(&mut view, cols, rows);
+        let laid = laid_out(&told);
+        let band = laid.composer;
+        let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+
+        assert_eq!(
+            (band.x, band.width),
+            (0, cols),
+            "the band at {cols} columns is drawn in the frame's columns and not the ones the rail \
+             left it"
+        );
+        assert_eq!(
+            (laid.footer.x, laid.footer.width),
+            (0, cols),
+            "and the hints' row is drawn in them too, so no rail stands beside it"
+        );
+        assert_eq!(
+            rail.bottom(),
+            band.y,
+            "the rail closes on the row above the band's head, at {cols} columns"
+        );
+        assert_eq!(
+            drawn_glyphs(&buffer, band.y + ends(&view).above),
+            format!(" \u{203a}{}", pen::filled(room, 'x')),
+            "a draft of {room} glyphs fills the row the frame leaves it, past the columns the \
+             rail takes from the transcript"
+        );
+        for y in band.y + 1..band.bottom() {
+            for x in rail.x..rail.right() {
+                assert_eq!(
+                    under(&buffer, x, y),
+                    palette.step(y - band.y, band.height),
+                    "row {y}, column {x} of the band at {cols} columns is not the band's own \
+                     shade: the rail may not be drawn over a row the band holds"
+                );
+            }
+        }
+    }
+}
+
 /// A frame whose transcript runs to the seam the rail is drawn across, on a terminal that places
 /// pictures and the face switched off or on one that places none: the two differ in the plane under
 /// their cells and in no row the rail gives a picture.
@@ -2334,14 +2385,20 @@ fn a_forty_row_frame_beside_a_rail_holds_every_row_it_holds_without_one() {
         );
     }
     assert_eq!(
-        beside.rail.expect("a rail beside the bands").1.area.height,
-        40,
-        "and the rail is handed the frame's own height, so no row of it is a row a band gave up"
+        beside
+            .rail
+            .expect("a rail above the composer")
+            .1
+            .area
+            .height,
+        beside.composer.y - beside.transcript.y,
+        "and the rail closes on the row above the composer, so the rows the rail is handed are \
+         the frame's less the ones the composer holds"
     );
 }
 
 #[test]
-fn the_hints_beside_a_rail_give_up_the_hint_the_rails_columns_took() {
+fn the_hints_beside_a_rail_keep_every_column_the_frames_own_width_holds() {
     let mut railed = View::of(
         Capabilities::default(),
         Facts::default().asked().railed(rail()),
@@ -2361,16 +2418,15 @@ fn the_hints_beside_a_rail_give_up_the_hint_the_rails_columns_took() {
     assert!(columns < 100, "a rail takes the frame's right-hand columns");
     assert_eq!(
         said.len(),
-        whole - 1,
-        "a 100-column frame beside a rail draws {said:?}, which is not one hint shorter than \
-         the {whole} the frame's own width holds"
+        whole,
+        "a 100-column frame beside a rail draws {said:?}, which is not the {whole} hints the \
+         frame's own width holds: no rail stands beside the hints' row"
     );
     assert_eq!(
         beside.trim_end(),
-        drawn_footer(&mut bare, columns - 1, 24).trim_end(),
-        "the hints' row stands in the transcript's columns less the one the rail's seam is \
-         drawn beside, so it reads as a {} column frame reads, in the order the hints survive in",
-        columns - 1
+        drawn_footer(&mut bare, 100, 24).trim_end(),
+        "the hints' row stands in the frame's own columns, so it reads as a frame with no rail \
+         reads, in the order the hints survive in"
     );
 
     let mut railed = View::of(
@@ -2381,21 +2437,13 @@ fn the_hints_beside_a_rail_give_up_the_hint_the_rails_columns_took() {
     for text in ["one", "two", "three"] {
         railed.enqueue(prompt(text));
     }
-    let (_, told) = painted_and_told(&mut railed, 100, 24);
-    let columns = laid_out(&told).transcript.width;
-    let whole = said_row(drawn_footer(&mut asking(3), 100, 24).trim_end()).len();
     let beside = drawn_footer(&mut railed, 100, 24);
 
-    assert!(
-        said_row(beside.trim_end()).len() < whole,
-        "and a queued prompt's count is given up with the hints beside it: {beside:?} holds \
-         {} of the {whole} hints the frame's own width holds",
-        said_row(beside.trim_end()).len()
-    );
     assert_eq!(
         beside.trim_end(),
-        drawn_footer(&mut asking(3), columns - 1, 24).trim_end(),
-        "the row standing in the same columns reads the same hints"
+        drawn_footer(&mut asking(3), 100, 24).trim_end(),
+        "and the count of the prompts waiting is drawn under the draft's last hint where the \
+         whole frame holds it, so no hint is given up beside a rail"
     );
 }
 

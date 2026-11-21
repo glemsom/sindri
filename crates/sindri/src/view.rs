@@ -1208,18 +1208,19 @@ impl View {
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let mut painted = Painted::none();
         pen::claim(buffer, area, self.capabilities.palette().ground(None));
-        // The rail is a fact about the frame, so its columns are cut out before the bands are laid
-        // and the draft is measured at the width it is drawn at.
+        // The rail is a fact about the frame, so its columns are cut from the transcript before the
+        // bands are laid and the draft is measured at the width its band fills.
         let share = self.split(area);
-        self.composer.set_room(View::room(share.bands));
+        self.composer.set_room(View::room(area));
         let mut layout = bands(
+            area,
             share.bands,
             self.composer.rows(),
             self.queue.rows(),
             self.composer.ends(),
             self.notice_rows(),
         );
-        layout.rail = share.rail_band(area, &mut layout.transcript);
+        layout.rail = share.rail_band(area, layout.composer.y, &mut layout.transcript);
         // The band the rail's plane is drawn under, which the transcript claims as the terminal's
         // own ground once its rows are down.
         let mut under = None;
@@ -1274,7 +1275,7 @@ impl View {
         if let Some(plane) = self.composer_band(layout.composer, layout.queue, buffer) {
             painted.planes.push(plane);
         }
-        self.footer(layout.rail, layout.footer, buffer);
+        self.footer(layout.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
         // reader sees the transcript they will return to, and sees that it is out of reach.
         let screen = self.stack.top();
@@ -1824,9 +1825,10 @@ impl View {
         }
     }
 
-    /// The columns the draft's words have: the band's own width, less the gutter an answer is set from.
-    fn room(band: Rect) -> u16 {
-        band.width.saturating_sub(pen::cells(INDENT))
+    /// The columns the draft's words have: the frame's own width, which its band fills, less the
+    /// gutter an answer is set from.
+    fn room(area: Rect) -> u16 {
+        area.width.saturating_sub(pen::cells(INDENT))
     }
 
     /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
@@ -1854,23 +1856,16 @@ impl View {
         }
     }
 
-    /// The hints' row: the band's last row, laid up to the column a ledger's lit seam stands beside
-    /// rather than into it, so the last hint of a row that fills the band is no word of the rail's.
-    fn footer(&self, rail: Option<(Rail, RailBand)>, area: Rect, buffer: &mut Buffer) {
+    /// The hints' row: the band's last row, which stands under no rail and so is the whole of what
+    /// the frame holds in it.
+    fn footer(&self, area: Rect, buffer: &mut Buffer) {
         if area.height == 0 {
             return;
         }
-        let room = match rail {
-            Some((Rail::Ledger, _)) => Rect {
-                width: area.width.saturating_sub(1),
-                ..area
-            },
-            _ => area,
-        };
         let depth = self.queue.label().unwrap_or_default();
         hints_row(
             buffer,
-            room,
+            area,
             &self.hints(),
             &depth,
             &self.capabilities.palette(),
@@ -1896,8 +1891,8 @@ enum Page {
 }
 
 /// Where a paint pass put each part of the frame: the bands it shared the rows out in, the cells it
-/// gave the transcript, the rail it stood beside them, and the body it gave a card when one was
-/// drawn. The band the caret is placed in is this pass's, and never a second laying out of it.
+/// gave the transcript, the rail it stood above the composer, and the body it gave a card when one
+/// was drawn. The band the caret is placed in is this pass's, and never a second laying out of it.
 #[derive(Clone, Copy, Debug)]
 pub struct Layout {
     /// The rows the transcript was drawn in, in the columns the rail left it.
@@ -1906,15 +1901,15 @@ pub struct Layout {
     pub queue: Rect,
     /// The one row saying how far back from the tail the frame stands, and none at the tail.
     pub notice: Rect,
-    /// The band's own rows, in the transcript's columns: its head, the draft under it, the queue's
+    /// The band's own rows, in the frame's own columns: its head, the draft under it, the queue's
     /// rows and its footer.
     pub composer: Rect,
-    /// The band's last row, in the transcript's columns: the footer, where the hints of what a key
+    /// The band's last row, in the frame's own columns: the footer, where the hints of what a key
     /// does this frame stand.
     pub footer: Rect,
     /// The cells a card's body was drawn in, and none while no card was drawn.
     pub card: Option<Rect>,
-    /// The rail's shape and the band it drew in beside the bands, and none while the frame drew
+    /// The rail's shape and the band it drew in above the composer, and none while the frame drew
     /// no rail.
     pub rail: Option<(Rail, RailBand)>,
 }
@@ -1945,7 +1940,16 @@ fn place(
     pictures.place(picture, cell, block, buffer);
 }
 
-fn bands(area: Rect, composer_rows: u16, queue_rows: u16, ends: Ends, notice_rows: u16) -> Layout {
+/// Every band a frame lays in `area`, with the transcript and the notice in `beside`'s columns:
+/// the composer, its queue and the hints hold every column of the frame.
+fn bands(
+    area: Rect,
+    beside: Rect,
+    composer_rows: u16,
+    queue_rows: u16,
+    ends: Ends,
+    notice_rows: u16,
+) -> Layout {
     let composer = composer_rows.min(area.height);
     let queue = queue_rows.min(area.height.saturating_sub(composer));
     let room = area.height.saturating_sub(composer).saturating_sub(queue);
@@ -1964,7 +1968,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, ends: Ends, notice_row
     Layout {
         transcript: Rect {
             height: transcript,
-            ..area
+            ..beside
         },
         queue: Rect {
             y: queue_y,
@@ -1974,7 +1978,7 @@ fn bands(area: Rect, composer_rows: u16, queue_rows: u16, ends: Ends, notice_row
         notice: Rect {
             y: notice_y,
             height: notice,
-            ..area
+            ..beside
         },
         composer: Rect {
             y: composer_y,

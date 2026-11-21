@@ -735,11 +735,12 @@ impl RailBand {
     }
 }
 
-/// What the frame's bands and its rail share of it: the cells the bands beside the rail are laid
+/// What the frame's bands and its rail share of it: the cells the transcript and the notice are laid
 /// in, and the rail's shape — nothing at all for a frame that knows no fact.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Share {
-    /// The cells the bands beside the rail are laid in.
+    /// The cells the transcript and the notice are laid in, which is the frame less the rail's
+    /// columns.
     pub bands: Rect,
     /// The rail's shape, and nothing at all for a frame that knows no fact.
     pub rail: Option<Rail>,
@@ -747,19 +748,29 @@ pub struct Share {
 
 impl Share {
     /// The rail's band on the frame `area`, and the rows the bands beside it keep: a ledger's band
-    /// is the frame's own height, and a strip takes the transcript's band's last row, which is cut
-    /// off the `transcript` handed in.
-    pub fn rail_band(self, area: Rect, transcript: &mut Rect) -> Option<(Rail, RailBand)> {
+    /// is the frame's right-hand columns down to `head`, and none at all where that leaves it no
+    /// row; a strip takes the transcript's last row, which is cut off the `transcript` handed in.
+    pub fn rail_band(
+        self,
+        area: Rect,
+        head: u16,
+        transcript: &mut Rect,
+    ) -> Option<(Rail, RailBand)> {
         let rail = self.rail?;
         match rail {
             Rail::Ledger => {
                 let columns = Rail::columns(area.width);
+                let height = head.saturating_sub(area.y);
+                if height == 0 {
+                    return None;
+                }
                 Some((
                     rail,
                     RailBand::of(Rect {
                         x: area.right().saturating_sub(columns),
+                        y: area.y,
                         width: columns,
-                        ..area
+                        height,
                     }),
                 ))
             }
@@ -785,7 +796,7 @@ impl Share {
 
 /// Cuts the frame the bands and the rail share: the rail's own columns down the right while the
 /// frame is wide enough to hold a column, a strip along the transcript's bottom row below it. A
-/// frame that knows no fact draws no rail, and the bands lose no room to one.
+/// frame that knows no fact draws no rail, and the transcript loses no column to one.
 pub fn split(facts: &Facts, area: Rect) -> Share {
     let shape = Rail::of(area.width);
     if area.width == 0 || area.height == 0 || known(facts, shape.into(), None).is_empty() {

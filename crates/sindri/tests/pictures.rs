@@ -16,7 +16,7 @@ use sindri::composer::{Key, Outcome};
 use sindri::face;
 use sindri::facts;
 use sindri::graphics::{Ceiling, CellSize};
-use sindri::ledger::{self, Boot, Ctx, Facts, Rail};
+use sindri::ledger::{Boot, Ctx, Facts, Rail};
 use sindri::mark::Cell;
 use sindri::markdown;
 use sindri::palette::{Band, Edge, Palette, channels};
@@ -689,15 +689,17 @@ fn strip_band(cols: u16, rows: u16) -> Rect {
     }
 }
 
-/// The rail's own columns of the frame: the ones the frame's width gives it, down its right-hand
-/// edge for the frame's own height.
-fn rail_band(cols: u16, rows: u16) -> Rect {
-    let columns = Rail::columns(cols);
-    Rect {
-        x: cols - columns,
-        width: columns,
-        ..Rect::new(0, 0, cols, rows)
-    }
+/// The band the rail of a painted frame is drawn in: the frame's right-hand columns, from its first
+/// row down to the one above the composer's head.
+fn rail_band(framed: &frame::Frame) -> Rect {
+    framed
+        .told()
+        .layout()
+        .expect("a laid out frame")
+        .rail
+        .expect("a rail on a frame that knows a fact")
+        .1
+        .area
 }
 
 /// The cells whose glyphs hold the protocol's first chunk, counted: what a buffer sends when it is
@@ -1138,7 +1140,7 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
     for cols in [100, 120] {
         let mut view = railed(true, true);
         let painted = frame::painted(&mut view, cols, 40);
-        let rail = rail_band(cols, 40);
+        let rail = rail_band(&painted);
         let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
 
         assert_eq!(
@@ -1204,11 +1206,11 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
 #[test]
 fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
     for cols in [100, 120] {
-        let rail = rail_band(cols, 40);
         let mut bare = railed(false, true);
         let without = frame::painted(&mut bare, cols, 40);
         let mut faced = railed(true, true);
         let with = frame::painted(&mut faced, cols, 40);
+        let rail = rail_band(&with);
 
         let stated = |buffer: &Buffer, from: u16| -> Vec<String> {
             (from..rail.bottom())
@@ -1254,9 +1256,9 @@ fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
 #[test]
 fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_picture_draws() {
     for cols in [100, 120] {
-        let rail = rail_band(cols, 40);
         let mut turned_off = railed(true, false);
         let off = frame::painted(&mut turned_off, cols, 40);
+        let rail = rail_band(&off);
         let mut placeless = railed(false, true);
         let placeless = frame::painted(&mut placeless, cols, 40);
 
@@ -1290,7 +1292,7 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let with = frame::painted(&mut pictured, 120, 40);
     let mut placeless = splash(false);
     let without = frame::painted(&mut placeless, 120, 40);
-    let rail = rail_band(120, 40);
+    let rail = rail_band(&with);
     let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
 
     let pictured_in_rail = |y: u16| -> Vec<u16> {
@@ -1358,9 +1360,9 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
 
 #[test]
 fn a_splash_screen_the_face_is_turned_off_for_is_the_one_a_placeless_terminal_draws() {
-    let rail = rail_band(120, 40);
     let mut turned_off = View::of(caps::faced(false), boot_facts(), Transcript::none());
     let off = frame::painted(&mut turned_off, 120, 40);
+    let rail = rail_band(&off);
     let mut placeless = splash(false);
     let without = frame::painted(&mut placeless, 120, 40);
 
@@ -1404,7 +1406,7 @@ fn a_terminal_that_places_no_picture_draws_the_facts_from_the_rails_first_row() 
     for cols in [100, 120] {
         let mut view = railed(false, true);
         let painted = frame::painted(&mut view, cols, 40);
-        let rail = rail_band(cols, 40);
+        let rail = rail_band(&painted);
 
         assert!(
             pictured_rows(painted.cells()).is_empty(),
@@ -1462,13 +1464,13 @@ fn the_placement_covers_the_band_the_ledger_reserved_for_it_and_no_cell_outside_
     for cols in [100, 120] {
         let mut view = railed(true, true);
         let painted = frame::painted(&mut view, cols, 40);
-        let rail = rail_band(cols, 40);
+        let rail = rail_band(&painted);
         let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
-        let frame = Rect::new(0, 0, cols, 40);
-        let share = ledger::split(&railed_facts(), frame);
-        let mut transcript = share.bands;
-        let reserved = share
-            .rail_band(frame, &mut transcript)
+        let reserved = painted
+            .told()
+            .layout()
+            .expect("a laid out frame")
+            .rail
             .expect("a frame this wide holds a ledger")
             .1
             .with_picture(face.cols(), face.rows())
