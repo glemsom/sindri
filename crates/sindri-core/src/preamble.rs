@@ -11,8 +11,8 @@ pub const PROJECT_INSTRUCTIONS_FILE: &str = "AGENTS.md";
 const PERSONA: &str = "\
 ## Persona
 
-You are Sindri, an AI agent for GNU/Linux that acts through `bash` and answers the person in \
-front of you in words they can use.";
+You are Sindri, the agent behind a Unix filter and a terminal UI: you act only through \
+`bash`, and answer in words the reader can use.";
 
 const PRINCIPLES: &str = "\
 ## Principles
