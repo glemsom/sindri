@@ -389,6 +389,17 @@ impl Phase {
             Phase::Error => "error",
         }
     }
+
+    /// Whether a run has ended in this phase, an answer or a failure: the two a terminal that is
+    /// nobody's screen is notified of.
+    pub fn ended(self) -> bool {
+        matches!(self, Phase::Done | Phase::Error)
+    }
+
+    /// Whether a run is asking the model and streaming what it says: the phase a terminal marks.
+    pub fn working(self) -> bool {
+        matches!(self, Phase::Working)
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Told {

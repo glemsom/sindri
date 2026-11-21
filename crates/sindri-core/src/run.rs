@@ -17,6 +17,7 @@ use crate::config::Config;
 use crate::open::{Ground, Handover, Opener};
 use crate::policy::{Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES};
 use crate::provider::{Deltas, Failure};
+use crate::records::Told;
 use crate::redact::{Redacted, SecretSet};
 use crate::skills::Catalog;
 use crate::tools::{BASH, OPEN, SKILL, ToolSet};
@@ -394,6 +395,10 @@ pub trait Witness {
     /// A turn ended and is in the history, its calls run, and the state the run is in after it.
     fn ended(&mut self, ended: &Turn, state: &State);
 
+    /// What the run says of itself as it goes: the phase it is in and the turn it is on, in the
+    /// run's own turns, never in the session's.
+    fn told(&mut self, _told: Told) {}
+
     /// The run stopped.
     fn settled(&mut self, settled: &Settled<'_>);
 }
@@ -410,6 +415,8 @@ impl Witness for () {
     fn began(&mut self) {}
 
     fn ended(&mut self, _ended: &Turn, _state: &State) {}
+
+    fn told(&mut self, _told: Told) {}
 
     fn settled(&mut self, _settled: &Settled<'_>) {}
 }
@@ -544,7 +551,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self.loaded.clear();
     }
 
-    pub fn turn(&mut self, deltas: &mut dyn Deltas) -> State {
+    pub fn turn(&mut self, deltas: &mut dyn Deltas, witness: &mut dyn Witness) -> State {
         if !self.state.is_running() {
             return self.state();
         }
@@ -562,6 +569,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         }
 
         self.turns += 1;
+        witness.told(Told::Asking { turn: self.turns });
         let request = self.request();
         let reply = match self.responder.respond(&request, deltas) {
             Ok(reply) => reply,
@@ -571,6 +579,9 @@ impl<R: Responder, A: Executor> Run<R, A> {
             }
         };
         let mut results = Vec::with_capacity(reply.calls.len());
+        if !reply.calls.is_empty() {
+            witness.told(Told::Waiting { turn: self.turns });
+        }
         for call in &reply.calls {
             let acted = match self.executor.execute(call, &self.loaded) {
                 Ok(acted) => acted,
@@ -619,7 +630,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         witness.began();
         while self.state.is_running() {
             let took = self.history.len();
-            self.turn(deltas);
+            self.turn(deltas, witness);
             if let Some(ended) = self.history.get(took) {
                 witness.ended(ended, &self.state);
             }
@@ -629,6 +640,12 @@ impl<R: Responder, A: Executor> Run<R, A> {
             kept: &self.kept(),
             spent: &totaled(&self.history),
         });
+        if let Some(stop) = self.state.stop() {
+            witness.told(Told::Stopped {
+                turn: self.turns,
+                stop: stop.clone(),
+            });
+        }
         self.state()
     }
 

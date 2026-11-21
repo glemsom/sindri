@@ -32,6 +32,10 @@ const ROWS: u16 = 24;
 const ANSWER: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
 
+/// The recorded reply that asks for `bash ls` and answers nothing: the turn the run waits on.
+const TOOL_USE: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_tool_use.sse");
+
 struct Ground {
     /// Held so the directories outlive the paths that name them.
     _root: TempDir,
@@ -82,14 +86,22 @@ struct Wire {
 
 impl Wire {
     fn answering() -> Wire {
+        Wire::scripted(&[ANSWER])
+    }
+
+    /// A wire that answers each request with the next body of `bodies`, and the last one for every
+    /// request past it, so a test scripts the turn that asks for a call and the one after it.
+    fn scripted(bodies: &'static [&'static str]) -> Wire {
         let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
         let port = listener.local_addr().expect("a bound address").port();
         let (arrived, arrivals) = channel();
         thread::spawn(move || {
-            for stream in listener.incoming() {
+            for (index, stream) in listener.incoming().enumerate() {
                 let Ok(mut stream) = stream else { break };
+                read_request(&mut stream);
                 let _ = arrived.send(());
-                let _ = answer(&mut stream);
+                let body = bodies[index.min(bodies.len().saturating_sub(1))];
+                let _ = answer(&mut stream, body);
             }
         });
         Wire {
@@ -109,17 +121,53 @@ impl Wire {
     }
 }
 
-/// The recorded reply, as a wire writes one: the request is read first, because a socket nobody reads is a run
-/// waiting on a request still in the kernel.
-fn answer(stream: &mut TcpStream) -> std::io::Result<()> {
-    let mut request = [0u8; 4096];
-    let _ = stream.read(&mut request)?;
+/// The whole request, head and the body it promises read before it is answered: a socket nobody finishes
+/// reading is a run waiting on its own request still in the kernel.
+fn read_request(stream: &mut TcpStream) {
+    let mut request = Vec::new();
+    let mut buffer = [0u8; 4096];
+    while split(&request).is_none() {
+        match stream.read(&mut buffer) {
+            Ok(0) | Err(_) => return,
+            Ok(read) => request.extend_from_slice(&buffer[..read]),
+        }
+    }
+    let (head, mut body) = split(&request).expect("a head, once the blank line is read");
+    let promised = head
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("content-length")
+                .then(|| value.trim().parse::<usize>().ok())?
+        })
+        .unwrap_or(0);
+    while body < promised {
+        match stream.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => {
+                request.extend_from_slice(&buffer[..read]);
+                body += read;
+            }
+        }
+    }
+}
+
+fn split(request: &[u8]) -> Option<(String, usize)> {
+    let end = request
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")?;
+    let head = String::from_utf8_lossy(&request[..end]).into_owned();
+    Some((head, request.len() - (end + 4)))
+}
+
+/// The recorded reply, as a wire writes one.
+fn answer(stream: &mut TcpStream, body: &str) -> std::io::Result<()> {
     let head = format!(
         "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
-        ANSWER.len()
+        body.len()
     );
     stream.write_all(head.as_bytes())?;
-    stream.write_all(ANSWER.as_bytes())?;
+    stream.write_all(body.as_bytes())?;
     stream.flush()
 }
 
@@ -238,11 +286,16 @@ impl Session {
     }
 
     fn frame(ground: &Ground, wire: &Wire) -> (Session, Pty, Drawn) {
+        Session::frame_running(&mut ground.command(wire))
+    }
+
+    /// A frame on a command the test shaped itself: the one it stands on is the terminal it is read
+    /// as, and a frame asks that terminal what it speaks before it wears a title.
+    fn frame_running(command: &mut Command) -> (Session, Pty, Drawn) {
         let pty = Pty::open();
         let drawn = Drawn::watch(pty.reading_end());
         let session = Session::spawn(
-            ground
-                .command(wire)
+            command
                 .stdin(Stdio::from(pty.child_end()))
                 .stdout(Stdio::from(pty.child_end()))
                 .stderr(Stdio::from(pty.child_end())),
@@ -306,6 +359,18 @@ impl Drop for Session {
 
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
+}
+
+/// The titles the window wore, in the order it wore them.
+fn titles(stream: &str) -> Vec<&str> {
+    stream
+        .match_indices("\x1b]2;")
+        .filter_map(|(at, _)| {
+            let sequence = &stream[at..];
+            let end = sequence.find("\x1b\\")?;
+            Some(&sequence[..end + 2])
+        })
+        .collect()
 }
 
 fn sequences(stream: &str) -> Vec<&str> {
@@ -547,6 +612,95 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
             .iter()
             .any(|sequence| sequence.contains("\"phase\":\"done\""))),
         "and done when it stopped: {:?}",
+        text(&drawn.bytes())
+    );
+    drop(session);
+}
+
+#[test]
+fn a_batch_run_whose_turn_asks_for_a_command_is_told_it_is_blocked_between_working_and_done() {
+    let ground = Ground::new();
+    let wire = Wire::scripted(&[TOOL_USE, ANSWER]);
+
+    let (session, drawn) = Session::batch_on_a_terminal(&ground, &wire);
+    let output = session.wait();
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "the run answered after its command: {}",
+        text(&output.stderr)
+    );
+    let seen = text(&drawn.bytes());
+    let said = sequences(&seen);
+    let blocked = said
+        .iter()
+        .position(|sequence| sequence.contains("\"phase\":\"blocked\""))
+        .unwrap_or_else(|| panic!("the run is told as blocked while it waits: {seen:?}"));
+    assert!(
+        said[blocked].contains("\"message\":\"waiting for a command\""),
+        "and says what it is waiting for: {:?}",
+        said[blocked]
+    );
+    assert!(
+        said[..blocked]
+            .iter()
+            .any(|sequence| sequence.contains("\"phase\":\"working\"")),
+        "the blocked word comes after the run was told it was asking: {said:?}"
+    );
+    assert!(
+        said[blocked + 1..]
+            .iter()
+            .any(|sequence| sequence.contains("\"phase\":\"done\"")),
+        "and before the one that says it answered: {said:?}"
+    );
+}
+
+#[test]
+fn a_frame_says_in_its_title_the_phase_its_run_was_handed() {
+    let ground = Ground::new();
+    let wire = Wire::scripted(&[TOOL_USE, ANSWER]);
+    // A terminal that speaks the sequences a window is drawn with, and names none of the picture
+    // protocols: this is a test about a title and nothing else.
+    let mut command = ground.command(&wire);
+    command.env("TERM", "alacritty");
+    let (session, mut pty, drawn) = Session::frame_running(&mut command);
+
+    assert!(
+        drawn.wait_until(|stream| !titles(stream).is_empty()),
+        "the frame is up: {:?}",
+        text(&drawn.bytes())
+    );
+    pty.type_bytes(b"list the files");
+    assert!(
+        drawn.wait_until(|stream| frame::read(stream, COLS, ROWS)
+            .caret()
+            .is_some_and(|(_, column)| column == 16)),
+        "fourteen glyphs typed past the band's two-column gutter: {:?}",
+        text(&drawn.bytes())
+    );
+    pty.type_bytes(b"\r");
+    wire.wait_for_request();
+
+    assert!(
+        drawn.wait_until(|stream| titles(stream)
+            .iter()
+            .any(|title| title.contains("workspace \u{2014} blocked"))),
+        "the title wears the blocked phase the run was handed: {:?}",
+        text(&drawn.bytes())
+    );
+    assert!(
+        drawn.wait_until(|stream| {
+            let worn = titles(stream);
+            worn.iter()
+                .position(|title| title.contains("workspace \u{2014} blocked"))
+                .is_some_and(|blocked| {
+                    worn[blocked + 1..]
+                        .iter()
+                        .any(|title| title.contains("workspace \u{2014} done"))
+                })
+        }),
+        "and a later title says it is done: {:?}",
         text(&drawn.bytes())
     );
     drop(session);
