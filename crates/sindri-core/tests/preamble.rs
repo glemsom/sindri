@@ -59,6 +59,19 @@ fn assembled(workspace: &Path, catalog: &Catalog) -> (String, ToolSet) {
     )
 }
 
+fn principle_bullets(preamble: &str) -> Vec<&str> {
+    let (_, after) = preamble
+        .split_once("## Principles\n\n")
+        .expect("a principles section");
+    let section = after
+        .split_once("\n## ")
+        .map_or(after, |(section, _)| section);
+    section
+        .lines()
+        .filter(|line| line.starts_with("- "))
+        .collect()
+}
+
 #[test]
 fn a_catalog_offering_no_skill_leaves_the_preamble_byte_identical() {
     let tree = Tree::new();
@@ -201,5 +214,39 @@ fn the_persona_names_the_product_the_channel_and_the_reader() {
          only through `bash`, and answer in words the reader can use.",
         "the persona names the job as a Unix filter and a terminal UI, the shell it acts through, \
          and the words the reader gets"
+    );
+}
+
+#[test]
+fn the_first_principle_states_the_batching_rule() {
+    let tree = Tree::new();
+
+    let preamble = Preamble::for_workspace(&tree.workspace()).render();
+
+    assert_eq!(
+        principle_bullets(&preamble).first().copied(),
+        Some("- Batch what is independent; chain what depends on what."),
+        "the section's first rule says which work to batch and which to chain, and carries no \
+         figure of speech where a rule belongs"
+    );
+}
+
+#[test]
+fn the_rule_against_flattery_sits_beside_the_rule_about_what_was_seen() {
+    let tree = Tree::new();
+
+    let preamble = Preamble::for_workspace(&tree.workspace()).render();
+
+    let seen = "- Report what you observed; a result you did not see is not a result.";
+    let bullets = principle_bullets(&preamble);
+    let honesty = bullets
+        .iter()
+        .position(|bullet| *bullet == seen)
+        .expect("the rule about reporting what was seen");
+    assert_eq!(
+        bullets.get(honesty + 1).copied(),
+        Some("- Say what you found, not what pleases: no flattery, no forced enthusiasm."),
+        "the rule against pleasing sits immediately after the rule against reporting what was \
+         never seen"
     );
 }
