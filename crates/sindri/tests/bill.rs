@@ -1,5 +1,5 @@
-//! The count the band's edge hangs of the draft: the files its words name, the command it opens
-//! with and the characters it holds, as a reader's own keys and a card's own rows change it.
+//! The count the band's edge hangs of the draft: the files its words name and the command it opens
+//! with, as a reader's own keys and a card's own rows change it.
 
 mod frame; // one paint-and-read for every test
 
@@ -49,20 +49,20 @@ fn draft(view: &View) -> &str {
 }
 
 #[test]
-fn a_paste_is_counted_the_moment_it_lands() {
+fn a_paste_bills_the_files_it_names_the_moment_it_lands() {
     let root = workspace(&["src/rows.rs"]);
     let mut view = typing(root.path(), "read src/rows.rs");
     let frame = frame::painted(&mut view, 120, 40);
     let edge = edge_row(&frame);
 
     assert!(
-        edge.ends_with("1 file · 16 chars┐"),
-        "the edge hangs no count of the draft the reader pasted: {edge:?}"
+        edge.ends_with("1 file┐"),
+        "the edge hangs no count of the files the draft the reader pasted names: {edge:?}"
     );
 }
 
 #[test]
-fn a_recalled_prompt_is_counted_as_the_draft_it_becomes() {
+fn a_recalled_prompt_is_billed_as_the_draft_it_becomes() {
     let root = workspace(&["src/rows.rs"]);
     let mut view = typing(root.path(), "read src/rows.rs");
     let Outcome::Send(prompt) = view.key(Key::Enter) else {
@@ -84,13 +84,13 @@ fn a_recalled_prompt_is_counted_as_the_draft_it_becomes() {
     let edge = edge_row(&frame);
 
     assert!(
-        edge.ends_with("1 file · 16 chars┐"),
-        "the edge counts the draft a recalled prompt becomes: {edge:?}"
+        edge.ends_with("1 file┐"),
+        "the edge bills the draft a recalled prompt becomes: {edge:?}"
     );
 }
 
 #[test]
-fn a_row_a_card_writes_into_the_draft_is_counted_with_it() {
+fn a_row_a_card_writes_into_the_draft_is_billed_with_it() {
     let root = workspace(&["src/rows.rs"]);
     let mut view = typing(root.path(), "read ");
     view.key(Key::Char('@'));
@@ -104,8 +104,8 @@ fn a_row_a_card_writes_into_the_draft_is_counted_with_it() {
     let edge = edge_row(&frame);
 
     assert!(
-        edge.ends_with("1 file · 17 chars┐"),
-        "the edge counts the file the picker's row wrote into the draft: {edge:?}"
+        edge.ends_with("1 file┐"),
+        "the edge bills the file the picker's row wrote into the draft: {edge:?}"
     );
 
     let mut view = typing(root.path(), "/sk");
@@ -123,7 +123,27 @@ fn a_row_a_card_writes_into_the_draft_is_counted_with_it() {
     let edge = edge_row(&frame);
 
     assert!(
-        edge.ends_with("6 chars┐"),
-        "the edge counts the word the commands card wrote into the draft: {edge:?}"
+        edge.ends_with("\u{2500}\u{2510}"),
+        "the edge bills the word the commands card wrote into the draft: {edge:?}"
+    );
+}
+
+#[test]
+fn a_draft_that_bills_nothing_hangs_no_count_on_the_edge() {
+    let root = workspace(&["src/rows.rs"]);
+    let mut view = typing(root.path(), "a draft that names no file of the workspace");
+    let frame = frame::painted(&mut view, 120, 40);
+    let edge = edge_row(&frame);
+    let ruled = edge
+        .strip_prefix("\u{250c}prompt ")
+        .and_then(|rest| rest.strip_suffix('\u{2510}'))
+        .unwrap_or_else(|| {
+            panic!("the band's edge says no word inside its opening corner: {edge:?}")
+        });
+
+    assert!(
+        ruled.chars().all(|glyph| glyph == '\u{2500}'),
+        "a draft of any length bills nothing of itself, so a draft that names no file hangs no \
+         count and the rule keeps the row: {edge:?}"
     );
 }

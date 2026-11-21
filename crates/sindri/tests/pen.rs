@@ -96,8 +96,8 @@ fn the_pen_is_the_only_module_that_writes_a_glyph_into_a_cell() {
 fn no_module_but_the_pen_answers_a_column_by_counting_glyphs() {
     let sources = front_end();
 
-    // `pen::glyphs` answers how many glyphs a run is made of, and no column is ever one of them, so
-    // the one module that counts glyphs is the one module that measures a column.
+    // A column is the cells a run draws in and never the glyphs it is made of, so a module that
+    // counts a run's glyphs to answer one is a second measure: the pen is where columns are counted.
     let counted = everywhere(&sources, "chars().count()");
     assert!(
         counted.iter().all(|at| modules::of(at) == modules::of(PEN)),

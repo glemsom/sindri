@@ -255,11 +255,16 @@ read through, and the columns a frame has measured for them. The columns are mea
 band is placed, so a draft wraps at the width it is drawn at.
 _Avoid_: Text box, input box, editor, entry field
 
+**Bill**:
+What one draft would send, counted: the files its words name in the workspace, and the command it
+opens with. A draft that names no file and opens with no command bills nothing.
+_Avoid_: Count, tally, stats
+
 **Draft count**:
-What Enter would send, counted on the far corner of the **Composer**'s band: the files the draft's
-words name, the command it opens with, and the characters it holds. It is a count of the draft and
-never of the run's facts, it follows every edit, and a frame too narrow for the whole of it draws
-none of it — the rule keeps the row.
+The **Bill**, drawn on the far corner of the **Composer**'s band: `1 file`, `2 files`, `1 command`,
+and no span at all for a draft billing nothing. It is a count of the draft and never of the run's
+facts, it follows every edit, and a frame too narrow for the whole of it draws none of it — the rule
+keeps the row.
 _Avoid_: Tokens, stats, progress
 
 **Layout**:

@@ -17,7 +17,7 @@ draft-long at 120x24
 11 |                                                                                                                        | plain:120
 12 |                                                                                                                        | plain:120
 13 |                                                                                                                        | plain:120
-14 |┌prompt ──────────────────────────────────────────────────────────────────────────────────────────────────────240 chars┐| accent+faint:110 muted:9 accent+faint:1
+14 |┌prompt ───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
 15 |│                                                                                                                      │| dim:1 plain:118 dim:1
 16 |│  six: the stop reason                                                                                                │| dim:3 plain:116 dim:1
 17 |│  seven: the session it left                                                                                          │| dim:3 plain:116 dim:1

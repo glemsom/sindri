@@ -107,6 +107,27 @@ fn drafted(facts: Facts, palette: Palette, lines: usize, cols: u16, rows: u16) -
     (buffer, laid_out(&told))
 }
 
+/// A workspace holding one file, `src/rows.rs`, for a draft's words to name.
+fn workspace() -> tempfile::TempDir {
+    let root = tempfile::tempdir().expect("a temp workspace");
+    std::fs::create_dir_all(root.path().join("src")).expect("the directories a file sits in");
+    std::fs::write(root.path().join("src/rows.rs"), "").expect("a file");
+    root
+}
+
+/// A frame `cols` by `rows` holding `draft`, typed into a band standing in the workspace at `root`,
+/// and where that pass laid it out.
+fn drafting(palette: Palette, root: &Path, draft: &str, cols: u16, rows: u16) -> (Buffer, Layout) {
+    let mut view = View::of(
+        inked(palette),
+        Facts::default().asked().working(root.to_path_buf(), None),
+        Transcript::none(),
+    );
+    view.paste(draft);
+    let (buffer, told) = painted_and_told(&mut view, cols, rows);
+    (buffer, laid_out(&told))
+}
+
 /// The facts of a band a run is live in, standing on the step `elapsed_ms` of the pulse reaches.
 fn live(elapsed_ms: u64) -> Facts {
     Facts::default()
@@ -475,19 +496,16 @@ fn sixty_columns_show_the_raised_band_and_lose_no_hint_from_the_footer() {
 #[test]
 fn a_composer_at_rest_draws_a_box_that_opens_and_closes_on_its_edge_and_is_footed() {
     let palette = Palette::TRUECOLOR;
-    for (lines, counted) in [(0, ""), (1, "1 char"), (3, "5 chars"), (5, "9 chars")] {
+    for lines in [0, 1, 3, 5] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
         let rule = pen::filled(band.width - 2, HAIRLINE);
         let word = PROMPT_EDGE;
-        let edged = pen::filled(
-            band.width - pen::cells(word) - pen::cells(counted) - 3,
-            HAIRLINE,
-        );
+        let edged = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
 
         assert_eq!(
             drawn_glyphs(&buffer, band.y),
-            format!("{EDGE_OPEN}{word} {edged}{counted}{EDGE_CLOSE}"),
+            format!("{EDGE_OPEN}{word} {edged}{EDGE_CLOSE}"),
             "the {} row band a draft of {lines} lines takes does not open on the mode it is \
                  in and close along its edge",
             band.height
@@ -514,19 +532,16 @@ fn a_composer_at_rest_draws_a_box_that_opens_and_closes_on_its_edge_and_is_foote
 #[test]
 fn the_edge_of_a_band_at_rest_says_prompt_inside_its_opening_corner_in_the_faint_accent() {
     let palette = Palette::TRUECOLOR;
-    for (lines, counted) in [(0, ""), (1, "1 char"), (3, "5 chars"), (5, "9 chars")] {
+    for lines in [0, 1, 3, 5] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
         let word = PROMPT_EDGE;
-        let rule = pen::filled(
-            band.width - pen::cells(word) - pen::cells(counted) - 3,
-            HAIRLINE,
-        );
+        let rule = pen::filled(band.width - pen::cells(word) - 3, HAIRLINE);
         let row = drawn_glyphs(&buffer, band.y);
 
         assert_eq!(
             row,
-            format!("{EDGE_OPEN}{word} {rule}{counted}{EDGE_CLOSE}"),
+            format!("{EDGE_OPEN}{word} {rule}{EDGE_CLOSE}"),
             "the edge of the {} row band a draft of {lines} lines takes says no mode, or says \
                  it outside the corner",
             band.height
@@ -550,17 +565,19 @@ fn the_edge_of_a_band_at_rest_says_prompt_inside_its_opening_corner_in_the_faint
 #[test]
 fn the_edge_hangs_the_drafts_own_count_on_its_far_corner() {
     let palette = Palette::TRUECOLOR;
-    let (buffer, laid) = composer(palette, 1, 120, 40);
+    let root = workspace();
+    let (buffer, laid) = drafting(palette, root.path(), "read src/rows.rs", 120, 40);
     let band = laid.composer;
-    let row = drawn_glyphs(&buffer, band.y);
-    let ruled = row.strip_suffix("1 char┐").unwrap_or_else(|| {
-        panic!("the edge hangs no count of the draft on its far corner: {row:?}")
-    });
+    let rule = pen::filled(
+        band.width - pen::cells(PROMPT_EDGE) - pen::cells("1 file") - 3,
+        HAIRLINE,
+    );
 
     assert_eq!(
-        ruled.chars().next_back(),
-        Some(HAIRLINE),
-        "the rule does not end in the column before the count begins: {row:?}"
+        drawn_glyphs(&buffer, band.y),
+        format!("{EDGE_OPEN}{PROMPT_EDGE} {rule}1 file{EDGE_CLOSE}"),
+        "the edge hangs the count of the file the draft names on its far corner, and the rule \
+         runs on to it"
     );
 }
 
@@ -579,29 +596,36 @@ fn an_empty_draft_hangs_no_count_beside_a_rail_of_facts() {
 }
 
 #[test]
-fn a_frame_too_narrow_for_the_whole_count_draws_none_of_it_and_the_rule_keeps_the_row() {
+fn a_draft_that_bills_nothing_hangs_no_count_at_any_width_the_band_is_drawn_in() {
     let palette = Palette::TRUECOLOR;
-    let mut view = View::of(inked(palette), Facts::default().asked(), Transcript::none());
-    // A thousand characters bill a count wider than the sixteen columns the box leaves.
-    for _ in 0..500 {
-        view.paste("a ");
-    }
-    let (buffer, told) = painted_and_told(&mut view, 18, 24);
-    let band = laid_out(&told).composer;
-    let rule = pen::filled(band.width - pen::cells(PROMPT_EDGE) - 3, HAIRLINE);
+    for cols in 3..=200 {
+        let (buffer, laid) = drafted(Facts::default().asked(), palette, 1, cols, 24);
+        let band = laid.composer;
+        let row = drawn_glyphs(&buffer, band.y);
+        let inside = row
+            .strip_prefix(EDGE_OPEN)
+            .and_then(|rest| rest.strip_suffix(EDGE_CLOSE))
+            .unwrap_or_else(|| panic!("the edge of a {cols} column frame is no box: {row:?}"));
+        // A band too narrow for the word keeps its plain rule, and either way nothing hangs there.
+        let rule = inside
+            .strip_prefix(&format!("{PROMPT_EDGE} "))
+            .unwrap_or(inside);
 
-    assert_eq!(
-        drawn_glyphs(&buffer, band.y),
-        format!("{EDGE_OPEN}{PROMPT_EDGE} {rule}{EDGE_CLOSE}"),
-        "a count the row has no room for is refused whole, and the rule keeps the row"
-    );
+        assert!(
+            !rule.is_empty() && rule.chars().all(|glyph| glyph == HAIRLINE),
+            "a draft that names no file and opens with no command hangs no count of itself on a \
+             {cols} column frame, and the rule keeps the row: {row:?}"
+        );
+    }
 }
 
 #[test]
 fn the_count_is_refused_where_the_rule_would_lose_its_last_column_and_drawn_one_column_wider() {
     let palette = Palette::TRUECOLOR;
-    // Four lines are seven characters, so the count is the same seven columns at either width.
-    let (refused, laid) = composer(palette, 4, 16, 24);
+    let root = workspace();
+    // The count of one file is six columns, so a fifteen column band leaves the rule none of its
+    // own and a sixteen column band leaves it one.
+    let (refused, laid) = drafting(palette, root.path(), "read src/rows.rs", 15, 24);
     let band = laid.composer;
     let rule = pen::filled(band.width - pen::cells(PROMPT_EDGE) - 3, HAIRLINE);
 
@@ -612,12 +636,12 @@ fn the_count_is_refused_where_the_rule_would_lose_its_last_column_and_drawn_one_
          keeps the row"
     );
 
-    let (drawn, laid) = composer(palette, 4, 17, 24);
+    let (drawn, laid) = drafting(palette, root.path(), "read src/rows.rs", 16, 24);
     let band = laid.composer;
 
     assert_eq!(
         drawn_glyphs(&drawn, band.y),
-        format!("{EDGE_OPEN}{PROMPT_EDGE} {HAIRLINE}7 chars{EDGE_CLOSE}"),
+        format!("{EDGE_OPEN}{PROMPT_EDGE} {HAIRLINE}1 file{EDGE_CLOSE}"),
         "one column wider, the count hangs and the rule keeps the one column left below it"
     );
 }
@@ -625,9 +649,7 @@ fn the_count_is_refused_where_the_rule_would_lose_its_last_column_and_drawn_one_
 #[test]
 fn the_count_is_drawn_in_the_quiet_inks_the_frame_already_gives_a_meaning() {
     let palette = Palette::TRUECOLOR;
-    let root = tempfile::tempdir().expect("a temp workspace");
-    std::fs::create_dir_all(root.path().join("src")).expect("the directories a file sits in");
-    std::fs::write(root.path().join("src/rows.rs"), "").expect("a file");
+    let root = workspace();
     let mut view = View::of(
         inked(palette),
         Facts::default()
@@ -635,13 +657,14 @@ fn the_count_is_drawn_in_the_quiet_inks_the_frame_already_gives_a_meaning() {
             .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
-    view.paste("read src/rows.rs");
+    view.paste("/stats src/rows.rs");
+    view.key(Key::Escape);
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let band = laid_out(&told).composer;
-    let counted = pen::cells("1 file · 16 chars");
+    let counted = pen::cells("1 file · 1 command");
     let mut x = band.right() - 1 - counted;
 
-    for (width, ink) in [(6, Ink::Muted), (3, Ink::Dim), (8, Ink::Muted)] {
+    for (width, ink) in [(6, Ink::Muted), (3, Ink::Dim), (9, Ink::Muted)] {
         for _ in 0..width {
             assert_eq!(
                 look_at(&buffer, &palette, x, band.y),
