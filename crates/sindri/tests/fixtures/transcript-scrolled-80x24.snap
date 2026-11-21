@@ -23,7 +23,7 @@ transcript-scrolled at 80x24
 17 |▏ rust                                                                          | dim:2 accent+faint:4 plain:74
 18 |ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · branch spec/1-capability| dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:10 plain:17
 19 |prompt 5 / 6 · 4 rows back · End follows the run                                | muted:12 dim:3 muted:11 dim:3 plain+bold:3 muted:16 plain:32
-20 |┌prompt ───────────────────────────────────────────────────────────────────────┐| accent+faint:80
+20 |┌──────────────────────────────────────────────────────────────────────────────┐| accent+faint:80
 21 |│› what should the run do?                                                     │| dim:26 plain:53 dim:1
 22 |└──────────────────────────────────────────────────────────────────────────────┘| dim:80
 23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7

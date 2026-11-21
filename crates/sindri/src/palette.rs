@@ -169,15 +169,6 @@ impl Palette {
         }
     }
 
-    /// The look an edge row is drawn in while a run is live: the accent lit, and the dim edge for a
-    /// palette that draws no light at all.
-    pub fn lit_edge(&self) -> Look {
-        match self.draws_edge() {
-            true => Look::plain(Ink::Accent),
-            false => self.dim_edge(),
-        }
-    }
-
     /// The look an edge row is drawn in while its surface takes no keys.
     pub fn dim_edge(&self) -> Look {
         Look::plain(Ink::Dim)

@@ -158,10 +158,6 @@ const FOOT_OPEN: char = '└';
 const FOOT_CLOSE: char = '┘';
 const UPRIGHT: char = '│';
 
-/// The two words the band's edge says: what the band is for, and never what a key does.
-const PROMPT_EDGE: &str = "prompt";
-const RUNNING_EDGE: &str = "running";
-
 /// The heavier cell the rule carries while a run is live: the head travels the rule's own columns.
 const EDGE_HEAD: char = '━';
 
@@ -1775,52 +1771,23 @@ impl View {
         }
     }
 
-    /// The band's edge row: its word just inside the opening corner, one blank column, the rule
-    /// running on to the far corner with a live run's head on one of its own columns, and the draft's
-    /// count hung there. A band with no room for a whole word or count keeps its plain rule.
+    /// The band's edge row: the rule from corner to corner, the head a live run walks along it, and
+    /// the draft's count hung on the far corner.
     fn composer_edge_row(&self, row: Rect, buffer: &mut Buffer) {
         let palette = self.capabilities.palette();
         let look = self.composer_edge();
         corners(buffer, row, (EDGE_OPEN, EDGE_CLOSE), look, &palette);
         let room = inside(row);
-        let word = self.edge_word();
-        let cells = pen::cells(word);
-        let named = cells.saturating_add(2) <= room.width;
-        let opening = match named {
-            true => cells.saturating_add(1),
-            false => 0,
-        };
-        if named {
-            pen::write(
-                buffer,
-                Rect {
-                    width: cells,
-                    ..room
-                },
-                &[(word, look)],
-                Clip::Edge,
-                &palette,
-            );
-            pen::glyph(
-                buffer,
-                room.x.saturating_add(cells),
-                row.y,
-                ' ',
-                look,
-                &palette,
-            );
-        }
         let count = self.draft_count();
         let counted = pen::width(&count);
         // The count hangs on the far corner only where the rule keeps a column below it: a frame
         // too narrow for the whole count draws none of it, and the rule keeps the row.
         let hung = pen::hanging(room, counted)
-            .filter(|first| *first > room.x.saturating_add(opening))
+            .filter(|first| *first > room.x)
             .map(|_| counted)
             .unwrap_or(0);
         let rule = Rect {
-            x: room.x.saturating_add(opening),
-            width: room.width.saturating_sub(opening).saturating_sub(hung),
+            width: room.width.saturating_sub(hung),
             ..room
         };
         pen::rule(buffer, rule, HAIRLINE, look, &palette);
@@ -1852,14 +1819,6 @@ impl View {
         spans
     }
 
-    /// The word the band's edge says: the band only takes the draft, or a run is live.
-    fn edge_word(&self) -> &'static str {
-        match self.facts.live() {
-            true => RUNNING_EDGE,
-            false => PROMPT_EDGE,
-        }
-    }
-
     /// The step the edge's head stands on: the pulse's own, and the first of the cycle while no live
     /// pulse has said anything yet.
     fn edge_step(&self) -> u64 {
@@ -1869,17 +1828,14 @@ impl View {
         }
     }
 
-    /// The look the composer's edge row is drawn in: the accent lit while a run is live, the accent
-    /// faint while the band only waits, and the dim edge while a screen stands over the band.
+    /// The look the composer's edge row is drawn in: the accent at rest, and the dim edge while a
+    /// screen stands over the band.
     fn composer_edge(&self) -> Look {
         let palette = self.capabilities.palette();
         if self.stack.modal().is_some() {
             return palette.dim_edge();
         }
-        self.edge(match self.facts.live() {
-            true => palette.lit_edge(),
-            false => palette.accent_edge(),
-        })
+        self.edge(palette.accent_edge())
     }
 
     /// The look an edge that takes the keys is drawn in, given what the terminal has reported about
