@@ -248,6 +248,7 @@ struct Kept {
     transcript: Vec<Entry>,
     kept: Option<Turn>,
     loaded: Vec<String>,
+    turns: Vec<u32>,
 }
 
 impl Kept {
@@ -259,7 +260,9 @@ impl Kept {
 }
 
 impl Turns for Kept {
-    fn turn(&mut self, _ended: &Turn) {}
+    fn turn(&mut self, ended: &Turn) {
+        self.turns.push(ended.turn);
+    }
 
     fn kept(&mut self, kept: &Turn) {
         self.kept = Some(kept.clone());
@@ -815,4 +818,93 @@ fn every_tool_a_batch_launch_registers_is_a_tool_its_own_executor_answers() {
     );
 
     every_registered_tool_is_answered(&launch);
+}
+
+/// The turn numbers the record wrote, in the order it wrote them.
+fn turns_written(directory: &Path) -> Vec<u32> {
+    read_transcript(directory)
+        .expect("the record the launch wrote")
+        .entries()
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Turn { turn } => Some(*turn),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_launch_stopped_by_the_turn_cap_writes_the_turn_it_took_once() {
+    let homes = Homes::new();
+    homes.user_skill("deploy", "ship the branch");
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.max_turns = Some(1);
+    let script = Scripted::answering([
+        Reply::asking(
+            "loading",
+            [Call::new("call_1", SKILL, r#"{"name":"deploy"}"#)],
+        ),
+        Reply::answer("never asked"),
+    ]);
+    let script = script.clone();
+    let mut launch = Launch::answered_by(
+        &homes.machine(),
+        &config,
+        Enforcement::Unsafe,
+        FrontEnd::Batch,
+        None,
+        |_, _, _| script.clone(),
+    )
+    .ok()
+    .expect("a config naming a wire, a model and a key names a run");
+    let figure = launch.figure();
+
+    let mut kept = Kept::default();
+    let outcome = match launch.drive("ship it", &[], &mut Quiet, &mut kept, Cancel::new()) {
+        Ok(outcome) => outcome,
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    };
+
+    assert_eq!(
+        outcome.stopped(),
+        &Stop::MaxTurns,
+        "one turn is the cap this launch was given"
+    );
+    assert_eq!(
+        turns_written(&figure.session),
+        [1],
+        "the one turn it took is written once, not once more for the pass that took none"
+    );
+}
+
+#[test]
+fn a_launch_hands_the_front_end_every_turn_it_took() {
+    let homes = Homes::new();
+    homes.user_skill("deploy", "ship the branch");
+    let script = Scripted::answering([
+        Reply::asking(
+            "loading",
+            [Call::new("call_1", SKILL, r#"{"name":"deploy"}"#)],
+        ),
+        Reply::answer("shipped"),
+    ]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Terminal);
+    let figure = launch.figure();
+
+    let mut kept = Kept::default();
+    match launch.drive("ship it", &[], &mut Quiet, &mut kept, Cancel::new()) {
+        Ok(_) => {}
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    }
+
+    assert_eq!(
+        kept.turns,
+        [1, 2],
+        "the front end sees each turn the run took, in order"
+    );
+    assert_eq!(
+        turns_written(&figure.session),
+        [1, 2],
+        "the record writes each turn once, in the order the loop took them"
+    );
 }

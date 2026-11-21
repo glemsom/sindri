@@ -81,7 +81,7 @@ fn facts<'a>(session: &'a str, model: &'a str) -> Facts<'a> {
 fn reported<R: Responder, A: Executor>(prompt: &str, responder: R, executor: A) -> Outcome {
     let mut run = Run::new(prompt, responder, executor);
     let mut quiet = Quiet;
-    let state = run.drive(&mut quiet);
+    let state = run.drive(&mut quiet, &mut ());
     assert!(
         !matches!(state, State::Running),
         "a driven run stops, which is what makes a report possible"
@@ -141,7 +141,7 @@ fn keys(json: &str) -> Vec<String> {
 fn the_report_names_its_fields_in_the_order_a_script_reads_them() {
     let mut run = Run::new("hello", Says("hi"), Costs);
     let mut quiet = Quiet;
-    run.drive(&mut quiet);
+    run.drive(&mut quiet, &mut ());
     let mut told = facts("019fd6ff-2b7a-7c31-9d6c-0b6b0e0f4a11", "claude-sonnet-4-6");
     told.usage = Usage {
         input: Some(11),
@@ -214,7 +214,7 @@ fn usage_no_wire_reported_is_left_out_and_usage_reported_is_reported_back() {
 
     let mut run = Run::new("hello", Says("hi"), Costs);
     let mut quiet = Quiet;
-    run.drive(&mut quiet);
+    run.drive(&mut quiet, &mut ());
     let mut told = facts("019fd6ff-2b7a-7c31-9d6c-0b6b0e0f4a11", "claude-sonnet-4-6");
     told.usage = Usage {
         input: Some(11),
@@ -246,7 +246,7 @@ fn each_stop_reason_reports_the_exit_code_the_spec_gives_it() {
         let mut run =
             Run::new("hello", Loopy, Costs).limits(Limits::new(3, Duration::MAX, u64::MAX));
         let mut quiet = Quiet;
-        run.drive(&mut quiet);
+        run.drive(&mut quiet, &mut ());
         Outcome::of(&run, facts("id", "m")).expect("a stopped run")
     };
     assert_eq!(capped.exit_code(), 100, "the turn cap");
@@ -255,7 +255,7 @@ fn each_stop_reason_reports_the_exit_code_the_spec_gives_it() {
         let mut run =
             Run::new("hello", Loopy, Costs).limits(Limits::new(9, Duration::ZERO, u64::MAX));
         let mut quiet = Quiet;
-        run.drive(&mut quiet);
+        run.drive(&mut quiet, &mut ());
         Outcome::of(&run, facts("id", "m")).expect("a stopped run")
     };
     assert_eq!(spent.exit_code(), 101, "a budget");
@@ -264,7 +264,7 @@ fn each_stop_reason_reports_the_exit_code_the_spec_gives_it() {
         let mut run = Run::new("hello", Says("hi"), Costs);
         run.canceller().now();
         let mut quiet = Quiet;
-        run.drive(&mut quiet);
+        run.drive(&mut quiet, &mut ());
         Outcome::of(&run, facts("id", "m")).expect("a stopped run")
     };
     assert_eq!(cancelled.exit_code(), 130, "the user's own word");

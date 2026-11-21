@@ -82,7 +82,7 @@ fn the_wire_is_asked_with_the_bash_tool_the_run_holds() {
     )
     .tools(&tools);
 
-    run.drive(&mut ());
+    run.drive(&mut (), &mut ());
 
     let body = &replay.requests()[0].body;
     assert!(
@@ -107,7 +107,7 @@ fn a_reply_that_asks_for_bash_runs_it_and_answers() {
     )
     .tools(&tools);
 
-    let state = run.drive(&mut ());
+    let state = run.drive(&mut (), &mut ());
 
     assert_eq!(state, State::Stopped(Stop::Final), "the run answers");
     assert_eq!(ran.names(), ["bash"], "the call the reply asked for ran");
@@ -129,7 +129,7 @@ fn the_output_of_a_call_is_what_the_next_ask_is_told() {
     )
     .tools(&tools);
 
-    run.drive(&mut ());
+    run.drive(&mut (), &mut ());
 
     let requests = replay.requests();
     assert_eq!(
@@ -230,7 +230,7 @@ fn an_openai_shaped_wire_is_told_the_tools_and_answers_with_a_call_too() {
     )
     .tools(&tools);
 
-    let state = run.drive(&mut ());
+    let state = run.drive(&mut (), &mut ());
 
     assert_eq!(state, State::Stopped(Stop::Final));
     assert!(
@@ -261,7 +261,7 @@ fn every_wire_the_tree_declares_replays_one_turn_with_each_call_beside_what_it_a
         )
         .tools(&tools);
 
-        let state = run.drive(&mut ());
+        let state = run.drive(&mut (), &mut ());
 
         assert_eq!(
             state,

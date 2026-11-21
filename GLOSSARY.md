@@ -41,6 +41,13 @@ One request to the model and the tool calls it asks for. Not a unit of progress,
 band: the record writes one for every turn the run took and the drawing leaves it out.
 _Avoid_: Step, iteration, wave
 
+**Witness**:
+What a **Run**'s loop reports to: each finished **Turn**, and the state the run settled on with the
+turn a conversation keeps for it and what its turns spent, so the **Launch** writes the record with it
+and hands the front end the facts. The loop is the run's own, so a launch and a test are driven by the
+same one.
+_Avoid_: Listener, observer, callback, subscriber
+
 **Answer**:
 The text a run produces for stdout — the only thing on stdout in batch mode.
 _Avoid_: Response, output, result

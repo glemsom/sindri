@@ -18,7 +18,7 @@ use crate::provider::endpoint::Endpoint;
 use crate::provider::served::Listing;
 use crate::provider::{Ask, Client, Deltas, Route, Usage};
 use crate::records::{Entry, Facts, Record, SessionDocument};
-use crate::run::{Cancel, Limits, Loaded, Responder, Run, Shell, Turn};
+use crate::run::{Cancel, Limits, Loaded, Responder, Run, Settled, Shell, Turn, Witness};
 use crate::sandbox::{self, Proof};
 use crate::session::{self, Session};
 use crate::skills::{self, Catalog, Diagnostic, home};
@@ -338,28 +338,15 @@ impl<R: Responder + Clone> Launch<R> {
             .earlier(earlier.iter().cloned())
             .loaded(self.loaded.clone())
             .cancel(cancel);
-        // Ahead of the turn loop, so the transcript opens with the words it answers.
+        // Ahead of the loop, so the transcript opens with the words it answers.
         note(self.record.asked(prompt));
-        note(self.record.began());
-        hand(turns, self);
-        while run.state().is_running() {
-            run.turn(deltas);
-            if let Some(ended) = run.history().last() {
-                note(self.record.wrote(ended));
-                // A turn whose report carries no size leaves the one the turn before stated.
-                if ended.usage.input.is_some() {
-                    self.measured = ended.usage;
-                }
-                turns.turn(ended);
-                hand(turns, self);
-            }
-        }
-
-        turns.kept(&run.kept());
-        let state = run.state();
-        note(self.record.charged(&spent(run.history())));
-        note(self.record.stopped(&state));
-        hand(turns, self);
+        run.drive(
+            deltas,
+            &mut Recording {
+                launch: self,
+                turns,
+            },
+        );
         let outcome = Outcome::of(
             &run,
             Reported {
@@ -401,14 +388,35 @@ impl Turns for () {
     fn turn(&mut self, _ended: &Turn) {}
 }
 
-/// What the turns of one run reported spending, as the record's running total takes it: a responder
-/// that spends nothing of its own still writes what each reply said it cost.
-fn spent(history: &[Turn]) -> Usage {
-    let mut spent = Usage::default();
-    for turn in history {
-        spent.charge(&turn.usage);
+/// The launch watching a run it drives: it writes the record from what the loop reports, and hands the
+/// front end the facts each time the record moves.
+struct Recording<'a, R> {
+    launch: &'a mut Launch<R>,
+    turns: &'a mut dyn Turns,
+}
+
+impl<R> Witness for Recording<'_, R> {
+    fn began(&mut self) {
+        note(self.launch.record.began());
+        hand(self.turns, self.launch);
     }
-    spent
+
+    fn ended(&mut self, ended: &Turn) {
+        note(self.launch.record.wrote(ended));
+        // A turn whose report carries no size leaves the one the turn before stated.
+        if ended.usage.input.is_some() {
+            self.launch.measured = ended.usage;
+        }
+        self.turns.turn(ended);
+        hand(self.turns, self.launch);
+    }
+
+    fn settled(&mut self, settled: &Settled<'_>) {
+        self.turns.kept(settled.kept);
+        note(self.launch.record.charged(settled.spent));
+        note(self.launch.record.stopped(settled.state));
+        hand(self.turns, self.launch);
+    }
 }
 
 fn hand<R>(turns: &mut dyn Turns, launch: &Launch<R>) {
