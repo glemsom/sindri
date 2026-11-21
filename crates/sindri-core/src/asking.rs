@@ -53,10 +53,6 @@ impl Responder for Asking {
             .charge(&answer.usage);
         Ok(Reply::from(answer))
     }
-
-    fn spent(&self) -> Usage {
-        Asking::spent(self)
-    }
 }
 
 impl From<Answer> for Reply {

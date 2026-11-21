@@ -61,7 +61,7 @@ impl Ground {
             .current_dir(&self.workspace)
             .env("SINDRI_PROVIDER", "anthropic")
             .env("SINDRI_MODEL", "claude-sonnet-4-6")
-            .env("SINDRI_BASE_URL", UNASKED)
+            .env("SINDRI_BASE_URL", UNANSWERED_ENDPOINT)
             .env("ANTHROPIC_API_KEY", "sk-ant-the-stand-in-one");
         command
     }
@@ -83,9 +83,9 @@ impl Ground {
     }
 }
 
-/// A wire nothing answers on: no port listens here, so a run that reaches it is refused at once
-/// instead of waiting out a timeout.
-const UNASKED: &str = "http://127.0.0.1:1";
+/// An endpoint nothing listens on: a run that reaches it is refused at once instead of waiting out
+/// a timeout.
+const UNANSWERED_ENDPOINT: &str = "http://127.0.0.1:1";
 
 const RESTRICTED: &str = "if [ \"${1:-}\" = --version ]; then\n  \
                           echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\

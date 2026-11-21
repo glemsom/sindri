@@ -120,8 +120,8 @@ impl Launch<Asking> {
 }
 
 impl<R> Launch<R> {
-    /// The parts a run asks with, handed to `adapter`: the client that reaches the wire, the ask
-    /// its words are shaped into, and the tools it holds out. Never asks on its own.
+    /// Where a launch's replies come from, for a launch that must not ask the wire: `adapter` is the
+    /// one responder every run on it asks, so a test drives the run's loop with a script under it.
     pub fn answered_by(
         machine: &Machine<'_>,
         config: &Config,
@@ -348,8 +348,7 @@ impl<R: Responder + Clone> Launch<R> {
 
         turns.kept(&run.kept());
         let state = run.state();
-        let usage = self.asking.spent();
-        note(self.record.spent(usage));
+        note(self.record.charged(&spent(run.history())));
         note(self.record.stopped(&state));
         hand(turns, self);
         let outcome = Outcome::of(
@@ -390,6 +389,16 @@ pub trait Turns {
 
 impl Turns for () {
     fn turn(&mut self, _ended: &Turn) {}
+}
+
+/// What the turns of one run reported spending, as the record's running total takes it: a responder
+/// that spends nothing of its own still writes what each reply said it cost.
+fn spent(history: &[Turn]) -> Usage {
+    let mut spent = Usage::default();
+    for turn in history {
+        spent.charge(&turn.usage);
+    }
+    spent
 }
 
 fn hand<R>(turns: &mut dyn Turns, launch: &Launch<R>) {
