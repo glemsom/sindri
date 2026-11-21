@@ -385,6 +385,45 @@ impl<S: Into<String>> FromIterator<S> for Loaded {
     }
 }
 
+/// What a run's loop reports to as it goes: the launch writes the record with it and hands the front
+/// end the facts it settled on.
+pub trait Witness {
+    /// The run opened, before it asks its first turn.
+    fn began(&mut self);
+
+    /// A turn ended and is in the history, its calls run.
+    fn ended(&mut self, ended: &Turn);
+
+    /// The run stopped.
+    fn settled(&mut self, settled: &Settled<'_>);
+}
+
+/// What a run settled on: the state it stopped in, the turn a conversation keeps for it, and what its
+/// turns spent.
+pub struct Settled<'a> {
+    pub state: &'a State,
+    pub kept: &'a Turn,
+    pub spent: &'a Usage,
+}
+
+impl Witness for () {
+    fn began(&mut self) {}
+
+    fn ended(&mut self, _ended: &Turn) {}
+
+    fn settled(&mut self, _settled: &Settled<'_>) {}
+}
+
+/// What the turns of one run reported spending, as the record's running total takes it: a responder
+/// that spends nothing of its own still writes what each reply said it cost.
+fn totaled(history: &[Turn]) -> Usage {
+    let mut total = Usage::default();
+    for turn in history {
+        total.charge(&turn.usage);
+    }
+    total
+}
+
 pub struct Run<R, A> {
     prompt: String,
     responder: R,
@@ -571,10 +610,25 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self.state()
     }
 
-    pub fn drive(&mut self, deltas: &mut dyn Deltas) -> State {
-        while self.state.is_running() {
-            self.turn(deltas);
+    /// The one loop a run is driven by: a witness sees each turn as it settles. A run that has already
+    /// stopped is driven no further.
+    pub fn drive(&mut self, deltas: &mut dyn Deltas, witness: &mut dyn Witness) -> State {
+        if !self.state.is_running() {
+            return self.state();
         }
+        witness.began();
+        while self.state.is_running() {
+            let took = self.history.len();
+            self.turn(deltas);
+            if let Some(ended) = self.history.get(took) {
+                witness.ended(ended);
+            }
+        }
+        witness.settled(&Settled {
+            state: &self.state,
+            kept: &self.kept(),
+            spent: &totaled(&self.history),
+        });
         self.state()
     }
 

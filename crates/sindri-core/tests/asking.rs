@@ -71,7 +71,7 @@ fn asked(replay: &Replay) -> Value {
 fn body_for(asking: Asking, replay: &Replay) -> String {
     let mut run = Run::new("triage this", asking, Unreached);
     let mut transcript = Transcript::default();
-    run.drive(&mut transcript);
+    run.drive(&mut transcript, &mut ());
     let requests = replay.requests();
     assert_eq!(requests.len(), 1, "one turn asks the wire once");
     requests[0].body.clone()
@@ -112,7 +112,7 @@ fn the_answers_text_is_what_the_run_answers_with() {
     );
     let mut transcript = Transcript::default();
 
-    let state = run.drive(&mut transcript);
+    let state = run.drive(&mut transcript, &mut ());
 
     assert_eq!(state, State::Stopped(Stop::Final));
     assert_eq!(
@@ -134,8 +134,8 @@ fn a_reply_carries_what_its_ask_spent_and_the_total_stays_the_runs() {
     let mut first = Run::new("triage this", asking.clone(), Unreached);
     let mut second = Run::new("triage this", asking.clone(), Unreached);
 
-    first.drive(&mut Transcript::default());
-    second.drive(&mut Transcript::default());
+    first.drive(&mut Transcript::default(), &mut ());
+    second.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(
         first.history()[0].usage.input,
@@ -164,7 +164,7 @@ fn a_refused_ask_stops_the_run_in_the_one_line_safe_to_print() {
     );
     let mut transcript = Transcript::default();
 
-    let state = run.drive(&mut transcript);
+    let state = run.drive(&mut transcript, &mut ());
 
     let Stop::Error(message) = state.stop().cloned().expect("a stop reason") else {
         panic!("a refused request ends the run as an error, not as an answer");
@@ -211,7 +211,7 @@ fn the_turns_that_ended_before_a_run_are_asked_ahead_of_its_prompt() {
         Turn::answered(2, "is it raining?", "it is raining"),
     ]);
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let body = asked(&replay);
     assert_eq!(
@@ -250,7 +250,7 @@ fn a_turn_that_ended_with_no_answer_is_not_sent_as_an_empty_message() {
         Turn::answered(2, "what is the weather?", ""),
     ]);
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(
         asked(&replay)["messages"],

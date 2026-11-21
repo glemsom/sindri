@@ -16,7 +16,7 @@ use sindri_core::provider::{Deltas, Failure, Usage};
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{
     Acted, Budget, Call, Cancel, Executor, Exit, Limits, Load, Loaded, Reply, Request, Responder,
-    Run, Shell, State, Stop, Turn,
+    Run, Settled, Shell, State, Stop, Turn, Witness,
 };
 use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
@@ -159,6 +159,86 @@ fn requests(log: &Arc<Mutex<Vec<Request>>>) -> Vec<Request> {
     log.lock().expect("the log is not poisoned").clone()
 }
 
+/// A witness that keeps what the loop told it, in the order it was told.
+#[derive(Default)]
+struct Watching {
+    began: usize,
+    ended: Vec<u32>,
+    settled: Vec<(State, Turn, Usage)>,
+}
+
+impl Witness for Watching {
+    fn began(&mut self) {
+        self.began += 1;
+    }
+
+    fn ended(&mut self, ended: &Turn) {
+        self.ended.push(ended.turn);
+    }
+
+    fn settled(&mut self, settled: &Settled<'_>) {
+        self.settled
+            .push((settled.state.clone(), settled.kept.clone(), *settled.spent));
+    }
+}
+
+#[test]
+fn the_loop_reports_each_turn_it_settled_once_and_the_state_it_settled_on() {
+    let mut run = Run::new(
+        "count the files",
+        Scripted::answering([
+            Reply::asking("running it", [command("true")]).spent(spent(Some(1_000), Some(10))),
+            Reply::asking("running it again", [command("false")])
+                .spent(spent(Some(1_200), Some(20))),
+            Reply::answer("none of them"),
+        ]),
+        Tools::cheap(),
+    );
+    let mut watching = Watching::default();
+
+    let state = run.drive(&mut Transcript::default(), &mut watching);
+
+    assert_eq!(state, State::Stopped(Stop::Final));
+    assert_eq!(watching.began, 1, "the loop opens the run once");
+    assert_eq!(
+        watching.ended,
+        [1, 2, 3],
+        "each turn it took is reported once, in the order it took them"
+    );
+    let [(state, kept, spent)] = watching.settled.as_slice() else {
+        panic!("the loop settles once: {:?}", watching.settled.len());
+    };
+    assert_eq!(state, &State::Stopped(Stop::Final));
+    assert_eq!(
+        kept.text, "none of them",
+        "the turn a conversation keeps is the one it ended on"
+    );
+    assert_eq!(
+        (spent.input, spent.output),
+        (Some(2_200), Some(30)),
+        "what its turns spent, summed"
+    );
+
+    let again = run.drive(&mut Transcript::default(), &mut watching);
+
+    assert_eq!(
+        again,
+        State::Stopped(Stop::Final),
+        "a run that has stopped is driven no further"
+    );
+    assert_eq!(watching.began, 1, "and it is opened no second time");
+    assert_eq!(
+        watching.ended,
+        [1, 2, 3],
+        "nor does a pass that takes no turn report the one before it again"
+    );
+    assert_eq!(
+        watching.settled.len(),
+        1,
+        "the loop settles once for the run it settled"
+    );
+}
+
 #[test]
 fn a_turn_is_one_request_and_the_calls_it_asks_for() {
     let model = Scripted::answering([Reply::asking("running it", [command("true")])]);
@@ -189,7 +269,7 @@ fn a_turn_carries_what_that_turns_ask_spent_and_not_the_total() {
         Tools::cheap(),
     );
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let history = run.history();
     assert_eq!(history.len(), 2, "two asks, two turns");
@@ -218,7 +298,7 @@ fn a_turn_holds_the_prompt_the_run_was_asked() {
         Tools::cheap(),
     );
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(
         run.history()[0].prompt,
@@ -239,7 +319,7 @@ fn a_run_keeps_the_reasoning_its_reply_brought_beside_the_turn_it_produced() {
         Tools::cheap(),
     );
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(
         run.history()[0].reasoning.as_deref(),
@@ -264,7 +344,7 @@ fn an_ask_that_reported_no_input_leaves_the_size_unknown_rather_than_zero() {
         Tools::cheap(),
     );
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let history = run.history();
     assert_eq!(
@@ -292,7 +372,7 @@ fn a_run_handed_the_turns_that_came_before_it_hands_them_to_every_request() {
         Turn::answered(2, "is it raining?", "it is raining"),
     ]);
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let seen = requests(&log);
     assert_eq!(
@@ -321,7 +401,7 @@ fn a_run_handed_nothing_asks_with_nothing_from_before_it() {
     let log = model.log();
     let mut run = Run::new("say hi", model, Tools::cheap());
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     assert!(
         requests(&log)[0].earlier().is_empty(),
@@ -344,7 +424,7 @@ fn a_responder_is_handed_the_very_turn_the_run_keeps() {
     let mut run =
         Run::new("why does the retry test fail?", model, Tools::cheap()).earlier(earlier.clone());
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let asked = Turn {
         turn: 1,
@@ -390,7 +470,7 @@ fn a_run_keeps_its_prompt_beside_the_answer_it_got() {
     ]);
     let mut run = Run::new("why does the retry test fail?", model, Tools::cheap());
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let kept = run.kept();
     assert_eq!(
@@ -450,7 +530,7 @@ fn a_run_stopped_on_the_turn_cap_keeps_the_words_of_the_turn_it_ended() {
     let mut run = Run::new("loop", Scripted::answering([loopy()]), Tools::cheap())
         .limits(Limits::new(2, Duration::from_secs(3_600), 8 * 1024 * 1024));
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "max_turns", "a stop that is not final");
     let kept = run.kept();
@@ -476,7 +556,7 @@ fn a_run_stopped_on_an_error_keeps_the_words_of_the_turn_it_ended() {
 
     let mut run = Run::new("work", Breaks, Tools::cheap());
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "error");
     assert_eq!(
@@ -497,7 +577,7 @@ fn a_run_stopped_on_cancellation_keeps_the_words_of_the_turn_it_ended() {
     )
     .cancel(cancel);
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "cancelled");
     assert_eq!(
@@ -520,7 +600,7 @@ fn a_run_stopped_on_its_clock_budget_keeps_the_words_of_the_turn_it_ended() {
         8 * 1024 * 1024,
     ));
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "budget");
     assert_eq!(
@@ -539,7 +619,7 @@ fn a_run_that_got_no_answer_keeps_the_words_it_was_asked_with_alone() {
     );
     run.canceller().now();
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let kept = run.kept();
     assert_eq!(kept.prompt, "read the failing test");
@@ -573,7 +653,7 @@ fn a_complete_answer_stops_the_run_as_final_with_exit_zero() {
 fn the_turn_cap_defaults_to_two_hundred_and_fifty_and_exits_one_hundred() {
     let mut run = Run::new("loop", Scripted::answering([loopy()]), Tools::cheap());
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(run.turns(), 250, "the cap uses its own default");
     assert_eq!(state.word(), "max_turns");
@@ -589,7 +669,7 @@ fn the_turn_cap_obeys_the_dial_it_is_given() {
     let mut run = Run::new("loop", Scripted::answering([loopy()]), Tools::cheap())
         .limits(Limits::new(3, Duration::from_secs(3_600), 8 * 1024 * 1024));
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(run.turns(), 3);
     assert_eq!(state.word(), "max_turns");
@@ -626,7 +706,7 @@ fn a_tool_that_cannot_run_stops_the_run_as_error() {
         Tools::broken(),
     );
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "error");
     assert_eq!(
@@ -713,7 +793,7 @@ fn the_command_wall_clock_is_a_budget_of_the_whole_run() {
     )
     .limits(limits);
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "budget");
     assert_eq!(state.stop().map(Stop::exit_code), Some(101));
@@ -745,7 +825,7 @@ fn the_output_bytes_are_a_budget_of_the_whole_run() {
     )
     .limits(limits);
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "budget");
     assert_eq!(state.stop().map(Stop::exit_code), Some(101));
@@ -770,7 +850,7 @@ fn two_turns_of_half_an_hour_spend_the_run_an_hour_budget() {
     )
     .limits(limits);
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "budget");
     assert_eq!(run.turns(), 2, "the third turn never starts");
@@ -796,7 +876,7 @@ fn cancellation_wins_over_a_budget_spent_in_the_same_turn() {
     .limits(limits)
     .cancel(cancel);
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(
         run.spent().exhausted(&limits),
@@ -820,7 +900,7 @@ fn the_budget_that_fired_first_wins_over_the_turn_cap() {
     )
     .limits(limits);
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "budget");
     assert_eq!(run.spent().exhausted(&limits), Some(Budget::Clock));
@@ -836,7 +916,7 @@ fn the_turn_cap_that_fired_first_wins_over_an_unspent_budget() {
     )
     .limits(limits);
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "max_turns");
     assert_eq!(run.turns(), 2);
@@ -876,7 +956,7 @@ fn clearing_the_history_forgets_the_turns_the_run_was_handed_but_not_the_prompt(
     )]);
 
     run.clear_history();
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let seen = requests(&log);
     assert!(
@@ -919,7 +999,7 @@ fn a_sigint_stops_the_run_as_cancelled_with_nothing_on_stdout() {
 
     let mut run = Run::new("ask", Interrupted, Tools::cheap()).cancel(Cancel::on_sigint());
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "cancelled");
     assert_eq!(state.stop().map(Stop::exit_code), Some(130));
@@ -932,8 +1012,8 @@ fn a_stopped_run_starts_no_further_turn() {
     let log = model.log();
     let mut run = Run::new("say hi", model, Tools::cheap());
 
-    let first = run.drive(&mut Transcript::default());
-    let again = run.drive(&mut Transcript::default());
+    let first = run.drive(&mut Transcript::default(), &mut ());
+    let again = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(first, again, "a settled stop reason is not replaced");
     assert_eq!(run.turns(), 1);
@@ -1530,7 +1610,7 @@ fn a_run_whose_open_call_is_refused_answers_on() {
         ground.shell().opener(Some(shared(&logged))),
     );
 
-    let state = run.drive(&mut Transcript::default());
+    let state = run.drive(&mut Transcript::default(), &mut ());
 
     assert_eq!(
         state.stop(),
@@ -1826,7 +1906,7 @@ fn two_identical_loads_in_one_turn_are_one_load() {
     ]);
     let mut run = Run::new("deploy it", model, tools);
 
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let answers = answers(&log);
     assert_eq!(answers.len(), 2, "both calls are answered");
@@ -1862,7 +1942,7 @@ fn a_human_load_makes_the_next_model_load_already_loaded() {
         Load::Loaded,
         "the human loads it first, with `/skill:deploy`"
     );
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let answers = answers(&log);
     assert_eq!(answers.len(), 1);
@@ -1886,7 +1966,7 @@ fn clearing_the_history_allows_a_fresh_load() {
 
     run.turn(&mut Transcript::default());
     run.clear_history();
-    run.drive(&mut Transcript::default());
+    run.drive(&mut Transcript::default(), &mut ());
 
     let answers = answers(&log);
     assert_eq!(answers.len(), 2, "one load before `/new` and one after it");
@@ -2000,7 +2080,7 @@ fn a_run_cancelled_mid_command_kills_it_and_stops_cancelled() {
 
     let driving = std::thread::spawn(move || {
         let mut sink = Transcript::default();
-        run.drive(&mut sink)
+        run.drive(&mut sink, &mut ())
     });
 
     assert!(
