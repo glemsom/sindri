@@ -461,14 +461,59 @@ fn a_turn_that_asks_for_a_call_moves_the_turn_the_document_names() {
         Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
     }
 
-    let moved: Vec<(&str, u32)> = statuses_written(&figure.session)
-        .into_iter()
-        .map(|(phase, turn, _)| (phase, turn))
-        .collect();
     assert_eq!(
-        moved,
-        [("working", 1), ("working", 2), ("done", 2)],
-        "a reader of the documents sees the run move turn by turn"
+        statuses_written(&figure.session),
+        [
+            ("working", 1, String::from("asking the model")),
+            ("blocked", 1, String::from("waiting for a command")),
+            ("working", 2, String::from("asking the model")),
+            ("done", 2, String::from("answered")),
+        ],
+        "a reader of the documents sees the run ask, wait on its call, ask again and stop"
+    );
+}
+
+#[test]
+fn a_second_prompt_numbers_the_documents_from_its_own_first_turn() {
+    let homes = Homes::new();
+    let script = Scripted::answering([Reply::answer("the first"), Reply::answer("the second")]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Terminal);
+    let figure = launch.figure();
+
+    let mut first = Kept::default();
+    match launch.drive(
+        "the first prompt",
+        &[],
+        &mut Quiet,
+        &mut first,
+        Cancel::new(),
+    ) {
+        Ok(_) => {}
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    }
+    let ended = first.ended_on();
+
+    let mut second = Kept::default();
+    match launch.drive(
+        "the second prompt",
+        std::slice::from_ref(&ended),
+        &mut Quiet,
+        &mut second,
+        Cancel::new(),
+    ) {
+        Ok(_) => {}
+        Err(refusal) => panic!("the run after it stopped on its own: {}", refusal.message()),
+    }
+
+    let written = statuses_written(&figure.session);
+    assert_eq!(
+        &written[2..],
+        [
+            ("working", 1, String::from("asking the model")),
+            ("done", 1, String::from("answered")),
+        ],
+        "the session's document has counted the turn before it, and the run counts its own: \
+         {written:?}"
     );
 }
 
@@ -492,10 +537,10 @@ fn a_run_that_stopped_on_an_error_leaves_its_last_document_saying_error() {
         statuses_written(&figure.session),
         [
             ("working", 1, String::from("asking the model")),
+            ("blocked", 1, String::from("waiting for a command")),
             ("error", 1, String::from("failed")),
         ],
-        "a run that stopped on an error leaves its last document saying error, and no line for \
-         the turn it never asked: {}",
+        "a run whose call failed waited on it, and leaves its last document saying error: {}",
         outcome.stopped()
     );
     assert!(

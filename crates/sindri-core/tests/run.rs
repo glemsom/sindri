@@ -13,6 +13,7 @@ use sindri_core::policy::{
     Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES, Enforcement,
 };
 use sindri_core::provider::{Deltas, Failure, Usage};
+use sindri_core::records::Told;
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::run::{
     Acted, Budget, Call, Cancel, Executor, Exit, Limits, Load, Loaded, Reply, Request, Responder,
@@ -164,6 +165,7 @@ fn requests(log: &Arc<Mutex<Vec<Request>>>) -> Vec<Request> {
 struct Watching {
     began: usize,
     ended: Vec<u32>,
+    told: Vec<Told>,
     settled: Vec<(State, Turn, Usage)>,
 }
 
@@ -172,14 +174,123 @@ impl Witness for Watching {
         self.began += 1;
     }
 
-    fn ended(&mut self, ended: &Turn, _state: &State) {
+    fn ended(&mut self, ended: &Turn) {
         self.ended.push(ended.turn);
+    }
+
+    fn told(&mut self, told: Told) {
+        self.told.push(told);
     }
 
     fn settled(&mut self, settled: &Settled<'_>) {
         self.settled
             .push((settled.state.clone(), settled.kept.clone(), *settled.spent));
     }
+}
+
+/// The turns the run told, split into the ones it asked and the ones it waited on, each in the
+/// order it said them.
+fn told_turns(watching: &Watching) -> (Vec<u32>, Vec<u32>) {
+    let mut asking = Vec::new();
+    let mut waiting = Vec::new();
+    for told in &watching.told {
+        match told {
+            Told::Asking { turn } => asking.push(*turn),
+            Told::Waiting { turn } => waiting.push(*turn),
+            Told::Idle | Told::Stopped { .. } => {}
+        }
+    }
+    (asking, waiting)
+}
+
+#[test]
+fn a_turn_that_asks_for_a_command_tells_the_run_it_is_waiting_before_that_command_runs() {
+    let mut run = Run::new(
+        "count the files",
+        Scripted::answering([
+            Reply::asking("running it", [command("true")]),
+            Reply::answer("none of them"),
+        ]),
+        Tools::cheap(),
+    );
+    let mut watching = Watching::default();
+
+    run.drive(&mut Transcript::default(), &mut watching);
+
+    assert_eq!(
+        watching.told,
+        [
+            Told::Asking { turn: 1 },
+            Told::Waiting { turn: 1 },
+            Told::Asking { turn: 2 },
+            Told::Stopped {
+                turn: 2,
+                stop: Stop::Final,
+            },
+        ],
+        "the run says each phase it is in beside the turn it is on, and the stop last"
+    );
+}
+
+#[test]
+fn a_run_that_answers_straight_away_is_told_it_asked_once_and_then_stopped() {
+    let mut run = Run::new(
+        "say hi",
+        Scripted::answering([Reply::answer("hello")]),
+        Tools::cheap(),
+    );
+    let mut watching = Watching::default();
+
+    run.drive(&mut Transcript::default(), &mut watching);
+
+    assert_eq!(
+        watching.told,
+        [
+            Told::Asking { turn: 1 },
+            Told::Stopped {
+                turn: 1,
+                stop: Stop::Final,
+            },
+        ],
+        "a run that asked nothing on the way is told it asked and stopped, and no turn more"
+    );
+}
+
+#[test]
+fn a_run_of_three_asking_turns_tells_the_runs_own_turns_never_renumbered() {
+    let mut run = Run::new(
+        "count the files",
+        Scripted::answering([
+            Reply::asking("one", [command("true")]),
+            Reply::asking("two", [command("true")]),
+            Reply::asking("three", [command("true")]),
+        ]),
+        Tools::cheap(),
+    )
+    .limits(Limits::new(3, Duration::from_secs(60), 10_000_000));
+    let mut watching = Watching::default();
+
+    run.drive(&mut Transcript::default(), &mut watching);
+
+    let (asking, waiting) = told_turns(&watching);
+    assert_eq!(
+        asking,
+        [1, 2, 3],
+        "each turn is told as the run's own, counted from one"
+    );
+    assert_eq!(
+        waiting,
+        [1, 2, 3],
+        "and every waiting turn is the turn that asked, renumbered by nothing"
+    );
+    assert_eq!(
+        watching.told.last(),
+        Some(&Told::Stopped {
+            turn: 3,
+            stop: Stop::MaxTurns,
+        }),
+        "the stop names the turn the run actually took"
+    );
 }
 
 #[test]
@@ -244,7 +355,7 @@ fn a_turn_is_one_request_and_the_calls_it_asks_for() {
     let model = Scripted::answering([Reply::asking("running it", [command("true")])]);
     let mut run = Run::new("count the files", model, Tools::cheap());
 
-    let state = run.turn(&mut Transcript::default());
+    let state = run.turn(&mut Transcript::default(), &mut ());
 
     assert_eq!(
         run.turns(),
@@ -492,7 +603,7 @@ fn a_run_keeps_the_very_turn_it_took() {
         Tools::cheap(),
     );
 
-    run.turn(&mut Transcript::default());
+    run.turn(&mut Transcript::default(), &mut ());
 
     let took = Turn {
         turn: 1,
@@ -638,7 +749,7 @@ fn a_complete_answer_stops_the_run_as_final_with_exit_zero() {
     );
     let mut transcript = Transcript::default();
 
-    let state = run.turn(&mut transcript);
+    let state = run.turn(&mut transcript, &mut ());
 
     assert_eq!(state.word(), "final");
     assert_eq!(state.stop().map(Stop::exit_code), Some(0));
@@ -683,7 +794,7 @@ fn a_failed_request_stops_the_run_as_error_with_exit_one() {
         Tools::cheap(),
     );
 
-    let state = run.turn(&mut Transcript::default());
+    let state = run.turn(&mut Transcript::default(), &mut ());
 
     assert_eq!(state.word(), "error");
     assert_eq!(state.stop().map(Stop::exit_code), Some(1));
@@ -730,7 +841,7 @@ fn a_running_run_says_running_and_the_stop_set_is_five_words() {
     );
     assert_eq!(run.state().stop(), None);
 
-    run.turn(&mut Transcript::default());
+    run.turn(&mut Transcript::default(), &mut ());
     assert_eq!(run.state().word(), "final");
 
     let closed: Vec<(State, &str, u8)> = vec![
@@ -929,7 +1040,7 @@ fn clearing_the_history_forgets_the_loaded_skills() {
     let log = model.log();
     let mut run = Run::new("use the skill", model, Tools::cheap());
 
-    run.turn(&mut Transcript::default());
+    run.turn(&mut Transcript::default(), &mut ());
     assert_eq!(run.load_skill("code-review"), Load::Loaded);
     run.clear_history();
 
@@ -939,7 +1050,7 @@ fn clearing_the_history_forgets_the_loaded_skills() {
     );
     assert!(run.history().is_empty());
 
-    run.turn(&mut Transcript::default());
+    run.turn(&mut Transcript::default(), &mut ());
 
     let seen = requests(&log);
     assert!(seen[1].history().is_empty(), "and remembers nothing");
@@ -1073,7 +1184,7 @@ fn the_request_names_the_tools_the_front_end_registered() {
     let log = model.log();
     let mut run = Run::new("hi", model, Tools::cheap()).tools(&registered);
 
-    run.turn(&mut Transcript::default());
+    run.turn(&mut Transcript::default(), &mut ());
 
     assert_eq!(
         requests(&log)[0].tools(),
@@ -1964,7 +2075,7 @@ fn clearing_the_history_allows_a_fresh_load() {
     ]);
     let mut run = Run::new("deploy it", model, tools);
 
-    run.turn(&mut Transcript::default());
+    run.turn(&mut Transcript::default(), &mut ());
     run.clear_history();
     run.drive(&mut Transcript::default(), &mut ());
 

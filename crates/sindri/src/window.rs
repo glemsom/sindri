@@ -119,7 +119,7 @@ impl<W: Write> Window<W> {
         let mut said = Vec::new();
         if window.state != Some(phase) {
             said.extend(osc::title(report.workspace(), phase.word()));
-            if matches!(phase, Phase::Done | Phase::Error) && !window.focused {
+            if phase.ended() && !window.focused {
                 said.extend(osc::notification(&format!(
                     "{}: {}",
                     report.workspace(),
@@ -128,7 +128,7 @@ impl<W: Write> Window<W> {
             }
             window.state = Some(phase);
         }
-        let marked = phase == Phase::Working;
+        let marked = phase.working();
         if window.marked != Some(marked) {
             said.extend(osc::progress(marked));
             window.marked = Some(marked);

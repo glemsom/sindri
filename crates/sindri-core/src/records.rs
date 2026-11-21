@@ -389,6 +389,16 @@ impl Phase {
             Phase::Error => "error",
         }
     }
+
+    /// Whether a run has ended in this phase, an answer or a failure: the two a terminal nobody is
+    /// watching raises a notification for.
+    pub fn ended(self) -> bool {
+        matches!(self, Phase::Done | Phase::Error)
+    }
+
+    pub fn working(self) -> bool {
+        matches!(self, Phase::Working)
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Told {
