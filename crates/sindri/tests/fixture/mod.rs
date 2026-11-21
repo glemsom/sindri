@@ -28,7 +28,7 @@ use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential, Deltas};
 use sindri_core::records::{Dials, Entry, SessionDocument, Usage};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Budget, DEFAULT_MAX_TURNS, Exit, Limits, State as RunState, Stop};
+use sindri_core::run::{Budget, DEFAULT_MAX_TURNS, Exit, Limits, Loaded, State as RunState, Stop};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 
@@ -765,7 +765,10 @@ fn stats(capabilities: Capabilities) -> View {
         Facts::default()
             .asked()
             .working(root.path().to_path_buf(), None)
-            .railed(facts())
+            .railed(ledger::Facts {
+                loaded: Loaded::default(),
+                ..facts()
+            })
             .recorded(&document()),
         Transcript::none(),
     );
@@ -875,9 +878,9 @@ pub fn session() -> &'static Session {
 /// The rail a run draws, derived the one way production derives it: off the session it writes and
 /// the document its record rewrites, so a fact the rail has stopped reading leaves with them.
 pub fn railed(document: &SessionDocument) -> ledger::Facts {
-    let loaded = LOADED_SKILLS.map(String::from);
     ledger::Facts::of(session(), document)
-        .recorded(document, &loaded)
+        .recorded(document)
+        .loading(LOADED_SKILLS.map(String::from).into_iter().collect())
         .measured(&MEASURED, Some(CONTEXT_WINDOW))
 }
 
@@ -1581,7 +1584,8 @@ fn the_rails_facts_come_off_the_fixture_session_and_the_document_it_recorded() {
         "the workspace is the tree the document recorded the run standing in"
     );
     assert_eq!(
-        facts.loaded, LOADED_SKILLS,
+        facts.loaded.names(),
+        LOADED_SKILLS,
         "the skills are the ones the run loaded, in the order it loaded them"
     );
     assert_eq!(

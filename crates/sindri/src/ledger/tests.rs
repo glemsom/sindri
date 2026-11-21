@@ -59,7 +59,7 @@ fn the_facts_a_launch_holds_before_a_run_are_what_a_prompt_is_pointed_at() {
             facts.turns,
             facts.ctx,
             facts.cache,
-            facts.loaded.len()
+            facts.loaded.names().len()
         ),
         (None, None, None, None, 0),
         "a launch knows no thinking, no turn count, no size, no hit rate and no skill: they \
@@ -115,7 +115,7 @@ fn the_facts_a_session_holds_are_the_ones_a_frame_draws_it_by() {
         "and the temp the sandbox maps to TMPDIR"
     );
     assert_eq!(
-        (facts.ctx, facts.cache, facts.loaded.len()),
+        (facts.ctx, facts.cache, facts.loaded.names().len()),
         (None, None, 0),
         "a document holds what the run spent summed over every turn, so the size of one \
              ask and the cache's hit rate are handed in and not read off it"
@@ -136,7 +136,9 @@ fn the_facts_a_record_wrote_join_the_facts_the_frame_was_handed() {
         ..document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")
     };
 
-    let facts = Facts::default().recorded(&document, &[String::from("bash")]);
+    let facts = Facts::default()
+        .recorded(&document)
+        .loading([String::from("bash")].into_iter().collect());
 
     assert_eq!(
         (
@@ -161,7 +163,11 @@ fn the_facts_a_record_wrote_join_the_facts_the_frame_was_handed() {
         ),
         "and so are the commit it stood on and the instants it was written at"
     );
-    assert_eq!(facts.loaded, ["bash"], "and the names it loaded, whole");
+    assert_eq!(
+        facts.loaded.names(),
+        ["bash"],
+        "and the names it loaded, whole"
+    );
     assert!(
         facts.wire.is_none() && facts.model.is_none(),
         "a record is no source of the facts the frame was handed: it adds the ones it wrote"
@@ -539,7 +545,7 @@ fn frame() -> Facts {
             "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
         )),
         branch: Some(String::from("spec/1-capability")),
-        loaded: vec![String::from("bash"), String::from("records")],
+        loaded: ["bash", "records"].into_iter().collect(),
         sandbox: Some(Enforcement::Bubblewrap),
         session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
         temp: Some(PathBuf::from(
@@ -862,10 +868,8 @@ fn run() -> Facts {
         }),
         ..frame()
     }
-    .recorded(
-        &document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"),
-        &[String::from("bash"), String::from("records")],
-    )
+    .recorded(&document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"))
+    .loading(["bash", "records"].into_iter().collect())
 }
 
 /// The screen of a run painted into a band, as the adapter paints it: the ground under every
@@ -944,7 +948,7 @@ fn a_fact_the_run_knows_nothing_about_is_not_drawn_and_its_block_goes_with_it() 
         sandbox: Some(Enforcement::Bubblewrap),
         ..Facts::default()
     }
-    .recorded(&document, &[]);
+    .recorded(&document);
 
     let rows = read(&facts, band(81, 40));
 
@@ -974,9 +978,11 @@ fn a_narrow_column_cuts_a_path_at_its_head_and_a_name_at_its_tail_and_draws_no_o
         model: Some(String::from(GATEWAY)),
         ..frame()
     }
-    .recorded(
-        &document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"),
-        &[String::from("a-skill-name-that-runs-past-any-column-here")],
+    .recorded(&document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"))
+    .loading(
+        [String::from("a-skill-name-that-runs-past-any-column-here")]
+            .into_iter()
+            .collect(),
     );
     let area = band(40, 40);
 
@@ -1010,10 +1016,9 @@ fn a_narrow_column_cuts_a_path_at_its_head_and_a_name_at_its_tail_and_draws_no_o
 
 #[test]
 fn a_block_is_drawn_whole_and_what_the_band_cannot_hold_is_counted_under_its_last_column() {
-    let facts = Facts { ..frame() }.recorded(
-        &document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"),
-        &[String::from("bash")],
-    );
+    let facts = Facts { ..frame() }
+        .recorded(&document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"))
+        .loading([String::from("bash")].into_iter().collect());
     let area = band(120, 12);
 
     let laid = placed(&facts, Shape::Screen, area);
@@ -1178,7 +1183,7 @@ fn the_screen_draws_the_facts_the_ledger_holds_and_never_reads_one_off_the_recor
         branch: Some(String::from("main")),
         ..frame()
     }
-    .recorded(&document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"), &[]);
+    .recorded(&document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"));
     let drawn = read(&elsewhere, band(81, 40));
 
     for held in ["wire openai", "model gpt-5", "think off", "branch main"] {
@@ -1193,7 +1198,7 @@ fn the_screen_draws_the_facts_the_ledger_holds_and_never_reads_one_off_the_recor
         model: None,
         ..frame()
     }
-    .recorded(&document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"), &[]);
+    .recorded(&document("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61"));
     let drawn = read(&blank, band(81, 40));
 
     assert!(
@@ -1340,13 +1345,10 @@ fn the_fact_that_says_the_run_is_moving_wears_the_accent() {
         (RunState::Running, Ink::Accent),
         (RunState::Stopped(Stop::Final), Ink::Plain),
     ] {
-        let facts = Facts { ..frame() }.recorded(
-            &SessionDocument {
-                stopped,
-                ..moved.clone()
-            },
-            &[],
-        );
+        let facts = Facts { ..frame() }.recorded(&SessionDocument {
+            stopped,
+            ..moved.clone()
+        });
         let buffer = painted(&facts, area);
         let row = (0..area.height)
             .find(|y| glyphs(&buffer, *y).trim_end().starts_with("stopped"))

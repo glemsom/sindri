@@ -174,7 +174,9 @@ impl Turns for Reports {
 
     fn facts(&mut self, handed: Handed<'_>) {
         self.push(Report::Facts(
-            Facts::of(handed.session, handed.document).measured(&handed.measured, handed.window),
+            Facts::of(handed.session, handed.document)
+                .loading(handed.loaded.clone())
+                .measured(&handed.measured, handed.window),
         ));
         self.push(Report::Record {
             document: handed.document.clone(),

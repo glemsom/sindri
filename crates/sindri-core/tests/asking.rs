@@ -42,7 +42,7 @@ fn ask() -> Ask {
 struct Unreached;
 
 impl Executor for Unreached {
-    fn execute(&self, call: &Call, _loaded: &mut Loaded) -> Result<Acted, Redacted> {
+    fn execute(&self, call: &Call, _loaded: &Loaded) -> Result<Acted, Redacted> {
         panic!(
             "no call was asked for, so `{}` cannot have been run",
             call.name

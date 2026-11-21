@@ -128,7 +128,7 @@ fn frame() -> Facts {
             "/home/glemsom/Documents/git/sindri/.worktrees/46-rail",
         )),
         branch: Some(String::from("spec/1-capability")),
-        loaded: vec![String::from("bash"), String::from("records")],
+        loaded: ["bash", "records"].into_iter().collect(),
         sandbox: Some(Enforcement::Bubblewrap),
         session: Some(String::from("9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61")),
         temp: Some(PathBuf::from(

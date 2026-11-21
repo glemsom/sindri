@@ -11,6 +11,7 @@ use sindri::composer::{Key, MIN_ROWS, Outcome};
 use sindri::facts::Facts;
 use sindri::keys::Mode;
 use sindri::view::{Transcript, View};
+use sindri_core::run::Loaded;
 
 #[allow(dead_code)] // the harness draws every frame; this binary asks it for the run only
 mod fixture; // one frame rendered at a fixed size into the text a fixture holds
@@ -64,9 +65,49 @@ fn a_slash_stats_line_opens_the_screen_and_escape_gives_the_frame_back() {
 }
 
 #[test]
+fn the_rail_draws_the_set_the_frame_was_handed_and_new_empties_it() {
+    let loaded: Loaded = ["deploy"].into_iter().collect();
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default()
+            .asked()
+            .railed(facts().loading(loaded.clone()))
+            .recorded(&document()),
+        Transcript::none(),
+    );
+
+    let drawn = |view: &mut View| {
+        view.paste("/stats");
+        assert_eq!(view.key(Key::Enter), Outcome::Edited);
+        let rows = frame::painted(view, 120, 40).rows();
+        assert_eq!(
+            view.key(Key::Escape),
+            Outcome::Edited,
+            "Esc gives the frame back"
+        );
+        rows
+    };
+
+    let rows = drawn(&mut view);
+    assert!(
+        rows.iter().any(|row| row.contains("deploy")),
+        "the screen draws the name the frame was handed: {rows:#?}"
+    );
+
+    view.paste("/new");
+    assert_eq!(view.key(Key::Enter), Outcome::Edited);
+
+    let rows = drawn(&mut view);
+    assert!(
+        !rows.iter().any(|row| row.contains("deploy")),
+        "and `/new` empties the one set the launch holds, so the name is gone: {rows:#?}"
+    );
+}
+
+#[test]
 fn the_screen_draws_the_facts_no_rail_column_holds_whole() {
     let mut view = opened();
-    let rows = frame::painted(&mut view, 120, 40).rows();
+    let rows = frame::painted(&mut view, 120, 46).rows();
 
     for asked in [
         "/stats", GUID, "route", "input", "total", "start", "end", "commit",

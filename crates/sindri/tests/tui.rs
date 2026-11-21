@@ -41,6 +41,9 @@ const ANSWER: &str =
 const OPEN_TOOL_USE: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_open_tool_use.sse");
 
+const SKILL_TOOL_USE: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_skill_tool_use.sse");
+
 const OPEN_TOOL_USE_REFUSED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_open_tool_use_refused.sse");
 
@@ -3748,6 +3751,107 @@ fn awaited(record: &Path, absent: &str) -> Vec<String> {
         assert!(Instant::now() < deadline, "{absent}");
         thread::sleep(Duration::from_millis(10));
     }
+}
+
+/// A skill the workspace offers a person, discovered the way a run discovers it.
+fn offering(workspace: &Path) {
+    let directory = workspace.join(".agents/skills/deploy");
+    std::fs::create_dir_all(&directory).expect("the skill's directory");
+    std::fs::write(
+        directory.join("SKILL.md"),
+        "---\nname: deploy\ndescription: ship the branch\n---\n\nShip it.\n",
+    )
+    .expect("a SKILL.md");
+}
+
+/// Whether the rail is drawing one loaded skill: the count hangs on the far edge of the row its
+/// label opens.
+fn rail_holds_one_skill(frame: &str) -> bool {
+    frame::read(frame, COLS, ROWS)
+        .rows()
+        .iter()
+        .any(|row| row.contains("skills") && row.trim_end().ends_with('1'))
+}
+
+#[test]
+fn a_skill_loaded_by_hand_before_the_first_prompt_stays_on_the_rail() {
+    let ground = Ground::new();
+    offering(&ground.workspace);
+
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    command(&mut pty, &drawn, "/skill:deploy");
+    assert!(
+        drawn.wait_until(rail_holds_one_skill),
+        "the line loads the skill on the splash screen's own rail: {:?}",
+        drawn.text()
+    );
+
+    ask(&mut pty, &drawn, &wire);
+    wire.release();
+    answered(&drawn);
+
+    assert!(
+        rail_holds_one_skill(&drawn.text()),
+        "and the run's facts take on the name the reader loaded, so the hand does not lose it: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn a_skill_the_model_loads_is_drawn_on_the_rail() {
+    let ground = Ground::new();
+    offering(&ground.workspace);
+
+    let wire = Wire::scripted([SKILL_TOOL_USE, ANSWER]);
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    assert!(
+        !drawn.text().contains("skills"),
+        "no set is drawn before a run has loaded a name: {:?}",
+        drawn.text()
+    );
+
+    ask(&mut pty, &drawn, &wire);
+    wire.release();
+
+    assert!(
+        drawn.wait_until(rail_holds_one_skill),
+        "the rail draws one skill once the call has settled, which is the set a run loaded into \
+         and the launch kept: {:?}",
+        drawn.text()
+    );
+
+    wire.wait_for_request();
+    wire.release();
+    answered(&drawn);
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run that loaded a skill: {:?}",
+        drawn.text()
+    );
 }
 
 #[test]

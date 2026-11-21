@@ -567,6 +567,11 @@ impl<'a> Loop<'a> {
                 // A status changes no cell: it is written by the one thing here that owns a tty.
                 Report::Told(told) => self.told(told)?,
                 Report::Facts(rail) => {
+                    // A name `/skill:name` loaded before this launch existed is the frame's alone:
+                    // the hand is where the reader's names join the set the launch goes on holding.
+                    for name in self.view.facts().loaded().names() {
+                        rail.loaded.load(name);
+                    }
                     self.view.handed(self.view.facts().clone().railed(rail));
                     painted = true;
                 }
