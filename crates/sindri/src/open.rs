@@ -20,14 +20,15 @@ pub const HOST_OPENER: &str = "xdg-open";
 /// How long an opener is given to end before the target is settled as handed over.
 const GRACE: Duration = Duration::from_secs(2);
 
-const NAP: Duration = Duration::from_millis(25);
+/// The longest the wait between two looks at an opener that is still running, so a call that
+/// settles at once is back at once.
+const MAX_NAP: Duration = Duration::from_millis(25);
 
 /// This machine's opener, and the one argv word it is spawned with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HostOpener {
     /// The program to spawn, as the host names it.
     program: OsString,
-    /// How long a call waits for it before settling as handed.
     grace: Duration,
 }
 
@@ -98,10 +99,11 @@ impl Opener for HostOpener {
             }
             if Instant::now() >= deadline {
                 reap(child);
+                said.forget();
                 return Handover::Handed;
             }
             thread::sleep(nap);
-            nap = (nap * 2).min(NAP);
+            nap = (nap * 2).min(MAX_NAP);
         };
         if exit.is_ok() {
             return Handover::Opened;

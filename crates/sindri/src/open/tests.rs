@@ -76,7 +76,6 @@ impl Tree {
         HostOpener::new(script)
     }
 
-    /// Waits until the script of the test has written `name` into the tree.
     fn wait_for(&self, name: &str) {
         let path = self.root.path().join(name);
         let deadline = Instant::now() + PATIENCE;
@@ -109,8 +108,6 @@ impl Tree {
         }
     }
 
-    /// A fake opener whose whole body is `body`, so a test says what the
-    /// program it spawns does.
     fn script(&self, name: &str, body: &str) -> HostOpener {
         let script = self.root.path().join(name);
         std::fs::write(&script, format!("#!/bin/sh\n{body}")).expect("the script");
