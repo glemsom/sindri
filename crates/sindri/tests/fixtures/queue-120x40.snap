@@ -40,6 +40,6 @@ queue at 120x40
 34 |━                                                                                                                       | accent+faint:1 plain:119
 35 | ›and this one while they wait                                                                                          | dim:1 accent:1 plain:118
 36 | ›run the test that failed and read it                                                                                  | dim:38 plain:82
-37 | ›then the fmt check                                                                                                    | dim:20 plain:100
-38 | ›and say why the retry hid it                                                                                          | dim:30 plain:90
-39 |Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                               | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:31
+37 | ›then the fmt check                                                        input                                  48.2k| dim:20 plain:56 dim:10 plain:34
+38 | ›and say why the retry hid it                                              output                                  3.1k| dim:30 plain:46 dim:10 plain:34
+39 |Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys · Ctrl-Q quit    total                                  51.3k| plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 plain:4 dim:10 plain:34

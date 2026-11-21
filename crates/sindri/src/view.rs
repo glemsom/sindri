@@ -1214,23 +1214,22 @@ impl View {
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let mut painted = Painted::none();
         pen::claim(buffer, area, self.capabilities.palette().ground(None));
-        self.composer.set_room(View::room(area));
+        // The rail is a fact about the frame, so its columns are cut out before the bands are laid
+        // and the draft is measured at the width it is drawn at.
+        let share = self.split(area);
+        self.composer.set_room(View::room(share.bands));
         let mut layout = bands(
-            area,
+            share.bands,
             self.composer.rows(),
             self.queue.rows(),
             self.composer.ends(),
             self.notice_rows(),
         );
-        // The rail's share is taken from the transcript's band before the transcript is laid out
-        // in what is left: a row's width is the width it is drawn at.
-        let share = self.split(layout.transcript);
-        layout.transcript = share.transcript;
-        layout.rail = share.rail;
+        layout.rail = share.rail_band(area, &mut layout.transcript);
         // The band the rail's plane is drawn under, which the transcript claims as the terminal's
         // own ground once its rows are down.
         let mut under = None;
-        if let Some((shape, band)) = share.rail {
+        if let Some((shape, band)) = layout.rail {
             // A ledger carries the face wherever it is drawn, and a strip is one row of facts with
             // no band to carry one in: a terminal that places no picture, or a config that turned
             // it off, is handed no cells and reserves no row.
@@ -1262,7 +1261,7 @@ impl View {
             }
         }
         let drawn = self.transcript(
-            share.transcript,
+            layout.transcript,
             under,
             buffer,
             &mut painted.links,
@@ -1270,7 +1269,7 @@ impl View {
         );
         if self.facts.splash() {
             splash::paint(
-                share.transcript,
+                layout.transcript,
                 buffer,
                 &self.capabilities.palette(),
                 &mut painted.links,
@@ -1281,7 +1280,7 @@ impl View {
         if let Some(plane) = self.composer_band(layout.composer, layout.queue, buffer) {
             painted.planes.push(plane);
         }
-        self.footer(layout.footer, buffer);
+        self.footer(layout.rail, layout.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
         // reader sees the transcript they will return to, and sees that it is out of reach.
         let screen = self.stack.top();
@@ -1290,8 +1289,8 @@ impl View {
             // known: one with no row of that band under it is the words it says.
             painted
                 .sizes
-                .settle(share.transcript, buffer, &self.capabilities.palette());
-            self.highlight(share.transcript, buffer, drawn.span());
+                .settle(layout.transcript, buffer, &self.capabilities.palette());
+            self.highlight(layout.transcript, buffer, drawn.span());
             self.note(&mut painted, drawn);
             painted.caret = self
                 .caret(layout.composer, layout.queue, None)
@@ -1302,7 +1301,7 @@ impl View {
         // The band under a card takes no key, so the frame under it is no way to anywhere — and no
         // heading of it is drawn large, because the scrim is read as the words it holds.
         painted = Painted::none();
-        self.highlight(share.transcript, buffer, drawn.span());
+        self.highlight(layout.transcript, buffer, drawn.span());
         self.note(&mut painted, drawn);
         let rows = body.held();
         let bounds = card::bounds(area, rows);
@@ -1361,17 +1360,16 @@ impl View {
         })
     }
 
-    /// The band the transcript and the rail share. A splash screen is drawn with a ledger beside
-    /// it or with no rail at all: a strip is a live run's one row, and no run is live at the
-    /// splash screen.
-    fn split(&self, band: Rect) -> Share {
-        if self.facts.splash() && Rail::of(band.width) != Rail::Ledger {
+    /// What the frame gives the rail. A splash screen is drawn with a ledger beside it or with no
+    /// rail at all: a strip is a live run's one row, and no run is live at the splash screen.
+    fn split(&self, area: Rect) -> Share {
+        if self.facts.splash() && Rail::of(area.width) != Rail::Ledger {
             return Share {
-                transcript: band,
+                bands: area,
                 rail: None,
             };
         }
-        ledger::split(self.facts.rail(), band)
+        ledger::split(self.facts.rail(), area)
     }
 
     /// The transcript is drawn in the well, the darkest of the grounds a frame lays down. The turn in
@@ -1865,14 +1863,23 @@ impl View {
         }
     }
 
-    fn footer(&self, area: Rect, buffer: &mut Buffer) {
+    /// The hints' row: the band's last row, laid up to the column a ledger's lit seam stands beside
+    /// rather than into it, so the last hint of a row that fills the band is no word of the rail's.
+    fn footer(&self, rail: Option<(Rail, RailBand)>, area: Rect, buffer: &mut Buffer) {
         if area.height == 0 {
             return;
         }
+        let room = match rail {
+            Some((Rail::Ledger, _)) => Rect {
+                width: area.width.saturating_sub(1),
+                ..area
+            },
+            _ => area,
+        };
         let depth = self.queue.label().unwrap_or_default();
         hints_row(
             buffer,
-            area,
+            room,
             &self.hints(),
             &depth,
             &self.capabilities.palette(),
@@ -1902,20 +1909,22 @@ enum Page {
 /// drawn. The band the caret is placed in is this pass's, and never a second laying out of it.
 #[derive(Clone, Copy, Debug)]
 pub struct Layout {
-    /// The rows the transcript was drawn in, after the rail took its share.
+    /// The rows the transcript was drawn in, in the columns the rail left it.
     pub transcript: Rect,
     /// The rows the queue was given under the draft and above the hints, and none while nothing waits.
     pub queue: Rect,
     /// The one row saying how far back from the tail the frame stands, and none at the tail.
     pub notice: Rect,
-    /// The band's own rows: its head, the draft under it, the queue's rows and its footer.
+    /// The band's own rows, in the transcript's columns: its head, the draft under it, the queue's
+    /// rows and its footer.
     pub composer: Rect,
-    /// The band's last row: the footer, where the hints of what a key does this frame stand.
+    /// The band's last row, in the transcript's columns: the footer, where the hints of what a key
+    /// does this frame stand.
     pub footer: Rect,
     /// The cells a card's body was drawn in, and none while no card was drawn.
     pub card: Option<Rect>,
-    /// The rail's shape and the band it drew in beside the transcript, and none while the frame
-    /// drew no rail.
+    /// The rail's shape and the band it drew in beside the bands, and none while the frame drew
+    /// no rail.
     pub rail: Option<(Rail, RailBand)>,
 }
 

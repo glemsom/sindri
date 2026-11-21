@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use ratatui::style::Color;
 
 use sindri_core::policy::Enforcement;
+use sindri_core::records::Usage;
 
 use super::*;
 use crate::ink::Ink;
@@ -137,6 +138,19 @@ fn frame() -> Facts {
     }
 }
 
+/// [`frame`] with a run's spend, which is the foot the rail lays down to the frame's floor.
+fn spent() -> Facts {
+    Facts {
+        spend: Usage {
+            input: Some(48_200),
+            output: Some(3_100),
+            total: Some(51_300),
+            ..Usage::default()
+        },
+        ..frame()
+    }
+}
+
 /// Every fact the rail draws, its label and its value, stated here and not read off the module's
 /// own tables, so a test cannot pass by agreeing with the code it is testing.
 const CONTRACT: [(&str, &str); 12] = [
@@ -177,6 +191,31 @@ fn a_ledger_is_lit_along_its_boundary_and_shadowed_under_its_last_row() {
                  itself"
         );
     }
+}
+
+#[test]
+fn the_foot_is_drawn_on_the_row_the_band_shadows() {
+    let area = band(COLUMNS, 24);
+    let mut buffer = Buffer::empty(area);
+
+    paint(&spent(), Rail::Ledger, area, None, &mut buffer, &PALETTE);
+
+    let floor = area.bottom() - 1;
+    let at = pen::hanging(area, pen::cells("51.3k")).expect("a row that holds it");
+    assert_eq!(
+        under(&buffer, area.x, floor),
+        PALETTE.edge(Edge::Shadow),
+        "the band's last row is the shadow, and the foot stands on it rather than above it"
+    );
+    assert_eq!(
+        glyphs(&buffer, floor).trim_end(),
+        format!(
+            "{}{}",
+            pen::pad("total", FIELD),
+            pen::blank(at.saturating_sub(FIELD))
+        ) + "51.3k",
+        "the total is the last row of the foot, so it is the row the shadow falls across"
+    );
 }
 
 #[test]

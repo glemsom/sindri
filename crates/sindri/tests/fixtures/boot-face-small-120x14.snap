@@ -14,6 +14,6 @@ boot-face-small at 120x14
 08 |     /stats     the facts the rail is too narrow to hold                                                                | plain:5 accent:11 dim:40 plain:64
 09 |                                                                                                                        | plain:120
 10 |                                                                                                                        | plain:120
-11 |                                                                                                                        | plain:120
-12 | ›what should the run do?                                                                                               | dim:25 plain:95
-13 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47
+11 |                                                                            ────────────────────────────────────────────| plain:76 dim:44
+12 | ›what should the run do?                                                   sandbox   bwrap                             | dim:25 plain:51 dim:10 plain:34
+13 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline   +6 more                                     | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:3 muted:7 plain:37

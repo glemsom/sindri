@@ -16,7 +16,7 @@ use sindri::facts::Facts;
 use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger;
 use sindri::mark::Cell;
-use sindri::palette::Palette;
+use sindri::palette::{Band, Edge, Palette};
 use sindri::pen::{self, Clip};
 use sindri::pointer::Pointer;
 use sindri::rows::Scroll;
@@ -458,7 +458,7 @@ fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
 }
 
 #[test]
-fn a_pass_hands_back_the_rail_beside_the_transcript_and_none_while_no_fact_is_known() {
+fn the_rail_holds_the_frames_right_edge_to_its_floor_and_none_is_drawn_while_no_fact_is_known() {
     let mut view = View::of(Capabilities::default(), railed(), Transcript::of(turns(3)));
     let area = Rect::new(0, 0, 120, 40);
     let frame = frame::painted(&mut view, 120, 40);
@@ -466,10 +466,10 @@ fn a_pass_hands_back_the_rail_beside_the_transcript_and_none_while_no_fact_is_kn
         .told()
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
-    let (shape, rail) = laid
+    let (shape, band) = laid
         .rail
-        .expect("a frame whose facts know one is drawn with a rail beside the transcript");
-    let rail = rail.area;
+        .expect("a frame whose facts know one is drawn with a rail beside the bands");
+    let rail = band.area;
 
     assert_eq!(
         shape,
@@ -478,13 +478,17 @@ fn a_pass_hands_back_the_rail_beside_the_transcript_and_none_while_no_fact_is_kn
     );
     assert_eq!(
         (rail.y, rail.height),
-        (laid.transcript.y, laid.transcript.height),
-        "the rail stands the rows the transcript was given: {laid:?}"
+        (area.y, area.height),
+        "the rail's band is the frame's own height: {laid:?}"
     );
     assert_eq!(
-        rail.right(),
-        area.right(),
-        "its last column is the frame's last column: {laid:?}"
+        (rail.right(), rail.bottom()),
+        (area.right(), area.bottom()),
+        "so its last column and its last row are the frame's own: {laid:?}"
+    );
+    assert!(
+        laid.transcript.bottom() < rail.bottom(),
+        "the transcript stops at the composer's head where the rail runs on to the floor: {laid:?}"
     );
 
     let mut plain = View::of(
@@ -501,6 +505,84 @@ fn a_pass_hands_back_the_rail_beside_the_transcript_and_none_while_no_fact_is_kn
     assert_eq!(
         laid.rail, None,
         "a frame whose facts know nothing draws no rail, so the value names none: {laid:?}"
+    );
+    assert_eq!(
+        laid.transcript.width, 120,
+        "and the bands keep every column of a frame that has no rail to stand beside: {laid:?}"
+    );
+}
+
+#[test]
+fn the_bands_beside_the_rail_stand_in_the_transcripts_columns_and_the_shadow_falls_on_the_floor() {
+    let palette = Palette::TRUECOLOR;
+    let mut view = View::of(caps::inked(palette), railed(), Transcript::of(turns(3)));
+    let area = Rect::new(0, 0, 120, 40);
+    let frame = frame::painted(&mut view, 120, 40);
+    let laid = frame
+        .told()
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    let rail = laid.rail.expect("a rail beside the bands").1.area;
+
+    assert_eq!(
+        rail.x,
+        laid.transcript.right(),
+        "the rail's seam is the transcript's last column and the bands' last too: {laid:?}"
+    );
+    for band in [laid.composer, laid.footer, laid.queue, laid.notice] {
+        assert_eq!(
+            (band.x, band.width),
+            (laid.transcript.x, laid.transcript.width),
+            "a band stands in the transcript's columns and not the frame's: {laid:?}"
+        );
+    }
+    for y in laid.composer.y..area.bottom() {
+        for x in rail.x..area.right() {
+            let ground = frame.cell(x, y).bg;
+            let wanted = match (y, x) {
+                (y, _) if y == area.bottom() - 1 => palette.edge(Edge::Shadow),
+                (_, x) if x == rail.x => palette.edge(Edge::Lit),
+                _ => palette.band(Band::Rail),
+            };
+            assert_eq!(
+                ground, wanted,
+                "row {y}, column {x} of the rail is {ground:?} where the rail's band is {wanted:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn below_the_ledgers_floor_the_strip_takes_the_transcripts_last_row_and_no_column() {
+    let mut view = View::of(Capabilities::default(), railed(), Transcript::of(turns(3)));
+    let area = Rect::new(0, 0, 80, 24);
+    let frame = frame::painted(&mut view, 80, 24);
+    let laid = frame
+        .told()
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    let (shape, band) = laid
+        .rail
+        .expect("a frame whose facts know one is drawn with a rail");
+
+    assert_eq!(
+        shape,
+        ledger::Rail::Strip,
+        "a frame 80 columns wide is handed the strip rather than the ledger's column"
+    );
+    assert_eq!(
+        band.area,
+        Rect {
+            y: laid.transcript.bottom(),
+            height: 1,
+            ..area
+        },
+        "the strip is the row the transcript's band gave up, across the frame's own columns"
+    );
+    assert_eq!(
+        (laid.composer.x, laid.composer.width),
+        (area.x, area.width),
+        "and it takes no column of the bands beside it: {laid:?}"
     );
 }
 

@@ -689,14 +689,14 @@ fn strip_band(cols: u16, rows: u16) -> Rect {
     }
 }
 
-/// The rail's own columns of that band: the ones the frame's width gives it, down its right-hand
-/// edge.
+/// The rail's own columns of the frame: the ones the frame's width gives it, down its right-hand
+/// edge for the frame's own height.
 fn rail_band(cols: u16, rows: u16) -> Rect {
     let columns = Rail::columns(cols);
     Rect {
         x: cols - columns,
         width: columns,
-        ..shared_band(cols, rows)
+        ..Rect::new(0, 0, cols, rows)
     }
 }
 
@@ -1464,8 +1464,11 @@ fn the_placement_covers_the_band_the_ledger_reserved_for_it_and_no_cell_outside_
         let painted = frame::painted(&mut view, cols, 40);
         let rail = rail_band(cols, 40);
         let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
-        let reserved = ledger::split(&railed_facts(), shared_band(cols, 40))
-            .rail
+        let frame = Rect::new(0, 0, cols, 40);
+        let share = ledger::split(&railed_facts(), frame);
+        let mut transcript = share.bands;
+        let reserved = share
+            .rail_band(frame, &mut transcript)
             .expect("a frame this wide holds a ledger")
             .1
             .with_picture(face.cols(), face.rows())

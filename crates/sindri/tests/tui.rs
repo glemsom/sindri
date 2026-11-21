@@ -1528,9 +1528,10 @@ fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
         drawn.text()
     );
 
-    // A draft as wide as the room the band leaves it: every column of the frame but the two the
-    // gutter is set in.
-    let room = COLS - GUTTER;
+    // A draft as wide as the room the band beside the rail leaves it: the frame's columns less
+    // the rail's, and the two the gutter is set in.
+    let band = COLS - Rail::columns(COLS);
+    let room = band - GUTTER;
     let draft = format!("\u{1b}[200~{}\u{1b}[201~", "x".repeat(usize::from(room)));
     pty.type_bytes(draft.as_bytes());
 
@@ -1544,7 +1545,7 @@ fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
     let frame = drawn.text();
     assert_eq!(
         placed(&frame).map(|(_, column)| column),
-        Some(COLS - 1),
+        Some(band - 1),
         "a caret past the band's last column waits on that column rather than off the frame: \
          {frame:?}"
     );
@@ -3624,6 +3625,11 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
          starts at"
     );
     assert_eq!(
+        u32::from(width),
+        u32::from(COLS - Rail::columns(COLS)),
+        "and it covers the columns the bands were given beside the rail and not the frame's own"
+    );
+    assert_eq!(
         covers(&bytes, placed).1,
         3,
         "and it covers the band's three rows: {:?}",
@@ -3645,21 +3651,20 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     assert_eq!(top, 1, "at the frame's first row");
     assert_eq!(
         u32::from(left) + u32::from(columns) - 1,
-        u32::from(width),
+        u32::from(COLS),
         "over the rail's own columns and the seam it widens across the transcript, which end at \
          the frame's right-hand edge"
     );
     assert_eq!(
         u32::from(columns),
-        u32::from(Rail::columns(width)) + u32::from(SEAM),
+        u32::from(Rail::columns(COLS)) + u32::from(SEAM),
         "and the plane takes {SEAM} columns of the transcript besides, so the rail comes out of \
          the transcript's edge rather than being parted from it"
     );
     assert_eq!(
-        rows,
-        band - 1,
-        "and down every row of the band it shares with the transcript, up to the row the \
-         composer's band starts at"
+        rows, ROWS,
+        "and down every row of the frame, from its first to the shadow at its floor on row \
+         {band}, rather than stopping where the composer's band starts"
     );
 
     pty.type_bytes(&[0x11]);

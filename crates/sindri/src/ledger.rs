@@ -641,6 +641,10 @@ const BLOCKS: [&[Kind]; 7] = [
     &[Kind::Session, Kind::Temp],
 ];
 
+/// The facts the ledger lays on the rows at its foot, read from the top down: what the run has
+/// spent while the reader types.
+const FOOT: [Kind; 3] = [Kind::Input, Kind::Output, Kind::Total];
+
 /// The five facts the strip carries, in the order it reads them: its one row asks a different
 /// question than the ledger's blocks do, so its list is its own.
 const STRIP_FACTS: [Kind; 5] = [
@@ -659,7 +663,10 @@ const STRIP_SACRIFICE: [Kind; 4] = [Kind::Branch, Kind::Sandbox, Kind::Model, Ki
 /// The ledger's sacrifice order, the first to go first. The sandbox posture is deliberately absent,
 /// because it never goes, so no loop over this list can reach it; the state goes last, after every
 /// fact the rail may give up.
-const SACRIFICE: [Kind; 12] = [
+const SACRIFICE: [Kind; 15] = [
+    Kind::Input,
+    Kind::Output,
+    Kind::Total,
     Kind::Temp,
     Kind::Cache,
     Kind::Session,
@@ -723,57 +730,75 @@ impl RailBand {
     }
 }
 
-/// What the transcript and the rail share of a band.
+/// What the frame's bands and its rail share of it: the cells the bands beside the rail are laid
+/// in, and the rail's shape — nothing at all for a frame that knows no fact.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Share {
-    pub transcript: Rect,
-    /// Nothing when the frame knows no fact at all, and the transcript keeps the whole band.
-    pub rail: Option<(Rail, RailBand)>,
+    /// The cells the bands beside the rail are laid in.
+    pub bands: Rect,
+    /// The rail's shape, and nothing at all for a frame that knows no fact.
+    pub rail: Option<Rail>,
 }
 
-/// Cuts the band the transcript and the rail share: the rail's own columns down the right while the
-/// frame is wide enough to hold a column, one strip along the band's bottom row below it. A frame
-/// that knows no fact draws no rail, and the transcript loses no room to one.
-pub fn split(facts: &Facts, band: Rect) -> Share {
-    let shape = Rail::of(band.width);
-    if band.width == 0 || band.height == 0 || known(facts, shape.into(), None).is_empty() {
+impl Share {
+    /// The rail's band on the frame `area`, and the rows the bands beside it keep: a ledger's band
+    /// is the frame's own height, and a strip takes the transcript's band's last row, which is cut
+    /// off the `transcript` handed in.
+    pub fn rail_band(self, area: Rect, transcript: &mut Rect) -> Option<(Rail, RailBand)> {
+        let rail = self.rail?;
+        match rail {
+            Rail::Ledger => {
+                let columns = Rail::columns(area.width);
+                Some((
+                    rail,
+                    RailBand::of(Rect {
+                        x: area.right().saturating_sub(columns),
+                        width: columns,
+                        ..area
+                    }),
+                ))
+            }
+            Rail::Strip => {
+                let height = transcript.height.checked_sub(1)?;
+                let y = transcript.y.saturating_add(height);
+                *transcript = Rect {
+                    height,
+                    ..*transcript
+                };
+                Some((
+                    rail,
+                    RailBand::of(Rect {
+                        y,
+                        height: 1,
+                        ..area
+                    }),
+                ))
+            }
+        }
+    }
+}
+
+/// Cuts the frame the bands and the rail share: the rail's own columns down the right while the
+/// frame is wide enough to hold a column, a strip along the transcript's bottom row below it. A
+/// frame that knows no fact draws no rail, and the bands lose no room to one.
+pub fn split(facts: &Facts, area: Rect) -> Share {
+    let shape = Rail::of(area.width);
+    if area.width == 0 || area.height == 0 || known(facts, shape.into(), None).is_empty() {
         return Share {
-            transcript: band,
+            bands: area,
             rail: None,
         };
     }
-    let (transcript, rail) = match shape {
-        Rail::Ledger => {
-            let columns = Rail::columns(band.width);
-            let x = band.x.saturating_add(band.width - columns);
-            (
-                Rect {
-                    width: band.width - columns,
-                    ..band
-                },
-                Rect {
-                    x,
-                    height: band.height,
-                    width: columns,
-                    ..band
-                },
-            )
-        }
-        Rail::Strip => (
-            Rect {
-                height: band.height - 1,
-                ..band
-            },
-            Rect {
-                y: band.y.saturating_add(band.height - 1),
-                height: 1,
-                ..band
-            },
-        ),
+    let bands = match shape {
+        Rail::Ledger => Rect {
+            width: area.width - Rail::columns(area.width),
+            ..area
+        },
+        Rail::Strip => area,
     };
     Share {
-        transcript,
-        rail: Some((shape, RailBand::of(rail))),
+        bands,
+        rail: Some(shape),
     }
 }
 
@@ -806,29 +831,52 @@ pub(crate) fn draw(rows: &[Row], at: Rect, buffer: &mut Buffer, palette: &Palett
 fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> Vec<Row> {
     let kept = kept(facts, rail, area, marker);
     match rail {
-        Rail::Ledger => ledger_lines(&kept.facts, kept.went)
-            .into_iter()
-            .take(usize::from(area.height))
-            .enumerate()
-            .map(|(offset, line)| {
-                let row = Rect {
-                    y: area
-                        .y
-                        .saturating_add(u16::try_from(offset).unwrap_or(u16::MAX)),
-                    ..area
-                };
-                match line {
-                    Line::Fact(fact) => labelled(row, fact),
-                    Line::Air => Row {
-                        y: row.y,
-                        parts: Vec::new(),
+        Rail::Ledger => {
+            let foot = foot_facts(&kept.facts);
+            let laid = u16::try_from(foot.len()).unwrap_or(u16::MAX);
+            let mut rows: Vec<Row> = ledger_lines(&kept.facts, kept.went)
+                .into_iter()
+                .take(usize::from(area.height.saturating_sub(laid)))
+                .enumerate()
+                .map(|(offset, line)| {
+                    let row = Rect {
+                        y: area
+                            .y
+                            .saturating_add(u16::try_from(offset).unwrap_or(u16::MAX)),
+                        ..area
+                    };
+                    match line {
+                        Line::Fact(fact) => labelled(row, fact),
+                        Line::Air => Row {
+                            y: row.y,
+                            parts: Vec::new(),
+                        },
+                        Line::Went(went) => Row::run(row.x, row.y, more(went), Ink::Muted),
+                    }
+                })
+                .collect();
+            // The foot is read up from the floor, so its last fact stands on the row the shadow is
+            // drawn across.
+            for (at, fact) in foot.iter().enumerate() {
+                let back = u16::try_from(foot.len() - at).unwrap_or(u16::MAX);
+                rows.push(labelled(
+                    Rect {
+                        y: area.bottom().saturating_sub(back),
+                        ..area
                     },
-                    Line::Went(went) => Row::run(row.x, row.y, more(went), Ink::Muted),
-                }
-            })
-            .collect(),
+                    fact,
+                ));
+            }
+            rows
+        }
         Rail::Strip => vec![strip(&kept, area)],
     }
+}
+
+fn foot_facts(kept: &[Fact]) -> Vec<&Fact> {
+    FOOT.iter()
+        .filter_map(|kind| kept.iter().find(|fact| fact.kind == *kind))
+        .collect()
 }
 
 /// The screen's rows: each column's blocks in the order the ledger reads them, a rule over every
@@ -1121,16 +1169,18 @@ fn kept(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> Kept {
     let with_count = rail == Rail::Ledger;
     let mut went = total - kept.len();
     while !holds(&kept, went, with_count, rail, area) {
-        let Some(victim) = order
+        let Some(kind) = order
             .iter()
-            .find_map(|kind| kept.iter().position(|fact| fact.kind == *kind))
+            .copied()
+            .find(|kind| kept.iter().any(|fact| fact.kind == *kind))
         else {
             // Nothing the shape may give up is left — the ledger keeps the sandbox posture and the
             // strip the run's size — so a rail narrower than that fact has nothing left to give up.
             break;
         };
-        kept.remove(victim);
-        went = went.saturating_add(1);
+        let before = kept.len();
+        kept.retain(|fact| fact.kind != kind);
+        went = went.saturating_add(before - kept.len());
     }
     let counted = went > 0 && holds(&kept, went, true, rail, area);
     Kept {
@@ -1169,17 +1219,20 @@ fn known(facts: &Facts, shape: Shape, marker: Option<&Pulse>) -> Vec<Fact> {
     if let Some(cache) = facts.cache {
         stated.push(Fact::new(Kind::Cache, hit_rate(cache)));
     }
-    if shape == Shape::Screen {
-        for (kind, count) in [
-            (Kind::Input, facts.spend.input),
-            (Kind::Output, facts.spend.output),
-            (Kind::Total, facts.spend.total),
-            (Kind::Cached, facts.spend.cached_input),
-            (Kind::Reasoning, facts.spend.reasoning),
-        ] {
-            if let Some(count) = count {
-                stated.push(Fact::new(kind, tokens(count)));
-            }
+    for (kind, count) in [
+        (Kind::Input, facts.spend.input),
+        (Kind::Output, facts.spend.output),
+        (Kind::Total, facts.spend.total),
+        (Kind::Cached, facts.spend.cached_input),
+        (Kind::Reasoning, facts.spend.reasoning),
+    ] {
+        let spelled = match shape {
+            Shape::Screen => true,
+            Shape::Ledger => FOOT.contains(&kind),
+            Shape::Strip => false,
+        };
+        if let Some(count) = count.filter(|_| spelled) {
+            stated.push(Fact::new(kind, tokens(count)));
         }
     }
     if let Some(workspace) = &facts.workspace {
@@ -1259,7 +1312,10 @@ fn known(facts: &Facts, shape: Shape, marker: Option<&Pulse>) -> Vec<Fact> {
         }
     }
     match shape {
-        Shape::Ledger => aligned(&mut stated, BLOCKS.iter().copied()),
+        Shape::Ledger => aligned(
+            &mut stated,
+            BLOCKS.iter().copied().chain(std::iter::once(&FOOT[..])),
+        ),
         Shape::Screen => aligned(&mut stated, SCREEN_BLOCKS.iter().map(|(_, kinds)| *kinds)),
         Shape::Strip => stated.sort_by_key(|fact| strip_place(fact.kind)),
     }
@@ -1330,7 +1386,12 @@ fn strip_place(kind: Kind) -> usize {
 
 fn holds(facts: &[Fact], went: usize, counted: bool, rail: Rail, area: Rect) -> bool {
     match rail {
-        Rail::Ledger => ledger_lines(facts, went).len() <= usize::from(area.height),
+        Rail::Ledger => {
+            let above = ledger_lines(facts, went).len();
+            let foot = foot_facts(facts).len();
+            let air = usize::from(above > 0 && foot > 0);
+            above + air + foot <= usize::from(area.height)
+        }
         Rail::Strip => strip_columns(facts, went, counted) <= usize::from(area.width),
     }
 }

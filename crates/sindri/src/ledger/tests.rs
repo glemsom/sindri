@@ -549,6 +549,19 @@ fn frame() -> Facts {
     }
 }
 
+/// [`frame`] with a run's spend, which is the only fact the foot says.
+fn spent() -> Facts {
+    Facts {
+        spend: Usage {
+            input: Some(48_200),
+            output: Some(3_100),
+            total: Some(51_300),
+            ..Usage::default()
+        },
+        ..frame()
+    }
+}
+
 /// The one stop that carries a line of the run's own words.
 fn wire_refused() -> Stop {
     Stop::Error(SecretSet::default().redact("the wire went away"))
@@ -794,10 +807,10 @@ fn laid(
         .collect()
 }
 
-/// The screen's rows on `area`, each read as the row of the band it is drawn on, the column
+/// The rows a shape lays on `area`, each read as the row of the band it is drawn on, the column
 /// each of its parts starts at, and the glyphs they draw.
-fn screen(facts: &Facts, area: Rect) -> Vec<(u16, Vec<(u16, String)>)> {
-    rows(facts, Shape::Screen, area, None)
+fn placed(facts: &Facts, shape: Shape, area: Rect) -> Vec<(u16, Vec<(u16, String)>)> {
+    rows(facts, shape, area, None)
         .iter()
         .map(|row| {
             (
@@ -820,7 +833,7 @@ fn screen(facts: &Facts, area: Rect) -> Vec<(u16, Vec<(u16, String)>)> {
 /// The screen's rows as a reader sees them: the glyphs of each row, trimmed, and a rule across
 /// the row stated as the rule it is rather than as its eighty glyphs.
 fn read(facts: &Facts, area: Rect) -> Vec<String> {
-    screen(facts, area)
+    placed(facts, Shape::Screen, area)
         .into_iter()
         .map(|(_, parts)| {
             let glyphs: Vec<&str> = parts.iter().map(|(_, glyphs)| glyphs.as_str()).collect();
@@ -1003,7 +1016,7 @@ fn a_block_is_drawn_whole_and_what_the_band_cannot_hold_is_counted_under_its_las
     );
     let area = band(120, 12);
 
-    let laid = screen(&facts, area);
+    let laid = placed(&facts, Shape::Screen, area);
     let names: Vec<(&str, u16)> = laid
         .iter()
         .filter_map(|(_, parts)| match parts.as_slice() {
@@ -1054,7 +1067,7 @@ fn a_band_wide_enough_for_one_column_draws_one_however_wide_it_is() {
                  narrow a fact: {rows:?}"
         );
         assert_eq!(
-            screen(&facts, band(width, 54))
+            placed(&facts, Shape::Screen, band(width, 54))
                 .iter()
                 .filter_map(|(_, parts)| match parts.as_slice() {
                     [(_, glyphs)] if glyphs == "session" => Some(()),
@@ -1413,7 +1426,7 @@ fn the_screen_names_a_block_and_lays_a_row_for_each_fact_with_its_value_on_the_h
     };
 
     assert_eq!(
-        screen(&facts, band(81, 40)),
+        placed(&facts, Shape::Screen, band(81, 40)),
         [
             (0, stated(&[(0, "run")])),
             (1, stated(&[(0, "wire      "), (10, "anthropic")])),
@@ -1465,6 +1478,79 @@ fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_air_between_two() 
         rules.is_empty(),
         "the rail draws a rule on rows {rules:?}: the blocks are parted by air, and the \
              column's only rules are the one under the face and the shadow under its last row"
+    );
+}
+
+#[test]
+fn the_ledgers_foot_says_what_the_run_spent_on_the_frames_last_rows() {
+    let rows = placed(&spent(), Shape::Ledger, band(COLUMNS, 24));
+
+    assert_eq!(
+        &rows[rows.len() - 3..],
+        [
+            (21, stated(&[(0, "input     "), (27, "48.2k")])),
+            (22, stated(&[(0, "output    "), (28, "3.1k")])),
+            (23, stated(&[(0, "total     "), (27, "51.3k")])),
+        ],
+        "the spend stands on the band's last three rows, read from the top down, with the total \
+             on the frame's own floor"
+    );
+}
+
+#[test]
+fn the_foot_is_parted_from_the_blocks_above_it_by_one_row_of_air() {
+    let rows = placed(&spent(), Shape::Ledger, band(COLUMNS, 21));
+
+    assert_eq!(
+        rows[16],
+        (16, stated(&[(0, "temp      "), (10, "…/9f2c7a41/tmp")])),
+        "the blocks above the foot end on row 16, as they do on a rail that knows no spend"
+    );
+    assert_eq!(
+        rows[17],
+        (18, stated(&[(0, "input     "), (27, "48.2k")])),
+        "and the foot takes the band's last three rows from row 18, so the row above it is the \
+             air that parts the two"
+    );
+}
+
+#[test]
+fn a_band_with_no_room_for_the_foot_keeps_the_total_and_counts_the_two_it_gave_up() {
+    let rows = placed(&spent(), Shape::Ledger, band(COLUMNS, 20));
+
+    assert_eq!(
+        rows[17],
+        (17, stated(&[(0, "+2 more")])),
+        "a band with room for one row of the spend counts the two it gave up under the blocks"
+    );
+    assert_eq!(
+        rows[18],
+        (19, stated(&[(0, "total     "), (27, "51.3k")])),
+        "and keeps the total on its floor, because that is the fact a reader glances at"
+    );
+}
+
+#[test]
+fn a_full_rail_keeps_the_foot_on_the_band_it_just_fits() {
+    let rows = placed(&run(), Shape::Ledger, band(COLUMNS, 24));
+
+    assert_eq!(
+        rows.last(),
+        Some(&(23, stated(&[(0, "total     "), (27, "51.3k")]))),
+        "every fact a frame can hold and a spend beside them leave the total on the floor, so the \
+         foot costs the blocks above it no row they held"
+    );
+}
+
+#[test]
+fn a_ledger_that_knows_no_spend_gives_the_rows_at_its_foot_back_to_air() {
+    let rows = laid(&frame(), Shape::Ledger, band(COLUMNS, 24), None);
+
+    assert_eq!(
+        rows.last(),
+        Some(&stated(&[(0, "temp      "), (10, "…/9f2c7a41/tmp")])),
+        "a rail that knows no spend draws no row at its foot: the block it ends on is the last \
+             row it lays"
     );
 }
 
@@ -1593,7 +1679,9 @@ fn no_row_is_laid_past_the_band_it_is_drawn_in() {
             Rail::Strip => width,
         };
         for height in 1..=20 {
-            assert_laid_inside(&frame(), rail.into(), band(room, height), room);
+            for facts in [frame(), spent(), run()] {
+                assert_laid_inside(&facts, rail.into(), band(room, height), room);
+            }
         }
     }
 }
@@ -1622,51 +1710,85 @@ fn assert_laid_inside(facts: &Facts, shape: Shape, area: Rect, room: u16) {
 }
 
 #[test]
-fn the_share_is_the_ledgers_columns_beside_the_transcript_or_the_strips_bottom_row() {
+fn the_rail_holds_the_frames_right_edge_to_its_floor_and_takes_no_row_of_the_transcript() {
+    let area = band(120, 40);
+    let share = split(&frame(), area);
     assert_eq!(
-        split(&frame(), band(120, 37)),
-        Share {
-            transcript: band(120 - CEILING, 37),
-            rail: Some((
-                Rail::Ledger,
-                RailBand::of(Rect {
-                    x: 120 - CEILING,
-                    ..band(CEILING, 37)
-                })
-            )),
-        },
-        "a frame wide enough for the rail's ceiling holds a ledger that wide, band high, and \
-             the transcript keeps what is left"
+        share.bands,
+        band(120 - CEILING, 40),
+        "the bands beside a ledger are the frame less the rail's columns, and the frame's own \
+             height"
+    );
+    assert_eq!(share.rail, Some(Rail::Ledger));
+
+    let mut transcript = band(120 - CEILING, 37);
+    assert_eq!(
+        share.rail_band(area, &mut transcript),
+        Some((
+            Rail::Ledger,
+            RailBand::of(Rect {
+                x: 120 - CEILING,
+                ..band(CEILING, 40)
+            })
+        )),
+        "the rail's band is the frame's own floor at its right edge, and a ledger takes no row \
+             of the transcript's band"
     );
     assert_eq!(
-        split(&frame(), band(NARROW, 37)),
-        Share {
-            transcript: band(NARROW - FLOOR, 37),
-            rail: Some((
-                Rail::Ledger,
-                RailBand::of(Rect {
-                    x: NARROW - FLOOR,
-                    ..band(FLOOR, 37)
-                })
-            )),
-        },
+        transcript,
+        band(120 - CEILING, 37),
+        "so the transcript is handed back the band it was laid in"
+    );
+
+    let mut transcript = band(NARROW - FLOOR, 21);
+    assert_eq!(
+        split(&frame(), band(NARROW, 37)).rail_band(band(NARROW, 37), &mut transcript),
+        Some((
+            Rail::Ledger,
+            RailBand::of(Rect {
+                x: NARROW - FLOOR,
+                ..band(FLOOR, 37)
+            })
+        )),
         "and the narrowest frame that holds a ledger is the transcript's own floor beside the \
              rail's"
     );
+}
+
+#[test]
+fn a_strip_takes_the_transcripts_last_row_and_leaves_the_bands_their_columns() {
+    let area = band(NARROW - 1, 24);
+    let share = split(&frame(), area);
     assert_eq!(
-        split(&frame(), band(NARROW - 1, 21)),
-        Share {
-            transcript: band(NARROW - 1, 20),
-            rail: Some((
-                Rail::Strip,
-                RailBand::of(Rect {
-                    y: 20,
-                    height: 1,
-                    ..band(NARROW - 1, 1)
-                })
-            )),
-        },
-        "below that the strip takes the band's bottom row and no columns"
+        share.bands, area,
+        "a frame below the ledger's floor gives the bands every column it holds"
+    );
+    assert_eq!(share.rail, Some(Rail::Strip));
+
+    let mut transcript = band(NARROW - 1, 21);
+    assert_eq!(
+        share.rail_band(area, &mut transcript),
+        Some((
+            Rail::Strip,
+            RailBand::of(Rect {
+                y: 20,
+                height: 1,
+                ..area
+            })
+        )),
+        "below that the strip takes the transcript's band's last row and no columns"
+    );
+    assert_eq!(
+        transcript,
+        band(NARROW - 1, 20),
+        "which is the one row the transcript gives up for it"
+    );
+
+    let mut nothing = band(NARROW - 1, 0);
+    assert_eq!(
+        share.rail_band(area, &mut nothing),
+        None,
+        "and a band with no row to give hands the strip none"
     );
 }
 
@@ -1716,14 +1838,45 @@ fn a_picture_larger_than_the_band_is_cut_to_it_rather_than_laid_outside_the_rail
 }
 
 #[test]
-fn a_frame_that_knows_no_fact_leaves_the_whole_band_to_the_transcript() {
+fn a_frame_that_knows_no_fact_leaves_the_whole_frame_to_the_bands() {
+    let area = band(120, 37);
     assert_eq!(
-        split(&Facts::default(), band(120, 37)),
+        split(&Facts::default(), area),
         Share {
-            transcript: band(120, 37),
+            bands: area,
             rail: None,
         },
         "a ledger with nothing in it is not drawn, and nothing narrows for it"
+    );
+    let mut transcript = area;
+    assert_eq!(
+        Share {
+            bands: area,
+            rail: None
+        }
+        .rail_band(area, &mut transcript),
+        None,
+        "and a frame with no rail cuts no band of its own"
+    );
+    assert_eq!(transcript, area, "so the transcript keeps the whole frame");
+}
+
+#[test]
+fn a_taller_band_keeps_the_blocks_where_they_stood_and_lays_the_foot_on_its_floor() {
+    let frame_high = placed(&spent(), Shape::Ledger, band(COLUMNS, 40));
+    let band_high = placed(&spent(), Shape::Ledger, band(COLUMNS, 37));
+    let floor = |rows: &[(u16, Vec<(u16, String)>)]| rows.last().map(|(row, _)| *row);
+
+    assert_eq!(
+        &frame_high[..17],
+        &band_high[..17],
+        "the rows a rail is handed past the blocks it holds are air: every block keeps the row \
+             it stood on"
+    );
+    assert_eq!(
+        (floor(&frame_high), floor(&band_high)),
+        (Some(39), Some(36)),
+        "and the foot stands on the floor of the band it is handed rather than under the blocks"
     );
 }
 
@@ -1776,8 +1929,12 @@ fn a_wide_frame_draws_the_whole_served_name_where_the_narrowest_ledger_cuts_it_t
 /// The model's value as a frame `frame` columns wide draws it, read off the rail beside the
 /// transcript.
 fn model_drawn(facts: &Facts, frame: u16) -> String {
-    let share = split(facts, band(frame, 24));
-    let (shape, rail) = share.rail.expect("a rail in a frame that knows a fact");
+    let area = band(frame, 24);
+    let share = split(facts, area);
+    let mut transcript = share.bands;
+    let (shape, rail) = share
+        .rail_band(area, &mut transcript)
+        .expect("a rail in a frame that knows a fact");
     rows(facts, shape.into(), rail.facts, None)
         .iter()
         .flat_map(Row::parts)
@@ -1814,8 +1971,8 @@ fn the_width_a_frame_loses_its_ledger_at_is_the_rails_floor_beside_the_transcrip
 fn the_transcript_moves_a_column_at_a_time_and_gives_up_the_rail_only_where_the_shape_changes() {
     let mut crossing = None;
     for width in 21..=200u16 {
-        let narrow = split(&frame(), band(width - 1, 40)).transcript.width;
-        let wide = split(&frame(), band(width, 40)).transcript.width;
+        let narrow = split(&frame(), band(width - 1, 40)).bands.width;
+        let wide = split(&frame(), band(width, 40)).bands.width;
         if Rail::of(width - 1) != Rail::of(width) {
             crossing = Some((width, narrow, wide));
             continue;
@@ -1848,10 +2005,13 @@ fn the_transcript_moves_a_column_at_a_time_and_gives_up_the_rail_only_where_the_
 }
 
 #[test]
-fn the_ledger_gives_facts_up_in_the_sacrifice_order_and_the_sandbox_never_goes() {
+fn the_ledger_gives_the_foot_up_first_and_the_sandbox_never_goes() {
     assert_eq!(
         SACRIFICE.map(Kind::label),
         [
+            "input",
+            "output",
+            "total",
             "temp",
             "cache",
             "session",
@@ -1865,7 +2025,8 @@ fn the_ledger_gives_facts_up_in_the_sacrifice_order_and_the_sandbox_never_goes()
             "model",
             "state"
         ],
-        "the sacrifice order, the first to go first, and the state the last fact it lets go"
+        "the sacrifice order, the first to go first: the foot, then every block above it, and \
+             the state the last fact it lets go"
     );
     assert!(
         !SACRIFICE.contains(&Kind::Sandbox),
