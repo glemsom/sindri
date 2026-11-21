@@ -1531,10 +1531,9 @@ fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
         drawn.text()
     );
 
-    // A draft as wide as the room the band beside the rail leaves it: the frame's columns less
-    // the rail's, and the two the gutter is set in.
-    let band = COLS - Rail::columns(COLS);
-    let room = band - GUTTER;
+    // A draft as wide as the room the frame leaves it: every column of it less the two the
+    // gutter is set in.
+    let room = COLS - GUTTER;
     let draft = format!("\u{1b}[200~{}\u{1b}[201~", "x".repeat(usize::from(room)));
     pty.type_bytes(draft.as_bytes());
 
@@ -1548,8 +1547,8 @@ fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
     let frame = drawn.text();
     assert_eq!(
         placed(&frame).map(|(_, column)| column),
-        Some(band - 1),
-        "a caret past the band's last column waits on that column rather than off the frame: \
+        Some(COLS - 1),
+        "a caret past the band's last column waits on the frame's margin rather than off it: \
          {frame:?}"
     );
 
@@ -3637,8 +3636,8 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     );
     assert_eq!(
         u32::from(width),
-        u32::from(COLS - Rail::columns(COLS)),
-        "and it covers the columns the bands were given beside the rail and not the frame's own"
+        u32::from(COLS),
+        "and it covers the frame's own columns, with no rail beside the band"
     );
     assert_eq!(
         covers(&bytes, placed).1,
@@ -3673,14 +3672,15 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
          the transcript's edge rather than being parted from it"
     );
     assert_eq!(
-        rows, ROWS,
-        "and down every row of the frame, from its first to the shadow at its floor on row \
-         {band}, rather than stopping where the composer's band starts"
+        rows,
+        band - 1,
+        "and down every row above the composer's band, from the frame's first to the row {band} \
+         its own starts on, so the rail's shadow closes it and no row past it is the rail's"
     );
     assert!(
         leaves_the_cursor(&bytes, rail) && leaves_the_cursor(&bytes, placed),
         "and placing a plane leaves the cursor where the band starts: a placement that moved it \
-         would scroll the screen the plane shades, and the rail's own is as tall as that screen"
+         would scroll the screen the plane shades"
     );
 
     pty.type_bytes(&[0x11]);

@@ -37,9 +37,9 @@ refused at 120x40
 31 |▏ fn main() {                                                                                                           | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:111
 32 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
 33 |▏    │row.paint(area, buffer);                                                                                          | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:105
-34 |▏ }                                                                                                                     | dim:2 plain:118
-35 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
-36 |  cannot create the sandbox: bubblewrap is on PATH                                                                      | muted:50 plain:70
-37 |                                                                            input                                  48.2k| plain:76 dim:10 plain:34
-38 | ›why does the retry test fail                                              output                                  3.1k| dim:1 accent:1 plain:74 dim:10 plain:34
-39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline   total                                  51.3k| plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:3 dim:10 plain:34
+34 |▏ }                                                                         input                                  48.2k| dim:2 plain:74 dim:10 plain:34
+35 |✗ error                                                                     output                                  3.1k| err:1 plain:1 dim:5 plain:69 dim:10 plain:34
+36 |  cannot create the sandbox: bubblewrap is on PATH                          total                                  51.3k| muted:50 plain:26 dim:10 plain:34
+37 |                                                                                                                        | plain:120
+38 | ›why does the retry test fail                                                                                          | dim:1 accent:1 plain:118
+39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47
