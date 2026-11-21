@@ -174,7 +174,7 @@ impl Witness for Watching {
         self.began += 1;
     }
 
-    fn ended(&mut self, ended: &Turn, _state: &State) {
+    fn ended(&mut self, ended: &Turn) {
         self.ended.push(ended.turn);
     }
 
@@ -188,17 +188,19 @@ impl Witness for Watching {
     }
 }
 
-/// The turn each telling of one kind named, in the order the run told them: the ones it asked,
-/// or the ones it waited on.
-fn told_turns(watching: &Watching, asking: bool) -> Vec<u32> {
-    watching
-        .told
-        .iter()
-        .filter_map(|told| match (told, asking) {
-            (Told::Asking { turn }, true) | (Told::Waiting { turn }, false) => Some(*turn),
-            _ => None,
-        })
-        .collect()
+/// The turns the run told, split into the ones it asked and the ones it waited on, each in the
+/// order it said them.
+fn told_turns(watching: &Watching) -> (Vec<u32>, Vec<u32>) {
+    let mut asking = Vec::new();
+    let mut waiting = Vec::new();
+    for told in &watching.told {
+        match told {
+            Told::Asking { turn } => asking.push(*turn),
+            Told::Waiting { turn } => waiting.push(*turn),
+            Told::Idle | Told::Stopped { .. } => {}
+        }
+    }
+    (asking, waiting)
 }
 
 #[test]
@@ -270,13 +272,14 @@ fn a_run_of_three_asking_turns_tells_the_runs_own_turns_never_renumbered() {
 
     run.drive(&mut Transcript::default(), &mut watching);
 
+    let (asking, waiting) = told_turns(&watching);
     assert_eq!(
-        told_turns(&watching, true),
+        asking,
         [1, 2, 3],
         "each turn is told as the run's own, counted from one"
     );
     assert_eq!(
-        told_turns(&watching, false),
+        waiting,
         [1, 2, 3],
         "and every waiting turn is the turn that asked, renumbered by nothing"
     );

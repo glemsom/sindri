@@ -373,6 +373,23 @@ fn titles(stream: &str) -> Vec<&str> {
         .collect()
 }
 
+/// Types `prompt` into the frame and sends it: the caret is read where the band's two-column gutter
+/// puts it, so the bytes have reached the composer before the carriage return does — one arriving with
+/// more of its burst is a paste's line break and sends nothing.
+fn send_prompt(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
+    let column =
+        u16::try_from(prompt.chars().count() + 2).expect("a prompt narrower than the frame");
+    pty.type_bytes(prompt.as_bytes());
+    assert!(
+        drawn.wait_until(|stream| frame::read(stream, COLS, ROWS)
+            .caret()
+            .is_some_and(|(_, at)| at == column)),
+        "{prompt:?} is in the composer: {:?}",
+        text(&drawn.bytes())
+    );
+    pty.type_bytes(b"\r");
+}
+
 fn sequences(stream: &str) -> Vec<&str> {
     stream
         .match_indices("\x1b]7501;")
@@ -586,18 +603,7 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
         "the frame is up: {:?}",
         text(&drawn.bytes())
     );
-    // A prompt typed, then `Enter` alone: a carriage return arriving with more of its burst is a paste's
-    // line break and sends nothing. No `?` in the draft either: that key opens a screen.
-    pty.type_bytes(b"triage this");
-    assert!(
-        drawn.wait_until(|stream| frame::read(stream, COLS, ROWS)
-            .caret()
-            .is_some_and(|(_, column)| column == 13)),
-        "eleven glyphs typed past the band's two-column gutter, so the terminal's cursor is \
-         placed one column past the last: {:?}",
-        text(&drawn.bytes())
-    );
-    pty.type_bytes(b"\r");
+    send_prompt(&mut pty, &drawn, "triage this");
     wire.wait_for_request();
 
     assert!(
@@ -671,15 +677,7 @@ fn a_frame_says_in_its_title_the_phase_its_run_was_handed() {
         "the frame is up: {:?}",
         text(&drawn.bytes())
     );
-    pty.type_bytes(b"list the files");
-    assert!(
-        drawn.wait_until(|stream| frame::read(stream, COLS, ROWS)
-            .caret()
-            .is_some_and(|(_, column)| column == 16)),
-        "fourteen glyphs typed past the band's two-column gutter: {:?}",
-        text(&drawn.bytes())
-    );
-    pty.type_bytes(b"\r");
+    send_prompt(&mut pty, &drawn, "list the files");
     wire.wait_for_request();
 
     assert!(

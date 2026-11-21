@@ -390,13 +390,12 @@ impl Phase {
         }
     }
 
-    /// Whether a run has ended in this phase, an answer or a failure: the two a terminal that is
-    /// nobody's screen is notified of.
+    /// Whether a run has ended in this phase, an answer or a failure: the two a terminal nobody is
+    /// watching raises a notification for.
     pub fn ended(self) -> bool {
         matches!(self, Phase::Done | Phase::Error)
     }
 
-    /// Whether a run is asking the model and streaming what it says: the phase a terminal marks.
     pub fn working(self) -> bool {
         matches!(self, Phase::Working)
     }

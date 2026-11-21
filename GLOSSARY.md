@@ -42,10 +42,10 @@ band: the record writes one for every turn the run took and the drawing leaves i
 _Avoid_: Step, iteration, wave
 
 **Witness**:
-What a **Run**'s loop reports to: each finished **Turn**, and the state the run settled on with the
-turn a conversation keeps for it and what its turns spent, so the **Launch** writes the record with it
-and hands the front end the facts. The loop is the run's own, so a launch and a test are driven by the
-same one.
+What a **Run**'s loop reports to: the phase it is in and the turn it is on as it goes, each finished
+**Turn**, and the state the run settled on with the turn a conversation keeps for it and what its turns
+spent, so the **Launch** writes the record with it and hands the front end the facts. The loop is the
+run's own, so a launch and a test are driven by the same one.
 _Avoid_: Listener, observer, callback, subscriber
 
 **Answer**:
@@ -82,10 +82,10 @@ _Avoid_: Context limit, token budget, max context
 **Status**:
 The document a session publishes about its run: the phase, one redacted line of the run's own words,
 the turn the run is on, and the workspace's name. The line is never the command, the prompt or the
-answer, and a report about a run is never the run's own word about itself — that is **State**'s
-alone. One is appended to `status.json` as the run goes and reported off the terminal too: the launch
-tells it from the phase and the turn its run holds, and hands the front end the same word, so the file
-and the terminal cannot disagree.
+answer, and the stop in a report is never the run's own claim about itself — that is **State**'s
+alone. One is appended to `status.json` as the run goes and reported off the terminal too: the run says
+the phase it is in and the turn it is on, and the launch writes that word and hands the front end the
+same one, so the file and the terminal cannot disagree.
 _Avoid_: Progress, notice, indicator
 
 **Phase**:
