@@ -44,8 +44,9 @@ fn a_row_of_one_run_draws_the_gutter_then_the_words_in_the_runs_ink() {
 
     assert_eq!(
         glyphs(&opened, 0),
-        "\u{203a} the draft",
-        "the sigil opens the row and the words follow it, so a draft begins where an answer does"
+        " \u{203a}the draft",
+        "the sigil stands one blank past the row's first column and the words follow it, so a \
+         draft's first glyph sits in the column an answer's prose starts at"
     );
     assert_eq!(
         inks(&opened, 0, &PALETTE),
@@ -83,7 +84,7 @@ fn a_row_of_several_runs_draws_each_in_the_ink_it_carries_in_order() {
 
     assert_eq!(
         glyphs(&buffer, 0),
-        "\u{203a} one two three",
+        " \u{203a}one two three",
         "the runs stand side by side in the order the row is handed them, with no column between them"
     );
     assert_eq!(
@@ -114,7 +115,7 @@ fn a_run_the_row_has_no_room_for_is_cut_at_the_edge_and_the_run_after_it_is_drop
 
     assert_eq!(
         glyphs(&buffer, 0),
-        "\u{203a} abcdefgh",
+        " \u{203a}abcdefgh",
         "the run is drawn up to the row's last column and the rest of it is dropped"
     );
     assert_eq!(
@@ -132,10 +133,18 @@ fn a_run_the_row_has_no_room_for_is_cut_at_the_edge_and_the_run_after_it_is_drop
 #[test]
 fn a_lit_gutter_draws_the_sigil_in_the_accent_and_the_other_two_in_the_dim_ink() {
     let area = Rect::new(0, 0, 3, 1);
-    for (gutter, glyphs_drawn, ink) in [
-        (Gutter::Lit, "\u{203a} a", Ink::Accent),
-        (Gutter::Open, "\u{203a} a", Ink::Dim),
-        (Gutter::Blank, "  a", Ink::Dim),
+    for (gutter, glyphs_drawn, inks_drawn) in [
+        (
+            Gutter::Lit,
+            " \u{203a}a",
+            &[(Ink::Dim, 1), (Ink::Accent, 1), (Ink::Plain, 1)][..],
+        ),
+        (
+            Gutter::Open,
+            " \u{203a}a",
+            &[(Ink::Dim, 2), (Ink::Plain, 1)][..],
+        ),
+        (Gutter::Blank, "  a", &[(Ink::Dim, 2), (Ink::Plain, 1)][..]),
     ] {
         let mut buffer = Buffer::empty(area);
         row(&mut buffer, area, gutter, &[("a", Ink::Plain)], &PALETTE);
@@ -143,11 +152,11 @@ fn a_lit_gutter_draws_the_sigil_in_the_accent_and_the_other_two_in_the_dim_ink()
         assert_eq!(
             glyphs(&buffer, 0),
             glyphs_drawn,
-            "{gutter:?} draws the column it names"
+            "{gutter:?} draws the gutter it names"
         );
         assert_eq!(
             inks(&buffer, 0, &PALETTE),
-            [(ink, 2), (Ink::Plain, 1)],
+            inks_drawn,
             "{gutter:?} is drawn in the one ink it carries, and only a lit one is the accent"
         );
     }

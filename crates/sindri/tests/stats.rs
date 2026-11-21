@@ -109,12 +109,12 @@ fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
          they will return to: {:?}",
         rows[last]
     );
-    let edge = last - usize::from(MIN_ROWS);
+    let head = last - usize::from(MIN_ROWS) + 1;
     assert!(
-        rows[edge].starts_with('┌') && rows[last - 1].starts_with('└'),
-        "and so is the composer's band, its edge and its foot opening where the gutter reaches \
+        rows[head..=last].iter().all(|row| !row.trim().is_empty()),
+        "and so is the composer's band, its head and its hints opening where the gutter reaches \
          them: {:?}",
-        (&rows[edge], &rows[last - 1])
+        (&rows[head], &rows[last])
     );
     assert!(
         rows.iter().any(|row| row.contains("╭─ /stats")),

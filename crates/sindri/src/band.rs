@@ -9,7 +9,8 @@ use crate::pen::{self, Clip};
 use crate::rows::{INDENT, SIGIL};
 
 /// The gutter a row of the band opens with: `Lit` is the sigil of the row the caret waits in, `Open`
-/// the sigil of a row a prompt's words begin on, and `Blank` the indent under one.
+/// the sigil of a row a prompt's words begin on, and `Blank` the indent under one. Two columns every
+/// row spends, so the draft's words and a queued prompt's begin where an answer's prose does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Gutter {
     Lit,
@@ -26,13 +27,20 @@ pub fn row(
     runs: &[(&str, Ink)],
     palette: &Palette,
 ) {
-    let (column, ink) = match gutter {
-        Gutter::Lit => (SIGIL, Ink::Accent),
-        Gutter::Open => (SIGIL, Ink::Dim),
-        Gutter::Blank => (INDENT, Ink::Dim),
+    let sigil = match gutter {
+        Gutter::Lit => Some(Ink::Accent),
+        Gutter::Open => Some(Ink::Dim),
+        Gutter::Blank => None,
     };
-    let mut spans: Vec<(&str, Ink)> = Vec::with_capacity(runs.len().saturating_add(1));
-    spans.push((column, ink));
+    let mut spans: Vec<(&str, Ink)> = Vec::with_capacity(runs.len().saturating_add(2));
+    match sigil {
+        Some(ink) => {
+            // The blank column and then the sigil, which is where a prompt's own sigil stands.
+            spans.push((" ", Ink::Dim));
+            spans.push((SIGIL.trim_end(), ink));
+        }
+        None => spans.push((INDENT, Ink::Dim)),
+    }
     spans.extend_from_slice(runs);
     pen::write(
         buffer,

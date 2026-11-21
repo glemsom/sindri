@@ -3,27 +3,27 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 queue-long at 120x24
-00 |  code      │ behind a bar, highlighted                                     wire      anthropic                         | plain:11 dim:3 plain:62 dim:10 plain:34
-01 |  table     │ columns joined by a bar                                       model     claude-sonnet-4-5-20250929        | plain:11 dim:3 plain:62 dim:10 plain:34
-02 |                                                                            think     high                              | plain:76 dim:10 plain:34
-03 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
-04 |⋯ 1 call · 31 ms                                                            turns                               6 /  250| dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
-05 |  A row is one line                                                         ctx                      █░░░░░ 48.2k / 200k| plain:2 plain+bold:17 plain:57 dim:10 plain:16 dim:5 plain:13
-06 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
-07 |                                                                            workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
-08 |  A row says the exit code and not the command, because the verdict is a    branch    spec/1-capability                 | plain:76 dim:10 plain:34
-09 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
-10 |                                                                            skills                                     2| plain:76 dim:10 plain:34
-11 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
-12 |▏ fn main() {                                                               sandbox   bwrap                             | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:67 dim:10 plain:34
-13 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
-14 |▏    │row.paint(area, buffer);                                              session   9f2c7a41                          | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:61 dim:10 plain:34
-15 |▏ }                                                                         +2 more                                     | dim:2 plain:74 muted:7 plain:37
-16 |┌━─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
-17 |│› and this one while they wait                                                                                        │| dim:1 accent:2 plain:116 dim:1
-18 |│  4 more queued                                                                                                       │| dim:16 plain:103 dim:1
-19 |│› then the row that counts it                                                                                         │| dim:30 plain:89 dim:1
-20 |│› then the caret that stays inside it                                                                                 │| dim:38 plain:81 dim:1
-21 |│› and then the report                                                                                                 │| dim:22 plain:97 dim:1
-22 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120
+00 |  heading   │ in the answer's own gutter                                    wire      anthropic                         | plain:11 dim:3 plain:62 dim:10 plain:34
+01 |  code      │ behind a bar, highlighted                                     model     claude-sonnet-4-5-20250929        | plain:11 dim:3 plain:62 dim:10 plain:34
+02 |  table     │ columns joined by a bar                                       think     high                              | plain:11 dim:3 plain:62 dim:10 plain:34
+03 |                                                                                                                        | plain:120
+04 |┃›what does a row of the band say?                                          turns                               6 /  250| dim:1 plain:75 dim:10 plain:34
+05 |⋯ 1 call · 31 ms                                                            ctx                      █░░░░░ 48.2k / 200k| dim:1 plain:1 dim:14 plain:60 dim:10 plain:16 dim:5 plain:13
+06 |  A row is one line                                                         cache                                    88%| plain:2 plain+bold:17 plain:57 dim:10 plain:34
+07 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
+08 |                                                                            workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
+09 |  A row says the exit code and not the command, because the verdict is a    branch    spec/1-capability                 | plain:76 dim:10 plain:34
+10 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
+11 |                                                                            skills                                     2| plain:76 dim:10 plain:34
+12 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
+13 |▏ fn main() {                                                               sandbox   bwrap                             | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:67 dim:10 plain:34
+14 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
+15 |▏    │row.paint(area, buffer);                                              session   9f2c7a41                          | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:61 dim:10 plain:34
+16 |▏ }                                                                         temp      …/sindri/sessions/9f2c7a41/tmp    | dim:2 plain:74 dim:10 plain:34
+17 |━                                                                                                                       | accent+faint:1 plain:119
+18 | ›and this one while they wait                                                                                          | dim:1 accent:1 plain:118
+19 |  4 more queued                                                                                                         | dim:15 plain:105
+20 | ›then the row that counts it                                                                                           | dim:29 plain:91
+21 | ›then the caret that stays inside it                                                                                   | dim:37 plain:83
+22 | ›and then the report                                                                                                   | dim:21 plain:99
 23 |Ctrl-C cancel · ↑ 7 queued · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                               | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:31

@@ -180,18 +180,17 @@ off reserves no row.
 _Avoid_: Logo, avatar, mascot, icon
 
 **Band**:
-A strip of rows the frame shares out — the **Transcript band**, the **Composer**'s, the row that
-says the frame stands off the tail, and the **Footer**'s — each drawn in the rows it was given
-and never past them. What a band cannot hold it counts: a draft's rows past the composer's
-ceiling, and a queue's prompts past the composer's rows under the draft. A fence it never
-reflows, and the **Caret** is no cell of it.
+A strip of rows the frame shares out — the **Transcript band**, the **Composer**'s, and the row
+that says the frame stands off the tail — each drawn in the rows it was given and never past them.
+The **Composer**'s band is raised as one surface, its **Footer** on its last row. What a band
+cannot hold it counts: a draft's rows past the composer's ceiling, and a queue's prompts past the
+composer's rows under the draft. A fence it never reflows, and the **Caret** is no cell of it.
 _Avoid_: Region, pane, panel, viewport
 
 **Transcript band**:
-The band every other strip is taken out of — the **Composer**'s, the row that says the frame
-stands off the tail, and the **Footer**'s — and the band the **Rail** takes its share of. The
-**Transcript** is drawn in it with the row the reader stands at, and the **Splash screen** until
-a prompt has been asked for.
+The band every other strip is taken out of — the **Composer**'s and the row that says the frame
+stands off the tail — and the band the **Rail** takes its share of. The **Transcript** is drawn in
+it with the row the reader stands at, and the **Splash screen** until a prompt has been asked for.
 _Avoid_: Main window, main view, content area, viewport, scrollback, well
 
 **Rail**:
@@ -261,10 +260,10 @@ opens with. A draft that names no file and opens with no command bills nothing.
 _Avoid_: Count, tally, stats
 
 **Draft count**:
-The **Bill**, drawn on the far corner of the **Composer**'s band: `1 file`, `2 files`, `1 command`,
-and no span at all for a draft billing nothing. It is a count of the draft and never of the run's
-facts, it follows every edit, and a frame too narrow for the whole of it draws none of it — the rule
-keeps the row.
+The **Bill**, drawn on the far edge of the **Composer**'s head row: `1 file`, `2 files`,
+`1 command`, and no span at all for a draft billing nothing. It is a count of the draft and never of
+the run's facts, it follows every edit, and a frame too narrow for the whole of it draws none of it —
+the head keeps the row.
 _Avoid_: Tokens, stats, progress
 
 **Layout**:
@@ -275,10 +274,11 @@ frame a press is answered from.
 _Avoid_: Geometry, arrangement, tiling, regions
 
 **Footer**:
-The frame's last row: the hints of what a key does that this frame can honour, most valuable first,
-each giving up its tail as the row narrows, and a key the frame cannot answer not named at all. An
-idle draft names sending, the commands, the files and the keys; a run in flight names cancelling and
-never sending; and a queue behind the draft is counted where the key that recalls one stands.
+The last row of the **Composer**'s band: the hints of what a key does that this frame can honour,
+most valuable first, each giving up its tail as the row narrows, and a key the frame cannot answer
+not named at all. An idle draft names sending, the commands, the files and the keys; a run in flight
+names cancelling and never sending; and a queue behind the draft is counted where the key that
+recalls one stands.
 _Avoid_: Status bar, help line, key bar
 
 **Card**:

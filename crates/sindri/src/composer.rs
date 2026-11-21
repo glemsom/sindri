@@ -2,28 +2,29 @@ use sindri_core::config::Touched;
 
 use crate::pen;
 
-/// The band's floor: its rule, the one row a draft of a single line sits on, and its foot.
+/// The band's floor: its head, the one row a draft of a single line sits on, and its footer under
+/// it.
 pub const MIN_ROWS: u16 = 3;
 
-/// The band's ceiling: its rule and its foot, the air inside each of them and the rows of draft it
-/// showed before it had any air.
+/// The band's ceiling: its head and its footer, the air inside each of them and the rows of draft
+/// it showed before it had any air.
 pub const MAX_ROWS: u16 = DRAFT_ROWS + 2 * (AIR_ROWS + 1);
 
-/// The blank row a band keeps inside each end of its box once the draft wraps, so no glyph of a
-/// draft of many rows touches the rule above it or the foot under it.
+/// The blank row a band keeps inside each end once the draft wraps, so no glyph of a draft of many
+/// rows touches the head above it or the footer under it.
 pub const AIR_ROWS: u16 = 1;
 
 /// The rows of draft a band at its ceiling draws: the window a draft has had since before the band
 /// kept air in its ends.
 pub const DRAFT_ROWS: u16 = 5;
 
-/// The rows a band spends on its two ends — its rule above the draft's rows and its foot below them
-/// — by the height the draft is drawn at.
+/// The rows a band spends on its two ends — its head above the draft's rows and its footer below
+/// them — by the height the draft is drawn at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Ends {
-    /// The rule, and the air under it once the draft wraps.
+    /// The head, and the air under it once the draft wraps.
     pub above: u16,
-    /// The air over the foot once the draft wraps, and the foot.
+    /// The air over the footer once the draft wraps, and the footer.
     pub below: u16,
 }
 
@@ -134,8 +135,8 @@ impl Composer {
     }
 
     /// The columns the frame gives the draft's words: the band's width less the gutter its sigil
-    /// stands in and the upright either side of the box. The frame hands it over before the band is
-    /// placed, so a draft wraps at the width it is drawn at and at no other.
+    /// stands in. The frame hands it over before the band is placed, so a draft wraps at the width it
+    /// is drawn at and at no other.
     pub fn set_room(&mut self, room: u16) {
         self.room = Some(room);
     }
@@ -149,8 +150,8 @@ impl Composer {
         Composer::ends_at(self.drawn().len())
     }
 
-    /// The ends a draft of `drawn` rows takes: the rule and the foot alone while it sits on one row,
-    /// and a row of air inside each of them once it wraps.
+    /// The ends a draft of `drawn` rows takes: the head and the footer alone while it sits on one
+    /// row, and a row of air inside each of them once it wraps.
     fn ends_at(drawn: usize) -> Ends {
         match drawn > 1 {
             true => Ends {
@@ -341,8 +342,8 @@ impl Composer {
             Key::Down => Composer::edited(self.down()),
             Key::Home => Composer::edited(self.home()),
             Key::End => Composer::edited(self.end()),
-            // The mark's three keys and the transcript's three are the frame's: a box has no mark to
-            // change and no rows to move.
+            // The mark's three keys and the transcript's three are the frame's: a draft has no mark
+            // to change and no rows to move.
             Key::ShiftUp
             | Key::ShiftDown
             | Key::ShiftLeft

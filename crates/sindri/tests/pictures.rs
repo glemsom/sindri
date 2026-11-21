@@ -1556,7 +1556,7 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
         "at the pixels of the cell it is drawn on"
     );
     let palette = *frame.palette();
-    for row in 0..band.height {
+    for row in 1..band.height {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
             frame.cells()[(x, y)].bg,
@@ -1565,6 +1565,11 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
              cell by cell over it"
         );
     }
+    assert!(
+        (band.x..band.right()).all(|x| frame.cells()[(x, band.y)].bg == palette.edge(Edge::Lit)),
+        "and its head row is claimed in the lit edge over that ground, which is how the light \
+         reads over the band's pixels"
+    );
 }
 
 #[test]
@@ -1823,7 +1828,7 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
 }
 
 #[test]
-fn the_bands_top_rule_reads_back_as_the_accent_edge_over_its_rise() {
+fn the_bands_head_row_reads_back_as_the_lit_edge_over_its_rise() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
@@ -1833,29 +1838,22 @@ fn the_bands_top_rule_reads_back_as_the_accent_edge_over_its_rise() {
     assert_eq!(
         ground.area(),
         band,
-        "the rise stands under the band's own rule"
+        "the rise stands under the band's own head row"
     );
-    let edge = palette.accent_edge();
-    let mut ruled = 0;
+    let edge = palette.edge(Edge::Lit);
+    let mut lit = 0;
     for x in band.x..band.right() {
-        if !matches!(
-            frame.cell(x, band.y).symbol(),
-            "\u{2500}" | "\u{250c}" | "\u{2510}"
-        ) {
-            continue;
-        }
         assert_eq!(
-            frame.look(x, band.y),
+            frame.cells()[(x, band.y)].bg,
             edge,
-            "column {x} of the band's top row reads back as the accent edge the rule is drawn in, \
-             and not as an ink the rise under it lent it"
+            "column {x} of the band's head row is claimed in the light the band meets the frame \
+             on, and not as a cell the rise under it lent a tone"
         );
-        ruled += 1;
+        lit += 1;
     }
-    assert!(
-        ruled >= 3,
-        "the band's top row carries its rule and both its corners, and {ruled} cells of it hold \
-         one"
+    assert_eq!(
+        lit, band.width,
+        "every column of the head row is that light, and no glyph of a rule stands on it"
     );
 }
 
@@ -2003,7 +2001,7 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
     let band = plain_frame.told().layout().unwrap().composer;
     assert_eq!(band, picture_frame.told().layout().unwrap().composer);
     let palette = plain_frame.palette();
-    for row in 0..band.height {
+    for row in 1..band.height {
         let x = band.x + band.width / 2;
         let y = band.y + row;
         assert_eq!(
@@ -2013,6 +2011,18 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
         assert_eq!(
             picture_frame.cells()[(x, y)].bg,
             palette.ground(None).bg.unwrap()
+        );
+    }
+    for x in band.x..band.right() {
+        assert_eq!(
+            plain_frame.cells()[(x, band.y)].bg,
+            palette.edge(Edge::Lit),
+            "column {x} of the head row stands on the lit edge where no plane is placed"
+        );
+        assert_eq!(
+            picture_frame.cells()[(x, band.y)].bg,
+            palette.edge(Edge::Lit),
+            "and on the same light over the plane a terminal that places one is handed"
         );
     }
 }
