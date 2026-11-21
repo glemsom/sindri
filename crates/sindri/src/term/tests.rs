@@ -9,6 +9,7 @@ use ratatui::layout::Rect;
 use rustix::termios::{LocalModes, Winsize};
 
 use sindri::capability::{Asked, Capabilities, Question};
+use sindri::composer::Key;
 use sindri::facts::Facts;
 use sindri::ink::{Ink, Look};
 use sindri::link::{Link, Links};
@@ -789,13 +790,7 @@ fn a_frame_reaches_the_terminal_in_one_write() {
 #[test]
 fn the_cell_the_caret_is_placed_in_travels_in_the_one_write_the_cells_do() {
     let writes = Writes::default();
-    let mut canvas = ratatui::Terminal::with_options(
-        Backend::new(writes.clone(), false),
-        ratatui::TerminalOptions {
-            viewport: ratatui::Viewport::Fixed(painted_at()),
-        },
-    )
-    .expect("a canvas over the wire");
+    let mut canvas = canvas_over(&writes, painted_at());
     let mut view = View::of(
         Capabilities::default(),
         Facts::default(),
@@ -834,6 +829,170 @@ fn the_cell_the_caret_is_placed_in_travels_in_the_one_write_the_cells_do() {
         frame.ends_with(&placement),
         "the placement is the last thing written, so it lands on the frame just painted: {frame:?}"
     );
+}
+
+/// A canvas at the shape the test gives it, over a writer that keeps each write apart.
+fn canvas_over(writes: &Writes, area: Rect) -> CanvasOver<Writes> {
+    ratatui::Terminal::with_options(
+        Backend::new(writes.clone(), false),
+        ratatui::TerminalOptions {
+            viewport: ratatui::Viewport::Fixed(area),
+        },
+    )
+    .expect("a canvas over the wire")
+}
+
+/// The writes as the words they carry: a glyph split between two of them reads as no sequence, and
+/// every sequence a frame is written with is ASCII.
+fn carried(writes: &[Vec<u8>]) -> Vec<String> {
+    writes
+        .iter()
+        .map(|write| String::from_utf8_lossy(write).into_owned())
+        .collect()
+}
+
+/// The sequence that places the caret in the cell the frame named, counted from one as the terminal
+/// counts it where the pass counts from none.
+fn placed_in(painted: Painted) -> String {
+    let caret = painted
+        .caret()
+        .expect("a draft takes the keys, so the frame names a cell to place the caret in");
+    format!("\u{1b}[{};{}H", caret.y + 1, caret.x + 1)
+}
+
+fn gives_up_across(frame: &[String], placement: &str) {
+    assert!(
+        frame.len() > 1,
+        "the frame spans more than one write: {} write(s)",
+        frame.len()
+    );
+    assert!(
+        frame[0].starts_with("\u{1b}[?25l"),
+        "the caret is given up before the frame's first byte: {:?}",
+        frame[0]
+    );
+    let given_up: usize = frame
+        .iter()
+        .map(|write| write.matches("\u{1b}[?25l").count())
+        .sum();
+    assert_eq!(
+        given_up, 1,
+        "and given up once for the whole frame, never once per write: {frame:?}"
+    );
+    let (last, before) = frame.split_last().expect("a frame is more than no write");
+    assert!(
+        before.iter().all(|write| !write.contains("\u{1b}[?25h")),
+        "no write the frame spans shows the caret: {before:?}"
+    );
+    assert!(
+        last.contains("\u{1b}[?25h") && last.ends_with(placement),
+        "and the frame's end shows it and places it, on the cell the frame names: {last:?}"
+    );
+}
+
+#[test]
+fn a_frame_too_big_to_hold_gives_the_caret_up_before_its_first_byte_and_places_it_at_its_end() {
+    let writes = Writes::default();
+    let mut canvas = canvas_over(&writes, Rect::new(0, 0, 300, 100));
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default(),
+        Transcript::none(),
+    );
+    view.paste("a draft of mine");
+    let placement = placed_in(paint(&mut canvas, &mut view).expect("a painted frame"));
+    drop(canvas);
+
+    gives_up_across(&carried(&writes.kept()), &placement);
+}
+
+#[test]
+fn a_frame_that_fits_in_one_write_places_the_caret_and_never_gives_it_up() {
+    let writes = Writes::default();
+    let mut canvas = canvas_over(&writes, painted_at());
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default(),
+        Transcript::none(),
+    );
+    view.paste("a draft of mine");
+    let placement = placed_in(paint(&mut canvas, &mut view).expect("a painted frame"));
+    drop(canvas);
+
+    let made = carried(&writes.kept());
+    assert_eq!(
+        made.len(),
+        1,
+        "a frame the buffer holds is the terminal's in one write: {} write(s)",
+        made.len()
+    );
+    let frame = &made[0];
+    assert!(
+        !frame.contains("\u{1b}[?25l"),
+        "and the caret is never given up where it is placed by the one write: {frame:?}"
+    );
+    assert!(
+        frame.contains("\u{1b}[?25h") && frame.ends_with(&placement),
+        "the show and the placement are the last things written, as they were: {frame:?}"
+    );
+}
+
+#[test]
+fn a_frame_that_names_no_caret_leaves_it_hidden_however_many_writes_it_spans() {
+    let writes = Writes::default();
+    let mut canvas = canvas_over(&writes, Rect::new(0, 0, 160, 50));
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default(),
+        Transcript::none(),
+    );
+    view.key(Key::Char('?'));
+    let painted = paint(&mut canvas, &mut view).expect("a painted frame");
+    drop(canvas);
+
+    assert!(
+        painted.caret().is_none(),
+        "the keys card draws no query row, so the frame names no cell for the caret"
+    );
+    let made = carried(&writes.kept());
+    assert!(
+        made.len() > 1,
+        "and a frame this big is the terminal's in more than one write: {} write(s)",
+        made.len()
+    );
+    assert!(
+        made.iter().all(|write| !write.contains("\u{1b}[?25h")),
+        "no write it spans shows the caret: {made:?}"
+    );
+    assert!(
+        made.last().is_some_and(|last| last.contains("\u{1b}[?25l")),
+        "the frame's own last bytes leave it hidden: {made:?}"
+    );
+}
+
+#[test]
+fn the_launchs_first_frame_and_the_frame_a_resize_paints_give_the_caret_up_across_their_writes() {
+    let writes = Writes::default();
+    let mut canvas = canvas_over(&writes, Rect::new(0, 0, 160, 50));
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default(),
+        Transcript::none(),
+    );
+    view.paste("a draft of mine");
+
+    let launch = placed_in(paint(&mut canvas, &mut view).expect("a painted frame"));
+    let launched = carried(&writes.kept()).len();
+    canvas
+        .resize(Rect::new(0, 0, 200, 60))
+        .expect("a canvas the size the window became");
+    let resized = placed_in(paint(&mut canvas, &mut view).expect("a painted frame"));
+    drop(canvas);
+
+    let made = carried(&writes.kept());
+    let (first, after) = made.split_at(launched);
+    gives_up_across(first, &launch);
+    gives_up_across(after, &resized);
 }
 
 /// The bytes a terminal takes in while a frame is written to it, read off a thread of this test's
