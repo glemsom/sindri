@@ -244,7 +244,7 @@ pub struct Painted {
     presses: Vec<Press>,
     drawn: Drawn,
     layout: Option<Layout>,
-    planes: Vec<Shade>,
+    shades: Vec<Shade>,
     caret: Option<Position>,
 }
 
@@ -257,7 +257,7 @@ impl Painted {
             presses: Vec::new(),
             drawn: Drawn::none(),
             layout: None,
-            planes: Vec::new(),
+            shades: Vec::new(),
             caret: None,
         }
     }
@@ -267,10 +267,10 @@ impl Painted {
         self.caret
     }
 
-    /// The shading of the bands this pass places a plane under, which is what it hands the terminal
-    /// for its bands: two passes holding the same shading are the same bands.
-    pub fn planes(&self) -> &[Shade] {
-        &self.planes
+    /// The bands this pass places a plane under, as the shading the terminal is handed for them:
+    /// two passes holding the same shading are the same bands.
+    pub fn shades(&self) -> &[Shade] {
+        &self.shades
     }
 
     /// The destinations this frame named, laid on the rows it drew.
@@ -1237,7 +1237,7 @@ impl View {
     /// every row here and the same pass lays them again; the composer's rows are measured as it draws.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let painted = self.draw(area, buffer);
-        self.planes.hold(painted.planes());
+        self.planes.hold(painted.shades());
         painted
     }
 
@@ -1284,7 +1284,7 @@ impl View {
                 &self.capabilities.palette(),
             ) {
                 under = Some(shade.area());
-                painted.planes.push(shade);
+                painted.shades.push(shade);
             }
             if let (Some(picture), Some(cells)) = (&picture, band.picture) {
                 let cell = self.capabilities.cell();
@@ -1311,7 +1311,7 @@ impl View {
         }
         self.notice_band(layout.notice, buffer, &drawn);
         if let Some(shade) = self.composer_band(layout.composer, layout.queue, buffer) {
-            painted.planes.push(shade);
+            painted.shades.push(shade);
         }
         self.footer(layout.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
@@ -1624,7 +1624,7 @@ impl View {
     /// cell by cell where no plane stands under them, one claim per row, so no cell loses its own ink.
     fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) -> Option<Shade> {
         let palette = self.capabilities.palette();
-        let caret = self.caret(band, queue, None);
+        let caret = self.caret(band, queue, None).map(|(x, _)| x);
         let shade = self
             .capabilities
             .pictures()

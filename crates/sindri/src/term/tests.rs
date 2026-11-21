@@ -1100,9 +1100,9 @@ fn held(shades: &[Shade]) -> Planes {
     images
 }
 
-/// The composer's shading over `area`, with the caret waiting at `caret` where one is given: the
-/// design's own colours, which is the palette a frame nobody told a palette about draws.
-fn composer_at(area: Rect, caret: Option<(u16, u16)>) -> Shade {
+/// The composer's shading over `area`, with the caret waiting in `caret`'s column where one is
+/// given: the design's own colours, which is the palette a frame nobody told a palette about draws.
+fn composer_shade(area: Rect, caret: Option<u16>) -> Shade {
     Shade::composer(area, CellSize::NOMINAL, caret, &Palette::TRUECOLOR).expect("a band to shade")
 }
 
@@ -1121,18 +1121,18 @@ fn rail_shade() -> Shade {
 fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
     let wire = Wire::default();
     let mut backend = Backend::new(wire.clone(), false);
-    let shades = [composer_at(Rect::new(2, 3, 2, 1), None), rail_shade()];
+    let shades = [composer_shade(Rect::new(2, 3, 2, 1), None), rail_shade()];
     let images = held(&shades);
-    backend.planes(&shades, &images).unwrap();
+    backend.shades(&shades, &images).unwrap();
     let placed = wire.drawn().len();
-    backend.planes(&shades, &images).unwrap();
+    backend.shades(&shades, &images).unwrap();
     assert_eq!(
         placed,
         wire.drawn().len(),
         "a paint that changes no band writes no bytes at all"
     );
     let rest = &shades[1..];
-    backend.planes(rest, &held(rest)).unwrap();
+    backend.shades(rest, &held(rest)).unwrap();
     drop(backend);
     let wire = wire.drawn();
     assert_eq!(
@@ -1159,11 +1159,11 @@ fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
 fn a_resized_plane_replaces_the_old_placement_and_a_moved_caret_refreshes_it() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
-    let first = composer_at(Rect::new(2, 3, 2, 1), None);
-    let moved = composer_at(Rect::new(2, 3, 2, 1), Some((3, 3)));
-    let resized = composer_at(Rect::new(1, 5, 3, 2), Some((3, 3)));
+    let first = composer_shade(Rect::new(2, 3, 2, 1), None);
+    let moved = composer_shade(Rect::new(2, 3, 2, 1), Some(3));
+    let resized = composer_shade(Rect::new(1, 5, 3, 2), Some(3));
     for shade in [first, moved, resized] {
-        backend.planes(&[shade], &held(&[shade])).unwrap();
+        backend.shades(&[shade], &held(&[shade])).unwrap();
     }
     drop(backend);
     let wire = String::from_utf8(wire).unwrap();
@@ -1186,23 +1186,18 @@ fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_ar
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
     let area = Rect::new(2, 3, 2, 1);
-    let first = composer_at(area, Some((3, 3)));
-    let finer = Shade::composer(
-        area,
-        CellSize::new(20, 40),
-        Some((3, 3)),
-        &Palette::TRUECOLOR,
-    )
-    .expect("a band to shade");
-    let greys = Shade::composer(area, CellSize::NOMINAL, Some((3, 3)), &Palette::ANSI)
+    let first = composer_shade(area, Some(3));
+    let finer = Shade::composer(area, CellSize::new(20, 40), Some(3), &Palette::TRUECOLOR)
         .expect("a band to shade");
+    let greys =
+        Shade::composer(area, CellSize::NOMINAL, Some(3), &Palette::ANSI).expect("a band to shade");
     assert_eq!(
         (finer.area(), greys.area()),
         (first.area(), first.area()),
         "the band's area stands where it did, and only the cell and the palette moved"
     );
     for shade in [first, finer, greys] {
-        backend.planes(&[shade], &held(&[shade])).unwrap();
+        backend.shades(&[shade], &held(&[shade])).unwrap();
     }
     drop(backend);
     let wire = String::from_utf8(wire).unwrap();
@@ -1221,11 +1216,11 @@ fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_ar
 fn a_whole_frame_clear_drops_both_planes_before_it_clears_the_screen() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
-    let shades = [composer_at(Rect::new(2, 3, 2, 1), None), rail_shade()];
+    let shades = [composer_shade(Rect::new(2, 3, 2, 1), None), rail_shade()];
     let images = held(&shades);
-    backend.planes(&shades, &images).unwrap();
+    backend.shades(&shades, &images).unwrap();
     RatatuiBackend::clear(&mut backend).unwrap();
-    backend.planes(&shades, &images).unwrap();
+    backend.shades(&shades, &images).unwrap();
     drop(backend);
     let wire = String::from_utf8(wire).unwrap();
     assert_eq!(wire.matches("_Ga=T").count(), 4, "two planes, placed twice");

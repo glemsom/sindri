@@ -63,17 +63,19 @@ impl Shade {
     pub fn composer(
         area: Rect,
         cell: CellSize,
-        caret: Option<(u16, u16)>,
+        caret: Option<u16>,
         palette: &Palette,
     ) -> Option<Shade> {
-        extent(area, cell)?;
+        if !covers(area) {
+            return None;
+        }
         Some(Shade::Composer {
             area,
             cell,
             well: channels(palette.band(Band::Well))?,
             head: channels(palette.step(0, area.height))?,
             foot: channels(palette.step(area.height - 1, area.height))?,
-            caret: caret.map(|(x, _)| x),
+            caret,
         })
     }
 
@@ -93,7 +95,9 @@ impl Shade {
             width: area.width + widened,
             ..area
         };
-        extent(area, cell)?;
+        if !covers(area) {
+            return None;
+        }
         Some(Shade::Rail {
             area,
             cell,
@@ -103,7 +107,6 @@ impl Shade {
         })
     }
 
-    /// The identity a placement of this shading is named by.
     pub fn id(&self) -> PlaneId {
         match self {
             Shade::Composer { .. } => PlaneId::Composer,
@@ -111,7 +114,6 @@ impl Shade {
         }
     }
 
-    /// The rows and columns this shading covers.
     pub fn area(&self) -> Rect {
         match self {
             Shade::Composer { area, .. } | Shade::Rail { area, .. } => *area,
@@ -134,9 +136,8 @@ pub struct Plane {
 }
 
 impl Plane {
-    /// The image a shading is drawn as, at the pixels of the cell it is drawn on.
     pub(crate) fn draw(shade: Shade) -> Plane {
-        let (width, height) = extent(shade.area(), shade.cell()).unwrap_or_default();
+        let (width, height) = extent(shade.area(), shade.cell());
         let pixels = match shade {
             Shade::Composer {
                 area,
@@ -179,12 +180,10 @@ impl Plane {
         Plane { shade, pixels }
     }
 
-    /// The identity the terminal holds this plane under.
     pub fn id(&self) -> PlaneId {
         self.shade.id()
     }
 
-    /// The rows and columns this plane covers.
     pub fn area(&self) -> Rect {
         self.shade.area()
     }
@@ -219,17 +218,14 @@ impl Planes {
         self.held = held;
     }
 
-    /// The image held under `shade`, and none while this frame holds no image of it.
     pub fn image(&self, shade: &Shade) -> Option<&Plane> {
         self.held.iter().find(|plane| plane.shade == *shade)
     }
 
-    /// The images this frame holds, in the order its pass named them.
     pub fn held(&self) -> &[Plane] {
         &self.held
     }
 
-    /// How many band images this frame has made.
     pub fn made(&self) -> usize {
         self.made
     }
@@ -240,15 +236,17 @@ pub fn delete(id: PlaneId) -> Vec<u8> {
     format!("\x1b_Ga=d,d=i,i={}\x1b\\", id.image()).into_bytes()
 }
 
-/// The pixels a band `area` covers at `cell`, and nothing for a band with no rows or columns.
-fn extent(area: Rect, cell: CellSize) -> Option<(u32, u32)> {
-    match area.width == 0 || area.height == 0 {
-        true => None,
-        false => Some((
-            u32::from(area.width) * cell.width(),
-            u32::from(area.height) * cell.height(),
-        )),
-    }
+/// Whether a band `area` covers a pixel at all: one with no rows or no columns is no image.
+fn covers(area: Rect) -> bool {
+    area.width > 0 && area.height > 0
+}
+
+/// The pixels a band `area` covers at `cell`, which a covered band always has.
+fn extent(area: Rect, cell: CellSize) -> (u32, u32) {
+    (
+        u32::from(area.width) * cell.width(),
+        u32::from(area.height) * cell.height(),
+    )
 }
 
 /// The seam a ledger's plane widens across: the transcript's columns to the left of the rail's

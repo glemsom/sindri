@@ -1880,12 +1880,12 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     assert_eq!(
         frame
             .told()
-            .planes()
+            .shades()
             .iter()
             .map(Shade::id)
             .collect::<Vec<PlaneId>>(),
         vec![PlaneId::Rail, PlaneId::Composer],
-        "the frame hands back the rail's plane beside the composer's, each under its own identity"
+        "the frame hands back the rail's shading beside the composer's, each under its own identity"
     );
     let band = plane_of(&view, PlaneId::Rail);
     assert_eq!(
@@ -1952,10 +1952,10 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
     assert!(
         frame
             .told()
-            .planes()
+            .shades()
             .iter()
             .all(|shade| shade.id() != PlaneId::Rail),
-        "a palette that draws no colour is handed no plane over the rail: its band is the flat \
+        "a palette that draws no colour is handed no shading over the rail: its band is the flat \
          band it already had"
     );
 }
@@ -1974,10 +1974,10 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_composer() {
     assert!(
         frame
             .told()
-            .planes()
+            .shades()
             .iter()
             .all(|shade| shade.id() != PlaneId::Composer),
-        "a palette that draws no colour is handed no plane over the composer: the band drawn in \
+        "a palette that draws no colour is handed no shading over the composer: the band drawn in \
          its place is the flat one the frame already had"
     );
     let band = frame.told().layout().expect("a laid out frame").composer;
@@ -2000,9 +2000,9 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
     let plain_frame = frame::painted(&mut plain, 80, 24);
     let picture_frame = frame::painted(&mut pictured, 80, 24);
     assert!(
-        plain_frame.told().planes().is_empty(),
-        "a terminal that places no picture is handed no plane at all: {:?}",
-        plain_frame.told().planes()
+        plain_frame.told().shades().is_empty(),
+        "a terminal that places no picture is handed no shading at all: {:?}",
+        plain_frame.told().shades()
     );
     let band = plain_frame.told().layout().unwrap().composer;
     assert_eq!(band, picture_frame.told().layout().unwrap().composer);
@@ -2050,11 +2050,11 @@ fn a_pass_that_shades_the_same_bands_makes_no_band_image() {
         "a pass that shades the same bands makes no band image"
     );
     assert_eq!(
-        first.told().planes(),
-        again.told().planes(),
+        first.told().shades(),
+        again.told().shades(),
         "and the two passes hand the terminal the same bands: {:?} against {:?}",
-        first.told().planes(),
-        again.told().planes()
+        first.told().shades(),
+        again.told().shades()
     );
 }
 
@@ -2093,12 +2093,12 @@ fn a_pass_drawn_at_a_new_size_makes_the_bands_images_again() {
         "a pass drawn at a new size makes the bands' images again: {made} images before it"
     );
     assert_ne!(
-        small.told().planes(),
-        large.told().planes(),
+        small.told().shades(),
+        large.told().shades(),
         "and the bands it hands the terminal are not the bands of the frame before it: {:?} \
          against {:?}",
-        small.told().planes(),
-        large.told().planes()
+        small.told().shades(),
+        large.told().shades()
     );
 }
 

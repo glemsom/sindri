@@ -255,10 +255,10 @@ impl<W: Write> Backend<W> {
         self.sizes.clone_from(sizes);
     }
 
-    /// The bands the frame about to be written shades and the images it holds of them: a shading
-    /// that left is deleted by its identity, and one that arrived is uploaded as the image the frame
-    /// holds under it.
-    fn planes(&mut self, shades: &[Shade], images: &Planes) -> io::Result<()> {
+    /// The bands the frame shades and the images it holds of them: a shading that left is deleted
+    /// by its identity, and one that arrived is uploaded as the frame's image of it. One with no
+    /// image is no band the terminal is told of, and the next pass names it again.
+    fn shades(&mut self, shades: &[Shade], images: &Planes) -> io::Result<()> {
         if self.shades == shades {
             return Ok(());
         }
@@ -269,13 +269,15 @@ impl<W: Write> Backend<W> {
             }
         }
         for shade in shades {
-            if !before.contains(shade)
-                && let Some(plane) = images.image(shade)
-            {
+            if before.contains(shade) {
+                self.shades.push(*shade);
+                continue;
+            }
+            if let Some(plane) = images.image(shade) {
                 self.upload(plane)?;
+                self.shades.push(*shade);
             }
         }
-        self.shades = shades.to_vec();
         Ok(())
     }
 
@@ -498,7 +500,7 @@ pub(crate) fn paint<W: Write>(canvas: &mut CanvasOver<W>, view: &mut View) -> io
     canvas.backend_mut().sizes(painted.sizes());
     canvas
         .backend_mut()
-        .planes(painted.planes(), view.planes())?;
+        .shades(painted.shades(), view.planes())?;
     let caret = painted.caret();
     canvas.draw(|frame| {
         if let Some(caret) = caret {
