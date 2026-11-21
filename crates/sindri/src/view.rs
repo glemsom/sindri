@@ -1483,11 +1483,13 @@ impl View {
         let mut lined = Vec::new();
         let mut strays = false;
         let mut drawn = Vec::new();
+        let mut placed = Vec::new();
         for piece in window.pieces() {
             let top = y.saturating_sub(area.y);
             let rows = self.rows.rows(piece.entry);
             let first = usize::from(piece.skip);
-            for row in &rows[first..first + usize::from(piece.rows)] {
+            let shown = &rows[first..first + usize::from(piece.rows)];
+            for (offset, row) in shown.iter().enumerate() {
                 row.paint(
                     Rect {
                         height: 1,
@@ -1502,10 +1504,9 @@ impl View {
                 if let Some(thumb) = &thumb {
                     thumb.paint(area, y, buffer, &self.capabilities.palette());
                 }
-                // Written after the row's words and the thumb, so a block's first cell is the
-                // picture's: a refused picture places nothing and leaves the thumb that cell.
-                let cell = self.capabilities.cell();
-                place(self.capabilities.pictures_mut(), cell, row, area, y, buffer);
+                if row.picture().is_some() {
+                    placed.push((piece.entry, first + offset, y));
+                }
                 // Gathered only when there is a mark: a mark's cells are counted in the rows this
                 // band draws.
                 if let Some(mark) = self.mark {
@@ -1540,6 +1541,15 @@ impl View {
                 band: top..y.saturating_sub(area.y),
                 head: piece.skip == 0,
             });
+        }
+        // Written once every row of the band is painted: a placement covers its rows by writing a
+        // sequence into the first cell of each, and a row painted after it would leave the words
+        // where that sequence belongs. A refused picture places nothing and leaves the row's own.
+        let cell = self.capabilities.cell();
+        for (entry, at, y) in placed {
+            if let Some(row) = self.rows.rows(entry).get(at) {
+                place(self.capabilities.pictures_mut(), cell, row, area, y, buffer);
+            }
         }
         // What this band placed is all the cache keeps: a picture scrolled past is a raster
         // nobody is looking at.

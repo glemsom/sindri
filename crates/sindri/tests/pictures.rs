@@ -1186,6 +1186,30 @@ fn a_mermaid_fence_still_streaming_claims_no_cells_for_a_picture() {
 }
 
 #[test]
+fn a_diagram_writes_its_sequence_into_every_row_of_the_block_it_is_placed_over() {
+    let (_root, workspace) = workspace(40, 40);
+    let mut view = frame(
+        caps::at(cell()),
+        &workspace,
+        "```mermaid\nflowchart TD\n  A-->B\n  B-->C\n  C-->D\n```\n\nand the prose under it",
+    );
+
+    let painted = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let rows = pictured_rows(painted.cells());
+    assert!(
+        rows.len() > 3,
+        "a flowchart is placed over more rows than the one it opened on: {rows:?}"
+    );
+    for y in rows {
+        assert!(
+            (0..SCREEN.0).any(|x| painted.cell(x, y).symbol().contains(PLACEHOLDER)),
+            "row {y} of the block carries the picture's own sequence: a row whose cells are \
+             skipped and whose first cell holds no sequence is placed over nothing"
+        );
+    }
+}
+
+#[test]
 fn a_diagram_and_an_image_in_one_answer_are_placed_each_over_its_own_block() {
     let (_root, workspace) = workspace(400, 200);
     let mut view = frame(
