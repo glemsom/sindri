@@ -184,3 +184,22 @@ fn a_workspace_with_no_agents_md_adds_no_project_instructions() {
         "absent means nothing is added, not an empty section"
     );
 }
+
+#[test]
+fn the_persona_names_the_product_the_channel_and_the_reader() {
+    let tree = Tree::new();
+
+    let preamble = Preamble::for_workspace(&tree.workspace()).render();
+
+    let persona = preamble.find("## Persona").expect("a persona section");
+    let principles = preamble
+        .find("## Principles")
+        .expect("a principles section");
+    assert_eq!(
+        preamble[persona..principles].trim_end(),
+        "## Persona\n\nYou are Sindri, the agent behind a Unix filter and a terminal UI: you act \
+         only through `bash`, and answer in words the reader can use.",
+        "the persona names the job as a Unix filter and a terminal UI, the shell it acts through, \
+         and the words the reader gets"
+    );
+}
