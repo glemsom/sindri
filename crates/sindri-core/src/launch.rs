@@ -18,7 +18,7 @@ use crate::provider::endpoint::Endpoint;
 use crate::provider::served::Listing;
 use crate::provider::{Ask, Client, Deltas, Route, Usage};
 use crate::records::{Entry, Facts, Record, SessionDocument, Told};
-use crate::run::{Cancel, Limits, Loaded, Responder, Run, Settled, Shell, Turn, Witness};
+use crate::run::{Cancel, Limits, Loaded, Responder, Run, Settled, Shell, State, Turn, Witness};
 use crate::sandbox::{self, Proof};
 use crate::session::{self, Session};
 use crate::skills::{self, Catalog, Diagnostic, home};
@@ -376,8 +376,8 @@ pub struct Handed<'a> {
 pub trait Turns {
     fn turn(&mut self, ended: &Turn);
 
-    /// Handed as the run opens, as each turn ends and once more when it stops: the word the record
-    /// wrote for the status it keeps, so a front end tells what the document says.
+    /// Handed as the run opens, as each turn that leaves it running ends and once more when it
+    /// stops: the word the record wrote, so a front end tells what the status document says.
     fn told(&mut self, _told: Told) {}
 
     /// Handed once, when the run stops: the prompt it was asked with beside the answer it got, which
@@ -413,14 +413,14 @@ impl<R> Witness for Recording<'_, R> {
         hand(self.turns, self.launch);
     }
 
-    fn ended(&mut self, ended: &Turn) {
+    fn ended(&mut self, ended: &Turn, state: &State) {
         note(self.launch.record.wrote(ended));
         // A turn whose report carries no size leaves the one the turn before stated.
         if ended.usage.input.is_some() {
             self.launch.measured = ended.usage;
         }
         self.turns.turn(ended);
-        if !ended.calls.is_empty() {
+        if state.is_running() {
             self.told(Told::Asking {
                 turn: ended.turn + 1,
             });

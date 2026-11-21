@@ -393,6 +393,21 @@ fn a_scripted_answer_ends_the_run_as_final_and_the_record_holds_it() {
     );
 }
 
+/// The status documents a session wrote, as the phase, the turn and the line, in the order written.
+fn statuses_written(directory: &Path) -> Vec<(&'static str, u32, String)> {
+    read_status(directory)
+        .expect("the statuses the launch wrote")
+        .iter()
+        .map(|status| {
+            (
+                status.phase().word(),
+                status.turn(),
+                status.message().to_string(),
+            )
+        })
+        .collect()
+}
+
 #[test]
 fn a_driven_launch_writes_the_status_its_front_end_was_told() {
     let homes = Homes::new();
@@ -406,19 +421,8 @@ fn a_driven_launch_writes_the_status_its_front_end_was_told() {
         Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
     }
 
-    let written = read_status(&figure.session).expect("the statuses the launch wrote");
-    let documents: Vec<(&str, u32, String)> = written
-        .iter()
-        .map(|status| {
-            (
-                status.phase().word(),
-                status.turn(),
-                status.message().to_string(),
-            )
-        })
-        .collect();
     assert_eq!(
-        documents,
+        statuses_written(&figure.session),
         [
             ("working", 1, String::from("asking the model")),
             ("done", 1, String::from("answered")),
@@ -457,10 +461,9 @@ fn a_turn_that_asks_for_a_call_moves_the_turn_the_document_names() {
         Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
     }
 
-    let written = read_status(&figure.session).expect("the statuses the launch wrote");
-    let moved: Vec<(&str, u32)> = written
-        .iter()
-        .map(|status| (status.phase().word(), status.turn()))
+    let moved: Vec<(&str, u32)> = statuses_written(&figure.session)
+        .into_iter()
+        .map(|(phase, turn, _)| (phase, turn))
         .collect();
     assert_eq!(
         moved,
@@ -485,12 +488,14 @@ fn a_run_that_stopped_on_an_error_leaves_its_last_document_saying_error() {
         Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
     };
 
-    let written = read_status(&figure.session).expect("the statuses the launch wrote");
-    let last = written.last().expect("a stopped run leaves a status");
     assert_eq!(
-        last.phase().word(),
-        "error",
-        "the last document a run that stopped on an error leaves says error: {}",
+        statuses_written(&figure.session),
+        [
+            ("working", 1, String::from("asking the model")),
+            ("error", 1, String::from("failed")),
+        ],
+        "a run that stopped on an error leaves its last document saying error, and no line for \
+         the turn it never asked: {}",
         outcome.stopped()
     );
     assert!(

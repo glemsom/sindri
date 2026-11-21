@@ -83,7 +83,9 @@ _Avoid_: Context limit, token budget, max context
 The document a session publishes about its run: the phase, one redacted line of the run's own words,
 the turn the run is on, and the workspace's name. The line is never the command, the prompt or the
 answer, and a report about a run is never the run's own word about itself — that is **State**'s
-alone. One is appended to `status.json` as the run goes and reported off the terminal too.
+alone. One is appended to `status.json` as the run goes and reported off the terminal too: the launch
+tells it from the phase and the turn its run holds, and hands the front end the same word, so the file
+and the terminal cannot disagree.
 _Avoid_: Progress, notice, indicator
 
 **Phase**:
