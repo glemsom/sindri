@@ -40,7 +40,7 @@ use crate::picker::Picker;
 use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::plane::Plane;
-use crate::pointer::{Notch, Pointer};
+use crate::pointer::{self, Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
@@ -961,6 +961,13 @@ impl View {
     /// it to, and a key pressed at the first row or at the tail repaints nothing.
     fn page(&mut self, by: Page) -> Outcome {
         let rows = self.page_rows();
+        self.travel(by, rows)
+    }
+
+    /// `rows` rows of the transcript in one direction: the frame is moved where there is a row to
+    /// move it to, clamped at the first row the last paint pass drew the band over, and a move that
+    /// moves nothing repaints nothing. A page key and a notch of the wheel both come through here.
+    fn travel(&mut self, by: Page, rows: u32) -> Outcome {
         let at = match by {
             Page::Back => self
                 .scroll
@@ -1111,15 +1118,15 @@ impl View {
         &self.facts
     }
 
-    /// What the terminal's pointer report is answered with: a notch moves the transcript through the
-    /// one key table, and a press chooses the row it landed on.
+    /// What the terminal's pointer report is answered with: a notch moves the transcript by
+    /// `pointer::ROWS` rows and a press chooses the row it landed on.
     pub fn pointer(&mut self, painted: &Painted, report: Pointer) -> Outcome {
         if !self.capabilities.reports_pointer() {
             return Outcome::Unchanged;
         }
         match report {
-            Pointer::Wheel(Notch::Up) => self.key(Key::PageUp),
-            Pointer::Wheel(Notch::Down) => self.key(Key::PageDown),
+            Pointer::Wheel(Notch::Up) => self.travel(Page::Back, pointer::ROWS),
+            Pointer::Wheel(Notch::Down) => self.travel(Page::Forward, pointer::ROWS),
             Pointer::Press(at) => self.pressed(painted, at),
         }
     }
