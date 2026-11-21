@@ -8,7 +8,7 @@ use crate::ink::Ink;
 use crate::ledger::{self, Facts, Rail, RailBand};
 use crate::palette::{Band, Edge, Palette};
 use crate::pen;
-use crate::plane::Plane;
+use crate::plane::Shade;
 use crate::pulse::Pulse;
 
 /// The one rule the rail draws in its body: the face is closed by a line, and the blocks under it
@@ -16,7 +16,7 @@ use crate::pulse::Pulse;
 const HAIRLINE: char = '─';
 
 /// The band the rail draws, handed the cell a picture is measured at where this terminal places
-/// one: the plane the band stands on is built from it and handed back with the band it shades.
+/// one: the shading the band stands on is worked out from it and handed back with the band.
 pub fn paint(
     facts: &Facts,
     rail: Rail,
@@ -25,19 +25,19 @@ pub fn paint(
     pictures: Option<CellSize>,
     buffer: &mut Buffer,
     palette: &Palette,
-) -> Option<Plane> {
+) -> Option<Shade> {
     let area = band.area;
     if area.width == 0 || area.height == 0 {
         return None;
     }
-    let plane = pictures.and_then(|cell| Plane::rail(rail, area, cell, palette));
-    let ground = match plane.is_some() {
+    let shade = pictures.and_then(|cell| Shade::rail(rail, area, cell, palette));
+    let ground = match shade.is_some() {
         true => None,
         false => Some(Band::Rail),
     };
     pen::claim(buffer, area, palette.ground(ground));
     if rail == Rail::Ledger {
-        if plane.is_none() {
+        if shade.is_none() {
             elevation(buffer, area, palette);
         }
         under_the_face(band, buffer, palette);
@@ -48,7 +48,7 @@ pub fn paint(
         buffer,
         palette,
     );
-    plane
+    shade
 }
 
 /// The rule that closes a face drawn over the rail's top rows, and nothing when the band holds no

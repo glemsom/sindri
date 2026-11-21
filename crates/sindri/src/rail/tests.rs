@@ -17,7 +17,7 @@ use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 const COLUMNS: u16 = FLOOR;
 use crate::palette::{Edge, channels};
 use crate::pen;
-use crate::plane::SEAM;
+use crate::plane::{Plane, SEAM};
 use crate::readback::{column_of, inks, under};
 
 /// How far into the frame a seamed test stands its rail: the transcript's own columns are to its
@@ -293,11 +293,11 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
 }
 
 #[test]
-fn a_ledger_handed_a_cell_is_handed_a_plane_widened_across_the_seam() {
+fn a_ledger_handed_a_cell_is_handed_a_shade_widened_across_the_seam() {
     let rail = stood(8);
     let mut buffer = Buffer::empty(framed(rail));
 
-    let plane = super::paint(
+    let shade = super::paint(
         &frame(),
         Rail::Ledger,
         RailBand::of(rail),
@@ -306,7 +306,8 @@ fn a_ledger_handed_a_cell_is_handed_a_plane_widened_across_the_seam() {
         &mut buffer,
         &PALETTE,
     )
-    .expect("a palette that spells its colours is handed the band's plane");
+    .expect("a palette that spells its colours is handed the band's shading");
+    let plane = Plane::draw(shade);
 
     assert_eq!(
         plane.area(),
@@ -336,7 +337,7 @@ fn a_ledger_stood_at_the_frames_edge_widens_by_the_columns_it_has_to_its_left() 
     };
     let mut buffer = Buffer::empty(framed(rail));
 
-    let plane = super::paint(
+    let shade = super::paint(
         &frame(),
         Rail::Ledger,
         RailBand::of(rail),
@@ -345,10 +346,10 @@ fn a_ledger_stood_at_the_frames_edge_widens_by_the_columns_it_has_to_its_left() 
         &mut buffer,
         &PALETTE,
     )
-    .expect("a palette that spells its colours is handed the band's plane");
+    .expect("a palette that spells its colours is handed the band's shading");
 
     assert_eq!(
-        plane.area(),
+        shade.area(),
         Rect {
             x: 0,
             width: rail.width + 1,
@@ -364,7 +365,7 @@ fn the_seam_falls_from_the_well_into_the_shadow_and_comes_back_out_over_the_rail
     let rail = stood(8);
     let mut buffer = Buffer::empty(framed(rail));
 
-    let plane = super::paint(
+    let shade = super::paint(
         &frame(),
         Rail::Ledger,
         RailBand::of(rail),
@@ -373,7 +374,8 @@ fn the_seam_falls_from_the_well_into_the_shadow_and_comes_back_out_over_the_rail
         &mut buffer,
         &PALETTE,
     )
-    .expect("a palette that spells its colours is handed the band's plane");
+    .expect("a palette that spells its colours is handed the band's shading");
+    let plane = Plane::draw(shade);
 
     let pixels = plane.pixels();
     let (width, height) = pixels.dimensions();
@@ -432,7 +434,7 @@ fn a_ledger_handed_a_cell_lights_no_column_and_shadows_no_row_of_its_band() {
         &mut buffer,
         &PALETTE,
     )
-    .expect("a palette that spells its colours is handed the band's plane");
+    .expect("a palette that spells its colours is handed the band's shading");
 
     for y in rail.y..rail.bottom() {
         for x in rail.x..rail.right() {
@@ -455,7 +457,7 @@ fn a_strip_is_handed_a_plane_that_widens_across_no_seam() {
     };
     let mut buffer = Buffer::empty(framed(rail));
 
-    let plane = super::paint(
+    let shade = super::paint(
         &frame(),
         Rail::Strip,
         RailBand::of(rail),
@@ -464,14 +466,15 @@ fn a_strip_is_handed_a_plane_that_widens_across_no_seam() {
         &mut buffer,
         &PALETTE,
     )
-    .expect("a palette that spells its colours is handed the band's plane");
+    .expect("a palette that spells its colours is handed the band's shading");
 
     assert_eq!(
-        plane.area(),
+        shade.area(),
         rail,
         "a strip is one row of the rail's own columns, and its plane takes no column of the \
          transcript's"
     );
+    let plane = Plane::draw(shade);
     let (width, height) = plane.pixels().dimensions();
     for y in 0..height {
         let row = *plane.pixels().get_pixel(0, y);
@@ -501,7 +504,7 @@ fn a_rail_handed_no_cell_draws_todays_band_and_its_shadow_row() {
     let area = band(COLUMNS, 8);
     let mut buffer = Buffer::empty(area);
 
-    let plane = super::paint(
+    let shade = super::paint(
         &frame(),
         Rail::Ledger,
         RailBand::of(area),
@@ -512,8 +515,8 @@ fn a_rail_handed_no_cell_draws_todays_band_and_its_shadow_row() {
     );
 
     assert!(
-        plane.is_none(),
-        "a terminal that places no picture is handed no plane for the rail"
+        shade.is_none(),
+        "a terminal that places no picture is handed no shading for the rail"
     );
     for y in area.y..area.bottom() - 1 {
         for x in area.x + 1..area.right() {
@@ -541,7 +544,7 @@ fn a_rail_handed_a_cell_in_no_colour_draws_the_band_and_shadow_it_drew_without_o
         let mut pictured = Buffer::empty(area);
         let mut placeless = Buffer::empty(area);
 
-        let plane = super::paint(
+        let shade = super::paint(
             &frame(),
             shape,
             RailBand::of(area),
@@ -553,8 +556,8 @@ fn a_rail_handed_a_cell_in_no_colour_draws_the_band_and_shadow_it_drew_without_o
         paint(&frame(), shape, area, None, &mut placeless, &Palette::SLOTS);
 
         assert!(
-            plane.is_none(),
-            "a palette that draws no colour is handed no plane for the {shape:?}, so the band's \
+            shade.is_none(),
+            "a palette that draws no colour is handed no shading for the {shape:?}, so the band's \
              own rows are the whole of its shading"
         );
         for y in area.y..area.bottom() {
