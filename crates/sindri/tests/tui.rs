@@ -383,15 +383,16 @@ impl Pty {
 }
 
 /// What a child has drawn so far, read off the master by a thread of its own so a test never blocks
-/// on a frame that may never come.
+/// on a frame that may never come. Each read is kept apart, in the order it landed, so a test can
+/// ask what the terminal had been told part-way through a frame.
 struct Drawn {
-    seen: Arc<Mutex<Vec<u8>>>,
+    reads: Arc<Mutex<Vec<Vec<u8>>>>,
 }
 
 impl Drawn {
     fn watch(master: File) -> Drawn {
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        let landing = Arc::clone(&seen);
+        let reads = Arc::new(Mutex::new(Vec::new()));
+        let landing = Arc::clone(&reads);
         thread::spawn(move || {
             let mut master = master;
             let mut buffer = [0u8; 4096];
@@ -403,15 +404,20 @@ impl Drawn {
                     Ok(count) => landing
                         .lock()
                         .expect("the frame")
-                        .extend_from_slice(&buffer[..count]),
+                        .push(buffer[..count].to_vec()),
                 }
             }
         });
-        Drawn { seen }
+        Drawn { reads }
+    }
+
+    /// The drawing as the reads that delivered it, in the order they landed.
+    fn reads(&self) -> Vec<Vec<u8>> {
+        self.reads.lock().expect("the frame").clone()
     }
 
     fn bytes(&self) -> Vec<u8> {
-        self.seen.lock().expect("the frame").clone()
+        self.reads.lock().expect("the frame").concat()
     }
 
     fn text(&self) -> String {
@@ -1158,6 +1164,92 @@ fn the_boot_frame_is_read_as_the_cells_and_the_caret_its_terminal_holds() {
         boot.caret(),
         Some((corner + 1, GUTTER)),
         "and the terminal's own caret stands in the cell that glyph is drawn at"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn a_launch_drawing_is_read_as_the_reads_that_delivered_it_and_as_one_string() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    let quiet = drawn.settled();
+    let reads = drawn.reads();
+    let lengths: Vec<usize> = reads.iter().map(Vec::len).collect();
+
+    // A read is one `read` off the master, capped at 4096 bytes, so a frame is many of them.
+    assert!(
+        reads.len() > 1,
+        "the boot frame is more than one read's worth of bytes, so the drawing arrived as more \
+         than one read: {lengths:?}"
+    );
+    assert_eq!(
+        reads.concat(),
+        quiet,
+        "and the reads in the order they landed are the drawing a quiet terminal holds: {lengths:?}"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
+fn a_frames_last_read_carries_the_cell_it_places_the_caret_in() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    let booted = placed(&text(&drawn.settled()))
+        .expect("the boot frame places the caret in the draft's cell");
+
+    pty.type_bytes(b"x");
+    assert!(
+        drawn.wait_until(|frame| placed(frame).is_some_and(|cell| cell != booted)),
+        "one glyph typed moves the caret off the cell it waited in: {:?}",
+        drawn.text()
+    );
+    let quiet = drawn.settled();
+    let reads = drawn.reads();
+    let stood: Vec<Option<(u16, u16)>> = (1..=reads.len())
+        .map(|count| placed(&text(&reads[..count].concat())))
+        .collect();
+    let (last, before) = stood.split_last().expect("the drawing arrived as reads");
+    let cell = placed(&text(&quiet)).expect("the frame the glyph drew places the caret");
+
+    assert_ne!(
+        cell, booted,
+        "the frame the glyph drew places the caret in a cell of its own, so the reads say which \
+         frame a read belongs to"
+    );
+    assert_eq!(
+        *last,
+        Some(cell),
+        "the caret arrives with the last read, in the cell that frame places it in: {cell:?}"
+    );
+    assert_ne!(
+        before.last().copied().flatten(),
+        Some(cell),
+        "and the read before it leaves the caret elsewhere, so the read that places the caret is \
+         the last one a frame delivers: {cell:?}"
     );
 
     pty.type_bytes(&[0x11]);
