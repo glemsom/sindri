@@ -332,8 +332,8 @@ pub enum Load {
     AlreadyLoaded,
 }
 
-/// The names loaded so far, in load order: one set, shared by the launch that owns it, the run that
-/// writes to it and the frame that draws it.
+/// The loaded-skill set, held through a handle: the launch keeps it, the run writes it, the frame
+/// draws it, and they all mean the same names.
 #[derive(Clone, Debug, Default)]
 pub struct Loaded {
     names: Arc<Mutex<Vec<String>>>,
@@ -346,7 +346,7 @@ impl Loaded {
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        self.lock().iter().any(|loaded| loaded == name)
+        holds(&self.lock(), name)
     }
 
     /// A name already in the set is `already_loaded` and carries no body: a tool result is
@@ -354,7 +354,7 @@ impl Loaded {
     pub fn load(&self, name: impl Into<String>) -> Load {
         let name = name.into();
         let mut names = self.lock();
-        if names.iter().any(|loaded| loaded == &name) {
+        if holds(&names, &name) {
             return Load::AlreadyLoaded;
         }
         names.push(name);
@@ -370,6 +370,11 @@ impl Loaded {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
+}
+
+/// Whether `names` already holds `name`, asked once so a load and a question of one set agree.
+fn holds(names: &[String], name: &str) -> bool {
+    names.iter().any(|loaded| loaded == name)
 }
 
 impl<S: Into<String>> FromIterator<S> for Loaded {
@@ -389,7 +394,7 @@ pub struct Run<R, A> {
     cancel: Cancel,
     spent: Spent,
     turns: u32,
-    skills: Loaded,
+    loaded: Loaded,
     earlier: Vec<Turn>,
     history: Vec<Turn>,
     answer: Option<String>,
@@ -407,7 +412,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             cancel: Cancel::new(),
             spent: Spent::default(),
             turns: 0,
-            skills: Loaded::default(),
+            loaded: Loaded::default(),
             earlier: Vec::new(),
             history: Vec::new(),
             answer: None,
@@ -439,7 +444,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
     /// The loaded-skill set this run writes to: the launch's own, so a name a run loads outlives the
     /// run that loaded it.
     pub fn loaded(mut self, loaded: Loaded) -> Self {
-        self.skills = loaded;
+        self.loaded = loaded;
         self
     }
 
@@ -478,7 +483,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
     }
 
     pub fn skills(&self) -> Vec<String> {
-        self.skills.names()
+        self.loaded.names()
     }
 
     pub fn answer(&self) -> Option<&str> {
@@ -489,13 +494,15 @@ impl<R: Responder, A: Executor> Run<R, A> {
     }
 
     pub fn load_skill(&self, name: impl Into<String>) -> Load {
-        self.skills.load(name)
+        self.loaded.load(name)
     }
 
     pub fn clear_history(&mut self) {
         self.history.clear();
         self.earlier.clear();
-        self.skills.clear();
+        // The set goes with the turns it was loaded beside: a name kept here while its body leaves
+        // the history is a name the model is told it already holds.
+        self.loaded.clear();
     }
 
     pub fn turn(&mut self, deltas: &mut dyn Deltas) -> State {
@@ -526,7 +533,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         };
         let mut results = Vec::with_capacity(reply.calls.len());
         for call in &reply.calls {
-            let acted = match self.executor.execute(call, &self.skills) {
+            let acted = match self.executor.execute(call, &self.loaded) {
                 Ok(acted) => acted,
                 Err(message) => {
                     self.settle(Stop::Error(message));

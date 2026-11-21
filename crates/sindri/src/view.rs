@@ -798,15 +798,15 @@ impl View {
         self.mark = None;
         self.fence = None;
         self.drawn = Drawn::none();
-        self.facts.rail().loaded.clear();
+        self.facts.loaded().clear();
         self.conversation.clear();
         self.superseded = true;
         Outcome::Edited
     }
 
-    /// `/skill:name` and `/skill name` are one line: one skill into the one set the conversation
-    /// keeps, discovered afresh. A name put in this set by hand would answer `already_loaded`
-    /// to a later model load for a body nothing had ever handed over.
+    /// `/skill:name` and `/skill name` are one line: one skill into the one set the launch keeps,
+    /// discovered afresh. A name put in this set by hand would answer `already_loaded` to a later
+    /// model load for a body nothing had ever handed over.
     fn skill(&mut self, name: &str) -> Outcome {
         let Some(workspace) = self.facts.workspace().map(Path::to_path_buf) else {
             return Outcome::Unchanged;
@@ -815,7 +815,7 @@ impl View {
         if !catalog.get(name).is_some_and(Skill::human_invocable) {
             return Outcome::Unchanged;
         }
-        match self.facts.rail().loaded.load(name) {
+        match self.facts.loaded().load(name) {
             Load::Loaded => Outcome::Edited,
             Load::AlreadyLoaded => Outcome::Unchanged,
         }

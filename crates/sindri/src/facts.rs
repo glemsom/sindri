@@ -8,6 +8,7 @@ use std::sync::Arc;
 use sindri_core::open::Ground;
 use sindri_core::provider::served::Listing;
 use sindri_core::records::{Entry, SessionDocument};
+use sindri_core::run::Loaded;
 
 use crate::ledger::{self, Boot};
 use crate::pulse::Pulse;
@@ -154,6 +155,12 @@ impl Facts {
 
     pub fn rail(&self) -> &ledger::Facts {
         &self.rail
+    }
+
+    /// The loaded-skill set the frame draws: the launch's own, handed in with its facts, so a
+    /// `/skill:name` and the model's own call both write the one set.
+    pub fn loaded(&self) -> &Loaded {
+        &self.rail.loaded
     }
 
     pub fn workspace(&self) -> Option<&Path> {

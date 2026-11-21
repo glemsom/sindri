@@ -439,7 +439,7 @@ fn the_prompt_after_the_first_sees_the_turn_it_ended_on() {
 }
 
 #[test]
-fn a_skill_the_run_loaded_is_the_launchs_once_the_run_has_ended() {
+fn a_skill_a_run_loads_outlives_the_run_that_loaded_it() {
     let homes = Homes::new();
     homes.user_skill("deploy", "ship the branch");
     let script = Scripted::answering([
@@ -470,7 +470,7 @@ fn a_skill_the_run_loaded_is_the_launchs_once_the_run_has_ended() {
 }
 
 #[test]
-fn the_prompt_after_a_load_starts_knowing_what_came_before() {
+fn the_prompt_after_a_load_gets_the_skill_already_loaded() {
     let homes = Homes::new();
     homes.user_skill("deploy", "ship the branch");
     let loading = || {

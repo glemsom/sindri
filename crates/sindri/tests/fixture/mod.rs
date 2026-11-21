@@ -760,14 +760,15 @@ fn stats(capabilities: Capabilities) -> View {
         .expect("a SKILL.md");
     }
 
-    // The set starts empty and the lines below fill it, so the screen draws names a reader loaded
-    // rather than names the frame was handed.
     let mut view = View::of(
         capabilities,
         Facts::default()
             .asked()
             .working(root.path().to_path_buf(), None)
-            .railed(facts().loading(Loaded::default()))
+            .railed(ledger::Facts {
+                loaded: Loaded::default(),
+                ..facts()
+            })
             .recorded(&document()),
         Transcript::none(),
     );
