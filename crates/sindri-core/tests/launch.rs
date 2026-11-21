@@ -12,7 +12,7 @@ use sindri_core::launch::{Handed, Launch, Machine, Turns};
 use sindri_core::open::{Handover, Opener, Opening};
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::{Deltas, Failure, Usage};
-use sindri_core::records::{Entry, SessionDocument, read_transcript};
+use sindri_core::records::{Entry, SessionDocument, Told, read_status, read_transcript};
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Call, Cancel, Reply, Request, Responder, State, Stop, Turn};
 use sindri_core::tools::{FrontEnd, OPEN, SKILL};
@@ -249,6 +249,7 @@ struct Kept {
     kept: Option<Turn>,
     loaded: Vec<String>,
     turns: Vec<u32>,
+    told: Vec<Told>,
 }
 
 impl Kept {
@@ -262,6 +263,10 @@ impl Kept {
 impl Turns for Kept {
     fn turn(&mut self, ended: &Turn) {
         self.turns.push(ended.turn);
+    }
+
+    fn told(&mut self, told: Told) {
+        self.told.push(told);
     }
 
     fn kept(&mut self, kept: &Turn) {
@@ -385,6 +390,119 @@ fn a_scripted_answer_ends_the_run_as_final_and_the_record_holds_it() {
             Entry::Stop { stop: Stop::Final },
         ],
         "the record holds the prompt, the turn it took, the answer and the stop, in that order"
+    );
+}
+
+#[test]
+fn a_driven_launch_writes_the_status_its_front_end_was_told() {
+    let homes = Homes::new();
+    let script = Scripted::answering([Reply::answer("triaged")]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Batch);
+    let figure = launch.figure();
+
+    let mut kept = Kept::default();
+    match launch.drive("triage this", &[], &mut Quiet, &mut kept, Cancel::new()) {
+        Ok(_) => {}
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    }
+
+    let written = read_status(&figure.session).expect("the statuses the launch wrote");
+    let documents: Vec<(&str, u32, String)> = written
+        .iter()
+        .map(|status| {
+            (
+                status.phase().word(),
+                status.turn(),
+                status.message().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        documents,
+        [
+            ("working", 1, String::from("asking the model")),
+            ("done", 1, String::from("answered")),
+        ],
+        "a launch leaves one status for each phase its run passed through"
+    );
+    assert_eq!(
+        kept.told,
+        [
+            Told::Asking { turn: 1 },
+            Told::Stopped {
+                turn: 1,
+                stop: Stop::Final,
+            },
+        ],
+        "the telling the record wrote is the one the front end was handed"
+    );
+}
+
+#[test]
+fn a_turn_that_asks_for_a_call_moves_the_turn_the_document_names() {
+    let homes = Homes::new();
+    let script = Scripted::answering([
+        Reply::asking(
+            "running it",
+            [Call::new("call_1", "bash", r#"{"command":"true"}"#)],
+        ),
+        Reply::answer("it ran"),
+    ]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Batch);
+    let figure = launch.figure();
+
+    let mut kept = Kept::default();
+    match launch.drive("run it", &[], &mut Quiet, &mut kept, Cancel::new()) {
+        Ok(_) => {}
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    }
+
+    let written = read_status(&figure.session).expect("the statuses the launch wrote");
+    let moved: Vec<(&str, u32)> = written
+        .iter()
+        .map(|status| (status.phase().word(), status.turn()))
+        .collect();
+    assert_eq!(
+        moved,
+        [("working", 1), ("working", 2), ("done", 2)],
+        "a reader of the documents sees the run move turn by turn"
+    );
+}
+
+#[test]
+fn a_run_that_stopped_on_an_error_leaves_its_last_document_saying_error() {
+    let homes = Homes::new();
+    let script = Scripted::answering([Reply::asking(
+        "reading it",
+        [Call::new("call_1", "read", r#"{"path":"notes.md"}"#)],
+    )]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Batch);
+    let figure = launch.figure();
+
+    let mut kept = Kept::default();
+    let outcome = match launch.drive("read it", &[], &mut Quiet, &mut kept, Cancel::new()) {
+        Ok(outcome) => outcome,
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    };
+
+    let written = read_status(&figure.session).expect("the statuses the launch wrote");
+    let last = written.last().expect("a stopped run leaves a status");
+    assert_eq!(
+        last.phase().word(),
+        "error",
+        "the last document a run that stopped on an error leaves says error: {}",
+        outcome.stopped()
+    );
+    assert!(
+        matches!(
+            kept.told.last(),
+            Some(Told::Stopped {
+                stop: Stop::Error(_),
+                ..
+            })
+        ),
+        "and the front end is told the same error: {:?}",
+        kept.told
     );
 }
 
