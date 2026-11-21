@@ -116,10 +116,7 @@ impl Shade {
         }
         let tone = palette.band(Band::Rail);
         let shadow = palette.edge(Edge::Shadow);
-        let well = palette.band(Band::Well);
-        let cell = cell.filter(|_| {
-            channels(tone).is_some() && channels(shadow).is_some() && channels(well).is_some()
-        });
+        let cell = cell.filter(|_| channels(tone).is_some() && channels(shadow).is_some());
         let seam = match (shape, cell) {
             (Rail::Ledger, Some(cell)) => Seam::of(SEAM.min(area.x), cell, shadow, palette),
             _ => None,
@@ -188,7 +185,7 @@ impl Shade {
     /// under them, and otherwise every row on the colour the shade says it sits on, then the seams
     /// it makes with the band beside it.
     pub fn claim(&self, buffer: &mut Buffer, palette: &Palette) {
-        let area = self.area();
+        let area = self.claimed();
         match self.places() {
             true => pen::claim(buffer, area, palette.ground(None)),
             false => {
@@ -206,7 +203,6 @@ impl Shade {
                 if let Shade::Rail {
                     shape: Rail::Ledger,
                     lit,
-                    shadow,
                     ..
                 } = *self
                 {
@@ -219,25 +215,27 @@ impl Shade {
                         },
                         palette.over(lit),
                     );
-                    pen::claim(
-                        buffer,
-                        Rect {
-                            y: area.bottom().saturating_sub(1),
-                            height: 1,
-                            ..area
-                        },
-                        palette.over(shadow),
-                    );
                 }
             }
         }
-        if let Shade::Composer {
-            area,
-            lit: Some(lit),
-            ..
-        } = *self
-        {
+        if let Shade::Composer { lit: Some(lit), .. } = *self {
             pen::claim(buffer, Rect { height: 1, ..area }, palette.over(lit));
+        }
+    }
+
+    /// The band's own rows and columns, which is all a claim of its cells reaches: a rail's plane
+    /// widens back over the transcript's last ones, and those are the transcript band's cells.
+    fn claimed(&self) -> Rect {
+        let area = self.area();
+        match self {
+            Shade::Rail {
+                seam: Some(seam), ..
+            } => Rect {
+                x: area.x.saturating_add(seam.widened()),
+                width: area.width.saturating_sub(seam.widened()),
+                ..area
+            },
+            _ => area,
         }
     }
 

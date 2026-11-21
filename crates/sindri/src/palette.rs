@@ -140,15 +140,9 @@ impl Palette {
         self.over(band.map_or(Color::Reset, |band| self.band(band)))
     }
 
-    /// The style a cell of one end of a boundary's light is claimed in: the plain ink over that
-    /// edge, so a cell on an edge still reads back as the ink it is written in.
-    pub fn edged(&self, edge: Edge) -> Style {
-        self.over(self.edge(edge))
-    }
-
     /// The plain ink over a ground the caller names, so a cell claimed in it reads back as the ink
     /// it is written in whatever colour it sits on.
-    pub fn over(&self, colour: Color) -> Style {
+    pub(crate) fn over(&self, colour: Color) -> Style {
         let (foreground, modifier) = self.ink(Ink::Plain);
         Style::default()
             .fg(foreground)
@@ -285,7 +279,7 @@ pub fn channels(colour: Color) -> Option<[u8; 3]> {
 /// The colour `at` of `span` from `head` to `foot`, in the spelling both ends share: two `Rgb` ends
 /// mix per channel and two `Indexed` ends mix their slots, which ascend with the grey they are, and
 /// ends with nothing between them are drawn as the head.
-pub fn blend(head: Color, foot: Color, at: u16, span: u16) -> Color {
+pub(crate) fn blend(head: Color, foot: Color, at: u16, span: u16) -> Color {
     let (at, span) = (u32::from(at.min(span)), u32::from(span));
     let between = |head: u8, foot: u8| match span {
         0 => head,

@@ -12,7 +12,7 @@ use crate::readback::under;
 /// The two spellings that name colours of their own; `SLOTS` wears the reader's theme instead.
 const SPELLED: [(&str, Palette); 2] = [("ansi", Palette::ANSI), ("truecolor", Palette::TRUECOLOR)];
 
-/// The columns a band stands in, wide enough for every row these tests claim.
+/// The columns a band stands in, wide enough for every column these tests claim.
 const COLUMNS: u16 = 80;
 
 /// The composer's band of `rows` rows in `palette`, with no plane placed under it.
@@ -235,6 +235,40 @@ fn a_rail_drawn_in_cells_lights_its_first_column_and_shadows_its_last_row() {
 }
 
 #[test]
+fn a_rail_a_plane_stands_under_claims_no_column_of_the_transcript() {
+    let palette = Palette::TRUECOLOR;
+    let band = Rect::new(COLUMNS / 4, 0, 32, 8);
+    let shade = Shade::rail(Rail::Ledger, band, Some(CellSize::NOMINAL), &palette)
+        .expect("a band to shade");
+    let frame = Rect::new(0, 0, COLUMNS, band.height);
+    let mut buffer = Buffer::empty(frame);
+
+    assert_eq!(
+        shade.area().x,
+        band.x - SEAM,
+        "the rail's plane widens back across the transcript's last columns, which is where the \
+         seam falls out of the well"
+    );
+    pen::claim(&mut buffer, frame, palette.ground(Some(Band::Well)));
+    shade.claim(&mut buffer, &palette);
+
+    for x in band.x - SEAM..band.x {
+        assert_eq!(
+            under(&buffer, x, 0),
+            palette.band(Band::Well),
+            "column {x} of the columns the plane reaches back over is not the transcript band's \
+             own: no claim of the rail's is made past the columns it is drawn in"
+        );
+    }
+    assert_eq!(
+        under(&buffer, band.x, 0),
+        palette.ground(None).bg.expect("the terminal's own ground"),
+        "and the band's own first column is the terminal's own ground, which its plane is read \
+         through"
+    );
+}
+
+#[test]
 fn a_strip_drawn_in_cells_makes_no_seam_at_all() {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(20, 0, 40, 1);
@@ -381,7 +415,7 @@ fn a_band_no_plane_stands_under_makes_no_image() {
     let transcript = Shade::transcript(area, &Palette::TRUECOLOR).expect("a band of rows");
     let composer =
         Shade::composer(area, None, None, false, &Palette::TRUECOLOR).expect("a band to shade");
-    let mut planes = held(&[transcript, composer]);
+    let planes = held(&[transcript, composer]);
 
     assert_eq!(
         planes.made(),

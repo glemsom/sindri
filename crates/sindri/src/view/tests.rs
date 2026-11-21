@@ -21,9 +21,9 @@ use crate::ledger::Boot;
 
 use crate::capability::caps::{inked, pictured, pointing, sized};
 use crate::ink::{Face, Look};
-use crate::palette::{self, Band, Edge};
+use crate::palette::{Band, Edge, Palette};
 use crate::pictures::PLACEHOLDER as PLACED;
-use crate::plane::SEAM;
+use crate::plane::{SEAM, Shade};
 use crate::pulse::STEP_MS;
 use crate::readback::under;
 use crate::rows::{SIGIL, THUMB};
@@ -160,6 +160,14 @@ fn glyph_at(buffer: &Buffer, x: u16, y: u16) -> char {
         .unwrap_or(' ')
 }
 
+/// The ground the `row`th row of a composer's band `rows` rows tall sits on, read off the shade the
+/// band is claimed from rather than worked out a second time.
+fn raised(palette: &Palette, row: u16, rows: u16) -> Color {
+    Shade::composer(Rect::new(0, 0, 1, rows), None, None, false, palette)
+        .expect("a band of rows")
+        .row(row)
+}
+
 /// The column the head of a live run's pulse stands in, read off the row it was drawn on.
 fn head_at(buffer: &Buffer, band: Rect) -> u16 {
     let row = drawn_glyphs(buffer, band.y);
@@ -181,12 +189,7 @@ fn the_composer_is_drawn_from_its_lit_head_down_to_the_rails_own_tone() {
                 for x in band.x..band.right() {
                     assert_eq!(
                         under(&buffer, x, band.y + row),
-                        palette::blend(
-                            palette.band(Band::Composer),
-                            palette.band(Band::Rail),
-                            row,
-                            band.height - 1,
-                        ),
+                        raised(&palette, row, band.height),
                         "row {row} of the {} at {cols}x{rows} sits on no shade of the band, \
                              so the band is not one raised surface",
                         band.height
@@ -286,12 +289,7 @@ fn the_head_reads_as_the_light_the_palette_draws_over_the_draft_row() {
             }
             assert_eq!(
                 under(&buffer, band.x, band.y + 1),
-                palette::blend(
-                    palette.band(Band::Composer),
-                    palette.band(Band::Rail),
-                    1,
-                    band.height - 1,
-                ),
+                raised(&palette, 1, band.height),
                 "the row under the head is the ramp's second step in {palette:?}, so the head \
                  sits over the draft"
             );
@@ -1388,12 +1386,7 @@ fn the_band_beside_a_rail_is_drawn_in_the_frames_whole_width_and_the_rail_closes
             for x in rail.x..rail.right() {
                 assert_eq!(
                     under(&buffer, x, y),
-                    palette::blend(
-                        palette.band(Band::Composer),
-                        palette.band(Band::Rail),
-                        y - band.y,
-                        band.height - 1,
-                    ),
+                    raised(&palette, y - band.y, band.height),
                     "row {y}, column {x} of the band at {cols} columns is not the band's own \
                      shade: the rail may not be drawn over a row the band holds"
                 );
@@ -1505,12 +1498,7 @@ fn a_prompt_drawn_beside_a_live_draft_is_read_as_the_words_asked_and_not_the_dra
     for x in composer.x..composer.right() {
         assert_eq!(
             under(&buffer, x, composer.y + 1),
-            palette::blend(
-                palette.band(Band::Composer),
-                palette.band(Band::Rail),
-                1,
-                composer.height - 1,
-            ),
+            raised(&palette, 1, composer.height),
             "column {x} of the composer's draft stands on the ramp the draft takes the keys on"
         );
     }
@@ -5230,12 +5218,7 @@ fn an_empty_drafts_placeholder_is_drawn_whole_with_no_cell_of_it_reversed() {
     );
     assert_eq!(
         under(&buffer, x, y),
-        palette::blend(
-            palette.band(Band::Composer),
-            palette.band(Band::Rail),
-            ends(&view).above,
-            band.height - 1,
-        ),
+        raised(&palette, ends(&view).above, band.height),
         "and that cell keeps the ground the row it stands on is ramped in"
     );
     assert_eq!(
