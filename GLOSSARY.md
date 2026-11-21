@@ -102,6 +102,12 @@ the front end supplies it, because the sandbox has no display and the core never
 with no browser to hand a target to supplies none.
 _Avoid_: Launcher, browser, spawner
 
+**Handover**:
+What the **Opener** did with a judged target, and so what the call settles on: `opened` when it exited 0,
+`handed` when it was still running past its grace, and `failed` with the exit it left and one line of its
+own words — a spawn alone is no opening.
+_Avoid_: Result, answer, status, outcome
+
 ## Words from the wire
 
 **Wire**:

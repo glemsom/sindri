@@ -14,7 +14,7 @@ use serde_json::Value;
 
 use crate::bash::{self, Outcome};
 use crate::config::Config;
-use crate::open::{Ground, Opener};
+use crate::open::{Ground, Handover, Opener};
 use crate::policy::{Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES};
 use crate::provider::{Deltas, Failure};
 use crate::redact::{Redacted, SecretSet};
@@ -641,12 +641,13 @@ impl Shell {
     /// A refusal is `Ok`: the call failed and the run did not.
     fn open(&self, arguments: &str) -> Result<Acted, Redacted> {
         let started = Instant::now();
-        let refused = |words: String| Acted {
+        let settled = |words: String, exit: Exit| Acted {
             text: SecretSet::default().redact(words).to_string(),
             bytes: 0,
             elapsed: started.elapsed(),
-            exit: Exit::Code(1),
+            exit,
         };
+        let refused = |words: String| settled(words, Exit::Code(1));
 
         let Some(ground) = self.ground.as_ref() else {
             return Ok(refused(String::from(
@@ -663,15 +664,13 @@ impl Shell {
                  supplies the program that opens one",
             )));
         };
-        if let Err(reason) = opener.open(&opening) {
-            return Ok(refused(reason));
-        }
-
-        Ok(Acted {
-            text: format!("opened {opening}"),
-            bytes: 0,
-            elapsed: started.elapsed(),
-            exit: Exit::Code(0),
+        Ok(match opener.open(&opening) {
+            Handover::Opened => settled(format!("opened {opening}"), Exit::Code(0)),
+            Handover::Handed => settled(
+                format!("handed {opening} to the opener, which is still running"),
+                Exit::Code(0),
+            ),
+            Handover::Failed { exit, words } => settled(words, exit),
         })
     }
 

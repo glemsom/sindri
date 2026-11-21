@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use sindri_core::config::Config;
 use sindri_core::launch::{Handed, Launch, Machine, Turns};
-use sindri_core::open::{Opener, Opening};
+use sindri_core::open::{Handover, Opener, Opening};
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
 use sindri_core::records::{Entry, SessionDocument, read_transcript};
@@ -523,8 +523,8 @@ fn a_launch_the_sandbox_refuses_leaves_no_session_behind() {
 struct HandsNowhere;
 
 impl Opener for HandsNowhere {
-    fn open(&self, _opening: &Opening) -> Result<(), String> {
-        Ok(())
+    fn open(&self, _opening: &Opening) -> Handover {
+        Handover::Handed
     }
 }
 

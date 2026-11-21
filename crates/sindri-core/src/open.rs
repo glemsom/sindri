@@ -6,6 +6,7 @@ use std::path::{Component, Path, PathBuf};
 use serde_json::Value;
 
 use crate::policy::Boundary;
+use crate::turn::Exit;
 
 /// `file:` is absent on purpose: it would hand the host's browser a local path no
 /// judgement ever looked at.
@@ -42,11 +43,23 @@ impl fmt::Display for Opening {
     }
 }
 
-/// What hands a judged target to the browser on this machine. The front end supplies it,
-/// because the sandbox has no display and the core never spawns; the `Err` words are why the
-/// target could not be handed over.
+/// What an opener did with a judged target, which is the call's answer: a spawn that only
+/// started says nothing about whether a browser appeared.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Handover {
+    /// The opener exited 0, so the target is on its way to the reader's screen.
+    Opened,
+    /// The opener is still running past the grace it was given: handed over, and no failure.
+    Handed,
+    /// No opening happened, in the opener's own words — a non-zero exit, or a spawn that could
+    /// not happen at all.
+    Failed { exit: Exit, words: String },
+}
+
+/// What hands a judged target to the browser on this machine. The front end supplies it, because
+/// the sandbox has no display and the core never spawns.
 pub trait Opener: fmt::Debug + Send + Sync {
-    fn open(&self, opening: &Opening) -> Result<(), String>;
+    fn open(&self, opening: &Opening) -> Handover;
 }
 
 /// Where a run stands when it asks to open something: the writable set, the session temp

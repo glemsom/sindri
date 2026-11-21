@@ -3540,10 +3540,15 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
     let bin = ground.at("bin");
     std::fs::create_dir_all(&bin).expect("the bin directory");
     let argv = ground.at("argv");
+    let display = ground.at("display");
     let opener = bin.join("xdg-open");
     std::fs::write(
         &opener,
-        format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n", argv.display()),
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' \"$DISPLAY\" > '{}'\n",
+            argv.display(),
+            display.display()
+        ),
     )
     .expect("the recording opener");
     std::fs::set_permissions(&opener, PermissionsExt::from_mode(0o755)).expect("it is executable");
@@ -3554,7 +3559,8 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
         .arg("--yolo-unsafe")
         .env("SINDRI_BASE_URL", wire.base_url())
         // `/usr/bin` and `/bin` behind the script, because the launch asks `git` for the branch.
-        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()));
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("DISPLAY", ":42");
     let (session, mut pty, drawn) = Session::starting(command);
 
     assert!(
@@ -3581,6 +3587,24 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
         handed,
         vec![target.display().to_string()],
         "the target arrives as exactly one word, and it is the path the ground resolved"
+    );
+
+    let deadline = Instant::now() + PATIENCE;
+    let seen = loop {
+        if let Some(words) = argv_from(&display) {
+            break words;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the opener recorded no display: {:?}",
+            drawn.text()
+        );
+        thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(
+        seen,
+        vec![String::from(":42")],
+        "the display the launch has is the display the target opens on"
     );
 
     // The call has settled and the run is asking again: the band draws its work while it is live,
