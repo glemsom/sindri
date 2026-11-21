@@ -238,10 +238,6 @@ impl Record {
         };
         self.append(Entry::Stop { stop })
     }
-    pub fn spent(&mut self, usage: Usage) -> Result<(), RecordError> {
-        self.document.usage = usage;
-        self.write_document()
-    }
     pub fn charged(&mut self, usage: &Usage) -> Result<(), RecordError> {
         self.document.usage.charge(usage);
         self.write_document()

@@ -1,21 +1,20 @@
 //! What a launch is, proved at the core's own seam: one value that joins the boundary, the proof,
 //! the session, the record, the tools and the client in the one order a run can be asked for.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fs::Permissions;
-use std::io::ErrorKind;
-use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use sindri_core::config::Config;
 use sindri_core::launch::{Handed, Launch, Machine, Turns};
 use sindri_core::open::{Handover, Opener, Opening};
 use sindri_core::policy::{Boundary, Enforcement};
-use sindri_core::provider::Deltas;
+use sindri_core::provider::{Deltas, Failure, Usage};
 use sindri_core::records::{Entry, SessionDocument, read_transcript};
-use sindri_core::run::{Cancel, Stop, Turn};
+use sindri_core::redact::SecretSet;
+use sindri_core::run::{Cancel, Reply, Request, Responder, State, Stop, Turn};
 use sindri_core::tools::{FrontEnd, OPEN, SKILL};
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
@@ -106,14 +105,9 @@ fn named(root: &Path, name: &str) -> Vec<PathBuf> {
     found
 }
 
-/// A wire nothing answers on: a loopback port that was bound and let go, so a run that reaches it is
-/// refused at once instead of waiting out a timeout.
-fn closed_wire() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
-    let port = listener.local_addr().expect("a bound address").port();
-    drop(listener);
-    format!("http://127.0.0.1:{port}")
-}
+/// An endpoint nothing listens on: a scripted launch never asks it, and an opening that takes no
+/// turn asks nothing.
+const UNANSWERED_ENDPOINT: &str = "http://127.0.0.1:1";
 
 fn naming_wire(base_url: String) -> Config {
     Config {
@@ -157,17 +151,15 @@ fn a_config_that_names_no_run_is_refused_by_the_launch_in_one_vocabulary() {
 fn a_launch_refused_by_the_sandbox_keeps_no_record_and_asks_no_turn() {
     let homes = Homes::new();
     let machine = homes.machine_that_refuses();
-    let wire = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
-    wire.set_nonblocking(true)
-        .expect("a wire that never blocks");
-    let port = wire.local_addr().expect("a bound address").port();
+    let script = Scripted::answering(Vec::new());
 
-    let Err(refusal) = Launch::open(
+    let Err(refusal) = Launch::answered_by(
         &machine,
-        &naming_wire(format!("http://127.0.0.1:{port}")),
+        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
         Enforcement::Bubblewrap,
         FrontEnd::Batch,
         None,
+        |_, _, _| script.clone(),
     ) else {
         panic!("this machine cannot make the sandbox");
     };
@@ -190,14 +182,10 @@ fn a_launch_refused_by_the_sandbox_keeps_no_record_and_asks_no_turn() {
         documents.is_empty(),
         "nothing is recorded before the boundary is proved: {documents:?}"
     );
-    let asked = wire
-        .accept()
-        .map(|_| ())
-        .expect_err("a launch refused by the sandbox asks for no turn");
-    assert_eq!(
-        asked.kind(),
-        ErrorKind::WouldBlock,
-        "the wire was never asked: {asked}"
+    assert!(
+        script.asked().is_empty(),
+        "a launch refused by the sandbox asks for no turn: {:?}",
+        script.asked()
     );
 }
 
@@ -210,16 +198,70 @@ impl Deltas for Quiet {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
+/// A responder scripted in advance: each request is logged and the next reply handed back, so a
+/// launch's own loop is driven with no wire under it.
+#[derive(Clone)]
+struct Scripted {
+    replies: Arc<Mutex<VecDeque<Reply>>>,
+    asked: Arc<Mutex<Vec<Request>>>,
+}
+
+impl Scripted {
+    fn answering(replies: impl IntoIterator<Item = Reply>) -> Scripted {
+        Scripted {
+            replies: Arc::new(Mutex::new(replies.into_iter().collect())),
+            asked: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn asked(&self) -> Vec<Request> {
+        self.asked.lock().expect("the log is not poisoned").clone()
+    }
+}
+
+impl Responder for Scripted {
+    fn respond(&self, request: &Request, deltas: &mut dyn Deltas) -> Result<Reply, Failure> {
+        self.asked
+            .lock()
+            .expect("the log is not poisoned")
+            .push(request.clone());
+        let reply = self
+            .replies
+            .lock()
+            .expect("the script is not poisoned")
+            .pop_front()
+            .expect("the script answers every request made of it");
+        deltas.text(&reply.text);
+        if let Some(reasoning) = &reply.reasoning {
+            deltas.reasoning(reasoning);
+        }
+        Ok(reply)
+    }
+}
+
 /// A front end that keeps the newest document and transcript it is handed, which is what a launch's
-/// own record says once a run has stopped.
+/// own record says once a run has stopped, and the turn a run ended on.
 #[derive(Default)]
 struct Kept {
     document: Option<SessionDocument>,
     transcript: Vec<Entry>,
+    kept: Option<Turn>,
+}
+
+impl Kept {
+    fn ended_on(&self) -> Turn {
+        self.kept
+            .clone()
+            .expect("the run hands back the turn it ended on")
+    }
 }
 
 impl Turns for Kept {
     fn turn(&mut self, _ended: &Turn) {}
+
+    fn kept(&mut self, kept: &Turn) {
+        self.kept = Some(kept.clone());
+    }
 
     fn facts(&mut self, handed: Handed<'_>) {
         self.document = Some(handed.document.clone());
@@ -227,19 +269,27 @@ impl Turns for Kept {
     }
 }
 
+/// A launch that answers through `script` and nothing else, on a config that names a run.
+fn launch_answering(homes: &Homes, script: &Scripted, front_end: FrontEnd) -> Launch<Scripted> {
+    let script = script.clone();
+    Launch::answered_by(
+        &homes.machine(),
+        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
+        Enforcement::Unsafe,
+        front_end,
+        None,
+        |_, _, _| script.clone(),
+    )
+    .ok()
+    .expect("a config naming a wire, a model and a key names a run")
+}
+
 #[test]
 fn a_launch_records_the_wire_the_model_and_the_boundary_it_runs() {
     let homes = Homes::new();
+    let script = Scripted::answering([Reply::answer("triaged")]);
 
-    let mut launch = Launch::open(
-        &homes.machine(),
-        &naming_wire(closed_wire()),
-        Enforcement::Unsafe,
-        FrontEnd::Batch,
-        None,
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run");
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Batch);
     let figure = launch.figure();
 
     assert_eq!(figure.wire, Wire::Anthropic, "the wire the config names");
@@ -252,35 +302,17 @@ fn a_launch_records_the_wire_the_model_and_the_boundary_it_runs() {
     );
 
     let mut kept = Kept::default();
-    let outcome = match launch.drive("triage this", &[], &mut Quiet, &mut kept, Cancel::new()) {
-        Ok(outcome) => outcome,
+    match launch.drive("triage this", &[], &mut Quiet, &mut kept, Cancel::new()) {
+        Ok(_) => {}
         Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
-    };
+    }
 
-    assert!(
-        matches!(outcome.stopped(), Stop::Error(_)),
-        "a closed wire ends the run rather than answering it: {}",
-        outcome.stopped()
-    );
     let document = kept
         .document
         .expect("the launch hands the document its record holds");
     assert_eq!(document.wire, Wire::Anthropic);
     assert_eq!(document.model, "claude-sonnet-4-5");
     assert_eq!(document.enforcement, Enforcement::Unsafe);
-    assert_eq!(
-        document.turns, 0,
-        "a wire that took no reply ended the run before a turn was kept"
-    );
-    let transcript = read_transcript(&figure.session).expect("the record the launch wrote");
-    let (Some(Entry::Prompt { .. }), Some(Entry::Stop { .. })) =
-        (transcript.entries().first(), transcript.entries().last())
-    else {
-        panic!(
-            "the record opens with the prompt it was asked and closes with the stop: {:?}",
-            transcript.entries()
-        );
-    };
     assert!(
         figure.session.join("session.json").exists(),
         "the record the launch wrote is in the session it named"
@@ -288,17 +320,126 @@ fn a_launch_records_the_wire_the_model_and_the_boundary_it_runs() {
 }
 
 #[test]
+fn a_scripted_answer_ends_the_run_as_final_and_the_record_holds_it() {
+    let homes = Homes::new();
+    let script = Scripted::answering([Reply::answer("triaged").spent(Usage {
+        input: Some(11),
+        output: Some(7),
+        ..Usage::default()
+    })]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Batch);
+    let figure = launch.figure();
+
+    let mut kept = Kept::default();
+    let outcome = match launch.drive("triage this", &[], &mut Quiet, &mut kept, Cancel::new()) {
+        Ok(outcome) => outcome,
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    };
+
+    assert_eq!(
+        outcome.answer(),
+        Some("triaged"),
+        "the answer is the words the reply gave"
+    );
+    assert_eq!(
+        outcome.stopped(),
+        &Stop::Final,
+        "a reply that asks for no call is the end of the run"
+    );
+    assert_eq!(
+        script.asked().len(),
+        1,
+        "one prompt is one request to the wire"
+    );
+
+    let document = kept
+        .document
+        .expect("the launch hands the document its record holds");
+    assert_eq!(document.turns, 1, "one reply is the one turn of the run");
+    assert_eq!(document.stopped, State::Stopped(Stop::Final));
+    assert_eq!(
+        (document.usage.input, document.usage.output),
+        (Some(11), Some(7)),
+        "the record writes what the reply said it spent"
+    );
+
+    let transcript = read_transcript(&figure.session).expect("the record the launch wrote");
+    let safe = SecretSet::default();
+    assert_eq!(
+        transcript.entries(),
+        [
+            Entry::Prompt {
+                text: safe.redact("triage this"),
+            },
+            Entry::Turn { turn: 1 },
+            Entry::Assistant {
+                turn: 1,
+                text: safe.redact("triaged"),
+            },
+            Entry::Stop { stop: Stop::Final },
+        ],
+        "the record holds the prompt, the turn it took, the answer and the stop, in that order"
+    );
+}
+
+#[test]
+fn the_prompt_after_the_first_sees_the_turn_it_ended_on() {
+    let homes = Homes::new();
+    let script = Scripted::answering([
+        Reply::answer("the first answer"),
+        Reply::answer("the second answer"),
+    ]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Terminal);
+
+    let mut first = Kept::default();
+    let outcome = match launch.drive(
+        "the first prompt",
+        &[],
+        &mut Quiet,
+        &mut first,
+        Cancel::new(),
+    ) {
+        Ok(outcome) => outcome,
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    };
+    assert_eq!(outcome.answer(), Some("the first answer"));
+    let ended = first.ended_on();
+
+    let mut second = Kept::default();
+    let outcome = match launch.drive(
+        "the second prompt",
+        std::slice::from_ref(&ended),
+        &mut Quiet,
+        &mut second,
+        Cancel::new(),
+    ) {
+        Ok(outcome) => outcome,
+        Err(refusal) => panic!("the run after it stopped on its own: {}", refusal.message()),
+    };
+    assert_eq!(outcome.answer(), Some("the second answer"));
+
+    let asked = script.asked();
+    assert_eq!(asked.len(), 2, "each prompt in the conversation is one ask");
+    assert!(
+        asked[0].earlier().is_empty(),
+        "the first prompt joins a conversation nothing has said yet: {:?}",
+        asked[0].earlier()
+    );
+    let joined = asked[1].earlier();
+    assert_eq!(
+        joined,
+        [ended],
+        "the second ask carries the turn the first run ended on"
+    );
+    assert_eq!(joined[0].prompt, "the first prompt");
+    assert_eq!(joined[0].text, "the first answer");
+}
+
+#[test]
 fn a_launch_hands_the_transcript_its_record_wrote() {
     let homes = Homes::new();
-    let mut launch = Launch::open(
-        &homes.machine(),
-        &naming_wire(closed_wire()),
-        Enforcement::Unsafe,
-        FrontEnd::Terminal,
-        None,
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run");
+    let script = Scripted::answering([Reply::answer("triaged")]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Terminal);
     let figure = launch.figure();
 
     let mut kept = Kept::default();
@@ -328,7 +469,7 @@ fn a_launch_that_names_no_session_mints_a_guid_of_its_own() {
     let homes = Homes::new();
     let first = Launch::open(
         &homes.machine(),
-        &naming_wire(closed_wire()),
+        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
         Enforcement::Unsafe,
         FrontEnd::Terminal,
         None,
@@ -337,7 +478,7 @@ fn a_launch_that_names_no_session_mints_a_guid_of_its_own() {
     .expect("a config naming a wire, a model and a key names a run");
     let second = Launch::open(
         &homes.machine(),
-        &naming_wire(closed_wire()),
+        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
         Enforcement::Unsafe,
         FrontEnd::Terminal,
         None,
@@ -355,15 +496,11 @@ fn a_launch_that_names_no_session_mints_a_guid_of_its_own() {
 #[test]
 fn a_launch_outlives_the_runs_it_drives() {
     let homes = Homes::new();
-    let mut launch = Launch::open(
-        &homes.machine(),
-        &naming_wire(closed_wire()),
-        Enforcement::Unsafe,
-        FrontEnd::Terminal,
-        None,
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run");
+    let script = Scripted::answering([
+        Reply::answer("the first answer"),
+        Reply::answer("the second answer"),
+    ]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Terminal);
     let session = launch.session();
 
     let first = match launch.drive("the first prompt", &[], &mut Quiet, &mut (), Cancel::new()) {
@@ -375,6 +512,8 @@ fn a_launch_outlives_the_runs_it_drives() {
         Err(refusal) => panic!("the run after it stopped on its own: {}", refusal.message()),
     };
 
+    assert_eq!(first.answer(), Some("the first answer"));
+    assert_eq!(second.answer(), Some("the second answer"));
     assert_eq!(
         first.session(),
         second.session(),
@@ -418,7 +557,7 @@ fn a_launch_outlives_the_runs_it_drives() {
 fn a_launch_hands_the_words_and_skills_its_tools_were_built_from() {
     let homes = Homes::new();
     homes.user_skill("triage", "sort the tickets before you read them");
-    let config = naming_wire(closed_wire());
+    let config = naming_wire(String::from(UNANSWERED_ENDPOINT));
 
     let launch = Launch::open(
         &homes.machine(),
@@ -457,7 +596,7 @@ fn a_launch_nobody_drove_leaves_no_session_behind() {
     let homes = Homes::new();
     let launch = Launch::open(
         &homes.machine(),
-        &naming_wire(closed_wire()),
+        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
         Enforcement::Unsafe,
         FrontEnd::Batch,
         None,
@@ -493,7 +632,7 @@ fn a_launch_the_sandbox_refuses_leaves_no_session_behind() {
 
     let Err(refusal) = Launch::open(
         &homes.machine_that_refuses(),
-        &naming_wire(closed_wire()),
+        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
         Enforcement::Bubblewrap,
         FrontEnd::Batch,
         None,
@@ -545,7 +684,7 @@ fn every_tool_a_terminal_launch_registers_is_a_tool_its_own_executor_answers() {
 
     let launch = Launch::open(
         &homes.machine(),
-        &naming_wire(closed_wire()),
+        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
         Enforcement::Unsafe,
         FrontEnd::Terminal,
         Some(Arc::new(OpensNowhere)),
@@ -568,7 +707,7 @@ fn every_tool_a_batch_launch_registers_is_a_tool_its_own_executor_answers() {
 
     let launch = Launch::open(
         &homes.machine(),
-        &naming_wire(closed_wire()),
+        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
         Enforcement::Unsafe,
         FrontEnd::Batch,
         None,

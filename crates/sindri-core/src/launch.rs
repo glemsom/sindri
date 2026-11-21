@@ -18,7 +18,7 @@ use crate::provider::endpoint::Endpoint;
 use crate::provider::served::Listing;
 use crate::provider::{Ask, Client, Deltas, Route, Usage};
 use crate::records::{Entry, Facts, Record, SessionDocument};
-use crate::run::{Cancel, Limits, Run, Shell, Turn};
+use crate::run::{Cancel, Limits, Responder, Run, Shell, Turn};
 use crate::sandbox::{self, Proof};
 use crate::session::{self, Session};
 use crate::skills::{self, Catalog, Diagnostic, home};
@@ -89,12 +89,12 @@ pub struct Figure {
     pub proof: String,
 }
 
-pub struct Launch {
+pub struct Launch<R = Asking> {
     session: Session,
     boundary: Boundary,
     limits: Limits,
     record: Record,
-    asking: Asking,
+    asking: R,
     shell: Shell,
     tools: ToolSet,
     catalog: Catalog,
@@ -107,14 +107,29 @@ pub struct Launch {
     proof: Proof,
 }
 
-impl Launch {
+impl Launch<Asking> {
     pub fn open(
         machine: &Machine<'_>,
         config: &Config,
         enforcement: Enforcement,
         front_end: FrontEnd,
         opener: Option<Arc<dyn Opener>>,
-    ) -> Result<Launch, Refusal> {
+    ) -> Result<Launch<Asking>, Refusal> {
+        Launch::answered_by(machine, config, enforcement, front_end, opener, Asking::new)
+    }
+}
+
+impl<R> Launch<R> {
+    /// Where a launch's replies come from, for a launch that must not ask the wire: `adapter` is the
+    /// one responder every run on it asks, so a test drives the run's loop with a script under it.
+    pub fn answered_by(
+        machine: &Machine<'_>,
+        config: &Config,
+        enforcement: Enforcement,
+        front_end: FrontEnd,
+        opener: Option<Arc<dyn Opener>>,
+        adapter: impl FnOnce(Client, Ask, ToolSet) -> R,
+    ) -> Result<Launch<R>, Refusal> {
         let (Some(endpoint), Some(model)) = (config.endpoint(), config.model.clone()) else {
             return Err(Refusal::new(
                 "a run needs a provider and a model: set them in the config or in the environment",
@@ -134,6 +149,7 @@ impl Launch {
             model,
             &session,
             opener,
+            adapter,
         )
         .inspect_err(|_| session.discard())
     }
@@ -148,7 +164,8 @@ impl Launch {
         model: String,
         session: &Session,
         opener: Option<Arc<dyn Opener>>,
-    ) -> Result<Launch, Refusal> {
+        adapter: impl FnOnce(Client, Ask, ToolSet) -> R,
+    ) -> Result<Launch<R>, Refusal> {
         let wire = endpoint.wire();
         let workspace = std::env::current_dir().map_err(|error| {
             Refusal::new(format!("cannot read the working directory: {error}"), SETUP)
@@ -191,7 +208,7 @@ impl Launch {
             },
         )
         .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
-        let asking = Asking::new(client, ask, tools.clone());
+        let asking = adapter(client, ask, tools.clone());
         // Resolved once: the ground a frame draws a path against is the one the run judges by.
         let ground = Ground::new(&boundary, session.temp(), &workspace).ok();
         let shell = Shell::new(boundary.clone(), session.temp(), catalog.clone())
@@ -274,6 +291,27 @@ impl Launch {
         self.limits.max_turns()
     }
 
+    /// The session the run on this launch uses, held by whoever started the run: a run owns the
+    /// launch while it is in flight, so the temp of the session has to be reachable without it.
+    pub fn session(&self) -> Session {
+        self.session.clone()
+    }
+
+    /// The conversation the session held is over: its temp goes and the directory, the record and the
+    /// spill are kept, so a launch that ended still reads.
+    pub fn close(&mut self) {
+        note(self.record.finish());
+    }
+
+    /// Whether a run on this session would still be the run its record names. A session records one
+    /// wire, one model, one route, one boundary and one set of dials, so a config that decides
+    /// another run is the end of it.
+    pub fn runs_on(&self, config: &Config) -> bool {
+        self.config.decides_the_same_run(config)
+    }
+}
+
+impl<R: Responder + Clone> Launch<R> {
     /// Drives `prompt` on the turns this launch has already ended. The session it writes is the one
     /// the prompt before it wrote: the record counts the turns of both, and the temp a command wrote
     /// in is still there.
@@ -310,8 +348,7 @@ impl Launch {
 
         turns.kept(&run.kept());
         let state = run.state();
-        let usage = self.asking.spent();
-        note(self.record.spent(usage));
+        note(self.record.charged(&spent(run.history())));
         note(self.record.stopped(&state));
         hand(turns, self);
         let outcome = Outcome::of(
@@ -325,25 +362,6 @@ impl Launch {
             },
         );
         outcome.ok_or_else(|| Refusal::new("the run ended with no stop reason to report", SETUP))
-    }
-
-    /// The session the run on this launch uses, held by whoever started the run: a run owns the
-    /// launch while it is in flight, so the temp of the session has to be reachable without it.
-    pub fn session(&self) -> Session {
-        self.session.clone()
-    }
-
-    /// The conversation the session held is over: its temp goes and the directory, the record and the
-    /// spill are kept, so a launch that ended still reads.
-    pub fn close(&mut self) {
-        note(self.record.finish());
-    }
-
-    /// Whether a run on this session would still be the run its record names. A session records one
-    /// wire, one model, one route, one boundary and one set of dials, so a config that decides
-    /// another run is the end of it.
-    pub fn runs_on(&self, config: &Config) -> bool {
-        self.config.decides_the_same_run(config)
     }
 }
 
@@ -373,7 +391,17 @@ impl Turns for () {
     fn turn(&mut self, _ended: &Turn) {}
 }
 
-fn hand(turns: &mut dyn Turns, launch: &Launch) {
+/// What the turns of one run reported spending, as the record's running total takes it: a responder
+/// that spends nothing of its own still writes what each reply said it cost.
+fn spent(history: &[Turn]) -> Usage {
+    let mut spent = Usage::default();
+    for turn in history {
+        spent.charge(&turn.usage);
+    }
+    spent
+}
+
+fn hand<R>(turns: &mut dyn Turns, launch: &Launch<R>) {
     turns.facts(Handed {
         session: &launch.session,
         document: launch.record.document(),

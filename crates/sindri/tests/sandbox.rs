@@ -5,7 +5,6 @@
 mod modules; // the module a source file belongs to
 
 use std::fs::Permissions;
-use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -62,7 +61,7 @@ impl Ground {
             .current_dir(&self.workspace)
             .env("SINDRI_PROVIDER", "anthropic")
             .env("SINDRI_MODEL", "claude-sonnet-4-6")
-            .env("SINDRI_BASE_URL", closed_wire())
+            .env("SINDRI_BASE_URL", UNANSWERED_ENDPOINT)
             .env("ANTHROPIC_API_KEY", "sk-ant-the-stand-in-one");
         command
     }
@@ -84,14 +83,9 @@ impl Ground {
     }
 }
 
-/// A URL nothing answers on: a loopback port that was bound and let go, so a run that reaches the wire is
-/// refused at once instead of waiting out a timeout.
-fn closed_wire() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
-    let port = listener.local_addr().expect("a bound address").port();
-    drop(listener);
-    format!("http://127.0.0.1:{port}")
-}
+/// An endpoint nothing listens on: a run that reaches it is refused at once instead of waiting out
+/// a timeout.
+const UNANSWERED_ENDPOINT: &str = "http://127.0.0.1:1";
 
 const RESTRICTED: &str = "if [ \"${1:-}\" = --version ]; then\n  \
                           echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
