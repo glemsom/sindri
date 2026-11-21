@@ -325,6 +325,12 @@ impl Request {
 
 pub trait Responder {
     fn respond(&self, request: &Request, deltas: &mut dyn Deltas) -> Result<Reply, Failure>;
+
+    /// What this responder has spent over every reply it made, which the record writes as the
+    /// run's usage: one that makes no reply of its own spends nothing.
+    fn spent(&self) -> Usage {
+        Usage::default()
+    }
 }
 
 pub trait Executor {
