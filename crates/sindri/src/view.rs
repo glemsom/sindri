@@ -34,7 +34,7 @@ use crate::link::Links;
 use crate::list::ScreenRow;
 use crate::mark::{Cell, Line, Mark, Span};
 use crate::models::Models;
-use crate::palette::{Band, Edge, Palette};
+use crate::palette::Palette;
 use crate::pen::{self, Clip};
 use crate::picker::Picker;
 use crate::picture::Surface;
@@ -271,6 +271,14 @@ impl Painted {
     /// two passes holding the same shading are the same bands.
     pub fn shades(&self) -> &[Shade] {
         &self.shades
+    }
+
+    /// Hands the terminal a band's shade: a band drawn in cells alone is claimed by its shade and
+    /// no image placed under it.
+    fn shaded(&mut self, shade: Shade) {
+        if shade.places() {
+            self.shades.push(shade);
+        }
     }
 
     /// The destinations this frame named, laid on the rows it drew.
@@ -1283,8 +1291,10 @@ impl View {
                 buffer,
                 &self.capabilities.palette(),
             ) {
-                under = Some(shade.area());
-                painted.shades.push(shade);
+                if shade.places() {
+                    under = Some(shade.area());
+                }
+                painted.shaded(shade);
             }
             if let (Some(picture), Some(cells)) = (&picture, band.picture) {
                 let cell = self.capabilities.cell();
@@ -1311,7 +1321,7 @@ impl View {
         }
         self.notice_band(layout.notice, buffer, &drawn);
         if let Some(shade) = self.composer_band(layout.composer, layout.queue, buffer) {
-            painted.shades.push(shade);
+            painted.shaded(shade);
         }
         self.footer(layout.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
@@ -1417,7 +1427,9 @@ impl View {
         sizes: &mut Sizes,
     ) -> Drawn {
         let palette = self.capabilities.palette();
-        pen::claim(buffer, area, palette.ground(Some(Band::Well)));
+        if let Some(shade) = Shade::transcript(area, &palette) {
+            shade.claim(buffer, &palette);
+        }
         let reflowed = self.rows.measure(Measure::new(
             area.width,
             self.surface(),
@@ -1619,32 +1631,21 @@ impl View {
         whole_row(buffer, area, area.y, &spans, &self.capabilities.palette());
     }
 
-    /// The composer's band drawn, and the shading it stands on where this terminal places a picture
-    /// and the palette spells a pixel: its rows are shaded from its head down to the rail's own tone,
-    /// cell by cell where no plane stands under them, one claim per row, so no cell loses its own ink.
+    /// The composer's band drawn, and the shade its rows stand on: a plane where this terminal
+    /// places a picture and the palette spells a pixel, and the shade's own rows claimed under the
+    /// cells where it does not, so no cell loses its ink.
     fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) -> Option<Shade> {
         let palette = self.capabilities.palette();
         let caret = self.caret(band, queue, None).map(|(x, _)| x);
-        let shade = self
-            .capabilities
-            .pictures()
-            .cell()
-            .and_then(|cell| Shade::composer(band, cell, caret, &palette));
-        match shade.is_some() {
-            true => pen::claim(buffer, band, palette.ground(None)),
-            false => {
-                for row in 0..band.height {
-                    pen::claim(
-                        buffer,
-                        Rect {
-                            y: band.y.saturating_add(row),
-                            height: 1,
-                            ..band
-                        },
-                        palette.raised(row, band.height),
-                    );
-                }
-            }
+        let shade = Shade::composer(
+            band,
+            self.capabilities.pictures().cell(),
+            caret,
+            self.head_lit(),
+            &palette,
+        );
+        if let Some(shade) = shade {
+            shade.claim(buffer, &palette);
         }
         self.composer_inside(band, queue, buffer);
         self.composer_head(band, buffer);
@@ -1745,9 +1746,9 @@ impl View {
         }
     }
 
-    /// The band's head row: the light a band meets the frame on, and the one rule it is drawn as
-    /// where the palette draws no edge, a card covers the band or the window is away. The draft's
-    /// count hangs on the row's far edge over either, and a live run's pulse walks it.
+    /// The band's head row over the light its shade claims: the one rule it is drawn as where the
+    /// palette draws no edge, a card covers the band or the window is away, the draft's count hung
+    /// on the row's far edge, and the pulse a live run walks it with.
     fn composer_head(&self, band: Rect, buffer: &mut Buffer) {
         if band.height == 0 {
             return;
@@ -1767,9 +1768,8 @@ impl View {
             width: row.width.saturating_sub(hung),
             ..row
         };
-        match self.head_lit() {
-            true => pen::claim(buffer, row, palette.edged(Edge::Lit)),
-            false => pen::rule(buffer, room, HAIRLINE, look, &palette),
+        if !self.head_lit() {
+            pen::rule(buffer, room, HAIRLINE, look, &palette);
         }
         if self.facts.live() && room.width > 0 {
             let step = self.edge_step() % u64::from(room.width);

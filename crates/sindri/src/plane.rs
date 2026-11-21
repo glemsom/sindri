@@ -1,11 +1,14 @@
-//! The planes a frame places under its cells: the shading a band's ground is drawn from, the image
+//! The planes a frame places under its cells: the shade a band's ground is drawn from, the image
 //! it is drawn as, the identity a placement is named by, and the bytes that take one away again.
 
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 
 use crate::graphics::CellSize;
 use crate::ledger::Rail;
-use crate::palette::{Band, Edge, Palette, channels};
+use crate::palette::{self, Band, Edge, Palette, channels};
+use crate::pen;
 
 /// The columns of the transcript the rail's plane widens across: the transcript's last, where the
 /// well falls into the shadow the rail comes back out of.
@@ -31,122 +34,241 @@ impl PlaneId {
     }
 }
 
-/// A band's shading as a value: which band it is, the rows and columns it covers, the cell it is
-/// drawn at and the colours it is drawn in. Every fact an image of it depends on is held here, so
-/// drawing one never fails and two passes that shade the same band shade it alike.
+/// The one description of what a band sits on: the colour each of its rows is claimed in, the seams
+/// it makes with the band beside it, and every fact an image of it is drawn from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shade {
-    /// The composer's band, with the caret's column in the frame and none while it waits nowhere:
-    /// the glow is drawn under it, and it is the one fact besides the band the shading depends on.
-    Composer {
-        area: Rect,
-        cell: CellSize,
-        well: [u8; 3],
-        head: [u8; 3],
-        foot: [u8; 3],
-        caret: Option<u16>,
-    },
-    /// The rail's band, over the rows and columns it covers already widened across the seam.
+    /// The transcript band, on the well, with no seam of its own.
+    Transcript { area: Rect, well: Color },
+    /// The rail on its own tone, the frame's shadow across its last row, the light its first
+    /// column meets the transcript on, and the seam a ledger's plane widens across.
     Rail {
         area: Rect,
-        cell: CellSize,
-        head: [u8; 3],
-        foot: [u8; 3],
+        cell: Option<CellSize>,
+        shape: Rail,
+        tone: Color,
+        shadow: Color,
+        lit: Color,
         seam: Option<Seam>,
+    },
+    /// The composer's band rising out of the well into its head row and falling to the rail's own
+    /// tone under it, with the light its head row is claimed in where it takes the keys.
+    Composer {
+        area: Rect,
+        cell: Option<CellSize>,
+        well: Color,
+        head: Color,
+        foot: Color,
+        lit: Option<Color>,
+        caret: Option<u16>,
     },
 }
 
 impl Shade {
-    /// The composer's band: its first cell rising out of the transcript's well into its head, the rung
-    /// above the rail's tone, which falls into the rail's own tone over the height left, with the glow
-    /// under the caret's column. None for an area with no rows or no columns, or no colour in a pixel.
+    /// The transcript band on the well, and nothing for an area with no rows or no columns.
+    pub fn transcript(area: Rect, palette: &Palette) -> Option<Shade> {
+        covers(area).then(|| Shade::Transcript {
+            area,
+            well: palette.band(Band::Well),
+        })
+    }
+
+    /// The composer's band, with no plane under it unless the palette spells its three colours as
+    /// pixels: the glow under the caret's column is drawn in the image, so it is a fact of the
+    /// shade.
     pub fn composer(
         area: Rect,
-        cell: CellSize,
+        cell: Option<CellSize>,
         caret: Option<u16>,
+        lit: bool,
         palette: &Palette,
     ) -> Option<Shade> {
         if !covers(area) {
             return None;
         }
+        let well = palette.band(Band::Well);
+        let head = palette.band(Band::Composer);
+        let foot = palette.band(Band::Rail);
+        let cell = cell.filter(|_| {
+            channels(well).is_some() && channels(head).is_some() && channels(foot).is_some()
+        });
         Some(Shade::Composer {
             area,
             cell,
-            well: channels(palette.band(Band::Well))?,
-            head: channels(palette.step(0, area.height))?,
-            foot: channels(palette.step(area.height - 1, area.height))?,
+            well,
+            head,
+            foot,
+            lit: lit.then(|| palette.edge(Edge::Lit)),
             caret,
         })
     }
 
-    /// The rail's band: the band's own colour at the head, falling into the shadow at its foot, and
-    /// a ledger's widened across the seam, where the well falls into the crease and the band comes
-    /// back out of it. None for an area with no rows or columns or a palette with no colour in it.
-    pub fn rail(shape: Rail, area: Rect, cell: CellSize, palette: &Palette) -> Option<Shade> {
-        let head = channels(palette.band(Band::Rail))?;
-        let foot = channels(palette.edge(Edge::Shadow))?;
-        let seam = match shape {
-            Rail::Ledger => Seam::of(SEAM.min(area.x), cell, foot, palette),
-            Rail::Strip => None,
-        };
-        let widened = seam.map_or(0, Seam::widened);
-        let area = Rect {
-            x: area.x - widened,
-            width: area.width + widened,
-            ..area
-        };
+    /// The rail's band over the rows and columns it covers, widened across the seam a ledger's
+    /// plane falls out of the transcript on, and not widened at all where no plane is drawn.
+    pub fn rail(
+        shape: Rail,
+        area: Rect,
+        cell: Option<CellSize>,
+        palette: &Palette,
+    ) -> Option<Shade> {
         if !covers(area) {
             return None;
         }
+        let tone = palette.band(Band::Rail);
+        let shadow = palette.edge(Edge::Shadow);
+        let cell = cell.filter(|_| channels(tone).is_some() && channels(shadow).is_some());
+        let seam = match (shape, cell) {
+            (Rail::Ledger, Some(cell)) => Seam::of(SEAM.min(area.x), cell, shadow, palette),
+            _ => None,
+        };
+        let widened = seam.map_or(0, Seam::widened);
         Some(Shade::Rail {
-            area,
+            area: Rect {
+                x: area.x - widened,
+                width: area.width + widened,
+                ..area
+            },
             cell,
-            head,
-            foot,
+            shape,
+            tone,
+            shadow,
+            lit: palette.edge(Edge::Lit),
             seam,
         })
     }
 
-    pub fn id(&self) -> PlaneId {
+    /// The identity the terminal holds this band's plane under, and nothing for the transcript
+    /// band, which no plane stands under.
+    pub fn id(&self) -> Option<PlaneId> {
         match self {
-            Shade::Composer { .. } => PlaneId::Composer,
-            Shade::Rail { .. } => PlaneId::Rail,
+            Shade::Transcript { .. } => None,
+            Shade::Rail { .. } => Some(PlaneId::Rail),
+            Shade::Composer { .. } => Some(PlaneId::Composer),
         }
     }
 
     pub fn area(&self) -> Rect {
         match self {
-            Shade::Composer { area, .. } | Shade::Rail { area, .. } => *area,
+            Shade::Transcript { area, .. }
+            | Shade::Rail { area, .. }
+            | Shade::Composer { area, .. } => *area,
         }
     }
 
-    fn cell(&self) -> CellSize {
+    /// Whether a plane is drawn under the band, which is the one thing a cell of it is claimed by.
+    pub fn places(&self) -> bool {
+        self.cell().is_some()
+    }
+
+    /// The colour that row of the band sits on under no seam: the well, the rail's own tone, the
+    /// shadow across a ledger's last row, or the shade the composer's band is raised in.
+    pub fn row(&self, row: u16) -> Color {
         match self {
-            Shade::Composer { cell, .. } | Shade::Rail { cell, .. } => *cell,
+            Shade::Transcript { well, .. } => *well,
+            Shade::Rail {
+                area,
+                shape,
+                tone,
+                shadow,
+                ..
+            } => match (*shape, row) {
+                (Rail::Ledger, row) if row == area.height.saturating_sub(1) => *shadow,
+                _ => *tone,
+            },
+            Shade::Composer {
+                area, head, foot, ..
+            } => palette::blend(*head, *foot, row, area.height.saturating_sub(1)),
+        }
+    }
+
+    /// Claims the band's cells from the shade: the terminal's own ground where a plane is drawn
+    /// under them, and otherwise every row on the colour the shade says it sits on, then the seams
+    /// it makes with the band beside it.
+    pub fn claim(&self, buffer: &mut Buffer, palette: &Palette) {
+        let area = self.claimed();
+        match self.places() {
+            true => pen::claim(buffer, area, palette.ground(None)),
+            false => {
+                for row in 0..area.height {
+                    pen::claim(
+                        buffer,
+                        Rect {
+                            y: area.y.saturating_add(row),
+                            height: 1,
+                            ..area
+                        },
+                        palette.over(self.row(row)),
+                    );
+                }
+                if let Shade::Rail {
+                    shape: Rail::Ledger,
+                    lit,
+                    ..
+                } = *self
+                {
+                    pen::claim(
+                        buffer,
+                        Rect {
+                            width: 1,
+                            height: area.height.saturating_sub(1),
+                            ..area
+                        },
+                        palette.over(lit),
+                    );
+                }
+            }
+        }
+        if let Shade::Composer { lit: Some(lit), .. } = *self {
+            pen::claim(buffer, Rect { height: 1, ..area }, palette.over(lit));
+        }
+    }
+
+    /// The band's own rows and columns, which is all a claim of its cells reaches: a rail's plane
+    /// widens back over the transcript's last ones, and those are the transcript band's cells.
+    fn claimed(&self) -> Rect {
+        let area = self.area();
+        match self {
+            Shade::Rail {
+                seam: Some(seam), ..
+            } => Rect {
+                x: area.x.saturating_add(seam.widened()),
+                width: area.width.saturating_sub(seam.widened()),
+                ..area
+            },
+            _ => area,
+        }
+    }
+
+    fn cell(&self) -> Option<CellSize> {
+        match self {
+            Shade::Transcript { .. } => None,
+            Shade::Rail { cell, .. } | Shade::Composer { cell, .. } => *cell,
         }
     }
 }
 
-/// A band's ground as the image the terminal draws under its cells, held with the shading it was
-/// drawn from: two planes of one frame are told apart by that shading and by nothing else.
+/// A band's ground as the image the terminal draws under its cells, held with the shade it was drawn
+/// from: two planes of one frame are told apart by that shade and by nothing else.
 #[derive(Clone, Debug)]
 pub struct Plane {
     shade: Shade,
+    id: PlaneId,
     pixels: image::RgbaImage,
 }
 
 impl Plane {
-    pub(crate) fn draw(shade: Shade) -> Plane {
-        let (width, height) = extent(shade.area(), shade.cell());
+    /// The image a shade is drawn as, and nothing for a band no plane stands under.
+    pub(crate) fn draw(shade: Shade) -> Option<Plane> {
+        let id = shade.id()?;
+        let cell = shade.cell()?;
+        let area = shade.area();
+        let (width, height) = extent(area, cell);
         let pixels = match shade {
-            Shade::Composer {
-                area,
-                cell,
-                well,
-                head,
-                foot,
-                caret,
-            } => {
+            Shade::Transcript { .. } => return None,
+            Shade::Composer { well, caret, .. } => {
+                let head = channels(shade.row(0))?;
+                let foot = channels(shade.row(area.height.saturating_sub(1)))?;
+                let well = channels(well)?;
                 let rise = cell.height().min(height.saturating_sub(1)).max(1);
                 // The head's own row is the rise's last, so the fall runs over the rows under it.
                 let body = height.saturating_sub(rise + 1);
@@ -167,8 +289,10 @@ impl Plane {
                 })
             }
             Shade::Rail {
-                head, foot, seam, ..
+                tone, shadow, seam, ..
             } => {
+                let head = channels(tone)?;
+                let foot = channels(shadow)?;
                 let span = f64::from(height.saturating_sub(1).max(1));
                 image::RgbaImage::from_fn(width, height, |x, y| {
                     let down = mix(head, foot, f64::from(y) / span);
@@ -177,11 +301,11 @@ impl Plane {
                 })
             }
         };
-        Plane { shade, pixels }
+        Some(Plane { shade, id, pixels })
     }
 
     pub fn id(&self) -> PlaneId {
-        self.shade.id()
+        self.id
     }
 
     pub fn area(&self) -> Rect {
@@ -193,8 +317,8 @@ impl Plane {
     }
 }
 
-/// The band images one frame holds, each against the shading it was drawn from: a frame makes an
-/// image when a band's shading moves and keeps it while that shading stands.
+/// The band images one frame holds, each against the shade it was drawn from: a frame makes an image
+/// when a band's shade moves and keeps it while that shade stands.
 #[derive(Clone, Debug, Default)]
 pub struct Planes {
     held: Vec<Plane>,
@@ -202,7 +326,7 @@ pub struct Planes {
 }
 
 impl Planes {
-    /// Holds a pass's `shades`: a shading already held keeps its image, a new one is drawn, and one
+    /// Holds a pass's `shades`: a shade already held keeps its image, a new one is drawn, and one
     /// the pass no longer names loses its image.
     pub fn hold(&mut self, shades: &[Shade]) {
         let mut held = Vec::with_capacity(shades.len());
@@ -210,8 +334,10 @@ impl Planes {
             match self.held.iter().position(|plane| plane.shade == *shade) {
                 Some(at) => held.push(self.held.remove(at)),
                 None => {
-                    held.push(Plane::draw(*shade));
-                    self.made += 1;
+                    if let Some(plane) = Plane::draw(*shade) {
+                        held.push(plane);
+                        self.made += 1;
+                    }
                 }
             }
         }
@@ -260,14 +386,14 @@ pub struct Seam {
 }
 
 impl Seam {
-    /// The seam that widens a plane `widened` columns, and nothing for a palette with no well to
-    /// spell in a pixel, where there is no fall to start from.
-    fn of(widened: u16, cell: CellSize, shadow: [u8; 3], palette: &Palette) -> Option<Seam> {
+    /// The seam that widens a plane `widened` columns, and nothing for a palette with no well or no
+    /// shadow to spell in a pixel, where there is no fall to start from.
+    fn of(widened: u16, cell: CellSize, shadow: Color, palette: &Palette) -> Option<Seam> {
         Some(Seam {
             widened,
             cell,
             well: channels(palette.band(Band::Well))?,
-            shadow,
+            shadow: channels(shadow)?,
         })
     }
 
@@ -319,3 +445,6 @@ fn mix(head: [u8; 3], foot: [u8; 3], t: f64) -> [u8; 3] {
         channel(head[2], foot[2]),
     ]
 }
+
+#[cfg(test)]
+mod tests;

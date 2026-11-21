@@ -1514,8 +1514,8 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     }));
     let palette = *frame.palette();
     let (head, foot) = (
-        channels(palette.step(0, band.height)).expect("the band's head in pixels"),
-        channels(palette.step(band.height - 1, band.height)).expect("its foot in pixels"),
+        channels(palette.band(Band::Composer)).expect("the band's head in pixels"),
+        channels(palette.band(Band::Rail)).expect("its foot in pixels"),
     );
     let top = ground.pixels().get_pixel(400, 0);
     let mid = ground.pixels().get_pixel(400, ground.pixels().height() / 2);
@@ -1589,12 +1589,11 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
         Palette::ANSI,
         "a terminal that names no twenty-four-bit colour draws the design in its greys"
     );
-    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the band's well in pixels");
-    let head = channels(palette.step(0, band.height)).expect("the band's head in pixels");
-    let foot = channels(palette.step(band.height - 1, band.height)).expect("its foot in pixels");
+    let head = channels(palette.band(Band::Composer)).expect("the band's head in pixels");
+    let foot = channels(palette.band(Band::Rail)).expect("its foot in pixels");
     assert_eq!(
         (well, head, foot),
         ([28, 28, 28], [48, 48, 48], [38, 38, 38]),
@@ -1686,7 +1685,6 @@ fn the_bands_ground_rises_out_of_the_well_over_its_first_cell() {
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
     let palette = *frame.palette();
-    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     let column = width - 1;
@@ -1698,13 +1696,13 @@ fn the_bands_ground_rises_out_of_the_well_over_its_first_cell() {
     );
     assert_eq!(
         ground.pixels().get_pixel(column, cell().height()).0[..3],
-        channels(palette.step(0, band.height)).expect("the band's head in pixels"),
+        channels(palette.band(Band::Composer)).expect("the band's head in pixels"),
         "and one cell down the rise has come out at the band's head"
     );
     let bottom = ground.pixels().get_pixel(column, height - 1).0;
     assert_eq!(
         bottom[..3],
-        channels(palette.step(band.height - 1, band.height)).expect("the band's foot"),
+        channels(palette.band(Band::Rail)).expect("the band's foot"),
         "and the last row is still the foot the band comes down to"
     );
 }
@@ -1715,11 +1713,10 @@ fn the_rise_out_of_the_well_eases_into_the_bands_head() {
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
     let palette = *frame.palette();
-    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(&view);
     let (width, _height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the well in pixels");
-    let head = channels(palette.step(0, band.height)).expect("the band's head in pixels");
+    let head = channels(palette.band(Band::Composer)).expect("the band's head in pixels");
     let rise = cell().height();
     let at = |y| {
         let pixel = ground.pixels().get_pixel(width - 1, y);
@@ -1755,7 +1752,7 @@ fn the_rise_out_of_the_well_eases_into_the_bands_head() {
              {arriving} in the second, so it eases out into the head"
         );
     }
-    let foot = channels(palette.step(band.height - 1, band.height)).expect("the band's foot");
+    let foot = channels(palette.band(Band::Rail)).expect("the band's foot");
     let under = at(rise + 1);
     for channel in 0..3 {
         assert!(
@@ -1882,7 +1879,7 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
             .told()
             .shades()
             .iter()
-            .map(Shade::id)
+            .filter_map(Shade::id)
             .collect::<Vec<PlaneId>>(),
         vec![PlaneId::Rail, PlaneId::Composer],
         "the frame hands back the rail's shading beside the composer's, each under its own identity"
@@ -1954,7 +1951,7 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
             .told()
             .shades()
             .iter()
-            .all(|shade| shade.id() != PlaneId::Rail),
+            .all(|shade| shade.id() != Some(PlaneId::Rail)),
         "a palette that draws no colour is handed no shading over the rail: its band is the flat \
          band it already had"
     );
@@ -1976,16 +1973,17 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_composer() {
             .told()
             .shades()
             .iter()
-            .all(|shade| shade.id() != PlaneId::Composer),
+            .all(|shade| shade.id() != Some(PlaneId::Composer)),
         "a palette that draws no colour is handed no shading over the composer: the band drawn in \
          its place is the flat one the frame already had"
     );
     let band = frame.told().layout().expect("a laid out frame").composer;
+    let shade = Shade::composer(band, None, None, false, &palette).expect("a band to shade");
     for row in 0..band.height {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
             frame.cells()[(x, y)].bg,
-            palette.raised(row, band.height).bg.unwrap(),
+            shade.row(row),
             "row {row} of the band stands on the flat ground the reader's own slots are, and on \
              no ground a plane was claimed over"
         );
@@ -2007,13 +2005,11 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
     let band = plain_frame.told().layout().unwrap().composer;
     assert_eq!(band, picture_frame.told().layout().unwrap().composer);
     let palette = plain_frame.palette();
+    let shade = Shade::composer(band, None, None, false, palette).expect("a band to shade");
     for row in 1..band.height {
         let x = band.x + band.width / 2;
         let y = band.y + row;
-        assert_eq!(
-            plain_frame.cells()[(x, y)].bg,
-            palette.raised(row, band.height).bg.unwrap()
-        );
+        assert_eq!(plain_frame.cells()[(x, y)].bg, shade.row(row));
         assert_eq!(
             picture_frame.cells()[(x, y)].bg,
             palette.ground(None).bg.unwrap()

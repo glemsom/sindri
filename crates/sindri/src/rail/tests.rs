@@ -15,7 +15,7 @@ use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 /// The band a ledger test stands in: the rail at its floor, which is what the narrowest frame
 /// that holds one is handed.
 const COLUMNS: u16 = FLOOR;
-use crate::palette::{Edge, channels};
+use crate::palette::{Band, Edge, channels};
 use crate::pen;
 use crate::plane::{Plane, SEAM};
 use crate::readback::{column_of, inks, under};
@@ -307,7 +307,7 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_widened_across_the_seam() {
         &PALETTE,
     )
     .expect("a palette that spells its colours is handed the band's shading");
-    let plane = Plane::draw(shade);
+    let plane = Plane::draw(shade).expect("a band a plane is drawn under");
 
     assert_eq!(
         plane.area(),
@@ -375,7 +375,7 @@ fn the_seam_falls_from_the_well_into_the_shadow_and_comes_back_out_over_the_rail
         &PALETTE,
     )
     .expect("a palette that spells its colours is handed the band's shading");
-    let plane = Plane::draw(shade);
+    let plane = Plane::draw(shade).expect("a band a plane is drawn under");
 
     let pixels = plane.pixels();
     let (width, height) = pixels.dimensions();
@@ -474,7 +474,7 @@ fn a_strip_is_handed_a_plane_that_widens_across_no_seam() {
         "a strip is one row of the rail's own columns, and its plane takes no column of the \
          transcript's"
     );
-    let plane = Plane::draw(shade);
+    let plane = Plane::draw(shade).expect("a band a plane is drawn under");
     let (width, height) = plane.pixels().dimensions();
     for y in 0..height {
         let row = *plane.pixels().get_pixel(0, y);
@@ -512,11 +512,12 @@ fn a_rail_handed_no_cell_draws_todays_band_and_its_shadow_row() {
         None,
         &mut buffer,
         &PALETTE,
-    );
+    )
+    .expect("a band to shade");
 
     assert!(
-        shade.is_none(),
-        "a terminal that places no picture is handed no shading for the rail"
+        !shade.places(),
+        "a terminal that places no picture is handed no plane under the rail"
     );
     for y in area.y..area.bottom() - 1 {
         for x in area.x + 1..area.right() {
@@ -552,12 +553,13 @@ fn a_rail_handed_a_cell_in_no_colour_draws_the_band_and_shadow_it_drew_without_o
             Some(CellSize::NOMINAL),
             &mut pictured,
             &Palette::SLOTS,
-        );
+        )
+        .expect("a band to shade");
         paint(&frame(), shape, area, None, &mut placeless, &Palette::SLOTS);
 
         assert!(
-            shade.is_none(),
-            "a palette that draws no colour is handed no shading for the {shape:?}, so the band's \
+            !shade.places(),
+            "a palette that draws no colour is handed no plane under the {shape:?}, so the band's \
              own rows are the whole of its shading"
         );
         for y in area.y..area.bottom() {
