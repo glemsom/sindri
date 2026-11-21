@@ -135,11 +135,9 @@ fn a_draft_that_bills_nothing_hangs_no_count_on_the_edge() {
     let frame = frame::painted(&mut view, 120, 40);
     let edge = edge_row(&frame);
     let ruled = edge
-        .strip_prefix("\u{250c}prompt ")
+        .strip_prefix('\u{250c}')
         .and_then(|rest| rest.strip_suffix('\u{2510}'))
-        .unwrap_or_else(|| {
-            panic!("the band's edge says no word inside its opening corner: {edge:?}")
-        });
+        .unwrap_or_else(|| panic!("the band's edge is no box that opens and closes: {edge:?}"));
 
     assert!(
         ruled.chars().all(|glyph| glyph == '\u{2500}'),

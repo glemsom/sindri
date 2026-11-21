@@ -23,7 +23,7 @@ footer at 52x24
 17 |                                                    | plain:52
 18 |                                                    | plain:52
 19 |                                                    | plain:52
-20 |┌prompt ───────────────────────────────────────────┐| accent+faint:52
+20 |┌──────────────────────────────────────────────────┐| accent+faint:52
 21 |│› what should the run do?                         │| dim:26 plain:25 dim:1
 22 |└──────────────────────────────────────────────────┘| dim:52
 23 |Enter send · / commands · @ files · ? keys          | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 plain:10

@@ -20,7 +20,7 @@ footer-queue at 120x24
 14 |                                                                                                                        | plain:120
 15 |                                                                                                                        | plain:120
 16 |                                                                                                                        | plain:120
-17 |┌running ━─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent:120
+17 |┌━─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
 18 |│› what should the run do?                                                                                             │| dim:26 plain:93 dim:1
 19 |│› run the test that failed and read it                                                                                │| dim:39 plain:80 dim:1
 20 |│› then the fmt check                                                                                                  │| dim:21 plain:98 dim:1
