@@ -347,6 +347,11 @@ taken, one notch moves the transcript, a press on a card's row chooses it and se
 from, and a press on no row of a card is no act — a pointer is never drawn into a cell.
 _Avoid_: Mouse, cursor (that one is the Caret), hover
 
+**Notch**:
+The wheel's turn, and how far it moves the **Transcript**: three rows, where a page key moves a band
+of them.
+_Avoid_: Tick, detent, scroll unit
+
 **Caret**:
 The terminal's own cursor, and never a cell of a frame: placed in the cell the draft waits in
 wherever a reader can type there, and in the query row of a card that draws one, past the last glyph
