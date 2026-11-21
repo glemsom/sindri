@@ -120,27 +120,54 @@ impl Drop for Screen {
 
 /// The screen frames are painted through, taken once: a canvas that remembered nothing would
 /// rewrite every cell of the frame on every key.
-pub(crate) type Canvas<'a> = ratatui::Terminal<Backend<&'a File>>;
+pub(crate) type Canvas<'a> = CanvasOver<&'a File>;
+
+/// A canvas over any writer: the terminal's own in a launch, and one a test can read in pieces.
+pub(crate) type CanvasOver<W> = ratatui::Terminal<Backend<W>>;
 
 /// The most of one frame held before it spills: a frame bigger than this reaches the terminal as it
 /// is written, in more than one write.
 const FRAME_HELD: usize = 8 * 1024;
 
+/// `CSI ? 25 l`: the caret is given up for as long as a frame too big to be held whole is written,
+/// because a terminal repaints between its writes and would show the caret in a cell that frame has
+/// not placed it in.
+const GIVE_UP_CARET: &[u8] = b"\x1b[?25l";
+
+/// The bytes of the frame being written before they are the terminal's, and whether its caret has
+/// been given up.
+#[derive(Default)]
+struct Writing {
+    bytes: Vec<u8>,
+    /// Set by the frame's first spill, and cleared only when the frame is the terminal's: a frame
+    /// that spans several writes gives the caret up once.
+    given_up: bool,
+}
+
 /// The screen one frame is written to, with what it has drawn so far held until the frame is a
 /// whole one: the cells and the cell the caret is placed in then reach the terminal together.
 struct Held<'a, W: Write> {
     screen: &'a mut W,
-    bytes: &'a mut Vec<u8>,
+    writing: &'a mut Writing,
 }
 
 impl<W: Write> Held<'_, W> {
     /// Hands the screen what is held so far, so what is written next follows it.
     fn spill(&mut self) -> io::Result<()> {
-        let held = std::mem::take(self.bytes);
+        let held = std::mem::take(&mut self.writing.bytes);
         if held.is_empty() {
             return Ok(());
         }
         self.screen.write_all(&held)
+    }
+
+    fn give_up_the_caret(&mut self) -> io::Result<()> {
+        if self.writing.given_up {
+            return Ok(());
+        }
+        self.screen.write_all(GIVE_UP_CARET)?;
+        self.writing.given_up = true;
+        Ok(())
     }
 
     /// Says what is no part of a frame — a plane's bytes, a clear's deletes: what is held leaves
@@ -154,19 +181,21 @@ impl<W: Write> Held<'_, W> {
     /// under it is flushed.
     fn hand_over(&mut self) -> io::Result<()> {
         self.spill()?;
+        self.writing.given_up = false;
         self.screen.flush()
     }
 }
 
 impl<W: Write> Write for Held<'_, W> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        if self.bytes.len() + bytes.len() > FRAME_HELD {
+        if self.writing.bytes.len() + bytes.len() > FRAME_HELD {
+            self.give_up_the_caret()?;
             self.spill()?;
             if bytes.len() >= FRAME_HELD {
                 return self.screen.write(bytes);
             }
         }
-        self.bytes.extend_from_slice(bytes);
+        self.writing.bytes.extend_from_slice(bytes);
         Ok(bytes.len())
     }
 
@@ -177,17 +206,17 @@ impl<W: Write> Write for Held<'_, W> {
     }
 }
 
-fn holding<'a, W: Write>(screen: &'a mut W, bytes: &'a mut Vec<u8>) -> Held<'a, W> {
-    Held { screen, bytes }
+fn holding<'a, W: Write>(screen: &'a mut W, writing: &'a mut Writing) -> Held<'a, W> {
+    Held { screen, writing }
 }
 
 /// The screen a frame is drawn through, and the bytes it draws with: borrowed apart from the backend
 /// so a frame's own links and sizes can be read while it is written.
 fn painting<'a, W: Write>(
     screen: &'a mut W,
-    bytes: &'a mut Vec<u8>,
+    writing: &'a mut Writing,
 ) -> CrosstermBackend<Held<'a, W>> {
-    CrosstermBackend::new(holding(screen, bytes))
+    CrosstermBackend::new(holding(screen, writing))
 }
 
 /// Writes a frame to a terminal, with each destination a run of its cells names opened before the
@@ -195,7 +224,7 @@ fn painting<'a, W: Write>(
 /// written as the sequence that draws it: a cell has room for neither, so both travel beside it.
 pub(crate) struct Backend<W: Write> {
     screen: CrosstermBackend<W>,
-    bytes: Vec<u8>,
+    writing: Writing,
     links: Links,
     sizes: Sizes,
     places: bool,
@@ -208,7 +237,7 @@ impl<W: Write> Backend<W> {
     fn new(screen: W, places: bool) -> Backend<W> {
         Backend {
             screen: CrosstermBackend::new(screen),
-            bytes: Vec::new(),
+            writing: Writing::default(),
             links: Links::none(),
             sizes: Sizes::none(),
             places,
@@ -235,7 +264,7 @@ impl<W: Write> Backend<W> {
         let before = std::mem::take(&mut self.planes);
         for plane in &before {
             if !planes.contains(plane) {
-                holding(&mut self.screen, &mut self.bytes).tell(&plane::delete(plane.id()))?;
+                holding(&mut self.screen, &mut self.writing).tell(&plane::delete(plane.id()))?;
             }
         }
         for plane in planes {
@@ -280,7 +309,7 @@ impl<W: Write> Backend<W> {
             sent.extend_from_slice(b"\x1b\\");
         }
         sent.extend_from_slice(b"\x1b8");
-        holding(&mut self.screen, &mut self.bytes).tell(&sent)
+        holding(&mut self.screen, &mut self.writing).tell(&sent)
     }
 
     /// One run drawn as the sequence that makes it: written in the ink of the cell the diff handed
@@ -338,7 +367,7 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,
     {
-        let mut screen = painting(&mut self.screen, &mut self.bytes);
+        let mut screen = painting(&mut self.screen, &mut self.writing);
         let mut cells: Vec<(u16, u16, &Cell)> = Vec::new();
         let mut naming: Option<String> = None;
         let mut written: Vec<(u16, u16)> = Vec::new();
@@ -381,29 +410,35 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     }
 
     fn hide_cursor(&mut self) -> io::Result<()> {
-        painting(&mut self.screen, &mut self.bytes).hide_cursor()
+        painting(&mut self.screen, &mut self.writing).hide_cursor()
     }
 
+    /// The cells leave before the show, so the show and the placement that follows it are the
+    /// frame's last write: a frame given up across its writes shows the caret in the cell it places
+    /// and in no other.
     fn show_cursor(&mut self) -> io::Result<()> {
-        painting(&mut self.screen, &mut self.bytes).show_cursor()
+        if self.writing.given_up {
+            holding(&mut self.screen, &mut self.writing).spill()?;
+        }
+        painting(&mut self.screen, &mut self.writing).show_cursor()
     }
 
     /// The question is put once the frame is the terminal's whole, so the cell it answers with is
     /// the one the frame placed.
     fn get_cursor_position(&mut self) -> io::Result<Position> {
-        holding(&mut self.screen, &mut self.bytes).spill()?;
+        holding(&mut self.screen, &mut self.writing).spill()?;
         self.screen.get_cursor_position()
     }
 
     fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> io::Result<()> {
-        painting(&mut self.screen, &mut self.bytes).set_cursor_position(position)
+        painting(&mut self.screen, &mut self.writing).set_cursor_position(position)
     }
 
     fn clear(&mut self) -> io::Result<()> {
         for plane in std::mem::take(&mut self.planes) {
-            holding(&mut self.screen, &mut self.bytes).tell(&plane::delete(plane.id()))?;
+            holding(&mut self.screen, &mut self.writing).tell(&plane::delete(plane.id()))?;
         }
-        painting(&mut self.screen, &mut self.bytes).clear()
+        painting(&mut self.screen, &mut self.writing).clear()
     }
 
     fn size(&self) -> io::Result<Size> {
@@ -416,15 +451,15 @@ impl<W: Write> RatatuiBackend for Backend<W> {
 
     /// The frame is the terminal's here, in the one write it was held for.
     fn flush(&mut self) -> io::Result<()> {
-        holding(&mut self.screen, &mut self.bytes).hand_over()
+        holding(&mut self.screen, &mut self.writing).hand_over()
     }
 
     fn append_lines(&mut self, count: u16) -> io::Result<()> {
-        painting(&mut self.screen, &mut self.bytes).append_lines(count)
+        painting(&mut self.screen, &mut self.writing).append_lines(count)
     }
 
     fn clear_region(&mut self, clear: ClearType) -> io::Result<()> {
-        painting(&mut self.screen, &mut self.bytes).clear_region(clear)
+        painting(&mut self.screen, &mut self.writing).clear_region(clear)
     }
 }
 
@@ -452,7 +487,7 @@ pub(crate) fn canvas_at(
 /// Paints the frame the view holds now. The buffer is painted first, because the ways a frame names
 /// are known only after it is painted and the backend must hold them before the frame is written.
 /// The cursor is placed last, so the cell it lands in is the one this frame drew.
-pub(crate) fn paint(canvas: &mut Canvas<'_>, view: &mut View) -> io::Result<Painted> {
+pub(crate) fn paint<W: Write>(canvas: &mut CanvasOver<W>, view: &mut View) -> io::Result<Painted> {
     canvas.autoresize()?;
     let area = canvas.current_buffer_mut().area;
     let painted = view.paint(area, canvas.current_buffer_mut());
