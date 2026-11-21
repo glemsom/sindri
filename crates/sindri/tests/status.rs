@@ -485,9 +485,9 @@ fn a_frame_tells_its_terminal_that_a_run_is_working_and_then_done() {
     assert!(
         drawn.wait_until(|stream| frame::read(stream, COLS, ROWS)
             .caret()
-            .is_some_and(|(_, column)| column == 14)),
-        "eleven glyphs typed in the draft's fourth column, one column in from the band's \
-         upright, so the terminal's cursor is placed one column past the last: {:?}",
+            .is_some_and(|(_, column)| column == 13)),
+        "eleven glyphs typed past the band's two-column gutter, so the terminal's cursor is \
+         placed one column past the last: {:?}",
         text(&drawn.bytes())
     );
     pty.type_bytes(b"\r");

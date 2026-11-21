@@ -174,8 +174,9 @@ impl Palette {
         Look::plain(Ink::Dim)
     }
 
-    /// Whether this palette draws an edge at all.
-    fn draws_edge(&self) -> bool {
+    /// Whether this palette draws an edge at all: a band's head is a row of light where it does, and
+    /// the same rule in the dim edge where it draws none.
+    pub fn draws_edge(&self) -> bool {
         self.edge(Edge::Lit) != Color::Reset
     }
 

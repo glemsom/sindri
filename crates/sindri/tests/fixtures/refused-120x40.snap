@@ -3,43 +3,43 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 refused at 120x40
-00 |                                                                            wire      anthropic                         | plain:76 dim:10 plain:34
-01 |┃›what does the check cost?                                                 model     claude-sonnet-4-5-20250929        | dim:1 plain:75 dim:10 plain:34
-02 |⋯ 1 call · 118 ms                                                           think     high                              | dim:1 plain:1 dim:15 plain:59 dim:10 plain:34
-03 |  What that buys is the plain case and what it costs is the scrolled one: a                                             | plain:120
-04 |  window is a row offset from the tail, so resolving one walks the entries  turns                               6 /  250| plain:76 dim:10 plain:34
-05 |  between the tail and the window and lays out every one of them on the way.ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
-06 |  Each is laid out once and kept, so the whole history scrolled through     cache                                    88%| plain:76 dim:10 plain:34
-07 |  costs one layout per entry and scrolling it again costs none.                                                         | plain:120
-08 |                                                                            workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
-09 |┃›what is the transcript's unit?                                            branch    spec/1-capability                 | dim:1 plain:75 dim:10 plain:34
-10 |⋯ 1 call · 9 ms                                                                                                         | dim:1 plain:1 dim:13 plain:105
-11 |  The transcript's unit is the entry. An entry never carries a formatted    skills                                     2| plain:76 dim:10 plain:34
-12 |  line, so the same run is drawn the same way by the TUI, by a reader of the                                            | plain:120
-13 |  transcript and by whatever front end comes next.                          sandbox   bwrap                             | plain:76 dim:10 plain:34
-14 |                                                                                                                        | plain:120
-15 |  construct │ where it stands                                               session   9f2c7a41                          | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:47 dim:10 plain:34
-16 |  ──────────┼───────────────────────────                                    temp      …/sindri/sessions/9f2c7a41/tmp    | plain:2 dim:38 plain:36 dim:10 plain:34
-17 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
-18 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
-19 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
-20 |                                                                                                                        | plain:120
-21 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
-22 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
-23 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
-24 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
-25 |                                                                                                                        | plain:120
-26 |  A row says the exit code and not the command, because the verdict is a                                                | plain:120
-27 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
-28 |                                                                                                                        | plain:120
-29 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
-30 |▏ fn main() {                                                                                                           | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:111
-31 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
-32 |▏    │row.paint(area, buffer);                                                                                          | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:105
-33 |▏ }                                                                                                                     | dim:2 plain:118
-34 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
-35 |  cannot create the sandbox: bubblewrap is on PATH                                                                      | muted:50 plain:70
-36 |┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
-37 |│› why does the retry test fail                                                                                        │| dim:1 accent:2 plain:116 dim:1
-38 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120
+00 |  what it shows and no more.                                                wire      anthropic                         | plain:76 dim:10 plain:34
+01 |                                                                            model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
+02 |┃›what does the check cost?                                                 think     high                              | dim:1 plain:75 dim:10 plain:34
+03 |⋯ 1 call · 118 ms                                                                                                       | dim:1 plain:1 dim:15 plain:103
+04 |  What that buys is the plain case and what it costs is the scrolled one: a turns                               6 /  250| plain:76 dim:10 plain:34
+05 |  window is a row offset from the tail, so resolving one walks the entries  ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
+06 |  between the tail and the window and lays out every one of them on the way.cache                                    88%| plain:76 dim:10 plain:34
+07 |  Each is laid out once and kept, so the whole history scrolled through                                                 | plain:120
+08 |  costs one layout per entry and scrolling it again costs none.             workspace …/git/sindri/.worktrees/46-rail   | plain:76 dim:10 plain:34
+09 |                                                                            branch    spec/1-capability                 | plain:76 dim:10 plain:34
+10 |┃›what is the transcript's unit?                                                                                        | dim:1 plain:119
+11 |⋯ 1 call · 9 ms                                                             skills                                     2| dim:1 plain:1 dim:13 plain:61 dim:10 plain:34
+12 |  The transcript's unit is the entry. An entry never carries a formatted                                                | plain:120
+13 |  line, so the same run is drawn the same way by the TUI, by a reader of thesandbox   bwrap                             | plain:76 dim:10 plain:34
+14 |  transcript and by whatever front end comes next.                                                                      | plain:120
+15 |                                                                            session   9f2c7a41                          | plain:76 dim:10 plain:34
+16 |  construct │ where it stands                                               temp      …/sindri/sessions/9f2c7a41/tmp    | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:47 dim:10 plain:34
+17 |  ──────────┼───────────────────────────                                                                                | plain:2 dim:38 plain:80
+18 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
+19 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
+20 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
+21 |                                                                                                                        | plain:120
+22 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+23 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
+24 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
+25 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
+26 |                                                                                                                        | plain:120
+27 |  A row says the exit code and not the command, because the verdict is a                                                | plain:120
+28 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
+29 |                                                                                                                        | plain:120
+30 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
+31 |▏ fn main() {                                                                                                           | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:111
+32 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
+33 |▏    │row.paint(area, buffer);                                                                                          | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:105
+34 |▏ }                                                                                                                     | dim:2 plain:118
+35 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
+36 |  cannot create the sandbox: bubblewrap is on PATH                                                                      | muted:50 plain:70
+37 |                                                                                                                        | plain:120
+38 | ›why does the retry test fail                                                                                          | dim:1 accent:1 plain:118
 39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47

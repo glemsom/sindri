@@ -3,43 +3,43 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 thumb-tail at 120x40
-00 |│ turn 45                                                                                                               | dim:2 muted:7 plain:111
-01 |│ turn 46                                                                                                               | dim:2 muted:7 plain:111
-02 |│ turn 47                                                                                                               | dim:2 muted:7 plain:111
-03 |│ turn 48                                                                                                               | dim:2 muted:7 plain:111
-04 |│ turn 49                                                                                                               | dim:2 muted:7 plain:111
-05 |│ turn 50                                                                                                               | dim:2 muted:7 plain:111
-06 |│ turn 51                                                                                                               | dim:2 muted:7 plain:111
-07 |│ turn 52                                                                                                               | dim:2 muted:7 plain:111
-08 |│ turn 53                                                                                                               | dim:2 muted:7 plain:111
-09 |│ turn 54                                                                                                               | dim:2 muted:7 plain:111
-10 |│ turn 55                                                                                                               | dim:2 muted:7 plain:111
-11 |│ turn 56                                                                                                               | dim:2 muted:7 plain:111
-12 |│ turn 57                                                                                                               | dim:2 muted:7 plain:111
-13 |│ turn 58                                                                                                               | dim:2 muted:7 plain:111
-14 |│ turn 59                                                                                                               | dim:2 muted:7 plain:111
-15 |│ turn 60                                                                                                               | dim:2 muted:7 plain:111
-16 |│ turn 61                                                                                                               | dim:2 muted:7 plain:111
-17 |│ turn 62                                                                                                               | dim:2 muted:7 plain:111
-18 |│ turn 63                                                                                                               | dim:2 muted:7 plain:111
-19 |│ turn 64                                                                                                               | dim:2 muted:7 plain:111
-20 |│ turn 65                                                                                                               | dim:2 muted:7 plain:111
-21 |│ turn 66                                                                                                               | dim:2 muted:7 plain:111
-22 |│ turn 67                                                                                                               | dim:2 muted:7 plain:111
-23 |│ turn 68                                                                                                               | dim:2 muted:7 plain:111
-24 |│ turn 69                                                                                                               | dim:2 muted:7 plain:111
-25 |│ turn 70                                                                                                               | dim:2 muted:7 plain:111
-26 |│ turn 71                                                                                                               | dim:2 muted:7 plain:111
-27 |│ turn 72                                                                                                               | dim:2 muted:7 plain:111
-28 |│ turn 73                                                                                                               | dim:2 muted:7 plain:111
-29 |│ turn 74                                                                                                               | dim:2 muted:7 plain:111
-30 |│ turn 75                                                                                                               | dim:2 muted:7 plain:111
-31 |│ turn 76                                                                                                               | dim:2 muted:7 plain:111
-32 |│ turn 77                                                                                                               | dim:2 muted:7 plain:111
-33 |│ turn 78                                                                                                               | dim:2 muted:7 plain:111
-34 |│ turn 79                                                                                                               | dim:2 muted:7 plain:111
-35 |│ turn 80                                                                                                               | dim:2 muted:7 plain:111
-36 |┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐| accent+faint:120
-37 |│› what should the run do?                                                                                             │| dim:26 plain:93 dim:1
-38 |└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘| dim:120
+00 |│ turn 44                                                                                                               | dim:2 muted:7 plain:111
+01 |│ turn 45                                                                                                               | dim:2 muted:7 plain:111
+02 |│ turn 46                                                                                                               | dim:2 muted:7 plain:111
+03 |│ turn 47                                                                                                               | dim:2 muted:7 plain:111
+04 |│ turn 48                                                                                                               | dim:2 muted:7 plain:111
+05 |│ turn 49                                                                                                               | dim:2 muted:7 plain:111
+06 |│ turn 50                                                                                                               | dim:2 muted:7 plain:111
+07 |│ turn 51                                                                                                               | dim:2 muted:7 plain:111
+08 |│ turn 52                                                                                                               | dim:2 muted:7 plain:111
+09 |│ turn 53                                                                                                               | dim:2 muted:7 plain:111
+10 |│ turn 54                                                                                                               | dim:2 muted:7 plain:111
+11 |│ turn 55                                                                                                               | dim:2 muted:7 plain:111
+12 |│ turn 56                                                                                                               | dim:2 muted:7 plain:111
+13 |│ turn 57                                                                                                               | dim:2 muted:7 plain:111
+14 |│ turn 58                                                                                                               | dim:2 muted:7 plain:111
+15 |│ turn 59                                                                                                               | dim:2 muted:7 plain:111
+16 |│ turn 60                                                                                                               | dim:2 muted:7 plain:111
+17 |│ turn 61                                                                                                               | dim:2 muted:7 plain:111
+18 |│ turn 62                                                                                                               | dim:2 muted:7 plain:111
+19 |│ turn 63                                                                                                               | dim:2 muted:7 plain:111
+20 |│ turn 64                                                                                                               | dim:2 muted:7 plain:111
+21 |│ turn 65                                                                                                               | dim:2 muted:7 plain:111
+22 |│ turn 66                                                                                                               | dim:2 muted:7 plain:111
+23 |│ turn 67                                                                                                               | dim:2 muted:7 plain:111
+24 |│ turn 68                                                                                                               | dim:2 muted:7 plain:111
+25 |│ turn 69                                                                                                               | dim:2 muted:7 plain:111
+26 |│ turn 70                                                                                                               | dim:2 muted:7 plain:111
+27 |│ turn 71                                                                                                               | dim:2 muted:7 plain:111
+28 |│ turn 72                                                                                                               | dim:2 muted:7 plain:111
+29 |│ turn 73                                                                                                               | dim:2 muted:7 plain:111
+30 |│ turn 74                                                                                                               | dim:2 muted:7 plain:111
+31 |│ turn 75                                                                                                               | dim:2 muted:7 plain:111
+32 |│ turn 76                                                                                                               | dim:2 muted:7 plain:111
+33 |│ turn 77                                                                                                               | dim:2 muted:7 plain:111
+34 |│ turn 78                                                                                                               | dim:2 muted:7 plain:111
+35 |│ turn 79                                                                                                               | dim:2 muted:7 plain:111
+36 |│ turn 80                                                                                                               | dim:2 muted:7 plain:111
+37 |                                                                                                                        | plain:120
+38 | ›what should the run do?                                                                                               | dim:25 plain:95
 39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47

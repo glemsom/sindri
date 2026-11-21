@@ -349,30 +349,46 @@ fn the_frame_behind_a_card_is_painted_and_dimmed() {
         words > 0,
         "the frame behind the card drew {words} glyphs in the gutter the card leaves it"
     );
+    let band = after
+        .told()
+        .layout()
+        .expect("a frame under a card is laid out whole")
+        .composer
+        .y;
     for y in 0..40 {
         for x in (0..24).chain(96..120) {
             let held = before.cell(x, y);
             let drawn = after.cell(x, y);
             assert_eq!(
-                drawn.symbol(),
-                held.symbol(),
-                "row {y}, column {x} is the frame the card was opened from, and it is still \
-                 drawn: {:?}",
-                after.row(y)
-            );
-            assert_eq!(
                 after.ink(x, y),
                 Some(Ink::Dim),
-                "and it is dimmed, so the reader sees a frame they cannot reach: row {y}, \
-                 column {x} is on the band {:?} and reads back as {:?}",
-                drawn.bg,
-                after.ink(x, y)
+                "row {y}, column {x} of the frame behind the card is not dimmed: the reader sees \
+                 a frame they cannot reach, and this cell is on {:?}",
+                drawn.bg
             );
-            assert_eq!(
-                drawn.bg,
-                before.cell(x, y).bg,
-                "and a cell behind the card keeps the band it sits on, at row {y}, column {x}"
-            );
+            match y == band {
+                true => assert_eq!(
+                    drawn.symbol(),
+                    "\u{2500}",
+                    "row {y}, column {x} of the band's head is no rule, and a card over the band \
+                     is a head that draws the dim edge instead of the light: {:?}",
+                    after.row(y)
+                ),
+                false => {
+                    assert_eq!(
+                        drawn.symbol(),
+                        held.symbol(),
+                        "row {y}, column {x} is the frame the card was opened from, and it is \
+                         still drawn: {:?}",
+                        after.row(y)
+                    );
+                    assert_eq!(
+                        drawn.bg, held.bg,
+                        "and a cell behind the card keeps the band it sits on, at row {y}, \
+                         column {x}"
+                    );
+                }
+            }
         }
     }
 }

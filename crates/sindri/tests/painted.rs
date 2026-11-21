@@ -331,14 +331,14 @@ fn a_pass_hands_back_the_bands_it_shared_the_frame_out_in() {
         "and its band is the composer's own rows: {laid:?}"
     );
     assert_eq!(
-        laid.queue.bottom(),
-        laid.footer.y,
-        "the footer's band begins on the row the composer's ends: {laid:?}"
+        laid.composer.bottom(),
+        area.bottom(),
+        "the composer's band takes the frame's last row, which the footer had: {laid:?}"
     );
     assert_eq!(
         (laid.footer.y, laid.footer.height),
-        (area.bottom() - 1, 1),
-        "the footer is the frame's last row and no other: {laid:?}"
+        (laid.composer.bottom() - 1, 1),
+        "and the hints are drawn on that band's last row: {laid:?}"
     );
     assert_eq!(
         laid.card, None,
@@ -516,9 +516,9 @@ fn the_caret_is_placed_in_the_band_the_pass_drew_and_not_in_one_counted_again() 
 
     assert_eq!(
         frame.told().caret(),
-        Some(Position::new(4, 8)),
-        "a five-row draft takes nine of the frame's twelve rows, so its last row is row eight \
-         and the caret is placed one column past the gutter, inside the box"
+        Some(Position::new(3, 9)),
+        "a five-row draft takes nine of the frame's twelve rows, so its last row is row nine \
+         and the caret is placed one column past the gutter, inside the band"
     );
 
     for _ in 0.."1\n2\n3\n4\n5".len() {
@@ -534,7 +534,7 @@ fn the_caret_is_placed_in_the_band_the_pass_drew_and_not_in_one_counted_again() 
 
     assert_eq!(
         frame.told().caret(),
-        Some(Position::new(band.x + 3, band.y + 1)),
+        Some(Position::new(band.x + 2, band.y + 1)),
         "the empty draft's caret is placed in the band this pass drew, on its first draft row \
          and on the first glyph cell of the placeholder"
     );
@@ -631,9 +631,9 @@ fn the_pass_places_the_cursor_one_column_past_the_last_glyph_of_the_last_row() {
 
     assert_eq!(
         frame.told().caret(),
-        Some(Position::new(4, 8)),
-        "the fifth row of a five-row draft is row eight of the frame, and its one glyph takes \
-         column three, so the cursor waits on column four"
+        Some(Position::new(3, 9)),
+        "the fifth row of a five-row draft is row nine of the frame, and its one glyph takes \
+         column two, so the cursor waits on column three"
     );
 }
 
@@ -668,7 +668,7 @@ fn a_pass_where_a_reader_types_no_draft_hands_back_no_caret() {
         Transcript::none(),
     );
     commands.key(Key::Char('/'));
-    let frame = frame::painted(&mut commands, 60, 13);
+    let frame = frame::painted(&mut commands, 60, 11);
     let laid = frame
         .told()
         .layout()
@@ -717,7 +717,7 @@ fn a_card_that_leaves_the_carets_cell_leaves_the_cursor_in_that_same_cell() {
 
     assert_eq!(
         cursor,
-        Position::new(laid.composer.x + 4, laid.composer.y + 1),
+        Position::new(laid.composer.x + 3, laid.composer.y + 1),
         "the slash typed is one glyph on the draft's first row, so the cursor waits one column \
          past it"
     );

@@ -135,65 +135,49 @@ fn live(elapsed_ms: u64) -> Facts {
         .pulsed(Some(Pulse::live(elapsed_ms)))
 }
 
-/// The columns the band's edge gives its rule: the first of them, and how many there are, read off
-/// the row the frame drew rather than counted off the layout again.
-fn rule_span(buffer: &Buffer, band: Rect) -> (u16, u16) {
-    let row = drawn_glyphs(buffer, band.y);
-    let first = row
-        .find([HAIRLINE, EDGE_HEAD])
-        .unwrap_or_else(|| panic!("the edge of the band is not ruled: {row:?}"));
-    let columns = row
-        .chars()
-        .filter(|glyph| [HAIRLINE, EDGE_HEAD].contains(glyph))
-        .count();
-    (band.x + pen::cells(&row[..first]), pen::columns(columns))
-}
-
-/// The columns of an edge row the draft's count is hung in, and none when no count hangs there: the
-/// rule's last column names the one the count begins at, and the far corner is no column of it.
-fn count_span(buffer: &Buffer, band: Rect) -> Range<u16> {
-    let (first, columns) = rule_span(buffer, band);
-    first.saturating_add(columns)..band.right().saturating_sub(1)
-}
-
-/// The columns of an edge row the edge itself draws: its rule, its head and a corner at each end, and
-/// never a column of the count hung on the corner beside them.
-fn edge_columns(buffer: &Buffer, band: Rect) -> Vec<u16> {
-    let counted = count_span(buffer, band);
-    let close = band.right().saturating_sub(1);
-    (band.x..close)
-        .filter(|x| !counted.contains(x))
-        .chain([close])
-        .collect()
-}
-
-/// The edge row of a band that hangs nothing on its far corner: a corner at each end and the rule
-/// between them.
-fn ruled_edge(band: Rect) -> String {
-    format!(
-        "{EDGE_OPEN}{}{EDGE_CLOSE}",
-        pen::filled(band.width.saturating_sub(2), HAIRLINE)
+/// The composer's head row as the frame draws it: the ground the row is claimed in, and the rule
+/// drawn across it, which a band that draws the lit edge has none of.
+fn head_row(view: &mut View, palette: &Palette) -> (Color, Option<Look>) {
+    let (buffer, told) = painted_and_told(view, 120, 40);
+    let band = laid_out(&told).composer;
+    let ruled = drawn_glyphs(&buffer, band.y).contains(HAIRLINE);
+    (
+        under(&buffer, band.x, band.y),
+        ruled.then(|| look_at(&buffer, palette, band.x, band.y)),
     )
 }
 
-/// The column the head of a live run's edge stands in, read off the row it was drawn on.
+/// The glyphs no frame draws in the composer's band at any width: the corners and the upright that
+/// closed a drawn box.
+const BOX: [char; 5] = ['\u{250c}', '\u{2510}', '\u{2514}', '\u{2518}', '\u{2502}'];
+
+/// The glyph the cell at column `x` of row `y` is drawn as, and a blank for a column the frame
+/// leaves empty.
+fn glyph_at(buffer: &Buffer, x: u16, y: u16) -> char {
+    buffer
+        .cell((x, y))
+        .and_then(|cell| cell.symbol().chars().next())
+        .unwrap_or(' ')
+}
+
+/// The column the head of a live run's pulse stands in, read off the row it was drawn on.
 fn head_at(buffer: &Buffer, band: Rect) -> u16 {
     let row = drawn_glyphs(buffer, band.y);
     let at = row
         .find(EDGE_HEAD)
-        .expect("a live run's edge carries a head");
+        .expect("a live run's head row carries a pulse");
     band.x + pen::cells(&row[..at])
 }
 
 #[test]
-fn the_composer_is_drawn_from_its_head_down_to_the_rails_own_tone() {
+fn the_composer_is_drawn_from_its_lit_head_down_to_the_rails_own_tone() {
     let palette = Palette::TRUECOLOR;
     for lines in 1..=5 {
         for (cols, rows) in [(120, 40), (60, 24)] {
             let (buffer, laid) = composer(palette, lines, cols, rows);
             let band = laid.composer;
 
-            for row in 0..band.height {
+            for row in 1..band.height {
                 for x in band.x..band.right() {
                     assert_eq!(
                         under(&buffer, x, band.y + row),
@@ -206,14 +190,15 @@ fn the_composer_is_drawn_from_its_head_down_to_the_rails_own_tone() {
             }
             assert_eq!(
                 under(&buffer, band.x, band.y),
-                palette.band(Band::Composer),
-                "the top row of the {} at {cols}x{rows} is not the head the band rises to",
+                palette.edge(Edge::Lit),
+                "the head row of the {} at {cols}x{rows} is not the light the band meets the \
+                     frame on",
                 band.height
             );
             assert_eq!(
                 under(&buffer, band.x, band.bottom() - 1),
                 palette.band(Band::Rail),
-                "the bottom row of the {} at {cols}x{rows} is not the rail's own tone, so the \
+                "the last row of the {} at {cols}x{rows} is not the rail's own tone, so the \
                      band is parted from the surface it stands on",
                 band.height
             );
@@ -222,29 +207,90 @@ fn the_composer_is_drawn_from_its_head_down_to_the_rails_own_tone() {
 }
 
 #[test]
-fn the_composer_that_takes_the_keys_lights_its_edge_row_with_the_accent() {
+fn the_band_that_takes_the_keys_is_headed_by_one_row_of_the_lit_edge() {
     let palette = Palette::TRUECOLOR;
-    let faint = Look::new(Ink::Accent, Face::Faint);
     for lines in 1..=5 {
         for (cols, rows) in [(120, 40), (60, 24)] {
             let (buffer, laid) = composer(palette, lines, cols, rows);
             let band = laid.composer;
 
-            for x in edge_columns(&buffer, band) {
+            for x in band.x..band.right() {
+                assert_eq!(
+                    under(&buffer, x, band.y),
+                    palette.edge(Edge::Lit),
+                    "column {x} of the {} row composer's head row at {cols} columns is not the \
+                        lit edge, and the draft is the surface that takes the keys",
+                    band.height
+                );
                 assert_eq!(
                     look_at(&buffer, &palette, x, band.y),
-                    faint,
-                    "column {x} of the {} row composer's edge row at {cols} columns is not the \
-                        accent drawn faint, and the draft is the surface that takes the keys",
+                    Look::plain(Ink::Plain),
+                    "column {x} of the head row of the {} row band at {cols} columns is read in \
+                        an ink other than the one the lit edge is claimed in",
                     band.height
                 );
             }
+            assert!(
+                !drawn_glyphs(&buffer, band.y).contains(HAIRLINE),
+                "the head row of a band the palette draws light for is no rule: {}",
+                drawn_glyphs(&buffer, band.y)
+            );
         }
     }
 }
 
 #[test]
-fn no_row_of_the_composer_band_is_drawn_on_an_edge() {
+fn the_head_reads_as_the_light_the_palette_draws_over_the_draft_row() {
+    for (palette, light) in [
+        (Palette::TRUECOLOR, true),
+        (Palette::ANSI, true),
+        (Palette::SLOTS, false),
+    ] {
+        for (cols, rows) in [(120, 40), (40, 24), (8, 12)] {
+            let (buffer, laid) = composer(palette, 3, cols, rows);
+            let band = laid.composer;
+            let row = drawn_glyphs(&buffer, band.y);
+            match light {
+                true => {
+                    assert_eq!(
+                        under(&buffer, band.x, band.y),
+                        palette.edge(Edge::Lit),
+                        "the head of a {cols} column frame in {:?} does not stand on the lit \
+                         edge, and only a palette that draws no light heads its band with a rule",
+                        palette
+                    );
+                    assert_eq!(
+                        row.trim_end(),
+                        "",
+                        "the head of a {cols} column frame in {palette:?} draws a glyph, and a \
+                         row of light is no rule: {row:?}"
+                    );
+                }
+                false => {
+                    assert!(
+                        row.chars().all(|glyph| glyph == HAIRLINE),
+                        "the head of a {cols} column frame in {palette:?} is not the one rule a \
+                         palette that draws no light heads its band with: {row:?}"
+                    );
+                    assert_eq!(
+                        look_at(&buffer, &palette, band.x, band.y),
+                        palette.dim_edge(),
+                        "and that rule is the dim edge, which is the only edge such a palette has"
+                    );
+                }
+            }
+            assert_eq!(
+                under(&buffer, band.x, band.y + 1),
+                palette.step(1, band.height),
+                "the row under the head is the ramp's second step in {palette:?}, so the head \
+                 sits over the draft"
+            );
+        }
+    }
+}
+
+#[test]
+fn no_row_of_the_composer_band_is_drawn_on_an_edge_but_its_head() {
     let palette = Palette::TRUECOLOR;
     for lines in [1, 5] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
@@ -262,12 +308,18 @@ fn no_row_of_the_composer_band_is_drawn_on_an_edge() {
         );
         for edge in Edge::ALL {
             assert!(
-                (band.y..band.bottom()).all(|y| !on_edge(edge, y)),
-                "a {} band is drawn on its {edge:?} edge, and an edge is the light a boundary \
-                     is raised out of or the shadow it is set down into, never a row of the band",
+                (band.y + 1..band.bottom()).all(|y| !on_edge(edge, y)),
+                "a {} band is drawn on its {edge:?} edge under its head, and an edge is the \
+                     light a boundary is raised out of or the shadow it is set down into, never \
+                     a row the draft is drawn in",
                 band.height
             );
         }
+        assert!(
+            !on_edge(Edge::Shadow, band.y),
+            "the head row is claimed in the shadow under the band rather than in the light it \
+             meets the frame on"
+        );
         assert_eq!(
             under(&buffer, band.x, band.bottom() - 1),
             palette.band(Band::Rail),
@@ -289,7 +341,7 @@ fn no_row_of_the_composer_band_is_drawn_on_an_edge() {
 }
 
 #[test]
-fn the_ramp_moves_the_surface_under_the_cells_and_adds_no_ink_but_the_accent_edge() {
+fn the_ramp_moves_the_surface_under_the_cells_and_adds_no_ink_but_the_lit_head() {
     let (coloured, laid) = composer(Palette::TRUECOLOR, 3, 120, 40);
     let (flat, flat_laid) = composer(Palette::SLOTS, 3, 120, 40);
     assert_eq!(laid.composer, flat_laid.composer);
@@ -298,15 +350,15 @@ fn the_ramp_moves_the_surface_under_the_cells_and_adds_no_ink_but_the_accent_edg
     let area = coloured.area;
     for y in area.y..area.bottom() {
         for x in area.x..area.right() {
-            let takes_keys = y == band.y && (band.x..band.right()).contains(&x);
-            if takes_keys {
+            let head = y == band.y && (band.x..band.right()).contains(&x);
+            if head {
                 continue;
             }
             assert_eq!(
                 look_at(&coloured, &Palette::TRUECOLOR, x, y),
                 look_at(&flat, &Palette::SLOTS, x, y),
                 "row {y}, column {x} is read in a colour a frame drawn in none is not: the \
-                     ramp is a surface, and the accent edge on the composer's own edge row is the \
+                     ramp is a surface, and the lit head on the composer's own first row is the \
                      one ink the draft that takes the keys adds"
             );
         }
@@ -314,7 +366,7 @@ fn the_ramp_moves_the_surface_under_the_cells_and_adds_no_ink_but_the_accent_edg
 }
 
 #[test]
-fn the_composer_gives_the_accent_up_while_a_screen_takes_the_keys() {
+fn the_composer_gives_the_lit_head_up_while_a_screen_takes_the_keys() {
     let palette = Palette::TRUECOLOR;
     for mode in [
         Mode::Keys,
@@ -336,18 +388,24 @@ fn the_composer_gives_the_accent_up_while_a_screen_takes_the_keys() {
         let (left, right) = card::border_columns(card_body(&told));
         assert!(
             band.x < left && right + 1 < band.right(),
-            "the card leaves the composer's edge row visible in its gutters at {left} and \
+            "the card leaves the composer's head row visible in its gutters at {left} and \
                  {right}, and the band it covers reaches from {} to {}",
             band.x,
             band.right()
         );
-        // The composer's edge row is read in the card's two gutters, where the scrim leaves
-        // an accent dimmed rather than bright.
+        // The head row is read in the card's two gutters, where the scrim leaves it ruled and dim.
         for x in (band.x..left).chain(right + 1..band.right()) {
+            assert_eq!(
+                glyph_at(&buffer, x, band.y),
+                HAIRLINE,
+                "column {x} of the composer's head row under {} is no rule, and the card is the \
+                     surface that takes the keys",
+                mode.name()
+            );
             assert_eq!(
                 look_at(&buffer, &palette, x, band.y),
                 palette.dim_edge(),
-                "column {x} of the composer's edge row under {} is not the dim edge, and the \
+                "column {x} of the composer's head row under {} is not the dim edge, and the \
                      card is the surface that takes the keys",
                 mode.name()
             );
@@ -355,15 +413,8 @@ fn the_composer_gives_the_accent_up_while_a_screen_takes_the_keys() {
     }
 }
 
-/// The look the composer's edge row is drawn in, in the frame the view paints now.
-fn edge_row(view: &mut View, palette: &Palette) -> Look {
-    let (buffer, told) = painted_and_told(view, 120, 40);
-    let band = laid_out(&told).composer;
-    look_at(&buffer, palette, band.x, band.y)
-}
-
 #[test]
-fn the_accent_edge_recedes_while_the_window_is_unfocused_and_returns_when_it_is_focused() {
+fn the_lit_head_recedes_while_the_window_is_unfocused_and_returns_when_it_is_focused() {
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(
         Capabilities::default(),
@@ -371,25 +422,31 @@ fn the_accent_edge_recedes_while_the_window_is_unfocused_and_returns_when_it_is_
         Transcript::none(),
     );
     view.paste("the draft the composer band is drawn from");
-    let lit = edge_row(&mut view, &palette);
+    let (lit, lit_rule) = head_row(&mut view, &palette);
 
     view.handed(view.facts().clone().focused(false));
-    let away = edge_row(&mut view, &palette);
+    let (away, away_rule) = head_row(&mut view, &palette);
 
     view.handed(view.facts().clone().focused(true));
-    let back = edge_row(&mut view, &palette);
+    let back = head_row(&mut view, &palette);
 
     assert_eq!(
-        lit,
-        palette.accent_edge(),
-        "a window nobody has reported on is the one being read, so its edge is the accent"
+        (lit, lit_rule),
+        (palette.edge(Edge::Lit), None),
+        "a window nobody has reported on is the one being read, so its head is a row of light and \
+         no rule"
     );
     assert_eq!(
-        away,
-        palette.dim_edge(),
-        "and the accent recedes while the terminal says nobody is looking"
+        (away, away_rule),
+        (palette.band(Band::Composer), Some(palette.dim_edge())),
+        "and the light recedes to a dim rule over the ramp's own first step while the terminal \
+         says nobody is looking"
     );
-    assert_eq!(back, lit, "and returns when the reader comes back");
+    assert_eq!(
+        back,
+        (lit, lit_rule),
+        "and returns when the reader comes back"
+    );
 }
 
 #[test]
@@ -464,80 +521,119 @@ fn a_frame_with_no_colour_draws_the_composer_as_a_flat_band() {
 }
 
 #[test]
-fn a_frame_with_one_row_to_give_the_composer_draws_it_as_its_head() {
+fn a_frame_with_two_rows_gives_the_composer_its_head_and_its_hints_and_no_draft() {
     let palette = Palette::TRUECOLOR;
     let (buffer, laid) = composer(palette, 1, 60, 2);
     let band = laid.composer;
 
-    assert_eq!(band.height, 1, "a two-row frame gives the composer one row");
+    assert_eq!(
+        band.height, 2,
+        "a two-row frame gives the composer both the rows it has"
+    );
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.band(Band::Composer),
-        "one row has no room for both ends, so it is drawn as the head and never on the frame's \
-             own ground"
+        palette.edge(Edge::Lit),
+        "the first of them is the head the band takes the keys on, and never the frame's own ground"
+    );
+    assert_eq!(
+        drawn_row(&buffer, band.bottom() - 1).trim_end(),
+        "Enter send · / commands · @ files · ? keys · Ctrl-Q quit",
+        "and the hints stand on the last one, the draft having been given up whole"
     );
 }
 
 #[test]
-fn sixty_columns_show_the_raised_band_and_lose_no_hint_from_the_footer() {
+fn a_frame_with_one_row_gives_the_composer_its_head_and_the_hints_up() {
+    let palette = Palette::TRUECOLOR;
+    let (buffer, laid) = composer(palette, 1, 60, 1);
+    let band = laid.composer;
+
+    assert_eq!(band.height, 1, "a one-row frame gives the composer one row");
+    assert_eq!(
+        laid.footer.height, 0,
+        "and a band of one row is drawn as its head alone, so no row of it says the hints"
+    );
+    assert_eq!(
+        under(&buffer, band.x, band.y),
+        palette.edge(Edge::Lit),
+        "the one row is the head the band takes the keys on"
+    );
+    assert_eq!(
+        drawn_row(&buffer, band.y).trim_end(),
+        "",
+        "and no hint is drawn past the band"
+    );
+}
+
+#[test]
+fn sixty_columns_show_the_band_and_lose_no_hint_from_its_last_row() {
     let palette = Palette::TRUECOLOR;
     let (buffer, laid) = composer(palette, 1, 60, 24);
     let band = laid.composer;
 
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.band(Band::Composer),
-        "a sixty-column frame draws no head on the composer's top row"
+        palette.edge(Edge::Lit),
+        "a sixty-column frame heads the composer with the lit edge"
     );
     assert_eq!(
         under(&buffer, band.x, band.bottom() - 1),
         palette.band(Band::Rail),
-        "a sixty-column frame leaves the composer's foot above the rail's own tone"
+        "and its last row still stands on the rail's own tone"
+    );
+    assert_eq!(
+        laid.footer.y,
+        band.bottom() - 1,
+        "the row the hints are drawn on is the band's own last row"
     );
     assert_eq!(
         drawn_row(&buffer, laid.footer.y).trim_end(),
         "Enter send · / commands · @ files · ? keys · Ctrl-Q quit",
-        "the raised band takes no row the footer had, and every hint that fits in sixty \
-             columns is still drawn"
+        "and every hint that fits in sixty columns is still drawn"
     );
 }
 
 #[test]
-fn a_composer_at_rest_draws_a_box_that_opens_and_closes_on_its_edge_and_is_footed() {
+fn a_composer_at_rest_is_three_rows_of_three_grounds_and_no_glyph_of_a_box() {
     let palette = Palette::TRUECOLOR;
     for lines in [0, 1, 3, 5] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
         let band = laid.composer;
-        let rule = pen::filled(band.width - 2, HAIRLINE);
 
         assert_eq!(
-            drawn_glyphs(&buffer, band.y),
-            ruled_edge(band),
-            "the {} row band a draft of {lines} lines takes does not open on a corner and close \
-                 along its edge",
+            under(&buffer, band.x, band.y),
+            palette.edge(Edge::Lit),
+            "the {} row band a draft of {lines} lines takes is not headed by the lit edge",
             band.height
         );
         assert_eq!(
-            drawn_glyphs(&buffer, band.bottom() - 1),
-            format!("{FOOT_OPEN}{rule}{FOOT_CLOSE}"),
-            "the {} row band a draft of {lines} lines takes is not footed",
+            under(&buffer, band.x, band.bottom() - 1),
+            palette.band(Band::Rail),
+            "the {} row band a draft of {lines} lines takes does not come down to the rail's tone",
             band.height
         );
         assert_eq!(
-            look_at(&buffer, &palette, band.x, band.y),
-            palette.accent_edge(),
-            "the corner the edge opens with is not drawn in the look the edge row is"
+            drawn_row(&buffer, band.bottom() - 1)
+                .trim_end()
+                .split(' ')
+                .next(),
+            Some("Enter"),
+            "the last row of the {} row band is the hints and no rule",
+            band.height
         );
-        assert_eq!(
-            look_at(&buffer, &palette, band.x, band.bottom() - 1),
-            palette.dim_edge(),
-            "the corner the foot opens with is not the dim edge the shadow is drawn in"
-        );
+        for y in band.y..band.bottom() {
+            let row = drawn_glyphs(&buffer, y);
+            assert!(
+                !row.chars().any(|glyph| BOX.contains(&glyph)),
+                "row {y} of the {} row band draws a corner or an upright: {row:?}",
+                band.height
+            );
+        }
     }
 }
 
 #[test]
-fn the_edge_of_a_band_at_rest_is_one_quiet_rule_from_corner_to_corner_with_no_head() {
+fn the_head_of_a_band_at_rest_is_a_row_of_light_with_no_pulse_on_it() {
     let palette = Palette::TRUECOLOR;
     for lines in [0, 1, 3, 5] {
         let (buffer, laid) = composer(palette, lines, 120, 40);
@@ -545,41 +641,46 @@ fn the_edge_of_a_band_at_rest_is_one_quiet_rule_from_corner_to_corner_with_no_he
         let row = drawn_glyphs(&buffer, band.y);
 
         assert_eq!(
-            row,
-            ruled_edge(band),
-            "the edge of the {} row band a draft of {lines} lines takes names the run's state or \
-                 leaves a column of its rule unnamed",
+            row.trim_end(),
+            "",
+            "the head of the {} row band a draft of {lines} lines takes names the run's state or \
+                 leaves a glyph where the light should be",
             band.height
         );
         assert!(
             !row.contains(EDGE_HEAD),
-            "a band no run is live in carries no head: its edge is still, and the frame keeps no \
+            "a band no run is live in carries no pulse: its head is still, and the frame keeps no \
                  clock to move one"
         );
-        for x in edge_columns(&buffer, band) {
+        for x in band.x..band.right() {
             assert_eq!(
-                look_at(&buffer, &palette, x, band.y),
-                palette.accent_edge(),
-                "column {x} of the edge row is not the quiet accent the band wears at rest: the \
-                     rule and the corners are one row in one look"
+                under(&buffer, x, band.y),
+                palette.edge(Edge::Lit),
+                "column {x} of the head row is not the lit edge the band wears at rest: the head \
+                     is one row in one ground"
             );
         }
     }
 }
 
 #[test]
-fn the_edge_hangs_the_drafts_own_count_on_its_far_corner() {
+fn the_head_hangs_the_drafts_own_count_on_its_far_edge() {
     let palette = Palette::TRUECOLOR;
     let root = workspace();
     let (buffer, laid) = drafting(palette, root.path(), "read src/rows.rs", 120, 40);
     let band = laid.composer;
-    let rule = pen::filled(band.width - 2 - pen::cells("1 file"), HAIRLINE);
+    let row = drawn_glyphs(&buffer, band.y);
 
     assert_eq!(
-        drawn_glyphs(&buffer, band.y),
-        format!("{EDGE_OPEN}{rule}1 file{EDGE_CLOSE}"),
-        "the edge hangs the count of the file the draft names on its far corner, and the rule \
-         runs on to it"
+        row,
+        format!("{}1 file", pen::filled(band.width - 6, ' ')),
+        "the head hangs the count of the file the draft names on its far edge, and no glyph \
+         stands before it"
+    );
+    assert_eq!(
+        look_at(&buffer, &palette, band.right() - 1, band.y),
+        Look::plain(Ink::Muted),
+        "and the count is read in the ink a fact's words are drawn in, over the lit edge"
     );
 }
 
@@ -590,54 +691,63 @@ fn an_empty_draft_hangs_no_count_beside_a_rail_of_facts() {
     let band = laid.composer;
 
     assert_eq!(
-        drawn_glyphs(&buffer, band.y),
-        ruled_edge(band),
-        "an empty draft bills nothing, so the edge of a band beside a rail hangs no count"
+        drawn_glyphs(&buffer, band.y).trim_end(),
+        "",
+        "an empty draft bills nothing, so the head of a band beside a rail hangs no count"
     );
 }
 
 #[test]
-fn a_draft_that_bills_nothing_hangs_no_count_at_any_width_the_band_is_drawn_in() {
+fn no_frame_at_any_width_draws_a_corner_or_an_upright_in_the_composer() {
     let palette = Palette::TRUECOLOR;
     for cols in 3..=200 {
         let (buffer, laid) = drafted(Facts::default().asked(), palette, 1, cols, 24);
         let band = laid.composer;
-        let row = drawn_glyphs(&buffer, band.y);
-        let inside = row
-            .strip_prefix(EDGE_OPEN)
-            .and_then(|rest| rest.strip_suffix(EDGE_CLOSE))
-            .unwrap_or_else(|| panic!("the edge of a {cols} column frame is no box: {row:?}"));
+        for y in band.y..band.bottom() {
+            let row = drawn_glyphs(&buffer, y);
+            assert!(
+                !row.chars().any(|glyph| BOX.contains(&glyph)),
+                "row {y} of the composer band of a {cols} column frame draws a corner or an \
+                 upright: {row:?}"
+            );
+        }
+        let drafted = drawn_glyphs(&buffer, band.y + 1);
         assert!(
-            !inside.is_empty() && inside.chars().all(|glyph| glyph == HAIRLINE),
-            "a draft that names no file and opens with no command hangs no count of itself on a \
-             {cols} column frame, and the rule keeps the row: {row:?}"
+            drafted.starts_with(" \u{203a}1"),
+            "the draft of a {cols} column frame does not open past the blank and the sigil of its \
+             gutter: {drafted:?}"
         );
     }
 }
 
 #[test]
-fn the_count_is_refused_where_the_rule_would_lose_its_last_column_and_drawn_one_column_wider() {
+fn the_count_is_refused_where_the_head_would_lose_its_last_column_and_drawn_one_column_wider() {
     let palette = Palette::TRUECOLOR;
     let root = workspace();
-    // The count of one file is six columns, so an eight column band leaves the rule none of its
-    // own and a nine column band leaves it one.
-    let (refused, laid) = drafting(palette, root.path(), "read src/rows.rs", 8, 24);
+    // The count of one file is six columns, so a six column band leaves the head none of its own and
+    // a seven column band leaves it one.
+    let (refused, laid) = drafting(palette, root.path(), "read src/rows.rs", 6, 24);
     let band = laid.composer;
 
     assert_eq!(
-        drawn_glyphs(&refused, band.y),
-        ruled_edge(band),
-        "a count that would leave the rule no column of its own is refused whole, so the rule \
+        drawn_glyphs(&refused, band.y).trim_end(),
+        "",
+        "a count that would leave the head no column of its own is refused whole, so the head \
          keeps the row"
     );
 
-    let (drawn, laid) = drafting(palette, root.path(), "read src/rows.rs", 9, 24);
+    let (drawn, laid) = drafting(palette, root.path(), "read src/rows.rs", 7, 24);
     let band = laid.composer;
 
     assert_eq!(
         drawn_glyphs(&drawn, band.y),
-        format!("{EDGE_OPEN}{HAIRLINE}1 file{EDGE_CLOSE}"),
-        "one column wider, the count hangs and the rule keeps the one column left below it"
+        " 1 file",
+        "one column wider, the count hangs and the head keeps the one column left before it"
+    );
+    assert_eq!(
+        under(&drawn, band.x, band.y),
+        palette.edge(Edge::Lit),
+        "and the column it keeps is still the lit edge"
     );
 }
 
@@ -657,14 +767,14 @@ fn the_count_is_drawn_in_the_quiet_inks_the_frame_already_gives_a_meaning() {
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let band = laid_out(&told).composer;
     let counted = pen::cells("1 file · 1 command");
-    let mut x = band.right() - 1 - counted;
+    let mut x = band.right() - counted;
 
     for (width, ink) in [(6, Ink::Muted), (3, Ink::Dim), (9, Ink::Muted)] {
         for _ in 0..width {
             assert_eq!(
                 look_at(&buffer, &palette, x, band.y),
                 Look::plain(ink),
-                "column {x} of the count the edge hangs is not the {} ink its part is drawn in",
+                "column {x} of the count the head hangs is not the {} ink its part is drawn in",
                 ink.name()
             );
             x += 1;
@@ -672,62 +782,60 @@ fn the_count_is_drawn_in_the_quiet_inks_the_frame_already_gives_a_meaning() {
     }
     assert_eq!(
         x,
-        band.right() - 1,
-        "the count is drawn whole, and the far corner is the column after it"
+        band.right(),
+        "the count is drawn whole, and its last column is the row's own"
     );
 }
 
 #[test]
-fn the_edge_of_a_band_a_run_is_live_in_wears_the_quiet_accent_of_the_resting_one_with_one_head() {
+fn the_head_of_a_band_a_run_is_live_in_is_one_row_of_light_with_one_pulse_on_it() {
     let palette = Palette::TRUECOLOR;
     let (buffer, laid) = drafted(live(4_200), palette, 1, 120, 40);
     let band = laid.composer;
-    let (first, columns) = rule_span(&buffer, band);
     let row = drawn_glyphs(&buffer, band.y);
 
     assert_eq!(
-        first,
-        band.x + 1,
-        "the rule of a live run's edge does not begin at the column inside its opening corner, so \
-             something is written there beside the rule: {row:?}"
-    );
-    assert!(
-        row.ends_with(EDGE_CLOSE),
-        "a live run's edge does not rule on to the far corner: {row:?}"
-    );
-    assert_eq!(
         row.matches(EDGE_HEAD).count(),
         1,
-        "a live run's edge carries one head and no more: {row:?}"
+        "a live run's head row carries one pulse and no more: {row:?}"
+    );
+    assert!(
+        row.chars().all(|glyph| glyph == EDGE_HEAD || glyph == ' '),
+        "the pulse is the one glyph of a lit head row: {row:?}"
     );
     let head = head_at(&buffer, band);
     assert!(
-        (first..first + columns).contains(&head),
-        "the head stands at column {head}, away from the rule's own columns {first} to {}: the \
-             head travels the rule and never a column beside it",
-        first + columns
+        (band.x..band.right()).contains(&head),
+        "the pulse stands at column {head}, away from the head row's own columns {} to {}",
+        band.x,
+        band.right()
     );
-    for x in edge_columns(&buffer, band) {
+    for x in band.x..band.right() {
         assert_eq!(
-            look_at(&buffer, &palette, x, band.y),
-            palette.accent_edge(),
-            "column {x} of a live run's edge row is not the quiet accent of the resting one: the \
-                 head is how a live band is told apart, and the edge keeps one look for both"
+            under(&buffer, x, band.y),
+            palette.edge(Edge::Lit),
+            "column {x} of a live run's head row is not the lit edge of the resting one: the \
+                 pulse is how a live band is told apart, and the head keeps one ground for both"
         );
     }
+    assert_eq!(
+        look_at(&buffer, &palette, head, band.y),
+        palette.accent_edge(),
+        "and the pulse itself is the accent drawn faint, over that light"
+    );
 }
 
 #[test]
-fn every_step_of_the_pulse_moves_the_head_one_column_and_the_rule_s_width_is_one_cycle() {
+fn every_step_of_the_pulse_moves_the_pulse_one_column_and_the_rows_width_is_one_cycle() {
     let palette = Palette::TRUECOLOR;
     let (buffer, laid) = drafted(live(0), palette, 1, 60, 24);
     let band = laid.composer;
-    let (first, columns) = rule_span(&buffer, band);
+    let (first, columns) = (band.x, band.width);
 
     assert_eq!(
         head_at(&buffer, band),
         first,
-        "a live band with no step behind it stands its head where the rule begins"
+        "a live band with no step behind it stands its pulse where the head row begins"
     );
     for step in 0..6u64 {
         for at in [step * STEP_MS, step * STEP_MS + STEP_MS - 1] {
@@ -735,7 +843,7 @@ fn every_step_of_the_pulse_moves_the_head_one_column_and_the_rule_s_width_is_one
             assert_eq!(
                 head_at(&buffer, band),
                 first + pen::columns(usize::try_from(step).unwrap_or(0)),
-                "step {step} of the pulse, at {at} ms, is not one column further along the rule"
+                "step {step} of the pulse, at {at} ms, is not one column further along the head row"
             );
         }
     }
@@ -743,13 +851,13 @@ fn every_step_of_the_pulse_moves_the_head_one_column_and_the_rule_s_width_is_one
     assert_eq!(
         head_at(&buffer, band),
         first,
-        "one cycle of the head is the rule's own width of {columns} columns, and it wraps back \
-             to the first"
+        "one cycle of the pulse is the head row's own width of {columns} columns, and it wraps \
+             back to the first"
     );
 }
 
 #[test]
-fn two_passes_of_one_live_frame_put_the_head_on_one_cell() {
+fn two_passes_of_one_live_frame_put_the_pulse_on_one_cell() {
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(inked(palette), live(4_200), Transcript::none());
     view.paste("the draft the band is drawn from");
@@ -765,20 +873,20 @@ fn two_passes_of_one_live_frame_put_the_head_on_one_cell() {
 }
 
 #[test]
-fn a_band_no_run_is_live_in_draws_no_head_however_live_the_pulse_handed_to_it() {
+fn a_band_no_run_is_live_in_draws_no_pulse_however_live_the_pulse_handed_to_it() {
     let palette = Palette::TRUECOLOR;
     let facts = Facts::default().asked().pulsed(Some(Pulse::live(4_200)));
     let (buffer, laid) = drafted(facts, palette, 1, 60, 24);
 
     assert!(
         !drawn_glyphs(&buffer, laid.composer.y).contains(EDGE_HEAD),
-        "the head is the run's, so an edge with no run behind it stays still however live its \
+        "the pulse is the run's, so a head with no run behind it stays still however live its \
          pulse is"
     );
 }
 
 #[test]
-fn the_head_recedes_to_the_dim_edge_while_the_window_is_away_and_under_a_screen() {
+fn the_head_is_ruled_in_the_dim_edge_while_the_window_is_away_and_under_a_screen() {
     let palette = Palette::TRUECOLOR;
 
     let mut view = View::of(inked(palette), live(0).focused(false), Transcript::none());
@@ -787,14 +895,19 @@ fn the_head_recedes_to_the_dim_edge_while_the_window_is_away_and_under_a_screen(
     let band = laid_out(&told).composer;
     assert!(
         drawn_glyphs(&buffer, band.y).contains(EDGE_HEAD),
-        "the head is still drawn while nobody reads the window, and only recedes"
+        "the pulse is still drawn while nobody reads the window, and only recedes"
     );
-    for x in edge_columns(&buffer, band) {
+    for x in band.x..band.right() {
+        let glyph = glyph_at(&buffer, x, band.y);
+        assert!(
+            glyph == HAIRLINE || glyph == EDGE_HEAD,
+            "column {x} of the head a window nobody reads draws no rule: {glyph:?}"
+        );
         assert_eq!(
             look_at(&buffer, &palette, x, band.y),
             palette.dim_edge(),
-            "column {x} of the edge a window nobody reads is not the dim edge: the head recedes \
-                 with the rule it walks"
+            "column {x} of the head a window nobody reads is not the dim edge: the light recedes \
+                 to the rule the head draws where the palette draws none, and the pulse with it"
         );
     }
 
@@ -804,14 +917,11 @@ fn the_head_recedes_to_the_dim_edge_while_the_window_is_away_and_under_a_screen(
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let band = laid_out(&told).composer;
     let (left, right) = card::border_columns(card_body(&told));
-    for x in edge_columns(&buffer, band)
-        .into_iter()
-        .filter(|x| *x < left || *x > right)
-    {
+    for x in (band.x..left).chain(right + 1..band.right()) {
         assert_eq!(
             look_at(&buffer, &palette, x, band.y),
             palette.dim_edge(),
-            "column {x} of the edge under {} is not the dim edge, and the card is the surface \
+            "column {x} of the head under {} is not the dim edge, and the card is the surface \
                  that takes the keys",
             Mode::Keys.name()
         );
@@ -819,7 +929,7 @@ fn the_head_recedes_to_the_dim_edge_while_the_window_is_away_and_under_a_screen(
 }
 
 #[test]
-fn a_band_too_narrow_for_a_count_still_walks_its_head_over_the_whole_rule() {
+fn a_band_too_narrow_for_a_count_still_walks_its_pulse_over_the_whole_row() {
     let palette = Palette::TRUECOLOR;
     let root = workspace();
     let mut view = View::of(
@@ -828,22 +938,19 @@ fn a_band_too_narrow_for_a_count_still_walks_its_head_over_the_whole_rule() {
         Transcript::none(),
     );
     view.paste("read src/rows.rs");
-    let (buffer, told) = painted_and_told(&mut view, 8, 24);
+    let (buffer, told) = painted_and_told(&mut view, 6, 24);
     let band = laid_out(&told).composer;
 
     assert_eq!(
         drawn_glyphs(&buffer, band.y),
-        format!(
-            "{EDGE_OPEN}{EDGE_HEAD}{}{EDGE_CLOSE}",
-            pen::filled(band.width - 3, HAIRLINE)
-        ),
-        "the eight column band a live run takes is too narrow for the count of the file the \
-         draft names, and its head still walks the whole rule"
+        format!("{EDGE_HEAD}{}", pen::filled(band.width - 1, ' ')),
+        "the six column band a live run takes is too narrow for the count of the file the \
+         draft names, and its pulse still walks the whole row"
     );
 }
 
 #[test]
-fn one_draft_drawn_idle_and_live_differs_on_the_edge_row_and_the_footer_and_nowhere_in_its_bands() {
+fn one_draft_drawn_idle_and_live_differs_on_the_head_row_and_the_hints_under_it_and_nowhere_else() {
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(
         inked(palette),
@@ -865,21 +972,21 @@ fn one_draft_drawn_idle_and_live_differs_on_the_edge_row_and_the_footer_and_nowh
     for y in band.y..band.bottom() {
         assert_eq!(
             drawn_row(&resting, y) == drawn_row(&live, y),
-            y != band.y,
-            "row {y} of the band is not what the head leaves of it: the head is the edge's and \
-                 the run's state is the footer's"
+            y != band.y && y != band.bottom() - 1,
+            "row {y} of the band is not what the pulse on its head leaves of it: the pulse is the \
+                 head's and the run's state is the hints'"
         );
     }
     assert_ne!(
         drawn_row(&resting, laid.footer.y),
         drawn_row(&live, laid.footer.y),
-        "the footer of an idle draft and one of a live run say the same keys, so neither says \
+        "the hints of an idle draft and one of a live run say the same keys, so neither says \
              what the frame can honour"
     );
 }
 
 #[test]
-fn every_row_between_the_edge_and_the_foot_carries_an_upright_in_the_bands_first_and_last_column() {
+fn every_row_of_the_band_under_its_head_opens_with_the_blank_the_sigil_stands_past() {
     let palette = Palette::TRUECOLOR;
     let (buffer, laid, _) = waiting_behind(palette, "a draft", 2, 120, 24);
     let band = laid.composer;
@@ -887,20 +994,20 @@ fn every_row_between_the_edge_and_the_foot_carries_an_upright_in_the_bands_first
     for y in band.y.saturating_add(1)..band.bottom().saturating_sub(1) {
         assert_eq!(
             buffer.cell((band.x, y)).map(|cell| cell.symbol()),
-            Some("\u{2502}"),
-            "row {y} of the {} row band has no upright in its first column",
+            Some(" "),
+            "row {y} of the {} row band does not keep its first column blank",
             band.height
         );
         assert_eq!(
-            buffer.cell((band.right() - 1, y)).map(|cell| cell.symbol()),
-            Some("\u{2502}"),
-            "row {y} of the {} row band has no upright in its last column",
+            buffer.cell((band.x + 1, y)).map(|cell| cell.symbol()),
+            Some("\u{203a}"),
+            "row {y} of the {} row band does not wear the sigil in the column beside it",
             band.height
         );
         assert_eq!(
-            look_at(&buffer, &palette, band.right() - 1, y),
-            palette.dim_edge(),
-            "the upright of row {y} is not the dim edge a side of the box is drawn in"
+            look_at(&buffer, &palette, band.x, y),
+            Look::plain(Ink::Dim),
+            "the blank column of row {y} is not the dim ink the gutter is drawn in"
         );
     }
 }
@@ -917,20 +1024,20 @@ fn an_empty_frame_and_a_one_line_draft_draw_the_band_in_three_rows() {
 
     assert_eq!(
         band.height, 3,
-        "a frame holding no draft draws the rule, the row the draft sits on and the foot"
+        "a frame holding no draft draws the head, the row the draft sits on and the hints"
     );
     assert_eq!(
         ends(&empty).above,
         1,
-        "so the band spends one row above the draft: its rule and no air"
+        "so the band spends one row above the draft: its head and no air"
     );
     assert!(
         drawn_glyphs(&buffer, band.y + 1).contains(PLACEHOLDER),
-        "and the placeholder stands on the row under the rule"
+        "and the placeholder stands on the row under the head"
     );
     assert!(
-        drawn_glyphs(&buffer, band.y + 2).starts_with(FOOT_OPEN),
-        "with the foot under it and no air row between them"
+        drawn_glyphs(&buffer, band.y + 2).starts_with("Enter send"),
+        "with the hints under it and no air row between them"
     );
 
     let (buffer, laid) = composer(Palette::TRUECOLOR, 1, 120, 40);
@@ -942,12 +1049,12 @@ fn an_empty_frame_and_a_one_line_draft_draw_the_band_in_three_rows() {
         "and a draft of one line takes no more rows than an empty one"
     );
     assert!(
-        drafted.starts_with(&format!("{UPRIGHT}{SIGIL}1")),
-        "its words stand on the row under the rule: {drafted:?}"
+        drafted.starts_with(" \u{203a}1"),
+        "its words stand on the row under the head, past the blank and the sigil: {drafted:?}"
     );
     assert!(
-        drawn_glyphs(&buffer, band.y + 2).starts_with(FOOT_OPEN),
-        "and the foot is the row under it"
+        drawn_glyphs(&buffer, band.y + 2).starts_with("Enter send"),
+        "and the hints are the row under it"
     );
 }
 
@@ -955,8 +1062,8 @@ fn an_empty_frame_and_a_one_line_draft_draw_the_band_in_three_rows() {
 fn a_draft_on_two_rows_draws_a_row_of_air_on_each_side_of_it_again() {
     let (buffer, laid) = composer(Palette::TRUECOLOR, 2, 120, 40);
     let band = laid.composer;
-    let air = format!("{UPRIGHT}{}{UPRIGHT}", pen::filled(band.width - 2, ' '));
-    let under_rule = band.y + 1 + AIR_ROWS;
+    let air = pen::filled(band.width, ' ');
+    let under_head = band.y + 1 + AIR_ROWS;
 
     assert_eq!(
         band.height, 6,
@@ -964,21 +1071,21 @@ fn a_draft_on_two_rows_draws_a_row_of_air_on_each_side_of_it_again() {
     );
     for (y, why) in [
         (band.y + AIR_ROWS, "above the draft"),
-        (band.bottom() - AIR_ROWS - 1, "over the foot"),
+        (band.bottom() - AIR_ROWS - 1, "over the hints"),
     ] {
         assert_eq!(
             drawn_glyphs(&buffer, y),
             air,
-            "row {y}, {why}, is not air: the box leaves it its two uprights and no glyph"
+            "row {y}, {why}, is not air: a blank row of the band carries no glyph"
         );
     }
-    let drafted = drawn_glyphs(&buffer, under_rule);
+    let drafted = drawn_glyphs(&buffer, under_head);
     assert!(
-        drafted.starts_with(&format!("{UPRIGHT}{SIGIL}1")),
+        drafted.starts_with(" \u{203a}1"),
         "the draft opens on the row under the air: {drafted:?}"
     );
     assert!(
-        drawn_glyphs(&buffer, under_rule + 1).contains('2'),
+        drawn_glyphs(&buffer, under_head + 1).contains('2'),
         "and its second row is the one under that"
     );
 }
@@ -996,14 +1103,14 @@ fn a_queued_prompt_adds_a_row_and_never_an_air_row() {
     );
     assert_eq!(
         draft_rows(&buffer, queued.composer, ends),
-        ["\u{203a} a draft", "\u{203a} prompt 1"],
-        "so the two rows under the rule are the draft's and the waiting prompt's, with no air \
+        [" \u{203a}a draft", " \u{203a}prompt 1"],
+        "so the two rows under the head are the draft's and the waiting prompt's, with no air \
              between them"
     );
 }
 
 #[test]
-fn the_transcript_gains_the_two_rows_an_idle_band_gives_up() {
+fn a_forty_row_frame_gives_the_transcript_the_row_the_hints_used_to_hold() {
     let mut idle = turns(100);
     idle.paste("one line");
     let (buffer, told) = painted_and_told(&mut idle, 120, 40);
@@ -1016,20 +1123,20 @@ fn the_transcript_gains_the_two_rows_an_idle_band_gives_up() {
 
     assert_eq!(
         small.transcript.height,
-        40 - 1 - MIN_ROWS,
-        "a frame of forty rows gives the transcript every row its footer and the band's three \
-             do not: the two rows the band's air took are the transcript's"
+        40 - MIN_ROWS,
+        "a frame of forty rows gives the transcript every row the band's three do not: the row \
+             the hints hold is the transcript's"
     );
     assert_eq!(
         tall.transcript.height,
-        40 - 1 - tall.composer.height,
+        40 - tall.composer.height,
         "and a band of {} rows takes its own rows back from the transcript",
         tall.composer.height
     );
     assert_eq!(
         small.transcript.bottom(),
         small.composer.y,
-        "and the transcript's band runs down to the composer's rule"
+        "and the transcript's band runs down to the composer's head"
     );
     assert!(
         drawn_row(&buffer, small.composer.y - 1).contains("turn"),
@@ -1039,8 +1146,8 @@ fn the_transcript_gains_the_two_rows_an_idle_band_gives_up() {
 }
 
 #[test]
-fn a_draft_exactly_as_wide_as_the_room_fills_its_row_and_touches_neither_upright() {
-    let room = 60 - pen::cells(INDENT) - 2;
+fn a_draft_exactly_as_wide_as_the_room_fills_its_row_and_never_runs_past_the_band() {
+    let room = 60 - pen::cells(INDENT);
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -1053,8 +1160,8 @@ fn a_draft_exactly_as_wide_as_the_room_fills_its_row_and_touches_neither_upright
 
     assert_eq!(
         drawn_glyphs(&buffer, band.y + ends(&view).above),
-        format!("{UPRIGHT}{SIGIL}{}{UPRIGHT}", pen::filled(room, 'x')),
-        "a draft of {room} glyphs does not fill the columns the box leaves it"
+        format!(" \u{203a}{}", pen::filled(room, 'x')),
+        "a draft of {room} glyphs does not fill the columns the band leaves it"
     );
     assert_eq!(
         view.composer().rows(),
@@ -1064,12 +1171,12 @@ fn a_draft_exactly_as_wide_as_the_room_fills_its_row_and_touches_neither_upright
     assert_eq!(
         view.composer().caret(),
         (0, room),
-        "and its caret waits at the end of that row, inside the box"
+        "and its caret waits at the end of that row, inside the band"
     );
 }
 
 #[test]
-fn a_queues_rows_stand_inside_the_box_and_the_foot_is_still_the_bands_last_row() {
+fn a_queues_rows_stand_above_the_hints_which_are_the_bands_last_row() {
     let palette = Palette::TRUECOLOR;
     let (buffer, laid, ends) = waiting_behind(palette, "a draft", 3, 120, 24);
     let band = laid.composer;
@@ -1078,32 +1185,32 @@ fn a_queues_rows_stand_inside_the_box_and_the_foot_is_still_the_bands_last_row()
     assert_eq!(
         queue.bottom(),
         band.bottom() - ends.below,
-        "the queue's rows do not end on the row above the foot"
+        "the queue's rows do not end on the row above the hints"
     );
     for y in queue.y..queue.bottom() {
         let row = drawn_glyphs(&buffer, y);
         assert!(
-            row.starts_with(UPRIGHT) && row.ends_with(UPRIGHT),
-            "row {y} of the queue is not drawn inside the box: {row:?}"
+            row.starts_with(" \u{203a}"),
+            "row {y} of the queue is not drawn in the band's gutter: {row:?}"
         );
     }
     assert_eq!(
-        drawn_glyphs(&buffer, band.bottom() - 1),
-        format!(
-            "{FOOT_OPEN}{}{FOOT_CLOSE}",
-            pen::filled(band.width - 2, HAIRLINE)
-        ),
-        "the foot is not the band's last row"
+        drawn_row(&buffer, band.bottom() - 1)
+            .trim_end()
+            .split(' ')
+            .next(),
+        Some("Ctrl-C"),
+        "the hints are not the band's last row"
     );
     assert_eq!(
         laid.footer.y,
-        band.bottom(),
-        "and the footer is the row under the whole band"
+        band.bottom() - 1,
+        "and the row the hints are drawn on is the band's own last row"
     );
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.band(Band::Composer),
-        "a band holding a queue still rises to its head"
+        palette.edge(Edge::Lit),
+        "a band holding a queue is still headed by the lit edge"
     );
     assert_eq!(
         under(&buffer, band.x, band.bottom() - 1),
@@ -1133,20 +1240,32 @@ fn the_caret_is_placed_above_the_queue_that_stands_under_the_draft() {
 }
 
 #[test]
-fn a_frame_asked_for_no_colour_draws_the_same_box_in_the_same_glyphs() {
+fn a_frame_asked_for_no_colour_draws_the_band_in_the_same_glyphs() {
     let (coloured, laid) = composer(Palette::TRUECOLOR, 3, 60, 24);
     let (flat, flat_laid) = composer(Palette::SLOTS, 3, 60, 24);
     assert_eq!(laid.composer, flat_laid.composer);
     let band = laid.composer;
 
-    for y in band.y..band.bottom() {
+    for y in band.y + 1..band.bottom() {
         assert_eq!(
             drawn_glyphs(&flat, y),
             drawn_glyphs(&coloured, y),
             "row {y} of a frame asked for no colour is not the row a coloured frame draws: the \
-                 box is no second look for a reader who asked for none"
+                 band is no second look for a reader who asked for none"
         );
     }
+    assert!(
+        drawn_glyphs(&flat, band.y)
+            .chars()
+            .all(|glyph| glyph == HAIRLINE),
+        "and its head is the rule a palette that draws no light heads its band with: {:?}",
+        drawn_glyphs(&flat, band.y)
+    );
+    assert_eq!(
+        drawn_glyphs(&coloured, band.y).trim_end(),
+        "",
+        "where the palette that draws the light heads the band with a row of it and no glyph"
+    );
 }
 
 #[test]
@@ -1314,9 +1433,9 @@ fn a_prompt_drawn_beside_a_live_draft_is_read_as_the_words_asked_and_not_the_dra
     }
     for x in composer.x..composer.right() {
         assert_eq!(
-            under(&buffer, x, composer.y),
-            palette.band(Band::Composer),
-            "column {x} of the composer's head stands on the surface the draft takes the keys on"
+            under(&buffer, x, composer.y + 1),
+            palette.step(1, composer.height),
+            "column {x} of the composer's draft stands on the ramp the draft takes the keys on"
         );
     }
     assert_ne!(
@@ -1499,8 +1618,10 @@ fn the_rail_and_a_code_well_are_painted_over_their_own_surface() {
             .any(|band| cell.bg == palette.band(band))
     });
     assert_eq!(
-        banded, None,
-        "the footer sits on no band, and column {banded:?} of it sits on one"
+        banded,
+        Some(0),
+        "the hints stand on the last step of the band's ramp, which is the rail's own tone: \
+         column {banded:?} of them is the first that sits on it"
     );
 }
 
@@ -1810,8 +1931,9 @@ fn the_block_stands_on_the_rows_a_terminal_that_places_no_picture_puts_it_on() {
     );
     assert_eq!(
         wordmark_row(&pictured, band),
-        14,
-        "and that is the row `boot-120x40` puts the wordmark on"
+        15,
+        "and that is the row the splash screen's block opens on once the transcript band has \
+         taken the hints' row"
     );
 }
 
@@ -2695,7 +2817,7 @@ fn a_notch_of_the_wheel_takes_the_transcript_back_exactly_as_the_page_key_does()
     );
     assert_eq!(
         view.scroll(),
-        Scroll::Back(36),
+        Scroll::Back(37),
         "and it moves it by the band the transcript is drawn in, exactly as `PgUp` does"
     );
     let (_, told) = painted_and_told(&mut view, 120, 40);
@@ -2723,7 +2845,7 @@ fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
     );
     assert_eq!(
         view.scroll(),
-        Scroll::Back(4),
+        Scroll::Back(3),
         "but only as far as its first row, which one page reaches"
     );
     assert_eq!(
@@ -2731,7 +2853,7 @@ fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
         Outcome::Unchanged,
         "and a notch up already at the first row moves nothing"
     );
-    assert_eq!(view.scroll(), Scroll::Back(4), "the row it stopped on");
+    assert_eq!(view.scroll(), Scroll::Back(3), "the row it stopped on");
 
     let mut tail = turns_taken(40);
     let (_, told) = painted_and_told(&mut tail, 120, 40);
@@ -2939,9 +3061,9 @@ fn a_page_up_takes_the_transcript_back_by_the_band_it_is_drawn_in() {
     );
     assert_eq!(
         view.scroll(),
-        Scroll::Back(36),
-        "a 120x40 frame gives the transcript thirty-six rows — forty less the footer \
-             and the composer's three — so one page moves it that far back"
+        Scroll::Back(37),
+        "a 120x40 frame gives the transcript thirty-seven rows — forty less the \
+             composer's three — so one page moves it that far back"
     );
     painted(&mut view, 120, 40);
     assert_eq!(
@@ -2965,7 +3087,7 @@ fn scrolled_back() -> View {
     view.key(Key::PageUp);
     assert_eq!(
         view.scroll(),
-        Scroll::Back(36),
+        Scroll::Back(37),
         "the frame under these tests is one page off the tail to begin with"
     );
     view
@@ -2997,12 +3119,12 @@ fn a_frame_off_the_tail_says_how_far_back_it_stands_and_the_key_that_follows_the
     let (drawn, y) = notice_of(&buffer);
     assert_eq!(
         drawn.trim_end(),
-        "36 rows back \u{b7} End follows the run",
+        "37 rows back \u{b7} End follows the run",
         "the row says how many rows back the frame stands and the key that returns it"
     );
     assert_eq!(
-        y, 35,
-        "the row stands above the composer's edge row and is the thirty-sixth of forty, \
+        y, 36,
+        "the row stands above the composer's head row and is the thirty-seventh of forty, \
              rather than a row of the transcript it is a fact about"
     );
 
@@ -3081,7 +3203,7 @@ fn a_row_that_lands_while_the_reader_is_scrolled_back_holds_the_window_still() {
     );
     let (now, _) = notice_of(&after);
     assert!(
-        now.trim_end().starts_with("38 rows back"),
+        now.trim_end().starts_with("39 rows back"),
         "the two rows the answer landed are added to the count of rows back: the frame holds \
              the rows it was reading rather than sliding with the tail, and what the row says \
              of them is its own test: {now:?}"
@@ -3102,7 +3224,7 @@ fn a_frame_off_the_tail_counts_the_rows_that_landed_below_it() {
     let (drawn, _) = notice_of(&landed);
     assert_eq!(
         drawn.trim_end(),
-        "38 rows back \u{b7} 2 rows landed \u{b7} End follows the run",
+        "39 rows back \u{b7} 2 rows landed \u{b7} End follows the run",
         "the row says how far back the frame stands, how many rows have landed below it \
              since, and the key that follows the run"
     );
@@ -3122,9 +3244,15 @@ fn one_row_that_landed_is_said_in_the_singular() {
     let (drawn, _) = notice_of(&landed);
     assert_eq!(
         drawn.trim_end(),
-        "37 rows back \u{b7} 1 row landed \u{b7} End follows the run",
+        "38 rows back \u{b7} 1 row landed \u{b7} End follows the run",
         "one row that landed is a count of one row, and not of one rows"
     );
+}
+
+/// One row of the frame with the thumb's gutter column cut off it: the rows a reader reads, and not
+/// the cell the geometry marks them with.
+fn unthumbed(buffer: &Buffer, y: u16) -> String {
+    drawn_row(buffer, y).chars().skip(1).collect()
 }
 
 #[test]
@@ -3146,10 +3274,11 @@ fn a_new_entry_that_lands_below_the_reader_holds_every_row_of_the_band_still() {
 
     for y in 0..told.drawn().band() {
         assert_eq!(
-            drawn_row(&after, y),
-            drawn_row(&before, y),
+            unthumbed(&after, y),
+            unthumbed(&before, y),
             "the row the reader is reading stands on the band row it stood on, though the \
-                 run opened two entries below it: row {y} moved"
+                 run opened two entries below it: row {y} moved, and the thumb in its gutter is \
+                 the geometry's rather than the row's"
         );
     }
 }
@@ -3198,7 +3327,7 @@ fn a_row_too_narrow_for_the_words_that_say_it_is_drawn_whole_or_not_at_all() {
 
     let roomy = painted(&mut view, 40, 40);
     assert!(
-        holds(&roomy, "36 rows back \u{b7} End follows the run"),
+        holds(&roomy, "37 rows back \u{b7} End follows the run"),
         "and forty columns hold the whole row"
     );
 }
@@ -3209,10 +3338,10 @@ fn a_frame_too_short_for_the_row_gives_it_up_before_the_transcript_loses_its_las
     painted(&mut view, 120, 40);
     view.key(Key::PageUp);
 
-    let close = painted(&mut view, 120, 5);
+    let close = painted(&mut view, 120, 4);
     assert!(
         !holds(&close, "rows back"),
-        "a frame of five rows holds the composer's three and the footer's one, so the row \
+        "a frame of four rows holds the composer's three and one row more, so the row \
              that says where the reader stands is given up and the transcript keeps its row: \
              {:?}",
         (close.area.y..close.area.bottom())
@@ -3331,7 +3460,7 @@ fn end_hands_the_frame_back_to_the_tail_and_it_follows_the_run_from_there() {
     let (drawn, _) = notice_of(&back);
     assert_eq!(
         drawn.trim_end(),
-        "36 rows back \u{b7} End follows the run",
+        "37 rows back \u{b7} End follows the run",
         "and a frame that stands off the tail again counts the rows landing below it from \
              there, and none of the rows that landed before"
     );
@@ -3404,9 +3533,9 @@ fn a_page_up_at_the_first_row_stops_there_rather_than_wrapping_to_the_tail() {
     );
     assert_eq!(
         view.scroll(),
-        Scroll::Back(4),
-        "forty rows of transcript in a band of thirty-six leaves four rows behind the \
-             frame, so the one page back is four rows and not thirty-six"
+        Scroll::Back(3),
+        "forty rows of transcript in a band of thirty-seven leaves three rows behind the \
+             frame, so the one page back is three rows and not thirty-seven"
     );
     painted(&mut view, 120, 40);
     assert_eq!(
@@ -3415,7 +3544,7 @@ fn a_page_up_at_the_first_row_stops_there_rather_than_wrapping_to_the_tail() {
         "the row saying where the frame stands is drawn out of that band, so reaching the \
              first row is the second press rather than the first"
     );
-    assert_eq!(view.scroll(), Scroll::Back(5));
+    assert_eq!(view.scroll(), Scroll::Back(4));
     let head = painted(&mut view, 120, 40);
     let first = drawn_row(&head, 0);
     assert!(
@@ -3432,7 +3561,7 @@ fn a_page_up_at_the_first_row_stops_there_rather_than_wrapping_to_the_tail() {
         );
         assert_eq!(
             view.scroll(),
-            Scroll::Back(5),
+            Scroll::Back(4),
             "and the frame stays on the first row rather than rolling round to the tail"
         );
     }
@@ -3625,9 +3754,9 @@ fn the_caret_is_placed_on_the_carets_row_of_the_draft() {
     );
     assert_eq!(
         caret_of(&told),
-        Some((14, 8)),
+        Some((13, 9)),
         "the caret is placed in the column it takes in the draft, and the draft is set \
-             two columns in from the upright"
+             past the two columns of its gutter"
     );
 }
 
@@ -3647,7 +3776,7 @@ fn place_of(buffer: &Buffer, words: &str) -> (String, u16) {
 }
 
 #[test]
-fn the_draft_is_set_behind_its_sigil_one_column_in_from_the_bands_upright() {
+fn the_draft_is_set_in_the_column_an_answers_prose_opens_in() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -3665,17 +3794,15 @@ fn the_draft_is_set_behind_its_sigil_one_column_in_from_the_bands_upright() {
     let (answered, answer_column) = place_of(&buffer, "an answer opens here");
     let (drafted, draft_column) = place_of(&buffer, "a draft opens here");
     assert_eq!(
-        draft_column,
-        answer_column + 1,
+        draft_column, answer_column,
         "the answer is set from column {answer_column} ({answered:?}) and the draft from \
-             {draft_column} ({drafted:?}): the draft is set in the answer's own gutter, one \
-             column in for the upright the box draws"
+             {draft_column} ({drafted:?}): the draft is set past its gutter, so it begins where an \
+             answer does"
     );
     let gutter: String = drafted.chars().take(usize::from(draft_column)).collect();
     assert_eq!(
-        gutter, "\u{2502}\u{203a} ",
-        "the columns before the draft are not the upright and the sigil that opens it in the \
-             gutter"
+        gutter, " \u{203a}",
+        "the columns before the draft are the blank and the sigil that opens it in the gutter"
     );
 }
 
@@ -3725,10 +3852,8 @@ fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
              cut, and the reader is handed a thumb where the tall field should be"
     );
     assert!(
-        drawn_row(&buffer, 0).starts_with(THUMB),
-        "row 0 stands beside no picture and carries the thumb, which is where a reader off \
-             the tail reads where they stand: {:?}",
-        drawn_row(&buffer, 0)
+        thumb_rows(&buffer).is_empty(),
+        "a band this tall holds the whole history, so no thumb is drawn over any row of it"
     );
 }
 
@@ -3785,10 +3910,10 @@ fn a_frame_off_the_tail_draws_the_thumb_in_the_gutter_for_the_rows_the_geometry_
     let thumb = thumb_rows(&head);
     assert_eq!(
         thumb,
-        (0..15).collect::<Vec<u16>>(),
-        "forty frame rows less the footer's one, the composer's three and the row saying \
-             where the reader stands leave thirty-five, of which an eighty-row transcript fills \
-             fifteen: the thumb opens the band at the head"
+        (0..16).collect::<Vec<u16>>(),
+        "forty frame rows less the composer's three and the row saying where the reader stands \
+             leave thirty-six, of which an eighty-row transcript fills sixteen: the thumb opens \
+             the band at the head"
     );
     assert_eq!(
         look_at(&head, &Palette::TRUECOLOR, 0, thumb[0]).ink(),
@@ -3802,15 +3927,14 @@ fn the_thumb_follows_the_window_down_the_frame() {
     let middle = painted(&mut scrolled(80, Scroll::Back(22)), 120, 40);
     assert_eq!(
         thumb_rows(&middle),
-        (10..25).collect::<Vec<u16>>(),
-        "half way from the head to the tail stands the thumb half way down the twenty rows \
-             the band leaves it"
+        (10..26).collect::<Vec<u16>>(),
+        "half way from the head to the tail stands the thumb half way down the band"
     );
 
     let foot = painted(&mut scrolled(80, Scroll::Back(1)), 120, 40);
     assert_eq!(
         thumb_rows(&foot),
-        (20..35).collect::<Vec<u16>>(),
+        (20..36).collect::<Vec<u16>>(),
         "one row off the tail stands the thumb at the foot of the band, so the reader sees it \
              arrive there"
     );
@@ -3985,16 +4109,11 @@ fn ends(view: &View) -> Ends {
     view.composer().ends()
 }
 
-/// The rows of the composer's box the draft is drawn in, with the upright at each end of them taken
-/// off.
+/// The rows of the composer's band the draft and its queue are drawn in, cut at their trailing
+/// blanks: the head over them and the hints under them are no row of the draft.
 fn draft_rows(buffer: &Buffer, band: Rect, ends: Ends) -> Vec<String> {
     (band.y.saturating_add(ends.above)..band.bottom().saturating_sub(ends.below))
-        .map(|y| {
-            drawn_glyphs(buffer, y)
-                .trim_matches(UPRIGHT)
-                .trim_end()
-                .to_owned()
-        })
+        .map(|y| drawn_glyphs(buffer, y).trim_end().to_owned())
         .collect()
 }
 
@@ -4030,10 +4149,10 @@ fn a_queue_of_three_is_drawn_under_the_draft_one_prompt_to_a_row_with_the_newest
     assert_eq!(
         draft_rows(&buffer, band, ends),
         [
-            "\u{203a} a draft",
-            "\u{203a} prompt 1",
-            "\u{203a} prompt 2",
-            "\u{203a} prompt 3"
+            " \u{203a}a draft",
+            " \u{203a}prompt 1",
+            " \u{203a}prompt 2",
+            " \u{203a}prompt 3"
         ],
         "three waiting prompts are three rows of the composer's own band, each wearing the \
              sigil the draft wears and the newest at the foot"
@@ -4065,18 +4184,18 @@ fn a_queue_longer_than_its_band_draws_the_newest_it_holds_and_the_count_of_the_r
     assert_eq!(
         draft_rows(&buffer, band, ends),
         [
-            "\u{203a} a draft",
+            " \u{203a}a draft",
             "  4 more queued",
-            "\u{203a} prompt 5",
-            "\u{203a} prompt 6",
-            "\u{203a} prompt 7",
+            " \u{203a}prompt 5",
+            " \u{203a}prompt 6",
+            " \u{203a}prompt 7",
         ],
         "so it draws the newest three and gives its first row to the count of the four the \
              band could not hold"
     );
-    let gutter = pen::cells(INDENT);
+    let words = pen::cells(INDENT);
     assert_eq!(
-        look_at(&buffer, &palette, gutter, queue.y),
+        look_at(&buffer, &palette, words, queue.y),
         Look::plain(Ink::Dim),
         "and the count is drawn in the dim ink, with no sigil of its own"
     );
@@ -4092,12 +4211,12 @@ fn a_frame_with_nothing_queued_draws_no_queue_row_and_the_transcript_keeps_them_
     assert_eq!(queue.height, 0, "nothing waiting is no queue row at all");
     assert_eq!(
         band.height, 3,
-        "so the band is the draft's own rows: the rule, the one row the draft takes and the \
-             foot"
+        "so the band is the draft's own rows: the head, the one row the draft takes and the \
+             hints"
     );
     assert_eq!(
         draft_rows(&buffer, band, ends),
-        ["\u{203a} a draft"],
+        [" \u{203a}a draft"],
         "and no row under the draft belongs to a queue"
     );
     assert!(
@@ -4112,11 +4231,11 @@ fn a_frame_with_nothing_queued_draws_no_queue_row_and_the_transcript_keeps_them_
     assert_eq!(
         laid.transcript.bottom(),
         laid.composer.y,
-        "the transcript's band runs down to the composer's edge"
+        "the transcript's band runs down to the composer's head"
     );
     assert!(
         drawn_row(&buffer, laid.composer.y - 1).contains("turn"),
-        "and the row above the edge is the transcript's own, drawn by it"
+        "and the row above the head is the transcript's own, drawn by it"
     );
 }
 
@@ -4158,18 +4277,23 @@ fn a_draft_past_the_ceiling_says_how_many_rows_it_keeps_back_and_keeps_the_caret
         "nine lines are drawn four at a time, and the row under them counts the five the band \
              keeps back"
     );
-    let gutter = pen::cells(INDENT);
+    let words = pen::cells(INDENT);
     assert_eq!(
-        look_at(&buffer, &palette, gutter, band.bottom() - 1),
+        look_at(
+            &buffer,
+            &palette,
+            words,
+            band.bottom() - ends(&view).below - 1
+        ),
         Look::plain(Ink::Dim),
-        "the count is the dim ink"
+        "the count is the dim ink, set in the column the draft's words are"
     );
     let (_, y) = caret_of(&told).expect("a caret is placed for a long draft");
     assert_eq!(
         y,
         band.bottom() - ends(&view).below - 2,
         "and the caret is placed on the last row the band draws the draft in: above the row \
-             that counts the rest and above the foot"
+             that counts the rest and above the hints"
     );
 }
 
@@ -4188,11 +4312,11 @@ fn a_draft_wider_than_the_band_wraps_under_the_gutter_and_never_splits_a_wide_gl
     assert_eq!(
         draft_rows(&buffer, band, ends(&view)),
         [
-            format!("\u{203a} {}", wide(28)),
-            format!("  {}", wide(28)),
-            format!("  {}", wide(4)),
+            format!(" ›{}", wide(29)),
+            format!("  {}", wide(29)),
+            format!("  {}", wide(2)),
         ],
-        "a fifty-six column room holds twenty-eight wide glyphs, and the sixtieth glyph \
+        "a fifty-eight column room holds twenty-nine wide glyphs, and the sixtieth glyph \
              begins the third row of the draft with the gutter beside it"
     );
     assert_eq!(
@@ -4218,9 +4342,9 @@ fn an_empty_draft_says_what_the_band_can_do_in_the_dim_ink_until_a_glyph_arrives
         .expect("the row the placeholder begins on");
     assert_eq!(
         &empty[..gutter],
-        format!("{UPRIGHT}{SIGIL}"),
-        "the placeholder {PLACEHOLDER:?} does not stand in the gutter inside the box: \
-             {empty:?}"
+        " \u{203a}",
+        "the placeholder {PLACEHOLDER:?} does not stand past the blank and the sigil of the \
+             band's gutter: {empty:?}"
     );
     let column = at + pen::cells(PLACEHOLDER) - 1;
     assert_eq!(
@@ -4253,9 +4377,8 @@ fn a_card_covers_the_composer_and_leaves_it_readable_and_out_of_reach() {
     let (drawn, column) = place_of(&buffer, "a draft of mine");
     assert_eq!(
         column,
-        1 + pen::cells(INDENT),
-        "the draft under the card is still set in the gutter, one column in from the \
-             band's upright: {drawn:?}"
+        pen::cells(INDENT),
+        "the draft under the card is still set in the band's gutter: {drawn:?}"
     );
     assert_eq!(
         look_at(&buffer, &palette, column, band.y + ends(&view).above),
@@ -4550,11 +4673,11 @@ fn a_boxed_card_that_reaches_the_drafts_row_holds_the_cell_the_caret_would_be_pl
     );
     view.paste("/");
 
-    let (buffer, told) = painted_and_told(&mut view, 60, 13);
+    let (buffer, told) = painted_and_told(&mut view, 60, 11);
     let band = laid_out(&told).composer;
     assert!(
         drawn_row(&buffer, band.y + ends(&view).above).contains("Esc"),
-        "a card nine rows tall in a thirteen row frame draws its foot on the draft's first row"
+        "a card nine rows tall in an eleven row frame draws its foot on the draft's first row"
     );
     assert_eq!(
         caret_of(&told),
@@ -4613,9 +4736,9 @@ fn a_screen_is_drawn_with_no_caret_placed_on_the_band() {
 fn a_draft_holding_a_wide_glyph_places_the_caret_in_the_column_the_glyph_occupies() {
     assert_eq!(
         placed_at("日本", 40, 12),
-        Some((7, 9)),
+        Some((6, 10)),
         "two wide glyphs take four columns, so the caret is placed in the fourth column after \
-             the gutter, one column in from the band's upright"
+             the gutter, inside the band's last column"
     );
 }
 
@@ -4637,45 +4760,46 @@ fn the_caret_follows_the_draft_onto_the_row_the_wrap_gave_it() {
 
     assert_eq!(
         placed_at(&asking, 40, 12),
-        Some((27, 8)),
-        "a thirty-six column room holds thirty-six glyphs of a draft of sixty, so the caret is \
-             placed twenty-four columns into the band's second row rather than off the frame"
+        Some((24, 9)),
+        "a thirty-eight column room holds thirty-eight glyphs of a draft of sixty, so the caret \
+             is placed twenty-two columns into the band's second row rather than off the frame"
     );
     assert_eq!(
         placed_at(&asking, 80, 12),
-        Some((63, 9)),
+        Some((62, 10)),
         "and a frame wide enough to hold the draft shows it on the one row it takes"
     );
 }
 
 #[test]
-fn a_caret_at_the_end_of_a_full_row_is_placed_in_the_last_column_inside_the_box() {
+fn a_caret_at_the_end_of_a_full_row_is_placed_in_the_bands_last_column() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
         Transcript::none(),
     );
-    let room = 40 - pen::cells(INDENT) - 2;
+    let room = 40 - pen::cells(INDENT);
     view.paste(&pen::filled(room, 'x'));
 
     let (buffer, told) = painted_and_told(&mut view, 40, 12);
     let band = laid_out(&told).composer;
-    let (column, row) = caret_of(&told).expect("a caret is placed for a draft that fills the box");
+    let (column, row) = caret_of(&told).expect("a caret is placed for a draft that fills the band");
 
     assert_eq!(
         column,
-        band.right() - 2,
+        band.right() - 1,
         "a draft that fills the row's {room} columns leaves the caret no column after it, so \
-             it is placed in the last one inside the box rather than on the upright"
-    );
-    assert_eq!(
-        buffer.cell((column + 1, row)).map(|cell| cell.symbol()),
-        Some("\u{2502}"),
-        "and the column after the caret is the band's right upright"
+             it is placed in the band's last one rather than off the frame"
     );
     assert!(
         row < band.bottom() - ends(&view).below,
-        "the caret is placed on a row inside the box and never on the foot"
+        "the caret is placed on a row inside the band and never on the hints"
+    );
+    assert!(
+        buffer
+            .cell((band.right() - 1, row))
+            .is_some_and(|cell| cell.symbol() == "x"),
+        "and the cell it marks is the draft's own last glyph"
     );
 }
 
@@ -4750,7 +4874,7 @@ fn a_placeholder_and_a_waiting_prompt_light_no_sigil_and_keep_the_dim_ink() {
     );
 
     let (buffer, laid, ends) = waiting_behind(palette, "a draft", 1, 120, 24);
-    let prompts = inside(laid.queue);
+    let prompts = laid.queue;
     assert_eq!(
         gutter_ink(&buffer, &palette, prompts.x, prompts.y),
         Ink::Dim,
@@ -4869,9 +4993,9 @@ fn the_caret_is_placed_before_the_glyph_it_comes_before_and_moves_with_every_key
             .symbol()
             .to_owned();
         let above = ends(view).above;
-        (x - band.x - 1, y - band.y - above, glyph)
+        (x - band.x - pen::cells(INDENT), y - band.y - above, glyph)
     };
-    let column = pen::cells(INDENT);
+    let column = 0;
 
     assert_eq!(
         placed(&mut view),
@@ -5717,17 +5841,29 @@ fn exchanges(count: u32) -> Vec<Entry> {
         .collect()
 }
 
+/// The number of the first prompt the frame's transcript band draws, read off the words a prompt is
+/// set from, so a case names the prompt the band opens on and not the row of it.
+fn first_prompt(buffer: &Buffer) -> u32 {
+    (buffer.area.y..buffer.area.bottom())
+        .map(|y| drawn_row(buffer, y))
+        .find_map(|row| {
+            let at = row.find("prompt ")? + "prompt ".len();
+            row[at..].split_whitespace().next()?.parse().ok()
+        })
+        .expect("the frame draws a prompt in its transcript band")
+}
+
 #[test]
 fn a_bracket_takes_the_frame_to_the_prompt_before_the_one_it_stands_on() {
     let mut view = conversation(20);
     let buffer = painted(&mut view, 120, 40);
-    assert!(
-        blank(&drawn_row(&buffer, 0)),
-        "twenty exchanges are fifty-nine rows, and the band's thirty-six open on the blank row \
-         above the ninth prompt: {:?}",
+    assert_eq!(
+        first_prompt(&buffer),
+        9,
+        "twenty exchanges are fifty-nine rows, and the band's thirty-seven open inside the \
+         ninth: {:?}",
         frame_rows(&buffer)
     );
-    assert!(drawn_row(&buffer, 1).contains("prompt 9"));
 
     assert_eq!(
         view.key(Key::Char('[')),
@@ -5735,15 +5871,16 @@ fn a_bracket_takes_the_frame_to_the_prompt_before_the_one_it_stands_on() {
         "`[` is a frame to paint"
     );
     let buffer = painted(&mut view, 120, 40);
-    assert!(
-        blank(&drawn_row(&buffer, 0)),
-        "the frame stands on the blank row above the eighth prompt: {:?}",
+    assert_eq!(
+        first_prompt(&buffer),
+        7,
+        "the frame's first row stands in the eighth exchange, and the prompt before it is the \
+         seventh: {:?}",
         frame_rows(&buffer)
     );
-    assert!(drawn_row(&buffer, 1).contains("prompt 8"));
     let (notice, _) = notice_of(&buffer);
     assert!(
-        notice.starts_with("prompt 8 / 20"),
+        notice.starts_with("prompt 7 / 20"),
         "the row above the composer names the prompt the frame stands on: {notice:?}"
     );
 }
@@ -5765,15 +5902,15 @@ fn a_bracket_takes_the_frame_to_the_prompt_after_the_one_it_stands_on() {
         "`]` is a frame to paint"
     );
     let buffer = painted(&mut view, 120, 40);
-    assert!(
-        blank(&drawn_row(&buffer, 0)),
-        "the frame stands on the blank row above the ninth prompt again: {:?}",
+    assert_eq!(
+        first_prompt(&buffer),
+        8,
+        "the frame stands on the eighth prompt, one after the seventh: {:?}",
         frame_rows(&buffer)
     );
-    assert!(drawn_row(&buffer, 1).contains("prompt 9"));
     let (notice, _) = notice_of(&buffer);
     assert!(
-        notice.starts_with("prompt 9 / 20"),
+        notice.starts_with("prompt 8 / 20"),
         "and the row above the composer names the ninth: {notice:?}"
     );
 }
@@ -5978,7 +6115,7 @@ fn the_row_above_the_composer_names_the_prompt_the_frame_stands_on() {
     let (notice, y) = notice_of(&buffer);
     assert_eq!(
         notice.trim_end(),
-        "prompt 1 / 20 \u{b7} 23 rows back \u{b7} End follows the run",
+        "prompt 1 / 20 \u{b7} 22 rows back \u{b7} End follows the run",
         "the row names the prompt the band's first row stands in, how many the conversation \
              holds, how far back the frame stands and the key that follows the run"
     );
@@ -6009,7 +6146,7 @@ fn the_prompt_the_frame_stands_on_is_given_up_before_the_row_is() {
     let (notice, _) = notice_of(&narrow);
     assert_eq!(
         notice.trim_end(),
-        "23 rows back \u{b7} End follows the run",
+        "22 rows back \u{b7} End follows the run",
         "a row too narrow for the count keeps the rest of what it says"
     );
 

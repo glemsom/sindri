@@ -12,7 +12,7 @@ use clap::Parser;
 use sindri::composer::{Composer, Key, Outcome, Prompt};
 use sindri::ink::Look;
 use sindri::ledger::Boot;
-use sindri::palette::Palette;
+use sindri::palette::{Edge, Palette};
 use sindri::pictures::PLACEHOLDER;
 use sindri_core::first_run::FirstRun;
 use sindri_core::policy::Enforcement;
@@ -441,20 +441,6 @@ fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again()
     );
 }
 
-fn cells_wearing(view: &mut View, palette: &Palette, look: Look) -> Vec<(u16, u16)> {
-    let frame = painted(view);
-    let area = frame.area;
-    (area.y..area.bottom())
-        .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
-        .filter(|at| {
-            frame
-                .cell(*at)
-                .and_then(|cell| Look::of(cell, palette))
-                .is_some_and(|worn| worn == look)
-        })
-        .collect()
-}
-
 /// What a test asks of a launch: the frame it holds, the config the run will ask by, and the words it
 /// has told. A test never reads a field of it.
 impl Loop<'_> {
@@ -492,8 +478,27 @@ impl Loop<'_> {
         self.view.capabilities().pictures().rasterises(source)
     }
 
-    fn cells(&mut self, palette: &Palette, look: Look) -> Vec<(u16, u16)> {
-        cells_wearing(&mut self.view, palette, look)
+    /// The cells of the frame that stand on the lit edge: the row the composer's head is drawn as
+    /// while the band takes the keys.
+    fn lit(&mut self, palette: &Palette) -> Vec<(u16, u16)> {
+        let frame = painted(&mut self.view);
+        let area = frame.area;
+        (area.y..area.bottom())
+            .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
+            .filter(|at| {
+                frame
+                    .cell(*at)
+                    .is_some_and(|cell| cell.bg == palette.edge(Edge::Lit))
+            })
+            .collect()
+    }
+
+    /// The look each of the cells at `at` is drawn in, read off the frame the launch holds now.
+    fn looks(&mut self, palette: &Palette, at: &[(u16, u16)]) -> Vec<Option<Look>> {
+        let frame = painted(&mut self.view);
+        at.iter()
+            .map(|cell| frame.cell(*cell).and_then(|cell| Look::of(cell, palette)))
+            .collect()
     }
 }
 
@@ -686,10 +691,11 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     view.paste("the draft the composer band is drawn from");
     // A stream that carries a window: nothing else raises a notification at all.
     let mut live = stage.launch_in_a_window(view, Config::default(), &environment);
-    let lit = live.cells(&palette, palette.accent_edge());
+    let lit = live.lit(&palette);
     assert!(
         !lit.is_empty(),
-        "the surface that takes the keys wears the accent edge while the reader is read: {lit:?}"
+        "the band that takes the keys is headed by a row of the lit edge while the reader is \
+         read: {lit:?}"
     );
 
     let ended = live
@@ -697,10 +703,10 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
         .expect("the report is answered");
 
     assert!(ended.is_none(), "a focus report never ends the launch");
-    let away = live.cells(&palette, palette.dim_edge());
+    let away = live.looks(&palette, &lit);
     assert!(
-        lit.iter().all(|at| away.contains(at)),
-        "every cell that wore the accent recedes to the dim edge while nobody is looking: {away:?}"
+        away.iter().all(|look| *look == Some(palette.dim_edge())),
+        "every cell of that head recedes to the dim edge's rule while nobody is looking: {away:?}"
     );
     live.told(Told::Stopped {
         turn: 1,
@@ -715,8 +721,8 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     );
     live.answer(Event::Focus(true)).expect("the reader is back");
     assert_eq!(
-        live.cells(&palette, palette.accent_edge()),
+        live.lit(&palette),
         lit,
-        "and the edge returns to the cells it left once the terminal says the reader is back"
+        "and the light returns to the cells it left once the terminal says the reader is back"
     );
 }

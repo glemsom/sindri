@@ -1057,18 +1057,21 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
     );
 }
 
-/// The rows the composer's band took in the last frame that painted it: the gap between the row of
-/// its corner and the footer's, which is the frame's last. The corner is the one drawn in the
-/// frame's first column: a rail and a transcript both draw rules of their own.
+/// The rows the composer's band took in the last frame that painted it, read off a screen that
+/// carries no layout to ask: the hints are on its last row, the draft's sigil one row under its head,
+/// and the air row of a draft that wraps stands between them.
 fn composer_rows(drawn: &str) -> Option<u16> {
-    let corner = frame::read(drawn, COLS, ROWS)
-        .rows()
-        .iter()
-        .rposition(|row| row.starts_with('\u{250c}'))?;
-    usize::from(ROWS)
-        .checked_sub(1)?
-        .checked_sub(corner)
-        .and_then(|band| u16::try_from(band).ok())
+    let screen = frame::read(drawn, COLS, ROWS);
+    let rows = screen.rows();
+    let last = u16::try_from(rows.len()).ok()?.checked_sub(1)?;
+    let opens = |y: u16| rows[usize::from(y)].starts_with(" \u{203a}");
+    let sigil = (0..last).find(|y| opens(*y))?;
+    let wraps = rows
+        .get(usize::from(sigil) + 1)
+        .is_some_and(|row| row.starts_with("  "));
+    last.checked_sub(sigil)?
+        .checked_add(1)?
+        .checked_add(1 + u16::from(wraps))
 }
 
 /// The last row of the screen that says `needle`, counted from the frame's first row.
@@ -1150,19 +1153,19 @@ fn the_boot_frame_is_read_as_the_cells_and_the_caret_its_terminal_holds() {
         drawn.text()
     );
     let boot = frame::read(&drawn.text(), COLS, ROWS);
-    let corner = (0..ROWS)
-        .find(|y| boot.glyph(0, *y) == '\u{250c}')
-        .expect("the composer's band draws its corner in the frame's first column");
+    let band = composer_rows(&drawn.text()).expect("the boot frame draws the band");
+    let head = ROWS - band;
     assert_eq!(
-        (boot.glyph(1, corner + 1), boot.glyph(GUTTER, corner + 1)),
+        (boot.glyph(1, head + 1), boot.glyph(GUTTER, head + 1)),
         ('\u{203a}', 'w'),
-        "the draft's row carries the sigil one column in and the placeholder's first glyph at \
-         the gutter, as cells and not as the escapes that wrote them: {:?}",
-        boot.row(corner + 1)
+        "the draft's row carries the sigil in the second column of its gutter and the \
+         placeholder's first glyph at the gutter, as cells and not as the escapes that wrote them: \
+         {:?}",
+        boot.row(head + 1)
     );
     assert_eq!(
         boot.caret(),
-        Some((corner + 1, GUTTER)),
+        Some((head + 1, GUTTER)),
         "and the terminal's own caret stands in the cell that glyph is drawn at"
     );
 
@@ -1515,7 +1518,7 @@ fn the_placed_caret_follows_the_row_the_draft_window_scrolls_to() {
 }
 
 #[test]
-fn a_caret_at_the_boxes_right_margin_waits_on_that_column() {
+fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);
 
@@ -1525,16 +1528,9 @@ fn a_caret_at_the_boxes_right_margin_waits_on_that_column() {
         drawn.text()
     );
 
-    let boot = frame::read(&drawn.text(), COLS, ROWS);
-    let corner = (0..ROWS)
-        .find(|y| boot.glyph(0, *y) == '\u{250c}')
-        .expect("the box's edge is drawn on the boot frame");
-    let upright = boot
-        .column_of(corner, '\u{2510}')
-        .expect("the box's edge is closed by its right upright");
-    // A draft as wide as the room the box leaves it: from the gutter the draft is set in to the
-    // cell just inside the right upright.
-    let room = upright - GUTTER;
+    // A draft as wide as the room the band leaves it: every column of the frame but the two the
+    // gutter is set in.
+    let room = COLS - GUTTER;
     let draft = format!("\u{1b}[200~{}\u{1b}[201~", "x".repeat(usize::from(room)));
     pty.type_bytes(draft.as_bytes());
 
@@ -1548,9 +1544,9 @@ fn a_caret_at_the_boxes_right_margin_waits_on_that_column() {
     let frame = drawn.text();
     assert_eq!(
         placed(&frame).map(|(_, column)| column),
-        Some(upright - 1),
-        "a caret past the box's last column waits on the column just inside the right upright, \
-         which is drawn at {upright}: {frame:?}"
+        Some(COLS - 1),
+        "a caret past the band's last column waits on that column rather than off the frame: \
+         {frame:?}"
     );
 
     pty.type_bytes(&[0x11]);
@@ -2107,9 +2103,9 @@ fn recorded(state: &std::path::Path, needle: &str) -> bool {
     false
 }
 
-/// The columns the composer sets a draft in before the first of its words: the band's upright, the
-/// sigil and the blank after it.
-const GUTTER: u16 = 3;
+/// The columns the composer sets a draft in before the first of its words: the gutter's blank and
+/// the sigil standing past it.
+const GUTTER: u16 = 2;
 
 /// The cell an empty draft's caret waits in: the placeholder's first glyph, at the gutter's edge.
 const EMPTY_CARET: u16 = GUTTER;
@@ -2582,7 +2578,7 @@ fn enter_during_a_run_keeps_the_prompt_in_the_composer_under_the_draft() {
     let frame = drawn.text();
     let waited = picture(&frame)
         .into_iter()
-        .find(|(_, glyphs)| glyphs.contains("\u{203a} read the test that failed"))
+        .find(|(_, glyphs)| glyphs.contains("\u{203a}read the test that failed"))
         .map(|(row, _)| row);
     assert!(
         waited
@@ -2593,8 +2589,8 @@ fn enter_during_a_run_keeps_the_prompt_in_the_composer_under_the_draft() {
     assert_eq!(
         composer_rows(&frame),
         Some(4),
-        "and it is a row of the composer's own band: the draft's, the prompt's and the box's \
-             own rule and foot, with no row of air either side of a draft that sits on one row"
+        "and it is a row of the composer's own band: the head, the draft's row, the prompt's \
+             and the hints, with no row of air either side of a draft that sits on one row"
     );
 
     wire.release();
