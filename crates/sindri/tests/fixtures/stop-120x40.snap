@@ -40,6 +40,6 @@ stop at 120x40
 34 |                                                                                                                        | plain:120
 35 |                                                                                                                        | plain:120
 36 |                                                                                                                        | plain:120
-37 |                                                                                                                        | plain:120
-38 | ›what should the run do?                                                                                               | dim:25 plain:95
-39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47
+37 |                                                                            input                                  48.2k| plain:76 dim:10 plain:34
+38 | ›what should the run do?                                                   output                                  3.1k| dim:25 plain:51 dim:10 plain:34
+39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline   total                                  51.3k| plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:3 dim:10 plain:34

@@ -181,22 +181,29 @@ _Avoid_: Logo, avatar, mascot, icon
 
 **Band**:
 A strip of rows the frame shares out — the **Transcript band**, the **Composer**'s, and the row
-that says the frame stands off the tail — each drawn in the rows it was given and never past them.
-The **Composer**'s band is raised as one surface, its **Footer** on its last row. What a band
-cannot hold it counts: a draft's rows past the composer's ceiling, and a queue's prompts past the
-composer's rows under the draft. A fence it never reflows, and the **Caret** is no cell of it.
+that says the frame stands off the tail — each drawn in the rows and the columns it was given and
+never past them, so a frame that draws a **Rail**'s column hands every band the columns the
+transcript has. The **Composer**'s band is raised as one surface, its **Footer** on its last row.
+What a band cannot hold it counts: a draft's rows past the composer's ceiling, and a queue's
+prompts past the composer's rows under the draft. A fence it never reflows, and the **Caret** is no
+cell of it.
 _Avoid_: Region, pane, panel, viewport
 
 **Transcript band**:
 The band every other strip is taken out of — the **Composer**'s and the row that says the frame
-stands off the tail — and the band the **Rail** takes its share of. The **Transcript** is drawn in
-it with the row the reader stands at, and the **Splash screen** until a prompt has been asked for.
+stands off the tail — drawn in the columns the **Rail** leaves it, because a ledger takes the
+frame's own columns down its right-hand edge and a strip the band's last row. The **Transcript** is
+drawn in it with the row the reader stands at, and the **Splash screen** until a prompt has been
+asked for.
 _Avoid_: Main window, main view, content area, viewport, scrollback, well
 
 **Rail**:
-The column beside the **Transcript band** that carries the frame's facts: a column down the frame's
-right-hand edge where the width holds one, and one row along the bottom of that band where it does
-not.
+The column that carries the frame's facts: the frame's right-hand edge from its top row to its
+floor where the width holds one, so the **Composer**'s band and its **Footer** stand in the
+transcript's columns beside it; and one row along the bottom of the **Transcript band** where it
+does not. Its blocks are read from the top down, with the run's spend on the rows at its foot — the
+last of them on the row the frame's shadow falls across, and those rows air on a rail that knows no
+spend.
 _Avoid_: Sidebar, side panel, gutter, fact bar
 
 **Measure**:
@@ -217,8 +224,8 @@ _Avoid_: Collapse, truncate, expand (that one is the other half), summary, previ
 
 **Plane**:
 A band's surface drawn as one image placed under its cells, so it shades in pixels rather than in
-whole rows, placed once per size. The rail's plane reaches back over the transcript's last columns,
-so the rail comes out of the transcript's edge: no line is drawn there. A terminal that places no
+whole rows, placed once per size. The rail's plane reaches back over the last columns of the bands
+beside it, so the rail comes out of their edge: no line is drawn there. A terminal that places no
 picture, or a band in a palette with no colour, is given none, and each band's own rows are the
 whole of its shading.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
@@ -267,18 +274,19 @@ the head keeps the row.
 _Avoid_: Tokens, stats, progress
 
 **Layout**:
-Where one pass put each part of the frame: the bands it shared the rows into, the columns the
-**Transcript band** was given beside a rail, and the body a card was given when one was drawn. A
-press is read off it rather than laid out a second time, so the frame a reader was shown is the
-frame a press is answered from.
+Where one pass put each part of the frame: the bands it shared the rows into, the columns they were
+given beside a rail, and the body a card was given when one was drawn. A press is read off it
+rather than laid out a second time, so the frame a reader was shown is the frame a press is
+answered from.
 _Avoid_: Geometry, arrangement, tiling, regions
 
 **Footer**:
 The last row of the **Composer**'s band: the hints of what a key does that this frame can honour,
 most valuable first, each giving up its tail as the row narrows, and a key the frame cannot answer
-not named at all. An idle draft names sending, the commands, the files and the keys; a run in flight
-names cancelling and never sending; and a queue behind the draft is counted where the key that
-recalls one stands.
+not named at all. It spans the **Composer**'s columns and stops a column short of a ledger's lit
+seam, so a frame with a **Rail**'s column beside it gives up the hints its own width would hold. An
+idle draft names sending, the commands, the files and the keys; a run in flight names cancelling and
+never sending; and a queue behind the draft is counted where the key that recalls one stands.
 _Avoid_: Status bar, help line, key bar
 
 **Card**:

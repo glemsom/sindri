@@ -24,6 +24,6 @@ queue-long at 120x24
 18 | ›and this one while they wait                                                                                          | dim:1 accent:1 plain:118
 19 |  4 more queued                                                                                                         | dim:15 plain:105
 20 | ›then the row that counts it                                                                                           | dim:29 plain:91
-21 | ›then the caret that stays inside it                                                                                   | dim:37 plain:83
-22 | ›and then the report                                                                                                   | dim:21 plain:99
-23 |Ctrl-C cancel · ↑ 7 queued · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                               | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:31
+21 | ›then the caret that stays inside it                                       input                                  48.2k| dim:37 plain:39 dim:10 plain:34
+22 | ›and then the report                                                       output                                  3.1k| dim:21 plain:55 dim:10 plain:34
+23 |Ctrl-C cancel · ↑ 7 queued · / commands · @ files · ? keys · Ctrl-Q quit    total                                  51.3k| plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 plain:4 dim:10 plain:34

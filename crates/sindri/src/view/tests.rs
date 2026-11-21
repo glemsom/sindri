@@ -700,23 +700,28 @@ fn an_empty_draft_hangs_no_count_beside_a_rail_of_facts() {
 #[test]
 fn no_frame_at_any_width_draws_a_corner_or_an_upright_in_the_composer() {
     let palette = Palette::TRUECOLOR;
-    for cols in 3..=200 {
-        let (buffer, laid) = drafted(Facts::default().asked(), palette, 1, cols, 24);
-        let band = laid.composer;
-        for y in band.y..band.bottom() {
-            let row = drawn_glyphs(&buffer, y);
+    for facts in [
+        Facts::default().asked(),
+        Facts::default().asked().railed(rail()),
+    ] {
+        for cols in 3..=200 {
+            let (buffer, laid) = drafted(facts.clone(), palette, 1, cols, 24);
+            let band = laid.composer;
+            for y in band.y..band.bottom() {
+                let row = drawn_glyphs(&buffer, y);
+                assert!(
+                    !row.chars().any(|glyph| BOX.contains(&glyph)),
+                    "row {y} of the composer band of a {cols} column frame draws a corner or an \
+                     upright: {row:?}"
+                );
+            }
+            let drafted = drawn_glyphs(&buffer, band.y + 1);
             assert!(
-                !row.chars().any(|glyph| BOX.contains(&glyph)),
-                "row {y} of the composer band of a {cols} column frame draws a corner or an \
-                 upright: {row:?}"
+                drafted.starts_with(" \u{203a}1"),
+                "the draft of a {cols} column frame does not open past the blank and the sigil of \
+                 its gutter: {drafted:?}"
             );
         }
-        let drafted = drawn_glyphs(&buffer, band.y + 1);
-        assert!(
-            drafted.starts_with(" \u{203a}1"),
-            "the draft of a {cols} column frame does not open past the blank and the sigil of its \
-             gutter: {drafted:?}"
-        );
     }
 }
 
@@ -2297,6 +2302,101 @@ fn each_set_is_cut_in_survival_order_at_four_widths() {
                  one hint given up at every narrowing"
         );
     }
+}
+
+#[test]
+fn a_forty_row_frame_beside_a_rail_holds_every_row_it_holds_without_one() {
+    let mut railed = View::of(
+        Capabilities::default(),
+        Facts::default().asked().railed(rail()),
+        Transcript::of((1..=3).map(thought)),
+    );
+    let (_, told) = painted_and_told(&mut railed, 120, 40);
+    let beside = laid_out(&told);
+    let mut bare = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of((1..=3).map(thought)),
+    );
+    let (_, told) = painted_and_told(&mut bare, 120, 40);
+    let alone = laid_out(&told);
+
+    for (band, without) in [
+        (beside.transcript, alone.transcript),
+        (beside.notice, alone.notice),
+        (beside.composer, alone.composer),
+        (beside.footer, alone.footer),
+    ] {
+        assert_eq!(
+            (band.y, band.height),
+            (without.y, without.height),
+            "a band of the frame beside a rail holds the rows it holds without one: {beside:?}"
+        );
+    }
+    assert_eq!(
+        beside.rail.expect("a rail beside the bands").1.area.height,
+        40,
+        "and the rail is handed the frame's own height, so no row of it is a row a band gave up"
+    );
+}
+
+#[test]
+fn the_hints_beside_a_rail_give_up_the_hint_the_rails_columns_took() {
+    let mut railed = View::of(
+        Capabilities::default(),
+        Facts::default().asked().railed(rail()),
+        Transcript::none(),
+    );
+    let (_, told) = painted_and_told(&mut railed, 100, 24);
+    let columns = laid_out(&told).transcript.width;
+    let mut bare = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    let whole = said_row(drawn_footer(&mut bare, 100, 24).trim_end()).len();
+    let beside = drawn_footer(&mut railed, 100, 24);
+    let said = said_row(beside.trim_end());
+
+    assert!(columns < 100, "a rail takes the frame's right-hand columns");
+    assert_eq!(
+        said.len(),
+        whole - 1,
+        "a 100-column frame beside a rail draws {said:?}, which is not one hint shorter than \
+         the {whole} the frame's own width holds"
+    );
+    assert_eq!(
+        beside.trim_end(),
+        drawn_footer(&mut bare, columns - 1, 24).trim_end(),
+        "the hints' row stands in the transcript's columns less the one the rail's seam is \
+         drawn beside, so it reads as a {} column frame reads, in the order the hints survive in",
+        columns - 1
+    );
+
+    let mut railed = View::of(
+        Capabilities::default(),
+        Facts::default().running().railed(rail()),
+        Transcript::none(),
+    );
+    for text in ["one", "two", "three"] {
+        railed.enqueue(prompt(text));
+    }
+    let (_, told) = painted_and_told(&mut railed, 100, 24);
+    let columns = laid_out(&told).transcript.width;
+    let whole = said_row(drawn_footer(&mut asking(3), 100, 24).trim_end()).len();
+    let beside = drawn_footer(&mut railed, 100, 24);
+
+    assert!(
+        said_row(beside.trim_end()).len() < whole,
+        "and a queued prompt's count is given up with the hints beside it: {beside:?} holds \
+         {} of the {whole} hints the frame's own width holds",
+        said_row(beside.trim_end()).len()
+    );
+    assert_eq!(
+        beside.trim_end(),
+        drawn_footer(&mut asking(3), columns - 1, 24).trim_end(),
+        "the row standing in the same columns reads the same hints"
+    );
 }
 
 #[test]
