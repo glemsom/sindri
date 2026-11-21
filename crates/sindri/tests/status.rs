@@ -345,6 +345,48 @@ fn a_batch_run_on_a_pipe_is_told_nothing() {
 }
 
 #[test]
+fn a_run_that_answered_reports_the_documents_it_wrote() {
+    let ground = Ground::new();
+    let wire = Wire::answering();
+
+    let answered = Session::batch(&ground, &wire, Stdio::piped()).wait();
+    assert_eq!(
+        answered.status.code(),
+        Some(0),
+        "the run answered: {}",
+        text(&answered.stderr)
+    );
+
+    let mut command = ground.command(&wire);
+    command
+        .arg("sessions")
+        .arg("show")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let shown = Session::spawn(&mut command).wait();
+
+    assert_eq!(
+        shown.status.code(),
+        Some(0),
+        "the session the run wrote is one `show` reads: {}",
+        text(&shown.stderr)
+    );
+    let read = text(&shown.stdout);
+    for expected in [
+        "status 2 documents",
+        "  working workspace turn 1: asking the model",
+        "  done workspace turn 1: answered",
+    ] {
+        assert!(
+            read.contains(expected),
+            "`sessions show` reports {expected:?}, matched as a stretch because the lines around it \
+             are the session's own: {read:?}"
+        );
+    }
+}
+
+#[test]
 fn a_batch_run_whose_stderr_is_a_file_is_told_nothing() {
     let ground = Ground::new();
     let wire = Wire::answering();

@@ -49,27 +49,20 @@ impl Running {
             let mut launch = launch;
             // `drive` failing leaves no stop reason, which the loop cannot do: the marker settles
             // on the refusal rather than turning for a run nobody is driving.
-            let (turns, stop) = match launch.drive(
+            let stop = match launch.drive(
                 prompt.text(),
                 &earlier,
                 &mut reports,
                 &mut turns,
                 interrupted,
             ) {
-                Ok(outcome) => (outcome.turns(), outcome.stopped().clone()),
-                Err(refusal) => (
-                    0,
-                    Stop::Error(SecretSet::default().redact(refusal.message())),
-                ),
+                Ok(outcome) => outcome.stopped().clone(),
+                Err(refusal) => Stop::Error(SecretSet::default().redact(refusal.message())),
             };
             // Read here, where the run stopped, and carried to the frame: a frame that read the
             // clock when it painted would put a different number beside the same verdict.
             let elapsed_ms = millis(started.elapsed());
-            reports.push(Report::Stopped {
-                stop,
-                elapsed_ms,
-                turns,
-            });
+            reports.push(Report::Stopped { stop, elapsed_ms });
             launch
         });
         Running {
@@ -133,7 +126,6 @@ pub(crate) enum Report {
     Stopped {
         stop: Stop,
         elapsed_ms: u64,
-        turns: u32,
     },
 }
 
@@ -161,15 +153,11 @@ impl Deltas for Reports {
 }
 
 impl Turns for Reports {
-    /// A turn that asked for calls keeps the run going, so the count a status bar wants moves on; a
-    /// turn that asked for none ended the run, and the stop reason is the word a terminal is owed,
-    /// since "asking the model" would be a status about a turn this run will never start.
-    fn turn(&mut self, ended: &Turn) {
-        if !ended.calls.is_empty() {
-            self.push(Report::Told(Told::Asking {
-                turn: ended.turn + 1,
-            }));
-        }
+    /// A turn moves no cell here: the status it moves is the launch's, and lands through `told`.
+    fn turn(&mut self, _ended: &Turn) {}
+
+    fn told(&mut self, told: Told) {
+        self.push(Report::Told(told));
     }
 
     fn facts(&mut self, handed: Handed<'_>) {

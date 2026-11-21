@@ -172,7 +172,7 @@ impl Witness for Watching {
         self.began += 1;
     }
 
-    fn ended(&mut self, ended: &Turn) {
+    fn ended(&mut self, ended: &Turn, _state: &State) {
         self.ended.push(ended.turn);
     }
 

@@ -17,8 +17,8 @@ use crate::provider::copilot::Signing;
 use crate::provider::endpoint::Endpoint;
 use crate::provider::served::Listing;
 use crate::provider::{Ask, Client, Deltas, Route, Usage};
-use crate::records::{Entry, Facts, Record, SessionDocument};
-use crate::run::{Cancel, Limits, Loaded, Responder, Run, Settled, Shell, Turn, Witness};
+use crate::records::{Entry, Facts, Record, SessionDocument, Told};
+use crate::run::{Cancel, Limits, Loaded, Responder, Run, Settled, Shell, State, Turn, Witness};
 use crate::sandbox::{self, Proof};
 use crate::session::{self, Session};
 use crate::skills::{self, Catalog, Diagnostic, home};
@@ -376,6 +376,10 @@ pub struct Handed<'a> {
 pub trait Turns {
     fn turn(&mut self, ended: &Turn);
 
+    /// Handed as the run opens, as each turn that leaves it running ends and once more when it
+    /// stops: the word the record wrote, so a front end tells what the status document says.
+    fn told(&mut self, _told: Told) {}
+
     /// Handed once, when the run stops: the prompt it was asked with beside the answer it got, which
     /// is what a conversation keeps for the prompt after it.
     fn kept(&mut self, _kept: &Turn) {}
@@ -395,19 +399,32 @@ struct Recording<'a, R> {
     turns: &'a mut dyn Turns,
 }
 
+impl<R> Recording<'_, R> {
+    fn told(&mut self, told: Told) {
+        note(self.launch.record.told(told.clone()));
+        self.turns.told(told);
+    }
+}
+
 impl<R> Witness for Recording<'_, R> {
     fn began(&mut self) {
         note(self.launch.record.began());
+        self.told(Told::Asking { turn: 1 });
         hand(self.turns, self.launch);
     }
 
-    fn ended(&mut self, ended: &Turn) {
+    fn ended(&mut self, ended: &Turn, state: &State) {
         note(self.launch.record.wrote(ended));
         // A turn whose report carries no size leaves the one the turn before stated.
         if ended.usage.input.is_some() {
             self.launch.measured = ended.usage;
         }
         self.turns.turn(ended);
+        if state.is_running() {
+            self.told(Told::Asking {
+                turn: ended.turn + 1,
+            });
+        }
         hand(self.turns, self.launch);
     }
 
@@ -415,6 +432,12 @@ impl<R> Witness for Recording<'_, R> {
         self.turns.kept(settled.kept);
         note(self.launch.record.charged(settled.spent));
         note(self.launch.record.stopped(settled.state));
+        if let Some(stop) = settled.state.stop() {
+            self.told(Told::Stopped {
+                turn: settled.kept.turn,
+                stop: stop.clone(),
+            });
+        }
         hand(self.turns, self.launch);
     }
 }

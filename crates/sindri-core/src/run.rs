@@ -391,8 +391,8 @@ pub trait Witness {
     /// The run opened, before it asks its first turn.
     fn began(&mut self);
 
-    /// A turn ended and is in the history, its calls run.
-    fn ended(&mut self, ended: &Turn);
+    /// A turn ended and is in the history, its calls run, and the state the run is in after it.
+    fn ended(&mut self, ended: &Turn, state: &State);
 
     /// The run stopped.
     fn settled(&mut self, settled: &Settled<'_>);
@@ -409,7 +409,7 @@ pub struct Settled<'a> {
 impl Witness for () {
     fn began(&mut self) {}
 
-    fn ended(&mut self, _ended: &Turn) {}
+    fn ended(&mut self, _ended: &Turn, _state: &State) {}
 
     fn settled(&mut self, _settled: &Settled<'_>) {}
 }
@@ -621,7 +621,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             let took = self.history.len();
             self.turn(deltas);
             if let Some(ended) = self.history.get(took) {
-                witness.ended(ended);
+                witness.ended(ended, &self.state);
             }
         }
         witness.settled(&Settled {

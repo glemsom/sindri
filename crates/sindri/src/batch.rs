@@ -92,7 +92,6 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     let max_turns = launch.max_turns();
     // A filter took no screen: its stderr carries the status document and no window.
     let mut telling = Window::new(io::stderr(), tells(config), &figure.workspace, false);
-    quietly(telling.say(Told::Asking { turn: 1 }));
 
     narrate(
         cli,
@@ -125,11 +124,6 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     };
     // One run is one session's whole conversation: its temp goes once the run has stopped.
     launch.close();
-    // Said at once, so a run that ended inside a second of starting still says it ended.
-    quietly(telling.say(Told::Stopped {
-        turn: outcome.turns(),
-        stop: outcome.stopped().clone(),
-    }));
 
     narrate(
         cli,
@@ -176,12 +170,10 @@ impl Turns for Says<'_> {
         narrate(self.cli, &format!("turn {}", self.turns));
         // Before this turn's own word: a filter nobody watches has no other clock to go by.
         quietly(self.telling.due());
-        // A turn that asked for no call has ended the run, so the stop reason comes next.
-        if !ended.calls.is_empty() {
-            quietly(self.telling.say(Told::Asking {
-                turn: self.turns + 1,
-            }));
-        }
+    }
+
+    fn told(&mut self, told: Told) {
+        quietly(self.telling.say(told));
     }
 }
 

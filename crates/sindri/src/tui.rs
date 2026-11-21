@@ -511,9 +511,7 @@ impl<'a> Loop<'a> {
         // the clock yet, so the frame a prompt is sent from already says a run has begun.
         self.view
             .handed(self.view.facts().clone().pulsed(Some(Pulse::live(0))));
-        self.paint()?;
-        self.told(Told::Asking { turn: 1 })?;
-        Ok(())
+        self.paint()
     }
 
     /// The launch the loop ends with, whether or not a run is in flight when it ends: a run still
@@ -590,19 +588,10 @@ impl<'a> Loop<'a> {
                 }
                 // No cell: the transcript already drew the turn it keeps.
                 Report::Kept(kept) => self.view.kept(&kept),
-                Report::Stopped {
-                    stop,
-                    elapsed_ms,
-                    turns,
-                } => stopped = Some((stop, elapsed_ms, turns)),
+                Report::Stopped { stop, elapsed_ms } => stopped = Some((stop, elapsed_ms)),
             }
         }
-        if let Some((ref stop, elapsed_ms, turns)) = stopped {
-            // Said at once, whatever the pace says about a turn: a stop reason is a change of state.
-            self.told(Told::Stopped {
-                turn: turns,
-                stop: stop.clone(),
-            })?;
+        if let Some((ref stop, elapsed_ms)) = stopped {
             // The last frame the run itself paints: once it is gone the wait goes back to forever,
             // and the settled marker stays on the frame for every later paint to draw.
             let facts = self
