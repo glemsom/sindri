@@ -2,6 +2,7 @@
 //! is a test's decision, and the guard and the panic hook both give the terminal back.
 
 use std::panic;
+use std::sync::Arc;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -119,10 +120,9 @@ fn a_terminal_that_says_nothing_answers_nothing_to_the_sizing_question() {
     );
 }
 
-/// A frame of `width` by `height` cells, the words each of `rows` holds, and the destinations
-/// it names, drawn through a pseudo-terminal of this process's own: the bytes the terminal at
-/// the far end is handed.
-fn drawn(width: u16, height: u16, rows: &[(u16, &str)], links: Links, places: bool) -> String {
+/// A buffer of `width` by `height` cells with the words each of `rows` holds drawn in it, the
+/// cells of a frame before a diff is taken against it.
+fn composed(width: u16, height: u16, rows: &[(u16, &str)]) -> Buffer {
     let area = Rect::new(0, 0, width, height);
     let mut buffer = Buffer::empty(area);
     for (y, words) in rows {
@@ -138,7 +138,14 @@ fn drawn(width: u16, height: u16, rows: &[(u16, &str)], links: Links, places: bo
             &Palette::TRUECOLOR,
         );
     }
-    handed(buffer, links, places)
+    buffer
+}
+
+/// A frame of `width` by `height` cells, the words each of `rows` holds, and the destinations
+/// it names, drawn through a pseudo-terminal of this process's own: the bytes the terminal at
+/// the far end is handed.
+fn drawn(width: u16, height: u16, rows: &[(u16, &str)], links: Links, places: bool) -> String {
+    handed(composed(width, height, rows), links, places)
 }
 
 /// The bytes a terminal at the far end of a pseudo-terminal is handed for a frame and the ways
@@ -703,6 +710,227 @@ impl Write for Wire {
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
+}
+
+/// A writer that keeps each write apart where `Wire` joins them: a frame handed over in pieces and a
+/// frame handed over whole read the same through that one, and only this one says which it was.
+#[derive(Clone, Default)]
+struct Writes(std::rc::Rc<std::cell::RefCell<Vec<Vec<u8>>>>);
+
+impl Writes {
+    /// The writes as they landed, each apart from the next.
+    fn kept(&self) -> Vec<Vec<u8>> {
+        self.0.borrow().clone()
+    }
+
+    fn joined(&self) -> String {
+        String::from_utf8(self.0.borrow().concat()).expect("a printable wire")
+    }
+}
+
+impl Write for Writes {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.borrow_mut().push(bytes.to_vec());
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+/// The words every row of a full frame drawn in a test holds.
+const A_ROW_OF_WORDS: &str = "the frame the launch paints at the pace the pulse paints it";
+
+/// A row of words that fills a wide band, so a screen of them is a frame past the bound one is held
+/// within.
+const A_ROW_PAST_THE_BOUND: &str = concat!(
+    "the frame the launch paints at the pace the pulse paints it, and the caret stands in the ",
+    "draft the whole time the frame is written: the frame the launch paints at the pace the ",
+    "pulse paints it, and the caret stands in the draft the whole time it is written",
+);
+
+/// A frame that fills a screen of that shape, every row of it a row of words.
+fn a_full_frame(width: u16, height: u16) -> Buffer {
+    let rows: Vec<(u16, &str)> = (0..height).map(|y| (y, A_ROW_OF_WORDS)).collect();
+    composed(width, height, &rows)
+}
+
+/// Draws `frame` through `backend` the way ratatui's terminal does: the cells the diff finds, then
+/// the flush that hands them over.
+fn draw<W: Write>(backend: &mut Backend<W>, frame: &Buffer) {
+    backend
+        .draw(Buffer::empty(*frame.area()).diff(frame).into_iter())
+        .expect("a drawn frame");
+    backend.flush().expect("a written frame");
+}
+
+#[test]
+fn a_frame_reaches_the_terminal_in_one_write() {
+    let frame = a_full_frame(80, 24);
+    let writes = Writes::default();
+    let mut backend = Backend::new(writes.clone(), false);
+    draw(&mut backend, &frame);
+    drop(backend);
+
+    assert_eq!(
+        writes.kept().len(),
+        1,
+        "a frame is the terminal's whole or not at all, so the caret cannot be drawn into a cell \
+         the frame has not placed it in"
+    );
+    assert_eq!(
+        writes.joined(),
+        handed(frame, Links::none(), false),
+        "and the bytes are the ones the frame drew, joined and no more"
+    );
+}
+
+#[test]
+fn the_cell_the_caret_is_placed_in_travels_in_the_one_write_the_cells_do() {
+    let writes = Writes::default();
+    let mut canvas = ratatui::Terminal::with_options(
+        Backend::new(writes.clone(), false),
+        ratatui::TerminalOptions {
+            viewport: ratatui::Viewport::Fixed(painted_at()),
+        },
+    )
+    .expect("a canvas over the wire");
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default(),
+        Transcript::none(),
+    );
+    view.paste("a draft of mine");
+    let mut caret = None;
+    canvas
+        .draw(|frame| {
+            caret = view.paint(frame.area(), frame.buffer_mut()).caret();
+            if let Some(at) = caret {
+                frame.set_cursor_position(at);
+            }
+        })
+        .expect("a painted frame");
+
+    let caret =
+        caret.expect("a draft takes the keys, so the frame names a cell to place the caret in");
+    // The terminal counts cells from one, and the pass counts them from none.
+    let placement = format!("\u{1b}[{};{}H", caret.y + 1, caret.x + 1);
+    let made = writes.kept();
+    assert_eq!(
+        made.len(),
+        1,
+        "the cells, the cursor shown and the cell it is placed in are one write, so no repaint \
+         finds the caret in a cell this frame has not placed it in"
+    );
+    let frame = String::from_utf8(made[0].clone()).expect("a printable frame");
+    let shown = frame.find("\u{1b}[?25h").expect("the cursor is shown");
+    let placed = frame.rfind(&placement).expect("and placed");
+    assert!(
+        shown < placed,
+        "the show comes first, and then the move, inside the write the cells are in"
+    );
+    assert!(
+        frame.ends_with(&placement),
+        "the placement is the last thing written, so it lands on the frame just painted: {frame:?}"
+    );
+}
+
+/// The bytes a terminal takes in while a frame is written to it, read off a thread of this test's
+/// own: the few kilobytes a terminal nobody reads will hold stop a spill that outgrows them.
+fn taken(pty: Pty, draw: impl FnOnce(&File)) -> String {
+    let mut master = pty
+        .master
+        .try_clone()
+        .expect("a second handle on the terminal");
+    let read = Arc::new(Mutex::new(Vec::new()));
+    let landing = Arc::clone(&read);
+    std::thread::spawn(move || {
+        let mut chunk = [0u8; 4096];
+        while let Ok(count) = master.read(&mut chunk) {
+            if count == 0 {
+                return;
+            }
+            landing
+                .lock()
+                .expect("the frame")
+                .extend_from_slice(&chunk[..count]);
+        }
+    });
+    draw(&pty.slave);
+    let mut landed = read.lock().expect("the frame").len();
+    loop {
+        std::thread::sleep(Duration::from_millis(20));
+        let now = read.lock().expect("the frame").len();
+        if now == landed {
+            return String::from_utf8_lossy(&read.lock().expect("the frame")).into_owned();
+        }
+        landed = now;
+    }
+}
+
+#[test]
+fn a_frame_past_the_bound_spills_and_every_byte_of_it_still_arrives_in_order() {
+    let rows: Vec<(u16, &str)> = (0..60).map(|y| (y, A_ROW_PAST_THE_BOUND)).collect();
+    let frame = composed(200, 60, &rows);
+    let writes = Writes::default();
+    let mut backend = Backend::new(writes.clone(), false);
+    draw(&mut backend, &frame);
+    drop(backend);
+
+    let made = writes.kept();
+    assert!(
+        made.len() > 1,
+        "a frame too big to hold is the terminal's as it is written, not a launch left with no \
+         room to draw in"
+    );
+    assert!(
+        made.iter().all(|write| write.len() <= FRAME_HELD),
+        "and no write of it is past the bound either: {:?}",
+        made.iter().map(Vec::len).collect::<Vec<usize>>()
+    );
+    assert_eq!(
+        writes.joined(),
+        taken(Pty::open(), |screen| {
+            draw(&mut Backend::new(screen, false), &frame);
+        }),
+        "and every byte of it arrives, in the order it was drawn"
+    );
+}
+
+#[test]
+fn the_words_a_launch_says_between_two_frames_keep_the_order_they_were_said_in() {
+    let frame = a_full_frame(80, 24);
+    let writes = Writes::default();
+    let mut backend = Backend::new(writes.clone(), false);
+    draw(&mut backend, &frame);
+
+    // The launch says its own words on a second handle of one descriptor, between two frames.
+    let mut launch = writes.clone();
+    launch
+        .write_all(b"\x1b[?1049h")
+        .expect("the screen is taken");
+    launch.flush().expect("and said");
+
+    draw(&mut backend, &frame);
+    drop(backend);
+
+    let made = writes.kept();
+    assert_eq!(
+        made.len(),
+        3,
+        "a frame, then the words said between, then the next frame, and the frame before the \
+         words is no part of them"
+    );
+    assert_eq!(
+        made[1],
+        b"\x1b[?1049h".to_vec(),
+        "the words are their own write, whole"
+    );
+    assert_eq!(
+        made[0], made[2],
+        "and the frame after them is the frame that came before them"
+    );
 }
 
 /// The composer's plane at a two-cell band, and the rail's beside it: two planes a backend tells
