@@ -281,9 +281,9 @@ fn named(name: &str, capabilities: Capabilities) -> View {
     }
 }
 
-/// The frame a picture block is drawn on, held at the top of the answer: the block is taller than the
-/// band, so it is never placed and its words stand alone. The refused source is a real diagram one
-/// directory above the workspace, so the caption is the refusal this product gives.
+/// The frame a picture block is drawn on, read at the tail: the field gives way on its rows to the
+/// band, so it is drawn over them with its words under its head. The refused source is a real diagram
+/// one directory above the workspace, so the caption is the refusal this product gives.
 fn pictured() -> View {
     let workspace = PathBuf::from(FIXTURES).join("pictures");
 

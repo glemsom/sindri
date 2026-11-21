@@ -868,7 +868,10 @@ impl Room {
             match mermaid::block(&mermaid.source, mermaid.fence) {
                 mermaid::Block::Refused { caption } => self.caption(&caption),
                 mermaid::Block::Picture(diagram) if self.surface.draws() => {
-                    let ceiling = Ceiling::across(u16::try_from(self.room()).unwrap_or(u16::MAX));
+                    let ceiling = Ceiling::new(
+                        u16::try_from(self.room()).unwrap_or(u16::MAX),
+                        self.surface.rows(),
+                    );
                     let measured =
                         picture::drawing(diagram.source(), diagram.svg(), ceiling, &self.surface);
                     match measured {
@@ -988,7 +991,10 @@ impl Room {
         self.gap();
         let words = picture::words(&source, &alt);
         let look = Look::plain(Ink::Dim);
-        let ceiling = Ceiling::across(u16::try_from(self.room()).unwrap_or(u16::MAX));
+        let ceiling = Ceiling::new(
+            u16::try_from(self.room()).unwrap_or(u16::MAX),
+            self.surface.rows(),
+        );
         match picture::measure(&source, ceiling, &self.surface) {
             Err(refusal) => {
                 self.prose(&words, look);

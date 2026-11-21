@@ -14,6 +14,7 @@ pub struct Surface {
     cell: CellSize,
     draws: bool,
     sizing: bool,
+    band: u16,
 }
 
 impl Surface {
@@ -23,13 +24,26 @@ impl Surface {
 
     /// A surface of the facts a row is measured against: the `workspace` a picture is found in, the
     /// pixels in a `cell`, whether this terminal `draws` pictures, and whether it `sizing`s text.
+    /// A surface told of no band takes a picture's own rows for the rows it may be read in.
     pub fn of(workspace: Option<&Path>, cell: CellSize, draws: bool, sizing: bool) -> Surface {
         Surface {
             workspace: workspace.map(Path::to_path_buf),
             cell,
             draws,
             sizing,
+            band: u16::MAX,
         }
+    }
+
+    /// The same surface on a band `rows` tall: the rows a picture is read in, and the most a
+    /// picture may take before it gives way on that axis to fit.
+    pub fn band(self, rows: u16) -> Surface {
+        Surface { band: rows, ..self }
+    }
+
+    /// The rows the band this surface is read in has, and `u16::MAX` where it was told of none.
+    pub fn rows(&self) -> u16 {
+        self.band
     }
 
     pub fn sizing(&self) -> bool {

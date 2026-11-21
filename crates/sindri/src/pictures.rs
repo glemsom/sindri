@@ -91,10 +91,17 @@ impl Pictures {
         self.held.retain(|key, _| shown.contains(key));
     }
 
-    /// Draws `picture` over `area`, the cells the transcript reserved for it. A picture that
-    /// cannot be made into pixels is drawn as nothing: its row already carries its words, and
-    /// half a picture is worse than a caption.
-    pub fn place(&mut self, picture: &Picture, cell: CellSize, area: Rect, buffer: &mut Buffer) {
+    /// Draws `picture` over the cells `shown` of the block `block` it was measured into: the two
+    /// differ where a band holds only the top of a block, and the rows it has no cells for are left
+    /// as they were. A picture that will not rasterise is drawn as nothing.
+    pub fn place(
+        &mut self,
+        picture: &Picture,
+        cell: CellSize,
+        block: Rect,
+        shown: Rect,
+        buffer: &mut Buffer,
+    ) {
         let Some(picker) = self.picker.as_ref() else {
             return;
         };
@@ -118,11 +125,15 @@ impl Pictures {
         let mut placed = placed.borrow_mut();
         // The protocol remembers the rectangle it encoded, so asking about rows that moved
         // would send the bytes again on every paint: it is asked about the size at the origin.
-        let size = Rect { x: 0, y: 0, ..area };
+        let size = Rect {
+            x: 0,
+            y: 0,
+            ..block
+        };
         if placed.needs_resize(&Resize::Scale(None), size).is_some() {
             placed.resize_encode(&Resize::Scale(None), size);
         }
-        placed.render(area, buffer);
+        placed.render(shown, buffer);
     }
 }
 

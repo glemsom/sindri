@@ -1306,7 +1306,7 @@ impl View {
                 let cell = self.capabilities.cell();
                 self.capabilities
                     .pictures_mut()
-                    .place(picture, cell, cells, buffer);
+                    .place(picture, cell, cells, cells, buffer);
             }
         }
         let drawn = self.transcript(
@@ -1439,9 +1439,11 @@ impl View {
             shade.claim(buffer, &palette);
         }
         let cols = area.width.saturating_sub(MARGIN);
-        let reflowed = self
-            .rows
-            .measure(Measure::new(cols, self.surface(), self.facts.ground()));
+        let reflowed = self.rows.measure(Measure::new(
+            cols,
+            self.surface().band(area.height),
+            self.facts.ground(),
+        ));
         // Laid into the rows it heads, so the prose the marker introduces is never cut by it. It
         // heads the turn in flight's answer while that has said a word or the run is live, and the
         // newest answer the record holds once the run is over — a band holding none gets a row.
@@ -1970,9 +1972,9 @@ pub struct Layout {
     pub rail: Option<(Rail, RailBand)>,
 }
 
-/// Places the picture `row` stands on over the block of cells the transcript reserved. A
-/// block the band does not hold whole is not placed at all: a placement writes into every
-/// row of it, and half a picture would be drawn over the composer under it.
+/// Places the picture `row` stands on over the block of cells the transcript reserved, down to the
+/// last row the band holds. A block whose head the band has scrolled past is left as the words it
+/// was written as, because the protocol sends a picture with the first row of its block.
 fn place(
     pictures: &mut Pictures,
     cell: CellSize,
@@ -1990,10 +1992,14 @@ fn place(
         width: picture.cols(),
         height: picture.rows(),
     };
-    if block.right() > area.right() || block.bottom() > area.bottom() {
+    if y < area.y || block.right() > area.right() {
         return;
     }
-    pictures.place(picture, cell, block, buffer);
+    let shown = Rect {
+        height: block.height.min(area.bottom().saturating_sub(y)),
+        ..block
+    };
+    pictures.place(picture, cell, block, shown, buffer);
 }
 
 /// Every band a frame lays in `area`, with the transcript and the notice in `beside`'s columns:
