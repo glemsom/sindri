@@ -5,13 +5,12 @@
 #[cfg(test)]
 use std::ffi::OsStr;
 use std::ffi::OsString;
-use std::io::{ErrorKind, Read};
-use std::process::{ChildStderr, Command, ExitStatus, Stdio};
-use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use sindri_core::open::{Handover, Opener, Opening};
+use sindri_core::pipe;
 use sindri_core::turn::Exit;
 
 /// The program a Linux host opens a target with. A front end on another machine
@@ -19,14 +18,9 @@ use sindri_core::turn::Exit;
 pub const HOST_OPENER: &str = "xdg-open";
 
 /// How long an opener is given to end before the target is settled as handed over.
-pub const GRACE: Duration = Duration::from_secs(2);
+const GRACE: Duration = Duration::from_secs(2);
 
-/// Short enough that an opener which ends at once is back at once.
 const NAP: Duration = Duration::from_millis(25);
-
-/// How long the opener's own words are given to arrive once it has exited: a grandchild still
-/// holding the pipe cannot hold the call open.
-const WORDS_GRACE: Duration = Duration::from_millis(250);
 
 /// This machine's opener, and the one argv word it is spawned with.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,7 +81,7 @@ impl Opener for HostOpener {
             }
         };
 
-        let stderr = Drain::start(child.stderr.take());
+        let said = pipe::Stream::drain(child.stderr.take());
         let deadline = Instant::now() + self.grace;
         let mut nap = Duration::from_millis(1);
         let exit = loop {
@@ -95,6 +89,7 @@ impl Opener for HostOpener {
                 Ok(Some(status)) => break exit_of(status),
                 Ok(None) => {}
                 Err(error) => {
+                    reap(child);
                     return Handover::Failed {
                         exit: Exit::Code(1),
                         words: format!("cannot wait for {program}: {error}"),
@@ -102,69 +97,32 @@ impl Opener for HostOpener {
                 }
             }
             if Instant::now() >= deadline {
-                thread::spawn(move || {
-                    let _ = child.wait();
-                });
+                reap(child);
                 return Handover::Handed;
             }
             thread::sleep(nap);
             nap = (nap * 2).min(NAP);
         };
-        match exit {
-            Exit::Code(0) => Handover::Opened,
-            exit => Handover::Failed {
-                exit,
-                words: stderr.words(),
+        if exit.is_ok() {
+            return Handover::Opened;
+        }
+        let words = pipe::first_line(&said.finish());
+        Handover::Failed {
+            exit,
+            words: match words.is_empty() {
+                true => format!("{program} said nothing"),
+                false => words,
             },
         }
     }
 }
 
-/// A child's stream read by a thread of its own, so an opener that writes to it never blocks on
-/// a pipe nobody reads, collected into a sink the call takes once the child has ended.
-struct Drain {
-    sink: Arc<Mutex<Vec<u8>>>,
-    reader: JoinHandle<()>,
-}
-
-impl Drain {
-    fn start(pipe: Option<ChildStderr>) -> Drain {
-        let sink = Arc::new(Mutex::new(Vec::new()));
-        let collected = Arc::clone(&sink);
-        let reader = thread::spawn(move || {
-            let Some(mut pipe) = pipe else {
-                return;
-            };
-            let mut chunk = [0u8; 8 * 1024];
-            loop {
-                match pipe.read(&mut chunk) {
-                    Ok(0) => return,
-                    Ok(read) => collected
-                        .lock()
-                        .expect("the sink is not poisoned")
-                        .extend_from_slice(&chunk[..read]),
-                    Err(error) if error.kind() == ErrorKind::Interrupted => continue,
-                    Err(_) => return,
-                }
-            }
-        });
-        Drain { sink, reader }
-    }
-
-    /// The first line the opener wrote that says anything, and none of the rest of it.
-    fn words(self) -> String {
-        let deadline = Instant::now() + WORDS_GRACE;
-        while !self.reader.is_finished() && Instant::now() < deadline {
-            thread::sleep(Duration::from_millis(1));
-        }
-        let sink = self.sink.lock().expect("the sink is not poisoned");
-        String::from_utf8_lossy(&sink)
-            .lines()
-            .map(str::trim)
-            .find(|line| !line.is_empty())
-            .unwrap_or_default()
-            .to_owned()
-    }
+/// The child is the browser's now: a thread waits for it, so a process outliving the call is
+/// neither killed nor left a zombie.
+fn reap(mut child: Child) {
+    thread::spawn(move || {
+        let _ = child.wait();
+    });
 }
 
 fn exit_of(status: ExitStatus) -> Exit {

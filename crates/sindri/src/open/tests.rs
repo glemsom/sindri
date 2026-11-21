@@ -350,6 +350,26 @@ fn an_opener_that_exits_non_zero_is_reported_failed_in_one_line_of_its_own_stder
 }
 
 #[test]
+fn an_opener_that_fails_without_a_word_is_reported_failed_naming_the_program() {
+    let tree = Tree::new();
+    tree.in_workspace("notes.html");
+    let opening = tree
+        .ground()
+        .judge(r#"{"path":"notes.html"}"#)
+        .expect("the file is inside the workspace");
+    let opener = tree.script("fake-opener", "exit 4\n");
+
+    assert_eq!(
+        opener.open_patiently(&opening),
+        Handover::Failed {
+            exit: Exit::Code(4),
+            words: format!("{} said nothing", opener.program().to_string_lossy()),
+        },
+        "an opener that failed in silence is still named, so a reader knows which program it was"
+    );
+}
+
+#[test]
 fn an_opener_that_exits_zero_is_reported_opened() {
     let tree = Tree::new();
     tree.in_workspace("notes.html");

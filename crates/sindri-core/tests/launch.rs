@@ -518,13 +518,13 @@ fn a_launch_the_sandbox_refuses_leaves_no_session_behind() {
     );
 }
 
-/// An opener that reports a target handed over and hands it nowhere.
+/// An opener that reports a target opened and opens it nowhere.
 #[derive(Debug)]
 struct HandsNowhere;
 
 impl Opener for HandsNowhere {
     fn open(&self, _opening: &Opening) -> Handover {
-        Handover::Handed
+        Handover::Opened
     }
 }
 

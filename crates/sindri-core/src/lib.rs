@@ -6,6 +6,7 @@ pub mod first_run;
 pub mod launch;
 pub mod open;
 pub mod outcome;
+pub mod pipe;
 pub mod policy;
 pub mod preamble;
 pub mod provider;
