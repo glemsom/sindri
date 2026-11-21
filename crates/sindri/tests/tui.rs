@@ -41,6 +41,9 @@ const ANSWER: &str =
 const OPEN_TOOL_USE: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_open_tool_use.sse");
 
+const SKILL_TOOL_USE: &str =
+    include_str!("../../sindri-core/tests/fixtures/providers/anthropic_skill_tool_use.sse");
+
 const OPEN_TOOL_USE_REFUSED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_open_tool_use_refused.sse");
 
@@ -3748,6 +3751,58 @@ fn awaited(record: &Path, absent: &str) -> Vec<String> {
         assert!(Instant::now() < deadline, "{absent}");
         thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[test]
+fn a_skill_the_model_loads_is_drawn_on_the_rail() {
+    let ground = Ground::new();
+    let deploy = ground.workspace.join(".agents/skills/deploy");
+    std::fs::create_dir_all(&deploy).expect("the skill's directory");
+    std::fs::write(
+        deploy.join("SKILL.md"),
+        "---\nname: deploy\ndescription: ship the branch\n---\n\nShip it.\n",
+    )
+    .expect("a SKILL.md");
+
+    let wire = Wire::scripted([SKILL_TOOL_USE, ANSWER]);
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    assert!(
+        !drawn.text().contains("skills"),
+        "no set is drawn before a run has loaded a name: {:?}",
+        drawn.text()
+    );
+
+    ask(&mut pty, &drawn, &wire);
+    wire.release();
+
+    assert!(
+        drawn.wait_until(|drawn| {
+            let rows = frame::read(drawn, COLS, ROWS).rows();
+            rows.iter()
+                .any(|row| row.contains("skills") && row.trim_end().ends_with('1'))
+        }),
+        "the rail draws one skill once the call has settled, which is the set a run loaded into \
+         and the launch kept: {:?}",
+        drawn.text()
+    );
+
+    wire.wait_for_request();
+    wire.release();
+    answered(&drawn);
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run that loaded a skill: {:?}",
+        drawn.text()
+    );
 }
 
 #[test]

@@ -135,7 +135,7 @@ fn calls(ledger: &Arc<Mutex<Vec<Call>>>) -> Vec<Call> {
 }
 
 impl Executor for Tools {
-    fn execute(&self, call: &Call, _loaded: &mut Loaded) -> Result<Acted, Redacted> {
+    fn execute(&self, call: &Call, _loaded: &Loaded) -> Result<Acted, Redacted> {
         self.seen
             .lock()
             .expect("the log is not poisoned")
@@ -844,31 +844,6 @@ fn the_turn_cap_that_fired_first_wins_over_an_unspent_budget() {
 }
 
 #[test]
-fn a_loaded_skill_is_named_in_every_later_turn() {
-    let model = Scripted::answering([Reply::asking("working", [command("true")])]);
-    let log = model.log();
-    let mut run = Run::new("use the skill", model, Tools::cheap());
-
-    assert_eq!(run.load_skill("code-review"), Load::Loaded);
-    run.turn(&mut Transcript::default());
-    run.turn(&mut Transcript::default());
-
-    let seen = requests(&log);
-    assert_eq!(seen.len(), 2);
-    assert_eq!(seen[0].skills(), ["code-review".to_owned()]);
-    assert_eq!(
-        seen[1].skills(),
-        ["code-review".to_owned()],
-        "the loaded set carries across turns"
-    );
-    assert_eq!(
-        seen[1].history().len(),
-        1,
-        "and so does the history it belongs to"
-    );
-}
-
-#[test]
 fn clearing_the_history_forgets_the_loaded_skills() {
     let model = Scripted::answering([Reply::asking("working", [command("true")])]);
     let log = model.log();
@@ -887,7 +862,6 @@ fn clearing_the_history_forgets_the_loaded_skills() {
     run.turn(&mut Transcript::default());
 
     let seen = requests(&log);
-    assert!(seen[1].skills().is_empty(), "the next turn loads nothing");
     assert!(seen[1].history().is_empty(), "and remembers nothing");
 }
 
@@ -918,7 +892,7 @@ fn clearing_the_history_forgets_the_turns_the_run_was_handed_but_not_the_prompt(
 
 #[test]
 fn a_second_load_of_one_skill_is_already_loaded() {
-    let mut run = Run::new("ask", Complete, Tools::cheap());
+    let run = Run::new("ask", Complete, Tools::cheap());
 
     assert_eq!(run.load_skill("code-review"), Load::Loaded);
     assert_eq!(
@@ -1036,7 +1010,7 @@ fn the_bash_executor_counts_the_bytes_its_command_wrote() {
     let acted = shell
         .execute(
             &Call::new("toolu_1", "bash", r#"{"command":"printf hi"}"#),
-            &mut Loaded::default(),
+            &Loaded::default(),
         )
         .expect("the command runs");
 
@@ -1050,12 +1024,12 @@ fn the_bash_executor_counts_the_bytes_its_command_wrote() {
 fn the_bash_executor_says_how_the_call_ended() {
     let (_root, workspace, boundary) = ground();
     let shell = Shell::new(boundary.clone(), &workspace, Catalog::default());
-    let mut loaded = Loaded::default();
-    let mut run = |command: &str| {
+    let loaded = Loaded::default();
+    let run = |command: &str| {
         shell
             .execute(
                 &Call::new("toolu_1", "bash", format!(r#"{{"command":"{command}"}}"#)),
-                &mut loaded,
+                &loaded,
             )
             .expect("the command runs")
             .exit
@@ -1087,7 +1061,7 @@ fn the_bash_executor_says_how_the_call_ended() {
     let killed = Shell::new(impatient, &workspace, Catalog::default())
         .execute(
             &Call::new("toolu_1", "bash", r#"{"command":"sleep 30"}"#),
-            &mut loaded,
+            &loaded,
         )
         .expect("the command runs");
 
@@ -1100,7 +1074,7 @@ fn a_bash_call_that_names_no_command_is_an_error() {
     let shell = Shell::new(boundary, &workspace, Catalog::default());
 
     let missing = shell
-        .execute(&Call::new("toolu_1", "bash", "{}"), &mut Loaded::default())
+        .execute(&Call::new("toolu_1", "bash", "{}"), &Loaded::default())
         .expect_err("no command was written, so nothing can run");
     assert!(
         missing.to_string().contains("command"),
@@ -1108,7 +1082,7 @@ fn a_bash_call_that_names_no_command_is_an_error() {
     );
 
     let unimplemented = shell
-        .execute(&Call::new("toolu_1", "web", "{}"), &mut Loaded::default())
+        .execute(&Call::new("toolu_1", "web", "{}"), &Loaded::default())
         .expect_err("this executor answers bash and skill and nothing else");
     assert!(
         unimplemented.to_string().contains("web"),
@@ -1270,7 +1244,7 @@ fn an_open_call_hands_the_judged_file_to_the_opener_the_run_was_given() {
     let acted = shell
         .execute(
             &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
-            &mut Loaded::default(),
+            &Loaded::default(),
         )
         .expect("a file in the session temp is a target the run may open");
 
@@ -1297,7 +1271,7 @@ fn an_open_call_naming_a_page_on_the_allowlist_hands_the_url_over() {
     let acted = shell
         .execute(
             &opening(r#"{"url":"https://localhost/notes"}"#),
-            &mut Loaded::default(),
+            &Loaded::default(),
         )
         .expect("a page on the allowlist is a target the run may open");
 
@@ -1319,7 +1293,7 @@ fn an_open_call_outside_the_ground_is_refused_as_the_calls_own_answer() {
     let acted = shell
         .execute(
             &opening(r#"{"path":"/etc/handbook.html"}"#),
-            &mut Loaded::default(),
+            &Loaded::default(),
         )
         .expect("a refused target is the call's own answer");
 
@@ -1344,7 +1318,7 @@ fn an_open_call_a_shell_has_no_opener_for_is_refused_as_its_own_answer() {
         .shell()
         .execute(
             &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
-            &mut Loaded::default(),
+            &Loaded::default(),
         )
         .expect("a refusal is the call's own answer and no error of the run");
 
@@ -1366,7 +1340,7 @@ fn an_open_call_a_shell_stands_on_no_ground_for_is_refused_as_its_own_answer() {
     let acted = shell
         .execute(
             &opening(r#"{"url":"https://localhost/notes"}"#),
-            &mut Loaded::default(),
+            &Loaded::default(),
         )
         .expect("a refusal is the call's own answer and no error of the run");
 
@@ -1386,7 +1360,7 @@ fn an_opener_that_will_not_start_is_the_calls_answer_in_its_own_words() {
     let acted = shell
         .execute(
             &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
-            &mut Loaded::default(),
+            &Loaded::default(),
         )
         .expect("an opener that will not start is the call's own answer");
 
@@ -1406,7 +1380,7 @@ fn a_handover_that_failed_settles_the_call_under_the_openers_own_words() {
     let acted = shell
         .execute(
             &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
-            &mut Loaded::default(),
+            &Loaded::default(),
         )
         .expect("an opener that ran and failed is the call's own answer");
 
@@ -1431,7 +1405,7 @@ fn a_handover_the_opener_is_still_working_on_settles_the_call_as_handed() {
     let acted = shell
         .execute(
             &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
-            &mut Loaded::default(),
+            &Loaded::default(),
         )
         .expect("an opener still working is the call's own answer");
 
@@ -1507,7 +1481,7 @@ fn every_refusal_the_ground_makes_is_that_calls_answer() {
         ),
     ] {
         let acted = shell
-            .execute(&opening(&arguments), &mut Loaded::default())
+            .execute(&opening(&arguments), &Loaded::default())
             .unwrap_or_else(|refused| {
                 panic!("a refusal is the call's own answer, and `{arguments}` gave {refused}")
             });
@@ -1594,12 +1568,12 @@ fn a_run_whose_open_call_is_refused_answers_on() {
 #[test]
 fn the_tool_list_a_refusal_writes_holds_open_only_when_the_shell_holds_an_opener() {
     let ground = OpenGround::new();
-    let mut loaded = Loaded::default();
+    let loaded = Loaded::default();
     let unknown = Call::new("toolu_1", "web", "{}");
 
     let bare = ground
         .shell()
-        .execute(&unknown, &mut loaded)
+        .execute(&unknown, &loaded)
         .expect_err("a shell holding no opener answers bash and skill");
     assert!(
         bare.to_string().contains("`bash`") && bare.to_string().contains("`skill`"),
@@ -1613,7 +1587,7 @@ fn the_tool_list_a_refusal_writes_holds_open_only_when_the_shell_holds_an_opener
     let opened = ground
         .shell()
         .opener(Some(Arc::new(Logged::default())))
-        .execute(&unknown, &mut loaded)
+        .execute(&unknown, &loaded)
         .expect_err("a shell holding an opener still answers no `web`");
     assert!(
         opened.to_string().contains("`open`"),
@@ -1690,7 +1664,7 @@ struct Recorded {
 }
 
 impl Executor for Recorded {
-    fn execute(&self, call: &Call, loaded: &mut Loaded) -> Result<Acted, Redacted> {
+    fn execute(&self, call: &Call, loaded: &Loaded) -> Result<Acted, Redacted> {
         let acted = self.shell.execute(call, loaded)?;
         self.seen
             .lock()
@@ -1708,10 +1682,10 @@ fn answers(log: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
 fn a_first_load_hands_back_the_body_with_the_files_beside_it() {
     let ground = SkillGround::new();
     let shell = ground.shell();
-    let mut loaded = Loaded::default();
+    let loaded = Loaded::default();
 
     let acted = shell
-        .execute(&ground.load("deploy"), &mut loaded)
+        .execute(&ground.load("deploy"), &loaded)
         .expect("the skill is in the catalog");
 
     assert!(
@@ -1737,13 +1711,13 @@ fn a_first_load_hands_back_the_body_with_the_files_beside_it() {
 fn a_second_load_answers_already_loaded_and_carries_no_body() {
     let ground = SkillGround::new();
     let shell = ground.shell();
-    let mut loaded = Loaded::default();
+    let loaded = Loaded::default();
 
     shell
-        .execute(&ground.load("deploy"), &mut loaded)
+        .execute(&ground.load("deploy"), &loaded)
         .expect("the first load");
     let acted = shell
-        .execute(&ground.load("deploy"), &mut loaded)
+        .execute(&ground.load("deploy"), &loaded)
         .expect("the second load is answered, not refused");
 
     assert!(
@@ -1791,12 +1765,12 @@ fn a_user_only_skill_is_refused_when_the_model_names_it_anyway() {
     let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Unsafe)
         .expect("the boundary holds");
     let shell = Shell::new(boundary, &workspace, Catalog::discover(&workspace, None));
-    let mut loaded = Loaded::default();
+    let loaded = Loaded::default();
 
     let refused = shell
         .execute(
             &Call::new("toolu_1", "skill", r#"{"name":"handover"}"#),
-            &mut loaded,
+            &loaded,
         )
         .expect_err("the model may not load a skill its frontmatter withholds");
 
@@ -1822,10 +1796,10 @@ fn a_user_only_skill_is_refused_when_the_model_names_it_anyway() {
 fn an_unknown_skill_name_is_refused_by_naming_the_catalog() {
     let ground = SkillGround::new();
     let shell = ground.shell();
-    let mut loaded = Loaded::default();
+    let loaded = Loaded::default();
 
     let refused = shell
-        .execute(&ground.load("deployy"), &mut loaded)
+        .execute(&ground.load("deployy"), &loaded)
         .expect_err("the catalog does not hold that name");
 
     assert!(
@@ -1930,12 +1904,12 @@ fn a_builtin_skill_loads_from_the_binary_and_lists_no_files_beside_it() {
     let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Unsafe)
         .expect("the boundary holds");
     let shell = Shell::new(boundary, &workspace, Catalog::discover(&workspace, None));
-    let mut loaded = Loaded::default();
+    let loaded = Loaded::default();
 
     let acted = shell
         .execute(
             &Call::new("toolu_1", "skill", r#"{"name":"commit-message"}"#),
-            &mut loaded,
+            &loaded,
         )
         .expect("the binary carries this skill");
 
@@ -1989,7 +1963,7 @@ fn a_call_the_users_word_stops_is_a_cancelled_exit() {
         shell
             .execute(
                 &Call::new("toolu_1", "bash", format!(r#"{{"command":"{line}"}}"#)),
-                &mut Loaded::default(),
+                &Loaded::default(),
             )
             .expect("the command runs")
     });

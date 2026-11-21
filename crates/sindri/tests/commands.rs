@@ -13,12 +13,14 @@ use sindri::commands::{self, Command};
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::keys::Mode;
+use sindri::ledger;
 use sindri::mark::Cell;
 use sindri::pointer::Pointer;
 use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
+use sindri_core::run::Loaded;
 
 const SCREEN: (u16, u16) = (80, 24);
 
@@ -28,11 +30,18 @@ fn say(view: &mut View, line: &str) -> Outcome {
 }
 
 fn frame(workspace: &Path) -> View {
+    frame_holding(workspace, &Loaded::default())
+}
+
+/// A frame whose rail facts hold `loaded`: the set the frame draws is the launch's, so a test reads
+/// every load off the set it handed over and not off a copy of the frame's own.
+fn frame_holding(workspace: &Path, loaded: &Loaded) -> View {
     View::of(
         Capabilities::default(),
         Facts::default()
             .asked()
-            .working(workspace.to_path_buf(), None),
+            .working(workspace.to_path_buf(), None)
+            .railed(ledger::Facts::default().loading(loaded.clone())),
         Transcript::none(),
     )
 }
@@ -250,10 +259,11 @@ fn new_clears_the_transcript_the_frame_held() {
 #[test]
 fn new_empties_the_loaded_skill_set() {
     let root = workspace_with("commit-message", "");
-    let mut view = frame(root.path());
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
     say(&mut view, "/skill:commit-message");
     assert_eq!(
-        view.loaded().names(),
+        loaded.names(),
         ["commit-message"],
         "the line names a skill the catalog offers a person, so the set holds it"
     );
@@ -261,17 +271,18 @@ fn new_empties_the_loaded_skill_set() {
     say(&mut view, "/new");
 
     assert!(
-        view.loaded().names().is_empty(),
+        loaded.names().is_empty(),
         "a load is once per conversation and the conversation is the history, so clearing \
-         the history empties the set: {:?}",
-        view.loaded().names()
+         the history empties the one set: {:?}",
+        loaded.names()
     );
 }
 
 #[test]
 fn a_skill_a_person_may_not_ask_for_is_not_loaded() {
     let root = workspace_with("model-only", "user-invocable: false\n");
-    let mut view = frame(root.path());
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
 
     assert_eq!(
         say(&mut view, "/skill:model-only"),
@@ -279,17 +290,18 @@ fn a_skill_a_person_may_not_ask_for_is_not_loaded() {
         "which names a person may ask for is the catalog's decision, and this one is the \
          model's door alone"
     );
-    assert!(view.loaded().names().is_empty());
+    assert!(loaded.names().is_empty());
 }
 
 #[test]
 fn a_skill_the_catalog_does_not_hold_loads_nothing() {
     let root = workspace_with("commit-message", "");
-    let mut view = frame(root.path());
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
 
     assert_eq!(say(&mut view, "/skill:no-such-skill"), Outcome::Unchanged);
     assert!(
-        view.loaded().names().is_empty(),
+        loaded.names().is_empty(),
         "a name in the set would answer a later model load with `already_loaded` for a body \
          nothing ever handed over"
     );
@@ -298,7 +310,8 @@ fn a_skill_the_catalog_does_not_hold_loads_nothing() {
 #[test]
 fn loading_one_skill_twice_is_one_load() {
     let root = workspace_with("commit-message", "");
-    let mut view = frame(root.path());
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
 
     assert_eq!(say(&mut view, "/skill commit-message"), Outcome::Edited);
     assert_eq!(
@@ -307,7 +320,7 @@ fn loading_one_skill_twice_is_one_load() {
         "the two spellings are one line, and two loads of one skill in one conversation are \
          one load — the second carries no body, so it changes nothing"
     );
-    assert_eq!(view.loaded().names(), ["commit-message"]);
+    assert_eq!(loaded.names(), ["commit-message"]);
 }
 
 #[test]
@@ -346,14 +359,17 @@ fn the_commands_are_read_off_the_draft_the_reader_typed() {
 fn a_frame_with_no_workspace_loads_no_skill() {
     // A frame told no workspace has no catalog to ask, and offering a skill from a directory no run
     // could read would name a name nothing can load.
+    let loaded = Loaded::default();
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .railed(ledger::Facts::default().loading(loaded.clone())),
         Transcript::none(),
     );
 
     assert_eq!(say(&mut view, "/skill:commit-message"), Outcome::Unchanged);
-    assert!(view.loaded().names().is_empty());
+    assert!(loaded.names().is_empty());
 }
 
 #[test]
@@ -492,7 +508,8 @@ fn escape_closes_the_commands_card_and_leaves_the_draft_as_it_was() {
 #[test]
 fn a_command_that_takes_a_word_is_written_into_the_draft_to_name_it() {
     let root = workspace_with("commit-message", "");
-    let mut view = frame(root.path());
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
     view.paste("/sk");
 
     assert_eq!(view.key(Key::Enter), Outcome::Edited);
@@ -511,7 +528,7 @@ fn a_command_that_takes_a_word_is_written_into_the_draft_to_name_it() {
 
     view.paste(":commit-message");
     assert_eq!(view.key(Key::Enter), Outcome::Edited);
-    assert_eq!(view.loaded().names(), ["commit-message"]);
+    assert_eq!(loaded.names(), ["commit-message"]);
 }
 
 #[test]

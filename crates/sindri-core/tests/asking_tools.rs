@@ -57,7 +57,7 @@ impl Ran {
 }
 
 impl Executor for Ran {
-    fn execute(&self, call: &Call, _loaded: &mut Loaded) -> Result<Acted, Redacted> {
+    fn execute(&self, call: &Call, _loaded: &Loaded) -> Result<Acted, Redacted> {
         self.0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

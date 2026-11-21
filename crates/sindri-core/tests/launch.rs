@@ -14,7 +14,7 @@ use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::{Deltas, Failure, Usage};
 use sindri_core::records::{Entry, SessionDocument, read_transcript};
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Cancel, Reply, Request, Responder, State, Stop, Turn};
+use sindri_core::run::{Call, Cancel, Reply, Request, Responder, State, Stop, Turn};
 use sindri_core::tools::{FrontEnd, OPEN, SKILL};
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
@@ -240,12 +240,14 @@ impl Responder for Scripted {
 }
 
 /// A front end that keeps the newest document and transcript it is handed, which is what a launch's
-/// own record says once a run has stopped, and the turn a run ended on.
+/// own record says once a run has stopped, the turn a run ended on, and the names the launch handed
+/// it with those facts.
 #[derive(Default)]
 struct Kept {
     document: Option<SessionDocument>,
     transcript: Vec<Entry>,
     kept: Option<Turn>,
+    loaded: Vec<String>,
 }
 
 impl Kept {
@@ -266,6 +268,7 @@ impl Turns for Kept {
     fn facts(&mut self, handed: Handed<'_>) {
         self.document = Some(handed.document.clone());
         self.transcript = handed.transcript.to_vec();
+        self.loaded = handed.loaded.names();
     }
 }
 
@@ -433,6 +436,97 @@ fn the_prompt_after_the_first_sees_the_turn_it_ended_on() {
     );
     assert_eq!(joined[0].prompt, "the first prompt");
     assert_eq!(joined[0].text, "the first answer");
+}
+
+#[test]
+fn a_skill_the_run_loaded_is_the_launchs_once_the_run_has_ended() {
+    let homes = Homes::new();
+    homes.user_skill("deploy", "ship the branch");
+    let script = Scripted::answering([
+        Reply::asking(
+            "loading",
+            [Call::new("call_1", SKILL, r#"{"name":"deploy"}"#)],
+        ),
+        Reply::answer("shipped"),
+    ]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Terminal);
+
+    let mut kept = Kept::default();
+    match launch.drive("ship it", &[], &mut Quiet, &mut kept, Cancel::new()) {
+        Ok(_) => {}
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    }
+
+    assert_eq!(
+        launch.loaded().names(),
+        ["deploy"],
+        "the name the model loaded is the launch's, so it outlives the run that loaded it"
+    );
+    assert_eq!(
+        kept.loaded,
+        ["deploy"],
+        "and the launch hands the frame the same set it holds, not a copy of one"
+    );
+}
+
+#[test]
+fn the_prompt_after_a_load_starts_knowing_what_came_before() {
+    let homes = Homes::new();
+    homes.user_skill("deploy", "ship the branch");
+    let loading = || {
+        Reply::asking(
+            "loading",
+            [Call::new("call_1", SKILL, r#"{"name":"deploy"}"#)],
+        )
+    };
+    let script = Scripted::answering([
+        loading(),
+        Reply::answer("shipped"),
+        loading(),
+        Reply::answer("shipped again"),
+    ]);
+    let mut launch = launch_answering(&homes, &script, FrontEnd::Terminal);
+
+    let mut first = Kept::default();
+    match launch.drive("ship it", &[], &mut Quiet, &mut first, Cancel::new()) {
+        Ok(_) => {}
+        Err(refusal) => panic!("the run stopped on its own: {}", refusal.message()),
+    }
+    let ended = first.ended_on();
+
+    let mut second = Kept::default();
+    match launch.drive(
+        "ship it again",
+        std::slice::from_ref(&ended),
+        &mut Quiet,
+        &mut second,
+        Cancel::new(),
+    ) {
+        Ok(_) => {}
+        Err(refusal) => panic!("the run after it stopped on its own: {}", refusal.message()),
+    }
+
+    let asked = script.asked();
+    let loaded_in = |request: &Request| {
+        request
+            .history()
+            .last()
+            .and_then(|turn| turn.results.first())
+            .map(|acted| acted.text.clone())
+            .expect("the turn that asked for the skill carries what it answered")
+    };
+    let body = "Body of deploy.";
+    assert!(
+        loaded_in(&asked[1]).contains(body),
+        "the first load hands the body over: {}",
+        loaded_in(&asked[1])
+    );
+    let again = loaded_in(&asked[3]);
+    assert!(
+        again.contains("already_loaded") && !again.contains(body),
+        "the prompt after the load starts knowing the body it was already handed, so a second \
+         load of the same skill carries none of it: {again}"
+    );
 }
 
 #[test]

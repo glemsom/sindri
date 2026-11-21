@@ -4,8 +4,8 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use serde::Serializer;
@@ -293,7 +293,6 @@ pub struct Request {
     prompt: String,
     earlier: Vec<Turn>,
     history: Vec<Turn>,
-    skills: Vec<String>,
     tools: Vec<String>,
 }
 
@@ -314,10 +313,6 @@ impl Request {
         &self.history
     }
 
-    pub fn skills(&self) -> &[String] {
-        &self.skills
-    }
-
     pub fn tools(&self) -> &[String] {
         &self.tools
     }
@@ -328,7 +323,7 @@ pub trait Responder {
 }
 
 pub trait Executor {
-    fn execute(&self, call: &Call, loaded: &mut Loaded) -> Result<Acted, Redacted>;
+    fn execute(&self, call: &Call, loaded: &Loaded) -> Result<Acted, Redacted>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -337,33 +332,51 @@ pub enum Load {
     AlreadyLoaded,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// The names loaded so far, in load order: one set, shared by the launch that owns it, the run that
+/// writes to it and the frame that draws it.
+#[derive(Clone, Debug, Default)]
 pub struct Loaded {
-    names: Vec<String>,
+    names: Arc<Mutex<Vec<String>>>,
 }
 
 impl Loaded {
-    pub fn names(&self) -> &[String] {
-        &self.names
+    /// A clone, because no borrow can escape the lock the set is written through.
+    pub fn names(&self) -> Vec<String> {
+        self.lock().clone()
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        self.names.iter().any(|loaded| loaded == name)
+        self.lock().iter().any(|loaded| loaded == name)
     }
 
     /// A name already in the set is `already_loaded` and carries no body: a tool result is
     /// re-sent with every later turn, so a second body would be paid for on every turn.
-    pub fn load(&mut self, name: impl Into<String>) -> Load {
+    pub fn load(&self, name: impl Into<String>) -> Load {
         let name = name.into();
-        if self.contains(&name) {
+        let mut names = self.lock();
+        if names.iter().any(|loaded| loaded == &name) {
             return Load::AlreadyLoaded;
         }
-        self.names.push(name);
+        names.push(name);
         Load::Loaded
     }
 
-    pub fn clear(&mut self) {
-        self.names.clear();
+    pub fn clear(&self) {
+        self.lock().clear();
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Vec<String>> {
+        self.names
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+impl<S: Into<String>> FromIterator<S> for Loaded {
+    fn from_iter<I: IntoIterator<Item = S>>(names: I) -> Loaded {
+        Loaded {
+            names: Arc::new(Mutex::new(names.into_iter().map(Into::into).collect())),
+        }
     }
 }
 
@@ -423,6 +436,13 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self
     }
 
+    /// The loaded-skill set this run writes to: the launch's own, so a name a run loads outlives the
+    /// run that loaded it.
+    pub fn loaded(mut self, loaded: Loaded) -> Self {
+        self.skills = loaded;
+        self
+    }
+
     pub fn cancel(mut self, cancel: Cancel) -> Self {
         self.cancel = cancel;
         self
@@ -457,7 +477,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             .unwrap_or_else(|| Turn::answered(self.turns, self.prompt.clone(), ""))
     }
 
-    pub fn skills(&self) -> &[String] {
+    pub fn skills(&self) -> Vec<String> {
         self.skills.names()
     }
 
@@ -468,7 +488,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         }
     }
 
-    pub fn load_skill(&mut self, name: impl Into<String>) -> Load {
+    pub fn load_skill(&self, name: impl Into<String>) -> Load {
         self.skills.load(name)
     }
 
@@ -506,7 +526,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         };
         let mut results = Vec::with_capacity(reply.calls.len());
         for call in &reply.calls {
-            let acted = match self.executor.execute(call, &mut self.skills) {
+            let acted = match self.executor.execute(call, &self.skills) {
                 Ok(acted) => acted,
                 Err(message) => {
                     self.settle(Stop::Error(message));
@@ -557,7 +577,6 @@ impl<R: Responder, A: Executor> Run<R, A> {
             prompt: self.prompt.clone(),
             earlier: self.earlier.clone(),
             history: self.history.clone(),
-            skills: self.skills.names().to_vec(),
             tools: self.tools.clone(),
         }
     }
@@ -674,7 +693,7 @@ impl Shell {
         })
     }
 
-    fn skill(&self, arguments: &str, loaded: &mut Loaded) -> Result<Acted, Redacted> {
+    fn skill(&self, arguments: &str, loaded: &Loaded) -> Result<Acted, Redacted> {
         let name = name_of(arguments).ok_or_else(|| {
             SecretSet::default().redact(format!(
                 "a `{SKILL}` call names its skill as {{\"name\": \"...\"}}, and this one was {arguments}"
@@ -727,7 +746,7 @@ impl Arm {
 }
 
 impl Executor for Shell {
-    fn execute(&self, call: &Call, loaded: &mut Loaded) -> Result<Acted, Redacted> {
+    fn execute(&self, call: &Call, loaded: &Loaded) -> Result<Acted, Redacted> {
         match Arm::of(&call.name) {
             Some(Arm::Bash) => self.bash(&call.arguments),
             Some(Arm::Skill) => self.skill(&call.arguments, loaded),

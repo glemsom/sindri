@@ -10,7 +10,7 @@ use sindri_core::config::Config;
 use sindri_core::policy::Enforcement;
 use sindri_core::provider::Route;
 use sindri_core::records::{SessionDocument, Usage, branch};
-use sindri_core::run::State;
+use sindri_core::run::{Loaded, State};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 
@@ -328,9 +328,9 @@ pub struct Facts {
     pub end: Option<String>,
     /// The run's state, in the word it is running under or the stop it ended on.
     pub state: Option<State>,
-    /// The skills the run loaded, in load order: a rail column has room for how many and the screen
-    /// for every name.
-    pub loaded: Vec<String>,
+    /// The names loaded so far, in load order: the launch's own set, which a rail column gives the
+    /// count of and the screen a row for each.
+    pub loaded: Loaded,
 }
 
 impl Facts {
@@ -370,14 +370,19 @@ impl Facts {
 
     /// The facts a run's record wrote, added to the ones a frame was handed: what the run spent and
     /// the state it ended on are the record's to say, and no drawing reads one off it again.
-    pub fn recorded(mut self, document: &SessionDocument, loaded: &[String]) -> Facts {
+    pub fn recorded(mut self, document: &SessionDocument) -> Facts {
         self.route = document.route;
         self.spend = document.usage;
         self.commit = document.commit.clone();
         self.start = Some(document.start.clone());
         self.end = document.end.clone();
         self.state = Some(document.stopped.clone());
-        self.loaded = loaded.to_vec();
+        self
+    }
+
+    /// The one set the frame draws and `/new` empties: every write to it is a write the rail sees.
+    pub fn loading(mut self, loaded: Loaded) -> Facts {
+        self.loaded = loaded;
         self
     }
 
@@ -1246,12 +1251,13 @@ fn known(facts: &Facts, shape: Shape, marker: Option<&Pulse>) -> Vec<Fact> {
     {
         stated.push(Fact::new(Kind::Commit, commit.clone()));
     }
+    let names = facts.loaded.names();
     if shape == Shape::Screen {
-        for name in &facts.loaded {
+        for name in &names {
             stated.push(Fact::bare(Kind::Skills, name.clone()));
         }
-    } else if !facts.loaded.is_empty() {
-        stated.push(Fact::new(Kind::Skills, facts.loaded.len().to_string()));
+    } else if !names.is_empty() {
+        stated.push(Fact::new(Kind::Skills, names.len().to_string()));
     }
     if shape == Shape::Screen
         && let Some(state) = &facts.state

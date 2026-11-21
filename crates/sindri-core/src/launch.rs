@@ -18,7 +18,7 @@ use crate::provider::endpoint::Endpoint;
 use crate::provider::served::Listing;
 use crate::provider::{Ask, Client, Deltas, Route, Usage};
 use crate::records::{Entry, Facts, Record, SessionDocument};
-use crate::run::{Cancel, Limits, Responder, Run, Shell, Turn};
+use crate::run::{Cancel, Limits, Loaded, Responder, Run, Shell, Turn};
 use crate::sandbox::{self, Proof};
 use crate::session::{self, Session};
 use crate::skills::{self, Catalog, Diagnostic, home};
@@ -104,6 +104,7 @@ pub struct Launch<R = Asking> {
     config: Config,
     context_window: Option<u64>,
     measured: Usage,
+    loaded: Loaded,
     proof: Proof,
 }
 
@@ -230,6 +231,7 @@ impl<R> Launch<R> {
             config: config.clone(),
             context_window: config.context_window,
             measured: Usage::default(),
+            loaded: Loaded::default(),
             proof,
         })
     }
@@ -269,6 +271,12 @@ impl<R> Launch<R> {
     /// The executor a run on this launch answers the calls those tools name with.
     pub fn executor(&self) -> &Shell {
         &self.shell
+    }
+
+    /// The loaded-skill set every run on this launch writes and reads: the launch's, so it outlives
+    /// the run that loaded a name and `/new` empties it.
+    pub fn loaded(&self) -> &Loaded {
+        &self.loaded
     }
 
     /// The skills a run on this launch would be offered, by name and with the scope each came
@@ -328,6 +336,7 @@ impl<R: Responder + Clone> Launch<R> {
             .limits(self.limits)
             .tools(&self.tools)
             .earlier(earlier.iter().cloned())
+            .loaded(self.loaded.clone())
             .cancel(cancel);
         // Ahead of the turn loop, so the transcript opens with the words it answers.
         note(self.record.asked(prompt));
@@ -374,6 +383,7 @@ pub struct Handed<'a> {
     pub transcript: &'a [Entry],
     pub measured: Usage,
     pub window: Option<u64>,
+    pub loaded: &'a Loaded,
 }
 
 pub trait Turns {
@@ -408,6 +418,7 @@ fn hand<R>(turns: &mut dyn Turns, launch: &Launch<R>) {
         transcript: launch.record.transcript(),
         measured: launch.measured,
         window: launch.context_window,
+        loaded: &launch.loaded,
     });
 }
 

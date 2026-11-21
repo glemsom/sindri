@@ -50,7 +50,7 @@ impl Responder for Loopy {
 struct Costs;
 
 impl Executor for Costs {
-    fn execute(&self, _call: &Call, _loaded: &mut Loaded) -> Result<Acted, Redacted> {
+    fn execute(&self, _call: &Call, _loaded: &Loaded) -> Result<Acted, Redacted> {
         Ok(Acted {
             text: String::from("exit 0\n"),
             bytes: 64,

@@ -12,7 +12,7 @@ use sindri_core::conversation::Conversation;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Load, Loaded, Stop, Turn};
+use sindri_core::run::{Load, Stop, Turn};
 use sindri_core::skills::{Catalog, Skill};
 
 use crate::band;
@@ -379,7 +379,6 @@ pub struct View {
     files: Files,
     picker: Picker,
     models: Models,
-    loaded: Loaded,
     settings: Settings,
     /// The commands card the draft opens, kept between keys.
     cards: Cards,
@@ -461,7 +460,6 @@ impl View {
             fence: None,
             files: Files::default(),
             picker: Picker::default(),
-            loaded: Loaded::default(),
             settings: Settings::default(),
             cards: Cards::default(),
             capabilities,
@@ -537,10 +535,6 @@ impl View {
     pub fn card(&mut self) -> Option<&commands::Card> {
         let card = self.cards.follow(self.composer.text())?;
         Some(card)
-    }
-
-    pub fn loaded(&self) -> &Loaded {
-        &self.loaded
     }
 
     pub fn capabilities(&self) -> &Capabilities {
@@ -804,7 +798,7 @@ impl View {
         self.mark = None;
         self.fence = None;
         self.drawn = Drawn::none();
-        self.loaded.clear();
+        self.facts.rail().loaded.clear();
         self.conversation.clear();
         self.superseded = true;
         Outcome::Edited
@@ -821,7 +815,7 @@ impl View {
         if !catalog.get(name).is_some_and(Skill::human_invocable) {
             return Outcome::Unchanged;
         }
-        match self.loaded.load(name) {
+        match self.facts.rail().loaded.load(name) {
             Load::Loaded => Outcome::Edited,
             Load::AlreadyLoaded => Outcome::Unchanged,
         }
@@ -1841,10 +1835,7 @@ impl View {
         let Some(document) = self.facts.record() else {
             return ledger::Facts::default();
         };
-        self.facts
-            .rail()
-            .clone()
-            .recorded(document, self.loaded.names())
+        self.facts.rail().clone().recorded(document)
     }
 
     fn hints(&self) -> Vec<Hint> {

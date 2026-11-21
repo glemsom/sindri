@@ -153,8 +153,8 @@ A directory holding a `SKILL.md` whose body the model can load by name, in one o
 _Avoid_: Prompt, plugin, recipe, tool
 
 **Loaded-skill set**:
-The names loaded so far, in load order; `/skill:name` and the `skill` call both write to it, and
-`/new` empties it.
+The names loaded so far, in load order, held by the **Launch** and so outliving the **Run** that
+loaded one: `/skill:name` and the `skill` call both write to it, and `/new` empties it.
 _Avoid_: Conversation state, skill cache, loaded prompt
 
 **Skill scope**:
