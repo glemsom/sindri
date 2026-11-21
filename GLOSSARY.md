@@ -180,17 +180,24 @@ off reserves no row.
 _Avoid_: Logo, avatar, mascot, icon
 
 **Band**:
-A strip of rows the frame shares out — the transcript's, the **Composer**'s, the row that says the
-frame stands off the tail, and the footer's — each drawn in the rows it was given and never past
-them. What a band cannot hold it counts: a draft's rows past the composer's ceiling, and a queue's
-prompts past the composer's rows under the draft. A fence it never reflows, and the **Caret** is no
-cell of it.
+A strip of rows the frame shares out — the **Transcript band**, the **Composer**'s, the row that
+says the frame stands off the tail, and the **Footer**'s — each drawn in the rows it was given
+and never past them. What a band cannot hold it counts: a draft's rows past the composer's
+ceiling, and a queue's prompts past the composer's rows under the draft. A fence it never
+reflows, and the **Caret** is no cell of it.
 _Avoid_: Region, pane, panel, viewport
 
+**Transcript band**:
+The band every other strip is taken out of — the **Composer**'s, the row that says the frame
+stands off the tail, and the **Footer**'s — and the band the **Rail** takes its share of. The
+**Transcript** is drawn in it with the row the reader stands at, and the **Splash screen** until
+a prompt has been asked for.
+_Avoid_: Main window, main view, content area, viewport, scrollback, well
+
 **Rail**:
-The column beside the transcript that carries the frame's facts: a column down the frame's
-right-hand edge where the width holds one, and one row along the bottom of the transcript's band
-where it does not.
+The column beside the **Transcript band** that carries the frame's facts: a column down the frame's
+right-hand edge where the width holds one, and one row along the bottom of that band where it does
+not.
 _Avoid_: Sidebar, side panel, gutter, fact bar
 
 **Measure**:
@@ -257,9 +264,9 @@ _Avoid_: Tokens, stats, progress
 
 **Layout**:
 Where one pass put each part of the frame: the bands it shared the rows into, the columns the
-transcript was given beside a rail, and the body a card was given when one was drawn. A press is read
-off it rather than laid out a second time, so the frame a reader was shown is the frame a press is
-answered from.
+**Transcript band** was given beside a rail, and the body a card was given when one was drawn. A
+press is read off it rather than laid out a second time, so the frame a reader was shown is the
+frame a press is answered from.
 _Avoid_: Geometry, arrangement, tiling, regions
 
 **Footer**:
@@ -299,9 +306,9 @@ _Avoid_: Palette, slash menu, command list, autocomplete
 
 **Splash screen**:
 The frame a launch opens on: the wordmark, one line saying what the product is, and three commands
-with the line that explains each, set as one block and centred in the band an answer is drawn in,
-with the rail of the facts the launch already holds beside it and nothing over it. A frame too
-narrow for a rail's column is drawn with no rail. One paint pass, and never again.
+with the line that explains each, set as one block and centred in the **Transcript band**, with the
+rail of the facts the launch already holds beside it and nothing over it. A frame too narrow for a
+rail's column is drawn with no rail. One paint pass, and never again.
 _Avoid_: Front door, welcome screen, landing page, boot animation
 
 **Key protocol**:
@@ -343,8 +350,9 @@ and that run's frame from the prompt on.
 _Avoid_: View model, props, session state, context
 
 **Transcript**:
-The record a frame draws — the entries a launch has written — with the row the reader stands at in it.
-One of the three values a frame is built from, beside **Terminal capabilities** and the **Frame
-facts** it draws: a launch hands over the tail, every entry the record writes after it is handed with
-those facts and drawn once, and a reader moves the row.
+The record a frame draws — the entries a launch has written — with the row the reader stands at in
+it, drawn in the **Transcript band**. One of the three values a frame is built from, beside
+**Terminal capabilities** and the **Frame facts** it draws: a launch hands over the tail, every
+entry the record writes after it is handed with those facts and drawn once, and a reader moves the
+row.
 _Avoid_: Log, scrollback, history (that one is a run's own turns)
