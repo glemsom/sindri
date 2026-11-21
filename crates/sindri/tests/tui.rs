@@ -3528,6 +3528,18 @@ fn argv_from(record: &Path) -> Option<Vec<String>> {
         .then(|| written.lines().map(str::to_owned).collect())
 }
 
+/// The words a recording opener wrote into `record`, one per line, once the last is down.
+fn awaited(record: &Path, absent: &str) -> Vec<String> {
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        if let Some(words) = argv_from(record) {
+            return words;
+        }
+        assert!(Instant::now() < deadline, "{absent}");
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
 #[test]
 fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machines_opener() {
     let ground = Ground::new();
@@ -3540,10 +3552,15 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
     let bin = ground.at("bin");
     std::fs::create_dir_all(&bin).expect("the bin directory");
     let argv = ground.at("argv");
+    let display = ground.at("display");
     let opener = bin.join("xdg-open");
     std::fs::write(
         &opener,
-        format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n", argv.display()),
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' \"$DISPLAY\" > '{}'\n",
+            argv.display(),
+            display.display()
+        ),
     )
     .expect("the recording opener");
     std::fs::set_permissions(&opener, PermissionsExt::from_mode(0o755)).expect("it is executable");
@@ -3554,7 +3571,8 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
         .arg("--yolo-unsafe")
         .env("SINDRI_BASE_URL", wire.base_url())
         // `/usr/bin` and `/bin` behind the script, because the launch asks `git` for the branch.
-        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()));
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("DISPLAY", ":42");
     let (session, mut pty, drawn) = Session::starting(command);
 
     assert!(
@@ -3565,22 +3583,24 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
     ask(&mut pty, &drawn, &wire);
     wire.release();
 
-    let deadline = Instant::now() + PATIENCE;
-    let handed = loop {
-        if let Some(words) = argv_from(&argv) {
-            break words;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "the opener was spawned with no argv: {:?}",
-            drawn.text()
-        );
-        thread::sleep(Duration::from_millis(10));
-    };
+    let handed = awaited(
+        &argv,
+        &format!("the opener was spawned with no argv: {:?}", drawn.text()),
+    );
     assert_eq!(
         handed,
         vec![target.display().to_string()],
         "the target arrives as exactly one word, and it is the path the ground resolved"
+    );
+
+    let seen = awaited(
+        &display,
+        &format!("the opener recorded no display: {:?}", drawn.text()),
+    );
+    assert_eq!(
+        seen,
+        vec![String::from(":42")],
+        "the display the launch has is the display the target opens on"
     );
 
     // The call has settled and the run is asking again: the band draws its work while it is live,
@@ -3600,6 +3620,65 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
         session.wait().code(),
         Some(0),
         "the launch outlives the run it opened a target for: {:?}",
+        drawn.text()
+    );
+}
+
+#[test]
+fn an_opener_that_fails_is_drawn_under_its_call_with_its_own_exit_and_words() {
+    let ground = Ground::new();
+    let page = ground.workspace.join("opened.html");
+    std::fs::write(&page, "<p>the page</p>").expect("the page");
+
+    // The first entry is this test's own opener, found through `PATH` the way the host finds the
+    // one this machine really has.
+    let bin = ground.at("bin");
+    std::fs::create_dir_all(&bin).expect("the bin directory");
+    let opener = bin.join("xdg-open");
+    std::fs::write(
+        &opener,
+        "#!/bin/sh\nprintf '%s\\n' 'no handler for .html' >&2\nexit 3\n",
+    )
+    .expect("the failing opener");
+    std::fs::set_permissions(&opener, PermissionsExt::from_mode(0o755)).expect("it is executable");
+
+    let wire = Wire::scripted([OPEN_TOOL_USE, ANSWER]);
+    let mut command = ground.command();
+    command
+        .arg("--yolo-unsafe")
+        .env("SINDRI_BASE_URL", wire.base_url())
+        // `/usr/bin` and `/bin` behind the script, because the launch asks `git` for the branch.
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()));
+    let (session, mut pty, drawn) = Session::starting(command);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    wire.release();
+
+    assert!(
+        drawn.wait_until(|drawn| {
+            let rows = frame::read(drawn, COLS, ROWS).rows();
+            rows.iter().any(|row| row.contains("\u{2717} exit 3"))
+                && rows.iter().any(|row| row.contains("no handler for .html"))
+        }),
+        "the band draws the call settled under a cross with the opener's own exit and its own words: \
+         {:?}",
+        drawn.text()
+    );
+
+    wire.wait_for_request();
+    wire.release();
+    answered(&drawn);
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "the launch outlives the run whose browser refused the target: {:?}",
         drawn.text()
     );
 }

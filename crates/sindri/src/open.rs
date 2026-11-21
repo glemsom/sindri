@@ -1,24 +1,35 @@
 //! The opener is this host's, because the sandbox has no display: the core has
 //! already judged the target, and it arrives as one argv word and never through a
-//! shell. The child outlives the frame, so it is reaped rather than waited for.
+//! shell. The call settles on what the opener did, and a browser outliving it is still reaped.
 
 #[cfg(test)]
 use std::ffi::OsStr;
 use std::ffi::OsString;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
+use std::time::{Duration, Instant};
 
-use sindri_core::open::{Opener, Opening};
+use sindri_core::open::{Handover, Opener, Opening};
+use sindri_core::pipe;
+use sindri_core::turn::Exit;
 
 /// The program a Linux host opens a target with. A front end on another machine
 /// builds its own [`HostOpener`] with that machine's opener instead.
 pub const HOST_OPENER: &str = "xdg-open";
+
+/// How long an opener is given to end before the target is settled as handed over.
+const GRACE: Duration = Duration::from_secs(2);
+
+/// The longest the wait between two looks at an opener that is still running, so a call that
+/// settles at once is back at once.
+const MAX_NAP: Duration = Duration::from_millis(25);
 
 /// This machine's opener, and the one argv word it is spawned with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HostOpener {
     /// The program to spawn, as the host names it.
     program: OsString,
+    grace: Duration,
 }
 
 impl HostOpener {
@@ -27,7 +38,15 @@ impl HostOpener {
     pub fn new(program: impl Into<OsString>) -> HostOpener {
         HostOpener {
             program: program.into(),
+            grace: GRACE,
         }
+    }
+
+    /// The same opener, waiting at most `grace` for it to end.
+    #[cfg(test)]
+    pub fn within(mut self, grace: Duration) -> HostOpener {
+        self.grace = grace;
+        self
     }
 
     /// This machine's opener: the one that knows which browser the user picked.
@@ -43,23 +62,75 @@ impl HostOpener {
 }
 
 impl Opener for HostOpener {
-    /// Hand a judged target to the opener — one argv word, both streams closed,
-    /// and a thread that reaps the child so nothing is left behind.
-    fn open(&self, opening: &Opening) -> Result<(), String> {
-        let mut child = Command::new(&self.program)
+    /// Hand a judged target to the opener — one argv word, and no shell — and settle on what
+    /// that opener did with it.
+    fn open(&self, opening: &Opening) -> Handover {
+        let program = self.program.to_string_lossy().into_owned();
+        let mut child = match Command::new(&self.program)
             .arg(opening.word())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
-            .map_err(|error| format!("cannot run {}: {error}", self.program.to_string_lossy()))?;
+        {
+            Ok(child) => child,
+            Err(error) => {
+                return Handover::Failed {
+                    exit: Exit::Code(1),
+                    words: format!("cannot run {program}: {error}"),
+                };
+            }
+        };
 
-        // A browser outlives the frame, so the wait is a thread's: that is what reaps the
-        // child instead of leaving a zombie a long session never collects.
-        thread::spawn(move || {
-            let _ = child.wait();
-        });
-        Ok(())
+        let said = pipe::Stream::drain(child.stderr.take());
+        let deadline = Instant::now() + self.grace;
+        let mut nap = Duration::from_millis(1);
+        let exit = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break exit_of(status),
+                Ok(None) => {}
+                Err(error) => {
+                    reap(child);
+                    return Handover::Failed {
+                        exit: Exit::Code(1),
+                        words: format!("cannot wait for {program}: {error}"),
+                    };
+                }
+            }
+            if Instant::now() >= deadline {
+                reap(child);
+                said.forget();
+                return Handover::Handed;
+            }
+            thread::sleep(nap);
+            nap = (nap * 2).min(MAX_NAP);
+        };
+        if exit.is_ok() {
+            return Handover::Opened;
+        }
+        let words = pipe::first_line(&said.finish());
+        Handover::Failed {
+            exit,
+            words: match words.is_empty() {
+                true => format!("{program} said nothing"),
+                false => words,
+            },
+        }
+    }
+}
+
+/// The child is the browser's now: a thread waits for it, so a process outliving the call is
+/// neither killed nor left a zombie.
+fn reap(mut child: Child) {
+    thread::spawn(move || {
+        let _ = child.wait();
+    });
+}
+
+fn exit_of(status: ExitStatus) -> Exit {
+    match status.code() {
+        Some(code) => Exit::Code(code),
+        None => Exit::Signalled,
     }
 }
 

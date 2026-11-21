@@ -1,9 +1,10 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use sindri_core::config::Config;
-use sindri_core::open::{Ground, Opener};
+use sindri_core::open::{Ground, Handover, Opener};
 use sindri_core::policy::{Boundary, Enforcement};
+use sindri_core::turn::Exit;
 use tempfile::TempDir;
 
 use super::*;
@@ -75,6 +76,46 @@ impl Tree {
         HostOpener::new(script)
     }
 
+    fn wait_for(&self, name: &str) {
+        let path = self.root.path().join(name);
+        let deadline = Instant::now() + PATIENCE;
+        while !path.exists() {
+            assert!(
+                Instant::now() < deadline,
+                "the fake opener never wrote {}",
+                path.display()
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// What a script wrote into the tree, once the last of it is down: the file exists before
+    /// the shell has written a byte to it.
+    fn wrote(&self, name: &str) -> String {
+        let path = self.root.path().join(name);
+        let deadline = Instant::now() + PATIENCE;
+        loop {
+            let written = std::fs::read_to_string(&path).unwrap_or_default();
+            if written.ends_with('\n') {
+                return written;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the fake opener never finished writing {}",
+                path.display()
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn script(&self, name: &str, body: &str) -> HostOpener {
+        let script = self.root.path().join(name);
+        std::fs::write(&script, format!("#!/bin/sh\n{body}")).expect("the script");
+        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .expect("the script is executable");
+        HostOpener::new(script)
+    }
+
     /// The argv the fake opener recorded, one word per line, once it has
     /// written them.
     fn recorded(&self) -> Vec<String> {
@@ -99,14 +140,16 @@ impl HostOpener {
     /// Spawns the fake opener, retrying while the script it was handed is
     /// still open for writing elsewhere in this process: tests run on forked
     /// threads, so a fixture written a moment ago can be `ETXTBSY`.
-    fn open_patiently(&self, opening: &Opening) -> Result<(), String> {
+    fn open_patiently(&self, opening: &Opening) -> Handover {
         let deadline = Instant::now() + PATIENCE;
         loop {
             match Opener::open(self, opening) {
-                Err(reason) if reason.contains("busy") && Instant::now() < deadline => {
+                Handover::Failed { words, .. }
+                    if words.contains("busy") && Instant::now() < deadline =>
+                {
                     std::thread::sleep(Duration::from_millis(10));
                 }
-                outcome => return outcome,
+                handover => return handover,
             }
         }
     }
@@ -121,9 +164,11 @@ fn the_target_reaches_the_opener_as_exactly_one_argv_word() {
         .judge(r#"{"path":"my notes.html"}"#)
         .expect("a file with spaces in its name is still one target");
 
-    tree.recording_opener()
-        .open_patiently(&opening)
-        .expect("the fake opener is spawned");
+    assert_eq!(
+        tree.recording_opener().open_patiently(&opening),
+        Handover::Opened,
+        "the fake opener exits 0 once it has written its argv"
+    );
 
     assert_eq!(
         tree.recorded(),
@@ -141,9 +186,11 @@ fn a_target_holding_shell_metacharacters_reaches_the_opener_whole() {
         .judge(r#"{"path":"notes; touch pwned.html"}"#)
         .expect("the extension is the one that matters, not the punctuation");
 
-    tree.recording_opener()
-        .open_patiently(&opening)
-        .expect("the fake opener is spawned");
+    assert_eq!(
+        tree.recording_opener().open_patiently(&opening),
+        Handover::Opened,
+        "the fake opener exits 0 once it has written its argv"
+    );
 
     assert_eq!(
         tree.recorded(),
@@ -162,7 +209,7 @@ fn the_host_opener_is_the_one_this_machine_opens_targets_with() {
 }
 
 #[test]
-fn an_opener_that_cannot_be_spawned_is_an_error_naming_the_program() {
+fn an_opener_that_cannot_be_spawned_is_reported_failed_naming_the_program() {
     let tree = Tree::new();
     tree.in_workspace("notes.html");
     let opening = tree
@@ -170,12 +217,168 @@ fn an_opener_that_cannot_be_spawned_is_an_error_naming_the_program() {
         .judge(r#"{"path":"notes.html"}"#)
         .expect("the file is inside the workspace");
 
-    let failure = Opener::open(&HostOpener::new("/nonexistent/opener"), &opening)
-        .expect_err("there is no such program");
+    let handover = Opener::open(&HostOpener::new("/nonexistent/opener"), &opening);
 
+    let Handover::Failed { exit, words } = handover else {
+        panic!("there is no such program, so nothing opened: {handover:?}");
+    };
+    assert_eq!(
+        exit,
+        Exit::Code(1),
+        "a call that opened nothing settles under a cross"
+    );
     assert!(
-        failure.contains("/nonexistent/opener"),
-        "the error says which program would not run: {failure}"
+        words.contains("/nonexistent/opener"),
+        "and says which program the host was asked for: {words}"
+    );
+}
+
+#[test]
+fn the_opener_is_spawned_with_the_readers_own_environment() {
+    let tree = Tree::new();
+    tree.in_workspace("notes.html");
+    let opening = tree
+        .ground()
+        .judge(r#"{"path":"notes.html"}"#)
+        .expect("the file is inside the workspace");
+    let opener = tree.script(
+        "fake-opener",
+        &format!(
+            "printf '%s\\n' \"$PATH\" > '{}'\n",
+            tree.root.path().join("path").display()
+        ),
+    );
+
+    assert_eq!(
+        opener.open_patiently(&opening),
+        Handover::Opened,
+        "the opener that wrote its environment exited 0"
+    );
+    assert_eq!(
+        tree.wrote("path").trim(),
+        std::env::var("PATH").expect("the test process has a PATH"),
+        "the opener runs in the launch's own environment, which is how the display reaches it"
+    );
+}
+
+#[test]
+fn a_browser_that_outlives_the_call_is_not_killed_and_is_reaped_when_it_ends() {
+    let tree = Tree::new();
+    tree.in_workspace("notes.html");
+    let opening = tree
+        .ground()
+        .judge(r#"{"path":"notes.html"}"#)
+        .expect("the file is inside the workspace");
+    let opener = tree
+        .script(
+            "fake-opener",
+            &format!(
+                "printf '%s\n' \"$$\" > '{}'\nsleep 0.5\ntouch '{}'\n",
+                tree.root.path().join("pid").display(),
+                tree.root.path().join("ended").display()
+            ),
+        )
+        .within(Duration::from_millis(100));
+
+    assert_eq!(
+        opener.open_patiently(&opening),
+        Handover::Handed,
+        "the browser is still running when the call settles"
+    );
+
+    let lived = tree.wrote("pid");
+    let child = lived.trim();
+    assert!(
+        Path::new(&format!("/proc/{child}")).exists(),
+        "the handover left the browser running under the pid it wrote: {child}"
+    );
+
+    tree.wait_for("ended");
+    let deadline = Instant::now() + PATIENCE;
+    while Path::new(&format!("/proc/{child}")).exists() {
+        assert!(
+            Instant::now() < deadline,
+            "the browser ended but nothing reaped it, so {child} is still a zombie"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn an_opener_still_running_when_its_grace_runs_out_is_reported_handed() {
+    let tree = Tree::new();
+    tree.in_workspace("notes.html");
+    let opening = tree
+        .ground()
+        .judge(r#"{"path":"notes.html"}"#)
+        .expect("the file is inside the workspace");
+    let opener = tree
+        .script("fake-opener", "sleep 1\n")
+        .within(Duration::from_millis(100));
+
+    assert_eq!(
+        opener.open_patiently(&opening),
+        Handover::Handed,
+        "a browser that keeps the opener alive hands the target over and fails nothing"
+    );
+}
+
+#[test]
+fn an_opener_that_exits_non_zero_is_reported_failed_in_one_line_of_its_own_stderr() {
+    let tree = Tree::new();
+    tree.in_workspace("notes.html");
+    let opening = tree
+        .ground()
+        .judge(r#"{"path":"notes.html"}"#)
+        .expect("the file is inside the workspace");
+    let opener = tree.script(
+        "fake-opener",
+        "printf '%s\n' 'no handler for .html' 'try a browser' >&2\nexit 3\n",
+    );
+
+    assert_eq!(
+        opener.open_patiently(&opening),
+        Handover::Failed {
+            exit: Exit::Code(3),
+            words: String::from("no handler for .html"),
+        },
+        "the row carries the opener's own exit and the first line it wrote"
+    );
+}
+
+#[test]
+fn an_opener_that_fails_without_a_word_is_reported_failed_naming_the_program() {
+    let tree = Tree::new();
+    tree.in_workspace("notes.html");
+    let opening = tree
+        .ground()
+        .judge(r#"{"path":"notes.html"}"#)
+        .expect("the file is inside the workspace");
+    let opener = tree.script("fake-opener", "exit 4\n");
+
+    assert_eq!(
+        opener.open_patiently(&opening),
+        Handover::Failed {
+            exit: Exit::Code(4),
+            words: format!("{} said nothing", opener.program().to_string_lossy()),
+        },
+        "an opener that failed in silence is still named, so a reader knows which program it was"
+    );
+}
+
+#[test]
+fn an_opener_that_exits_zero_is_reported_opened() {
+    let tree = Tree::new();
+    tree.in_workspace("notes.html");
+    let opening = tree
+        .ground()
+        .judge(r#"{"path":"notes.html"}"#)
+        .expect("the file is inside the workspace");
+
+    assert_eq!(
+        tree.recording_opener().open_patiently(&opening),
+        Handover::Opened,
+        "an opener that exited 0 opened the target"
     );
 }
 

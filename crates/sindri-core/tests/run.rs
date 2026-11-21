@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sindri_core::config::Config;
-use sindri_core::open::{Ground, Opener, Opening};
+use sindri_core::open::{Ground, Handover, Opener, Opening};
 use sindri_core::policy::{
     Boundary, DEFAULT_COMMAND_BUDGET_MS, DEFAULT_OUTPUT_BUDGET_BYTES, Enforcement,
 };
@@ -1204,12 +1204,12 @@ impl Logged {
 }
 
 impl Opener for Logged {
-    fn open(&self, opening: &Opening) -> Result<(), String> {
+    fn open(&self, opening: &Opening) -> Handover {
         self.openings
             .lock()
             .expect("the log is not poisoned")
             .push(opening.clone());
-        Ok(())
+        Handover::Opened
     }
 }
 
@@ -1223,8 +1223,36 @@ fn shared(logged: &Arc<Logged>) -> Arc<dyn Opener> {
 struct Broken;
 
 impl Opener for Broken {
-    fn open(&self, _opening: &Opening) -> Result<(), String> {
-        Err(String::from("cannot run /nonexistent/opener: no such file"))
+    fn open(&self, _opening: &Opening) -> Handover {
+        Handover::Failed {
+            exit: Exit::Code(1),
+            words: String::from("cannot run /nonexistent/opener: no such file"),
+        }
+    }
+}
+
+/// An opener still working on the target it was handed, the way a browser that keeps its opener
+/// alive while it starts does.
+#[derive(Debug)]
+struct Lingering;
+
+impl Opener for Lingering {
+    fn open(&self, _opening: &Opening) -> Handover {
+        Handover::Handed
+    }
+}
+
+/// An opener that ran and left the call failing in its own words, the way a browser that holds no
+/// handler for the target's extension does.
+#[derive(Debug)]
+struct Complained;
+
+impl Opener for Complained {
+    fn open(&self, _opening: &Opening) -> Handover {
+        Handover::Failed {
+            exit: Exit::Code(3),
+            words: String::from("no handler for that file"),
+        }
     }
 }
 
@@ -1367,6 +1395,60 @@ fn an_opener_that_will_not_start_is_the_calls_answer_in_its_own_words() {
         "the front end's words are the call's, with nothing of the core's put in front of them"
     );
     assert_eq!(acted.exit, Exit::Code(1), "and the call exited failing");
+}
+
+#[test]
+fn a_handover_that_failed_settles_the_call_under_the_openers_own_words() {
+    let ground = OpenGround::new();
+    let target = ground.file("page.html");
+    let shell = ground.shell().opener(Some(Arc::new(Complained)));
+
+    let acted = shell
+        .execute(
+            &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
+            &mut Loaded::default(),
+        )
+        .expect("an opener that ran and failed is the call's own answer");
+
+    assert_eq!(
+        acted.text, "no handler for that file",
+        "the opener's words are the call's, with nothing of the core's put in front of them"
+    );
+    assert_eq!(
+        acted.exit,
+        Exit::Code(3),
+        "and the exit is the opener's own"
+    );
+    assert_eq!(acted.bytes, 0, "an opener writes no output back");
+}
+
+#[test]
+fn a_handover_the_opener_is_still_working_on_settles_the_call_as_handed() {
+    let ground = OpenGround::new();
+    let target = ground.file("page.html");
+    let shell = ground.shell().opener(Some(Arc::new(Lingering)));
+
+    let acted = shell
+        .execute(
+            &opening(&format!(r#"{{"path":"{}"}}"#, target.display())),
+            &mut Loaded::default(),
+        )
+        .expect("an opener still working is the call's own answer");
+
+    assert_eq!(
+        acted.text,
+        format!(
+            "handed {} to the opener, which is still running",
+            target.display()
+        ),
+        "the call says the target went to the opener and the opener is still working on it"
+    );
+    assert_eq!(
+        acted.exit,
+        Exit::Code(0),
+        "an opener still working is no failure of the call"
+    );
+    assert_eq!(acted.bytes, 0, "an opener writes no output back");
 }
 
 #[test]

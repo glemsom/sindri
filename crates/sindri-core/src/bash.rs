@@ -4,16 +4,15 @@
 
 use std::error::Error;
 use std::fmt;
-use std::io::{ErrorKind, Read};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
+use crate::pipe::Stream;
 use crate::policy::{Boundary, BoundaryError, Enforcement};
 use crate::run::Cancel;
 
@@ -28,10 +27,6 @@ pub const TEMP_VARIABLE: &str = "TMPDIR";
 /// Short enough that a call which ends at once is back at once, long enough that a long one
 /// costs nothing.
 const MAX_NAP: Duration = Duration::from_millis(25);
-
-/// How long a reader gets to see the end of its pipe once the command has ended: a grandchild
-/// left holding it cannot hold the call open.
-const PIPE_GRACE: Duration = Duration::from_millis(250);
 
 const SIGKILL: i32 = 9;
 
@@ -200,8 +195,8 @@ pub fn run(
             reason: error.to_string(),
         })?;
 
-    let stdout = Pipe::drain(child.stdout.take());
-    let stderr = Pipe::drain(child.stderr.take());
+    let stdout = Stream::drain(child.stdout.take());
+    let stderr = Stream::drain(child.stderr.take());
 
     let deadline = Instant::now() + Duration::from_secs(boundary.timeout_seconds());
     let mut nap = Duration::from_millis(1);
@@ -263,46 +258,6 @@ unsafe extern "C" {
     /// `kill(2)`, declared here so the module names no crate to stop a command: one syscall that
     /// names a process group.
     fn kill(pid: i32, signal: i32) -> i32;
-}
-
-/// A stream read by a thread of its own, so a command that fills both cannot block on the one
-/// nobody is reading, and collected into a sink the call can take whether or not the read ended.
-struct Pipe {
-    sink: Arc<Mutex<Vec<u8>>>,
-    reader: JoinHandle<()>,
-}
-
-impl Pipe {
-    fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> Pipe {
-        let sink = Arc::new(Mutex::new(Vec::new()));
-        let collected = Arc::clone(&sink);
-        let reader = thread::spawn(move || {
-            let Some(mut pipe) = pipe else {
-                return;
-            };
-            let mut chunk = [0u8; 8 * 1024];
-            loop {
-                match pipe.read(&mut chunk) {
-                    Ok(0) => return,
-                    Ok(read) => collected
-                        .lock()
-                        .expect("the sink is not poisoned")
-                        .extend_from_slice(&chunk[..read]),
-                    Err(error) if error.kind() == ErrorKind::Interrupted => continue,
-                    Err(_) => return,
-                }
-            }
-        });
-        Pipe { sink, reader }
-    }
-
-    fn finish(self) -> Vec<u8> {
-        let deadline = Instant::now() + PIPE_GRACE;
-        while !self.reader.is_finished() && Instant::now() < deadline {
-            thread::sleep(Duration::from_millis(1));
-        }
-        self.sink.lock().expect("the sink is not poisoned").clone()
-    }
 }
 
 #[cfg(test)]
