@@ -1561,6 +1561,123 @@ fn a_caret_at_the_boxes_right_margin_waits_on_that_column() {
     );
 }
 
+/// `CSI ? 25 h`: a frame's last bytes show the caret, and the cell it belongs in is named right
+/// after it, so a placement is the end of a frame.
+const SHOW_CARET: &[u8] = b"\x1b[?25h";
+
+/// Where every frame in `drawing` placed the caret: the offset its placement ends at beside the cell
+/// it names, in the order the frames landed.
+fn placed_cells(drawing: &[u8]) -> Vec<(usize, (u16, u16))> {
+    let mut placed = Vec::new();
+    let mut from = 0;
+    while let Some(shown) = at(&drawing[from..], SHOW_CARET) {
+        let named = from + shown + SHOW_CARET.len();
+        match drawing
+            .get(named..named + 2)
+            .filter(|lead| *lead == b"\x1b[")
+            .and_then(|_| placement(drawing, named + 2))
+        {
+            Some((end, cell)) => {
+                from = end;
+                placed.push((end, cell));
+            }
+            None => from = named,
+        }
+    }
+    placed
+}
+
+/// The placement a `{row};{column}H` names from `from`: the offset it ends at, and the cell it names,
+/// counted from nought where the terminal counts it from one.
+fn placement(drawing: &[u8], from: usize) -> Option<(usize, (u16, u16))> {
+    fn number(said: &[u8]) -> Option<(u16, usize)> {
+        let end = said.iter().position(|byte| !byte.is_ascii_digit())?;
+        let named: u16 = std::str::from_utf8(&said[..end]).ok()?.parse().ok()?;
+        Some((named.checked_sub(1)?, end))
+    }
+    let (row, used) = number(drawing.get(from..)?)?;
+    let rest = drawing.get(from + used..)?.strip_prefix(b";")?;
+    let (column, end) = number(rest)?;
+    rest.get(end)
+        .filter(|glyph| **glyph == b'H')
+        .map(|_| (from + used + 1 + end + 1, (row, column)))
+}
+
+#[test]
+fn a_streamed_answer_leaves_the_caret_where_the_frame_placed_it() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+    wire.release();
+    answered(&drawn);
+    drawn.settled();
+
+    let reads = drawn.reads();
+    let drawing = reads.concat();
+    let taken = at(&drawing, b"\x1b[?1049h").expect("the launch takes the screen before it draws");
+    let placed = placed_cells(&drawing);
+    assert!(
+        placed.len() > 1,
+        "the run drew its frames as frames: {} placements in {} reads",
+        placed.len(),
+        reads.len()
+    );
+    // The thought and the answer both reached this terminal as frames, so the reads judged below
+    // are the ones a streamed run wrote.
+    for streamed in ["think.", ANSWER_WORDS[1]] {
+        assert!(
+            at(&drawing, streamed.as_bytes()).is_some(),
+            "the run streamed {streamed:?} off the wire onto this terminal: {:?}",
+            drawn.text()
+        );
+    }
+
+    // A terminal repaints between two of a launch's writes, so a read that leaves the caret away
+    // from the cell a frame placed it in is the reader shown a caret in a cell that is not its own.
+    let mut asked = 0;
+    let mut shown = 0;
+    let mut so_far: Vec<u8> = Vec::new();
+    for read in &reads {
+        so_far.extend_from_slice(read);
+        if so_far.len() <= taken {
+            continue;
+        }
+        let stood = frame::read(&text(&so_far), COLS, ROWS).caret();
+        let places = placed
+            .iter()
+            .rev()
+            .find(|(end, _)| *end <= so_far.len())
+            .map(|(_, cell)| *cell);
+        assert!(
+            stood.is_none() || stood == places,
+            "read {asked} left the caret shown in {stood:?}, and the frame it belongs to places it \
+             in {places:?}: {:?}",
+            text(read)
+        );
+        asked += 1;
+        shown += usize::from(stood.is_some());
+    }
+    assert!(
+        asked > 1 && shown > 0,
+        "the run's drawing was asked where the caret stood in {asked} reads, and one of them left \
+         it shown in the cell its frame placed it in"
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
 /// Whether the screen is given back with the terminal's own cursor shown on the way out: the paste
 /// report given up, then the cursor, and the screen left last, which is the order a shell reads.
 fn gave_back_showing_the_cursor(bytes: &[u8]) -> bool {
@@ -1570,7 +1687,7 @@ fn gave_back_showing_the_cursor(bytes: &[u8]) -> bool {
     given.is_some_and(|given| {
         let tail = &bytes[given..];
         matches!(
-            (at(tail, b"\x1b[?25h"), at(tail, b"\x1b[?1049l")),
+            (at(tail, SHOW_CARET), at(tail, b"\x1b[?1049l")),
             (Some(shown), Some(screen)) if shown < screen
         )
     })
