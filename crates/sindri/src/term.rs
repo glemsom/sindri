@@ -278,7 +278,7 @@ impl<W: Write> Backend<W> {
 
     /// One plane sent as the picture a terminal keeps under a band: the pixels as a PNG, in the
     /// chunks the protocol allows, under the identity, the rect and the depth the placement is made
-    /// of.
+    /// of, and `C=1`: a placement tall as the frame would otherwise scroll the screen it shades.
     fn upload(&mut self, plane: &Plane) -> io::Result<()> {
         let area = plane.area();
         let mut png = Vec::new();
@@ -297,7 +297,7 @@ impl<W: Write> Backend<W> {
             if index == 0 {
                 write!(
                     sent,
-                    "\x1b_Ga=T,f=100,i={},q=2,z=-1,c={},r={},m={more};",
+                    "\x1b_Ga=T,f=100,i={},q=2,z=-1,C=1,c={},r={},m={more};",
                     plane.id().image(),
                     area.width,
                     area.height

@@ -3597,6 +3597,14 @@ fn covers(bytes: &[u8], at: usize) -> (u16, u16) {
     (named("c="), named("r="))
 }
 
+/// Whether the placement at `at` asks the terminal to leave the cursor where it placed the plane,
+/// read off its own header.
+fn leaves_the_cursor(bytes: &[u8], at: usize) -> bool {
+    String::from_utf8_lossy(&bytes[at..])
+        .split_once(';')
+        .is_some_and(|(header, _)| header.split(',').any(|key| key == "C=1"))
+}
+
 /// The frame a launch opens on is drawn before any prompt and is the bands' frame as much as any
 /// other: a terminal that places pictures is handed both grounds from that first paint.
 #[test]
@@ -3611,7 +3619,7 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
         drawn.text()
     );
     let bytes = drawn.bytes();
-    let placed = at(&bytes, b"\x1b_Ga=T,f=100,i=333,q=2,z=-1,c=").unwrap_or_else(|| {
+    let placed = at(&bytes, b"\x1b_Ga=T,f=100,i=333,q=2,z=-1,C=1,c=").unwrap_or_else(|| {
         panic!(
             "the band of the boot frame is placed on a ground of its own cells: {:?}",
             drawn.text()
@@ -3636,7 +3644,7 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
         drawn.text()
     );
 
-    let rail = at(&bytes, b"\x1b_Ga=T,f=100,i=334,q=2,z=-1,c=").unwrap_or_else(|| {
+    let rail = at(&bytes, b"\x1b_Ga=T,f=100,i=334,q=2,z=-1,C=1,c=").unwrap_or_else(|| {
         panic!(
             "the rail's band of the boot frame is placed on a plane of its own: {:?}",
             drawn.text()
@@ -3665,6 +3673,11 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
         rows, ROWS,
         "and down every row of the frame, from its first to the shadow at its floor on row \
          {band}, rather than stopping where the composer's band starts"
+    );
+    assert!(
+        leaves_the_cursor(&bytes, rail) && leaves_the_cursor(&bytes, placed),
+        "and placing a plane leaves the cursor where the band starts: a placement that moved it \
+         would scroll the screen the plane shades, and the rail's own is as tall as that screen"
     );
 
     pty.type_bytes(&[0x11]);
