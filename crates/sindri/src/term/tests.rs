@@ -1103,7 +1103,14 @@ fn held(shades: &[Shade]) -> Planes {
 /// The composer's shading over `area`, with the caret waiting in `caret`'s column where one is
 /// given: the design's own colours, which is the palette a frame nobody told a palette about draws.
 fn composer_shade(area: Rect, caret: Option<u16>) -> Shade {
-    Shade::composer(area, CellSize::NOMINAL, caret, &Palette::TRUECOLOR).expect("a band to shade")
+    Shade::composer(
+        area,
+        Some(CellSize::NOMINAL),
+        caret,
+        false,
+        &Palette::TRUECOLOR,
+    )
+    .expect("a band to shade")
 }
 
 /// The rail's shading over its own rows and columns: the other band a frame draws a plane under.
@@ -1111,7 +1118,7 @@ fn rail_shade() -> Shade {
     Shade::rail(
         sindri::ledger::Rail::Ledger,
         Rect::new(6, 3, 3, 4),
-        CellSize::NOMINAL,
+        Some(CellSize::NOMINAL),
         &Palette::TRUECOLOR,
     )
     .expect("a band to shade")
@@ -1187,10 +1194,22 @@ fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_ar
     let mut backend = Backend::new(&mut wire, false);
     let area = Rect::new(2, 3, 2, 1);
     let first = composer_shade(area, Some(3));
-    let finer = Shade::composer(area, CellSize::new(20, 40), Some(3), &Palette::TRUECOLOR)
-        .expect("a band to shade");
-    let greys =
-        Shade::composer(area, CellSize::NOMINAL, Some(3), &Palette::ANSI).expect("a band to shade");
+    let finer = Shade::composer(
+        area,
+        Some(CellSize::new(20, 40)),
+        Some(3),
+        false,
+        &Palette::TRUECOLOR,
+    )
+    .expect("a band to shade");
+    let greys = Shade::composer(
+        area,
+        Some(CellSize::NOMINAL),
+        Some(3),
+        false,
+        &Palette::ANSI,
+    )
+    .expect("a band to shade");
     assert_eq!(
         (finer.area(), greys.area()),
         (first.area(), first.area()),

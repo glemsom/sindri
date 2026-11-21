@@ -137,26 +137,22 @@ impl Palette {
     /// over the terminal's own for a cell on no band. A cell a band's words leave blank is still the
     /// frame's ink, and a band that shrank leaves no stripe of the frame before it behind.
     pub fn ground(&self, band: Option<Band>) -> Style {
-        self.paint(band.map_or(Color::Reset, |band| self.band(band)))
-    }
-
-    /// The style a row of a raised surface is claimed in: the plain ink over the ground `step` gives
-    /// that row, so the ink written on it is the ink it was written in.
-    pub fn raised(&self, row: u16, rows: u16) -> Style {
-        self.paint(self.step(row, rows))
+        self.over(band.map_or(Color::Reset, |band| self.band(band)))
     }
 
     /// The style a cell of one end of a boundary's light is claimed in: the plain ink over that
     /// edge, so a cell on an edge still reads back as the ink it is written in.
     pub fn edged(&self, edge: Edge) -> Style {
-        self.paint(self.edge(edge))
+        self.over(self.edge(edge))
     }
 
-    fn paint(&self, background: Color) -> Style {
+    /// The plain ink over a ground the caller names, so a cell claimed in it reads back as the ink
+    /// it is written in whatever colour it sits on.
+    pub fn over(&self, colour: Color) -> Style {
         let (foreground, modifier) = self.ink(Ink::Plain);
         Style::default()
             .fg(foreground)
-            .bg(background)
+            .bg(colour)
             .add_modifier(modifier)
     }
 
@@ -186,14 +182,6 @@ impl Palette {
             Edge::Lit => self.ends.lit,
             Edge::Shadow => self.ends.shadow,
         }
-    }
-
-    /// The ground the `row`th row of a raised surface `rows` rows tall sits on: its head is the
-    /// composer's tone, the depth above the rail's, and its foot is the rail's own, with the rows
-    /// between shaded from one end to the other.
-    pub fn step(&self, row: u16, rows: u16) -> Color {
-        let span = rows.saturating_sub(1);
-        shade(self.bands.composer, self.bands.rail, row, span)
     }
 
     pub fn band(&self, band: Band) -> Color {
@@ -294,10 +282,10 @@ pub fn channels(colour: Color) -> Option<[u8; 3]> {
     }
 }
 
-/// The shade `at` of `span` from `head` to `foot`, in the spelling both ends share: two `Rgb` ends
+/// The colour `at` of `span` from `head` to `foot`, in the spelling both ends share: two `Rgb` ends
 /// mix per channel and two `Indexed` ends mix their slots, which ascend with the grey they are, and
-/// ends with no shade between them are drawn as the head.
-fn shade(head: Color, foot: Color, at: u16, span: u16) -> Color {
+/// ends with nothing between them are drawn as the head.
+pub fn blend(head: Color, foot: Color, at: u16, span: u16) -> Color {
     let (at, span) = (u32::from(at.min(span)), u32::from(span));
     let between = |head: u8, foot: u8| match span {
         0 => head,

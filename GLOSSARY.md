@@ -236,14 +236,17 @@ A band's surface drawn as one image placed under its cells, so it shades in pixe
 whole rows: the image a frame holds against that band's **Shade**, and makes only when the shade
 moves. The rail's plane reaches back over the last columns of the bands beside it, so the rail comes
 out of their edge: no line is drawn there. A terminal that places no picture, or a band in a palette
-with no colour, is given none, and each band's own rows are the whole of its shading.
+with no colour, is given none, and the band's own rows are claimed from its shade.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 
 **Shade**:
-Everything a band's **Plane** is drawn from and nothing else: which band it is, the rows and columns
-it covers, the cell it is drawn at, the rail's shape, the colours of the palette it is drawn in, and
-— for the composer's band — the column the caret waits in. A frame holds each band's image against
-it, so a pass in which it stands makes no image and tells the terminal nothing.
+What a band sits on: the colour each of its rows is claimed in and the seams it makes with the band
+beside it — the transcript band on the well, the rail on its own tone with the frame's shadow across
+its last row, the composer's band rising out of the well into its head row and falling to the rail's
+tone under it, its head row lit where it takes the keys. It holds every fact the band's cells and its
+**Plane** are drawn from and nothing else, the cell the plane is drawn at and the caret's column among
+them, and a frame holds each band's image against it, so a pass in which it stands makes no image.
+Where no picture is placed, that same shade is claimed cell by cell.
 _Avoid_: Colour, tone, gradient, paint, style
 
 **Footprint**:

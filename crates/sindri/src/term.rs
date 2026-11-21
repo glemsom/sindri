@@ -264,8 +264,10 @@ impl<W: Write> Backend<W> {
         }
         let before = std::mem::take(&mut self.shades);
         for shade in &before {
-            if !shades.contains(shade) {
-                holding(&mut self.screen, &mut self.writing).tell(&plane::delete(shade.id()))?;
+            if !shades.contains(shade)
+                && let Some(id) = shade.id()
+            {
+                holding(&mut self.screen, &mut self.writing).tell(&plane::delete(id))?;
             }
         }
         for shade in shades {
@@ -441,7 +443,9 @@ impl<W: Write> RatatuiBackend for Backend<W> {
 
     fn clear(&mut self) -> io::Result<()> {
         for shade in std::mem::take(&mut self.shades) {
-            holding(&mut self.screen, &mut self.writing).tell(&plane::delete(shade.id()))?;
+            if let Some(id) = shade.id() {
+                holding(&mut self.screen, &mut self.writing).tell(&plane::delete(id))?;
+            }
         }
         painting(&mut self.screen, &mut self.writing).clear()
     }

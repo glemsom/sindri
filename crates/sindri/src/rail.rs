@@ -6,7 +6,7 @@ use ratatui::layout::Rect;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::ledger::{self, Facts, Rail, RailBand};
-use crate::palette::{Band, Edge, Palette};
+use crate::palette::Palette;
 use crate::pen;
 use crate::plane::Shade;
 use crate::pulse::Pulse;
@@ -30,16 +30,11 @@ pub fn paint(
     if area.width == 0 || area.height == 0 {
         return None;
     }
-    let shade = pictures.and_then(|cell| Shade::rail(rail, area, cell, palette));
-    let ground = match shade.is_some() {
-        true => None,
-        false => Some(Band::Rail),
-    };
-    pen::claim(buffer, area, palette.ground(ground));
+    let shade = Shade::rail(rail, area, pictures, palette);
+    if let Some(shade) = shade {
+        shade.claim(buffer, palette);
+    }
     if rail == Rail::Ledger {
-        if shade.is_none() {
-            elevation(buffer, area, palette);
-        }
         under_the_face(band, buffer, palette);
     }
     ledger::draw(
@@ -71,22 +66,6 @@ fn under_the_face(band: RailBand, buffer: &mut Buffer, palette: &Palette) {
             palette,
         );
     }
-}
-
-/// The two ends a ledger's band carries light at on the band no plane is drawn under: the lit
-/// column it meets the transcript on, which is the rail's own column and never one the transcript
-/// gave up, and the shadow across its last row.
-fn elevation(buffer: &mut Buffer, area: Rect, palette: &Palette) {
-    pen::claim(buffer, Rect { width: 1, ..area }, palette.edged(Edge::Lit));
-    pen::claim(
-        buffer,
-        Rect {
-            y: area.bottom() - 1,
-            height: 1,
-            ..area
-        },
-        palette.edged(Edge::Shadow),
-    );
 }
 
 #[cfg(test)]
