@@ -39,7 +39,7 @@ use crate::pen::{self, Clip};
 use crate::picker::Picker;
 use crate::picture::Surface;
 use crate::pictures::Pictures;
-use crate::plane::Plane;
+use crate::plane::{Planes, Shade};
 use crate::pointer::{self, Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
@@ -244,7 +244,7 @@ pub struct Painted {
     presses: Vec<Press>,
     drawn: Drawn,
     layout: Option<Layout>,
-    planes: Vec<Plane>,
+    planes: Vec<Shade>,
     caret: Option<Position>,
 }
 
@@ -267,8 +267,9 @@ impl Painted {
         self.caret
     }
 
-    /// The planes this frame places under its bands, each carrying the identity it is held by.
-    pub fn planes(&self) -> &[Plane] {
+    /// The shading of the bands this pass places a plane under, which is what it hands the terminal
+    /// for its bands: two passes holding the same shading are the same bands.
+    pub fn planes(&self) -> &[Shade] {
         &self.planes
     }
 
@@ -360,6 +361,9 @@ pub struct View {
     /// What the last paint pass drew: what a page, a copy and a fold read rather than laying the
     /// transcript out a second time.
     drawn: Drawn,
+    /// The band images this frame holds, each against the shading of its last pass: a pass that
+    /// shades the same bands makes none.
+    planes: Planes,
     composer: Composer,
     queue: Queue,
     conversation: Conversation,
@@ -448,6 +452,7 @@ impl View {
             scroll,
             landed: 0,
             drawn: Drawn::none(),
+            planes: Planes::default(),
             composer: Composer::new(),
             queue: Queue::default(),
             conversation: Conversation::default(),
@@ -535,6 +540,11 @@ impl View {
     pub fn card(&mut self) -> Option<&commands::Card> {
         let card = self.cards.follow(self.composer.text())?;
         Some(card)
+    }
+
+    /// The band images this frame holds, and how many it has made.
+    pub fn planes(&self) -> &Planes {
+        &self.planes
     }
 
     pub fn capabilities(&self) -> &Capabilities {
@@ -1226,6 +1236,14 @@ impl View {
     /// drew. Painting is what hands the row cache the band's measure, so a measure that moved drops
     /// every row here and the same pass lays them again; the composer's rows are measured as it draws.
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
+        let painted = self.draw(area, buffer);
+        self.planes.hold(painted.planes());
+        painted
+    }
+
+    /// The pass itself, drawn into `area` and handed back with what it told the terminal, before the
+    /// images its bands stand on are held against it.
+    fn draw(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let mut painted = Painted::none();
         pen::claim(buffer, area, self.capabilities.palette().ground(None));
         // The rail is a fact about the frame, so its columns are cut from the transcript before the
@@ -1256,7 +1274,7 @@ impl View {
                 Some(picture) => band.with_picture(picture.cols(), picture.rows()),
                 None => band,
             };
-            if let Some(plane) = rail::paint(
+            if let Some(shade) = rail::paint(
                 self.facts.rail(),
                 shape,
                 band,
@@ -1265,8 +1283,8 @@ impl View {
                 buffer,
                 &self.capabilities.palette(),
             ) {
-                under = Some(plane.area());
-                painted.planes.push(plane);
+                under = Some(shade.area());
+                painted.planes.push(shade);
             }
             if let (Some(picture), Some(cells)) = (&picture, band.picture) {
                 let cell = self.capabilities.cell();
@@ -1292,8 +1310,8 @@ impl View {
             );
         }
         self.notice_band(layout.notice, buffer, &drawn);
-        if let Some(plane) = self.composer_band(layout.composer, layout.queue, buffer) {
-            painted.planes.push(plane);
+        if let Some(shade) = self.composer_band(layout.composer, layout.queue, buffer) {
+            painted.planes.push(shade);
         }
         self.footer(layout.footer, buffer);
         // A screen is drawn over the frame it was opened from rather than in place of it: the
@@ -1601,18 +1619,18 @@ impl View {
         whole_row(buffer, area, area.y, &spans, &self.capabilities.palette());
     }
 
-    /// The composer's band drawn, and the plane it stands on where this terminal places one and the
-    /// palette spells a pixel: its rows are shaded from its head down to the rail's own tone, cell by
-    /// cell where no plane stands under them, one claim per row, so no cell loses its own ink.
-    fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) -> Option<Plane> {
+    /// The composer's band drawn, and the shading it stands on where this terminal places a picture
+    /// and the palette spells a pixel: its rows are shaded from its head down to the rail's own tone,
+    /// cell by cell where no plane stands under them, one claim per row, so no cell loses its own ink.
+    fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) -> Option<Shade> {
         let palette = self.capabilities.palette();
         let caret = self.caret(band, queue, None);
-        let plane = self
+        let shade = self
             .capabilities
             .pictures()
             .cell()
-            .and_then(|cell| Plane::composer(band, cell, caret, &palette));
-        match plane.is_some() {
+            .and_then(|cell| Shade::composer(band, cell, caret, &palette));
+        match shade.is_some() {
             true => pen::claim(buffer, band, palette.ground(None)),
             false => {
                 for row in 0..band.height {
@@ -1630,7 +1648,7 @@ impl View {
         }
         self.composer_inside(band, queue, buffer);
         self.composer_head(band, buffer);
-        plane
+        shade
     }
 
     /// The draft, its placeholder, the rows it keeps back and the queue's prompts, each drawn from the

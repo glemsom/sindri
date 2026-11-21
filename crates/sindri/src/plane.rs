@@ -1,5 +1,5 @@
-//! The planes a frame places under its cells: an image the terminal draws at the pixels of a band,
-//! the identity it is placed under, and the bytes that take it away again.
+//! The planes a frame places under its cells: the shading a band's ground is drawn from, the image
+//! it is drawn as, the identity a placement is named by, and the bytes that take one away again.
 
 use ratatui::layout::Rect;
 
@@ -31,16 +31,32 @@ impl PlaneId {
     }
 }
 
-/// A band's ground as an image the terminal draws under its cells: the pixels, the rect they cover,
-/// and the identity the placement is held by.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Plane {
-    id: PlaneId,
-    area: Rect,
-    pixels: image::RgbaImage,
+/// A band's shading as a value: which band it is, the rows and columns it covers, the cell it is
+/// drawn at and the colours it is drawn in. Every fact an image of it depends on is held here, so
+/// drawing one never fails and two passes that shade the same band shade it alike.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shade {
+    /// The composer's band, with the caret's column in the frame and none while it waits nowhere:
+    /// the glow is drawn under it, and it is the one fact besides the band the shading depends on.
+    Composer {
+        area: Rect,
+        cell: CellSize,
+        well: [u8; 3],
+        head: [u8; 3],
+        foot: [u8; 3],
+        caret: Option<u16>,
+    },
+    /// The rail's band, over the rows and columns it covers already widened across the seam.
+    Rail {
+        area: Rect,
+        cell: CellSize,
+        head: [u8; 3],
+        foot: [u8; 3],
+        seam: Option<Seam>,
+    },
 }
 
-impl Plane {
+impl Shade {
     /// The composer's band: its first cell rising out of the transcript's well into its head, the rung
     /// above the rail's tone, which falls into the rail's own tone over the height left, with the glow
     /// under the caret's column. None for an area with no rows or no columns, or no colour in a pixel.
@@ -49,40 +65,22 @@ impl Plane {
         cell: CellSize,
         caret: Option<(u16, u16)>,
         palette: &Palette,
-    ) -> Option<Plane> {
-        let (width, height) = extent(area, cell)?;
-        let head = channels(palette.step(0, area.height))?;
-        let foot = channels(palette.step(area.height - 1, area.height))?;
-        let well = channels(palette.band(Band::Well))?;
-        let rise = cell.height().min(height.saturating_sub(1)).max(1);
-        // The head's own row is the rise's last, so the fall runs over the rows under it.
-        let body = height.saturating_sub(rise + 1);
-        let glow = caret
-            .map(|(x, _)| (f64::from(x.saturating_sub(area.x)) + 0.5) * f64::from(cell.width()));
-        let pixels = image::RgbaImage::from_fn(width, height, |x, y| {
-            let tone = match y < rise {
-                true => mix(well, head, ease(share(y, rise))),
-                false => mix(head, foot, share(y - rise, body)),
-            };
-            let light = glow.map_or(0.0, |center| {
-                let distance = (f64::from(x) - center) / (f64::from(cell.width()) * 8.0);
-                let depth = share(y, height) / 0.65;
-                (-(distance * distance + depth * depth) * 2.0).exp() * 22.0
-            });
-            let channel = |at: u8| (f64::from(at) + light).clamp(0.0, 255.0) as u8;
-            image::Rgba([channel(tone[0]), channel(tone[1]), channel(tone[2]), 255])
-        });
-        Some(Plane {
-            id: PlaneId::Composer,
+    ) -> Option<Shade> {
+        extent(area, cell)?;
+        Some(Shade::Composer {
             area,
-            pixels,
+            cell,
+            well: channels(palette.band(Band::Well))?,
+            head: channels(palette.step(0, area.height))?,
+            foot: channels(palette.step(area.height - 1, area.height))?,
+            caret: caret.map(|(x, _)| x),
         })
     }
 
     /// The rail's band: the band's own colour at the head, falling into the shadow at its foot, and
     /// a ledger's widened across the seam, where the well falls into the crease and the band comes
     /// back out of it. None for an area with no rows or columns or a palette with no colour in it.
-    pub fn rail(shape: Rail, area: Rect, cell: CellSize, palette: &Palette) -> Option<Plane> {
+    pub fn rail(shape: Rail, area: Rect, cell: CellSize, palette: &Palette) -> Option<Shade> {
         let head = channels(palette.band(Band::Rail))?;
         let foot = channels(palette.edge(Edge::Shadow))?;
         let seam = match shape {
@@ -95,30 +93,145 @@ impl Plane {
             width: area.width + widened,
             ..area
         };
-        let (width, height) = extent(area, cell)?;
-        let span = f64::from(height.saturating_sub(1).max(1));
-        let pixels = image::RgbaImage::from_fn(width, height, |x, y| {
-            let down = mix(head, foot, f64::from(y) / span);
-            let colour = seam.and_then(|seam| seam.across(x, down)).unwrap_or(down);
-            image::Rgba([colour[0], colour[1], colour[2], 255])
-        });
-        Some(Plane {
-            id: PlaneId::Rail,
+        extent(area, cell)?;
+        Some(Shade::Rail {
             area,
-            pixels,
+            cell,
+            head,
+            foot,
+            seam,
         })
     }
 
+    /// The identity a placement of this shading is named by.
     pub fn id(&self) -> PlaneId {
-        self.id
+        match self {
+            Shade::Composer { .. } => PlaneId::Composer,
+            Shade::Rail { .. } => PlaneId::Rail,
+        }
     }
 
+    /// The rows and columns this shading covers.
     pub fn area(&self) -> Rect {
-        self.area
+        match self {
+            Shade::Composer { area, .. } | Shade::Rail { area, .. } => *area,
+        }
+    }
+
+    fn cell(&self) -> CellSize {
+        match self {
+            Shade::Composer { cell, .. } | Shade::Rail { cell, .. } => *cell,
+        }
+    }
+}
+
+/// A band's ground as the image the terminal draws under its cells, held with the shading it was
+/// drawn from: two planes of one frame are told apart by that shading and by nothing else.
+#[derive(Clone, Debug)]
+pub struct Plane {
+    shade: Shade,
+    pixels: image::RgbaImage,
+}
+
+impl Plane {
+    /// The image a shading is drawn as, at the pixels of the cell it is drawn on.
+    pub(crate) fn draw(shade: Shade) -> Plane {
+        let (width, height) = extent(shade.area(), shade.cell()).unwrap_or_default();
+        let pixels = match shade {
+            Shade::Composer {
+                area,
+                cell,
+                well,
+                head,
+                foot,
+                caret,
+            } => {
+                let rise = cell.height().min(height.saturating_sub(1)).max(1);
+                // The head's own row is the rise's last, so the fall runs over the rows under it.
+                let body = height.saturating_sub(rise + 1);
+                let glow = caret
+                    .map(|x| (f64::from(x.saturating_sub(area.x)) + 0.5) * f64::from(cell.width()));
+                image::RgbaImage::from_fn(width, height, |x, y| {
+                    let tone = match y < rise {
+                        true => mix(well, head, ease(share(y, rise))),
+                        false => mix(head, foot, share(y - rise, body)),
+                    };
+                    let light = glow.map_or(0.0, |center| {
+                        let distance = (f64::from(x) - center) / (f64::from(cell.width()) * 8.0);
+                        let depth = share(y, height) / 0.65;
+                        (-(distance * distance + depth * depth) * 2.0).exp() * 22.0
+                    });
+                    let channel = |at: u8| (f64::from(at) + light).clamp(0.0, 255.0) as u8;
+                    image::Rgba([channel(tone[0]), channel(tone[1]), channel(tone[2]), 255])
+                })
+            }
+            Shade::Rail {
+                head, foot, seam, ..
+            } => {
+                let span = f64::from(height.saturating_sub(1).max(1));
+                image::RgbaImage::from_fn(width, height, |x, y| {
+                    let down = mix(head, foot, f64::from(y) / span);
+                    let colour = seam.and_then(|seam| seam.across(x, down)).unwrap_or(down);
+                    image::Rgba([colour[0], colour[1], colour[2], 255])
+                })
+            }
+        };
+        Plane { shade, pixels }
+    }
+
+    /// The identity the terminal holds this plane under.
+    pub fn id(&self) -> PlaneId {
+        self.shade.id()
+    }
+
+    /// The rows and columns this plane covers.
+    pub fn area(&self) -> Rect {
+        self.shade.area()
     }
 
     pub fn pixels(&self) -> &image::RgbaImage {
         &self.pixels
+    }
+}
+
+/// The band images one frame holds, each against the shading it was drawn from: a frame makes an
+/// image when a band's shading moves and keeps it while that shading stands.
+#[derive(Clone, Debug, Default)]
+pub struct Planes {
+    held: Vec<Plane>,
+    made: usize,
+}
+
+impl Planes {
+    /// Holds a pass's `shades`: a shading already held keeps its image, a new one is drawn, and one
+    /// the pass no longer names loses its image.
+    pub fn hold(&mut self, shades: &[Shade]) {
+        let mut held = Vec::with_capacity(shades.len());
+        for shade in shades {
+            match self.held.iter().position(|plane| plane.shade == *shade) {
+                Some(at) => held.push(self.held.remove(at)),
+                None => {
+                    held.push(Plane::draw(*shade));
+                    self.made += 1;
+                }
+            }
+        }
+        self.held = held;
+    }
+
+    /// The image held under `shade`, and none while this frame holds no image of it.
+    pub fn image(&self, shade: &Shade) -> Option<&Plane> {
+        self.held.iter().find(|plane| plane.shade == *shade)
+    }
+
+    /// The images this frame holds, in the order its pass named them.
+    pub fn held(&self) -> &[Plane] {
+        &self.held
+    }
+
+    /// How many band images this frame has made.
+    pub fn made(&self) -> usize {
+        self.made
     }
 }
 
@@ -141,7 +254,7 @@ fn extent(area: Rect, cell: CellSize) -> Option<(u32, u32)> {
 /// The seam a ledger's plane widens across: the transcript's columns to the left of the rail's
 /// first, and the rail's first few, drawn as a fall from the well into the shadow and back out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Seam {
+pub struct Seam {
     widened: u16,
     cell: CellSize,
     well: [u8; 3],

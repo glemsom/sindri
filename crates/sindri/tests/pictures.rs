@@ -22,7 +22,8 @@ use sindri::markdown;
 use sindri::palette::{Band, Edge, Palette, channels};
 use sindri::picture::{self, Surface};
 use sindri::pictures::{PLACEHOLDER, Pictures};
-use sindri::plane::{Plane, PlaneId, SEAM};
+use sindri::plane::{Plane, PlaneId, SEAM, Shade};
+use sindri::pulse::Pulse;
 use sindri::rows::Row;
 use sindri::view::{Transcript, View};
 use sindri_core::policy::Enforcement;
@@ -1498,7 +1499,7 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     view.paste("forge");
     let frame = frame::painted(&mut view, 80, 24);
     let band = frame.told().layout().expect("a laid out frame").composer;
-    let ground = composer_plane(frame.told());
+    let ground = composer_plane(&view);
     assert_eq!(ground.area(), band);
     assert_eq!(
         ground.pixels().dimensions(),
@@ -1546,10 +1547,10 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
 
 #[test]
 fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
-    let mut launching = splash(true);
-    let frame = frame::painted(&mut launching, 120, 40);
+    let mut view = splash(true);
+    let frame = frame::painted(&mut view, 120, 40);
     let band = frame.told().layout().expect("a laid out frame").composer;
-    let ground = composer_plane(frame.told());
+    let ground = composer_plane(&view);
     assert_eq!(
         ground.area(),
         band,
@@ -1589,7 +1590,7 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
         "a terminal that names no twenty-four-bit colour draws the design in its greys"
     );
     let band = frame.told().layout().expect("a laid out frame").composer;
-    let ground = composer_plane(frame.told());
+    let ground = composer_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the band's well in pixels");
     let head = channels(palette.step(0, band.height)).expect("the band's head in pixels");
@@ -1639,7 +1640,7 @@ fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
     let band = frame.told().layout().expect("a laid out frame").composer;
-    let ground = composer_plane(frame.told());
+    let ground = composer_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     assert_eq!(
         (width, height),
@@ -1686,7 +1687,7 @@ fn the_bands_ground_rises_out_of_the_well_over_its_first_cell() {
     let frame = frame::painted(&mut view, 80, 24);
     let palette = *frame.palette();
     let band = frame.told().layout().expect("a laid out frame").composer;
-    let ground = composer_plane(frame.told());
+    let ground = composer_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     let column = width - 1;
     assert_eq!(
@@ -1715,7 +1716,7 @@ fn the_rise_out_of_the_well_eases_into_the_bands_head() {
     let frame = frame::painted(&mut view, 80, 24);
     let palette = *frame.palette();
     let band = frame.told().layout().expect("a laid out frame").composer;
-    let ground = composer_plane(frame.told());
+    let ground = composer_plane(&view);
     let (width, _height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the well in pixels");
     let head = channels(palette.step(0, band.height)).expect("the band's head in pixels");
@@ -1777,7 +1778,7 @@ fn the_carets_glow_carries_across_the_rise_out_of_the_well() {
         .caret()
         .expect("a draft that takes the keys places the terminal's cursor");
     let caret = (caret.x, caret.y);
-    let ground = composer_plane(frame.told());
+    let ground = composer_plane(&view);
     let (width, _height) = ground.pixels().dimensions();
     let at = u32::from(caret.0 - band.x) * cell().width() + cell().width() / 2;
     for row in 0..cell().height() {
@@ -1805,7 +1806,7 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
         .caret()
         .expect("a draft that takes the keys places the terminal's cursor");
     let caret = (caret.x, caret.y);
-    let ground = composer_plane(frame.told());
+    let ground = composer_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     let row = height / 10;
     let at = u32::from(caret.0 - band.x) * cell().width() + cell().width() / 2;
@@ -1839,7 +1840,7 @@ fn the_bands_head_row_reads_back_as_the_lit_edge_over_its_rise() {
     let frame = frame::painted(&mut view, 80, 24);
     let palette = *frame.palette();
     let band = frame.told().layout().expect("a laid out frame").composer;
-    let ground = composer_plane(frame.told());
+    let ground = composer_plane(&view);
     assert_eq!(
         ground.area(),
         band,
@@ -1881,12 +1882,12 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
             .told()
             .planes()
             .iter()
-            .map(Plane::id)
+            .map(Shade::id)
             .collect::<Vec<PlaneId>>(),
         vec![PlaneId::Rail, PlaneId::Composer],
         "the frame hands back the rail's plane beside the composer's, each under its own identity"
     );
-    let band = plane_of(frame.told(), PlaneId::Rail);
+    let band = plane_of(&view, PlaneId::Rail);
     assert_eq!(
         band.area(),
         Rect {
@@ -1953,7 +1954,7 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
             .told()
             .planes()
             .iter()
-            .all(|plane| plane.id() != PlaneId::Rail),
+            .all(|shade| shade.id() != PlaneId::Rail),
         "a palette that draws no colour is handed no plane over the rail: its band is the flat \
          band it already had"
     );
@@ -1975,7 +1976,7 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_composer() {
             .told()
             .planes()
             .iter()
-            .all(|plane| plane.id() != PlaneId::Composer),
+            .all(|shade| shade.id() != PlaneId::Composer),
         "a palette that draws no colour is handed no plane over the composer: the band drawn in \
          its place is the flat one the frame already had"
     );
@@ -2032,19 +2033,109 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
     }
 }
 
-/// The plane a frame hands back under `id`: a frame hands back more than one, and each is asked
-/// for by the identity it is placed under.
-fn plane_of(painted: &sindri::view::Painted, id: PlaneId) -> &Plane {
-    painted
-        .planes()
+#[test]
+fn a_pass_that_shades_the_same_bands_makes_no_band_image() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(caps::at(cell()), &workspace, "hello");
+    let first = frame::painted(&mut view, 80, 24);
+    let made = view.planes().made();
+    assert!(
+        made > 0,
+        "the first pass makes the images its bands stand on"
+    );
+    let again = frame::painted(&mut view, 80, 24);
+    assert_eq!(
+        view.planes().made(),
+        made,
+        "a pass that shades the same bands makes no band image"
+    );
+    assert_eq!(
+        first.told().planes(),
+        again.told().planes(),
+        "and the two passes hand the terminal the same bands: {:?} against {:?}",
+        first.told().planes(),
+        again.told().planes()
+    );
+}
+
+#[test]
+fn a_pass_whose_caret_column_moved_makes_the_composers_band_again() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(caps::at(cell()), &workspace, "hello");
+    view.paste("forge");
+    let first = frame::painted(&mut view, 80, 24);
+    let made = view.planes().made();
+    let band = first.told().layout().expect("a laid out frame").composer;
+    view.paste(" more");
+    let again = frame::painted(&mut view, 80, 24);
+    assert_eq!(
+        again.told().layout().expect("a laid out frame").composer,
+        band,
+        "the band stands where it did, and only the caret's column moved"
+    );
+    assert_eq!(
+        view.planes().made(),
+        made + 1,
+        "a pass in which the caret's column moved makes the composer's band again, and no band \
+         whose shading stood"
+    );
+}
+
+#[test]
+fn a_pass_drawn_at_a_new_size_makes_the_bands_images_again() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(caps::at(cell()), &workspace, "hello");
+    let small = frame::painted(&mut view, 80, 24);
+    let made = view.planes().made();
+    let large = frame::painted(&mut view, 120, 40);
+    assert!(
+        view.planes().made() > made,
+        "a pass drawn at a new size makes the bands' images again: {made} images before it"
+    );
+    assert_ne!(
+        small.told().planes(),
+        large.told().planes(),
+        "and the bands it hands the terminal are not the bands of the frame before it: {:?} \
+         against {:?}",
+        small.told().planes(),
+        large.told().planes()
+    );
+}
+
+#[test]
+fn a_frame_whose_marker_has_stepped_makes_no_band_image() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(caps::at(cell()), &workspace, "hello");
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(0))));
+    let turned = frame::painted(&mut view, 80, 24);
+    let made = view.planes().made();
+    view.handed(view.facts().clone().pulsed(Some(Pulse::live(80))));
+    let stepped = frame::painted(&mut view, 80, 24);
+    assert_ne!(
+        turned.words(),
+        stepped.words(),
+        "the marker turned between the two passes"
+    );
+    assert_eq!(
+        view.planes().made(),
+        made,
+        "a frame whose marker has stepped makes no band image"
+    );
+}
+
+/// The image a frame holds under `id`: a frame holds more than one, and each is asked for by the
+/// identity it is placed under.
+fn plane_of(view: &View, id: PlaneId) -> &Plane {
+    view.planes()
+        .held()
         .iter()
         .find(|plane| plane.id() == id)
         .unwrap_or_else(|| {
             panic!(
-                "the frame hands back no plane under {id:?}, and a terminal that places pictures is \
-             handed its planes from every paint: {:?}",
-                painted
-                    .planes()
+                "the frame holds no image under {id:?}, and a terminal that places pictures is \
+             handed its bands' shading from every paint: {:?}",
+                view.planes()
+                    .held()
                     .iter()
                     .map(Plane::id)
                     .collect::<Vec<PlaneId>>()
@@ -2052,9 +2143,9 @@ fn plane_of(painted: &sindri::view::Painted, id: PlaneId) -> &Plane {
         })
 }
 
-/// The composer's plane, which is the one plane a frame's band has always carried.
-fn composer_plane(painted: &sindri::view::Painted) -> &Plane {
-    plane_of(painted, PlaneId::Composer)
+/// The composer's image, which is the one plane a frame's band has always carried.
+fn composer_plane(view: &View) -> &Plane {
+    plane_of(view, PlaneId::Composer)
 }
 
 /// The two frames compared cell by cell, on a terminal that places pictures and one that places

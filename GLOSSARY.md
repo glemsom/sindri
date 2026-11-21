@@ -233,11 +233,18 @@ _Avoid_: Collapse, truncate, expand (that one is the other half), summary, previ
 
 **Plane**:
 A band's surface drawn as one image placed under its cells, so it shades in pixels rather than in
-whole rows, placed once per size. The rail's plane reaches back over the last columns of the bands
-beside it, so the rail comes out of their edge: no line is drawn there. A terminal that places no
-picture, or a band in a palette with no colour, is given none, and each band's own rows are the
-whole of its shading.
+whole rows: the image a frame holds against that band's **Shade**, and makes only when the shade
+moves. The rail's plane reaches back over the last columns of the bands beside it, so the rail comes
+out of their edge: no line is drawn there. A terminal that places no picture, or a band in a palette
+with no colour, is given none, and each band's own rows are the whole of its shading.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
+
+**Shade**:
+Everything a band's **Plane** is drawn from and nothing else: which band it is, the rows and columns
+it covers, the cell it is drawn at, the rail's shape, the colours of the palette it is drawn in, and
+— for the composer's band — the column the caret waits in. A frame holds each band's image against
+it, so a pass in which it stands makes no image and tells the terminal nothing.
+_Avoid_: Colour, tone, gradient, paint, style
 
 **Footprint**:
 The columns by rows a picture is fitted into under a ceiling: one scale on both axes, so the

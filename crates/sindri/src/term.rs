@@ -20,7 +20,7 @@ use rustix::termios::{
 use sindri::capability::{Asked, Question};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
-use sindri::plane::{self, Plane, PlaneId};
+use sindri::plane::{self, Plane, PlaneId, Planes, Shade};
 use sindri::size::{Laid, Sizes};
 use sindri::view::{Painted, View};
 
@@ -228,7 +228,7 @@ pub(crate) struct Backend<W: Write> {
     links: Links,
     sizes: Sizes,
     places: bool,
-    planes: Vec<Plane>,
+    shades: Vec<Shade>,
 }
 
 impl<W: Write> Backend<W> {
@@ -241,7 +241,7 @@ impl<W: Write> Backend<W> {
             links: Links::none(),
             sizes: Sizes::none(),
             places,
-            planes: Vec::new(),
+            shades: Vec::new(),
         }
     }
 
@@ -255,24 +255,27 @@ impl<W: Write> Backend<W> {
         self.sizes.clone_from(sizes);
     }
 
-    /// The planes the frame about to be written places under its bands: a plane that left is
-    /// deleted by its identity, and a plane that arrived is uploaded under the one it carries.
-    fn planes(&mut self, planes: &[Plane]) -> io::Result<()> {
-        if self.planes == planes {
+    /// The bands the frame about to be written shades and the images it holds of them: a shading
+    /// that left is deleted by its identity, and one that arrived is uploaded as the image the frame
+    /// holds under it.
+    fn planes(&mut self, shades: &[Shade], images: &Planes) -> io::Result<()> {
+        if self.shades == shades {
             return Ok(());
         }
-        let before = std::mem::take(&mut self.planes);
-        for plane in &before {
-            if !planes.contains(plane) {
-                holding(&mut self.screen, &mut self.writing).tell(&plane::delete(plane.id()))?;
+        let before = std::mem::take(&mut self.shades);
+        for shade in &before {
+            if !shades.contains(shade) {
+                holding(&mut self.screen, &mut self.writing).tell(&plane::delete(shade.id()))?;
             }
         }
-        for plane in planes {
-            if !before.contains(plane) {
+        for shade in shades {
+            if !before.contains(shade)
+                && let Some(plane) = images.image(shade)
+            {
                 self.upload(plane)?;
             }
         }
-        self.planes = planes.to_vec();
+        self.shades = shades.to_vec();
         Ok(())
     }
 
@@ -435,8 +438,8 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     }
 
     fn clear(&mut self) -> io::Result<()> {
-        for plane in std::mem::take(&mut self.planes) {
-            holding(&mut self.screen, &mut self.writing).tell(&plane::delete(plane.id()))?;
+        for shade in std::mem::take(&mut self.shades) {
+            holding(&mut self.screen, &mut self.writing).tell(&plane::delete(shade.id()))?;
         }
         painting(&mut self.screen, &mut self.writing).clear()
     }
@@ -493,7 +496,9 @@ pub(crate) fn paint<W: Write>(canvas: &mut CanvasOver<W>, view: &mut View) -> io
     let painted = view.paint(area, canvas.current_buffer_mut());
     canvas.backend_mut().links(painted.links());
     canvas.backend_mut().sizes(painted.sizes());
-    canvas.backend_mut().planes(painted.planes())?;
+    canvas
+        .backend_mut()
+        .planes(painted.planes(), view.planes())?;
     let caret = painted.caret();
     canvas.draw(|frame| {
         if let Some(caret) = caret {
