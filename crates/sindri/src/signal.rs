@@ -5,18 +5,29 @@
 use std::io;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicPtr, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicU8, AtomicUsize, Ordering};
 
 use rustix::io::write as tell_fd;
 
 const SIGINT: i32 = 2;
 
+/// The window manager's report of a new size: `28` on the x86_64 Linux this builds for, and
+/// `rustix`'s own name for it is behind a feature this binary does not enable.
+const SIGWINCH: i32 = 28;
+
 /// Its value means nothing: a reader counts readiness, not letters.
 const PING: &[u8] = b"!";
+
+/// What a signal was before this launch took it. `usize::MAX` is no disposition at all — and is also
+/// what a `signal()` that failed hands back, so a failure is never given back as one.
+const NOT_TAKEN: usize = usize::MAX;
 
 /// The wake a handler pings, because a handler may not take a lock: null until one is installed,
 /// and leaked there, because a signal reads it for as long as the process runs.
 static HANDLER: AtomicPtr<Wake> = AtomicPtr::new(std::ptr::null_mut());
+
+static CANCEL_WAS: AtomicUsize = AtomicUsize::new(NOT_TAKEN);
+static RESIZE_WAS: AtomicUsize = AtomicUsize::new(NOT_TAKEN);
 
 /// Why a wake was raised, as a set: a cancel and a window change can both be waiting behind one
 /// readiness. A report that lands carries none.
@@ -60,8 +71,8 @@ impl Wake {
         })
     }
 
-    /// The handler is this process's own from here on: the default — the process dying with
-    /// the terminal in raw mode and the alternate screen up — is the outcome avoided here.
+    /// The handlers are this process's own from here on, both of them: the default — the process
+    /// dying with the terminal in raw mode and the alternate screen up — is the outcome avoided here.
     pub fn installed() -> io::Result<Arc<Wake>> {
         let wake = Arc::new(Wake::open()?);
         // Leaked, because the pointer is never cleared: a cause freed under a signal is one no
@@ -70,8 +81,12 @@ impl Wake {
             Arc::into_raw(Arc::clone(&wake)).cast_mut(),
             Ordering::SeqCst,
         );
-        let handler: extern "C" fn(i32) = interrupted;
-        unsafe { signal(SIGINT, handler as usize) };
+        let cancel: extern "C" fn(i32) = interrupted;
+        let resize: extern "C" fn(i32) = window_changed;
+        unsafe {
+            CANCEL_WAS.store(signal(SIGINT, cancel as usize), Ordering::SeqCst);
+            RESIZE_WAS.store(signal(SIGWINCH, resize as usize), Ordering::SeqCst);
+        }
         Ok(wake)
     }
 
@@ -103,11 +118,30 @@ impl Wake {
     }
 }
 
-/// One `write` of one byte, after the cause: anything else here is undefined behaviour.
 extern "C" fn interrupted(_signal: i32) {
+    raised(Causes::CANCEL);
+}
+
+extern "C" fn window_changed(_signal: i32) {
+    raised(Causes::RESIZE);
+}
+
+/// One atomic store and one `write` of one byte: anything else here is undefined behaviour.
+fn raised(cause: Causes) {
     // The wake a handler points at is leaked, so it answers for as long as the process runs.
     if let Some(wake) = unsafe { HANDLER.load(Ordering::SeqCst).as_ref() } {
-        wake.raise(Causes::CANCEL);
+        wake.raise(cause);
+    }
+}
+
+/// Gives both signals back as this process held them: a launch is the terminal's guest, so nothing
+/// it caught is left pointing at a pipe that went with it.
+pub(crate) fn give_back() {
+    for (signum, was) in [(SIGINT, &CANCEL_WAS), (SIGWINCH, &RESIZE_WAS)] {
+        let found = was.swap(NOT_TAKEN, Ordering::SeqCst);
+        if found != NOT_TAKEN {
+            unsafe { signal(signum, found) };
+        }
     }
 }
 

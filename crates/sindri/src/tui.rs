@@ -252,8 +252,9 @@ impl<'a> Loop<'a> {
     }
 
     /// Reads the terminal until the launch ends, one event at a time, and paints only when a key, a
-    /// landed report or a raise changed the frame: the wait sleeps in `poll` and draws nothing
-    /// meanwhile. A key, a signal and a live run's fragment are all fds in that wait.
+    /// landed report, an outside cancel or a window change asks: the wait sleeps in `poll` and draws
+    /// nothing meanwhile. A key, the pipe a signal and a window change ping, and a live run's
+    /// fragment are all fds in that wait.
     fn keys(&mut self, typed: &[u8]) -> io::Result<Ending> {
         let mut decoder = Decoder::new();
         let mut read = [0u8; 4096];
@@ -277,8 +278,9 @@ impl<'a> Loop<'a> {
                 PollFd::new(&self.terminal.keys, PollFlags::IN),
                 PollFd::new(&waiting, PollFlags::IN),
             ];
-            // A run in flight is the only clock this loop has: its marker steps once per 80 ms,
-            // so the wait is that long while one is live and forever while none is.
+            // A run in flight is the only clock this loop has: its marker steps once per 80 ms, so
+            // the wait is that long while one is live and forever while none is. A window change is
+            // no step of that clock: its byte wakes the wait either way.
             let step = self
                 .running
                 .is_some()

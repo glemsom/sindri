@@ -34,6 +34,10 @@ const PATIENCE: Duration = Duration::from_secs(10);
 const COLS: u16 = 120;
 const ROWS: u16 = 40;
 
+/// The size a window change gives the terminal: taller and wider than the boot size, so a frame laid
+/// at it claims rows and columns the frame before it never reached.
+const RESIZED: (u16, u16) = (140, 50);
+
 const ANSWER: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
 
@@ -366,6 +370,21 @@ impl Pty {
         }
     }
 
+    /// The size the window now has, as a window manager sets it before it says so: the child is
+    /// nobody's controlling terminal's, so this alone delivers no `SIGWINCH` and the test sends one.
+    fn resized(&self, (cols, rows): (u16, u16)) {
+        tcsetwinsize(
+            &self.slave,
+            Winsize {
+                ws_row: rows,
+                ws_col: cols,
+                ws_xpixel: 0,
+                ws_ypixel: 0,
+            },
+        )
+        .expect("the terminal takes its new size");
+    }
+
     fn child_end(&self) -> File {
         self.slave
             .try_clone()
@@ -537,8 +556,18 @@ impl Session {
     }
 
     fn interrupt(&self) -> bool {
+        self.sent("-INT")
+    }
+
+    /// The report a window manager sends when the window changed size, sent the way `interrupt`
+    /// sends a cancel: the size a pty is given reaches no process that is nobody's terminal's child.
+    fn window_changed(&self) -> bool {
+        self.sent("-WINCH")
+    }
+
+    fn sent(&self, signal: &str) -> bool {
         Command::new("kill")
-            .args(["-INT", &self.child.id().to_string()])
+            .args([signal, &self.child.id().to_string()])
             .status()
             .expect("`kill` should run")
             .success()
@@ -1103,6 +1132,16 @@ fn picture(drawn: &str) -> BTreeMap<u16, String> {
 /// frame behind it, and painting the frame again takes it off.
 fn showing(drawn: &str, needle: &str) -> bool {
     picture(drawn).values().any(|row| row.contains(needle))
+}
+
+/// The words on the last row of the frame a launch's bytes leave in a terminal of that size: the
+/// composer's footer, and so the proof that the frame was laid at that size and not another.
+fn footer(drawn: &str, (cols, rows): (u16, u16)) -> String {
+    frame::read(drawn, cols, rows)
+        .words()
+        .pop()
+        .unwrap_or_default()
+        .to_owned()
 }
 
 /// A row of a screen with the card's border and inset taken off it, so a row of facts is read as
@@ -2541,6 +2580,138 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
         given_back.input_modes.contains(InputModes::IXON),
         "flow control included"
     );
+}
+
+#[test]
+fn a_window_change_alone_repaints_an_idle_launch_at_the_size_the_terminal_now_holds() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    pty.resized(RESIZED);
+    assert!(
+        session.window_changed(),
+        "the window manager's report reaches the launch"
+    );
+
+    assert!(
+        drawn.wait_until(|frame| footer(frame, RESIZED).contains("Enter send")),
+        "no key was typed and nothing landed, so the report is the whole of what the launch woke \
+         for, and the footer it paints is the last row of the size the terminal now holds: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn a_window_change_is_no_keystroke_the_composer_reads() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    let draft = "the draft the window leaves alone";
+    pty.type_bytes(draft.as_bytes());
+    let typed = pen::cells(draft) + GUTTER;
+    assert!(
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == typed)),
+        "{draft:?} typed, so the caret waits one column past its last glyph: {:?}",
+        drawn.text()
+    );
+
+    pty.resized(RESIZED);
+    assert!(
+        session.window_changed(),
+        "the window manager's report reaches the launch"
+    );
+
+    assert!(
+        drawn.wait_until(|frame| {
+            let now = frame::read(frame, RESIZED.0, RESIZED.1);
+            footer(frame, RESIZED).contains("Enter send")
+                && now.words().iter().any(|row| row.contains(draft))
+                && now.caret() == Some((RESIZED.1 - 2, typed))
+        }),
+        "the draft the window change found is the draft it leaves, in the cell the caret is back \
+         in once the frame is laid at the new size: no glyph of a report reached the composer: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn two_window_changes_delivered_together_paint_the_newest_size_the_terminal_holds() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+
+    // Held still across both reports, so the two of them are waiting behind one readiness when the
+    // launch reads again — a burst, as a dragged window makes one.
+    assert!(session.sent("-STOP"), "the launch is held where it stands");
+    pty.resized((100, 30));
+    assert!(session.window_changed(), "the first report is queued");
+    pty.resized(RESIZED);
+    assert!(session.window_changed(), "the second report is queued");
+    assert!(session.sent("-CONT"), "the launch reads both at once");
+
+    assert!(
+        drawn.wait_until(|frame| footer(frame, RESIZED).contains("Enter send")),
+        "the report says the window changed and never what it changed to, so the paint reads the \
+         size itself: one frame, at the newest size the terminal holds: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
+#[test]
+fn a_window_change_with_a_run_live_stops_nothing_and_the_run_still_lands_its_answer() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask(&mut pty, &drawn, &wire);
+
+    pty.resized(RESIZED);
+    assert!(
+        session.window_changed(),
+        "the window manager's report reaches the launch"
+    );
+
+    wire.release();
+    answered(&drawn);
+
+    assert!(
+        frame::read(&drawn.text(), RESIZED.0, RESIZED.1)
+            .words()
+            .iter()
+            .any(|row| row.contains(ANSWER_SAID)),
+        "the run the window change found is the run it leaves: it neither stopped nor started \
+         again, and the answer it landed is drawn at the size the terminal now holds: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
 /// Types `prompt` and sends it, and waits until the box is empty again: the trace a prompt typed
