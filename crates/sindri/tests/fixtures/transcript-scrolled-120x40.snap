@@ -3,26 +3,26 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 transcript-scrolled at 120x40
-00 |⋯ 1 call · 41 ms                                                            wire      anthropic                         | dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
-01 |  The window is measured from the tail backwards, so following the newest   model     claude-sonnet-4-5-20250929        | plain:76 dim:10 plain:34
-02 |  row never asks how tall the history is: it lays out the entries it shows  think     high                              | plain:76 dim:10 plain:34
-03 |  and stops at the first row that fills the band. Only the rows a band                                                  | plain:120
-04 |  reaches are laid out, so a 250-turn history on a 40-row terminal pays for turns                               6 /  250| plain:76 dim:10 plain:34
-05 |  what it shows and no more.                                                ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
-06 |                                                                            cache                                    88%| plain:76 dim:10 plain:34
-07 |┃›what does the check cost?                                                                                             | dim:1 plain:119
-08 |⋯ 1 call · 118 ms                                                           workspace …/git/sindri/.worktrees/46-rail   | dim:1 plain:1 dim:15 plain:59 dim:10 plain:34
-09 |█ What that buys is the plain case and what it costs is the scrolled one: a branch    spec/1-capability                 | dim:1 plain:75 dim:10 plain:34
-10 |█ window is a row offset from the tail, so resolving one walks the entries                                              | dim:1 plain:119
-11 |█ between the tail and the window and lays out every one of them on the way.skills                                     2| dim:1 plain:75 dim:10 plain:34
-12 |█ Each is laid out once and kept, so the whole history scrolled through                                                 | dim:1 plain:119
-13 |█ costs one layout per entry and scrolling it again costs none.             sandbox   bwrap                             | dim:1 plain:75 dim:10 plain:34
+00 |  The window is measured from the tail backwards, so following the newest     wire      anthropic                       | plain:78 dim:10 plain:32
+01 |  row never asks how tall the history is: it lays out the entries it shows    model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
+02 |  and stops at the first row that fills the band. Only the rows a band        think     high                            | plain:78 dim:10 plain:32
+03 |  reaches are laid out, so a 250-turn history on a 40-row terminal pays                                                 | plain:120
+04 |  for what it shows and no more.                                              turns                           6 /  250  | plain:78 dim:10 plain:32
+05 |                                                                              ctx                  █░░░░░ 48.2k / 200k  | plain:78 dim:10 plain:12 dim:5 plain:15
+06 |┃›what does the check cost?                                                   cache                                88%  | dim:1 plain:77 dim:10 plain:32
+07 |⋯ 1 call · 118 ms                                                                                                       | dim:1 plain:1 dim:15 plain:103
+08 |  What that buys is the plain case and what it costs is the scrolled one:     workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
+09 |█ a window is a row offset from the tail, so resolving one walks the          branch    spec/1-capability               | dim:1 plain:77 dim:10 plain:32
+10 |█ entries between the tail and the window and lays out every one of them                                                | dim:1 plain:119
+11 |█ on the way. Each is laid out once and kept, so the whole history            skills                                 2  | dim:1 plain:77 dim:10 plain:32
+12 |█ scrolled through costs one layout per entry and scrolling it again costs                                              | dim:1 plain:119
+13 |█ none.                                                                       sandbox   bwrap                           | dim:1 plain:77 dim:10 plain:32
 14 |█                                                                                                                       | dim:1 plain:119
-15 |█›what is the transcript's unit?                                            session   9f2c7a41                          | dim:1 plain:75 dim:10 plain:34
-16 |█ 1 call · 9 ms                                                             temp      …/sindri/sessions/9f2c7a41/tmp    | dim:1 plain:1 dim:13 plain:61 dim:10 plain:34
+15 |█›what is the transcript's unit?                                              session   9f2c7a41                        | dim:1 plain:77 dim:10 plain:32
+16 |█ 1 call · 9 ms                                                               temp      …/sindri/sessions/9f2c7a41/tmp  | dim:1 plain:1 dim:13 plain:63 dim:10 plain:32
 17 |█ The transcript's unit is the entry. An entry never carries a formatted                                                | dim:1 plain:119
-18 |█ line, so the same run is drawn the same way by the TUI, by a reader of the                                            | dim:1 plain:119
-19 |█ transcript and by whatever front end comes next.                                                                      | dim:1 plain:119
+18 |█ line, so the same run is drawn the same way by the TUI, by a reader of                                                | dim:1 plain:119
+19 |█ the transcript and by whatever front end comes next.                                                                  | dim:1 plain:119
 20 |█                                                                                                                       | dim:1 plain:119
 21 |█ construct │ where it stands                                                                                           | dim:1 plain:1 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
 22 |█ ──────────┼───────────────────────────                                                                                | dim:1 plain:1 dim:38 plain:80
@@ -37,9 +37,9 @@ transcript-scrolled at 120x40
 31 |█                                                                                                                       | dim:1 plain:119
 32 |█ A row says the exit code and not the command, because the verdict is a                                                | dim:1 plain:119
 33 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
-34 |                                                                            input                                  48.2k| plain:76 dim:10 plain:34
-35 |▏ rust                                                                      output                                  3.1k| dim:2 accent+faint:4 plain:70 dim:10 plain:34
-36 |prompt 3 / 6 · 4 rows back · End follows the run                            total                                  51.3k| muted:12 dim:3 muted:11 dim:3 plain+bold:3 muted:16 plain:28 dim:10 plain:34
+34 |                                                                              input                              48.2k  | plain:78 dim:10 plain:32
+35 |▏ rust                                                                        output                              3.1k  | dim:2 accent+faint:4 plain:72 dim:10 plain:32
+36 |  prompt 3 / 6 · 4 rows back · End follows the run                            total                              51.3k  | plain:2 muted:12 dim:3 muted:11 dim:3 plain+bold:3 muted:16 plain:28 dim:10 plain:32
 37 |                                                                                                                        | plain:120
 38 | ›what should the run do?                                                                                               | dim:25 plain:95
-39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47
+39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

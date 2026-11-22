@@ -39,7 +39,7 @@ thumb-head at 120x40
 33 |│ turn 34                                                                                                               | dim:2 muted:7 plain:111
 34 |│ turn 35                                                                                                               | dim:2 muted:7 plain:111
 35 |│ turn 36                                                                                                               | dim:2 muted:7 plain:111
-36 |44 rows back · End follows the run                                                                                      | muted:12 dim:3 plain+bold:3 muted:16 plain:86
+36 |  44 rows back · End follows the run                                                                                    | plain:2 muted:12 dim:3 plain+bold:3 muted:16 plain:84
 37 |                                                                                                                        | plain:120
 38 | ›what should the run do?                                                                                               | dim:25 plain:95
-39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47
+39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

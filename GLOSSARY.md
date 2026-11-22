@@ -195,7 +195,8 @@ never past them: a frame that draws a **Rail**'s column hands the **Transcript b
 it leaves, and the **Composer**'s band the frame's whole width under it. The **Composer**'s band is
 raised as one surface, its **Footer** on its last row. What a band cannot hold it counts: a draft's
 rows past the composer's ceiling, and a queue's prompts past the composer's rows under the draft. A
-fence it never reflows, and the **Caret** is no cell of it.
+fence it never reflows, and the **Caret** is no cell of it. Every band draws its words inside the
+**Margin** and never on its own edge, so the frame reads as one sheet of paper and not five.
 _Avoid_: Region, pane, panel, viewport
 
 **Transcript band**:
@@ -203,7 +204,8 @@ The band every other strip is taken out of — the **Composer**'s, which runs un
 column the frame has, and the row that says the frame stands off the tail — drawn in the columns
 the **Rail** leaves it, because a ledger takes the frame's own columns down its right-hand edge and
 a strip the band's last row. The **Transcript** is drawn in it with the row the reader stands at,
-and the **Splash screen** until a prompt has been asked for.
+and the **Splash screen** until a prompt has been asked for. Its rows are measured two columns
+short of the band, so no word of it runs into the rail's seam.
 _Avoid_: Main window, main view, content area, viewport, scrollback, well
 
 **Rail**:
@@ -212,8 +214,18 @@ row the **Composer**'s head is drawn on where the width holds one, so the **Tran
 the columns it leaves and the **Composer**'s band runs under it whole; and one row along the bottom
 of the **Transcript band**, the **Composer**'s band under that, where it does not. Its blocks are
 read from the top down, with the run's spend on the rows at its foot — the last of them on the row
-the frame's shadow falls across, and those rows air on a rail that knows no spend.
+the frame's shadow falls across, and those rows air on a rail that knows no spend. Its words open
+in the **Margin** on both edges: no block name and no label stands on the rail's first column, and
+no value hangs on the frame's last one.
 _Avoid_: Sidebar, side panel, gutter, fact bar
+
+**Margin**:
+The two columns every **Band** opens its words in and keeps at its right edge, whatever the band
+holds: the **Transcript**'s prose past the gutter a row wears, the **Composer**'s head count, its
+hints and the row that says the frame stands off the tail, and the **Rail**'s sections, its fields
+and the values that hang in it. A gutter's glyph stands in the column before it and is no word of
+the band, and the air a band keeps on its right is what stops a word on the frame's own edge.
+_Avoid_: Seat, padding, indent (that one is the gutter a row opens with)
 
 **Measure**:
 The three facts the rows of a band are laid at: its width, the surface a picture in an answer is
@@ -288,7 +300,8 @@ opens with. A draft that names no file and opens with no command bills nothing.
 _Avoid_: Count, tally, stats
 
 **Draft count**:
-The **Bill**, drawn on the far edge of the **Composer**'s head row: `1 file`, `2 files`,
+The **Bill**, drawn on the far edge of the **Composer**'s head row, hanging in the **Margin** and
+never on the frame's last column: `1 file`, `2 files`,
 `1 command`, and no span at all for a draft billing nothing. It is a count of the draft and never of
 the run's facts, it follows every edit, and a frame too narrow for the whole of it draws none of it —
 the head keeps the row.
@@ -305,7 +318,8 @@ _Avoid_: Geometry, arrangement, tiling, regions
 The last row of the **Composer**'s band: the hints of what a key does that this frame can honour,
 most valuable first, each giving up its tail as the row narrows, and a key the frame cannot answer
 not named at all. It spans the **Composer**'s columns, the frame's own from edge to edge, so no
-seam beside the ledger stops it a column short of the hints that width holds. An idle draft names
+seam beside the ledger stops it a column short of the hints that width holds, and its hints open in
+the **Margin**. An idle draft names
 sending, the commands, the files and the keys; a run in flight names cancelling and never sending;
 and a queue behind the draft is counted where the key that recalls one stands.
 _Avoid_: Status bar, help line, key bar

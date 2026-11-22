@@ -29,6 +29,23 @@ use crate::stream::{Said, Stream};
 /// row is and the blank after it, so every entry's words begin in one column.
 pub(crate) const INDENT: &str = "  ";
 
+/// The two columns every band opens its words in and keeps at its right edge: the frame's margin.
+pub const MARGIN: u16 = 2;
+
+/// The columns a band gives up to the margin, both of its edges counted.
+pub(crate) const fn margins() -> u16 {
+    MARGIN.saturating_mul(2)
+}
+
+/// The columns of `band` its words are drawn in: the margin in from each of its edges.
+pub(crate) const fn margined(band: Rect) -> Rect {
+    Rect {
+        x: band.x.saturating_add(MARGIN),
+        width: band.width.saturating_sub(margins()),
+        ..band
+    }
+}
+
 /// The sigil the reader's own words are set from, two columns of it: the row a prompt is asked on and
 /// the draft that asks the next one alike.
 pub(crate) const SIGIL: &str = "› ";

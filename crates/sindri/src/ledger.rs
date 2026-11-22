@@ -18,7 +18,7 @@ use crate::ink::Ink;
 use crate::palette::Palette;
 use crate::pen;
 use crate::pulse::Pulse;
-use crate::rows::stop_mark;
+use crate::rows::{MARGIN, margined, stop_mark};
 
 /// The columns `text` draws in, a wide glyph counted as the two cells it takes: a value is
 /// measured by what a row shows and never by how many glyphs it is made of.
@@ -822,7 +822,7 @@ pub fn split(facts: &Facts, area: Rect) -> Share {
 /// stands on and the column each part starts at, never more of them than the band holds. `draw` is
 /// what places them where the band sits, and a live rail's state row wears the marker's step.
 pub(crate) fn rows(facts: &Facts, shape: Shape, band: Rect, marker: Option<&Pulse>) -> Vec<Row> {
-    let area = Rect::new(0, 0, band.width, band.height);
+    let area = Rect::new(0, 0, margined(band).width, band.height);
     match shape {
         Shape::Screen => sheet_rows(facts, area),
         Shape::Ledger => rail_rows(facts, Rail::Ledger, area, marker),
@@ -837,7 +837,12 @@ pub(crate) fn draw(rows: &[Row], at: Rect, buffer: &mut Buffer, palette: &Palett
     for row in rows.iter().take(usize::from(at.height)) {
         let y = at.y.saturating_add(row.y());
         for (x, part) in row.parts() {
-            part.draw(buffer, at.x.saturating_add(*x), y, palette);
+            part.draw(
+                buffer,
+                at.x.saturating_add(MARGIN).saturating_add(*x),
+                y,
+                palette,
+            );
         }
     }
 }

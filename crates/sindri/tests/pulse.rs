@@ -245,7 +245,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
     let rows = frame::painted(&mut view, 60, 12).words();
     let state_row = rows
         .iter()
-        .position(|row| row.starts_with("state "))
+        .position(|row| row.starts_with("  state "))
         .expect("the rail says what the run is doing");
 
     assert_eq!(
@@ -253,7 +253,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
         "the answer's head wears the step the frame is on"
     );
     assert_eq!(
-        rows[state_row], "state ⠹ running",
+        rows[state_row], "  state ⠹ running",
         "and the rail's own row wears the same one, so no two drawings show two steps"
     );
 
@@ -265,7 +265,7 @@ fn the_rail_s_state_row_steps_with_the_answer_s_marker() {
         "one step later the head has moved"
     );
     assert_eq!(
-        rows[state_row], "state ⠸ running",
+        rows[state_row], "  state ⠸ running",
         "and the rail's row has moved with it"
     );
 }

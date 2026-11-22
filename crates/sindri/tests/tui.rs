@@ -24,6 +24,7 @@ use tempfile::TempDir;
 
 use sindri::ledger::Rail;
 use sindri::pen;
+use sindri::rows::MARGIN;
 
 /// How long a frame is given to arrive before a test calls it absent: generous,
 /// because a test that is merely slow must not read as a program that never drew.
@@ -1107,9 +1108,9 @@ fn composer_rows(drawn: &str) -> Option<u16> {
     let last = u16::try_from(rows.len()).ok()?.checked_sub(1)?;
     let opens = |y: u16| rows[usize::from(y)].starts_with(" \u{203a}");
     let sigil = (0..last).find(|y| opens(*y))?;
-    let wraps = rows
-        .get(usize::from(sigil) + 1)
-        .is_some_and(|row| row.starts_with("  "));
+    // The hints open in the margin as a wrapped row of the draft does, and the hints are the last
+    // row: the row under the sigil is a wrap only when it is not that one.
+    let wraps = sigil + 1 < last && rows[usize::from(sigil) + 1].starts_with("  ");
     last.checked_sub(sigil)?
         .checked_add(1)?
         .checked_add(1 + u16::from(wraps))
@@ -1584,8 +1585,8 @@ fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
     );
 
     // A draft as wide as the room the frame leaves it: every column of it less the two the
-    // gutter is set in.
-    let room = COLS - GUTTER;
+    // gutter is set in and the two the band keeps in its margin at the right.
+    let room = COLS - GUTTER - MARGIN;
     let draft = format!("\u{1b}[200~{}\u{1b}[201~", "x".repeat(usize::from(room)));
     pty.type_bytes(draft.as_bytes());
 
@@ -1599,9 +1600,9 @@ fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
     let frame = drawn.text();
     assert_eq!(
         placed(&frame).map(|(_, column)| column),
-        Some(COLS - 1),
-        "a caret past the band's last column waits on the frame's margin rather than off it: \
-         {frame:?}"
+        Some(COLS - 3),
+        "a caret past the last column the draft's words have waits two columns in from the band's \
+         right edge rather than off it: {frame:?}"
     );
 
     pty.type_bytes(&[0x11]);

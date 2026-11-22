@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 markdown-fence-named-cut at 40x24
-00 |▏ rust crates/sindri/src/provider/transp| dim:2 accent+faint:4 plain:1 accent+faint:33
+00 |▏ rust crates/sindri/src/provider/tran  | dim:2 accent+faint:4 plain:1 accent+faint:31 plain:2
 01 |▏ let rows = markdown::rows(text, cols);| dim:2 accent+bold:3 plain:35
 02 |                                        | plain:40
 03 |                                        | plain:40
@@ -26,4 +26,4 @@ markdown-fence-named-cut at 40x24
 20 |                                        | plain:40
 21 |                                        | plain:40
 22 | ›what should the run do?               | dim:25 plain:15
-23 |Enter send · / commands · @ files       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 plain:7
+23 |  Enter send · / commands · @ files     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 plain:5

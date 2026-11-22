@@ -407,3 +407,44 @@ fn looks_in(runs: &str) -> Option<Vec<Look>> {
     }
     Some(looks)
 }
+
+/// Walks the cells of `frame` band by band and names the band that broke the margin: two columns of
+/// air at a band's left edge and never a word on its last column, and two of air where the rail
+/// stands against the frame's own right edge.
+pub fn assert_margin(frame: &Frame, fixture: &str) {
+    let Some(laid) = frame.told().layout() else {
+        return;
+    };
+    let mut bands = vec![
+        ("the transcript band", laid.transcript, 1),
+        ("the notice row", laid.notice, 1),
+        ("the composer's band", laid.composer, 1),
+        ("the footer", laid.footer, 1),
+    ];
+    if let Some((_, rail)) = laid.rail {
+        bands.push(("the rail's band", rail.area, sindri::rows::MARGIN));
+    }
+    for (name, band, air) in bands {
+        assert_band(frame, fixture, name, band, air, laid.card);
+    }
+}
+
+fn assert_band(frame: &Frame, fixture: &str, name: &str, band: Rect, air: u16, card: Option<Rect>) {
+    let margin = sindri::rows::MARGIN;
+    if band.width <= margin.saturating_mul(2) {
+        return;
+    }
+    let under = |x: u16, y: u16| card.is_some_and(|card| card.contains(Position::new(x, y)));
+    for y in band.y..band.bottom() {
+        let edges = (band.x..band.x.saturating_add(margin))
+            .chain(band.right().saturating_sub(air)..band.right());
+        for x in edges {
+            let glyph = frame.glyph(x, y);
+            assert!(
+                under(x, y) || !glyph.is_alphanumeric(),
+                "frame {fixture}: {name} draws {glyph:?} in column {x} of row {y}, where a band's \
+                 margin leaves the columns at its edges air"
+            );
+        }
+    }
+}

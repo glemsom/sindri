@@ -3,25 +3,25 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 stop at 120x40
-00 |┃›where does rendering live?                                                state     ✗ error                           | dim:1 plain:75 dim:10 err:7 plain:27
+00 |┃›where does rendering live?                                                  state     ✗ error                         | dim:1 plain:77 dim:10 err:7 plain:25
 01 |⋯ 1 call · 23 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
-02 |│ The marker is a clock, so the row it heads is laid out again whenever the wire      anthropic                         | dim:2 muted:73 plain:1 dim:10 plain:34
-03 |│ mark it wears moves, and a step that changes nothing costs nothing.       model     claude-sonnet-4-5-20250929        | dim:2 muted:67 plain:7 dim:10 plain:34
-04 |✗ error 1.2s A run that stopped for a reason says the reason, and it says itthink     high                              | err:1 plain:1 muted:10 plain:64 dim:10 plain:34
-05 |  twice: once in the marker beside the answer it ended on, and once in the                                              | plain:120
-06 |  entry the record keeps where the run ended. A failure carries one line of turns                               6 /  250| plain:76 dim:10 plain:34
-07 |  the run's own words about it, and a final answer and a cancellation carry ctx                      █░░░░░ 48.2k / 200k| plain:76 dim:10 plain:16 dim:5 plain:13
-08 |  no line they do not have.                                                 cache                                    88%| plain:76 dim:10 plain:34
+02 |│ The marker is a clock, so the row it heads is laid out again whenever       wire      anthropic                       | dim:2 muted:69 plain:7 dim:10 plain:32
+03 |│ the mark it wears moves, and a step that changes nothing costs nothing.     model     claude-sonnet-4-5-20250929      | dim:2 muted:71 plain:5 dim:10 plain:32
+04 |✗ error 1.2s A run that stopped for a reason says the reason, and it says     think     high                            | err:1 plain:1 muted:10 plain:66 dim:10 plain:32
+05 |  it twice: once in the marker beside the answer it ended on, and once in                                               | plain:120
+06 |  the entry the record keeps where the run ended. A failure carries one       turns                           6 /  250  | plain:78 dim:10 plain:32
+07 |  line of the run's own words about it, and a final answer and a              ctx                  █░░░░░ 48.2k / 200k  | plain:78 dim:10 plain:12 dim:5 plain:15
+08 |  cancellation carry no line they do not have.                                cache                                88%  | plain:78 dim:10 plain:32
 09 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
-10 |  the wire refused the request: 401 unauthorized                            workspace …/git/sindri/.worktrees/46-rail   | muted:48 plain:28 dim:10 plain:34
-11 |                                                                            branch    spec/1-capability                 | plain:76 dim:10 plain:34
+10 |  the wire refused the request: 401 unauthorized                              workspace …/sindri/.worktrees/46-rail     | muted:48 plain:30 dim:10 plain:32
+11 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 12 |                                                                                                                        | plain:120
-13 |                                                                            skills                                     2| plain:76 dim:10 plain:34
+13 |                                                                              skills                                 2  | plain:78 dim:10 plain:32
 14 |                                                                                                                        | plain:120
-15 |                                                                            sandbox   bwrap                             | plain:76 dim:10 plain:34
+15 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
 16 |                                                                                                                        | plain:120
-17 |                                                                            session   9f2c7a41                          | plain:76 dim:10 plain:34
-18 |                                                                            temp      …/sindri/sessions/9f2c7a41/tmp    | plain:76 dim:10 plain:34
+17 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
+18 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
 19 |                                                                                                                        | plain:120
 20 |                                                                                                                        | plain:120
 21 |                                                                                                                        | plain:120
@@ -37,9 +37,9 @@ stop at 120x40
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
 33 |                                                                                                                        | plain:120
-34 |                                                                            input                                  48.2k| plain:76 dim:10 plain:34
-35 |                                                                            output                                  3.1k| plain:76 dim:10 plain:34
-36 |                                                                            total                                  51.3k| plain:76 dim:10 plain:34
+34 |                                                                              input                              48.2k  | plain:78 dim:10 plain:32
+35 |                                                                              output                              3.1k  | plain:78 dim:10 plain:32
+36 |                                                                              total                              51.3k  | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
 38 | ›what should the run do?                                                                                               | dim:25 plain:95
-39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47
+39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

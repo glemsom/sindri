@@ -44,7 +44,7 @@ use crate::pointer::{self, Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{Fence, INDENT, Measure, Row, Rows, Scroll, Sideways};
+use crate::rows::{Fence, INDENT, MARGIN, Measure, Row, Rows, Scroll, Sideways, margined};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
@@ -1438,11 +1438,10 @@ impl View {
         if let Some(shade) = Shade::transcript(area, &palette) {
             shade.claim(buffer, &palette);
         }
-        let reflowed = self.rows.measure(Measure::new(
-            area.width,
-            self.surface(),
-            self.facts.ground(),
-        ));
+        let cols = area.width.saturating_sub(MARGIN);
+        let reflowed = self
+            .rows
+            .measure(Measure::new(cols, self.surface(), self.facts.ground()));
         // Laid into the rows it heads, so the prose the marker introduces is never cut by it. It
         // heads the turn in flight's answer while that has said a word or the run is live, and the
         // newest answer the record holds once the run is over — a band holding none gets a row.
@@ -1508,7 +1507,7 @@ impl View {
                 // Gathered only when there is a mark: a mark's cells are counted in the rows this
                 // band draws.
                 if let Some(mark) = self.mark {
-                    lines.push(Line::of(row.glyph_columns(), row.cut(area.width)));
+                    lines.push(Line::of(row.glyph_columns(), row.cut(cols)));
                     let here = row.fence_id().map(|fence| (piece.entry, fence));
                     let line = row.fence();
                     lined.push((
@@ -1518,12 +1517,12 @@ impl View {
                     let band = y.saturating_sub(area.y);
                     if (mark.first()..=mark.last()).contains(&band) {
                         self.fence = match self.fence {
-                            None => fence_under(piece.entry, rows, row, area.width).map(|fence| {
-                                MarkedFence {
+                            None => {
+                                fence_under(piece.entry, rows, row, cols).map(|fence| MarkedFence {
                                     whole: !strays,
                                     ..fence
-                                }
-                            }),
+                                })
+                            }
                             Some(marked) => Some(MarkedFence {
                                 whole: marked.whole && here == Some((marked.entry, marked.fence)),
                                 ..marked
@@ -1603,6 +1602,7 @@ impl View {
         let Some(place) = self.notice() else {
             return;
         };
+        let band = margined(area);
         // A band of no rows stands on the composer's head row: the row is given up, never drawn
         // over the surface under it.
         if area.height == 0 {
@@ -1628,10 +1628,10 @@ impl View {
         }
         spans.push((GAP, SEPARATOR));
         spans.extend(keyed("End", "follows the run"));
-        if counted_from > 0 && pen::width(&spans) > area.width {
+        if counted_from > 0 && pen::width(&spans) > band.width {
             spans.drain(..counted_from);
         }
-        whole_row(buffer, area, area.y, &spans, &self.capabilities.palette());
+        whole_row(buffer, band, area.y, &spans, &self.capabilities.palette());
     }
 
     /// The composer's band drawn, and the shade its rows stand on: a plane where this terminal
@@ -1663,9 +1663,13 @@ impl View {
         let draft = Rect {
             y: top,
             height: draft_end(band, queue, ends.below).saturating_sub(top),
+            width: band.width.saturating_sub(MARGIN),
             ..band
         };
-        let prompts = queue;
+        let prompts = Rect {
+            width: queue.width.saturating_sub(MARGIN),
+            ..queue
+        };
         let empty = self.composer.text().is_empty();
         // The placeholder is no row of the draft, so it lights no sigil and keeps the dim ink.
         let waited = (!empty).then(|| usize::from(self.composer.caret().0));
@@ -1761,14 +1765,23 @@ impl View {
         let row = Rect { height: 1, ..band };
         let count = self.draft_count();
         let counted = pen::width(&count);
-        // The count hangs on the far edge only where the row keeps a column of its own: a frame too
-        // narrow for the whole count draws none of it, and the rule keeps the row.
-        let hung = pen::hanging(row, counted)
-            .filter(|first| *first > row.x)
+        // The count hangs on the far edge of the row's margin only where the row keeps a column of
+        // its own: a frame too narrow for the whole count draws none of it, and the rule keeps the row.
+        let edge = Rect {
+            width: row.width.saturating_sub(MARGIN),
+            ..row
+        };
+        let hung = pen::hanging(edge, counted)
+            .filter(|first| *first > edge.x)
             .map(|_| counted)
             .unwrap_or(0);
+        // The rule stops short of the count and of the margin the count hangs inside, and spans the
+        // whole band while there is no count to leave room for.
         let room = Rect {
-            width: row.width.saturating_sub(hung),
+            width: match hung {
+                0 => row.width,
+                hung => row.width.saturating_sub(hung).saturating_sub(MARGIN),
+            },
             ..row
         };
         if !self.head_lit() {
@@ -1782,7 +1795,7 @@ impl View {
             pen::glyph(buffer, at, row.y, EDGE_HEAD, look, &palette);
         }
         if hung > 0 {
-            pen::hang(buffer, row, &count, &palette);
+            pen::hang(buffer, edge, &count, &palette);
         }
     }
 
@@ -1851,12 +1864,12 @@ impl View {
         let ends = self.composer.ends();
         let (row, column) = self.composer.caret();
         let y = band.y.checked_add(ends.above)?.checked_add(row)?;
-        // A caret past the band's last column waits on that column, the way a terminal keeps the
-        // cursor at its right margin rather than giving it up.
+        // A caret past the last column the draft's words have waits on that column, the way a
+        // terminal keeps the cursor at its right margin rather than giving it up.
         let x = band
             .x
             .checked_add(pen::cells(INDENT).saturating_add(column))?
-            .min(band.right().saturating_sub(1));
+            .min(band.right().saturating_sub(MARGIN.saturating_add(1)));
         if band.width == 0 || y >= draft_end(band, queue, ends.below) {
             return None;
         }
@@ -1867,9 +1880,11 @@ impl View {
     }
 
     /// The columns the draft's words have: the frame's own width, which its band fills, less the
-    /// gutter an answer is set from.
+    /// gutter an answer is set from and the margin it keeps at the band's right edge.
     fn room(area: Rect) -> u16 {
-        area.width.saturating_sub(pen::cells(INDENT))
+        area.width
+            .saturating_sub(pen::cells(INDENT))
+            .saturating_sub(MARGIN)
     }
 
     /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
@@ -1906,7 +1921,7 @@ impl View {
         let depth = self.queue.label().unwrap_or_default();
         hints_row(
             buffer,
-            area,
+            margined(area),
             &self.hints(),
             &depth,
             &self.capabilities.palette(),

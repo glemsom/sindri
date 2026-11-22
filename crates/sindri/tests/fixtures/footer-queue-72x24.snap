@@ -26,4 +26,4 @@ footer-queue at 72x24
 20 | ›run the test that failed and read it                                  | dim:38 plain:34
 21 | ›then the fmt check                                                    | dim:20 plain:52
 22 | ›and say why the retry hid it                                          | dim:30 plain:42
-23 |Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys · Ctrl-Q quit| plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5
+23 |  Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys            | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 plain:12
