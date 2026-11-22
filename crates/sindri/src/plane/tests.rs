@@ -69,6 +69,27 @@ fn drawn(shade: Shade) -> Plane {
     Plane::draw(shade).expect("a band a plane is drawn under")
 }
 
+/// The three bands a frame draws a plane under, each against the name a failure is reported in.
+fn bands(palette: &Palette) -> [(&'static str, Shade); 3] {
+    [
+        (
+            "the ledger's rail",
+            Shade::rail(Rail::Ledger, Rect::new(6, 2, 32, 8), Some(CELL), palette)
+                .expect("a band to shade"),
+        ),
+        (
+            "a strip",
+            Shade::rail(Rail::Strip, Rect::new(6, 2, 32, 1), Some(CELL), palette)
+                .expect("a band to shade"),
+        ),
+        (
+            "the composer's band",
+            Shade::composer(Rect::new(0, 20, 80, 5), Some(CELL), None, palette)
+                .expect("a band to shade"),
+        ),
+    ]
+}
+
 #[test]
 fn the_bands_band_is_the_prompts_tone_but_its_last_row_which_closes_on_the_rails() {
     for (spelling, palette) in SPELLED {
@@ -159,22 +180,7 @@ fn a_band_drawn_in_no_colour_draws_no_ground_on_any_row() {
 #[test]
 fn a_bands_plane_is_its_shade_sampled_at_the_cell() {
     for (spelling, palette) in SPELLED {
-        let bands = [
-            (
-                "the ledger's rail",
-                Shade::rail(Rail::Ledger, Rect::new(6, 2, 32, 8), Some(CELL), &palette),
-            ),
-            (
-                "a strip",
-                Shade::rail(Rail::Strip, Rect::new(6, 2, 32, 1), Some(CELL), &palette),
-            ),
-            (
-                "the composer's band",
-                Shade::composer(Rect::new(0, 20, 80, 5), Some(CELL), None, &palette),
-            ),
-        ];
-        for (band, shade) in bands {
-            let shade = shade.expect("a band to shade");
+        for (band, shade) in bands(&palette) {
             let plane = drawn(shade);
             assert_eq!(
                 plane.area(),
@@ -295,6 +301,69 @@ fn the_carets_glow_is_the_one_light_on_every_pixel_row_of_the_column_it_waits_in
                 row[channel],
                 waited[channel]
             );
+        }
+    }
+}
+
+#[test]
+fn the_carets_glow_is_the_only_blend_a_shade_makes() {
+    for (spelling, palette) in SPELLED {
+        let area = Rect::new(0, 20, 80, 5);
+        let caret = 12;
+        let shade =
+            Shade::composer(area, Some(CELL), Some(caret), &palette).expect("a band to shade");
+        let plane = drawn(shade);
+        let (width, height) = plane.pixels().dimensions();
+        let down = CELL.height();
+
+        for x in 0..width {
+            let lift = |y: u32| {
+                let ground = spelled(shade.row((y / down) as u16));
+                let pixel = plane.pixels().get_pixel(x, y);
+                [0, 1, 2].map(|channel| i32::from(pixel[channel]) - i32::from(ground[channel]))
+            };
+            let waited = lift(0);
+
+            assert!(
+                waited.iter().all(|channel| *channel >= 0),
+                "{spelling} draws column {x} of the band below the row it falls in on its first \
+                 pixel row: {waited:?}, and the glow only ever adds light"
+            );
+            for y in 1..height {
+                let row = lift(y);
+                assert_eq!(
+                    row, waited,
+                    "{spelling} draws column {x} of pixel row {y} {row:?} over the row it falls \
+                     in where the first pixel row reads {waited:?}: the caret's glow is the only \
+                     blend a shade makes, and it is the same on every pixel row of its column"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn no_row_of_a_shades_plane_is_a_blend_of_the_one_beside_it() {
+    for (spelling, palette) in SPELLED {
+        for (band, shade) in bands(&palette) {
+            let plane = drawn(shade);
+            let (width, height) = plane.pixels().dimensions();
+            let down = CELL.height();
+
+            for y in 0..height {
+                let ground = spelled(shade.row((y / down) as u16));
+                for x in 0..width {
+                    let pixel = plane.pixels().get_pixel(x, y);
+                    assert_eq!(
+                        [pixel[0], pixel[1], pixel[2]],
+                        ground,
+                        "{spelling} draws pixel row {y}, column {x} of {band} at {:?} where the \
+                         row it falls in is {ground:?}: a shade's plane is no blend of the row \
+                         beside it",
+                        [pixel[0], pixel[1], pixel[2]]
+                    );
+                }
+            }
         }
     }
 }

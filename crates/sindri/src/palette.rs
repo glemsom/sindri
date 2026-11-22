@@ -8,7 +8,7 @@ use crate::ink::{Face, Faces, Ink, Look};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Palette {
     inks: Inks,
-    bands: Bands,
+    ramp: [Color; Rung::ALL.len()],
     edge: Color,
 }
 
@@ -21,13 +21,6 @@ struct Inks {
     ok: (Color, Modifier),
     err: (Color, Modifier),
     mark: (Color, Modifier),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Bands {
-    rail: Color,
-    prompt: Color,
-    well: Color,
 }
 
 impl Palette {
@@ -43,11 +36,7 @@ impl Palette {
             err: (Color::Red, Modifier::empty()),
             mark: (Color::Reset, Modifier::REVERSED),
         },
-        bands: Bands {
-            rail: Color::Reset,
-            prompt: Color::Reset,
-            well: Color::Reset,
-        },
+        ramp: [Color::Reset; Rung::ALL.len()],
         edge: Color::Reset,
     };
 
@@ -62,11 +51,11 @@ impl Palette {
             err: (Color::Indexed(210), Modifier::empty()),
             mark: (Color::Reset, Modifier::REVERSED),
         },
-        bands: Bands {
-            rail: Color::Indexed(235),
-            prompt: Color::Indexed(236),
-            well: Color::Indexed(234),
-        },
+        ramp: [
+            Color::Indexed(234),
+            Color::Indexed(235),
+            Color::Indexed(236),
+        ],
         edge: Color::Indexed(232),
     };
 
@@ -81,11 +70,11 @@ impl Palette {
             err: (Color::Rgb(242, 128, 122), Modifier::empty()),
             mark: (Color::Reset, Modifier::REVERSED),
         },
-        bands: Bands {
-            rail: Color::Rgb(19, 27, 37),
-            prompt: Color::Rgb(22, 31, 42),
-            well: Color::Rgb(14, 21, 29),
-        },
+        ramp: [
+            Color::Rgb(14, 21, 29),
+            Color::Rgb(19, 27, 37),
+            Color::Rgb(22, 31, 42),
+        ],
         edge: Color::Rgb(5, 8, 13),
     };
 
@@ -154,11 +143,16 @@ impl Palette {
     }
 
     pub fn band(&self, band: Band) -> Color {
-        match band {
-            Band::Rail => self.bands.rail,
-            Band::Prompt => self.bands.prompt,
-            Band::Well => self.bands.well,
-        }
+        self.rung(band.rung())
+    }
+
+    pub fn rung(&self, rung: Rung) -> Color {
+        self.ramp[rung as usize]
+    }
+
+    /// Every surface a frame's bands are drawn on, in the one order the ramp lays them.
+    pub fn ramp(&self) -> [(Rung, Color); Rung::ALL.len()] {
+        Rung::ALL.map(|rung| (rung, self.rung(rung)))
     }
 
     /// The colour an ink is drawn in, and never the face it wears: the colour the line under a
@@ -214,7 +208,36 @@ pub enum Band {
 }
 
 impl Band {
-    pub const ALL: [Band; 3] = [Band::Rail, Band::Well, Band::Prompt];
+    pub const ALL: [Band; 3] = [Band::Well, Band::Rail, Band::Prompt];
+
+    pub fn rung(self) -> Rung {
+        match self {
+            Band::Rail => Rung::Rail,
+            Band::Well => Rung::Well,
+            Band::Prompt => Rung::Prompt,
+        }
+    }
+}
+
+/// A surface a band is drawn on: one rung of the frame's ramp, in the order `ALL` lays them, the well
+/// first and the prompt's band over it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Rung {
+    Well = 0,
+    Rail = 1,
+    Prompt = 2,
+}
+
+impl Rung {
+    pub const ALL: [Rung; 3] = [Rung::Well, Rung::Rail, Rung::Prompt];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Rung::Well => "well",
+            Rung::Rail => "rail",
+            Rung::Prompt => "prompt",
+        }
+    }
 }
 
 /// The channels a colour is spelled in, and nothing for a colour the terminal draws in a slot of

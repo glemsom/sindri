@@ -244,8 +244,7 @@ pub struct Plane {
 }
 
 impl Plane {
-    /// The image a shade is drawn as, and nothing for a band no plane stands under: the shade's
-    /// row colours read between rows at the pixels of the cell, so every row keeps its own.
+    /// The image a shade is drawn as, and nothing for a band no plane stands under.
     pub(crate) fn draw(shade: Shade) -> Option<Plane> {
         let id = shade.id()?;
         let cell = shade.cell()?;
@@ -260,12 +259,9 @@ impl Plane {
             } => Some((f64::from(caret.saturating_sub(area.x)) + 0.5) * f64::from(cell.width())),
             _ => None,
         };
-        let (down, across) = (f64::from(cell.height()), f64::from(cell.width()));
-        let last = f64::from(area.height.saturating_sub(1));
+        let (down, across) = (cell.height(), f64::from(cell.width()));
         let pixels = image::RgbaImage::from_fn(width, height, |x, y| {
-            let at = ((f64::from(y) + 0.5) / down - 0.5).clamp(0.0, last);
-            let (above, below) = (at.floor(), at.ceil());
-            let tone = mix(rows[above as usize], rows[below as usize], at - above);
+            let tone = rows[(y / down) as usize];
             let light = glow.map_or(0.0, |center| {
                 let distance = (f64::from(x) - center) / (across * 8.0);
                 (-(distance * distance) * 2.0).exp() * 22.0
@@ -357,17 +353,6 @@ fn seam_cell(buffer: &mut Buffer, line: Rect, axis: Axis, palette: &Palette) {
         }
         (false, Axis::Across) => {}
     }
-}
-
-/// The colour a plane is at `t` of the way down a ramp from `head` to `foot`.
-fn mix(head: [u8; 3], foot: [u8; 3], t: f64) -> [u8; 3] {
-    let channel =
-        |head: u8, foot: u8| (f64::from(head) * (1.0 - t) + f64::from(foot) * t).round() as u8;
-    [
-        channel(head[0], foot[0]),
-        channel(head[1], foot[1]),
-        channel(head[2], foot[2]),
-    ]
 }
 
 #[cfg(test)]
