@@ -152,6 +152,16 @@ impl Stage {
         config: Config,
         environment: &'a dyn Environment,
     ) -> Loop<'a> {
+        self.told_in(view, config, environment, false).0
+    }
+
+    /// The same launch, with the wake it waits on handed back: the one a test raises a cause on.
+    fn launch_woken<'a>(
+        &'a self,
+        view: View,
+        config: Config,
+        environment: &'a dyn Environment,
+    ) -> (Loop<'a>, Arc<Wake>) {
         self.told_in(view, config, environment, false)
     }
 
@@ -163,7 +173,7 @@ impl Stage {
         config: Config,
         environment: &'a dyn Environment,
     ) -> Loop<'a> {
-        self.told_in(view, config, environment, true)
+        self.told_in(view, config, environment, true).0
     }
 
     /// Every byte this terminal has been handed, once it has gone quiet: a frame is several
@@ -187,7 +197,8 @@ impl Stage {
         config: Config,
         environment: &'a dyn Environment,
         carries: bool,
-    ) -> Loop<'a> {
+    ) -> (Loop<'a>, Arc<Wake>) {
+        let wake = Arc::new(Wake::open().expect("a wake"));
         let telling = Window::new(
             self.pty
                 .slave
@@ -197,16 +208,17 @@ impl Stage {
             std::path::Path::new("/work/sindri"),
             carries,
         );
-        Loop::new(
+        let live = Loop::new(
             &self.terminal,
             &self.cli,
             config,
             environment,
             view,
             telling,
-            Arc::new(Wake::open().expect("a wake")),
+            Arc::clone(&wake),
         )
-        .expect("a launch")
+        .expect("a launch");
+        (live, wake)
     }
 }
 
@@ -659,7 +671,6 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
 fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
-    let signals = Signals::install().expect("a signal pipe");
     let mut live = stage.launch(
         View::of(
             Capabilities::default(),
@@ -670,11 +681,94 @@ fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
         &environment,
     );
 
-    let ended = live.keys(&signals, b"\x11").expect("the quit is answered");
+    let ended = live.keys(b"\x11").expect("the quit is answered");
 
     assert!(
         matches!(ended, Ending::Quit),
         "a quit typed before the first frame is the ending the loop hands back"
+    );
+}
+
+#[test]
+fn a_cancel_raised_with_no_key_typed_and_no_run_live_ends_the_launch() {
+    let stage = Stage::open();
+    let environment = std::collections::BTreeMap::new();
+    let (mut live, wake) = stage.launch_woken(
+        View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        ),
+        Config::default(),
+        &environment,
+    );
+
+    wake.raise(Causes::CANCEL);
+    let ended = live.keys(b"").expect("the cancel is answered");
+
+    assert!(
+        matches!(ended, Ending::Cancelled),
+        "an outside `SIGINT` with nothing in flight is the ending the loop hands back"
+    );
+}
+
+#[test]
+fn a_cancel_whose_byte_a_drain_took_is_read_on_a_pass_a_landed_report_wakes() {
+    let stage = Stage::open();
+    let environment = std::collections::BTreeMap::new();
+    let (mut live, wake) = stage.launch_woken(
+        View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        ),
+        Config::default(),
+        &environment,
+    );
+
+    wake.raise(Causes::CANCEL);
+    wake.drain();
+    wake.ping();
+
+    let ended = live.keys(b"").expect("the cancel is answered");
+
+    assert!(
+        matches!(ended, Ending::Cancelled),
+        "the report's byte is the only one left, and the cancel it no longer stood for is read \
+         on the pass that byte wakes"
+    );
+}
+
+#[test]
+fn a_window_change_at_the_wait_paints_the_frame_it_woke_for_and_no_ending_of_its_own() {
+    let stage = Stage::open();
+    let environment = std::collections::BTreeMap::new();
+    let (mut live, wake) = stage.launch_woken(
+        View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        ),
+        Config::default(),
+        &environment,
+    );
+
+    wake.raise(Causes::RESIZE);
+    let later = Arc::clone(&wake);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        later.raise(Causes::CANCEL);
+    });
+
+    let ended = live.keys(b"").expect("the cancel is answered");
+
+    assert!(
+        matches!(ended, Ending::Cancelled),
+        "the window change raises no ending of its own: the cancel behind it is the launch's"
+    );
+    assert!(
+        !stage.drawn().is_empty(),
+        "the window changed while the loop waited, so a frame was painted for it"
     );
 }
 
