@@ -1502,7 +1502,8 @@ fn a_frame_that_places_pictures_and_one_that_does_not_agree_on_the_shade_of_ever
                     pixel[channel].abs_diff(drawn[channel]) <= 1,
                     "channel {channel} of row {row} of {band} is {} in the plane the frame that \
                      places pictures is drawn on and {} in the cells of the frame that places \
-                     none, so the two frames shade the same band differently",
+                     none, so the two frames shade the same band differently away from the light \
+                     the caret gives off",
                     pixel[channel],
                     drawn[channel]
                 );

@@ -244,11 +244,11 @@ _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 What a band sits on: the colour each of its rows is claimed in and the seams it makes with the band
 beside it — the transcript band on the well, the rail on its own tone with the frame's shadow across
 its last row, the composer's band from its head row down to the rail's tone under it, its head row lit
-where it takes the keys. A seam is a shade of its own, and a frame draws it once, after the bands it
-parts. It holds every fact the band's cells and its **Plane** are drawn from and nothing else, the
-cell the plane is drawn at and the caret's column among them, and a frame holds each band's image
-against it, so a pass in which it stands makes no image. Where no picture is placed, that same shade
-is claimed cell by cell.
+where it takes the keys. A seam is a fall of its own, in the columns it takes from the band beside the
+rail, and a frame draws it once, after the bands it parts. It holds every fact the band's cells and
+its **Plane** are drawn from and nothing else, the cell the plane is drawn at and the caret's column
+among them, and a frame holds each band's image against it, so a pass in which it stands makes no
+image. Where no picture is placed, that same shade is claimed cell by cell.
 _Avoid_: Colour, tone, gradient, paint, style
 
 **Footprint**:
@@ -305,7 +305,7 @@ _Avoid_: Geometry, arrangement, tiling, regions
 The last row of the **Composer**'s band: the hints of what a key does that this frame can honour,
 most valuable first, each giving up its tail as the row narrows, and a key the frame cannot answer
 not named at all. It spans the **Composer**'s columns, the frame's own from edge to edge, so no
-ledger's lit seam stops it a column short of the hints that width holds. An idle draft names
+seam beside the ledger stops it a column short of the hints that width holds. An idle draft names
 sending, the commands, the files and the keys; a run in flight names cancelling and never sending;
 and a queue behind the draft is counted where the key that recalls one stands.
 _Avoid_: Status bar, help line, key bar

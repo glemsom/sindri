@@ -236,9 +236,7 @@ impl Plane {
             Shade::Composer {
                 caret: Some(caret), ..
             } => Some((f64::from(caret.saturating_sub(area.x)) + 0.5) * f64::from(cell.width())),
-            Shade::Transcript { .. } | Shade::Rail { .. } | Shade::Composer { caret: None, .. } => {
-                None
-            }
+            _ => None,
         };
         let (down, across) = (f64::from(cell.height()), f64::from(cell.width()));
         let last = f64::from(area.height.saturating_sub(1));
@@ -327,8 +325,8 @@ fn extent(area: Rect, cell: CellSize) -> (u32, u32) {
     )
 }
 
-/// The fall that parts the transcript band from the rail beside it: the columns it reaches back
-/// across the transcript's own, each one's cells claimed in a shade of its own.
+/// The fall that parts the transcript band from the rail beside it: the columns it takes from the
+/// transcript's own, each one's cells claimed in a shade of its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Seam {
     area: Rect,
@@ -337,25 +335,24 @@ pub struct Seam {
 }
 
 impl Seam {
-    /// The seam a `shape` rail of `rail` makes, and none for a shape that lies under the transcript
-    /// band, a palette with no edge to fall in, or a rail with no column beside it.
-    pub fn of(rail: Rect, shape: Rail, palette: &Palette) -> Option<Seam> {
-        if shape != Rail::Ledger || !palette.draws_edge() {
+    /// The seam the band `area` of a `shape` rail makes, and none for a shape that lies under the
+    /// transcript band, a palette with no colour to fall in, or a rail with no column beside it.
+    pub fn of(area: Rect, shape: Rail, palette: &Palette) -> Option<Seam> {
+        if shape != Rail::Ledger || !palette.draws_colour() {
             return None;
         }
-        let reach = SEAM.min(rail.x);
+        let reach = SEAM.min(area.x);
         (reach > 0).then(|| Seam {
             area: Rect {
-                x: rail.x - reach,
+                x: area.x - reach,
                 width: reach,
-                ..rail
+                ..area
             },
             well: palette.band(Band::Well),
             shadow: palette.edge(Edge::Shadow),
         })
     }
 
-    /// The columns and rows the seam reaches.
     pub fn area(&self) -> Rect {
         self.area
     }

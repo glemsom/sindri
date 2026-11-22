@@ -65,7 +65,7 @@ fn spelled(colour: Color) -> [u8; 3] {
 }
 
 /// The plane a shade is drawn as, and the band it covers.
-fn pictured(shade: Shade) -> Plane {
+fn drawn(shade: Shade) -> Plane {
     Plane::draw(shade).expect("a band a plane is drawn under")
 }
 
@@ -209,7 +209,7 @@ fn a_bands_plane_is_its_shade_sampled_at_the_cell() {
         ];
         for (band, shade) in bands {
             let shade = shade.expect("a band to shade");
-            let plane = pictured(shade);
+            let plane = drawn(shade);
             assert_eq!(
                 plane.area(),
                 shade.area(),
@@ -242,22 +242,21 @@ fn a_bands_plane_is_its_shade_sampled_at_the_cell() {
 fn a_composers_plane_opens_on_its_head_and_covers_no_pixel_of_the_well() {
     for (spelling, palette) in SPELLED {
         let area = Rect::new(0, 20, 80, 5);
-        let plane = pictured(
+        let plane = drawn(
             Shade::composer(area, Some(CELL), None, false, &palette).expect("a band to shade"),
         );
         let head = spelled(palette.band(Band::Composer));
         let foot = spelled(palette.band(Band::Rail));
         let well = spelled(palette.band(Band::Well));
 
+        let top = middle(&plane, 0, CELL);
         assert!(
-            near(middle(&plane, 0, CELL), head),
-            "{spelling} opens the composer's plane on {:?} where the band's head is {head:?}, so \
-             no pixel row of the well is drawn above the band",
-            middle(&plane, 0, CELL)
+            near(top, head),
+            "{spelling} opens the composer's plane on {top:?} where the band's head is {head:?}, \
+             so no pixel row of the well is drawn above the band"
         );
         assert_ne!(
-            middle(&plane, 0, CELL),
-            well,
+            top, well,
             "{spelling} draws the well over the top cell of the composer's band, which stands on \
              its own head and not on the band under it"
         );
@@ -274,7 +273,7 @@ fn a_composers_plane_opens_on_its_head_and_covers_no_pixel_of_the_well() {
 fn a_composers_plane_opens_on_the_light_of_a_head_that_takes_the_keys() {
     for (spelling, palette) in SPELLED {
         let area = Rect::new(0, 20, 80, 5);
-        let plane = pictured(
+        let plane = drawn(
             Shade::composer(area, Some(CELL), None, true, &palette).expect("a band to shade"),
         );
 
@@ -290,7 +289,7 @@ fn a_composers_plane_opens_on_the_light_of_a_head_that_takes_the_keys() {
 #[test]
 fn a_strips_plane_is_the_one_row_it_has() {
     for (spelling, palette) in SPELLED {
-        let plane = pictured(
+        let plane = drawn(
             Shade::rail(Rail::Strip, Rect::new(6, 2, 32, 1), Some(CELL), &palette)
                 .expect("a band to shade"),
         );
@@ -321,7 +320,7 @@ fn the_carets_glow_is_the_one_light_on_every_pixel_row_of_the_column_it_waits_in
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 20, 80, 5);
     let caret = 12;
-    let plane = pictured(
+    let plane = drawn(
         Shade::composer(area, Some(CELL), Some(caret), false, &palette).expect("a band to shade"),
     );
     let (width, _) = plane.pixels().dimensions();
@@ -358,7 +357,7 @@ fn a_bands_glow_dies_away_across_the_cells_away_from_the_caret() {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 20, 80, 5);
     let caret = 4;
-    let plane = pictured(
+    let plane = drawn(
         Shade::composer(area, Some(CELL), Some(caret), true, &palette).expect("a band to shade"),
     );
     let row = plane.pixels().height() / 2;
@@ -667,14 +666,14 @@ fn a_seam_reaches_no_column_the_rail_has_none_to_its_left() {
 }
 
 #[test]
-fn a_palette_that_draws_no_edge_makes_no_seam() {
+fn a_palette_that_draws_no_colour_makes_no_seam() {
     let rail = Rect::new(20, 0, 32, 8);
     let shade = Shade::rail(Rail::Ledger, rail, None, &Palette::SLOTS).expect("a band to shade");
 
     assert!(
         shade.seam().is_none(),
-        "a palette that draws no edge has no light to fall and no shadow to fall into, so the \
-         rail and the transcript are parted by no seam"
+        "a palette that draws no colour leaves every band on the terminal's own ground, so the \
+         rail and the transcript are parted by no fall"
     );
 }
 

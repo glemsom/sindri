@@ -145,6 +145,28 @@ fn every_palette_the_probe_hands_out_is_a_spelling_the_floor_and_the_ladder_are_
 }
 
 #[test]
+fn a_palette_that_names_no_colour_draws_no_ground_of_its_own() {
+    for (spelling, palette) in SPELLED {
+        assert!(
+            palette.draws_colour(),
+            "{spelling} spells a well of its own, so the bands of a frame drawn in it stand on a \
+             ground and not on the terminal's own"
+        );
+        for band in Band::ALL {
+            assert_ne!(
+                palette.band(band),
+                Color::Reset,
+                "{spelling} leaves {band:?} on the terminal's own ground"
+            );
+        }
+    }
+    assert!(
+        !Palette::SLOTS.draws_colour(),
+        "a terminal asked for no colour leaves every band on the ground it already has"
+    );
+}
+
+#[test]
 fn the_lit_edge_and_the_shadow_are_surfaces_no_ink_is_drawn_in() {
     for (spelling, palette) in SPELLED {
         let lit = palette.edge(Edge::Lit);

@@ -335,7 +335,7 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_beside_it
 }
 
 #[test]
-fn a_ledger_stood_at_the_frames_edge_reaches_the_one_column_it_has_to_its_left() {
+fn a_ledger_stood_at_the_frames_edge_keeps_its_band_and_reaches_the_one_column_beside_it() {
     let rail = Rect {
         x: 1,
         ..band(COLUMNS, 8)

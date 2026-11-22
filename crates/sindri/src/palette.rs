@@ -170,6 +170,12 @@ impl Palette {
         self.edge(Edge::Lit) != Color::Reset
     }
 
+    /// Whether this palette draws a ground of its own under a band: a terminal that asked for no
+    /// colour leaves every band on the ground its cells already stand on.
+    pub fn draws_colour(&self) -> bool {
+        self.bands.well != Color::Reset
+    }
+
     /// The colour an edge is drawn in: the lit end at its lightest, the shadow at its darkest.
     pub fn edge(&self, edge: Edge) -> Color {
         match edge {
