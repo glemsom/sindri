@@ -531,7 +531,7 @@ const CROWN_ROWS: f64 = 2.0;
 const SPENT: f64 = 4.0;
 
 /// The thresholds a pixel's light is quantised through, eight by eight and a sixty-fourth apart:
-/// a fall of a few levels over a band is dithered rather than drawn as a band of its own.
+/// a fall of a few levels over a band is dithered, and no band of its own shows.
 const THRESHOLDS: [[u8; 8]; 8] = [
     [0, 32, 8, 40, 2, 34, 10, 42],
     [48, 16, 56, 24, 50, 18, 58, 26],
