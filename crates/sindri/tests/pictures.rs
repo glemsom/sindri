@@ -1270,8 +1270,9 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
         let rule = rail.y + face.rows();
         assert_eq!(
             rail_row(painted.cells(), rail, rule).trim_end(),
-            "─".repeat(usize::from(rail.width)),
-            "the face is closed by the one rule the rail draws in its body"
+            format!(" {}", "─".repeat(usize::from(rail.width) - 1)),
+            "the face is closed by the one rule the rail draws in its body, opening past the \
+             column the frame's seam runs down"
         );
         let first = rule + 1;
         assert_eq!(
@@ -1423,8 +1424,9 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let hairline = rail.y + face.rows();
     assert_eq!(
         rail_row(with.cells(), rail, hairline).trim_end(),
-        "─".repeat(usize::from(rail.width)),
-        "the face the rail carries is closed by the one rule the rail draws in its body"
+        format!(" {}", "─".repeat(usize::from(rail.width) - 1)),
+        "the face the rail carries is closed by the one rule the rail draws in its body, \
+         opening past the column the frame's seam runs down"
     );
     let first = hairline + 1;
     assert_eq!(
@@ -1666,9 +1668,12 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
             frame.cells()[(x, y)].bg,
-            palette.ground(None).bg.unwrap(),
+            match row {
+                0 => palette.edge(),
+                _ => palette.ground(None).bg.unwrap(),
+            },
             "row {row} of the band is claimed as the ground the pixels are, and not ramped \
-             cell by cell over it"
+             cell by cell over it \u{2014} the row it is headed by is the frame's seam"
         );
     }
     let (width, _) = ground.pixels().dimensions();
@@ -1907,7 +1912,7 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
 }
 
 #[test]
-fn the_bands_head_row_is_the_light_a_band_that_takes_the_keys_meets_the_frame_on() {
+fn the_bands_head_row_is_the_frames_seam_drawn_over_the_planes_light() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
@@ -1934,15 +1939,15 @@ fn the_bands_head_row_is_the_light_a_band_that_takes_the_keys_meets_the_frame_on
     for x in band.x..band.right() {
         assert_eq!(
             frame.cells()[(x, band.y)].bg,
-            palette.ground(None).bg.expect("the terminal's own ground"),
-            "column {x} of the band's head row is not the ground the plane is drawn at, so the \
-             light over it is the plane's and no cell's"
+            palette.edge(),
+            "column {x} of the band's head row is not the one edge ink, so the seam that heads \
+             the band is read as a cell's light rather than the plane's"
         );
         claimed += 1;
     }
     assert_eq!(
         claimed, band.width,
-        "every column of the head row stands on the plane"
+        "every column of the head row is claimed by the seam of the frame"
     );
 }
 
@@ -2091,28 +2096,37 @@ fn a_terminal_that_places_no_picture_keeps_the_bands_own_rows_and_hands_back_no_
     assert_eq!(band, picture_frame.told().layout().unwrap().composer);
     let palette = plain_frame.palette();
     let shade = Shade::composer(band, None, None, palette).expect("a band to shade");
-    let first = shade.row(0);
     for row in 0..band.height {
         let x = band.x + band.width / 2;
         let y = band.y + row;
-        assert_eq!(plain_frame.cells()[(x, y)].bg, shade.row(row));
+        let ground = match row {
+            0 => palette.edge(),
+            _ => shade.row(row),
+        };
+        assert_eq!(
+            plain_frame.cells()[(x, y)].bg,
+            ground,
+            "row {row} of the band stands on its own ground where no plane is placed"
+        );
         assert_eq!(
             picture_frame.cells()[(x, y)].bg,
-            palette.ground(None).bg.unwrap(),
+            match row {
+                0 => palette.edge(),
+                _ => palette.ground(None).bg.unwrap(),
+            },
             "row {row} of the band a plane is placed under stands on the terminal's own ground"
         );
     }
     for x in band.x..band.right() {
         assert_eq!(
             plain_frame.cells()[(x, band.y)].bg,
-            first,
-            "column {x} of the head row stands on the band the prompt is read on where no plane \
-             is placed"
+            palette.edge(),
+            "column {x} of the head row stands on the one edge ink where no plane is placed"
         );
         assert_eq!(
             picture_frame.cells()[(x, band.y)].bg,
-            palette.ground(None).bg.unwrap(),
-            "and on the terminal's own ground over the plane a terminal that places one is handed"
+            palette.edge(),
+            "and on the same one edge ink over the plane a terminal that places one is handed"
         );
     }
 }

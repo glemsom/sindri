@@ -449,13 +449,19 @@ fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
         band.area.x,
         "the transcript is given the columns up to the rail's and not the frame's: {laid:?}"
     );
-    let seam = (laid.transcript.x..band.area.x)
-        .find(|x| frame.cell(*x, 0).bg != well)
-        .expect("the seam falls out of the well in the columns beside the rail");
-    assert!(
-        seam > laid.transcript.x && seam < band.area.x,
-        "the seam opens on the well at its first column and falls into the shadow before the rail \
-         begins, so the columns it takes are the transcript's own: column {seam} against {laid:?}"
+    for x in laid.transcript.x..laid.transcript.right() {
+        assert_eq!(
+            frame.cell(x, 0).bg,
+            well,
+            "column {x} of the transcript is not the well the band is read on: no column of the \
+             columns the frame hands it is claimed by the rail beside it"
+        );
+    }
+    assert_eq!(
+        frame.cell(band.area.x, 0).bg,
+        Palette::TRUECOLOR.edge(),
+        "the seam stands in the rail's own first column, and the transcript keeps every column \
+         the rail leaves it: {laid:?}"
     );
     assert!(
         laid.transcript.width < 120,
@@ -535,7 +541,7 @@ fn the_transcript_and_the_notice_stand_in_its_columns_and_the_bands_in_the_frame
     assert_eq!(
         rail.x,
         laid.transcript.right(),
-        "the rail's seam is the transcript's last column: {laid:?}"
+        "the rail's seam opens the column the transcript's band ends at: {laid:?}"
     );
     for band in [laid.transcript, laid.notice] {
         assert_eq!(
@@ -555,11 +561,15 @@ fn the_transcript_and_the_notice_stand_in_its_columns_and_the_bands_in_the_frame
     for y in rail.y..rail.bottom() {
         for x in rail.x..area.right() {
             let ground = frame.cell(x, y).bg;
-            let wanted = palette.band(Band::Rail);
+            let wanted = match x == rail.x {
+                true => palette.edge(),
+                false => palette.band(Band::Rail),
+            };
             assert_eq!(
                 ground, wanted,
                 "row {y}, column {x} of the rail is {ground:?} where the rail's band is {wanted:?}, \
-                 and the band is one tone down every row of it"
+                 and the band is one tone down every row of it but the one column the frame's \
+                 seam stands in"
             );
         }
     }

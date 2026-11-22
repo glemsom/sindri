@@ -367,13 +367,21 @@ fn the_frame_behind_a_card_is_painted_and_dimmed() {
                 drawn.bg
             );
             match y == band {
-                true => assert_eq!(
-                    drawn.symbol(),
-                    "\u{2500}",
-                    "row {y}, column {x} of the band's head is no rule, and a card over the band \
-                     is a head that draws the dim edge instead of the light: {:?}",
-                    after.row(y)
-                ),
+                true => {
+                    assert_eq!(
+                        drawn.symbol(),
+                        " ",
+                        "row {y}, column {x} of the band's head carries a glyph, and the head is \
+                         the blank row of the one edge ink the card's scrim dims: {:?}",
+                        after.row(y)
+                    );
+                    assert_eq!(
+                        drawn.bg,
+                        Palette::TRUECOLOR.edge(),
+                        "and the head the card leaves in its gutters is still the row of the one \
+                         edge ink, at row {y}, column {x}"
+                    );
+                }
                 false => {
                     assert_eq!(
                         drawn.symbol(),

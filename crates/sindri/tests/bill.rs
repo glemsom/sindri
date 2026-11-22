@@ -125,9 +125,9 @@ fn a_row_a_card_writes_into_the_draft_is_billed_with_it() {
     let head = head_row(&frame);
 
     assert!(
-        head.chars().all(|glyph| glyph == '\u{2500}'),
-        "the head bills nothing of the word the commands card wrote into the draft, so the rule \
-         keeps the row: {head:?}"
+        head.chars().all(|glyph| glyph == ' '),
+        "the head bills nothing of the word the commands card wrote into the draft, so the edge \
+         is left whole: {head:?}"
     );
 }
 
@@ -139,8 +139,8 @@ fn a_draft_that_bills_nothing_hangs_no_count_on_the_head() {
     let head = head_row(&frame);
 
     assert!(
-        head.chars().all(|glyph| glyph == '\u{2500}'),
+        head.chars().all(|glyph| glyph == ' '),
         "a draft of any length bills nothing of itself, so a draft that names no file hangs no \
-         count and the rule keeps the row: {head:?}"
+         count and the edge is left whole: {head:?}"
     );
 }

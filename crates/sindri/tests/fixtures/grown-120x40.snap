@@ -34,7 +34,7 @@ grown at 120x40
 28 |                                                                                                                        | plain:120
 29 |                                                                                                                        | plain:120
 30 |                                                                                                                        | plain:120
-31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
+31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
 33 |┃›read the transcript, then the failing test,                                                                           | dim:2 plain:118
 34 |┃ then the patch, and say which line of the                                                                             | dim:2 plain:118
