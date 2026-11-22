@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use clap::Parser;
 
 use sindri::composer::{Composer, Key, Outcome, Prompt};
+use sindri::graphics::CellSize;
 use sindri::ink::Look;
 use sindri::ledger::Boot;
 use sindri::palette::{Edge, Palette};
@@ -769,6 +770,57 @@ fn a_window_change_at_the_wait_paints_the_frame_it_woke_for_and_no_ending_of_its
     assert!(
         !stage.drawn().is_empty(),
         "the window changed while the loop waited, so a frame was painted for it"
+    );
+}
+
+#[test]
+fn a_window_that_crossed_to_another_cell_is_painted_at_it_and_the_cell_is_never_asked_for() {
+    let stage = Stage::open();
+    let environment = std::collections::BTreeMap::new();
+    let (mut live, wake) = stage.launch_woken(
+        View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        ),
+        Config::default(),
+        &environment,
+    );
+    live.paint().expect("the first frame is painted");
+    assert_eq!(
+        live.view.capabilities().cell(),
+        CellSize::NOMINAL,
+        "a terminal that reports no pixels keeps the cell it was given"
+    );
+
+    stage.pty.resize(80, 24, 1600, 960);
+    wake.raise(Causes::RESIZE);
+    let later = Arc::clone(&wake);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        later.raise(Causes::CANCEL);
+    });
+
+    let ended = live.keys(b"").expect("the cancel is answered");
+    assert!(
+        matches!(ended, Ending::Cancelled),
+        "the window change raises no ending of its own: the cancel behind it is the launch's"
+    );
+    assert_eq!(
+        live.view.capabilities().cell(),
+        CellSize::new(20, 40),
+        "the frame a pass woken for the window is drawn at the cell the kernel reports"
+    );
+
+    live.paint().expect("a second frame is painted");
+    assert_eq!(
+        live.view.capabilities().cell(),
+        CellSize::new(20, 40),
+        "and a pass drawn on the same window leaves the cell where it was"
+    );
+    assert!(
+        !stage.drawn().contains("\u{1b}[16t"),
+        "no pass puts the cell question to the terminal: the kernel's own report is the whole of it"
     );
 }
 

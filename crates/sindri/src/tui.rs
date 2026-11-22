@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use rustix::event::Timespec;
 use rustix::event::{PollFd, PollFlags, poll};
-use sindri::capability::Capabilities;
+use sindri::capability::{Asked, Capabilities};
 use sindri::composer::{Outcome, Prompt};
 use sindri::decode::{Decoder, Event};
 use sindri::facts::Facts;
@@ -242,7 +242,10 @@ impl<'a> Loop<'a> {
         })
     }
 
+    /// The frame this pass draws, at the cell the kernel reports for the window it is drawn on:
+    /// the one read a pass makes of it, and no question put to the terminal.
     fn paint(&mut self) -> io::Result<()> {
+        self.view.celled(self.terminal.winsize());
         self.painted = paint(&mut self.canvas, &mut self.view)?;
         Ok(())
     }

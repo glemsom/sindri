@@ -566,6 +566,16 @@ impl View {
         self.capabilities = capabilities;
     }
 
+    /// The cell the window is drawn on now, read from the kernel before each paint: a window that
+    /// crossed to another screen draws again what the old cell has already been made of. `None`
+    /// is a terminal that reported no pixels, and the cell it was given stands.
+    pub fn celled(&mut self, cell: Option<CellSize>) {
+        let Some(cell) = cell else { return };
+        if cell != self.capabilities.cell() {
+            self.drawn_on(self.capabilities.clone().celled(cell));
+        }
+    }
+
     fn surface(&self) -> Surface {
         Surface::of(
             self.facts.workspace(),

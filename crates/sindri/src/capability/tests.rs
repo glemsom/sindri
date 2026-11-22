@@ -190,6 +190,54 @@ fn the_pointer_a_reporting_moves_leaves_every_other_fact_where_it_was() {
 }
 
 #[test]
+fn the_cell_a_window_crossed_to_is_the_cell_the_pictures_are_measured_at() {
+    let capabilities = probed(
+        &terms(&[("TERM", "xterm-kitty")]),
+        &Answers::at(CellSize::new(9, 18)),
+    );
+    let moved = capabilities.clone().celled(CellSize::new(20, 40));
+
+    assert_eq!(
+        moved.cell(),
+        CellSize::new(20, 40),
+        "the cell a frame draws on is the one the window crossed to"
+    );
+    assert_eq!(
+        moved.pictures().cell(),
+        Some(CellSize::new(20, 40)),
+        "and the pictures are measured at it"
+    );
+}
+
+#[test]
+fn the_cell_a_window_kept_leaves_the_pictures_and_every_other_fact_where_they_were() {
+    let capabilities = probed(
+        &terms(&[("TERM", "xterm-kitty")]),
+        &Answers::at(CellSize::new(9, 18)),
+    );
+    let kept = capabilities.clone().celled(CellSize::new(9, 18));
+
+    assert_eq!(
+        kept.pictures().cell(),
+        capabilities.pictures().cell(),
+        "a cell that did not move left the pictures where they were"
+    );
+    assert_eq!(kept.cell(), capabilities.cell(), "and no cell moved");
+    assert_eq!(
+        kept.palette(),
+        capabilities.palette(),
+        "and no colour moved"
+    );
+    assert_eq!(
+        kept.sizes_text(),
+        capabilities.sizes_text(),
+        "and no sizing"
+    );
+    assert_eq!(kept.reports_pointer(), capabilities.reports_pointer());
+    assert_eq!(kept.draws_face(), capabilities.draws_face());
+}
+
+#[test]
 fn the_sizing_question_is_never_put_to_a_terminal_that_names_no_large_text() {
     let scripted = Scripted::default();
     let capabilities = probed(&terms(&[("TERM", "xterm-256color")]), &scripted);
