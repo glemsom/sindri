@@ -1100,8 +1100,8 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
 }
 
 /// The rows the composer's band took in the last frame that painted it, read off a screen that
-/// carries no layout to ask: the head row is the one the whole width is ruled in, and the hints are
-/// on the last row.
+/// carries no layout to ask: the head is the lowest row a hairline is drawn across edge to edge,
+/// and the hints are on the last row.
 fn composer_rows(drawn: &str) -> Option<u16> {
     let screen = frame::read(drawn, COLS, ROWS);
     let rows = screen.rows();

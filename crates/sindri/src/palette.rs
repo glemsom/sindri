@@ -75,7 +75,7 @@ impl Palette {
         },
         bands: Bands {
             rail: Color::Indexed(235),
-            prompt: Color::Indexed(235),
+            prompt: Color::Indexed(236),
             well: Color::Indexed(234),
         },
         ends: Ends {
@@ -160,8 +160,8 @@ impl Palette {
         Look::plain(Ink::Dim)
     }
 
-    /// Whether this palette draws an edge at all: a band's head is a row of light where it does, and
-    /// the same rule in the dim edge where it draws none.
+    /// Whether this palette draws an edge at all: the accent edge where it does, and the dim edge
+    /// where it has no light to spend.
     pub fn draws_edge(&self) -> bool {
         self.edge(Edge::Lit) != Color::Reset
     }

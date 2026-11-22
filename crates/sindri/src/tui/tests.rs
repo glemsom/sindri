@@ -494,10 +494,19 @@ impl Loop<'_> {
     /// The cells of the composer's head row the rule is drawn across in the accent edge: the row
     /// the band wears while it takes the keys.
     fn lit(&mut self, palette: &Palette) -> Vec<(u16, u16)> {
-        let frame = painted(&mut self.view);
-        let area = frame.area;
-        (area.y..area.bottom())
-            .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
+        let (cols, rows) = FRAME;
+        let area = ratatui::layout::Rect::new(0, 0, cols, rows);
+        let mut frame = ratatui::buffer::Buffer::empty(area);
+        let Some(head) = self
+            .view
+            .paint(area, &mut frame)
+            .layout()
+            .map(|laid| laid.composer.y)
+        else {
+            return Vec::new();
+        };
+        (area.x..area.right())
+            .map(|x| (x, head))
             .filter(|at| {
                 frame.cell(*at).is_some_and(|cell| {
                     cell.symbol() == "\u{2500}"

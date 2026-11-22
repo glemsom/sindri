@@ -53,8 +53,8 @@ pub enum Shade {
     Composer {
         area: Rect,
         cell: Option<CellSize>,
-        rise: Color,
-        close: Color,
+        prompt: Color,
+        rail: Color,
         caret: Option<u16>,
     },
 }
@@ -80,14 +80,14 @@ impl Shade {
         if !covers(area) {
             return None;
         }
-        let rise = palette.band(Band::Prompt);
-        let close = palette.band(Band::Rail);
-        let spelled = channels(rise).is_some() && channels(close).is_some();
+        let prompt = palette.band(Band::Prompt);
+        let rail = palette.band(Band::Rail);
+        let spelled = channels(prompt).is_some() && channels(rail).is_some();
         Some(Shade::Composer {
             area,
             cell: cell.filter(|_| spelled),
-            rise,
-            close,
+            prompt,
+            rail,
             caret,
         })
     }
@@ -151,10 +151,10 @@ impl Shade {
             Shade::Transcript { well, .. } => *well,
             Shade::Rail { tone, .. } => *tone,
             Shade::Composer {
-                area, rise, close, ..
+                area, prompt, rail, ..
             } => match row.saturating_add(1) >= area.height {
-                true => *close,
-                false => *rise,
+                true => *rail,
+                false => *prompt,
             },
         }
     }

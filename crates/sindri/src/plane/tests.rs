@@ -107,18 +107,33 @@ fn a_one_row_band_is_the_bands_last_row_and_closes_on_the_rails_tone() {
 #[test]
 fn no_row_of_the_bands_band_is_a_blend_of_the_two_tones_it_closes_through() {
     for (spelling, palette) in SPELLED {
-        let (rise, close) = (palette.band(Band::Prompt), palette.band(Band::Rail));
+        let (prompt, rail) = (palette.band(Band::Prompt), palette.band(Band::Rail));
         for rows in MIN_ROWS..=MAX_ROWS {
             let band = shaded(rows, &palette);
             for row in 0..rows {
                 let ground = band.row(row);
                 assert!(
-                    ground == rise || ground == close,
+                    ground == prompt || ground == rail,
                     "{spelling} draws row {row} of a {rows}-row band in {ground:?}, a tone \
                      between the two it is drawn in: the band rises out of the well in whole rows \
                      and closes into the rail's tone in one"
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn an_ansi_band_is_drawn_in_the_two_greys_its_tones_are_spelled_as() {
+    for rows in MIN_ROWS..=MAX_ROWS {
+        let band = shaded(rows, &Palette::ANSI);
+        for row in 0..rows {
+            assert!(
+                matches!(band.row(row), Color::Indexed(235 | 236)),
+                "ansi draws row {row} of a {rows}-row band in {:?}, outside the two greys the \
+                 rail's tone and the prompt's are spelled as",
+                band.row(row)
+            );
         }
     }
 }
@@ -209,15 +224,15 @@ fn a_composers_plane_opens_on_the_prompts_band_and_covers_no_pixel_of_the_well()
         let area = Rect::new(0, 20, 80, 5);
         let plane =
             drawn(Shade::composer(area, Some(CELL), None, &palette).expect("a band to shade"));
-        let rise = spelled(palette.band(Band::Prompt));
-        let close = spelled(palette.band(Band::Rail));
+        let prompt = spelled(palette.band(Band::Prompt));
+        let rail = spelled(palette.band(Band::Rail));
         let well = spelled(palette.band(Band::Well));
 
         let top = middle(&plane, 0, CELL);
         assert!(
-            near(top, rise),
+            near(top, prompt),
             "{spelling} opens the composer's plane on {top:?} where the prompt's own band is \
-             {rise:?}, so no pixel row of the well is drawn above the band"
+             {prompt:?}, so no pixel row of the well is drawn above the band"
         );
         assert_ne!(
             top, well,
@@ -225,8 +240,8 @@ fn a_composers_plane_opens_on_the_prompts_band_and_covers_no_pixel_of_the_well()
              the prompt's band and not on the band under it"
         );
         assert!(
-            near(middle(&plane, area.height - 1, CELL), close),
-            "{spelling} closes the composer's plane on {:?} where the rail's own tone {close:?} \
+            near(middle(&plane, area.height - 1, CELL), rail),
+            "{spelling} closes the composer's plane on {:?} where the rail's own tone {rail:?} \
              is the tone it closes on",
             middle(&plane, area.height - 1, CELL)
         );

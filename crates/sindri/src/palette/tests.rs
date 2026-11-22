@@ -222,10 +222,10 @@ fn the_prompt_band_is_the_highest_rung_and_the_well_the_lowest() {
         let well = luminance(palette.band(Band::Well));
 
         assert!(
-            well < rail && rail <= prompt,
+            well < rail && rail < prompt,
             "{spelling} draws the rail and the prompt at {rail} and {prompt} over the well at \
              {well}: the reader's own words stand one rung above the conversation they were asked \
-             in, and no lower"
+             in, and the rail one above the well beside it"
         );
         for band in Band::ALL {
             let ground = luminance(palette.band(band));

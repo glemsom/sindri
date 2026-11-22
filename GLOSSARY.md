@@ -192,12 +192,12 @@ _Avoid_: Logo, avatar, mascot, icon
 A strip of rows the frame shares out — the **Transcript band**, the **Composer**'s, and the row
 that says the frame stands off the tail — each drawn in the rows and the columns it was given and
 never past them: a frame that draws a **Rail**'s column hands the **Transcript band** the columns
-it leaves, and the **Composer**'s band the frame's whole width under it. The **Composer**'s band is
-the band a **Prompt** is read on, closing into the **Rail**'s tone on its last row, its **Footer**
-there. What a band cannot hold it counts: a draft's
-rows past the composer's ceiling, and a queue's prompts past the composer's rows under the draft. A
-fence it never reflows, and the **Caret** is no cell of it. Every band draws its words inside the
-**Margin** and never on its own edge, so the frame reads as one sheet of paper and not five.
+it leaves, and the **Composer**'s band the frame's whole width under it. The band a **Prompt** is
+read on and the band its draft is typed on are one band, closing into the **Rail**'s tone on its
+last row, its **Footer** there. What a band cannot hold it counts: a draft's rows past the
+composer's ceiling, and a queue's prompts past the composer's rows under the draft. A fence it never
+reflows, and the **Caret** is no cell of it. Every band draws its words inside the **Margin** and
+never on its own edge, so the frame reads as one sheet of paper and not five.
 _Avoid_: Region, pane, panel, viewport
 
 **Transcript band**:
@@ -255,8 +255,9 @@ _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 **Shade**:
 What a band sits on: the colour each of its rows is claimed in and the seams it makes with the band
 beside it — the transcript band on the well, the rail on its own tone on every row of it, the
-composer's band on the band a prompt is read on, closing into the rail's tone on its last row. A seam is a fall of its own, in the columns it takes from the band beside the rail, and a
-frame draws it once, after the bands it parts. It holds every fact the band's cells and its
+composer's band on the band a prompt is read on, closing into the rail's tone on its last row. A
+seam is a fall of its own, in the columns it takes from the band beside the rail, and a frame draws
+it once, after the bands it parts. It holds every fact the band's cells and its
 **Plane** are drawn from and nothing else, the cell the plane is drawn at and the caret's column
 among them, and a frame holds each band's image against it, so a pass in which it stands makes no
 image. Where no picture is placed, that same shade is claimed cell by cell.

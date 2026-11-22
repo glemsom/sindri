@@ -1609,23 +1609,25 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     }));
     let palette = *frame.palette();
     let shade = shade_of(&frame, PlaneId::Composer);
-    let (rise, close) = (
-        channels(shade.row(0)).expect("the band's rise in pixels"),
-        channels(palette.band(Band::Rail)).expect("its closing tone in pixels"),
+    let (prompt, rail) = (
+        channels(shade.row(0)).expect("the band's first row in pixels"),
+        channels(palette.band(Band::Rail)).expect("the tone it closes on"),
     );
     let top = ground.pixels().get_pixel(400, 0);
     assert_eq!(
         top.0[..3],
-        rise,
-        "the ground starts at the band's own head, and no pixel row of the well stands above it"
+        prompt,
+        "the ground starts on the band the prompt is read on, and no pixel row of the well \
+         stands above it"
     );
     let down = cell().height();
     for row in 1..band.height - 1 {
         let y = u32::from(row) * down + down / 2;
         assert_eq!(
             ground.pixels().get_pixel(400, y).0[..3],
-            rise,
-            "row {row} of the band is a whole row of the rise, and no step between the two tones"
+            prompt,
+            "row {row} of the band is a whole row of the prompt's band, and no step between the \
+             two tones"
         );
     }
     assert_eq!(
@@ -1633,8 +1635,8 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
             .pixels()
             .get_pixel(400, ground.pixels().height() - 1)
             .0[..3],
-        close,
-        "and it comes down to the tone the band closes on"
+        rail,
+        "and it comes down to the rail's tone the band closes on"
     );
     assert_ne!(
         ground.pixels().get_pixel(25, 30),
@@ -1693,26 +1695,24 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
     let (width, height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the band's well in pixels");
     let shade = shade_of(&frame, PlaneId::Composer);
-    let (rise, close) = (
-        channels(palette.band(Band::Prompt)).expect("the band's rise in pixels"),
-        channels(palette.band(Band::Rail)).expect("its closing tone in pixels"),
+    let (prompt, rail) = (
+        channels(palette.band(Band::Prompt)).expect("the prompt's band in pixels"),
+        channels(palette.band(Band::Rail)).expect("the rail's tone in pixels"),
     );
     assert_eq!(
-        (rise, close),
-        ([38, 38, 38], [38, 38, 38]),
-        "this palette spells the two tones the band is drawn in as one grey, so the band is \
-         drawn in it whole"
+        (prompt, rail),
+        ([48, 48, 48], [38, 38, 38]),
+        "the band this palette spells runs from the prompt's grey down to the rail's own"
     );
     assert_eq!(
         ground.pixels().get_pixel(width - 1, 0).0[..3],
-        channels(shade.row(0)).expect("the band's head row in pixels"),
-        "the plane's top row is the band's own head row, which is the row the band holds the \
-         keys over"
+        channels(shade.row(0)).expect("the band's first row in pixels"),
+        "the plane's top row is the band's own head row, the band the prompt is read on"
     );
     assert_eq!(
         ground.pixels().get_pixel(width - 1, height - 1).0[..3],
-        close,
-        "and its last is the tone the band closes on"
+        rail,
+        "and its last is the rail's tone the band closes on"
     );
     assert_ne!(
         ground.pixels().get_pixel(width - 1, 0).0[..3],
@@ -1724,6 +1724,15 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
         [22, 31, 42],
         "and not the band the design's truecolour prompt is read on"
     );
+    let bottom = ground.pixels().get_pixel(width - 1, height - 1);
+    for at in 0..3 {
+        assert!(
+            bottom.0[at].abs_diff(rail[at]) < bottom.0[at].abs_diff(prompt[at]),
+            "the plane's bottom row {:?} is nearer the rail's tone {rail:?} than the prompt's \
+             band {prompt:?}",
+            bottom.0
+        );
+    }
     for y in 0..height {
         let pixel = ground.pixels().get_pixel(width - 1, y);
         assert_eq!(
@@ -1751,29 +1760,30 @@ fn a_truecolour_frames_band_is_drawn_in_the_two_tones_the_palette_gives_it() {
         "the plane covers the band's own rect, at the pixels of the cell it is drawn on"
     );
     let palette = *frame.palette();
-    let (rise, close) = (
-        channels(palette.band(Band::Prompt)).expect("the band's rise in pixels"),
-        channels(palette.band(Band::Rail)).expect("its closing tone in pixels"),
+    let (prompt, rail) = (
+        channels(palette.band(Band::Prompt)).expect("the prompt's band in pixels"),
+        channels(palette.band(Band::Rail)).expect("the rail's tone in pixels"),
     );
     let column = width - 1;
     let top = ground.pixels().get_pixel(column, 0).0;
     assert_eq!(
         top[..3],
-        rise,
+        prompt,
         "the plane's top row is the band the prompt is read on, and no pixel row of the well \
          above it"
     );
     let bottom = ground.pixels().get_pixel(column, height - 1).0;
     assert_eq!(
         bottom[..3],
-        close,
+        rail,
         "and its bottom row is the rail's own tone, which is the row the band closes on"
     );
     let mid = ground.pixels().get_pixel(column, height / 2).0;
     assert_eq!(
         mid[..3],
-        rise,
-        "and half way down the plane is still the rise: the band climbs no ramp to its last row"
+        prompt,
+        "and half way down the plane stands on the prompt's band still: the band climbs no ramp \
+         to its last row"
     );
 }
 
@@ -1788,8 +1798,8 @@ fn the_bands_ground_is_the_shade_sampled_row_by_row_from_the_prompt_band_to_the_
     let (width, height) = ground.pixels().dimensions();
     let column = width - 1;
     let shade = shade_of(&frame, PlaneId::Composer);
-    let head = channels(shade.row(0)).expect("the band's head row in pixels");
-    let foot = channels(palette.band(Band::Rail)).expect("the band's foot");
+    let first = channels(shade.row(0)).expect("the band's first row in pixels");
+    let last = channels(palette.band(Band::Rail)).expect("the tone it closes on");
 
     for row in 0..band.height {
         let at = u32::from(row) * cell().height() + cell().height() / 2;
@@ -1807,13 +1817,13 @@ fn the_bands_ground_is_the_shade_sampled_row_by_row_from_the_prompt_band_to_the_
     }
     assert_eq!(
         ground.pixels().get_pixel(column, 0).0[..3],
-        head,
-        "the plane opens on the band's head"
+        first,
+        "the plane opens on the band the prompt is read on"
     );
     assert_eq!(
         ground.pixels().get_pixel(column, height - 1).0[..3],
-        foot,
-        "and closes on the rail's tone the band closes on"
+        last,
+        "and closes on the rail's tone"
     );
 }
 
@@ -2066,7 +2076,7 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_composer() {
 }
 
 #[test]
-fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane() {
+fn a_terminal_that_places_no_picture_keeps_the_bands_own_rows_and_hands_back_no_plane() {
     let (_root, workspace) = workspace(10, 20);
     let mut plain = frame(Capabilities::default(), &workspace, "hello");
     let mut pictured = frame(caps::at(cell()), &workspace, "hello");
@@ -2081,7 +2091,7 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
     assert_eq!(band, picture_frame.told().layout().unwrap().composer);
     let palette = plain_frame.palette();
     let shade = Shade::composer(band, None, None, palette).expect("a band to shade");
-    let lit = shade.row(0);
+    let first = shade.row(0);
     for row in 0..band.height {
         let x = band.x + band.width / 2;
         let y = band.y + row;
@@ -2095,9 +2105,9 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
     for x in band.x..band.right() {
         assert_eq!(
             plain_frame.cells()[(x, band.y)].bg,
-            lit,
-            "column {x} of the head row stands on the light the band takes the keys in where no \
-             plane is placed"
+            first,
+            "column {x} of the head row stands on the band the prompt is read on where no plane \
+             is placed"
         );
         assert_eq!(
             picture_frame.cells()[(x, band.y)].bg,

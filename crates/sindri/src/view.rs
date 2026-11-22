@@ -1677,7 +1677,8 @@ impl View {
             ..queue
         };
         let empty = self.composer.text().is_empty();
-        // The placeholder is no row of the draft, so it lights no sigil and keeps the dim ink.
+        // The placeholder is no row of the draft and a band without the keys lights no sigil: the
+        // dim column is what both leave it.
         let waited =
             (!empty && self.band_takes_keys()).then(|| usize::from(self.composer.caret().0));
         let scroll = self.composer.scroll();
