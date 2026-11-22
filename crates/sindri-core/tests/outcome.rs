@@ -1,7 +1,3 @@
-//! What a batch run reports to whoever scripted it: the object, one field after another in a fixed
-//! order, a field the run knows nothing about left out rather than written as `null`, and the exit
-//! code read off the stop reason and from nowhere else.
-
 use std::time::Duration;
 
 use sindri_core::outcome::{Facts, Outcome};
@@ -93,9 +89,6 @@ fn reported<R: Responder, A: Executor>(prompt: &str, responder: R, executor: A) 
     .expect("a stopped run has an outcome")
 }
 
-/// The field names of `json` at the object's own depth, in the order the bytes write them:
-/// `serde_json::Value` sorts an object's keys, so the order is read off the line itself. A string
-/// is a key when a colon follows it.
 fn keys(json: &str) -> Vec<String> {
     let mut keys = Vec::new();
     let mut depth = 0usize;

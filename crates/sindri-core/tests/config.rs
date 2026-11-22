@@ -1,6 +1,3 @@
-//! Proves the config is one file whose keys layer file, then `SINDRI_*` environment, then flags,
-//! and that a key also comes from the variable the resolved wire names — and from nothing else.
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -34,9 +31,6 @@ fn resolved_in(text: &str, vars: &[(&str, &str)], flags: Config) -> Config {
     resolved(home.path(), vars, flags).expect("the config loads")
 }
 
-/// One worked example of every key in the schema, spelled as the file spells it: the independent
-/// source of truth for the key list, so a schema that grows a key and a table that does not is a
-/// failure below.
 const EXAMPLES: [(&str, &str); 16] = [
     ("provider", "\"openai\""),
     ("model", "\"claude-sonnet-4-5\""),
@@ -56,8 +50,6 @@ const EXAMPLES: [(&str, &str); 16] = [
     ("ssh_agent", "false"),
 ];
 
-/// One worked example of every key as its own variable spells it, paired with the file's spelling:
-/// the variable is a shell path list for the paths and one header per line for the headers.
 const SPOKEN: [(&str, &str, &str); 16] = [
     ("provider", "openai", "\"openai\""),
     ("model", "claude-sonnet-4-5", "\"claude-sonnet-4-5\""),
@@ -426,8 +418,6 @@ fn debug_never_prints_the_api_key() {
     );
 }
 
-/// The working directory a test stands in, put back when the test ends, so a repo-local
-/// `.sindri.toml` can be planted under the process's own feet.
 struct Standing {
     previous: PathBuf,
 }
@@ -1108,8 +1098,6 @@ fn every_key_is_parsed_shown_written_spoken_and_merged_by_its_own_row() {
             "a config that says nothing about `{key}` is the row of `{key}` showing nothing"
         );
 
-        // The row of a secret is drawn as the mask and what a reader types there is a secret of
-        // their own, so that one row is handed the words its variable speaks.
         let typed = if words == sindri_core::redact::MASK {
             spoken
         } else {

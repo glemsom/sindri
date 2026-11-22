@@ -1,7 +1,3 @@
-//! The `@` screen: the workspace's files narrowed by the query typed at it, the rows a card shows
-//! of what the query leaves, and the word a selection puts in the draft. The files themselves are
-//! the workspace's own walk, held rather than repeated.
-
 use std::path::Path;
 
 use crate::composer::Key;
@@ -10,17 +6,14 @@ use crate::ink::{Ink, Look};
 use crate::kept::{CAP, Kept, Move, Narrow, leaves};
 use crate::list::{self, Item, ScreenRow};
 
-/// The one line the picker says in place of its rows when no file answers.
 const NO_FILE: &str = "no file answers";
 
-/// A row of the picker: the file's name, and the directory it sits in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Row<'a> {
     pub name: &'a str,
     pub directory: &'a str,
 }
 
-/// The `@` screen: the files of the workspace it was opened on, and the query typed at them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Picker {
     files: Files,
@@ -32,8 +25,6 @@ impl Picker {
         Picker::over(Files::walk(root))
     }
 
-    /// The same screen over a walk already made: the frame's own, so the rows a query leaves and the
-    /// count the band's edge hangs are never of two workspaces.
     pub fn over(files: Files) -> Picker {
         Picker {
             files,
@@ -45,12 +36,10 @@ impl Picker {
         self.narrow.query()
     }
 
-    /// The first `CAP` matching paths, each split into the file's name and its directory.
     pub fn rows(&self) -> Vec<Row<'_>> {
         self.ranked().into_iter().take(CAP).map(split).collect()
     }
 
-    /// Every path the query leaves, in the one order the rank gives.
     fn ranked(&self) -> Vec<&str> {
         leaves(
             self.files
@@ -65,7 +54,6 @@ impl Picker {
         self.narrow.mark()
     }
 
-    /// How many files the query leaves, whether or not the card has a row for them.
     pub fn matches(&self) -> usize {
         count(self.files.paths(), self.narrow.query())
     }
@@ -76,8 +64,6 @@ impl Picker {
         narrow.typed(key, |query| count(files, query).min(CAP))
     }
 
-    /// The rows the picker's card holds: the query at the head, one row per file with the row the
-    /// reader is on marked, and under them the count of the matches it shows.
     pub fn body(&self) -> Vec<ScreenRow> {
         let files = self.rows();
         let items = files
@@ -109,7 +95,6 @@ impl Picker {
     }
 }
 
-/// How many of `files` the query leaves, whether or not the card has a row for them.
 fn count(files: &[String], query: &str) -> usize {
     leaves(files.iter().map(|path| (path.as_str(), ())), query).len()
 }
@@ -140,7 +125,6 @@ fn leaves_alone(glyph: char) -> bool {
     glyph.is_ascii_alphanumeric() || matches!(glyph, '.' | '_' | '-' | '/')
 }
 
-/// The file's name and the directory it sits in, which spell the path back with a `/` between them.
 fn split(path: &str) -> Row<'_> {
     match path.rsplit_once('/') {
         Some((directory, name)) => Row { name, directory },

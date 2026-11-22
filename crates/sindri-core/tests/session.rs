@@ -1,6 +1,3 @@
-//! Proves a session's directory: where it lives under the state home, the GUID that names it, the
-//! temp mapped to `TMPDIR`, and the spill beside it.
-
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -23,7 +20,6 @@ fn state_home() -> TempDir {
     tempfile::tempdir().expect("a temp state home")
 }
 
-/// Real directories for the writable set, because a boundary canonicalises what it is given.
 struct Ground {
     _root: TempDir,
     path: PathBuf,
@@ -58,9 +54,6 @@ fn said(output: &std::process::Output) -> String {
     }
 }
 
-/// Whether this machine can confine a command at all, said loudly when it cannot: a skip must be
-/// visible on a green run, so it is written to the descriptor rather than through a captured
-/// `eprintln!`.
 fn sandbox() -> Option<()> {
     let problem = match Command::new(bash::BWRAP).arg("--version").output() {
         Err(error) => Some(format!("bwrap not on PATH: {error}")),
@@ -124,8 +117,6 @@ fn a_session_owns_one_directory_named_by_its_guid() {
 
     let guid = session.guid().to_owned();
 
-    // 8-4-4-4-12 lowercase hex, version 4, RFC 4122 variant: a GUID and not a string that merely
-    // looks distinctive.
     assert_eq!(guid.len(), 36, "a GUID is 36 characters: {guid}");
     let shapes: Vec<usize> = guid.split('-').map(str::len).collect();
     assert_eq!(shapes, vec![8, 4, 4, 4, 12], "{guid}");
@@ -140,7 +131,7 @@ fn a_session_owns_one_directory_named_by_its_guid() {
     );
     assert!(
         matches!(guid.chars().nth(19), Some('8' | '9' | 'a' | 'b')),
-        "the variant nibble is the RFC 4122 one: {guid}"
+        "the variant nibble is the 10 bits: {guid}"
     );
 
     let root = std::fs::canonicalize(state.path()).expect("the state home resolves");
@@ -348,8 +339,6 @@ fn two_sessions_are_two_directories() {
         "neither session sits inside the other"
     );
 
-    // The GUID is stable for the life of the session, so the record's `session` field and the last
-    // line of `-v` can both be written from it.
     let guid = one.guid().to_owned();
     assert_eq!(guid, one.guid());
     assert_eq!(
@@ -493,8 +482,6 @@ fn output_past_the_budget_is_spilled_as_the_bytes_the_command_wrote() {
     .expect("the command runs");
     assert_eq!(outcome.code, Some(0), "stderr: {}", outcome.stderr);
 
-    // This is the caller's decision and not this module's: the output is past what the run will
-    // feed back whole, so it is spilled and only a reference is printed.
     let budget = 1024usize;
     assert!(
         outcome.stdout.len() > budget,

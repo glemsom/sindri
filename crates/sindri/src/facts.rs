@@ -1,7 +1,3 @@
-//! The workspace and its ground, the home skills are read from, the served name, the record, the
-//! state, the rail's facts, the marker and the focus, gathered as one value and handed to the frame
-//! whole, beside the screen those facts are drawn as.
-
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -13,9 +9,6 @@ use sindri_core::run::Loaded;
 use crate::ledger::{self, Boot};
 use crate::pulse::Pulse;
 
-/// Handed whole, never a fact at a time: the screen a frame is drawn as follows from it, so a frame
-/// handed none is the splash screen and one handed a run's is that run's frame. No fact that lands
-/// ends the splash screen, because the facts a launch opens on are the splash screen's own.
 #[derive(Clone, Debug)]
 pub struct Facts {
     rail: ledger::Facts,
@@ -41,7 +34,6 @@ pub enum Focus {
 }
 
 impl Default for Facts {
-    /// The splash screen: the frame a launch opens on, before a fact of a run's has landed.
     fn default() -> Facts {
         Facts {
             rail: ledger::Facts::default(),
@@ -60,8 +52,6 @@ impl Default for Facts {
 }
 
 impl Facts {
-    /// The facts a launch opens on, beside the home its skills are read from: the splash screen over
-    /// the wire, the model, the workspace, the branch and the enforcement it already knows.
     pub fn boot(boot: Boot, home: Option<PathBuf>) -> Facts {
         let workspace = boot.workspace.clone();
         Facts {
@@ -72,19 +62,16 @@ impl Facts {
         }
     }
 
-    /// The same value as the frame a prompt has been asked for: the splash screen is over.
     pub fn asked(mut self) -> Facts {
         self.splash = false;
         self
     }
 
-    /// The same value with the run that prompt starts.
     pub fn running(mut self) -> Facts {
         self.live = true;
         self.asked()
     }
 
-    /// The same value with the run that prompt started ended.
     pub fn idle(mut self) -> Facts {
         self.live = false;
         self
@@ -100,8 +87,6 @@ impl Facts {
         self
     }
 
-    /// The same value with the entries the record it names has written: a band draws the whole
-    /// conversation, not the run in flight alone.
     pub fn transcribed(mut self, entries: Vec<Entry>) -> Facts {
         self.transcript = Some(Arc::from(entries));
         self
@@ -123,8 +108,6 @@ impl Facts {
         self
     }
 
-    /// The same value with the names a wire served dropped: a screen that asks again holds none until
-    /// that answer lands.
     pub fn unserved(mut self) -> Facts {
         self.served = None;
         self
@@ -147,8 +130,6 @@ impl Facts {
         self.splash
     }
 
-    /// Whether a run is live: the draft band's two words, where the rail says the run's state whole,
-    /// the stop it ended on included.
     pub fn live(&self) -> bool {
         self.live
     }
@@ -157,8 +138,6 @@ impl Facts {
         &self.rail
     }
 
-    /// The loaded-skill set the frame draws: the launch's own, handed in with its facts, so a
-    /// `/skill:name` and the model's own call both write the one set.
     pub fn loaded(&self) -> &Loaded {
         &self.rail.loaded
     }

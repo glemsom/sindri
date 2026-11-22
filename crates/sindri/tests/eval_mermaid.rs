@@ -8,11 +8,8 @@ use std::time::{Duration, Instant};
 use sindri::graphics::CellSize;
 use sindri::mermaid::Diagram;
 
-/// Where the corpus of real fences lives: one `.mmd` file per fence, and nothing else,
-/// because there is no golden beside it any more.
 const CORPUS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mermaid");
 
-/// A shared runner's patience, not a reader's: `mermaid::BOUND` bounds a stall a person feels.
 const EVAL_BOUND: Duration = Duration::from_secs(30);
 
 fn corpus() -> Vec<PathBuf> {
@@ -47,8 +44,6 @@ fn every_fence_in_the_corpus_is_drawn_as_a_picture_that_measures() {
         fences.len()
     );
 
-    // The first draw in a process pays the renderer's start-up as well as the drawing,
-    // so one is drawn untimed and every number below is a drawing.
     let _ = Diagram::of_within(EVAL_BOUND, &source(&fences[0]));
 
     let mut failures = Vec::new();

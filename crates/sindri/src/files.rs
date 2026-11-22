@@ -1,15 +1,8 @@
-//! The files of a workspace, walked as `git` reads them: the one walk the `@` screen's rows and the
-//! draft's count are read off. The walk is the `ignore` crate's with `hidden(false)` and
-//! `require_git(false)` turned around.
-
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-/// A directory in a working tree and a file in a worktree: a checkout's own bookkeeping and
-/// never something a reader points a prompt at.
 const GIT_DIRECTORY: &str = ".git";
 
-/// The files of a workspace, relative to its root and sorted, and the root they stand under.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Files {
     root: Option<PathBuf>,
@@ -17,7 +10,6 @@ pub struct Files {
 }
 
 impl Files {
-    /// The files of `root`, walked now.
     pub fn walk(root: &Path) -> Files {
         Files {
             root: Some(root.to_path_buf()),
@@ -25,7 +17,6 @@ impl Files {
         }
     }
 
-    /// The files of `root`, walked the first time one is asked for.
     pub fn of(root: Option<&Path>) -> Files {
         Files {
             root: root.map(Path::to_path_buf),
@@ -33,12 +24,10 @@ impl Files {
         }
     }
 
-    /// The root the files stand under, and none for a value holding no workspace.
     pub fn root(&self) -> Option<&Path> {
         self.root.as_deref()
     }
 
-    /// The workspace's files, the lazy walk happening here.
     pub fn paths(&self) -> &[String] {
         match self.root.as_deref() {
             Some(root) => self.paths.get_or_init(|| walked(root)),
@@ -46,7 +35,6 @@ impl Files {
         }
     }
 
-    /// Whether `word` is one of the paths, exactly: the walk is sorted, so the answer is one search.
     pub fn names(&self, word: &str) -> bool {
         self.paths()
             .binary_search_by(|path| path.as_str().cmp(word))
@@ -54,7 +42,6 @@ impl Files {
     }
 }
 
-/// The walk itself: every file under `root`, as a path relative to it.
 fn walked(root: &Path) -> Vec<String> {
     let mut files: Vec<String> = Vec::new();
     let mut walk = ignore::WalkBuilder::new(root);

@@ -1,8 +1,4 @@
-//! The transcript's cache of rows, counted through its own `lays`: the promises here are about
-//! how often layout happens, and a test that read the shape of the code instead would still
-//! pass on the day the cost came back.
-
-mod frame; // one paint-and-read for every test
+mod frame;
 
 use std::path::PathBuf;
 
@@ -35,8 +31,6 @@ use sindri_core::run::{Budget, Exit, Limits, Stop, Turn};
 use sindri_core::session::Session;
 use sindri_core::wire::Wire;
 
-/// One row of the band that says which turn it is: a turn draws no row of its own, so the tests
-/// that count rows say which one they stand on with a thought short enough to be drawn as one.
 fn thought(which: u32) -> Entry {
     Entry::Reasoning {
         turn: which,
@@ -530,7 +524,6 @@ fn every_row_but_a_fences_line_fits_the_width_it_was_laid_out_for() {
     }
 }
 
-/// One answer written as the model wrote it, laid out as the rows an entry is.
 fn answered(text: &str) -> Entry {
     Entry::Assistant {
         turn: 1,
@@ -538,12 +531,9 @@ fn answered(text: &str) -> Entry {
     }
 }
 
-/// Two fences in one answer, the first wider than the twenty columns the walk is read at: the
-/// sentence every test of a walk counts its rows against.
 const TWO_FENCES: &str = "```rust\nlet a_line_wider_than_the_band_it_is_drawn_in = 1;\n```\n\n\
                            between the two fences\n\n```rust\nlet short = 2;\n```";
 
-/// The fence each row of entry `at` is a line of, and how far it has been walked.
 fn walks(rows: &mut Rows, at: usize) -> Vec<(Option<usize>, u16)> {
     rows.rows(at)
         .iter()
@@ -859,8 +849,6 @@ fn the_prompt_stands_on_the_prompt_band_and_no_other_row_stands_on_one() {
     }
 }
 
-/// The rows the transcript band paints of `entries` at the tail, read from the screen's first row
-/// down to the composer's own band.
 fn band(entries: Vec<Entry>, cols: u16, rows: u16) -> Vec<String> {
     let mut view = View::of(
         Capabilities::default(),
@@ -870,7 +858,6 @@ fn band(entries: Vec<Entry>, cols: u16, rows: u16) -> Vec<String> {
     above_the_composer(&mut view, cols, rows)
 }
 
-/// The rows of a frame above the composer's band: the transcript and nothing of the draft under it.
 fn above_the_composer(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
     let frame = frame::painted(view, cols, rows);
     let composer = frame
@@ -969,7 +956,6 @@ fn a_turn_draws_no_row_at_any_width() {
     }
 }
 
-/// The frame a run that settled on `stop` leaves of `entries`.
 fn settled_frame(entries: Vec<Entry>, stop: &Stop, cols: u16, rows: u16) -> Vec<String> {
     let mut view = View::of(
         Capabilities::default(),
@@ -1113,8 +1099,6 @@ fn a_run_that_drew_no_answer_draws_the_row_of_the_stop_it_ended_on() {
     );
 }
 
-/// The column a row's words begin in: the first glyph of it that is a letter, a digit or a bullet,
-/// and nothing for a row that says no word at all.
 fn words_column(row: &Row) -> Option<u16> {
     row.glyph_columns()
         .into_iter()
@@ -1167,7 +1151,6 @@ fn every_entrys_words_begin_in_one_column() {
     }
 }
 
-/// The glyph a row draws at a column of it.
 fn drawn_at(row: &Row, column: u16) -> Option<char> {
     row.glyph_columns()
         .into_iter()
@@ -2067,7 +2050,6 @@ fn result_of(which: u32, identity: Option<&str>, exit: Exit) -> Entry {
     }
 }
 
-/// A result of twenty rows of a command's output, the way a test run writes them.
 fn long_result(which: u32) -> Entry {
     let text: String = (1..=20)
         .map(|line| format!("test rows::a_row_of_output_{line} ... ok"))
@@ -2084,7 +2066,6 @@ fn long_result(which: u32) -> Entry {
     }
 }
 
-/// Every ink of every cell of the rows `laid`, as a terminal draws them.
 fn drawn_inks(laid: &[Row], cols: u16) -> Vec<Ink> {
     laid.iter()
         .flat_map(|row| cell_inks(&painted(row, cols)))
@@ -2100,14 +2081,12 @@ fn named(which: u32, name: &str, arguments: &str) -> Entry {
     }
 }
 
-/// The ground a run standing in `workspace` judges a target from.
 fn ground(workspace: &std::path::Path) -> Ground {
     let boundary = Boundary::from_config(&Config::default(), workspace, Enforcement::Bubblewrap)
         .expect("the boundary holds");
     Ground::new(&boundary, workspace, workspace).expect("the ground resolves")
 }
 
-/// The line a way's words are drawn under.
 fn way() -> Look {
     Look::plain(Ink::Plain).underlined(Ink::Dim)
 }
@@ -2311,7 +2290,6 @@ fn an_argument_no_tool_spells_is_drawn_as_words_and_never_as_punctuation() {
     );
 }
 
-/// Whether a row says no punctuation a model writes around the arguments it sent.
 fn unpunctuated(row: &str) -> bool {
     !row.chars()
         .any(|glyph| matches!(glyph, '{' | '}' | '[' | ']' | '"' | ':' | ','))
@@ -2429,8 +2407,6 @@ fn painted(row: &Row, cols: u16) -> Vec<(char, Look)> {
         .collect()
 }
 
-/// A row as a terminal that sizes text draws it: the cells the runs it names leave, written once the
-/// band it stands in is known, which is when the frame writes them.
 fn spelled(row: &Row, cols: u16) -> String {
     let band = Rect::new(0, 0, cols, 4);
     let mut buffer = Buffer::empty(band);
@@ -2488,7 +2464,6 @@ fn said(row: &[(char, Look)]) -> String {
         .to_owned()
 }
 
-/// The ink of every column of a painted row, where `inks` reads the spans the row was laid out as.
 fn cell_inks(row: &[(char, Look)]) -> Vec<Ink> {
     row.iter().map(|(_, look)| look.ink()).collect()
 }
@@ -2563,7 +2538,6 @@ fn a_result_its_whole_fold_holds_is_drawn_whole() {
     );
 }
 
-/// The row a fold draws to say how many rows it keeps back, if this entry draws one.
 fn kept_back_row(laid: &[Row]) -> Option<String> {
     laid.iter().map(words).find(|row| row.contains("kept back"))
 }
@@ -2668,7 +2642,6 @@ fn a_session_read_back_is_folded_again() {
     );
 }
 
-/// A result of the call it settles, saying how long that call took.
 fn timed(which: u32, elapsed_ms: u64) -> Entry {
     Entry::Result {
         turn: which,
@@ -2681,19 +2654,16 @@ fn timed(which: u32, elapsed_ms: u64) -> Entry {
     }
 }
 
-/// An open call reading `path`.
 fn reading(which: u32, path: &str) -> Entry {
     named(which, "open", &format!(r#"{{"path": "{path}"}}"#))
 }
 
-/// The reader's own words a run was asked with.
 fn asked_for(which: u32) -> Entry {
     Entry::Prompt {
         text: SecretSet::default().redact(format!("prompt {which}")),
     }
 }
 
-/// The one row a settled exchange's work is drawn as, from the entries the work handed in.
 fn one_row_of(work: Vec<Entry>) -> Row {
     let mut rows = Rows::new();
     rows.measure(Measure::new(80, Surface::none(), None));
@@ -2916,8 +2886,6 @@ fn a_run_of_two_turns_leaves_one_row_for_the_work_of_both() {
     ] {
         rows.push(entry);
     }
-    // The result of each call is held under its call, so the prompt stands at 0, the first turn's
-    // work at 1, its answer at 2, and the second turn's work and answer under them.
     let work: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
         work,
@@ -3129,7 +3097,6 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
     );
 }
 
-/// A cache holding one settled exchange whose one call read a result longer than its fold.
 fn the_long_call() -> Rows {
     let mut rows = Rows::new();
     rows.measure(Measure::new(80, Surface::none(), None));
@@ -3834,7 +3801,6 @@ fn a_row_set_under_a_marker_moves_the_run_it_names_with_its_words() {
     }
 }
 
-/// A row is painted at the frame's own row and column, and what it names is laid there beside it.
 fn laid(row: &Row, area: Rect) -> (Buffer, Links) {
     let mut buffer = Buffer::empty(area);
     let mut links = Links::none();
@@ -3997,8 +3963,6 @@ fn a_row_set_under_a_gutter_keeps_the_picture_it_stands_on() {
     );
 }
 
-/// The thumb a transcript of `turns` one-row thoughts draws in a band `band` rows tall, read at
-/// `scroll`.
 fn thumb_of(turns: u32, band: u16, scroll: Scroll) -> Option<sindri::rows::Thumb> {
     let mut rows = Rows::new();
     rows.measure(Measure::new(120, Surface::none(), None));
@@ -4100,7 +4064,6 @@ fn a_band_with_nothing_to_point_at_draws_no_thumb() {
     );
 }
 
-/// The stop a run ends on: the one entry whose word is the reason a reader missed.
 fn stop_entry(stop: Stop) -> Entry {
     Entry::Stop { stop }
 }
@@ -4398,7 +4361,6 @@ fn a_streaming_answer_draws_the_definitions_that_ended_and_never_one_still_arriv
     );
 }
 
-/// The reader's own words laid a row to a line, so a fold's arithmetic is one the test can state.
 fn prompt_of_lines(lines: usize) -> Entry {
     let text: Vec<String> = (1..=lines).map(|line| format!("line {line}")).collect();
     Entry::Prompt {

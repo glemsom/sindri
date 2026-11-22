@@ -1,6 +1,3 @@
-//! The bytes a key arrives as, answered as the key or the paste they are: a decoder holds the
-//! half of a sequence one read brought, and asks a terminal for nothing.
-
 use crate::composer::Key;
 use crate::mark::Cell;
 use crate::pointer::{Notch, Pointer};
@@ -9,14 +6,10 @@ use crate::pointer::{Notch, Pointer};
 pub enum Event {
     Key(Key),
     Paste(String),
-    /// Whether the terminal says this window is the one being read: a report and never a key.
     Focus(bool),
-    /// The pointer's own report: a wheel's notch or a press, and never a key.
     Pointer(Pointer),
 }
 
-/// What one look at the front of the bytes came to: an event, bytes consumed that answer
-/// nothing, or a wait for the rest of a sequence.
 enum Step {
     Event(Event),
     Taken,
@@ -25,7 +18,6 @@ enum Step {
 
 const ESCAPE: u8 = 0x1b;
 
-/// The bits a modifier mask holds, counted from one: shift, then alt, ctrl and super.
 const SHIFT: u32 = 1;
 
 const CTRL: u32 = 4;
@@ -33,14 +25,13 @@ const CTRL: u32 = 4;
 /// Alt, super, hyper and meta: no act of this frame's is held with one of them.
 const UNANSWERED: u32 = 2 | 8 | 16 | 32;
 
-/// Caps lock and num lock, which a report carries beside the keys held and which name no key.
+/// Caps lock and num lock, which a report carries beside the keys held and name no key.
 const LOCKS: u32 = 64 | 128;
 
-/// The bits a pointer report's button carries for the keys held beside it: shift, alt and ctrl say
-/// nothing about which button was pressed.
+/// The bits a modifier mask holds, counted from one: shift, then alt, ctrl and super.
 const MODIFIERS: u32 = 4 | 8 | 16;
 
-/// The bit a pointer report sets when the pointer moved rather than pressed.
+/// The bit a pointer report sets when the pointer moved and no button was pressed.
 const MOTION: u32 = 32;
 
 /// `ESC [ 2 0 1 ~`: the sequence that ends a bracketed paste, so all before it is one paste.
@@ -71,8 +62,6 @@ impl Decoder {
         self.alone = bytes.len() == 1;
     }
 
-    /// The next answer the bytes hold, or nothing while the sequence they start is still
-    /// arriving: `None` is a decoder waiting for more and never one that is finished.
     pub fn next_event(&mut self) -> Option<Event> {
         loop {
             let step = if self.pasting {
@@ -104,8 +93,6 @@ impl Decoder {
         }
         if byte >= 0x80 {
             if byte < 0xc0 {
-                // A byte that starts no glyph: nothing types one, and a decoder that waited on it
-                // would never answer the key behind it.
                 self.take(1);
                 return Step::Taken;
             }
@@ -146,7 +133,6 @@ impl Decoder {
                 }
             }
             Some(_) => {
-                // Taken rather than held: holding it would stall every key behind it.
                 self.take(1);
                 Step::Taken
             }
@@ -256,8 +242,6 @@ fn held(field: &str) -> Option<u32> {
     field.parse::<u32>().ok().map(|held| held.saturating_sub(1))
 }
 
-/// Whether a control sequence's parameters say the shift key was held: the modifiers are the
-/// last field.
 fn shifted(params: &str) -> bool {
     let modifiers = params.rsplit(';').next().unwrap_or_default();
     held(modifiers).is_some_and(|held| held & SHIFT != 0)
@@ -275,8 +259,6 @@ fn arrow(last: u8) -> Option<Key> {
     }
 }
 
-/// The key one byte names, when it names one: what a control byte is read as, whether it reached
-/// the loop as a byte or as a report that spells it out.
 fn control(byte: u8) -> Option<Key> {
     match byte {
         0x03 => Some(Key::Cancel),
@@ -284,13 +266,11 @@ fn control(byte: u8) -> Option<Key> {
         0x15 => Some(Key::Clear),
         0x18 => Some(Key::Drop),
         b'\t' => Some(Key::Tab),
-        // `Ctrl-Q`, which is why flow control has to be off: a terminal left with `IXON` eats this
-        // byte instead of sending it.
         0x11 => Some(Key::Quit),
         0x19 => Some(Key::Copy),
         0x0f => Some(Key::Fold),
         0x7f | 0x08 => Some(Key::Backspace),
-        // `Ctrl-J` is the plain newline every terminal sends: it breaks a line rather than sending
+        // `Ctrl-J` is the plain newline every terminal sends: it breaks a line and does not send
         // one, and `Enter` is the carriage return `Ctrl-M` is.
         b'\n' => Some(Key::Newline),
         b'\r' => Some(Key::Enter),
@@ -304,7 +284,6 @@ fn control(byte: u8) -> Option<Key> {
 /// the wheel is a button like the rest. A report naming no act of this frame's — a release, a
 /// move, a button nothing hangs from — is no event at all.
 fn pointer(last: u8, params: &str) -> Option<Pointer> {
-    // A release says which button let go, and nothing a frame answers lets go.
     if last != b'M' {
         return None;
     }
@@ -327,8 +306,6 @@ fn pointer(last: u8, params: &str) -> Option<Pointer> {
     }
 }
 
-/// The key a protocol report names: `CSI <code> ; <modifiers> u`. Only the reports this frame's
-/// map has an answer for are answered, because a key nobody answers is not a key.
 fn reported(params: &str) -> Option<Key> {
     // A report says which glyph a layout's shift makes of the key after a colon, and the key
     // before it is the one the frame answers.
@@ -352,8 +329,6 @@ fn reported(params: &str) -> Option<Key> {
     }
 }
 
-/// The byte a `Ctrl` and one key name, for the keys a control byte is the key's own code with its
-/// three high bits taken off: the letters, and the six punctuation keys that share their range.
 fn control_byte(code: u32) -> Option<u8> {
     let key = u8::try_from(code).ok()?;
     matches!(key, b'a'..=b'z' | b'@' | b'[' | b'\\' | b']' | b'^' | b'_').then(|| key & 0x1f)

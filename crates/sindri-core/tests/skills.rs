@@ -1,7 +1,3 @@
-//! Proves skill discovery across the three scopes: what a workspace, a home and the compiled-in
-//! registry offer, which of two skills of one name survives, and that a scope the repository root
-//! does not own is never read. Every fixture is a temp dir, so no real `~/.agents/skills` is read.
-
 use std::path::{Path, PathBuf};
 
 use sindri_core::skills::{Catalog, Diagnostic, Scope, Shadowing};

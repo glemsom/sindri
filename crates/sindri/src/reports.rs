@@ -1,7 +1,3 @@
-//! The threads a run in flight and a wire listing run on, and the reports they land: a flight
-//! pushes a fragment and raises the pipe a signal uses, and paints no cell of its own. Nothing
-//! here reads a key.
-
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -27,9 +23,6 @@ pub(crate) struct Running {
 }
 
 impl Running {
-    /// Drives `prompt` in its own thread: the fragment a wire lands is pushed where the loop takes
-    /// it, and the loop is pinged through the pipe a signal uses, so nothing polls for it. The thread
-    /// hands the launch back when the run stops, so the prompt after it runs in the same session.
     pub(crate) fn start(
         launch: Launch,
         prompt: Prompt,
@@ -47,8 +40,6 @@ impl Running {
         let started = Instant::now();
         let thread = thread::spawn(move || {
             let mut launch = launch;
-            // `drive` failing leaves no stop reason, which the loop cannot do: the marker settles
-            // on the refusal rather than turning for a run nobody is driving.
             let stop = match launch.drive(
                 prompt.text(),
                 &earlier,
@@ -73,8 +64,6 @@ impl Running {
         }
     }
 
-    /// The user's word: the run stops when the request in flight does, and the command it is in
-    /// flight with is killed now.
     pub(crate) fn cancel(&self) {
         self.cancel.now();
     }
@@ -83,14 +72,10 @@ impl Running {
         millis(self.started.elapsed())
     }
 
-    /// Everything the run landed since the last pass. The queue is drained, so each report is
-    /// handed out once.
     pub(crate) fn landed(&mut self) -> Vec<Report> {
         std::mem::take(&mut *lock(&self.pending))
     }
 
-    /// Whether the run's thread ended within `grace`: a wait rather than a join, because a request
-    /// the wire never answers must not hold a launch that is ending.
     pub(crate) fn finished_within(&self, grace: Duration) -> bool {
         let deadline = Instant::now() + grace;
         while Instant::now() < deadline {
@@ -153,7 +138,6 @@ impl Deltas for Reports {
 }
 
 impl Turns for Reports {
-    /// A turn moves no cell here: the status it moves is the launch's, and lands through `told`.
     fn turn(&mut self, _ended: &Turn) {}
 
     fn told(&mut self, told: Told) {
@@ -177,41 +161,30 @@ impl Turns for Reports {
     }
 }
 
-/// A wire being asked what it serves, on a thread of its own: `/model` opens its screen at once
-/// and the names land when they land, because the loop owes a key its answer now.
 pub(crate) struct Asking {
     landing: Arc<Mutex<Option<Listing>>>,
     thread: JoinHandle<()>,
 }
 
-/// Asks the wire the config names what it serves, and pings the loop through the pipe a signal
-/// uses when the answer is in: one more fd the loop waits on, and no timer.
 pub(crate) fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
     let config = config.clone();
     let landing = Arc::new(Mutex::new(None));
     let answer = Arc::clone(&landing);
     let wake = Arc::clone(wake);
     let thread = thread::spawn(move || {
-        // A launch with no wire is one `main` refused before the screen was taken, so the only
-        // answer this thread can leave is a listing.
         if let Some(listing) = served(&Machine::this(), &config) {
             *lock(&answer) = Some(listing);
             wake.ping();
         }
     });
-    // The loop joins it when the listing lands: nothing blocks here, and the frame paints the
-    // screen asking until then.
     Some(Asking { landing, thread })
 }
 
 impl Asking {
-    /// The listing the wire answered with, once.
     pub(crate) fn landed(&mut self) -> Option<Listing> {
         lock(&self.landing).take()
     }
 
-    /// Joins the thread that asked, and keeps no word of it: the listing was taken before, so a
-    /// thread that panicked has nothing left to say.
     pub(crate) fn joined(self) {
         let _ = self.thread.join();
     }

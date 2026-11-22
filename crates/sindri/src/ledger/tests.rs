@@ -1,7 +1,3 @@
-//! The facts a run holds and the one way each is spelled: the value a launch's frame is owed
-//! and a run has yet to fill, the size in spelled tokens, the head of a name and the tail of a
-//! path, each measured by the columns it draws in.
-
 use std::path::{Path, PathBuf};
 
 use sindri_core::policy::{Enforcement, PolicyRecord};
@@ -17,12 +13,8 @@ use crate::pen;
 use crate::readback::{column_of, inks};
 use crate::rows::margins;
 
-/// The columns a rail's row leaves a value: the rail's floor less the ten its label field
-/// holds.
 const ROOM: usize = (FLOOR - FIELD) as usize;
 
-/// The band a ledger test stands in: the rail at its floor, which is what the narrowest frame
-/// that holds one is handed.
 const COLUMNS: u16 = FLOOR;
 
 #[test]
@@ -175,8 +167,6 @@ fn the_facts_a_record_wrote_join_the_facts_the_frame_was_handed() {
     );
 }
 
-/// The one launch a boot frame is drawn from: a workspace that is no checkout of this test's,
-/// so a fact nobody can know yet has nowhere to be read from but the rail itself.
 fn boot() -> Boot {
     Boot {
         wire: Some(Wire::Anthropic),
@@ -511,7 +501,6 @@ fn document(guid: &str) -> SessionDocument {
     }
 }
 
-/// The band a shape is laid on, which is the share the adapter hands in.
 fn band(width: u16, height: u16) -> Rect {
     Rect {
         x: 0,
@@ -521,16 +510,12 @@ fn band(width: u16, height: u16) -> Rect {
     }
 }
 
-/// The dated Anthropic name a real run is served, which is wider than a value column.
 const SERVED: &str = "claude-sonnet-4-5-20250929";
 
-/// A gateway's name: no column of a narrow band holds it, and it breaks at its segments.
 const GATEWAY: &str = "anthropic.claude-3-5-sonnet-20241022-v2:0";
 
-/// What the ledger draws of [`SERVED`]: its head, and the mark saying the date stamp went.
 const CUT: &str = "claude-sonnet-4-5…";
 
-/// Every fact a frame can draw, so a layout test reads a full ledger rather than a slice of one.
 fn frame() -> Facts {
     Facts {
         wire: Some(String::from("anthropic")),
@@ -556,7 +541,6 @@ fn frame() -> Facts {
     }
 }
 
-/// [`frame`] with a run's spend, which is the only fact the foot says.
 fn spent() -> Facts {
     Facts {
         spend: Usage {
@@ -569,12 +553,10 @@ fn spent() -> Facts {
     }
 }
 
-/// The one stop that carries a line of the run's own words.
 fn wire_refused() -> Stop {
     Stop::Error(SecretSet::default().redact("the wire went away"))
 }
 
-/// The facts a frame holds while its run is live.
 fn live() -> Facts {
     Facts {
         state: Some(RunState::Running),
@@ -582,8 +564,6 @@ fn live() -> Facts {
     }
 }
 
-/// A shape's rows on `area`, painted as the adapter paints them: the ground under every cell,
-/// then the rows the ledger laid.
 fn painted_shape(facts: &Facts, shape: Shape, area: Rect, marker: Option<&Pulse>) -> Buffer {
     let palette = Palette::TRUECOLOR;
     let mut buffer = Buffer::empty(area);
@@ -784,7 +764,6 @@ fn the_strip_carries_the_state_beside_the_size_and_lets_it_go_after_every_fact_i
     }
 }
 
-/// One row as a test states it: the column each of its parts starts in, and the glyphs it draws.
 fn stated(parts: &[(u16, &str)]) -> Vec<(u16, String)> {
     parts
         .iter()
@@ -792,8 +771,6 @@ fn stated(parts: &[(u16, &str)]) -> Vec<(u16, String)> {
         .collect()
 }
 
-/// The rows a shape lays on `area`, each read as the columns its parts start in and the glyphs
-/// they draw.
 fn laid(
     facts: &Facts,
     shape: Shape,
@@ -817,8 +794,6 @@ fn laid(
         .collect()
 }
 
-/// The rows a shape lays on `area`, each read as the row of the band it is drawn on, the column
-/// each of its parts starts at, and the glyphs they draw.
 fn placed(facts: &Facts, shape: Shape, area: Rect) -> Vec<(u16, Vec<(u16, String)>)> {
     rows(facts, shape, area, None)
         .iter()
@@ -840,8 +815,6 @@ fn placed(facts: &Facts, shape: Shape, area: Rect) -> Vec<(u16, Vec<(u16, String
         .collect()
 }
 
-/// The screen's rows as a reader sees them: the glyphs of each row, trimmed, and a rule across
-/// the row stated as the rule it is rather than as its eighty glyphs.
 fn read(facts: &Facts, area: Rect) -> Vec<String> {
     placed(facts, Shape::Screen, area)
         .into_iter()
@@ -862,8 +835,6 @@ fn read(facts: &Facts, area: Rect) -> Vec<String> {
         .collect()
 }
 
-/// Every fact the screen draws: the rail's own with a window named, and the ones the record
-/// wrote, over the two skills the run loaded.
 fn run() -> Facts {
     Facts {
         ctx: Some(Ctx {
@@ -876,8 +847,6 @@ fn run() -> Facts {
     .loading(["bash", "records"].into_iter().collect())
 }
 
-/// The screen of a run painted into a band, as the adapter paints it: the ground under every
-/// cell, then the rows the ledger laid.
 fn painted(facts: &Facts, area: Rect) -> Buffer {
     let palette = Palette::TRUECOLOR;
     let mut buffer = Buffer::empty(area);
@@ -891,21 +860,16 @@ fn painted(facts: &Facts, area: Rect) -> Buffer {
     buffer
 }
 
-/// A row `width` columns wide with `text` laid inside the frame's margin and the air beside it.
 fn margined_row(text: &str, width: u16) -> String {
     let mut row = format!("{}{text}", pen::blank(MARGIN));
     row.push_str(&pen::blank(width.saturating_sub(pen::cells(&row))));
     row
 }
 
-/// A row `width` columns wide whose value says its own name: a bare name is no number, so it
-/// starts the row it stands on.
 fn bare_row(value: &str, width: u16) -> String {
     margined_row(value, width)
 }
 
-/// A labelled row `width` columns wide whose value is a number: the label in the field and the
-/// value on the far edge.
 fn hung_row(label: &str, value: &str, width: u16) -> String {
     let at = width
         .saturating_sub(margins())
@@ -920,13 +884,10 @@ fn hung_row(label: &str, value: &str, width: u16) -> String {
     )
 }
 
-/// A labelled row `width` columns wide whose value is a word: the label in the field and the
-/// value reading on from it.
 fn said_row(label: &str, value: &str, width: u16) -> String {
     margined_row(&format!("{}{value}", pen::pad(label, FIELD)), width)
 }
 
-/// One row of a painted band, as a reader sees its glyphs.
 fn glyphs(buffer: &Buffer, y: u16) -> String {
     (buffer.area.x..buffer.area.right())
         .map(|x| {
@@ -1681,7 +1642,6 @@ fn a_name_that_goes_for_want_of_room_is_drawn_whole_once_the_rail_grew_to_hold_i
     }
 }
 
-/// A served name with no hyphen to break at, so no cut of it can keep a segment of it.
 const UNNAMED: &str = "aservednamethatnobreaksanywhere";
 
 fn unnamed() -> Facts {
@@ -1707,8 +1667,6 @@ fn no_row_is_laid_past_the_band_it_is_drawn_in() {
     }
 }
 
-/// Every row a shape lays on `area` starts inside the band and ends inside it, and the band's
-/// height holds them all.
 fn assert_laid_inside(facts: &Facts, shape: Shape, area: Rect, room: u16) {
     let laid = rows(facts, shape, area, None);
 
@@ -1959,8 +1917,6 @@ fn a_wide_frame_draws_the_whole_served_name_where_the_narrowest_ledger_cuts_it_t
     );
 }
 
-/// The model's value as a frame `frame` columns wide draws it, read off the rail beside the
-/// transcript.
 fn model_drawn(facts: &Facts, frame: u16) -> String {
     let area = band(frame, 24);
     let share = split(facts, area);
@@ -2103,8 +2059,6 @@ fn no_served_name_is_laid_in_part_at_any_width_between_twenty_and_two_hundred() 
     }
 }
 
-/// One served name at every width: whole when it fits, its head and the mark when it does not,
-/// and never a piece of a segment on any width.
 fn assert_no_width_lays_a_name_in_part(name: &str) {
     let mut cut = 0;
     for width in 20..=200u16 {

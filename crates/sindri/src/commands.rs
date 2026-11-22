@@ -19,14 +19,12 @@ const STATS: &str = "/stats";
 
 const QUIT: &str = "/quit";
 
-/// A command a reader sends from the draft, and the one line that says what it does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Row {
     pub name: &'static str,
     pub says: &'static str,
 }
 
-/// The commands a launch holds: the three the splash screen names first, and then the rest.
 pub const TABLE: [Row; 7] = [
     Row {
         name: MODEL,
@@ -58,19 +56,14 @@ pub const TABLE: [Row; 7] = [
     },
 ];
 
-/// The first `SPLASH` of the table are the commands the splash screen names.
 pub const SPLASH: usize = 3;
 
-/// The commands card: the words a draft holds, the rows they leave ranked the way a picker ranks — a name
-/// the word starts before a name it holds, and one order for ties — and the row the mark stands on.
 #[derive(Clone, Debug)]
 pub struct Card {
     narrow: Narrow,
 }
 
 impl Card {
-    /// The card a draft opens, and `None` unless its first glyph is a slash and a name holds the word
-    /// after it.
     pub fn of(draft: &str) -> Option<Card> {
         let words = draft.trim();
         match draft.starts_with('/') && recognised(word(words)) {
@@ -81,23 +74,18 @@ impl Card {
         }
     }
 
-    /// The rows the word leaves, in the order the card draws them.
     pub fn rows(&self) -> Vec<Row> {
         ranked(word(self.words()))
     }
 
-    /// The words the card was read from, which are the draft's own.
     pub fn words(&self) -> &str {
         self.narrow.query()
     }
 
-    /// The row the mark stands on.
     pub fn selected(&self) -> usize {
         self.narrow.mark()
     }
 
-    /// The rows the card hands its frame: every row the word leaves with the one line that says what it
-    /// does, and the row the mark stands on drawn in the accent.
     pub fn body(&self) -> Vec<ScreenRow> {
         list::List {
             query: None,
@@ -114,14 +102,11 @@ impl Card {
         .rows()
     }
 
-    /// What choosing the marked row sends: the draft itself where its word already spells the name, and
-    /// the name followed by what the word left otherwise.
     pub fn spelling(&self) -> String {
         self.spelling_of(self.narrow.mark())
             .unwrap_or_else(|| self.words().to_owned())
     }
 
-    /// The draft as the row at `at` spells it: the row's name followed by what the word left.
     pub fn spelling_of(&self, at: usize) -> Option<String> {
         let chosen = *self.rows().get(at)?;
         let words = self.words();
@@ -132,8 +117,6 @@ impl Card {
     }
 }
 
-/// Whether the card holds a row for `word`: a word with no leading slash, or whose name after the
-/// slash neither a name starts nor a name holds, is no command the card knows.
 pub fn recognised(word: &str) -> bool {
     !ranked(word).is_empty()
 }
@@ -152,12 +135,10 @@ impl Kept for Card {
     }
 }
 
-/// The first word of a draft, which is the word the rows are ranked by.
 fn word(draft: &str) -> &str {
     draft.split_whitespace().next().unwrap_or_default()
 }
 
-/// What a draft leaves after the word: from a `:` in that word, or the rest of the line after it.
 fn tail(draft: &str) -> &str {
     let word = word(draft);
     match word.find(':') {
@@ -166,7 +147,6 @@ fn tail(draft: &str) -> &str {
     }
 }
 
-/// The rows the word after the slash leaves, handed to the rank by name.
 fn ranked(asked: &str) -> Vec<Row> {
     let Some(body) = asked.strip_prefix('/') else {
         return Vec::new();
@@ -175,13 +155,10 @@ fn ranked(asked: &str) -> Vec<Row> {
     leaves(by_name().iter().map(|row| (plain(row), *row)), query)
 }
 
-/// The name a query is read against: a command is spelled with a slash and named without one, so a
-/// word that holds a slash of its own names no command at all.
 fn plain(row: &Row) -> &'static str {
     row.name.strip_prefix('/').unwrap_or(row.name)
 }
 
-/// The table in the order its names give, which is the order the rows of one rank come in, sorted once.
 fn by_name() -> &'static [Row] {
     static BY_NAME: OnceLock<Vec<Row>> = OnceLock::new();
     BY_NAME.get_or_init(|| {

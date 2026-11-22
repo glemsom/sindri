@@ -32,13 +32,11 @@ impl Tool {
         &self.description
     }
 
-    /// The schema a call's arguments must match, so a wire knows the shape of what it asks for.
     pub fn parameters(&self) -> &Value {
         &self.parameters
     }
 }
 
-/// One string argument, named and required: every tool here takes exactly one.
 fn argument(name: &str, described: &str) -> Value {
     json!({
         "type": "object",

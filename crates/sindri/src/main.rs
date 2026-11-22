@@ -1,18 +1,18 @@
-mod auth; // the one command that signs in rather than runs
-mod batch; // is the Unix filter: a prompt in, the answer and one newline out
+mod auth;
+mod batch;
 #[cfg(test)]
-mod caps; // the terminals a test states rather than probes
-mod cli; // the command line as clap sees it
-mod doctor; // the honest window: it proves the sandbox
-mod open; // the host spawns the opener, because the sandbox has no display
-mod osc; // sequences that carry words out of the terminal
-mod paste; // the terminal's echo is off while the key is typed
-mod reports; // the threads a run and a wire listing land their reports on
-mod sessions; // reads past runs back
-mod signal; // the one door an outside `SIGINT` and a window change come through
-mod term; // the terminal as a resource: raw mode, the alternate screen, the panic restore, the canvas, and the telling
-mod tui; // the launch: the loop, a key's outcome, where a prompt starts a run and a report lands, and the endings
-mod window; // the terminal outside the frame: its title, its mark, its notification and its focus
+mod caps;
+mod cli;
+mod doctor;
+mod open;
+mod osc;
+mod paste;
+mod reports;
+mod sessions;
+mod signal;
+mod term;
+mod tui;
+mod window;
 
 use std::process::ExitCode;
 
@@ -22,7 +22,6 @@ use sindri_core::first_run::FirstRun;
 
 use crate::cli::{Cli, Command};
 
-/// The exit code for a command line, a prompt or an answer that cannot be used.
 const USAGE: u8 = 2;
 
 fn main() -> ExitCode {
@@ -42,7 +41,6 @@ fn main() -> ExitCode {
         Err(error) => return refuse(&error.to_string(), error.exit_code()),
     };
 
-    // On stderr, because stdout is the answer's alone.
     if asked.is_none() || !first_run.config().is_ready() || cli.is_verbose() {
         eprintln!("{}", first_run.api_key_row());
     }

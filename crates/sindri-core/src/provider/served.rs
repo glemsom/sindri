@@ -71,7 +71,6 @@ impl Client {
                 .read_names(at, &key, &secrets)
                 .map_err(|failure| reason(at, &failure)),
             Ok(None) => Err(credential_source(at.wire())),
-            // A sign-in that would not read says its own words, which no verdict phrase could.
             Err(failure) => Err(failure.message.to_string()),
         };
         let outcome = if current.pair() == *at {
@@ -104,7 +103,6 @@ impl Client {
     }
 }
 
-/// The wire's own reply is never repeated here: a hint is one line, not a body.
 fn reason(at: &Endpoint, failure: &Failure) -> String {
     match failure.verdict {
         Verdict::Unconfigured => credential_source(at.wire()),

@@ -4,7 +4,6 @@ fn spelling(draft: &str) -> String {
     Card::of(draft).expect("a card holds this draft").spelling()
 }
 
-/// The rows a draft leaves, by name, in the order the card draws them.
 fn names(draft: &str) -> Vec<&'static str> {
     Card::of(draft)
         .map(|card| card.rows().iter().map(|row| row.name).collect())

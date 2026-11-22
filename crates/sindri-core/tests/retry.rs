@@ -1,7 +1,3 @@
-//! What the retry policy does, proved without a socket and without sleeping: the waits it takes are
-//! recorded by a fake backoff, so the sequence of delays and the number of attempts are assertions
-//! rather than elapsed time, and the replies it retries are the bytes a fixture recorded.
-
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

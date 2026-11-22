@@ -1,6 +1,3 @@
-//! The mode stack's contract: one key table per mode with no key bound twice in one of them, a screen that
-//! answers only its own keys, and `?` and `↑` resolving where the tables say they do.
-
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
@@ -18,7 +15,6 @@ fn typed(lines: &[&str]) -> View {
     )
 }
 
-/// The same frame with `lines` typed into its draft through the keys a reader's fingers send.
 fn drafted(mut view: View, lines: &[&str]) -> View {
     for (index, line) in lines.iter().enumerate() {
         if index > 0 {
@@ -83,7 +79,6 @@ fn every_row_of_a_table_says_what_its_key_is_and_does() {
     }
 }
 
-/// The act the table of `mode` gives `key`, or nothing where no row of it answers.
 fn act_of(mode: Mode, key: Key) -> Option<Act> {
     mode.table()
         .iter()
@@ -219,8 +214,6 @@ fn a_question_mark_with_a_draft_typed_is_a_glyph_and_not_a_screen() {
 
 #[test]
 fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
-    // The screen is opened on an empty draft, because that is the only place `?` is a key: from there a
-    // glyph that reached the draft under it would show.
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -255,9 +248,6 @@ fn a_screen_answers_its_own_keys_and_swallows_the_drafts() {
 
 #[test]
 fn the_up_arrows_one_arm_is_bound_in_one_row_of_one_table() {
-    // The draft's `↑` is `Act::Up` in exactly one row: the queue's recall and the row above the caret are
-    // one act. A screen's `↑` is its own act — a list's selection is not a caret — and this rule does
-    // not reach it.
     let bound: Vec<(Mode, Key)> = Mode::ALL
         .iter()
         .flat_map(|mode| mode.table().iter().map(move |binding| (*mode, binding)))

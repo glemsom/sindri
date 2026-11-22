@@ -14,8 +14,6 @@ fn probed(environment: &BTreeMap<String, String>, asked: &impl Asked) -> Capabil
     Capabilities::probed(environment, asked, true).0
 }
 
-/// A terminal a test states: the pixel size it reports, the bytes it answers each question
-/// with, and the questions that were put to it.
 #[derive(Default)]
 struct Scripted {
     size: Option<CellSize>,

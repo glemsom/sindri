@@ -1,6 +1,3 @@
-//! What a golden frame cannot hold: the cell the draft's caret waits in, which a frame's cells name by
-//! ink and the pass by a position, and the bands under the cells, which a fixture cannot read at all.
-
 use sindri_core::policy::{Enforcement, PolicyRecord};
 use sindri_core::provider::Route;
 use sindri_core::records::{Dials, SessionDocument, Usage};
@@ -30,10 +27,8 @@ use crate::pulse::STEP_MS;
 use crate::readback::under;
 use crate::rows::{SIGIL, THUMB};
 
-/// The session a test's record names, where the one it names does not matter.
 const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 
-/// Enough facts that the ledger fills its column top to bottom.
 fn rail() -> ledger::Facts {
     ledger::Facts {
         wire: Some(String::from("anthropic")),
@@ -55,13 +50,11 @@ fn rail() -> ledger::Facts {
     }
 }
 
-/// The look the cell at `x`, `y` of the frame reads back as.
 fn look_at(buffer: &Buffer, palette: &Palette, x: u16, y: u16) -> Look {
     Look::of(buffer.cell((x, y)).expect("a cell of the frame"), palette)
         .unwrap_or_else(|| panic!("row {y}, column {x} reads back as no look"))
 }
 
-/// Every cell of `area` the frame draws in the mark ink, read off the cells a reader is shown.
 fn mark_cells(buffer: &Buffer, palette: &Palette, area: Rect) -> Vec<(u16, u16)> {
     let mut found = Vec::new();
     for y in area.y..area.bottom() {
@@ -75,32 +68,26 @@ fn mark_cells(buffer: &Buffer, palette: &Palette, area: Rect) -> Vec<(u16, u16)>
     found
 }
 
-/// The cell the pass placed the terminal's cursor in, counted as the frame's cells are.
 fn caret_of(painted: &Painted) -> Option<(u16, u16)> {
     painted.caret().map(|at| (at.x, at.y))
 }
 
-/// The frame a pass laid out, read off the value it handed back.
 fn laid_out(painted: &Painted) -> Layout {
     painted
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out")
 }
 
-/// The card's body, as the pass that drew it laid the cells out.
 fn card_body(painted: &Painted) -> Rect {
     laid_out(painted)
         .card
         .expect("a frame drawn under a card hands back the body the card gave it")
 }
 
-/// A frame holding a draft of `lines` lines painted in `palette` at `cols` by `rows`, and where
-/// that pass laid it out.
 fn composer(palette: Palette, lines: usize, cols: u16, rows: u16) -> (Buffer, Layout) {
     drafted(Facts::default().asked(), palette, lines, cols, rows)
 }
 
-/// The same band under `facts`, which is what says whether a run is live on it.
 fn drafted(facts: Facts, palette: Palette, lines: usize, cols: u16, rows: u16) -> (Buffer, Layout) {
     let draft: Vec<String> = (1..=lines).map(|line| line.to_string()).collect();
     let mut view = View::of(inked(palette), facts, Transcript::none());
@@ -109,7 +96,6 @@ fn drafted(facts: Facts, palette: Palette, lines: usize, cols: u16, rows: u16) -
     (buffer, laid_out(&told))
 }
 
-/// A workspace holding one file, `src/rows.rs`, for a draft's words to name.
 fn workspace() -> tempfile::TempDir {
     let root = tempfile::tempdir().expect("a temp workspace");
     std::fs::create_dir_all(root.path().join("src")).expect("the directories a file sits in");
@@ -117,8 +103,6 @@ fn workspace() -> tempfile::TempDir {
     root
 }
 
-/// A frame `cols` by `rows` holding `draft`, typed into a band standing in the workspace at `root`,
-/// and where that pass laid it out.
 fn drafting(palette: Palette, root: &Path, draft: &str, cols: u16, rows: u16) -> (Buffer, Layout) {
     let mut view = View::of(
         inked(palette),
@@ -130,19 +114,14 @@ fn drafting(palette: Palette, root: &Path, draft: &str, cols: u16, rows: u16) ->
     (buffer, laid_out(&told))
 }
 
-/// The facts of a band a run is live in, standing on the step `elapsed_ms` of the pulse reaches.
 fn live(elapsed_ms: u64) -> Facts {
     Facts::default()
         .running()
         .pulsed(Some(Pulse::live(elapsed_ms)))
 }
 
-/// The glyphs no frame draws in the composer's band at any width: the corners and the upright that
-/// closed a drawn box.
 const BOX: [char; 5] = ['\u{250c}', '\u{2510}', '\u{2514}', '\u{2518}', '\u{2502}'];
 
-/// The glyph the cell at column `x` of row `y` is drawn as, and a blank for a column the frame
-/// leaves empty.
 fn glyph_at(buffer: &Buffer, x: u16, y: u16) -> char {
     buffer
         .cell((x, y))
@@ -150,15 +129,12 @@ fn glyph_at(buffer: &Buffer, x: u16, y: u16) -> char {
         .unwrap_or(' ')
 }
 
-/// The ground the `row`th row of a composer's band `rows` rows tall sits on, read off the shade the
-/// band is claimed from rather than worked out a second time.
 fn shade_row(palette: &Palette, row: u16, rows: u16) -> Color {
     Shade::composer(Rect::new(0, 0, 1, rows), None, None, palette)
         .expect("a band of rows")
         .row(row)
 }
 
-/// The column the head of a live run's pulse stands in, read off the row it was drawn on.
 fn head_at(buffer: &Buffer, band: Rect) -> u16 {
     let row = drawn_glyphs(buffer, band.y);
     let at = row
@@ -396,8 +372,6 @@ fn the_head_keeps_the_one_edge_in_the_gutters_of_the_card_that_takes_the_keys() 
             band.x,
             band.right()
         );
-        // The head row is read in the card's two gutters, under the scrim the card greys the
-        // frame with: the row keeps its edge and gives no rule of its own up.
         for x in (band.x..left).chain(right + 1..band.right()) {
             assert_eq!(
                 under(&buffer, x, band.y),
@@ -731,8 +705,6 @@ fn no_frame_at_any_width_draws_a_corner_or_an_upright_in_the_composer() {
                 );
             }
             let drafted = drawn_glyphs(&buffer, band.y + 1);
-            // The margin takes two columns at each edge, so a band of four columns or fewer keeps
-            // no column for the gutter and the word beside it.
             assert!(
                 cols <= MARGIN * 2 || drafted.starts_with("\u{2503}\u{203a}1"),
                 "the draft of a {cols} column frame does not open past the blank and the sigil of \
@@ -746,8 +718,6 @@ fn no_frame_at_any_width_draws_a_corner_or_an_upright_in_the_composer() {
 fn the_count_is_refused_where_the_head_would_lose_its_last_column_and_drawn_one_column_wider() {
     let palette = Palette::TRUECOLOR;
     let root = workspace();
-    // The count of one file is six columns and the head keeps two beside it, so an eight column
-    // band leaves the head none of its own and a nine column band leaves it one.
     let (refused, laid) = drafting(palette, root.path(), "read src/rows.rs", 8, 24);
     let band = laid.composer;
 
@@ -1282,8 +1252,6 @@ fn a_frame_asked_for_no_colour_draws_the_band_in_the_same_glyphs() {
 
     for y in band.y..band.bottom() {
         match y == band.y {
-            // The head is the one row the two palettes draw differently: the one that spells an
-            // edge fills it, and the one that spells none rules it.
             true => assert_eq!(
                 (drawn_glyphs(&flat, y), drawn_glyphs(&coloured, y)),
                 (pen::filled(band.width, HAIRLINE), pen::blank(band.width)),
@@ -1419,9 +1387,6 @@ fn the_band_beside_a_rail_is_drawn_in_the_frames_whole_width_and_the_rail_closes
     }
 }
 
-/// A frame whose transcript runs to the seam the rail is drawn across, on a terminal that places
-/// pictures and the face switched off or on one that places none: the two differ in the plane under
-/// their cells and in no row the rail gives a picture.
 fn seamed(draws: bool) -> View {
     let mut view = View::of(
         match draws {
@@ -1499,15 +1464,12 @@ fn a_frame_that_places_pictures_and_one_that_does_not_agree_on_the_shade_of_ever
     }
 }
 
-/// The reader's own words a run was asked with.
 fn words_asked(text: &str) -> Entry {
     Entry::Prompt {
         text: SecretSet::default().redact(text),
     }
 }
 
-/// A frame whose transcript holds the reader's own words and whose composer holds the draft they are
-/// typing beside them.
 fn asked_beside_a_draft() -> View {
     let mut view = View::of(
         Capabilities::default(),
@@ -1552,8 +1514,6 @@ fn a_prompt_drawn_beside_a_live_draft_stands_on_the_one_band_both_are_read_on() 
     );
 }
 
-/// A frame whose transcript opens on the reader's own words, on a terminal that places pictures or
-/// on one that places none, with a ledger rail beside it.
 fn asked_beside_a_rail(draws: bool) -> View {
     View::of(
         match draws {
@@ -1606,8 +1566,6 @@ fn the_prompt_in_the_transcript_keeps_the_band_it_is_read_on_beside_the_seam() {
     }
 }
 
-/// A frame whose answer holds a fence line wider than the band, so the band cuts it in the columns
-/// the rail's plane reaches back over.
 fn cut_beside_a_rail() -> View {
     View::of(
         pictured().faced(false),
@@ -1679,7 +1637,6 @@ fn the_rail_draws_the_same_words_in_the_same_inks_with_a_picture_placed_and_with
     }
 }
 
-/// A frame whose rail carries Sindri's face over its top rows, with a transcript beside it.
 fn faced_beside_a_seam() -> View {
     View::of(
         pictured(),
@@ -1740,7 +1697,6 @@ fn the_seam_runs_unbroken_under_the_face_and_the_rule_that_closes_it_opens_past_
     );
 }
 
-/// A band is a surface only because a name is read from a foreground and a modifier.
 #[test]
 fn the_rail_and_a_code_well_are_painted_over_their_own_surface() {
     let palette = Palette::TRUECOLOR;
@@ -1805,8 +1761,6 @@ fn the_rail_and_a_code_well_are_painted_over_their_own_surface() {
     );
 }
 
-/// The launch a boot frame is drawn from: a config's wire and model, the workspace the launch
-/// stands in and its branch, and the enforcement its policy holds.
 fn boot() -> Boot {
     Boot {
         wire: Some(sindri_core::wire::Wire::Anthropic),
@@ -1817,16 +1771,11 @@ fn boot() -> Boot {
     }
 }
 
-/// The rows of the transcript band a boot frame draws, from its left edge and cut where the
-/// rail's columns begin: the rail has rows of its own, and they are not the splash screen's.
 fn splash(cols: u16, rows: u16) -> Vec<String> {
     let (buffer, band) = splash_frame(cols, rows, false);
     band_of(&buffer, band)
 }
 
-/// The cells a splash screen frame `cols` by `rows` is painted into, and what it draws: a
-/// terminal that places pictures is handed the rail's face beside the block, and one that places
-/// none is handed the splash screen alone.
 fn splash_frame(cols: u16, rows: u16, draws: bool) -> (Buffer, Rect) {
     let mut view = View::of(
         match draws {
@@ -1840,15 +1789,10 @@ fn splash_frame(cols: u16, rows: u16, draws: bool) -> (Buffer, Rect) {
     (buffer, laid_out(&told).transcript)
 }
 
-/// Whether this cell is no glyph of the splash screen's: one a picture is placed over, or the
-/// bytes that place it.
 fn placed(cell: &ratatui::buffer::Cell) -> bool {
     cell.skip || cell.symbol().contains(PLACED) || cell.symbol().contains('\u{1b}')
 }
 
-/// The rows of `band` in `buffer` a splash screen frame drew, its left edge first and cut where
-/// the rail's columns begin. A cell a picture is placed over reads as a blank: it is no glyph
-/// of the splash screen's, and the bytes that place it are no word either.
 fn band_of(buffer: &Buffer, band: Rect) -> Vec<String> {
     (band.y..band.bottom())
         .map(|y| {
@@ -1867,8 +1811,6 @@ fn band_of(buffer: &Buffer, band: Rect) -> Vec<String> {
         .collect()
 }
 
-/// The splash screen's block as `band_of` draws it: the rows from the first it fills to the
-/// last, with the margin the band gives it on every side trimmed away.
 fn block(drawn: &[String]) -> Vec<String> {
     let mut rows: Vec<String> = drawn
         .iter()
@@ -1881,16 +1823,12 @@ fn block(drawn: &[String]) -> Vec<String> {
     rows
 }
 
-/// The rows of `buffer` inside `band` that are a placement of Sindri's face, read off the
-/// glyph every cell of a picture is written as.
 fn pictured_rows(buffer: &Buffer, band: Rect) -> Vec<u16> {
     (band.y..band.bottom())
         .filter(|y| (band.x..band.right()).any(|x| buffer.cell((x, *y)).is_some_and(placed)))
         .collect()
 }
 
-/// The columns of `row` in `buffer` that hold a glyph, which is where the splash screen's block
-/// begins and where it ends.
 fn filled_columns(buffer: &Buffer, band: Rect, y: u16) -> (u16, u16) {
     let filled: Vec<u16> = (band.x..band.right())
         .filter(|x| {
@@ -1908,16 +1846,12 @@ fn filled_columns(buffer: &Buffer, band: Rect, y: u16) -> (u16, u16) {
     }
 }
 
-/// The row of `band` the splash screen's wordmark stands on: the one row of the block that
-/// says the product's name.
 fn wordmark_row(buffer: &Buffer, band: Rect) -> u16 {
     (band.y..band.bottom())
         .find(|y| drawn_row(buffer, *y).contains("sindri"))
         .expect("the splash screen draws the wordmark")
 }
 
-/// The first and last columns of `buffer` inside `band` that a splash screen frame's block
-/// holds a glyph in: the widest row of it, which is where the block begins and where it ends.
 fn block_columns(buffer: &Buffer, band: Rect, drawn: &[String]) -> (u16, u16) {
     let (first, last) = filled_rows(drawn, band);
     let mut left = band.right();
@@ -1933,8 +1867,6 @@ fn block_columns(buffer: &Buffer, band: Rect, drawn: &[String]) -> (u16, u16) {
     (left, right)
 }
 
-/// The rows of `band` a splash screen frame fills, the first and the last: the block's own
-/// rows, with the blank rows the band gives it above and under left out.
 fn filled_rows(drawn: &[String], band: Rect) -> (u16, u16) {
     let filled: Vec<u16> = drawn
         .iter()
@@ -2185,8 +2117,6 @@ fn a_frame_too_narrow_for_a_rail_is_every_cell_a_terminal_that_places_no_picture
         for x in area.x..area.right() {
             let (with, without) = (&pictured[(x, y)], &placeless[(x, y)]);
             match band.contains(Position::new(x, y)) {
-                // The band is the one surface a picture is drawn under, so the two terminals
-                // differ there in the ink behind a word and in no word.
                 true => assert_eq!(
                     with.symbol(),
                     without.symbol(),
@@ -2300,7 +2230,6 @@ fn drawn_row(buffer: &Buffer, y: u16) -> String {
         .collect()
 }
 
-/// The row `hints` are drawn as in a footer `width` columns wide, with the queue `depth` deep.
 fn hints_drawn(hints: &[Hint], width: u16, depth: &str) -> Buffer {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 0, width, 1);
@@ -2310,8 +2239,6 @@ fn hints_drawn(hints: &[Hint], width: u16, depth: &str) -> Buffer {
     buffer
 }
 
-/// The hints as the footer draws them: each key, one blank, and the words that say what it
-/// does.
 fn said(hints: &[Hint], depth: &str) -> Vec<String> {
     hints
         .iter()
@@ -2323,8 +2250,6 @@ fn depth(view: &View) -> String {
     view.queue().label().unwrap_or_default()
 }
 
-/// The whole set of hints a frame honours, as its footer would draw them were the row wide
-/// enough.
 fn whole(view: &View) -> Vec<String> {
     said(&view.hints(), &depth(view))
 }
@@ -2350,8 +2275,6 @@ fn asking(queued: usize) -> View {
     view
 }
 
-/// A frame whose mark stands on a fence line wider than the band, so the sideways keys are hints it
-/// can honour.
 fn marked_fence() -> View {
     let mut view = View::of(
         Capabilities::default(),
@@ -2374,7 +2297,6 @@ fn drawn_footer(view: &mut View, cols: u16, rows: u16) -> String {
     drawn_row(&buffer, laid_out(&told).footer.y)
 }
 
-/// The footer row a boot frame draws.
 fn footer(cols: u16, rows: u16) -> String {
     drawn_footer(
         &mut View::of(
@@ -2446,7 +2368,6 @@ fn a_hint_a_frame_cannot_answer_is_not_drawn_in_it() {
     }
 }
 
-/// The hints a footer row reads as: each a key, one blank and the words that say what it does.
 fn said_row(row: &str) -> Vec<&str> {
     match row.is_empty() {
         true => Vec::new(),
@@ -2679,8 +2600,6 @@ fn a_footer_hint_holding_a_wide_glyph_is_not_drawn_past_the_rows_edge() {
 
 #[test]
 fn a_hint_the_row_has_no_room_for_is_not_drawn_at_all() {
-    // Narrower than any frame a footer is drawn at, the row's width is the whole of the cut: a
-    // hint is drawn whole or not at all, and the gap that would have introduced it goes with it.
     assert_eq!(
         footer(15, 24).trim_end(),
         "  Enter send",
@@ -2693,8 +2612,6 @@ fn a_hint_the_row_has_no_room_for_is_not_drawn_at_all() {
     );
 }
 
-/// Whether `one` reads louder than `other`: the frame's own order of light, and the weight a
-/// look wears on top of it.
 fn louder(one: Look, other: Look) -> bool {
     let rank = |look: Look| {
         let ink = match look.ink() {
@@ -2708,8 +2625,6 @@ fn louder(one: Look, other: Look) -> bool {
     rank(one) > rank(other)
 }
 
-/// The runs of row `y` from `from` to `to` as the cells are drawn, each with the look it reads
-/// back in.
 fn runs_of(buffer: &Buffer, palette: &Palette, y: u16, from: u16, to: u16) -> Vec<(Look, String)> {
     let mut runs: Vec<(Look, String)> = Vec::new();
     for x in from..to {
@@ -2809,8 +2724,6 @@ fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_ex
     );
 }
 
-/// One row of the band that says which turn it is: a turn draws no row of its own, so the frames
-/// these tests count rows with say which one they stand on with a thought drawn as one row.
 fn thought(turn: u32) -> Entry {
     Entry::Reasoning {
         turn,
@@ -2818,8 +2731,6 @@ fn thought(turn: u32) -> Entry {
     }
 }
 
-/// A frame whose transcript is `count` one-row entries, each saying which turn it is: where a row
-/// stands in the frame is then a fact of what the row says.
 fn turns(count: u32) -> View {
     View::of(
         Capabilities::default(),
@@ -2828,7 +2739,6 @@ fn turns(count: u32) -> View {
     )
 }
 
-/// The same transcript on a terminal that reports a pointer: what a notch moves.
 fn turns_taken(count: u32) -> View {
     View::of(
         pointing(),
@@ -2837,8 +2747,6 @@ fn turns_taken(count: u32) -> View {
     )
 }
 
-/// The entries of one turn and a `cargo test` run of `rows` rows, which is a result longer than
-/// its fold.
 fn run_entries(rows: u32) -> Vec<Entry> {
     let output: String = (1..=rows)
         .map(|line| format!("test rows::a_row_of_output_{line} ... ok"))
@@ -2865,8 +2773,6 @@ fn run_entries(rows: u32) -> Vec<Entry> {
     ]
 }
 
-/// A frame whose transcript is that run while it is still in flight: the work has not settled, so
-/// the band draws its thought, its call and its result as they landed.
 fn folded_run(rows: u32) -> View {
     View::of(
         Capabilities::default(),
@@ -2875,7 +2781,6 @@ fn folded_run(rows: u32) -> View {
     )
 }
 
-/// The same frame once the run has ended, which settles the work into one row.
 fn settled_run(rows: u32) -> View {
     let mut entries = run_entries(rows);
     entries.push(Entry::Assistant {
@@ -2890,7 +2795,6 @@ fn settled_run(rows: u32) -> View {
     )
 }
 
-/// The words of a prompt long enough to fold, a line to a row at the band's width.
 fn long_prompt_words() -> String {
     (1..=12)
         .map(|line| format!("words {line} of the prompt"))
@@ -2898,14 +2802,12 @@ fn long_prompt_words() -> String {
         .join("\n")
 }
 
-/// That prompt as the reader typed it.
 fn long_prompt() -> Entry {
     Entry::Prompt {
         text: SecretSet::default().redact(long_prompt_words()),
     }
 }
 
-/// A frame holding that prompt on a terminal that reports a pointer.
 fn folded_prompt() -> View {
     View::of(
         pointing(),
@@ -2914,7 +2816,6 @@ fn folded_prompt() -> View {
     )
 }
 
-/// Every row the frame draws, top to bottom.
 fn frame_rows(buffer: &Buffer) -> Vec<String> {
     let area = buffer.area;
     (area.y..area.bottom())
@@ -3061,7 +2962,6 @@ fn a_mark_grown_over_a_row_opens_the_fold_it_belongs_to() {
     );
 }
 
-/// The cells a frame `cols` by `rows` is painted into.
 fn painted(view: &mut View, cols: u16, rows: u16) -> Buffer {
     let area = screen(cols, rows);
     let mut buffer = Buffer::empty(area);
@@ -3069,7 +2969,6 @@ fn painted(view: &mut View, cols: u16, rows: u16) -> Buffer {
     buffer
 }
 
-/// The cells a frame `cols` by `rows` is painted into, and what that pass told the terminal.
 fn painted_and_told(view: &mut View, cols: u16, rows: u16) -> (Buffer, Painted) {
     let area = screen(cols, rows);
     let mut buffer = Buffer::empty(area);
@@ -3253,8 +3152,6 @@ fn a_notch_on_a_frame_whose_terminal_reports_no_pointer_moves_nothing() {
     );
 }
 
-/// A frame with the `@` picker open over a workspace of two files, painted at 120 by 40 with
-/// the pointer taken: what a press on one of its rows is read against.
 fn picking() -> (View, tempfile::TempDir) {
     let workspace = tempfile::tempdir().expect("a temp workspace");
     for file in ["alpha.rs", "zeta.rs"] {
@@ -3275,7 +3172,6 @@ fn picking() -> (View, tempfile::TempDir) {
     (view, workspace)
 }
 
-/// The row a frame draws `said` on, so a press can land where the words are.
 fn row_holding(buffer: &Buffer, said: &str) -> u16 {
     (buffer.area.y..buffer.area.bottom())
         .find(|y| drawn_row(buffer, *y).contains(said))
@@ -3450,8 +3346,6 @@ fn a_page_up_takes_the_transcript_back_by_the_band_it_is_drawn_in() {
     );
 }
 
-/// A frame painted at the tail and then taken a page back, which is the state every return to
-/// the tail is asked to leave.
 fn scrolled_back() -> View {
     let mut view = turns(100);
     painted(&mut view, 120, 40);
@@ -3464,8 +3358,6 @@ fn scrolled_back() -> View {
     view
 }
 
-/// The one row a frame draws saying the transcript is scrolled back, cut at the margin it opens
-/// past, and the row it stands on.
 fn notice_of(buffer: &Buffer) -> (String, u16) {
     let area = buffer.area;
     for y in area.y..area.bottom() {
@@ -3621,8 +3513,6 @@ fn one_row_that_landed_is_said_in_the_singular() {
     );
 }
 
-/// One row of the frame with the thumb's gutter column cut off it: the rows a reader reads, and not
-/// the cell the geometry marks them with.
 fn unthumbed(buffer: &Buffer, y: u16) -> String {
     drawn_row(buffer, y).chars().skip(1).collect()
 }
@@ -4132,8 +4022,6 @@ fn the_caret_is_placed_on_the_carets_row_of_the_draft() {
     );
 }
 
-/// The row holding `words`, and the column of its first glyph: what the frame drew, read back
-/// from the cells rather than from the constants the frame was drawn from.
 fn place_of(buffer: &Buffer, words: &str) -> (String, u16) {
     let area = buffer.area;
     for y in area.y..area.bottom() {
@@ -4178,9 +4066,6 @@ fn the_draft_is_set_in_the_column_an_answers_prose_opens_in() {
     );
 }
 
-/// The frame the picture fixtures draw: an answer naming a diagram outside the workspace and a
-/// tall field the workspace's own svg draws, then prose enough that a band of any size is read
-/// from inside the answer rather than from its tail alone.
 fn field(rows: u16) -> Buffer {
     let mut text = String::from(
         "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n\
@@ -4207,7 +4092,6 @@ fn field(rows: u16) -> Buffer {
     painted(&mut view, 120, rows)
 }
 
-/// The first row of `buffer` between `from` and `to` a picture is placed over, if one is.
 fn placed_row(buffer: &Buffer, from: u16, to: u16) -> Option<u16> {
     (from..to).find(|y| {
         (0..buffer.area.width).any(|x| placed(buffer.cell((x, *y)).expect("a cell of the frame")))
@@ -4216,7 +4100,6 @@ fn placed_row(buffer: &Buffer, from: u16, to: u16) -> Option<u16> {
 
 #[test]
 fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
-    // A band this tall holds the whole history, the hundred-row field among it.
     let rows = 130;
     let buffer = field(rows);
 
@@ -4234,8 +4117,6 @@ fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
     );
 }
 
-/// The frame the `picture` fixture draws at 120x40, read from the head of an answer long enough
-/// that the band carries a thumb down its gutter.
 #[test]
 fn the_thumb_keeps_its_cell_on_a_row_whose_picture_was_refused() {
     let buffer = field(40);
@@ -4253,14 +4134,12 @@ fn the_thumb_keeps_its_cell_on_a_row_whose_picture_was_refused() {
     );
 }
 
-/// The frame rows whose first column is the thumb.
 fn thumb_rows(buffer: &Buffer) -> Vec<u16> {
     (buffer.area.y..buffer.area.bottom())
         .filter(|y| drawn_row(buffer, *y).starts_with(THUMB))
         .collect()
 }
 
-/// A frame whose transcript is `count` one-row entries, read from `scroll`.
 fn scrolled(count: u32, scroll: Scroll) -> View {
     View::of(
         Capabilities::default(),
@@ -4351,15 +4230,12 @@ fn a_frame_too_narrow_for_a_gutter_draws_no_thumb() {
     );
 }
 
-/// A frame whose first entry is a thought of one wide glyph, which a band this narrow sets in
-/// its first column because the gutter would leave it no room.
 fn wide(cols: u16) -> Buffer {
     let mut entries = vec![Entry::Reasoning {
         turn: 1,
         text: SecretSet::default().redact("\u{8003}"),
     }];
     entries.extend((1..=79).map(thought));
-    // A window taken further back than the transcript reaches lands on its first row.
     painted(
         &mut View::of(
             Capabilities::default(),
@@ -4402,7 +4278,6 @@ fn a_band_that_leaves_a_row_no_gutter_keeps_its_word_and_gives_up_the_thumb() {
     );
 }
 
-/// Whether any row of the frame holds `said`.
 fn holds(buffer: &Buffer, said: &str) -> bool {
     !rows_holding(buffer, said).is_empty()
 }
@@ -4463,7 +4338,6 @@ fn a_frame_with_a_screen_over_it_draws_its_headings_as_the_words_they_are() {
     );
 }
 
-/// A row's glyphs, each wide one taken once although it is drawn in two cells.
 fn drawn_glyphs(buffer: &Buffer, y: u16) -> String {
     let area = buffer.area;
     let mut glyphs = String::new();
@@ -4477,21 +4351,16 @@ fn drawn_glyphs(buffer: &Buffer, y: u16) -> String {
     glyphs
 }
 
-/// The ends the band asks for, as the frame last drew it.
 fn ends(view: &View) -> Ends {
     view.composer().ends()
 }
 
-/// The rows of the composer's band the draft and its queue are drawn in, cut at their trailing
-/// blanks: the head over them and the hints under them are no row of the draft.
 fn draft_rows(buffer: &Buffer, band: Rect, ends: Ends) -> Vec<String> {
     (band.y.saturating_add(ends.above)..band.bottom().saturating_sub(ends.below))
         .map(|y| drawn_glyphs(buffer, y).trim_end().to_owned())
         .collect()
 }
 
-/// An idle frame holding `count` waiting prompts behind the draft `draft`, painted at `cols`
-/// by `rows`, the frame it laid out and the ends the band asked for.
 fn waiting_behind(
     palette: Palette,
     draft: &str,
@@ -4852,7 +4721,6 @@ fn a_card_that_takes_a_query_places_the_caret_past_the_last_glyph_typed_at_it() 
     );
 }
 
-/// The `/model` screen open over an empty frame: the other card whose list has a query.
 fn model_card() -> View {
     let mut view = View::of(
         Capabilities::default(),
@@ -5121,8 +4989,6 @@ fn a_draft_holding_a_wide_glyph_places_the_caret_in_the_column_the_glyph_occupie
     );
 }
 
-/// Where a frame `cols` by `rows` wide places the caret, read off the pass rather than off the
-/// view: the band's rows are a fact about the width, so nothing is asked before it is painted.
 fn placed_at(draft: &str, cols: u16, rows: u16) -> Option<(u16, u16)> {
     let mut view = View::of(
         Capabilities::default(),
@@ -5182,8 +5048,6 @@ fn a_caret_at_the_end_of_a_full_row_is_placed_in_the_bands_last_column() {
     );
 }
 
-/// The ink the gutter of the row at `x`, `y` is drawn in: the cell its sigil stands in, or the blank
-/// the indent leaves there.
 fn gutter_ink(buffer: &Buffer, palette: &Palette, x: u16, y: u16) -> Ink {
     look_at(buffer, palette, x, y).ink()
 }
@@ -5338,7 +5202,6 @@ fn every_palette_draws_the_inks_of_a_draft_row_in_its_own_colours() {
             Transcript::none(),
         );
         view.paste("/model src/rows.rs `a span` plain");
-        // A draft that names a command opens the commands card, whose scrim would dim every cell.
         view.key(Key::Escape);
         let (buffer, told) = painted_and_told(&mut view, 120, 40);
         let band = laid_out(&told).composer;
@@ -5488,8 +5351,6 @@ fn the_band_alone_places_the_caret_and_no_answer_or_prompt_does() {
     );
 }
 
-/// A session document naming `session`: the record a band reads its transcript under, and nothing
-/// else a frame draws.
 fn document(session: &str) -> SessionDocument {
     SessionDocument {
         session: String::from(session),
@@ -5586,7 +5447,6 @@ fn the_band_draws_each_exchange_the_record_holds() {
     }
 }
 
-/// The rows of the frame `said` is drawn in.
 fn rows_holding(buffer: &Buffer, said: &str) -> Vec<String> {
     frame_rows(buffer)
         .into_iter()
@@ -5848,15 +5708,12 @@ fn a_record_handed_from_another_session_is_read_from_its_first_entry() {
     );
 }
 
-/// An answer of many rows, one line of its own to a row: no glyph is repeated to spell one.
 fn long_answer(which: &str) -> String {
     (1..=20)
         .map(|line| format!("The {which} answer says its line {line} was drawn in the band.\n"))
         .collect()
 }
 
-/// The rows a band holds of the whole `entries` laid at `cols`: every entry laid out, less the
-/// separating row the exchange the transcript opens with has nothing above it to draw.
 fn laid_rows(entries: &[Entry], cols: u16) -> usize {
     entries
         .iter()
@@ -6240,12 +6097,10 @@ fn a_word_a_run_says_after_slash_new_is_drawn_and_the_rows_it_superseded_are_not
     );
 }
 
-/// Whether `row` holds no words at all.
 fn blank(row: &str) -> bool {
     row.trim().is_empty()
 }
 
-/// A frame on a transcript of `count` exchanges.
 fn conversation(count: u32) -> View {
     View::of(
         pointing(),
@@ -6254,8 +6109,6 @@ fn conversation(count: u32) -> View {
     )
 }
 
-/// The entries of `count` exchanges, each a prompt of one row of words and an answer of one row: a
-/// prompt opens on a blank row above it but the first, and so its place is a fact of its number.
 fn exchanges(count: u32) -> Vec<Entry> {
     (1..=count)
         .flat_map(|asked| {
@@ -6272,8 +6125,6 @@ fn exchanges(count: u32) -> Vec<Entry> {
         .collect()
 }
 
-/// The number of the first prompt the frame's transcript band draws, read off the words a prompt is
-/// set from, so a case names the prompt the band opens on and not the row of it.
 fn first_prompt(buffer: &Buffer) -> u32 {
     (buffer.area.y..buffer.area.bottom())
         .map(|y| drawn_row(buffer, y))
@@ -6922,8 +6773,6 @@ fn both_brackets_are_named_on_the_keys_screen() {
     }
 }
 
-/// The frame `draws` is drawn on, painted at the size it asks for: both seams of the frame are on
-/// it, and the rail's facts fill its column.
 fn seamed_frame(draws: bool, cols: u16, rows: u16) -> (Buffer, Painted) {
     painted_and_told(&mut seamed(draws), cols, rows)
 }

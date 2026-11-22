@@ -1,8 +1,4 @@
-//! The pulse as a value rather than as a picture: a frame holds the one moment it was painted at, so the
-//! boundaries — what 999 ms reads as, which glyph is 80 ms later, a marker settled at 12.4 s still saying
-//! 12.4 s a minute on — are reachable only from here.
-
-mod frame; // one paint-and-read for every test
+mod frame;
 
 use sindri::capability::Capabilities;
 use sindri::composer::Key;

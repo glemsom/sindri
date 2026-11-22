@@ -1,6 +1,3 @@
-//! Three attempts, waiting 200 ms and then twice that, and only ever for a failure the wire
-//! itself called retryable — never one that already streamed text, and never a cancel.
-
 use std::time::Duration;
 
 use super::{Failure, Verdict};

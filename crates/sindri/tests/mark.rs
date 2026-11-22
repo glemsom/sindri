@@ -1,9 +1,5 @@
-//! The mark's contract with the clipboard, proved where a reader's eyes are: a drag on a headless screen, the
-//! frame painted from it, the cells the highlight covers read back out of that frame, and those bytes held
-//! to what `Ctrl-Y` hands out. A snapshot would compare the frame with a copy of itself.
-
-mod caps; // the terminals these frames are drawn on
-mod frame; // one paint-and-read for every test
+mod caps;
+mod frame;
 
 use frame::Frame;
 
@@ -20,7 +16,6 @@ use sindri_core::redact::SecretSet;
 
 const SCREEN: (u16, u16) = (100, 30);
 
-/// The newer answer as the model wrote it: what a copy with no mark takes, written out once and compared whole.
 const NEWEST: &str = "A width change drops what the cache held and reflows on the next \
                       paint, once, because a paint lays an entry out to draw it and then \
                       keeps the answer.";
@@ -46,7 +41,6 @@ fn answer(turn: u32, text: &str) -> Entry {
     }
 }
 
-/// The frame the pass laid out, which a pass that drew a frame always hands back.
 fn laid_of(frame: &Frame) -> Layout {
     frame
         .told()
@@ -54,15 +48,12 @@ fn laid_of(frame: &Frame) -> Layout {
         .expect("a pass that drew a frame hands back the frame it laid out")
 }
 
-/// The cells the highlight covers, read off the rows the transcript was given.
 fn highlighted(frame: &Frame, area: Rect) -> String {
     let mut rows: Vec<String> = Vec::new();
     for y in area.y..area.bottom() {
         let mut line = String::new();
         for (x, glyph) in (area.x..area.right()).zip(frame.row(y).chars()) {
             if frame.ink(x, y) != Some(Ink::Mark) {
-                // The mark covers one run of cells a row, so the first cell of it that is not marked
-                // ends the run this row carries.
                 if !line.is_empty() {
                     break;
                 }
@@ -77,7 +68,6 @@ fn highlighted(frame: &Frame, area: Rect) -> String {
     rows.join("\n")
 }
 
-/// What `Ctrl-Y` hands the terminal, read after the frame the key changed has been painted.
 fn copied(view: &mut View) -> String {
     frame::painted(view, SCREEN.0, SCREEN.1);
     match view.key(Key::Copy) {
@@ -370,7 +360,6 @@ fn ctrl_y_on_a_frame_with_nothing_marked_and_no_answer_hands_out_nothing() {
         Transcript::none(),
     );
 
-    // Painted first, because a copy reads the span the last paint drew.
     frame::painted(&mut view, SCREEN.0, SCREEN.1);
     let outcome = view.key(Key::Copy);
 

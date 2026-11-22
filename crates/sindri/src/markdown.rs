@@ -1,7 +1,3 @@
-//! Markdown becomes the rows an entry is drawn as: `pulldown-cmark` finds the constructs
-//! and this module decides what each of them looks like, and a fenced block the text ends
-//! inside is still drawn as a block, because the wire streams one and never doubles back.
-
 use std::sync::OnceLock;
 
 use pulldown_cmark::{
@@ -18,21 +14,14 @@ use crate::picture::{self, Picture, Surface};
 use crate::rows::{Row, split_at};
 use crate::size::{self, Sized};
 
-/// The parser's options: GFM tables, task lists, strikethrough, footnotes and alerts on, because
-/// CommonMark leaves all five out. Alerts ride the GFM option alone: it is what reads the marker a
-/// quote opens with, and what makes a footnote a reference to a definition rather than three runs.
 const OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_TASKLISTS)
     .union(Options::ENABLE_STRIKETHROUGH)
     .union(Options::ENABLE_FOOTNOTES)
     .union(Options::ENABLE_GFM);
 
-/// The line under a way's words: an ink of its own and never a face, so the words keep the
-/// weight the block and its marks gave them.
 const UNDERLINE: Ink = Ink::Dim;
 
-/// The accent at half its weight: the look the composer's edge is drawn in, so a heading's rule and
-/// a fence's tag read as the accent of the frame they sit in.
 const FAINT_ACCENT: Look = Look::plain(Ink::Accent).wearing(Faces::FAINT);
 
 const ACCENT_BOLD: Look = Look::plain(Ink::Accent).wearing(Faces::BOLD);
@@ -40,23 +29,16 @@ const BOLD_PLAIN: Look = Look::plain(Ink::Plain).wearing(Faces::BOLD);
 
 const HAIRLINE: char = '─';
 
-/// One cell wide, so it stands in the place of the whitespace it takes and never widens a row.
 const GUIDE: char = '│';
 
-/// The digits a footnote's number is drawn with, one cell each, so the number is never wider than
-/// the bracketed reference it stands in the place of.
 const SUPERSCRIPT: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
 
-/// Whether an answer is all the words it will have: a definition whose block has not ended yet is
-/// gathered by an answer still arriving, and drawn only once its blank line lands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Wholeness {
     Whole,
     Arriving,
 }
 
-/// The bullet a list item's mark is: the two columns a task's box stands in the place of, so a
-/// task's words begin where an ordinary item's do.
 const BULLET: &str = "• ";
 
 const TICK: char = '✓';
@@ -66,21 +48,14 @@ pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
 }
 
-/// The same markdown with `reserve` columns given up on the first row alone, the one a
-/// marker stands beside: every row after it is laid out at the full width, which is what
-/// makes a live answer and a settled one the same picture with one glyph moved.
 pub fn rows_under(text: &str, cols: u16, reserve: u16) -> Vec<Row> {
     rows_on(text, cols, reserve, &Surface::none())
 }
 
-/// The same markdown on a `surface`: a picture is a block, so how many rows one takes is
-/// the layout's business and only the surface can answer it.
 pub fn rows_on(text: &str, cols: u16, reserve: u16, surface: &Surface) -> Vec<Row> {
     rows_in(text, cols, reserve, "", surface, Wholeness::Whole)
 }
 
-/// The same markdown set in `gutter`: the rows come back opening with it, so an answer's words
-/// begin where its entry's do and a block's bar stands in the gutter rather than past it.
 pub(crate) fn rows_in(
     text: &str,
     cols: u16,
@@ -95,17 +70,12 @@ pub(crate) fn rows_in(
     if !gutter.is_empty() {
         room.base = vec![(String::from(gutter), Look::plain(Ink::Plain))];
     }
-    // Each event is handed the span it came from, which is how a mermaid fence knows
-    // whether its own closing line has arrived or the wire is still writing it.
     for (event, span) in Parser::new_ext(text, OPTIONS).into_offset_iter() {
         room.event(event, &text[span]);
     }
     room.finish()
 }
 
-/// A call's body laid as the rows it is drawn as, with the path it names a way to the file the run
-/// judged: a path wider than the row is broken over two rows, each carrying the whole destination.
-/// Nothing is laid when the words do not name the path.
 pub fn body(text: &str, cols: u16, way: &Way) -> Option<Vec<Row>> {
     if way.written().is_empty() {
         return None;
@@ -137,8 +107,6 @@ fn syntaxes() -> &'static SyntaxSet {
     SYNTAXES.get_or_init(SyntaxSet::load_defaults_newlines)
 }
 
-/// The look a kind of word wears, read off the scope `syntect` puts it in: a `syntect` theme colours
-/// a cell by RGB, where a cell of this frame is an ink a fixture writes down by name.
 fn kinds() -> &'static [(Scope, Look)] {
     static KINDS: OnceLock<Vec<(Scope, Look)>> = OnceLock::new();
     KINDS.get_or_init(|| {
@@ -170,15 +138,10 @@ fn kinds() -> &'static [(Scope, Look)] {
     })
 }
 
-/// Whether a level is drawn at twice the cell where the terminal sizes text: the two highest,
-/// which are the two a long answer's shape is read from.
 fn large(level: HeadingLevel) -> bool {
     matches!(level, HeadingLevel::H1 | HeadingLevel::H2)
 }
 
-/// The look a level of heading is drawn in, and the mark of the rule it carries under it: the
-/// double under the highest, the single under the one beneath it, and none under a level told
-/// apart by its ink and its weight alone.
 fn heading(level: HeadingLevel) -> (Look, Option<char>) {
     match level {
         HeadingLevel::H1 => (Look::new(Ink::Accent, Face::Bold), Some('═')),
@@ -190,8 +153,6 @@ fn heading(level: HeadingLevel) -> (Look, Option<char>) {
     }
 }
 
-/// The name an alert is drawn under and the ink it is said in: one ink of the frame's own to each
-/// kind, quiet for a note and the frame's alarm for a caution.
 fn alert(kind: BlockQuoteKind) -> (&'static str, Ink) {
     match kind {
         BlockQuoteKind::Note => ("Note", Ink::Muted),
@@ -202,8 +163,6 @@ fn alert(kind: BlockQuoteKind) -> (&'static str, Ink) {
     }
 }
 
-/// The rule under the heading in hand: the mark it is drawn with and the width of the widest row
-/// the heading has written, which is the width the rule is drawn at.
 struct Rule {
     mark: char,
     wide: usize,
@@ -218,29 +177,22 @@ impl Rule {
         self.wide = self.wide.max(cells);
     }
 
-    /// The run of marks the rule is drawn as, no wider than the room the heading's rows had.
     fn run(&self, room: usize) -> String {
         pen::filled(pen::columns(self.wide.min(room)), self.mark)
     }
 }
 
-/// A list item's marker: the run that stands beside its words on its first row, and the ink it wears.
 struct Mark {
     text: String,
     ink: Ink,
 }
 
-/// One run of the row in hand that is a way to somewhere: the column it begins at past the words'
-/// own edge, the columns it covers, and where it goes.
 struct Laid {
     left: usize,
     width: usize,
     destination: String,
 }
 
-/// The room a block is being laid out in, and the rows it has been laid out as so far.
-/// The gutters a construct adds are subtracted from the room before a word is placed and
-/// never after, so no row this writes runs over the width and gets clipped by the paint.
 struct Room {
     wide: u16,
     rows: Vec<Row>,
@@ -248,64 +200,31 @@ struct Room {
     used: usize,
     spaced: bool,
     block: Look,
-    /// The faces the marks open inside the block in hand asked for, outermost first.
     faces: Vec<Face>,
     lead: Vec<(String, Look)>,
-    /// The gutter every row of the entry opens with, which a block's own bar stands in the place of.
     base: Vec<(String, Look)>,
-    /// The markers of the list items open, outermost first: every row is indented by the ones
-    /// outside it and by the width of the innermost.
     marks: Vec<Mark>,
     lists: Vec<Option<u64>>,
     first: bool,
-    /// Whether the last row put down is a blank one, so two blocks never stand under two blanks.
     blank: bool,
-    /// How many rows stood laid when an alert's label was drawn, while that label is still the last
-    /// of them.
     labelled: Option<usize>,
-    /// The code block in hand: the highlighter's parse carries from one line of it to the next,
-    /// so it lives with the block and not with the room.
     code: Option<Code>,
     mermaid: Option<Mermaid>,
-    /// The table in hand: read whole before a row of it is drawn, because a column is as wide
-    /// as the widest cell the table holds.
     table: Option<Table>,
     rule: Option<Rule>,
-    /// The destination the words in hand are a way to, while a link is being said.
     destination: Option<String>,
-    /// The runs of the row in hand that are ways to somewhere, measured from the words' own left
-    /// edge: laid as the words land, so a link that wraps is a run on each row it wrote.
     laid: Vec<Laid>,
-    /// The columns the first row gives up to a marker laid at the frame's left edge, and
-    /// nothing once that row has been written.
     reserve: usize,
     surface: Surface,
-    /// The picture being read: the source it points at and the words written over it, which
-    /// are what its block is spoken of as. Nothing is drawn until it closes, because its words
-    /// are inside it.
     image: Option<(String, String)>,
-    /// How many cells a glyph of the block in hand is drawn over: two inside a heading a terminal
-    /// sizes text for, and one everywhere else.
     scale: u16,
-    /// The footnotes the answer's references named, in the order they were read: a reference's
-    /// number is where its name stands here.
     refs: Vec<String>,
-    /// The definitions the answer wrote, gathered rather than laid: a definition is drawn once, at
-    /// the foot, and never where the answer wrote it.
     notes: Vec<Note>,
-    /// The definition being gathered, which `notes` holds once its block ends.
     gathering: Option<Note>,
-    /// Whether the answer is whole, which a definition still arriving is not drawn under.
     wholeness: Wholeness,
-    /// The code block in hand, counted off the blocks this answer has opened, and none outside one:
-    /// it is what tags the rows a fence's lines are drawn as.
     fence: Option<usize>,
-    /// How many code blocks this answer has opened.
     opened: usize,
-    /// The line of a fence the row being flushed was drawn from, which no other row has: set just
-    /// before the flush that lays it.
     source: Option<String>,
-    /// The fence the row being flushed names, while that row is the tag row it opens with.
     naming: Option<usize>,
 }
 
@@ -413,8 +332,6 @@ impl Room {
                     table.close_cell();
                 }
             }
-            // A mark adds a face to a run and never an ink: the word keeps the colour the block
-            // gave it.
             Event::Start(Tag::Strong) => self.faces.push(Face::Bold),
             Event::Start(Tag::Emphasis) => self.faces.push(Face::Italic),
             Event::Start(Tag::Strikethrough) => self.faces.push(Face::Crossed),
@@ -440,10 +357,7 @@ impl Room {
                     let look = self.prose_look();
                     let way = self.destination.clone();
                     match &mut self.table {
-                        // A cell is measured only once the whole table has been read.
                         Some(table) => table.text(&text, look, way.as_deref()),
-                        // A picture's words are kept aside for the row it is spoken of on:
-                        // they are the block's, not the paragraph's.
                         None => match &mut self.image {
                             Some((_, alt)) => alt.push_str(&text),
                             None => self.prose(&text, look),
@@ -451,8 +365,6 @@ impl Room {
                     }
                 }
             },
-            // A chip is placed whole and never broken on its spaces, so the spacing it was written
-            // with is the spacing it is drawn in.
             Event::Code(text) => {
                 let look = match self.destination.is_some() {
                     true => Look::plain(Ink::Accent).underlined(UNDERLINE),
@@ -468,8 +380,6 @@ impl Room {
                 self.destination = Some(String::from(&*dest_url));
             }
             Event::End(TagEnd::Link) => self.destination = None,
-            // A soft break is the line the source was wrapped on, not one the writer drew:
-            // the paragraph is reflowed to the room.
             Event::SoftBreak => {
                 let look = self.prose_look();
                 let way = self.destination.clone();
@@ -492,8 +402,6 @@ impl Room {
         }
     }
 
-    /// A definition is gathered and never laid where it was written: its events are kept for the
-    /// foot, and its block is whole only once the blank line that ends it has arrived.
     fn note(&mut self, event: Event, span: &str) {
         match event {
             Event::Start(Tag::FootnoteDefinition(name)) => {
@@ -518,8 +426,6 @@ impl Room {
         }
     }
 
-    /// A reference stands as the number of its footnote, which counts the references as the answer
-    /// reads them: a name already met keeps the number it was given.
     fn reference(&mut self, name: &str) {
         let at = match self.refs.iter().position(|known| known == name) {
             Some(at) => at,
@@ -531,8 +437,6 @@ impl Room {
         self.run(&superscript(at.saturating_add(1)), Look::plain(Ink::Dim));
     }
 
-    /// The names a definition's own words reference take their number where its block stands, and
-    /// are gathered at the foot with the answer's own.
     fn referenced(&mut self, events: &[(Event<'static>, String)]) {
         for (event, _) in events {
             let Event::FootnoteReference(name) = event else {
@@ -544,8 +448,6 @@ impl Room {
         }
     }
 
-    /// One run of glyphs in the words of the block in hand, or in the cell of a table being read,
-    /// which is laid only once the whole table has arrived.
     fn run(&mut self, text: &str, look: Look) {
         let way = self.destination.clone();
         match &mut self.table {
@@ -571,8 +473,6 @@ impl Room {
         };
     }
 
-    /// A heading closes under the rule its level carries, in the block's own gutter, so a
-    /// heading in a quote keeps the bar behind its rule.
     fn close_heading(&mut self) {
         self.flush_if_written();
         let rule = self.rule.take();
@@ -593,8 +493,6 @@ impl Room {
         }
     }
 
-    /// Drawn in the block's own gutter, so a rule in a quote keeps the bar and one in an item hangs
-    /// under its mark.
     fn draw_rule(&mut self) {
         self.flush_if_written();
         self.open_block();
@@ -607,9 +505,6 @@ impl Room {
         self.push(Row::of(spans));
     }
 
-    /// The words of a paragraph, heading or item, placed one at a time, so a word the row
-    /// cannot hold is the next row's and never a clipped one. The spacing the source put between
-    /// two runs is kept, so a full stop written against a link's word stays against it.
     fn prose(&mut self, text: &str, look: Look) {
         let mut rest = text;
         let mut space = self.spaced;
@@ -636,14 +531,10 @@ impl Room {
             .fold(Faces::PLAIN, |worn, face| worn.and(Faces::wearing(*face)))
     }
 
-    /// The look a way's words are drawn in: the accent, wearing the faces the block and its marks
-    /// gave them, under the line a way wears.
     fn way(&self) -> Look {
         Look::new(Ink::Accent, self.block.wearing(self.worn()).faces()).underlined(UNDERLINE)
     }
 
-    /// The look the block's own words are drawn in: a way's while a link is being said, and the
-    /// block's wearing the marks opened inside it otherwise.
     fn prose_look(&self) -> Look {
         match self.destination.is_some() {
             true => self.way(),
@@ -651,9 +542,6 @@ impl Room {
         }
     }
 
-    /// One run of glyphs placed at the end of the row in hand, carried to the next row when it
-    /// does not fit and broken only when it is alone on its row and still wider than the room:
-    /// a run is kept whole where a whole run fits, because half a word is not the word written.
     fn place(&mut self, text: &str, look: Look, space: bool) {
         let mut rest = text;
         let mut space = space;
@@ -683,8 +571,6 @@ impl Room {
         }
     }
 
-    /// The space between two words: the block's own, and between two words of one way the way's,
-    /// so a link's line and the cells a reader opens are one.
     fn between(&mut self) {
         match self.reaches() {
             true => {
@@ -701,8 +587,6 @@ impl Room {
         }
     }
 
-    /// Whether the way being said already covers the column the next word begins at, which is
-    /// what makes the space before it the way's own rather than the block's.
     fn reaches(&self) -> bool {
         let Some(destination) = &self.destination else {
             return false;
@@ -712,9 +596,6 @@ impl Room {
         })
     }
 
-    /// Extends the row in hand with `text`, and — while a way is being said — the cells it lands
-    /// on are that way's: a run is kept per row, so a link wider than the band is one run on each
-    /// row it wrote and each carries the whole destination.
     fn linked(&mut self, text: &str, look: Look) {
         let left = self.used;
         let width = usize::from(pen::cells(text));
@@ -745,9 +626,6 @@ impl Room {
         }
     }
 
-    /// The table in hand as the rows it is drawn as, each cell wrapped to its column's width
-    /// and its header ruled off from the header's own row, so a rule and the row above it cannot
-    /// disagree by a column. A table past the room wraps inside its cells, never into a paragraph.
     fn draw_table(&mut self) {
         let Some(table) = self.table.take() else {
             return;
@@ -777,8 +655,6 @@ impl Room {
         }
     }
 
-    /// A table with no row of it to be drawn on: each column is drawn in its turn, its heading
-    /// over its own cells, and a dim rule under that heading as wide as the column.
     fn draw_columns(&mut self, table: &Table, available: usize) {
         for at in 0..table.columns() {
             if at > 0 {
@@ -805,9 +681,6 @@ impl Room {
         }
     }
 
-    /// A code block opens with a `▏` bar and its language's tag, and a parse that carries from
-    /// line to line. A language no syntax definition names is drawn plain rather than refused:
-    /// an unknown language is the wire's business and never the run's error.
     fn open_code(&mut self, kind: CodeBlockKind, span: &str) {
         self.open_block();
         self.lead.push((String::from("▏ "), Look::plain(Ink::Dim)));
@@ -823,11 +696,8 @@ impl Room {
             self.naming = Some(self.opened);
             self.flush();
         }
-        // The tag row is no line of the fence: the lines under it are the ones the reader walks.
         self.fence = Some(self.opened);
         self.opened = self.opened.saturating_add(1);
-        // A mermaid fence is a picture and not code: its source is kept so the drawing can be
-        // made when the block closes, and so the reason it could not be drawn prints under it.
         if info.language == "mermaid" {
             let fence = match closed(span) {
                 true => Fence::Closed,
@@ -845,8 +715,6 @@ impl Room {
         }
     }
 
-    /// The file a fence names drawn beside its language: the accent at faint weight, clipped to the
-    /// columns the tag row has left, so a name never wraps and never claims a row of its own.
     fn draw_name(&mut self, file: &str) {
         let room = self.room().saturating_sub(self.used).saturating_sub(1);
         if file.is_empty() || room == 0 {
@@ -857,9 +725,6 @@ impl Room {
         self.extend(&kept, FAINT_ACCENT);
     }
 
-    /// A code block closes. A mermaid fence says what became of it — a picture placed over the
-    /// source, nothing while it is still arriving, one sentence under the source when it did not
-    /// draw — because a diagram that is simply absent cannot be told from a build that cannot draw.
     fn close_code(&mut self) {
         self.fence = None;
         self.flush_if_written();
@@ -879,17 +744,12 @@ impl Room {
                         Err(refusal) => self.caption(&refusal.message()),
                     }
                 }
-                // A fence still arriving, and a picture this terminal cannot place, are drawn as
-                // the source alone.
                 _ => {}
             }
         }
         self.lead.pop();
     }
 
-    /// Draws `picture` over the block that begins at `at`, growing the block to the picture's
-    /// height: the bar of the quote it is in runs down the rows added, so the source a reader
-    /// copies and the cells the picture is placed over are one height.
     fn pictured(&mut self, at: usize, picture: &Picture) {
         let height = at.saturating_add(usize::from(picture.rows()));
         while self.rows.len() < height {
@@ -900,7 +760,6 @@ impl Room {
         }
     }
 
-    /// One sentence under the block in hand: what a picture that is not there is said with.
     fn caption(&mut self, reason: &str) {
         self.prose(reason, Look::plain(Ink::Dim));
         self.flush_if_written();
@@ -908,8 +767,6 @@ impl Room {
 
     fn open_quote(&mut self, kind: Option<BlockQuoteKind>) {
         if kind.is_some() {
-            // The label is a row of the quote's own, so the words of the block before it are laid
-            // first, in the gutter they were written in.
             self.flush_if_written();
         }
         self.open_block();
@@ -919,8 +776,6 @@ impl Room {
         }
     }
 
-    /// The row an alert names its kind on, in the quote's own gutter: the block's first row, so an
-    /// item's mark stands beside it.
     fn draw_label(&mut self, kind: BlockQuoteKind) {
         let (name, ink) = alert(kind);
         let (kept, cut) = split_at(name, self.room_cells());
@@ -955,8 +810,6 @@ impl Room {
         self.first = true;
     }
 
-    /// A task's mark stands in the bullet its item opened with, where the words beside it are said
-    /// with no leading blank; an ordinal mark keeps its number and the box stands beside it.
     fn mark_task(&mut self, checked: bool) {
         let (glyph, ink) = match checked {
             true => (TICK, Ink::Ok),
@@ -980,9 +833,6 @@ impl Room {
         self.first = false;
     }
 
-    /// A picture closes: the block it is, spoken of as its words on the first of its rows and
-    /// measured into the cells it takes under them. The words are written even where the terminal
-    /// places the picture over them, because they are what a copy of the block takes.
     fn close_image(&mut self) {
         let Some((source, alt)) = self.image.take() else {
             return;
@@ -1012,21 +862,15 @@ impl Room {
                 self.pictured(at, &measured);
             }
         }
-        // The last row of a picture is a cell of the picture, so it does not stand in for
-        // the gap after it.
         self.blank = false;
         self.gap();
     }
 
-    /// A block opens: a mark never outlives the block it opened in, so no face is carried into
-    /// one the wire did not write it in.
     fn open_block(&mut self) {
         self.faces.clear();
         self.gap();
     }
 
-    /// One blank row between two blocks, nothing at the top of the answer and never two blank
-    /// rows where a block already stands under one.
     fn gap(&mut self) {
         let under_label = self.labelled.take() == Some(self.rows.len());
         if !self.rows.is_empty() && !self.blank && !under_label {
@@ -1039,8 +883,6 @@ impl Room {
         let runs = self.runs(gutter);
         let scale = usize::from(self.scale);
         if let Some(rule) = &mut self.rule {
-            // The rule is as wide as the heading is drawn: the cells the sizing leaves where it
-            // was drawn large, and the words where the band's edge left it no whole cell.
             rule.wrote(match runs.is_empty() {
                 true => self.used,
                 false => self.used.saturating_mul(scale),
@@ -1072,8 +914,6 @@ impl Room {
         self.line.clear();
         self.push(row);
         if sized {
-            // A scaled glyph is drawn over the row under it as well, so that row is the block's
-            // own: it keeps the gutter and says nothing else, because no cell of it is the frame's.
             self.first = false;
             let under = Row::of(self.gutter());
             self.push(under);
@@ -1083,9 +923,6 @@ impl Room {
         self.first = false;
     }
 
-    /// The row in hand as the runs a terminal draws at more than one cell, one run per span: none
-    /// at all where the band's edge leaves one of them no whole cells, because a scaled glyph is
-    /// never cut by a column and a row is drawn one way or the other.
     fn runs(&self, gutter: usize) -> Vec<Sized> {
         if self.scale == 1 {
             return Vec::new();
@@ -1106,15 +943,12 @@ impl Room {
         runs
     }
 
-    /// The spans of the row in hand: the gutter of the block, then the words placed in it.
     fn spans(&self) -> Vec<(String, Look)> {
         let mut spans = self.gutter();
         spans.extend(self.line.iter().cloned());
         spans
     }
 
-    /// The columns the words of the row in hand are set past: the gutter the block gives them up
-    /// to, which a way it names is measured from.
     fn columns(&self) -> usize {
         self.gutter()
             .iter()
@@ -1122,9 +956,6 @@ impl Room {
             .sum()
     }
 
-    /// The bars every row of the block in hand stands behind: the bar a block opened at, or the
-    /// entry's own gutter where it opened at none, so a code block's bar stands in that gutter and
-    /// its words begin where the answer's do. A band too narrow for the bars and a glyph keeps none.
     fn bars(&self) -> &[(String, Look)] {
         let bars = match self.lead.is_empty() {
             true => &self.base,
@@ -1140,9 +971,6 @@ impl Room {
         }
     }
 
-    /// The columns every row of the block in hand gives up before its words: the bars it is
-    /// quoted behind, and the marks it is indented by — the innermost of them said on an item's
-    /// first row alone.
     fn gutter(&self) -> Vec<(String, Look)> {
         let mut spans = self.bars().to_vec();
         for (at, mark) in self.marks.iter().enumerate() {
@@ -1156,8 +984,6 @@ impl Room {
         spans
     }
 
-    /// `row` as it is drawn in the block in hand: behind the bars the block is quoted behind and
-    /// under the marks it is indented by, so a table in a quote keeps the quote's gutter.
     fn guttered(&mut self, row: Row) {
         if self.bars().is_empty() && self.marks.is_empty() {
             self.push(row);
@@ -1186,8 +1012,6 @@ impl Room {
         (self.room_cells() / usize::from(self.scale)).max(1)
     }
 
-    /// The columns the block in hand is drawn across: the band's, less the gutters it is set in
-    /// and the columns of the first row a marker stands beside.
     fn room_cells(&self) -> usize {
         let bars: usize = self
             .bars()
@@ -1199,8 +1023,6 @@ impl Room {
             .iter()
             .map(|mark| usize::from(pen::cells(&mark.text)))
             .sum();
-        // The reserve holds only while no row has been written: a marker stands beside the
-        // first row alone.
         let reserve = match self.rows.is_empty() {
             true => self.reserve,
             false => 0,
@@ -1212,8 +1034,6 @@ impl Room {
             .max(1)
     }
 
-    /// One row of nothing when the text wrote none: an entry with nothing to say is still a row
-    /// of the transcript.
     fn finish(mut self) -> Vec<Row> {
         self.flush_if_written();
         if self.rows.is_empty() {
@@ -1223,9 +1043,6 @@ impl Room {
         self.rows
     }
 
-    /// The answer's foot: one hairline across the room the answer's own gutter leaves, then each
-    /// definition its references named. A definition no reference names, and one whose block is
-    /// still arriving, are drawn nowhere, and an answer with neither has no foot.
     fn foot(&mut self) {
         let definitions = self.definitions();
         if definitions.is_empty() {
@@ -1243,9 +1060,6 @@ impl Room {
         }
     }
 
-    /// Each definition laid in a room of its own, in the order its reference was read, under the
-    /// number of that reference as its gutter: a wrapped definition hangs under its number and the
-    /// answer's own bars stand behind it.
     fn definitions(&mut self) -> Vec<Row> {
         let mut laid = Vec::new();
         let mut opened = self.opened;
@@ -1260,8 +1074,6 @@ impl Room {
             let mut room = Room::new(self.wide, &self.surface);
             room.base.clone_from(&self.base);
             room.refs.clone_from(&self.refs);
-            // A definition's fences are numbered after the answer's, so no two blocks of one entry
-            // are a fence and its namesake.
             room.opened = opened;
             room.marks.push(Mark {
                 text: format!("{} ", superscript(number)),
@@ -1271,7 +1083,6 @@ impl Room {
                 room.event(event.clone(), span);
             }
             room.flush_if_written();
-            // A definition that wrote nothing is still the number its reference stands under.
             if room.rows.is_empty() {
                 let gutter = room.gutter();
                 room.push(Row::of(gutter));
@@ -1284,21 +1095,15 @@ impl Room {
     }
 }
 
-/// One definition the answer wrote, kept as the events it was written as and laid at the foot.
 struct Note {
     name: String,
     events: Vec<(Event<'static>, String)>,
-    /// Whether the blank line that ends the definition's block has arrived.
     ended: bool,
 }
 
 struct Mermaid {
     source: String,
-    /// Whether the closing line has arrived. A fence still arriving is never rendered, so a
-    /// half-written diagram costs no pass and never flickers.
     fence: Fence,
-    /// The row the block opened on, which is the row its picture is placed over. A fence that
-    /// carried a language opened it one row up, so the two cases count from different rows.
     at: usize,
 }
 
@@ -1346,8 +1151,6 @@ fn breaking(tag: &str) -> bool {
     }
 }
 
-/// A footnote's number as the digits it is drawn with: one cell a digit, so the number of any
-/// reference is narrower than the bracketed form it stands in the place of.
 fn superscript(number: usize) -> String {
     number
         .to_string()
@@ -1357,8 +1160,6 @@ fn superscript(number: usize) -> String {
         .collect()
 }
 
-/// `None` for a line that is not a fence: indented more than the three columns a fence may
-/// be, or carrying a run shorter than three.
 fn fence_line(line: &str) -> Option<(char, usize, &str)> {
     let line = line.trim_end();
     let indent = line.len() - line.trim_start_matches(' ').len();
@@ -1377,19 +1178,13 @@ fn fence_line(line: &str) -> Option<(char, usize, &str)> {
     }
 }
 
-/// One line of a fence: the words it was written as, and the runs the frame draws them as.
 struct CodeLine {
     source: String,
     runs: Vec<(String, Look)>,
 }
 
-/// One code block in hand, and the parse `syntect` carries across its lines: a string that
-/// opens on one line and closes on the next is one string only because the parse outlives it.
 struct Code {
-    /// Nothing when the language is one no syntax definition names: the block is drawn plain.
     parse: Option<(ParseState, ScopeStack)>,
-    /// Whether the block is a `diff`, whose rows wear one ink for the marker each opens with: a
-    /// tinted row never reaches the parse, and the rows the tint does not claim are its own.
     diff: bool,
 }
 
@@ -1407,8 +1202,6 @@ impl Code {
         }
     }
 
-    /// Every line of `text` beside the runs the frame draws it as: the words as written are what a
-    /// copy of the fence hands back, and the runs are what the frame makes of them.
     fn highlight(&mut self, text: &str) -> Vec<CodeLine> {
         let mut lines = Vec::new();
         let mut rest = text.split('\n').peekable();
@@ -1427,8 +1220,6 @@ impl Code {
         lines
     }
 
-    /// One line of code as the runs it is drawn as. A parse that fails is a line drawn plain
-    /// rather than a run that stops.
     fn line(&mut self, line: &str) -> Vec<(String, Look)> {
         if self.diff
             && let Some(ink) = ink_of(line)
@@ -1477,8 +1268,6 @@ fn ink_of(line: &str) -> Option<Ink> {
     }
 }
 
-/// What a fence's info string says: the word its language is named by, and the file it names after
-/// it, as `diff path/to/file` does. A string of one word names no file.
 fn info(tag: &str) -> Info<'_> {
     let tag = tag.trim();
     let language = tag.split_whitespace().next().unwrap_or_default();
@@ -1490,12 +1279,9 @@ fn info(tag: &str) -> Info<'_> {
 
 struct Info<'a> {
     language: &'a str,
-    /// The file the fence names, and nothing where its string names one word only.
     file: &'a str,
 }
 
-/// `runs` with the last of the line's leading whitespace drawn as the frame's dim guide. Only a
-/// space or a tab ever gives way, so no guide stands over a glyph, a fence bar or a quote's bar.
 fn guided(runs: Vec<(String, Look)>) -> Vec<(String, Look)> {
     let mut lead = 0;
     let mut last = None;
@@ -1530,16 +1316,12 @@ fn guided(runs: Vec<(String, Look)>) -> Vec<(String, Look)> {
     laid
 }
 
-/// How many bytes of `text` open with blank space: what a guide may stand in.
 fn leading(text: &str) -> usize {
     text.bytes()
         .take_while(|byte| *byte == b' ' || *byte == b'\t')
         .count()
 }
 
-/// The look the innermost kind of scope stands for. The stack is read from its top down, so
-/// the most particular kind of word wins over the block it sits in, and a scope no kind
-/// names is the frame's own ink.
 fn look_of(scopes: &ScopeStack) -> Look {
     for scope in scopes.as_slice().iter().rev() {
         if let Some((_, look)) = kinds().iter().find(|(kind, _)| kind.is_prefix_of(*scope)) {
@@ -1561,9 +1343,6 @@ struct Table {
 
 type Cell = Vec<Said>;
 
-/// One run of a cell, and where a run of words goes when it is a way somewhere: a cell is
-/// measured whole before a row of it is drawn, so what it names travels with the words it was
-/// written as, and a break it holds is a run of its own rather than a row of the block's.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Said {
     Words {
@@ -1575,7 +1354,6 @@ enum Said {
 }
 
 impl Table {
-    /// A cell's words, worn bold while the header is being read.
     fn text(&mut self, text: &str, look: Look, destination: Option<&str>) {
         if text.is_empty() {
             return;
@@ -1647,9 +1425,6 @@ impl Table {
     }
 }
 
-/// The columns of a table laid out in `budget` columns: a column keeps its own width where
-/// the table fits, and where it does not every column takes an equal share and what a narrow
-/// one leaves goes to the next that can spend it. Nothing when not even one column each fits.
 fn fit(naturals: &[usize], budget: usize) -> Option<Vec<usize>> {
     if budget < naturals.len() {
         return None;
@@ -1687,8 +1462,6 @@ fn lines_of(cells: &[Cell], widths: &[usize]) -> Vec<Vec<Row>> {
         .iter()
         .enumerate()
         .map(|(at, width)| {
-            // A picture's height is not a column's width, so this room has no surface for
-            // one: a cell is measured for the words that fit it.
             let mut room = Room::new(u16::try_from(*width).unwrap_or(u16::MAX), &Surface::none());
             for said in cells.get(at).into_iter().flatten() {
                 match said {
@@ -1728,8 +1501,6 @@ fn joined(line: &[Row], widths: &[usize], aligns: &[Alignment]) -> Row {
         let cell = line.get(at);
         let wrote = cell.map_or(0, Row::width);
         let last = at + 1 == widths.len();
-        // The last column keeps no blank past its words, nor any where it wrote nothing: padding
-        // either would draw cells that say nothing, and a row is a run of glyphs and not a box.
         let spare = match last && wrote == 0 {
             true => 0,
             false => width.saturating_sub(usize::from(wrote)),
@@ -1756,13 +1527,10 @@ fn joined(line: &[Row], widths: &[usize], aligns: &[Alignment]) -> Row {
     row
 }
 
-/// A run of blank cells worn as a row's own words are, so a pad is drawn in the frame's ink.
 fn blanks(cells: usize) -> Row {
     Row::of([(pen::blank(pen::columns(cells)), Look::plain(Ink::Plain))])
 }
 
-/// The rule under a header: the header's own row with every word spent as `─` and every bar
-/// as `┼`, so the rule is exactly as wide as the row above it.
 fn header_rule(widths: &[usize]) -> Row {
     let mut text = String::new();
     for (at, width) in widths.iter().enumerate() {
@@ -1774,8 +1542,6 @@ fn header_rule(widths: &[usize]) -> Row {
     Row::of([(text, Look::plain(Ink::Dim))])
 }
 
-/// The widest line of a cell: its runs are added up to a break and no further, because the rows a
-/// cell is drawn as are the lines its break leaves.
 fn measured(cell: &[Said]) -> usize {
     let mut widest = 0;
     let mut line = 0;

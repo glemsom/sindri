@@ -1,7 +1,3 @@
-//! Redaction is a type rather than a habit: every string that leaves the core is a `Redacted`,
-//! whose `Display`, `Debug` and `Serialize` scrub through one `SecretSet` of literals and no
-//! pattern, since a pattern that misses is worse than a literal that matches.
-
 use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;

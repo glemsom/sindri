@@ -1,7 +1,3 @@
-//! What `sindri sessions` hands a person and a script: `list` newest first, `show` from a whole id or an
-//! unambiguous prefix, and `--json` in the files' own shape, read back as bytes from the spawned binary.
-//! Every session is a temp `XDG_STATE_HOME` written by hand, so no test needs a network, a key or a config.
-
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -9,7 +5,6 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 struct State {
-    /// Held so the directory outlives the paths that name it.
     _root: TempDir,
     home: PathBuf,
 }
@@ -87,8 +82,6 @@ fn text(bytes: &[u8]) -> String {
 #[test]
 fn sessions_list_names_every_session_newest_first() {
     let state = State::empty();
-    // Named so the directory's order, the GUID's order and the start's order are three different orders:
-    // only a listing by the run's own start passes.
     state.session(
         "11111111-0000-4000-8000-000000000001",
         "anthropic",
@@ -170,7 +163,6 @@ impl State {
         state
     }
 
-    /// One finished run holding exactly the entries a test names, written by hand.
     fn recording(&self, entries: &[Value]) -> PathBuf {
         let directory = self.session(
             FIRST,
@@ -542,9 +534,6 @@ fn show_json_hands_on_the_files_in_their_own_shape() {
         "2024-03-01T00:00:00Z",
         "final",
     );
-    // A field this build never writes and a kind of entry it has no variant for: a newer `sindri` talking
-    // to an older reader, and both survive only if the files are handed on as bytes rather than
-    // re-encoded through this build's types.
     let document = std::fs::read_to_string(directory.join("session.json"))
         .expect("a session document")
         .replace(

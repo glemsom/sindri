@@ -1,7 +1,3 @@
-//! The bytes each wire sends, pinned: one ask per dialect and route goes out through the replay
-//! transport, and its method, endpoint, headers and body are compared against a golden beside this
-//! file. What a request says is the library's prose, so a bump that renames a field names itself.
-
 use serde_json::{Map, Value, json};
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Route, Turn};

@@ -1,7 +1,3 @@
-//! One `Boundary` value holds the boundary in force, so every surface that shows it is a view of
-//! one value rather than a copy free to drift. The escape hatch is an argument to the constructor
-//! and nothing else — no config key, no environment variable — so it dies with its invocation.
-
 use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -23,7 +19,6 @@ pub const DEFAULT_OUTPUT_BUDGET_BYTES: u64 = 8 * 1024 * 1024;
 #[serde(rename_all = "lowercase")]
 pub enum Enforcement {
     Bubblewrap,
-    /// The `--yolo-unsafe` escape hatch: no bubblewrap at all.
     Unsafe,
 }
 
@@ -49,8 +44,6 @@ impl fmt::Display for Enforcement {
     }
 }
 
-/// The paths a run may write, held in one sorted order so two routes to the same set — a file,
-/// a variable, a flag — render one description rather than two spellings of it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WritableSet {
     paths: Vec<PathBuf>,
@@ -122,8 +115,6 @@ pub struct Boundary {
 }
 
 impl Boundary {
-    /// `enforcement` is an argument because the escape hatch is not persistable: no key and no
-    /// variable could reach it, so a caller cannot arrive at it by configuration.
     pub fn from_config(
         config: &Config,
         workspace: &Path,
@@ -173,8 +164,6 @@ impl Boundary {
         self.enforcement
     }
 
-    /// Rendered from the fields and from nothing else: no clock, no environment, no hash map,
-    /// so two runs of one boundary render one string, byte for byte.
     pub fn description(&self) -> String {
         let mut lines: Vec<String> =
             vec![String::from("Run a command with `bash`."), String::new()];

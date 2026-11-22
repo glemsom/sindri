@@ -1,7 +1,3 @@
-//! What `sindri doctor` reports to a person at a prompt, measured where a script measures it: the built binary is
-//! spawned in a workspace and homes of the test's own, and its stdout, stderr and exit code read back as bytes.
-//! A failing sandbox check is reachable without a broken kernel by putting a stand-in `bwrap` first on `PATH`.
-
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -10,7 +6,6 @@ use std::process::{Command, Output};
 use tempfile::TempDir;
 
 struct Ground {
-    /// Held so the directories outlive the paths that name them.
     _root: TempDir,
     workspace: PathBuf,
     config: PathBuf,
@@ -33,8 +28,6 @@ impl Ground {
         ground
     }
 
-    /// A config naming a wire and a model, which is the least a launch asks for: a report no test
-    /// asked to be refused is a report of a run.
     fn naming_a_run(&self) {
         let directory = self.config.join("sindri");
         std::fs::create_dir_all(&directory).expect("the config directory");
@@ -117,8 +110,6 @@ const RESTRICTED: &str = "if [ \"${1:-}\" = --version ]; then\n  \
                           echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
                           echo 'bwrap: setting up uid map: Permission denied' >&2\nexit 1";
 
-/// A stand-in bwrap that answers the version and builds every sandbox it is asked for: a proof
-/// this machine's kernel has no say in.
 const PROVES: &str = "if [ \"${1:-}\" = --version ]; then\n  \
                       echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
                       exit 0";
@@ -131,8 +122,6 @@ fn run(command: &mut Command) -> Output {
     command.output().expect("the binary should run")
 }
 
-/// Asserts that `doctor` answered with a report rather than a refusal of its own: `0` over a sandbox this
-/// machine proved, and `3` over one its kernel would not let it make — the report is whole in both.
 fn a_report_was_made(output: &Output) {
     assert!(
         matches!(output.status.code(), Some(0) | Some(3)),
@@ -240,7 +229,6 @@ fn every_skill_found_is_listed_with_the_scope_it_came_from() {
     );
 }
 
-/// The column a row's description begins in, counted in cells: a wide glyph takes two.
 fn column_of(line: &str, description: &str) -> usize {
     let at = line
         .find(description)
@@ -358,7 +346,6 @@ fn a_sandbox_that_will_not_build_is_refused_as_a_run_is_and_exits_three() {
     );
 }
 
-/// A key, so the run the doctor is held against gets as far as the sandbox a launch proves.
 const RUN_KEY: &str = "sk-ant-a-key-no-refusal-may-draw";
 
 #[test]
@@ -391,8 +378,6 @@ fn a_sandbox_refusal_is_the_words_a_run_refuses_in_byte_for_byte() {
 #[test]
 fn the_proof_is_a_real_bubblewrap_invocation_rather_than_a_version_probe() {
     let ground = Ground::new();
-    // A stand-in that records every argv it is handed, so what the proof ran is read back rather than
-    // assumed.
     let log = ground.config.join("argv.log");
     let body = format!(
         "echo \"$@\" >> {}\n\

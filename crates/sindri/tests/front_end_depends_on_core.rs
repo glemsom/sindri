@@ -1,7 +1,3 @@
-//! The edge that makes "no front end owns a decision the core could make" a compile error rather than a
-//! convention. The reverse direction is checked on direct edges, which suffices: cargo forbids a cycle,
-//! and a path from the core back to the front end would close one.
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -11,8 +7,6 @@ use serde_json::Value;
 /// The devbox toolchain's platform, so the resolve stays offline.
 const PLATFORM: &str = "x86_64-unknown-linux-gnu";
 
-/// The parts a run is joined from, which only the core names: a front end that built one would be
-/// deciding how a run is assembled.
 const JOINED_IN_CORE: [&str; 5] = [
     "Asking::new",
     "Shell::new",

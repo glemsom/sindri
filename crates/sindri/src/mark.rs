@@ -10,12 +10,8 @@ impl Cell {
     }
 }
 
-/// One glyph of a row as the mark reads it: the column it is drawn from, the glyph, and the columns
-/// it covers — a glyph of a heading drawn at twice the cell is one word over two of them.
 pub type Glyph = (u16, char, u16);
 
-/// Two corners and not the cells they covered: a resize re-lays the band and a scroll
-/// moves it, so a mark that remembered cells would point at whatever came to sit there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Mark {
     anchor: Cell,
@@ -35,12 +31,10 @@ impl Mark {
         self.head
     }
 
-    /// The first row of the band the mark covers.
     pub fn first(self) -> u16 {
         self.anchor.row.min(self.head.row)
     }
 
-    /// The last row of the band the mark covers.
     pub fn last(self) -> u16 {
         self.anchor.row.max(self.head.row)
     }
@@ -79,8 +73,6 @@ impl Marked {
         self.left
     }
 
-    /// The columns of the frame the mark covers, which is the cells its glyphs are drawn in and
-    /// never the glyphs themselves: one of them can be two columns wide.
     pub fn width(&self) -> u16 {
         self.width
     }
@@ -90,8 +82,6 @@ impl Marked {
     }
 }
 
-/// One row of a band as the mark reads it: the columns its glyphs are drawn in, and whether the
-/// band cut its words off — a row the band cut is one a copy takes whole.
 #[derive(Clone, Debug, Default)]
 pub struct Line {
     glyphs: Vec<Glyph>,
@@ -105,8 +95,6 @@ impl Line {
 }
 
 impl Span {
-    /// The words the mark covers in the band `lines` drew, a cut row keeping every glyph past the
-    /// mark's right edge.
     pub fn of(mark: Mark, lines: &[Line]) -> Span {
         let first = mark.first();
         let last = mark.last();
@@ -142,8 +130,6 @@ impl Span {
 }
 
 fn marked_row(row: u16, line: &[Glyph], from: u16, to: u16, cut: bool) -> Option<Marked> {
-    // The band's edge hides no word of a cut row from a copy: the left edge the mark chose still
-    // holds, and the right one gives way to the words past it.
     let to = match cut {
         true => u16::MAX,
         false => to,

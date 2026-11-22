@@ -14,7 +14,6 @@ use crate::wire::Wire;
 
 pub const LOGIN: &str = "sindri auth login copilot";
 
-/// Owner-only, because every byte of the record is a credential.
 pub const MODE: u32 = 0o600;
 
 const SESSION_FIELD: &str = "token";
@@ -68,9 +67,6 @@ impl fmt::Display for SignIn {
     }
 }
 
-/// A copilot wire's sign-in: the store its session is read from, or its own words for why there is
-/// none. One value, asked by both a run and a listing, so neither can hold a sign-in the other
-/// cannot see.
 #[derive(Clone, Debug)]
 pub enum Signing {
     Store(Store),
@@ -79,8 +75,6 @@ pub enum Signing {
 
 #[derive(Clone)]
 pub struct Store {
-    /// rig's store of records: one owner-only file per provider, written whole or not
-    /// at all, with a lock another process waits on rather than racing a refresh with.
     records: FileTokenStore,
     transport: DynHttpClient,
 }
@@ -104,8 +98,6 @@ impl Store {
         self.records.path(PROVIDER_NAME)
     }
 
-    /// A session to ask the wire with, refreshed when the one on file has expired: a run
-    /// never starts a sign-in of its own, because it has no one to show a code to.
     pub fn session(&self) -> Result<Credential, SignIn> {
         let record = self.record();
         let secrets = secrets_of(&record);
@@ -120,9 +112,6 @@ impl Store {
         }
     }
 
-    /// Sign in with the device flow, showing the code through `show` as GitHub hands it
-    /// over, and keep the session it ends with. Blocks while GitHub is polled, which is what
-    /// the wait between polls is.
     pub fn login(&self, show: impl Fn(DeviceCode) + Send + Sync + 'static) -> Result<(), SignIn> {
         let secrets = self.secrets();
         let code = DeviceCodeHandler::new(move |prompt| {
@@ -138,8 +127,6 @@ impl Store {
         })
     }
 
-    /// Every literal the record holds that no window may print, read out of the record
-    /// as it lies on disk rather than from any field this crate knows the meaning of.
     pub fn secrets(&self) -> SecretSet {
         secrets_of(&self.record())
     }
@@ -165,8 +152,6 @@ impl fmt::Debug for Store {
     }
 }
 
-/// The sign-in a wire is asked with: the store when it can be read, and the words it failed with
-/// when it cannot, because a config home that will not open is a fact both jobs have to state.
 pub fn signing(wire: Wire, environment: &impl Environment) -> Option<Signing> {
     (wire == Wire::Copilot).then(|| match Store::resolve(environment) {
         Ok(store) => Signing::Store(store),

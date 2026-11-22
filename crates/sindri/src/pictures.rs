@@ -1,7 +1,3 @@
-//! The pictures a frame has placed, written back as the Kitty protocol's unicode placeholders:
-//! the bytes go to the terminal once per size, and every render after it draws glyphs that
-//! transmit nothing.
-
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -20,8 +16,6 @@ use crate::picture::Picture;
 /// protocol's own flag says the terminal already holds.
 type Placed = Rc<RefCell<StatefulProtocol>>;
 
-/// The glyph a Kitty placement writes into every cell it covers: the one thing on a screen that
-/// says a picture is placed there rather than written about.
 pub const PLACEHOLDER: char = '\u{10EEEE}';
 
 #[derive(Clone, Default)]
@@ -29,7 +23,6 @@ pub struct Pictures {
     picker: Option<Picker>,
     held: HashMap<(String, u16, u16), Placed>,
     shown: HashSet<(String, u16, u16)>,
-    /// How many times each source has been made into pixels: the instrument a test reads.
     rasterises: HashMap<String, usize>,
 }
 
@@ -38,8 +31,6 @@ impl Pictures {
         Pictures::default()
     }
 
-    /// A frame whose terminal places pictures, in the Kitty protocol: the protocol is named
-    /// here rather than guessed at, because one this frame cannot speak draws half a picture.
     pub fn kitty(cell: CellSize) -> Pictures {
         let font = (
             u16::try_from(cell.width()).unwrap_or(u16::MAX),
@@ -53,7 +44,6 @@ impl Pictures {
         }
     }
 
-    /// The cell these pictures are measured at, and `None` where nothing is placed.
     pub fn cell(&self) -> Option<CellSize> {
         self.picker.as_ref().map(|picker| {
             let (width, height) = picker.font_size();
@@ -61,8 +51,6 @@ impl Pictures {
         })
     }
 
-    /// The same cache measured at `cell`: a cell that moved makes every placement again and sends
-    /// it again, though the work already counted stays counted.
     pub fn celled(self, cell: CellSize) -> Pictures {
         match self.draws() && self.cell() != Some(cell) {
             true => Pictures {
@@ -73,27 +61,19 @@ impl Pictures {
         }
     }
 
-    /// Whether this terminal places pictures at all, which is what a block was laid out for.
     pub fn draws(&self) -> bool {
         self.picker.is_some()
     }
 
-    /// How many times `source` has been made into pixels on this screen.
     pub fn rasterises(&self, source: &str) -> usize {
         self.rasterises.get(source).copied().unwrap_or(0)
     }
 
-    /// Called once per paint of the band, after its rows are placed: what the paint placed is the
-    /// whole of what this cache holds, so a size the band has left is made and sent again when it
-    /// comes back, which is the cost of the bound.
     pub fn retain_shown(&mut self) {
         let shown = std::mem::take(&mut self.shown);
         self.held.retain(|key, _| shown.contains(key));
     }
 
-    /// Draws `picture` over the cells `shown`, which are fewer than its own where a band holds only
-    /// the top of its block: the rows it has no cells for are left as they were. A picture that will
-    /// not rasterise is drawn as nothing.
     pub fn place(&mut self, picture: &Picture, cell: CellSize, shown: Rect, buffer: &mut Buffer) {
         let Some(picker) = self.picker.as_ref() else {
             return;
@@ -132,7 +112,6 @@ impl Pictures {
 }
 
 impl std::fmt::Debug for Pictures {
-    /// The sources and sizes this frame holds, and nothing of the protocol's own state.
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("Pictures")

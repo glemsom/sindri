@@ -9,8 +9,6 @@ use sindri_core::wire::Wire;
 
 use super::*;
 
-/// The launch a boot frame is built from: a config's wire and model, the workspace the launch
-/// stands in and its branch, and the enforcement its policy holds.
 fn boot() -> Boot {
     Boot {
         wire: Some(Wire::Anthropic),

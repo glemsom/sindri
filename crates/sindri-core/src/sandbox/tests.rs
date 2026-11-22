@@ -25,9 +25,6 @@ fn proved(bwrap: &Path, boundary: &Boundary, session_temp: &Path) -> Result<Proo
     }
 }
 
-/// A stand-in `bwrap` on disk, so every refusal is provable where the real bwrap works. It
-/// answers `--version` as `version` says, keeps the argv it was handed in `spoken`, and
-/// then does what `creating` says.
 struct Machine {
     _root: TempDir,
     bwrap: PathBuf,
@@ -58,7 +55,6 @@ impl Machine {
         Machine::new("echo 'bubblewrap 0.12.0 (stand-in)'\nexit 0", "exit 0")
     }
 
-    /// The shape a hosted runner has, with AppArmor forbidding user namespaces.
     fn restricted() -> Machine {
         Machine::new(
             "echo 'bubblewrap 0.12.0 (stand-in)'\nexit 0",
@@ -66,7 +62,6 @@ impl Machine {
         )
     }
 
-    /// A broken install rather than an absent capability.
     fn broken() -> Machine {
         Machine::new(
             "echo 'bwrap: cannot execute: Exec format error' >&2\nexit 1",
@@ -83,8 +78,6 @@ impl Machine {
     }
 }
 
-/// A workspace and a session temp, both real directories, because the writable set is
-/// canonicalised through the filesystem and never tidied as a string.
 struct Ground {
     _root: TempDir,
     workspace: PathBuf,
@@ -279,7 +272,6 @@ fn a_check_that_exits_silently_still_gets_a_line_about_what_it_said() {
 #[test]
 fn an_unsafe_run_has_no_sandbox_to_prove() {
     let ground = Ground::new();
-    // A bwrap that refuses everything, so a proof that ran anything would hand back a card.
     let machine = Machine::restricted();
 
     let proof = proved(

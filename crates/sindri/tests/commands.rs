@@ -1,9 +1,5 @@
-//! The `/` commands from the outside: what a line names, and what each does to the frame — a screen opened, a
-//! history cleared, a set emptied, a name handed on, the launch ended. Every test types the line a reader types
-//! into a frame built the way the terminal builds one; the wire and the save behind `/model` are proved elsewhere.
-
-mod caps; // the terminals these frames are drawn on
-mod frame; // one paint-and-read for every test
+mod caps;
+mod frame;
 
 use std::path::Path;
 
@@ -33,8 +29,6 @@ fn frame(workspace: &Path) -> View {
     frame_holding(workspace, &Loaded::default())
 }
 
-/// A frame whose rail facts hold `loaded`: the set the frame draws is the launch's, so a test reads
-/// every load off the set it handed over and not off a copy of the frame's own.
 fn frame_holding(workspace: &Path, loaded: &Loaded) -> View {
     View::of(
         Capabilities::default(),
@@ -58,8 +52,6 @@ fn workspace_with(name: &str, frontmatter: &str) -> tempfile::TempDir {
     root
 }
 
-/// Whether the commands card is drawn: its name hangs in the top row of a border, and the footer
-/// names the same words on a row of its own.
 fn card_open(drawn: &Frame) -> bool {
     drawn
         .rows()
@@ -357,8 +349,6 @@ fn the_commands_are_read_off_the_draft_the_reader_typed() {
 
 #[test]
 fn a_frame_with_no_workspace_loads_no_skill() {
-    // A frame told no workspace has no catalog to ask, and offering a skill from a directory no run
-    // could read would name a name nothing can load.
     let loaded = Loaded::default();
     let mut view = View::of(
         Capabilities::default(),

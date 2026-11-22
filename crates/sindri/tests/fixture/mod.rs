@@ -1,7 +1,3 @@
-//! A fixture line is one row of the screen: its number, its glyphs between two bars, and the look of
-//! each run of cells from the left edge, so a row of blanks keeps its width in a file an editor may
-//! touch. The files are `.snap` because `insta` compares and blesses them and takes no other extension.
-
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -39,14 +35,12 @@ const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
 const LOADED_SKILLS: [&str; 2] = ["bash", "records"];
 
-/// The workspace the record names: a name and no directory of this machine, because the frame draws
-/// the whole of it and a golden may not be a picture of the box that blessed it.
+/// The workspace the record names: a name and no directory of this machine, because the frame
+/// draws the whole of it and a golden may not be a picture of the box that blessed it.
 const WORKSPACE: &str = "/home/glemsom/Documents/git/sindri/.worktrees/46-rail";
 
-/// The window the run's newest ask is measured against.
 const CONTEXT_WINDOW: u64 = 200_000;
 
-/// The newest ask's own report, which the document's summed usage cannot stand in for.
 const MEASURED: Usage = Usage {
     input: Some(48_200),
     cached_input: Some(42_416),
@@ -55,8 +49,6 @@ const MEASURED: Usage = Usage {
     reasoning: None,
 };
 
-/// A recorded Anthropic `GET /v1/models` listing, so the `/model` screen is painted from names a
-/// wire really served rather than from a list written down here.
 const SERVED: &str =
     include_str!("../../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
@@ -89,19 +81,14 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
     println!("\ncheck: frame {fixture} ... ok");
 }
 
-/// The facts a run's frame draws: the rail a launch has laid, drawn from the tail.
 fn run_facts() -> Facts {
     Facts::default().asked().railed(facts())
 }
 
-/// A frame with `lines` typed into its draft through the keys a reader's fingers send, so a picture
-/// of the draft cannot be of a state the product cannot reach.
 fn typing(capabilities: Capabilities, lines: &[&str]) -> View {
     drafting(capabilities, Facts::default().asked(), lines)
 }
 
-/// The same draft under the facts the frame is handed, which is what says whether a run is live in
-/// the band it is drawn in.
 fn drafting(capabilities: Capabilities, facts: Facts, lines: &[&str]) -> View {
     let mut view = View::of(capabilities, facts, Transcript::none());
     for (index, line) in lines.iter().enumerate() {
@@ -113,9 +100,6 @@ fn drafting(capabilities: Capabilities, facts: Facts, lines: &[&str]) -> View {
     view
 }
 
-/// The frames this front end paints, each built from the three values it draws and then asked for
-/// the key a reader presses where a frame is reached by one. A frame that needs pictures, large text
-/// or no face states its own terminal; every other one is drawn on `capabilities`.
 fn named(name: &str, capabilities: Capabilities) -> View {
     match name {
         "boot" => splash(false),
@@ -150,8 +134,6 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "prompt-fold-open" => prompt_fold(capabilities, true),
         "fold-answer" => folded_beside_an_answer(capabilities),
         "empty" => View::of(capabilities, Facts::default().asked(), Transcript::none()),
-        // One draft drawn twice, a run live in the second: the edge is the one row they disagree
-        // on, and the footer is the row the run's own state already spoke on.
         "edge" => typing(capabilities, &EDGE_DRAFT),
         "edge-live" => drafting(capabilities, Facts::default().running(), &EDGE_DRAFT),
         "typing" => typing(capabilities, &["why does the retry test fail"]),
@@ -229,8 +211,6 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "markdown-footnote" => construct(capabilities, footnotes()),
         "markdown-footnote-undefined" => construct(capabilities, unfooted()),
         "markdown-break" => construct(capabilities, breaks()),
-        // The same answer in both, three of its four fragments under the live marker and all of it
-        // under the settled one; nine point four seconds is under ten, so that marker keeps its decimal.
         "pulse-live" => with_pulse(capabilities, Pulse::live(4_200), &PULSE_ANSWER[..3]),
         "pulse-settled" => with_pulse(
             capabilities,
@@ -281,9 +261,6 @@ fn named(name: &str, capabilities: Capabilities) -> View {
     }
 }
 
-/// The frame a picture block is drawn on, read at the tail: the field gives way on its rows to the
-/// band, so it is drawn over them with its words under its head. The refused source is a real diagram
-/// one directory above the workspace, so the caption is the refusal this product gives.
 fn pictured() -> View {
     let workspace = PathBuf::from(FIXTURES).join("pictures");
 
@@ -299,9 +276,6 @@ fn pictured() -> View {
     )
 }
 
-/// A frame whose terminal places pictures, with the rail's facts where the face is drawn: the
-/// picture over the rail's top rows with the switch on, and the facts from the rail's first row
-/// with it off.
 fn faced(face: bool) -> View {
     View::of(
         crate::caps::pictured().faced(face),
@@ -310,9 +284,6 @@ fn faced(face: bool) -> View {
     )
 }
 
-/// The frame a launch opens on: the config's wire and model, the workspace and its branch, and the
-/// enforcement the policy holds — a session and a temp are a run's own, so the rail draws an em dash
-/// for each, beside a terminal that places pictures and one that places none.
 fn splash(draws: bool) -> View {
     View::of(
         match draws {
@@ -333,7 +304,6 @@ fn splash(draws: bool) -> View {
     )
 }
 
-/// A screen opened over a run, so the card's frame behind it is a transcript a reader was reading.
 fn over_a_run(capabilities: Capabilities) -> View {
     let mut view = running(capabilities, transcript(), Scroll::Tail);
     view.key(Key::Char('?'));
@@ -349,7 +319,6 @@ fn model_screen(capabilities: Capabilities) -> View {
     let mut view = View::of(capabilities, Facts::default().asked(), Transcript::none());
     view.paste("/model");
     view.key(Key::Enter);
-    // The wire answers the screen that asked it, so the names land on a frame already open.
     view.handed(view.facts().clone().served_by(listing));
     view
 }
@@ -362,8 +331,6 @@ fn construct(capabilities: Capabilities, text: &str) -> View {
     )
 }
 
-/// The same answer on a terminal that draws text at more than one cell: the two highest headings are
-/// laid out as the cells the sizing leaves and measured by them.
 fn sized(text: &str) -> View {
     View::of(
         crate::caps::kitty(),
@@ -397,14 +364,12 @@ fn table() -> &'static str {
      bar down its left and the language's tag |"
 }
 
-/// Each of the three alignments a column names, over cells of three widths.
 fn aligned() -> &'static str {
     "| construct | rendering | count |\n| :--- | :---: | ---: |\n| heading | bold, one blank row \
      above | 3 |\n| table | columns joined by a bar, a rule | 12 |\n| code | a bar down its \
      left | 128 |"
 }
 
-/// The very table `aligned` holds, written with no alignment anywhere.
 fn unaligned() -> String {
     aligned().replace("| :--- | :---: | ---: |", "| --- | --- | --- |")
 }
@@ -416,8 +381,6 @@ fn ruled() -> &'static str {
      the bullet"
 }
 
-/// A reference in prose, one behind a bar and one in a table cell, one footnote referenced twice,
-/// and each definition gathered at the foot of the answer in the order its reference was read.
 fn footnotes() -> &'static str {
     "A reference[^note] draws a dim marker where the brackets were, numbered by the order the \
      answer read it in[^second].\n\n> a quote keeps its bar[^note] and the marker of its \
@@ -428,8 +391,6 @@ fn footnotes() -> &'static str {
      answer and never inside the table that named it."
 }
 
-/// A reference no definition answers, which is drawn as the words it was written with, and a
-/// definition no reference names, which is drawn nowhere at all.
 fn unfooted() -> &'static str {
     "A reference[^gone] whose definition never arrived is drawn as the words it was written with, \
      and one[^here] whose definition came draws the marker of its number.\n\n[^here]: The one \
@@ -451,7 +412,6 @@ fn quoted() -> &'static str {
      it is being typed.\n>\n> - ### an item's heading, two columns further in"
 }
 
-/// One alert of each kind, each named on the row above the words it holds.
 fn alerts() -> &'static str {
     "> [!NOTE]\n> a note is the quietest thing a quote can say\n\n\
      > [!TIP]\n> a tip is advice the reader can take\n\n\
@@ -460,8 +420,6 @@ fn alerts() -> &'static str {
      > [!CAUTION]\n> and a caution is the frame's own alarm"
 }
 
-/// Both spellings that are still a kind, the marker that names none at all, and one alert under the
-/// words of an item, hung under its gutter.
 fn marker_alerts() -> &'static str {
     "> [!tip]\n> a lowercase marker names the kind a capitalised one does\n\n\
      > [!WaRnInG]\n> and a mixed one names no third kind\n\n\
@@ -476,8 +434,6 @@ fn code() -> &'static str {
      Fence { tag, words }\n    }\n}\n\nfn rust() -> Fence {\n    Fence::open(\"rust\")\n}\n```"
 }
 
-/// One fence whose lines stand at no indent, one column, four, eight and twelve, so a guide reads
-/// down the block and the one-column line carries none that would take its words' room.
 fn nested() -> &'static str {
     concat!(
         "```rust\nfn open() {\n let one = 1;\n    let four = 4;\n",
@@ -485,26 +441,20 @@ fn nested() -> &'static str {
     )
 }
 
-/// A fence whose tag no syntax definition names: its words are plain and stand at no indent.
 fn unknown() -> &'static str {
     "```frobnicate\n// a comment stays the glyphs it was written as\nlet x = 1; # not rust\n\
      \"a string\" is a word too\n```"
 }
 
-/// One fence line wider than the eighty columns its frame is drawn on, so the band cuts it and says
-/// more stands past its edge.
 fn cut() -> &'static str {
     "```rust\nlet a_fence_line_that_is_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_\
      the_model_wrote_it_in = 1;\n```"
 }
 
-/// The same fence with every line short enough for the band to hold it whole.
 fn fits() -> &'static str {
     "```rust\nlet a_fence_line_that_fits = 1;\n```"
 }
 
-/// A fence that names the file the model was writing: the path is drawn as a faint chip beside the
-/// language, and the lines under it are the source a copy of the fence hands back.
 fn named_file() -> &'static str {
     concat!(
         "```rust crates/sindri/src/rows.rs\n",
@@ -513,8 +463,6 @@ fn named_file() -> &'static str {
     )
 }
 
-/// The same fence named by a path forty columns cannot hold, so the name is cut at the band's edge
-/// rather than wrapped or given a row of its own.
 fn named_cut() -> &'static str {
     concat!(
         "```rust crates/sindri/src/provider/transport/hauling/the/whole/of/it.rs\n",
@@ -523,8 +471,6 @@ fn named_cut() -> &'static str {
     )
 }
 
-/// A diff fence with a file header, a hunk header, the rows both sides share and one row each
-/// side changed: every kind of row a diff is read by, its marker in the column it was written in.
 fn diff() -> &'static str {
     concat!(
         "```diff\n",
@@ -539,7 +485,6 @@ fn diff() -> &'static str {
     )
 }
 
-/// The very diff a fence holds, drawn behind a quote's bar.
 fn diff_quoted() -> String {
     diff()
         .lines()
@@ -567,9 +512,6 @@ fn struck() -> &'static str {
      ink, ~~struck~~ word and all"
 }
 
-/// An answer's ways and the paths a call names: a link is its words with the destination travelling
-/// beside the row, a link written over its own URL says it once, and a path a call names is a way to
-/// the file the run judged openable — the one it did not is drawn as the words it was written as.
 fn ways(capabilities: Capabilities) -> View {
     View::of(
         capabilities,
@@ -586,9 +528,6 @@ fn ways(capabilities: Capabilities) -> View {
     )
 }
 
-/// One call of each tool this product has: the settled three beside the result each one wrote, and
-/// then a turn whose three calls are still in flight — the row says the thing the call names, and a
-/// result says the verdict, the duration and the size and never the name the call row holds.
 fn tools(capabilities: Capabilities) -> View {
     View::of(
         capabilities,
@@ -627,8 +566,6 @@ fn tools(capabilities: Capabilities) -> View {
     )
 }
 
-/// The tree a launch resolves this process's working directory to, which is what a fixture stands
-/// its own run in.
 fn tree() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -652,9 +589,6 @@ fn narrow() -> &'static str {
      language's tag and highlighted by syntect |"
 }
 
-/// A workspace of the test's own, opened through the `@` key and narrowed by `query`: every row is
-/// a path relative to the temp directory, so nothing of a temp directory's name is frozen into a
-/// fixture.
 fn picking(capabilities: Capabilities, query: &str) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
     // `no_hardcoded_models` reads two numbered paths in one bracket as a hand-written model list,
@@ -822,8 +756,6 @@ fn document_of(config: &Config) -> SessionDocument {
     }
 }
 
-/// One row of the band that says which turn it is: a turn draws no row of its own, so a fixture
-/// that counts the rows of the band off the frame says which one they stand on with a thought.
 fn thought(turn: u32) -> Entry {
     Entry::Reasoning {
         turn,
@@ -831,8 +763,6 @@ fn thought(turn: u32) -> Entry {
     }
 }
 
-/// A transcript of eighty one-row entries, each saying which turn it is, so the rows of the band
-/// the thumb covers are counted off the frame.
 fn thumbing(capabilities: Capabilities, scroll: Scroll) -> View {
     View::of(
         capabilities,
@@ -849,8 +779,6 @@ fn running(capabilities: Capabilities, entries: Vec<Entry>, scroll: Scroll) -> V
     )
 }
 
-/// A live run's rail: the facts a run in flight holds and the marker its newest answer wears, so
-/// the rail's own row steps with the frame's marker.
 fn live(capabilities: Capabilities, entries: Vec<Entry>, scroll: Scroll) -> View {
     View::of(
         capabilities,
@@ -865,9 +793,6 @@ fn live(capabilities: Capabilities, entries: Vec<Entry>, scroll: Scroll) -> View
     )
 }
 
-/// The session every frame names: one for the whole test process, in a state home of its own under
-/// the temp directory, so no path of a developer's home reaches a golden and no GUID comes from
-/// urandom.
 pub fn session() -> &'static Session {
     static SESSION: OnceLock<Session> = OnceLock::new();
     SESSION.get_or_init(|| {
@@ -876,8 +801,6 @@ pub fn session() -> &'static Session {
     })
 }
 
-/// The rail a run draws, derived the one way production derives it: off the session it writes and
-/// the document its record rewrites, so a fact the rail has stopped reading leaves with them.
 pub fn railed(document: &SessionDocument) -> ledger::Facts {
     ledger::Facts::of(session(), document)
         .recorded(document)
@@ -885,7 +808,6 @@ pub fn railed(document: &SessionDocument) -> ledger::Facts {
         .measured(&MEASURED, Some(CONTEXT_WINDOW))
 }
 
-/// The rail these frames draw, less the run's state: a frame that draws no state row names none.
 pub fn facts() -> ledger::Facts {
     ledger::Facts {
         state: None,
@@ -897,8 +819,6 @@ fn opening() -> Vec<Entry> {
     transcript().into_iter().take(5).collect()
 }
 
-/// A conversation a reader scrolls back through: the prompt each exchange was asked with, the work
-/// the run did under it, the answer it got and the stop every run ends on.
 fn transcript() -> Vec<Entry> {
     vec![
         prompt("where does rendering live?"),
@@ -1017,8 +937,6 @@ fn transcript() -> Vec<Entry> {
     ]
 }
 
-/// One of every kind of entry a run writes, one above the other, so a frame says where each of them
-/// begins its words.
 fn gutter() -> Vec<Entry> {
     vec![
         Entry::Turn { turn: 1 },
@@ -1072,7 +990,6 @@ fn streaming(capabilities: Capabilities) -> View {
     view
 }
 
-/// The one draft the two edge fixtures are drawn from.
 const EDGE_DRAFT: [&str; 1] = ["the band's edge says what the band is for"];
 
 const PULSE_ANSWER: [&str; 4] = [
@@ -1118,13 +1035,10 @@ fn with_pulse(capabilities: Capabilities, pulse: Pulse, said: &[&str]) -> View {
     view
 }
 
-/// The failure a run can end on, in the words a wire gives it: the one stop that carries a line.
 fn wire_refused() -> Stop {
     Stop::Error(SecretSet::default().redact("the wire refused the request: 401 unauthorized"))
 }
 
-/// One entry of every stop a run can end on, one above the other, so the words it says and the
-/// marks they wear are read at once.
 fn stops() -> Vec<Entry> {
     vec![
         Stop::Final,
@@ -1145,17 +1059,12 @@ const STOP_ANSWER: [&str; 4] = [
     "and a final answer and a cancellation carry no line they do not have.",
 ];
 
-/// The frame a failed run leaves: the marker settled on the answer it last said, and the stop entry
-/// the record keeps under it.
 fn stopped_on(capabilities: Capabilities, stop: Stop) -> View {
     let mut view = with_pulse(capabilities, Pulse::settled(&stop, 1_240), &STOP_ANSWER);
     view.stopped(&stop);
     view
 }
 
-/// A prompt laid over three rows of a terminal that spells no colour, the work it asked for settled
-/// under it, and the draft the reader is typing beside it: the spine and the sigil are the whole of
-/// what such a terminal draws of a quoted block, and no ground stands under either of them.
 fn flat_prompt() -> View {
     let mut view = View::of(
         crate::caps::inked(Palette::SLOTS),
@@ -1188,8 +1097,6 @@ fn flat_prompt() -> View {
     view
 }
 
-/// The frame a run that could not start leaves: the entry a stop is, in the refusal's own words, and
-/// the draft that asked for it back in the composer.
 fn refused_run(capabilities: Capabilities) -> View {
     let mut view = running(capabilities, transcript(), Scroll::Tail);
     view.paste("why does the retry test fail");
@@ -1221,8 +1128,6 @@ fn queue(capabilities: Capabilities) -> View {
     view
 }
 
-/// Seven prompts waiting behind a one-line draft, which is a queue taller than the band it is
-/// drawn in.
 const SEVEN_QUEUED: &[&str] = &[
     "run the test that failed and read it",
     "then the fmt check",
@@ -1244,7 +1149,6 @@ fn queue_long(capabilities: Capabilities) -> View {
     view
 }
 
-/// A draft of nine lines, which is more than the composer's band draws.
 fn draft_long(capabilities: Capabilities) -> View {
     typing(
         capabilities,
@@ -1273,7 +1177,6 @@ fn waiting(mut view: View, prompts: &[&str]) -> View {
     view
 }
 
-/// The frame a prompt just sent leaves: a run in flight and nothing said yet.
 fn asked(capabilities: Capabilities) -> View {
     View::of(
         capabilities,
@@ -1282,7 +1185,6 @@ fn asked(capabilities: Capabilities) -> View {
     )
 }
 
-/// A `cargo test` run of twenty rows, which is a result longer than its fold.
 fn output() -> String {
     (1..=20)
         .map(|line| format!("test rows::a_row_of_output_{line} ... ok"))
@@ -1290,8 +1192,6 @@ fn output() -> String {
         .join("\n")
 }
 
-/// A settled exchange whose one result is longer than its fold: closed the work is one row, and
-/// opened it draws the call and the head, the count and the last row the result keeps.
 fn fold(capabilities: Capabilities, open: bool) -> View {
     let mut view = running(capabilities, folded_run(), Scroll::Tail);
     if open {
@@ -1305,8 +1205,6 @@ fn fold(capabilities: Capabilities, open: bool) -> View {
     view
 }
 
-/// The run a fold is drawn on, and the long answer under it that proves a fold is a result's and
-/// never an answer's: one frame holds both kinds of entry beside one another.
 fn folded_run() -> Vec<Entry> {
     vec![
         prompt("why does the retry test fail?"),
@@ -1330,9 +1228,6 @@ fn folded_run() -> Vec<Entry> {
     ]
 }
 
-/// A transcript whose newest prompt is longer than the head its fold keeps, under a settled call and
-/// the answer it ended on: folded it draws that head and the count, and opened every word the reader
-/// typed.
 fn prompt_fold(capabilities: Capabilities, open: bool) -> View {
     let view = running(capabilities, prompt_fold_run(), Scroll::Tail);
     match open {
@@ -1348,8 +1243,6 @@ fn prompt_fold(capabilities: Capabilities, open: bool) -> View {
     }
 }
 
-/// `view` with `key` pressed after a pass at `cols` by `rows`, which is the order a reader sends one
-/// in: the fold a key moves is read off the band the last pass laid, and never off no band at all.
 fn pressed(mut view: View, key: Key, cols: u16, rows: u16, why: &str) -> View {
     let area = Rect::new(0, 0, cols, rows);
     let mut buffer = Buffer::empty(area);
@@ -1358,8 +1251,6 @@ fn pressed(mut view: View, key: Key, cols: u16, rows: u16, why: &str) -> View {
     view
 }
 
-/// The words of the prompt the fold is drawn on, a line a row at the band's width: a reader reads
-/// which of them the fold draws and which it keeps back.
 const FOLDED_PROMPT: &str = "the retry test fails on the line the patch moved, and only there\
 \nsay which line the patch moved, and which row of the output disagrees\
 \nthe report names the file it read and the line it stopped on\
@@ -1418,8 +1309,6 @@ fn folded_beside_an_answer(capabilities: Capabilities) -> View {
     view
 }
 
-/// A settled exchange whose four calls ended four ways, opened so a reader reads them all, and the
-/// exchange after it whose one call is still out.
 fn calls() -> Vec<Entry> {
     vec![
         prompt("which calls settle well?"),
@@ -1498,14 +1387,10 @@ fn prompt(text: &str) -> Entry {
     }
 }
 
-/// The stop every run ends on: it draws no row of the band's, and it is what says the work above it
-/// is the work of an exchange that has settled.
 fn end() -> Entry {
     Entry::Stop { stop: Stop::Final }
 }
 
-/// The same frame drawn where the terminal reports a pointer and where it reports none: a pointer
-/// is never drawn into a cell, so the two are the one frame.
 pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
     let fixture = format!("{name}-{cols}x{rows}");
     let mut pointing = named(name, Capabilities::default().reporting(true));
@@ -1524,8 +1409,6 @@ pub fn assert_pointer_draws_the_same_cells(name: &str, cols: u16, rows: u16) {
     println!("\ncheck: frame {fixture} pointer ... ok");
 }
 
-/// `view` drawn once on a headless screen of that size, so a fixture built by a key is handed back
-/// with the pass that key read.
 fn drawn(mut view: View, cols: u16, rows: u16) -> View {
     crate::frame::painted(&mut view, cols, rows);
     view

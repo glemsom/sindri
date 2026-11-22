@@ -1,6 +1,3 @@
-//! What one row of the draft is drawn as: the command it opens with, the files its words name, the
-//! spans it sets in backticks, and the inks the band hands a buffer.
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
@@ -23,8 +20,6 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
     root
 }
 
-/// The row's runs, each joined to the one before it where the two share an ink: what a reader sees
-/// rather than the pieces the split between them left.
 fn joined(row: &str, opens: bool, files: &Files) -> Vec<(String, Ink)> {
     let mut joined: Vec<(String, Ink)> = Vec::new();
     for (run, ink) in runs(row, opens, files) {

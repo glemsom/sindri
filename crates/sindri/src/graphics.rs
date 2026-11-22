@@ -1,6 +1,3 @@
-//! An SVG becomes the pixels a picture is drawn in: `usvg` parses and lays it out, `resvg` and
-//! `tiny-skia` rasterise it, and `image` hands the RGBA on to the placement that draws it.
-
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -18,7 +15,6 @@ const LABEL_FAMILY: &str = "Liberation Sans";
 const MAX_COLS: u16 = 200;
 const MAX_ROWS: u16 = 100;
 
-/// The size of one terminal cell in pixels, handed in by the caller: nothing here asks a terminal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellSize {
     width: u32,
@@ -26,13 +22,11 @@ pub struct CellSize {
 }
 
 impl CellSize {
-    /// What a terminal that will not say what cell it has is assumed to have: ten by twenty.
     pub const NOMINAL: CellSize = CellSize {
         width: 10,
         height: 20,
     };
 
-    /// A cell of `width` by `height` pixels, and never zero of either: a caller divides by it.
     pub fn new(width: u32, height: u32) -> CellSize {
         CellSize {
             width: width.max(1),
@@ -55,9 +49,6 @@ impl Default for CellSize {
     }
 }
 
-/// The cells a picture may take: the columns and rows of the band it is drawn in. A picture in
-/// an answer is measured under a ceiling as tall as any transcript, and one drawn in a band of a
-/// few rows is measured under the rows that band has.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ceiling {
     cols: u16,
@@ -69,8 +60,6 @@ impl Ceiling {
         Ceiling { cols, rows }
     }
 
-    /// A ceiling `cols` columns across and as tall as a transcript: what a picture in an answer
-    /// is measured under, where only the whole band can make it give way on its rows.
     pub fn across(cols: u16) -> Ceiling {
         Ceiling::new(cols, MAX_ROWS)
     }
@@ -91,9 +80,6 @@ impl Footprint {
         self.rows
     }
 
-    /// The cells a picture `width` by `height` pixels takes fitted under a `ceiling`: one scale
-    /// on both axes, shrunk and never grown, so the shape is kept. The ceiling on rows is the one
-    /// place it gives way, and a picture with no extent is refused.
     pub fn fit(
         width: u32,
         height: u32,
@@ -126,10 +112,7 @@ impl Footprint {
 
 #[derive(Debug)]
 pub struct Svg {
-    /// The tree `usvg` laid out. Its own size is the picture's size, so what a footprint measures
-    /// and what the pixels are scaled by can never disagree about how big the picture is.
     tree: usvg::Tree,
-    /// How many times this picture has been handed to the renderer: the instrument a test reads.
     rasterises: AtomicUsize,
 }
 
@@ -149,8 +132,6 @@ impl Svg {
         (size.width() as u32, size.height() as u32)
     }
 
-    /// The cells of a `cell` this picture takes, rounded up on each axis and spent without a
-    /// pixel: a picture with no extent, and one no transcript has room for, are refused here.
     pub fn footprint(&self, cell: CellSize) -> Result<Footprint, Refusal> {
         let size = self.tree.size();
         let footprint = Footprint {
@@ -169,8 +150,6 @@ impl Svg {
         Ok(footprint)
     }
 
-    /// The picture as RGBA at the pixel size of the footprint it was measured into: a shape's
-    /// edge lands where the SVG put it instead of being stretched there by the terminal.
     pub fn rasterise(&self, cell: CellSize) -> Result<image::RgbaImage, Refusal> {
         let (width, height) = self.footprint(cell)?.pixels(cell);
         self.rasterise_at((width, height))
@@ -254,16 +233,12 @@ fn options() -> &'static usvg::Options<'static> {
     })
 }
 
-/// The whole cells a scaled picture takes: its rows are the drawn ratio read at the columns it
-/// actually got, not the ones the scale asked for, so a picture is never taller than its shape.
 fn shaped(cols: u16, rows: u16, scale: f64, room: Ceiling) -> (u16, u16) {
     let ratio = f64::from(rows) / f64::from(cols);
     let columns = fitted(f64::from(cols) * scale, room.cols);
     (columns, fitted(f64::from(columns) * ratio, room.rows))
 }
 
-/// How many whole cells a fitted picture takes: never zero, because a picture fitted down to a
-/// sliver is still a cell of the transcript rather than a gap in it.
 fn fitted(cells: f64, ceiling: u16) -> u16 {
     let whole = cells.floor().max(1.0);
     u16::try_from(whole as u64)
@@ -272,8 +247,6 @@ fn fitted(cells: f64, ceiling: u16) -> u16 {
         .max(1)
 }
 
-/// How many cells one axis of `pixels` takes at `cell` pixels a cell, rounded up, and zero only
-/// for a picture with no extent at all.
 fn cells(pixels: f32, cell: u32) -> u16 {
     let whole = (pixels / cell as f32).ceil();
     if whole < 1.0 {

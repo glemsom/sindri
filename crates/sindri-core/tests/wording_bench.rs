@@ -1,7 +1,3 @@
-//! A bench that decides wording: it prices the preamble and the tool descriptions a run re-sends
-//! every turn, so the cost of a sentence is read before it is written. The estimator is
-//! cl100k_base, a proxy for every model: an estimate, but the same one on every run and machine.
-
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -12,9 +8,6 @@ use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
 use tiktoken_rs::CoreBPE;
 
-/// The ceiling on the words a run pays every turn, in cl100k_base tokens: the preamble's sections
-/// plus every tool description, summed. Raising it is allowed; raising it without saying what
-/// bought the tokens is what the budget exists to prevent.
 const BUDGET_TOKENS: usize = 581;
 
 const SECTION_MARKERS: [(&str, &str); 4] = [
@@ -158,8 +151,6 @@ impl Measure {
 
 const PROJECT_INSTRUCTIONS: &str = "project instructions";
 
-/// The estimator, loaded once per test binary: the BPE's ranks are megabytes, and parsing them
-/// twice would be the only slow thing in this bench.
 fn tokenizer() -> &'static CoreBPE {
     static TOKENIZER: OnceLock<CoreBPE> = OnceLock::new();
     TOKENIZER.get_or_init(|| {
@@ -174,15 +165,10 @@ fn repo_root() -> PathBuf {
         .expect("the workspace root above this crate")
 }
 
-/// `text` with this machine's checkout path taken out of it: the table is a property of the
-/// wording, and where a tree happens to live is not.
 fn normalize(text: &str, root: &Path) -> String {
     text.replace(&root.display().to_string(), "<workspace>")
 }
 
-/// The preamble cut into the sections the markers name, each slice starting at its marker and
-/// ending where the next one starts, so the slices concatenated are the whole message and no byte
-/// is left unpriced.
 fn sections(rendered: &str) -> Vec<(&'static str, &str)> {
     let mut starts: Vec<(&'static str, usize)> = SECTION_MARKERS[..3]
         .iter()

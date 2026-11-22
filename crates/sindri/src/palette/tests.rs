@@ -1,6 +1,5 @@
 use super::*;
 
-/// The two spellings that name colours of their own; `SLOTS` wears the reader's theme instead.
 const SPELLED: [(&str, Palette); 2] = [("ansi", Palette::ANSI), ("truecolor", Palette::TRUECOLOR)];
 
 #[test]
@@ -99,8 +98,6 @@ fn a_terminal_naming_no_truecolor_is_given_the_same_design_in_ansi() {
 fn every_palette_the_probe_hands_out_is_a_spelling_the_floor_and_the_ladder_are_proved_on() {
     let mut picked: Vec<Palette> = Vec::new();
 
-    // The vocabulary the probe reads, so every spelling it accepts and every one it turns down
-    // is walked: a palette gated on one of these cannot land unproved.
     let no_colour = [None, Some("1")];
     let terms = [
         None,
@@ -279,11 +276,8 @@ fn every_palette_spells_the_prompt_band_and_the_rails_tone_apart() {
     }
 }
 
-/// The least step the design lays between two rungs of its ramp, in L*: less and they read as one
-/// surface.
 const STEP: f64 = 1.5;
 
-/// The most it lays, in L*: more and the band above reads as a second material, not a neighbour.
 const CEILING: f64 = 6.0;
 
 #[test]
@@ -306,8 +300,6 @@ fn no_two_rungs_of_the_ramp_sit_closer_than_the_designs_step_or_further_apart_th
     }
 }
 
-/// The step the edge ink keeps above the surfaces it parts, in the L* the ramp is laid out in:
-/// three is the least a reader can follow without a word beside it.
 const APART: f64 = 3.0;
 
 #[test]
@@ -419,8 +411,6 @@ fn no_two_inks_resolve_to_one_foreground_and_modifier() {
     }
 }
 
-/// The contrast a word is legible at: the dim ink carries the strip's separators and the
-/// rail's secondary lines, so no band may read it below this.
 const LEGIBLE: f64 = 4.2;
 
 #[test]
@@ -453,8 +443,6 @@ fn every_ink_keeps_its_legibility_floor_on_every_surface_a_frame_draws_on() {
 
 #[test]
 fn the_ladder_keeps_the_steps_it_had() {
-    // The rungs this ladder is held to: the design's three, in both spellings, so a rung that
-    // came closer to the one above it than these do is caught.
     let drawn = [
         (
             "ansi",
@@ -505,12 +493,10 @@ fn the_ladder_keeps_the_steps_it_had() {
     }
 }
 
-/// The contrast an ink reads at on a band's ground.
 fn reads(palette: &Palette, ink: Ink, band: Band) -> f64 {
     contrast(palette.ink(ink).0, palette.band(band))
 }
 
-/// The contrast one colour reads against another, the way WCAG measures it.
 fn contrast(one: Color, other: Color) -> f64 {
     let (one, other) = (luminance(one), luminance(other));
     let (high, low) = if one > other {
@@ -521,7 +507,6 @@ fn contrast(one: Color, other: Color) -> f64 {
     (high + 0.05) / (low + 0.05)
 }
 
-/// The relative luminance of a colour, from the channels it is spelled in.
 fn luminance(color: Color) -> f64 {
     let [red, green, blue] = spelled(color).map(|channel| {
         let channel = f64::from(channel) / 255.0;
@@ -533,7 +518,6 @@ fn luminance(color: Color) -> f64 {
     0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
 
-/// The CIELAB lightness of a colour, read off the luminance of the channels it is spelled in.
 fn lightness(color: Color) -> f64 {
     let luminance = luminance(color);
     match luminance > 0.008_856 {
@@ -542,8 +526,6 @@ fn lightness(color: Color) -> f64 {
     }
 }
 
-/// The channels a colour is spelled in, so a ratio can be measured: the terminal's own sixteen
-/// slots are the reader's colours and not this design's, and no ratio here is about them.
 fn spelled(color: Color) -> [u8; 3] {
     match color {
         Color::Rgb(red, green, blue) => [red, green, blue],

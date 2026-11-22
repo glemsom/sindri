@@ -1,7 +1,3 @@
-//! A call's arguments are a spelling of a tool's own fact: a command is a command line, a path is a
-//! path, a skill is a name. What a row says is the thing the reader would type, and the model's
-//! braces never reach the frame.
-
 use sindri::spell;
 use sindri_core::tools::{BASH, OPEN, SKILL};
 

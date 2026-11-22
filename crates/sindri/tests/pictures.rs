@@ -1,9 +1,5 @@
-//! Nothing here has a terminal: a placement is asserted as the glyphs in a buffer ratatui's
-//! headless backend hands back, and a transmission count is a reading of that buffer and not a
-//! wire — no byte leaves this process.
-
-mod caps; // the terminals these frames are drawn on
-mod frame; // one paint-and-read for every test
+mod caps;
+mod frame;
 
 use std::path::{Path, PathBuf};
 
@@ -48,14 +44,10 @@ fn surface(workspace: &Path) -> Surface {
     Surface::of(Some(workspace), CellSize::new(10, 20), true, false)
 }
 
-/// A surface with no workspace in it, which is all a picture the binary carries is measured
-/// against: the pixels in a cell, and whether this terminal places one at all.
 fn carried(draws: bool) -> Surface {
     Surface::of(None, cell(), draws, false)
 }
 
-/// Whether every alpha on the boundary of `drawn` is nothing, which is where its footprint is
-/// decided: a pixel left there is the plate the band used to read as.
 fn boundary_is_clear(drawn: &RgbaImage) -> bool {
     let (width, height) = drawn.dimensions();
     let top_and_bottom =
@@ -65,11 +57,8 @@ fn boundary_is_clear(drawn: &RgbaImage) -> bool {
     top_and_bottom && sides
 }
 
-/// The alpha at which a pixel is the head a picture draws rather than the glow it gives off.
 const HEAD: u8 = 64;
 
-/// The columns and rows the head of `drawn` stands at, or nothing where the picture lights no
-/// figure of its own.
 fn head(drawn: &RgbaImage) -> Option<Rect> {
     let (width, height) = drawn.dimensions();
     let mut bounds: Option<(u32, u32, u32, u32)> = None;
@@ -96,14 +85,10 @@ fn head(drawn: &RgbaImage) -> Option<Rect> {
     })
 }
 
-/// Whether `pixel` is the flat blue a picture was laid on: its blue at the top, red and green far
-/// under it.
 fn field(pixel: &Rgba<u8>) -> bool {
     pixel[2] >= 250 && pixel[0] <= 64 && pixel[1] <= 64
 }
 
-/// Whether every pixel of `drawn` more than a cell from `head` carries no light at all: the glow a
-/// head gives off reaches a cell past its edge, and the margin past that is the band's plane.
 fn margins_clear(drawn: &RgbaImage, head: Rect, cell: CellSize) -> bool {
     let (width, height) = drawn.dimensions();
     let across = cell.width() as u16;
@@ -560,9 +545,6 @@ fn frame(caps: Capabilities, workspace: &Path, text: &str) -> View {
     )
 }
 
-/// The first chunk of the protocol's transmission, which a terminal is told once and never
-/// again for one picture: the glyph a cell holds when the placement sends the picture rather
-/// than pointing at what the terminal already holds.
 const TRANSMIT: &str = "_Gq=2,";
 
 fn pictured_rows(buffer: &Buffer) -> Vec<u16> {
@@ -572,8 +554,6 @@ fn pictured_rows(buffer: &Buffer) -> Vec<u16> {
         .collect()
 }
 
-/// The columns of row `y` a placement covers: the cell the protocol writes its sequence into, and
-/// the cells it skips behind that one. It is the picture's whole width and no cell more.
 fn pictured_cols(buffer: &Buffer, y: u16) -> Vec<u16> {
     let area = buffer.area;
     (area.x..area.right())
@@ -585,7 +565,6 @@ fn pictured_cols(buffer: &Buffer, y: u16) -> Vec<u16> {
         .collect()
 }
 
-/// The rail's columns of row `y`, as a frame draws them.
 fn rail_row(buffer: &Buffer, rail: Rect, y: u16) -> String {
     (rail.x..rail.right())
         .map(|x| {
@@ -598,8 +577,6 @@ fn rail_row(buffer: &Buffer, rail: Rect, y: u16) -> String {
         .collect()
 }
 
-/// The twelve facts a rail draws, in the six blocks it reads them in, and no run's own spend: the
-/// facts that stand under the face, whole.
 fn railed_facts() -> Facts {
     Facts {
         wire: Some(String::from("anthropic")),
@@ -625,8 +602,6 @@ fn railed_facts() -> Facts {
     }
 }
 
-/// The facts a launch already holds beside the splash screen: a session and a temp are a run's own,
-/// so the rail draws an em dash for each.
 fn boot_facts() -> facts::Facts {
     facts::Facts::boot(
         Boot {
@@ -640,8 +615,6 @@ fn boot_facts() -> facts::Facts {
     )
 }
 
-/// The splash screen a launch opens on, drawn on a terminal that places pictures or on one that
-/// places none.
 fn splash(draws: bool) -> View {
     View::of(
         match draws {
@@ -653,9 +626,6 @@ fn splash(draws: bool) -> View {
     )
 }
 
-/// A frame whose rail carries the twelve facts, and a transcript of nothing: the rail is the picture
-/// a face is drawn over. A terminal that places none has no face to turn off, so `face` is no fact of
-/// its frame.
 fn railed(draws: bool, face: bool) -> View {
     View::of(
         match draws {
@@ -669,8 +639,6 @@ fn railed(draws: bool, face: bool) -> View {
     )
 }
 
-/// The band the transcript and the rail share in a `cols` by `rows` frame: everything above the
-/// two rows the composer rests at and the one the footer takes.
 fn shared_band(cols: u16, rows: u16) -> Rect {
     Rect {
         x: 0,
@@ -680,8 +648,6 @@ fn shared_band(cols: u16, rows: u16) -> Rect {
     }
 }
 
-/// The one row a frame narrower than the ledger's floor draws its strip in: the last row of the
-/// band it shares with the transcript.
 fn strip_band(cols: u16, rows: u16) -> Rect {
     Rect {
         y: shared_band(cols, rows).bottom() - 1,
@@ -690,8 +656,6 @@ fn strip_band(cols: u16, rows: u16) -> Rect {
     }
 }
 
-/// The band the rail of a painted frame is drawn in: the frame's right-hand columns, from its first
-/// row down to the one above the composer's head.
 fn rail_band(framed: &frame::Frame) -> Rect {
     framed
         .told()
@@ -703,8 +667,6 @@ fn rail_band(framed: &frame::Frame) -> Rect {
         .area
 }
 
-/// The cells whose glyphs hold the protocol's first chunk, counted: what a buffer sends when it is
-/// written out, and the count a scroll and a repaint must leave where it was.
 fn transmission_headers(buffer: &Buffer) -> usize {
     let area = buffer.area;
     let mut count = 0;
@@ -760,8 +722,6 @@ fn a_face_is_placed_over_the_footprint_it_was_measured_into_and_made_once_per_si
     );
 }
 
-/// The face measured into the block it is placed over, which needs no workspace and no file on
-/// disk: the picture a cache test moves from one cell to another.
 fn carried_face() -> (picture::Picture, Rect) {
     let measured = face::measure(Ceiling::new(40, 12), &carried(true))
         .expect("the face is measured with no workspace and no file on disk");
@@ -1311,7 +1271,6 @@ fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
                 .filter(|row| !row.is_empty())
                 .collect()
         };
-        // the rows the face takes, and the one under them that holds the rule closing it
         let under = u16::try_from(pictured_rows(with.cells()).len()).expect("the band's rows") + 1;
 
         assert_eq!(
@@ -2355,8 +2314,6 @@ fn a_frame_whose_marker_has_stepped_makes_no_band_image() {
     );
 }
 
-/// The image a frame holds under `id`: a frame holds more than one, and each is asked for by the
-/// identity it is placed under.
 fn plane_of(view: &View, id: PlaneId) -> &Plane {
     view.planes()
         .held()
@@ -2375,13 +2332,10 @@ fn plane_of(view: &View, id: PlaneId) -> &Plane {
         })
 }
 
-/// The composer's image, which is the one plane a frame's band has always carried.
 fn composer_plane(view: &View) -> &Plane {
     plane_of(view, PlaneId::Composer)
 }
 
-/// The shade the frame handed the terminal for the plane it holds under `id`, which is the one
-/// description of the colours that plane is drawn from.
 fn shade_of(drawn: &frame::Frame, id: PlaneId) -> Shade {
     *drawn
         .told()
@@ -2391,7 +2345,6 @@ fn shade_of(drawn: &frame::Frame, id: PlaneId) -> Shade {
         .unwrap_or_else(|| panic!("the frame handed no shade under {id:?}"))
 }
 
-/// The pixel at the middle of `row`'s cells of a plane drawn at `cell`, read as its channels.
 fn middle_of(plane: &Plane, row: u16) -> [u8; 3] {
     let pixel = plane.pixels().get_pixel(
         plane.pixels().width() / 2,
@@ -2400,9 +2353,6 @@ fn middle_of(plane: &Plane, row: u16) -> [u8; 3] {
     [pixel[0], pixel[1], pixel[2]]
 }
 
-/// The two frames compared cell by cell, on a terminal that places pictures and one that places
-/// none: a band the frame draws a plane under is read through its cells, so only the glyphs on it
-/// are the frame's, and every cell off both bands is the frame's whole.
 fn same_cells_outside_ground(
     pictured: &Buffer,
     placeless: &Buffer,

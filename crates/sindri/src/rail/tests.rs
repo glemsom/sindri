@@ -1,6 +1,3 @@
-//! What the adapter draws of the rows the ledger lays: the buffer it paints into read back, a
-//! row of glyphs and the ink of each cell.
-
 use std::path::PathBuf;
 
 use ratatui::style::Color;
@@ -12,8 +9,6 @@ use super::*;
 use crate::ink::Ink;
 use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 
-/// The band a ledger test stands in: the rail at its floor, which is what the narrowest frame
-/// that holds one is handed.
 const COLUMNS: u16 = FLOOR;
 use crate::palette::{Band, channels};
 use crate::pen;
@@ -21,22 +16,16 @@ use crate::plane::{Axis, Plane};
 use crate::readback::{column_of, inks, under};
 use crate::rows::{MARGIN, margins};
 
-/// The band a ledger test draws a meter and the size it is a share of in: the floor's columns and
-/// the two the frame's margin takes at either edge, which that pair needs of a row.
 const METERED: u16 = COLUMNS + MARGIN * 2;
 
-/// How far into the frame a seamed test stands its rail: the transcript's own columns are to its
-/// left, so the frame holds a band beside the rail's own.
 const LEFT: u16 = 20;
 
-/// The columns `text` draws in, which is the pen's question and not a count of its glyphs.
 fn columns(text: &str) -> usize {
     usize::from(pen::cells(text))
 }
 
 const PALETTE: Palette = Palette::TRUECOLOR;
 
-/// The rail painted over its whole band, with no picture drawn above the facts.
 fn paint(
     facts: &Facts,
     rail: Rail,
@@ -65,7 +54,6 @@ fn band(width: u16, height: u16) -> Rect {
     }
 }
 
-/// The rail's band stood `LEFT` columns into the frame, with its own rows whole.
 fn stood(height: u16) -> Rect {
     Rect {
         x: LEFT,
@@ -73,8 +61,6 @@ fn stood(height: u16) -> Rect {
     }
 }
 
-/// The frame a stood rail is drawn in: the transcript's columns to its left, and the rail's own to
-/// the frame's right edge.
 fn framed(rail: Rect) -> Rect {
     Rect {
         width: rail.right(),
@@ -94,16 +80,12 @@ fn glyphs(buffer: &Buffer, y: u16) -> String {
         .collect()
 }
 
-/// The dated Anthropic name a real run is served, which is wider than a value column.
 const SERVED: &str = "claude-sonnet-4-5-20250929";
 
-/// What the rail draws of [`SERVED`]: its head, and the mark saying the date stamp went.
 const CUT: &str = "claude-sonnet-4-5…";
 
 const BRANCH: &str = "spec/1-capability";
 
-/// The row a ctx fact of `value` is drawn on in a band `width` wide: the frame's margin, its label
-/// in the ten-column field, and the value against the last column the margin leaves.
 fn ctx_line(width: u16, value: &str) -> String {
     let at = width
         .saturating_sub(margins())
@@ -142,7 +124,6 @@ fn frame() -> Facts {
     }
 }
 
-/// [`frame`] with a run's spend, which is the foot the rail lays down to the frame's floor.
 fn spent() -> Facts {
     Facts {
         spend: Usage {
@@ -155,8 +136,6 @@ fn spent() -> Facts {
     }
 }
 
-/// Every fact the rail draws, its label and its value, stated here and not read off the module's
-/// own tables, so a test cannot pass by agreeing with the code it is testing.
 const CONTRACT: [(&str, &str); 12] = [
     ("wire", "anthropic"),
     ("model", CUT),
@@ -693,7 +672,6 @@ fn a_nearly_full_window_is_the_one_share_the_rail_raises_its_voice_about() {
             ctx_line(COLUMNS, &format!("{meter} {} / 200k", tokens(size))),
             "{size} tokens of two hundred thousand fills {filled} of the meter's six cells"
         );
-        // the meter stands where a value of "178k / 200k" leaves it, one margin from the edge
         let at = usize::from(COLUMNS)
             - usize::from(MARGIN)
             - METER
@@ -1297,8 +1275,6 @@ fn no_fact_is_ever_drawn_partially_at_any_width_between_twenty_and_two_hundred()
 
 #[test]
 fn a_strip_row_is_the_four_facts_of_its_list_beside_each_other_with_one_gap() {
-    // 220 columns hold the four facts and the count beside them, so the order is read
-    // without the room deciding any of it.
     let mut buffer = Buffer::empty(band(220, 1));
 
     paint(

@@ -1,7 +1,3 @@
-//! Proves the boundary is one value whose views cannot disagree: the `bash` tool description the
-//! model is given, the bytes `doctor` prints, the policy block a session record stores and the fact
-//! the rail draws are all read off it.
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -29,9 +25,6 @@ fn resolved(home: &Path, vars: &[(&str, &str)], flags: Config) -> Config {
     Config::resolve(&environment, flags).expect("the config resolves")
 }
 
-/// Real directories on disk, because a canonical path is resolved through the filesystem rather
-/// than tidied as a string: a set of paths that do not exist is refused, so a test that wants one
-/// has to make it.
 struct Ground {
     _root: TempDir,
     path: PathBuf,
@@ -74,8 +67,6 @@ fn the_description_names_every_writable_path_the_timeout_and_the_budgets() {
         Enforcement::Bubblewrap,
     );
 
-    // The worked example, written out: an independent statement of what the model is told, so the
-    // renderer cannot drift into saying something else.
     let paths = format!("  {}\n  {}", data.display(), workspace.display());
     let expected = format!(
         "Run a command with `bash`.\n\n\
@@ -148,9 +139,6 @@ fn the_same_boundary_reached_by_file_environment_or_flags_renders_identical_byte
     let workspace = ground.workspace();
     let (data, logs) = (data.display().to_string(), logs.display().to_string());
 
-    // The same two extra paths through each route in the precedence, in a different order each
-    // time: the set is sorted, so the order a route happened to name them in never reaches the
-    // model.
     let through_file = boundary(
         &resolved(
             config_home(&format!(
@@ -381,7 +369,6 @@ fn a_path_nested_inside_another_is_refused_naming_both() {
     let data = ground.directory("data");
     let cache = ground.directory("data/cache");
 
-    // Both orders: the set is sorted, so a caller cannot slip a nested path in by naming it first.
     for paths in [[&data, &cache], [&cache, &data]] {
         let error = WritableSet::new(paths).expect_err("a nested path grants nothing new");
         let message = error.to_string();

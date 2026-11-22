@@ -1,6 +1,3 @@
-//! What a conversation promises: the prompt of each run that ended beside the answer it got, in the
-//! order they ended, and nothing at all once the reader starts over.
-
 use sindri_core::conversation::Conversation;
 use sindri_core::run::Turn;
 

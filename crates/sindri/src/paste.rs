@@ -7,8 +7,6 @@ use rustix::termios::{LocalModes, OptionalActions, Termios, tcgetattr, tcsetattr
 
 const PROMPT: &str = "api key   paste it, then press Enter: ";
 
-/// A terminal whose echo cannot be turned off is an error rather than a read: a key typed
-/// where it can be seen is the one thing this function exists to avoid.
 pub fn ask() -> io::Result<String> {
     let terminal = io::stdin().is_terminal();
     let mut stderr = io::stderr();

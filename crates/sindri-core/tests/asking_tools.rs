@@ -1,6 +1,3 @@
-//! What the seam tells the wire about the tools a run holds, and what it does with a reply
-//! that asks for one: a prompt asking for the files in a folder is answered by running `bash`.
-
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

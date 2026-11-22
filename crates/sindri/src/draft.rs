@@ -1,14 +1,9 @@
-//! The inks one row of the draft is drawn in: the command it opens with, the files its words name,
-//! and the spans it sets in backticks.
-
 use crate::commands;
 use crate::files::Files;
 use crate::ink::Ink;
 
 const TICK: char = '`';
 
-/// The runs one drawn row of the draft is made of, in the order they sit, each with the ink it
-/// carries. `opens` says the row is the draft's own first row, the only row a command can open.
 pub fn runs<'a>(row: &'a str, opens: bool, files: &Files) -> Vec<(&'a str, Ink)> {
     let mut runs: Vec<(&'a str, Ink)> = Vec::new();
     let mut first = opens;
@@ -21,7 +16,6 @@ pub fn runs<'a>(row: &'a str, opens: bool, files: &Files) -> Vec<(&'a str, Ink)>
         words(&mut runs, &rest[..at], first, files);
         first = false;
         let span = &rest[at..];
-        // A backtick the row never closes opens no span: the rest of the row is drawn plain.
         let Some(close) = span[1..].find(TICK) else {
             runs.push((span, Ink::Plain));
             break;
@@ -32,8 +26,6 @@ pub fn runs<'a>(row: &'a str, opens: bool, files: &Files) -> Vec<(&'a str, Ink)>
     runs
 }
 
-/// The words and the blanks of one plain stretch of a row, in the order they sit, of which only a
-/// word that the row opens with can wear the accent.
 fn words<'a>(runs: &mut Vec<(&'a str, Ink)>, plain: &'a str, first: bool, files: &Files) {
     let mut first = first;
     let mut rest = plain;

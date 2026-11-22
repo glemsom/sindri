@@ -29,7 +29,6 @@ impl Route {
         }
     }
 
-    /// Read off the very wire the request is encoded by, never predicted from a table here.
     pub(super) fn of(wire: &OpenAiWire) -> Route {
         match wire {
             OpenAiWire::Chat(_) => Route::Chat,
@@ -64,8 +63,6 @@ impl<'de> serde::Deserialize<'de> for Route {
 }
 
 impl Ask {
-    /// The route this ask is sent on — rig's choice for the dialect and the served name, or
-    /// the one the override names — and `None` for a dialect that serves one endpoint.
     pub fn route_of(&self) -> Option<Route> {
         self.endpoint.route_of(&self.model)
     }

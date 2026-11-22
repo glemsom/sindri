@@ -1,6 +1,3 @@
-//! The turn in flight as the wire feeds it: the runs of fragments the newest turn was said in, the
-//! revision that counts them, and whether each run is a reasoning or an answer.
-
 use sindri_core::provider::Deltas;
 
 #[derive(Clone, Debug, Default)]

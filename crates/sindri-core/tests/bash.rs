@@ -1,7 +1,3 @@
-//! Proves the boundary is the one enforced, with real commands in a real sandbox: a write inside
-//! the writable set lands, one outside it is refused by the kernel, and a call past the per-call
-//! timeout is killed. A kernel that forbids unprivileged user namespaces makes these skip loudly.
-
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -13,8 +9,6 @@ use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::run::Cancel;
 use tempfile::TempDir;
 
-/// Real directories, because the writable set is canonicalised through the filesystem and a set
-/// that does not exist is refused.
 struct Ground {
     _root: TempDir,
     path: PathBuf,
@@ -63,9 +57,6 @@ fn said(output: &std::process::Output) -> String {
     }
 }
 
-/// Whether this machine can confine a command at all, said loudly when it cannot. Written to the
-/// descriptor rather than through `eprintln!`, because a passing test's output is captured and a
-/// skip must be seen.
 fn sandbox() -> Option<()> {
     let problem = match Command::new(bash::BWRAP).arg("--version").output() {
         Err(error) => Some(format!("bwrap not on PATH: {error}")),
@@ -296,8 +287,6 @@ fn an_unsafe_run_says_unsafe_in_the_outcome_the_json_and_the_rail() {
     assert_eq!(json["code"], serde_json::Value::from(0));
 }
 
-/// Waits until `path` exists, and says whether it ever did: a command is made to say it has started
-/// by writing a file, so a test never guesses with a sleep.
 fn waited_for(path: &Path) -> bool {
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
@@ -381,8 +370,6 @@ fn a_cancel_kills_a_sandboxed_command_before_it_can_write() {
     }
     let ground = Ground::new();
     let boundary = boundary(&ground, Enforcement::Bubblewrap, 120);
-    // Both files are in the writable set: a sandboxed command may write there, so a file that is
-    // missing is one a kill stopped and not one the kernel refused.
     let writable = ground.workspace();
     let temp = ground.temp();
     let late = writable.join("late.txt");
@@ -390,8 +377,6 @@ fn a_cancel_kills_a_sandboxed_command_before_it_can_write() {
     let cancel = Cancel::new();
     let interrupted = cancel.clone();
 
-    // The command says it started and then writes, two seconds later, a file the kernel would let
-    // it write: a kill that stopped only at the sandbox's edge would leave that file behind.
     let command = format!(
         "touch {}; sleep 2; echo late > {}",
         quoted(&started_file),

@@ -157,14 +157,9 @@ impl Record {
         &self.document
     }
 
-    /// The entries this record has written, in the order it wrote them: the transcript, readable
-    /// without the file.
     pub fn transcript(&self) -> &[Entry] {
         &self.entries
     }
-    /// A run joins the session this record keeps: the session is in flight again, and the end the
-    /// run before it reached is not this one's. Its turns are numbered after those the session
-    /// already counted.
     pub fn began(&mut self) -> Result<(), RecordError> {
         self.turns_before = self.document.turns;
         self.document.stopped = State::Running;
@@ -176,8 +171,6 @@ impl Record {
             text: self.secrets.redact(text),
         })
     }
-    /// The order is the transcript's, and its readers read it: each call before the result it
-    /// answered, and the answer last.
     pub fn wrote(&mut self, turn: &Turn) -> Result<(), RecordError> {
         let number = self.turns_before + turn.turn;
         let opened = Entry::Turn { turn: number };
@@ -192,8 +185,6 @@ impl Record {
                 arguments: self.secrets.redact(call.arguments.clone()),
             };
             self.append(called)?;
-            // A call the run never answered — a tool that failed, a stop mid-turn — is still a
-            // call the turn asked for, and no result is invented for it.
             let Some(acted) = turn.results.get(at) else {
                 continue;
             };
@@ -390,8 +381,6 @@ impl Phase {
         }
     }
 
-    /// Whether a run has ended in this phase, an answer or a failure: the two a terminal nobody is
-    /// watching raises a notification for.
     pub fn ended(self) -> bool {
         matches!(self, Phase::Done | Phase::Error)
     }

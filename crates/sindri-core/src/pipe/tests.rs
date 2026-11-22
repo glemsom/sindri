@@ -5,8 +5,6 @@ use std::time::Duration;
 
 use super::*;
 
-/// A stream that says one byte each time a test lets it, so a sink is counted without racing a
-/// clock.
 struct Chatter {
     permits: Receiver<()>,
 }

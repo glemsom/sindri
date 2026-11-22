@@ -1,6 +1,3 @@
-//! What a terminal's bytes become, proved where a caller can reach it: no terminal, no built
-//! binary, and nothing here asks whether a stream is one.
-
 use sindri::composer::Key;
 use sindri::decode::{Decoder, Event};
 use sindri::mark::Cell;
@@ -107,8 +104,6 @@ fn a_reported_key_is_the_key_the_byte_beside_it_would_be() {
 
 #[test]
 fn a_lock_a_report_carries_beside_its_modifiers_names_no_other_key() {
-    // A report's modifier field carries the locks the keyboard is in as well as the keys held, and
-    // a reader with caps lock on still types `Ctrl-C` rather than a key nobody answers.
     assert_eq!(
         event(b"\x1b[99;69u"),
         key(Key::Cancel),

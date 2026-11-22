@@ -1,7 +1,3 @@
-//! The redaction walk: every `Entry` variant is written with a known secret in every field that can
-//! hold one, and the transcript is read back against a golden only `SINDRI_BLESS=1` moves. The walk
-//! destructures each variant without a `..`, so a field added later stops it building.
-
 use std::time::Duration;
 
 use sindri_core::config::Config;
@@ -14,8 +10,6 @@ use sindri_core::wire::Wire;
 
 const SECRET: &str = "hunter2-eval";
 
-/// What a secret is written as, spelled out rather than imported: a test that read the constant
-/// could not tell a mask from a mask that never changed.
 const MASK: &str = "«redacted»";
 
 const GOLDENS: &str = concat!(
@@ -128,8 +122,6 @@ fn planted(field: &str) -> bool {
     matches!(field, "id" | "name" | "arguments" | "text")
 }
 
-/// The transcript the walk reads, written through the record a run writes through, so redaction
-/// happens on the production path and never in this test.
 fn written(ground: &Ground) -> Vec<String> {
     let session = ground.session();
     let mut record = ground.record(&session);

@@ -1,6 +1,3 @@
-// rig's `http::` error is 128 bytes and is what the transport trait returns, so
-// every fallible helper carries it: `#[allow]` here beats wrapping the trait,
-// which would be a second seam in front of the first.
 #![allow(clippy::result_large_err)]
 
 use std::collections::VecDeque;
@@ -12,8 +9,6 @@ use rig_core::http_client::{
     Response, StreamingResponse,
 };
 
-/// How many bytes a replayed reply hands out at a time, so the framing a live event stream
-/// exercises is the framing a fixture exercises.
 const CHUNK: usize = 64;
 
 const SESSION: &str = "{session}";
@@ -34,9 +29,6 @@ impl Http<()> {
         }
     }
 
-    /// The run's headers with `{session}` standing for `session`, expanded as the request is
-    /// dressed. Without it the placeholder is left as written, visible rather than silently
-    /// empty.
     pub fn session(self, session: impl Into<String>) -> Http<()> {
         Http {
             inner: self.inner,

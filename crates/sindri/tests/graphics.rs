@@ -1,7 +1,4 @@
-//! The picture's own contract, held to SVG strings a fence would produce: measured in cells
-//! before a pixel is spent, and then drawn at the pixels the cell was measured against.
-
-mod caps; // the terminals these frames are drawn on
+mod caps;
 
 use sindri::capability::Capabilities;
 use sindri::facts::Facts;
@@ -38,8 +35,8 @@ fn inked(image: &image::RgbaImage) -> usize {
 }
 
 /// `usvg` turns a `<text>` into paths while it parses, so a font database with nothing in it drops the
-/// label silently rather than failing. This draws the same label through a parser with no font, to
-/// prove the bundled one is what puts the words in the picture.
+/// label silently, with no error. This draws the same label through a parser with no font, to prove
+/// the bundled one is what puts the words in the picture.
 #[test]
 fn a_label_is_drawn_in_the_bundled_font_so_a_machine_with_no_fonts_still_shows_it() {
     let label = format!(

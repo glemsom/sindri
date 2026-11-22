@@ -1,7 +1,3 @@
-//! Proves what a run registers and what it says about each tool: the skill tool names every skill
-//! in force with the description discovery found, the catalog inside it is the one `doctor` prints,
-//! and a run with no skill registers `bash` alone rather than a skill tool that refuses.
-
 use std::path::{Path, PathBuf};
 
 use sindri_core::config::Config;

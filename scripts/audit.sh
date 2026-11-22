@@ -217,6 +217,7 @@ report test-name "${violations_test_name[@]}"
 
 violations_comment_block=()
 violations_comment_citation=()
+violations_comment_rationale=()
 
 audit_comments() {
   ((${#comment_files[@]})) || return 0
@@ -225,11 +226,12 @@ audit_comments() {
     case $kind in
       block) violations_comment_block+=("$file:$line: $text") ;;
       cite) violations_comment_citation+=("$file:$line: $text") ;;
+      rationale) violations_comment_rationale+=("$file:$line: $text") ;;
     esac
   done < <(awk -v US=$'\x1f' '
     BEGIN { sq = sprintf("%c", 39) }
 
-    # Both scanners count quotes rather than parsing them: a raw string or a character
+    # Both scanners count quotes and never parse them: a raw string or a character
     # literal opens a scan this read ends too early, and a line-spanning one desyncs it.
     function comment_start(line,   i, n, c, quoted) {
       n = length(line); quoted = 0
@@ -265,11 +267,20 @@ audit_comments() {
       block_lines = 0
     }
 
+    function flag_rationale(text,   phrase) {
+      if (match(text, /[Rr]ather than/)) phrase = substr(text, RSTART, RLENGTH)
+      else if (match(text, /[Ii]nstead of/)) phrase = substr(text, RSTART, RLENGTH)
+      else return
+      print "rationale" US FILENAME US FNR US "debates a choice (" phrase ")"
+    }
+
     function classify(text,   cited) {
       if (match(text, /§[[:space:]]*[0-9]+/)) {
         citation = "cites a spec section"; cited = substr(text, RSTART, RLENGTH)
       } else if (match(text, /[Aa][Dd][Rr][-/ ]?[0-9]+/)) {
         citation = "cites an ADR"; cited = substr(text, RSTART, RLENGTH)
+      } else if (match(text, /RFC[- ]?[0-9]+/)) {
+        citation = "cites an RFC"; cited = substr(text, RSTART, RLENGTH)
       } else if (match(text, /([Ii]ssue|[Tt]icket)[[:space:]]*#?[[:space:]]*[0-9]+/)) {
         citation = "cites an issue number"; cited = substr(text, RSTART, RLENGTH)
       } else if (match(text, /(^|[[:space:]]|\()#[0-9]+/)) {
@@ -312,7 +323,10 @@ audit_comments() {
       } else {
         flush_block()
       }
-      if (text != "") classify(text)
+      if (text != "") {
+        flag_rationale(text)
+        classify(text)
+      }
     }
 
     END { flush_block() }
@@ -321,5 +335,6 @@ audit_comments() {
 audit_comments
 report comment-block "${violations_comment_block[@]}"
 report comment-citation "${violations_comment_citation[@]}"
+report comment-rationale "${violations_comment_rationale[@]}"
 
 exit "$status"

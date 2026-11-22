@@ -1,7 +1,3 @@
-//! Proves rig is confined to one module tree by reading the source, not by trusting a convention:
-//! every file under `src/` is scanned, only the provider seam may carry the name, and comments are
-//! dropped so a module may explain rig without calling it.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 

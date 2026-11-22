@@ -1,8 +1,5 @@
-//! What a screen keeps: the list a cursor movement walks, the query a typed glyph reaches and the row
-//! a press chooses, each answered by the description of the screen rather than by matching on it.
-
-mod caps; // the terminals these frames are drawn on
-mod frame; // one paint-and-read for every test
+mod caps;
+mod frame;
 
 use sindri::capability::Capabilities;
 use sindri::commands;
@@ -30,7 +27,6 @@ use sindri_core::wire::Wire;
 const ANTHROPIC_MODELS: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
-/// The listing the model screen is handed: names a wire really served, read through the listing code.
 fn listed() -> Listing {
     let at = Endpoint::own(Wire::Anthropic);
     Client::over(
@@ -41,7 +37,6 @@ fn listed() -> Listing {
     .served(&at, &Credential::new("sk-ant-recorded"), &at)
 }
 
-/// A workspace of `files`, standing where the picker walks it.
 fn workspace(files: &[&str]) -> tempfile::TempDir {
     let root = tempfile::tempdir().expect("a temp workspace");
     for file in files {
@@ -54,8 +49,6 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
     root
 }
 
-/// A frame holding every list there is — a workspace the picker walks, the names the wire served and
-/// the keys the config holds — with `mode` open on top of it.
 fn screen(mode: Mode, capabilities: Capabilities) -> (tempfile::TempDir, View) {
     let root = workspace(&["src/rows.rs", "src/view.rs"]);
     let mut view = View::of(
@@ -76,7 +69,6 @@ fn screen(mode: Mode, capabilities: Capabilities) -> (tempfile::TempDir, View) {
         Mode::Settings => view.open_settings(&Config::default()),
         other => panic!("{other:?} keeps no list, so no screen of it is opened here"),
     }
-    // The model screen opens empty, so the wire's answer is handed to it once it stands.
     view.handed(view.facts().clone().served_by(listed()));
     assert_eq!(
         view.mode(),
@@ -87,11 +79,8 @@ fn screen(mode: Mode, capabilities: Capabilities) -> (tempfile::TempDir, View) {
     (root, view)
 }
 
-/// The three lists of one frame, in the order a test names them: the picker's, the served names' and
-/// the visit's.
 const LISTS: [Mode; 3] = [Mode::Files, Mode::Models, Mode::Settings];
 
-/// The mark of each of the three lists: the picker's row, the model screen's and the visit's.
 fn marks(view: &View) -> [usize; 3] {
     [
         view.picker().selected(),
@@ -100,7 +89,6 @@ fn marks(view: &View) -> [usize; 3] {
     ]
 }
 
-/// What each of the three lists has typed into it: two queries and the visit's value on its row.
 fn typed(view: &View) -> [String; 3] {
     let value = view
         .settings()
@@ -115,8 +103,6 @@ fn typed(view: &View) -> [String; 3] {
     ]
 }
 
-/// The four lists there are, stood on a bench: the picker's files, the names the wire served, the
-/// config's keys and the card a draft opens, each answering the seam as the frame asks it.
 enum Bench {
     Files(Picker),
     Models(Models),
@@ -124,23 +110,19 @@ enum Bench {
     Card(commands::Card),
 }
 
-/// A workspace of four files, one of which a query can take away from under the mark.
 fn files() -> Bench {
     let root = workspace(&["alpha.rs", "baker.rs", "mars.rs", "zulu.rs"]);
     Bench::Files(Picker::walk(root.path()))
 }
 
-/// The names a recorded wire served, which are two.
 fn served() -> Bench {
     Bench::Models(Models::new().served_by(Some(listed())))
 }
 
-/// The config's keys, which are the rows a visit holds and the one list with no query.
 fn visit() -> Bench {
     Bench::Settings(Settings::of(&Config::default()))
 }
 
-/// The card a bare slash opens, which holds every command in one order.
 fn card() -> Bench {
     Bench::Card(commands::Card::of("/").expect("a bare slash holds every command"))
 }
@@ -155,7 +137,6 @@ impl Bench {
         }
     }
 
-    /// The rows the list holds, each as the word it spells.
     fn rows(&self) -> Vec<String> {
         match self {
             Bench::Files(picker) => picker
@@ -180,7 +161,6 @@ impl Bench {
         }
     }
 
-    /// The mark, which is the row the reader stands on.
     fn mark(&self) -> usize {
         match self {
             Bench::Files(picker) => picker.selected(),
@@ -190,12 +170,10 @@ impl Bench {
         }
     }
 
-    /// The word the row the mark stands on spells.
     fn marked(&self) -> Option<String> {
         self.rows().into_iter().nth(self.mark())
     }
 
-    /// The glyphs of `asked`, typed at the list one at a time.
     fn ask(&mut self, asked: &str) {
         for glyph in asked.chars() {
             assert!(

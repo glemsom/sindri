@@ -1,7 +1,3 @@
-//! Proves redaction is a type rather than a habit: a `SecretSet` of literal strings and a
-//! `Redacted` newtype whose `Display`, `Debug` and `Serialize` all scrub, so a secret cannot leave
-//! the core by being printed. Bytes in, scrubbed bytes out — the type's guarantee, proved directly.
-
 use serde::Serialize;
 use sindri_core::config::Config;
 use sindri_core::provider::transport::{Canned, Replay};
@@ -9,8 +5,6 @@ use sindri_core::provider::{Ask, Client, Verdict};
 use sindri_core::redact::{Redacted, SecretSet};
 use sindri_core::wire::Wire;
 
-/// What a secret is written as, spelled out rather than imported, because a test that read the
-/// constant could not tell a mask from a mask that never changed.
 const MASK: &str = "«redacted»";
 
 #[derive(Debug, Serialize)]

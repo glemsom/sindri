@@ -1,6 +1,3 @@
-//! A child's stream read by a thread of its own, so a program that fills it cannot block on a pipe
-//! nobody is reading, collected into a sink the call can take whether or not the read ended.
-
 use std::io::{ErrorKind, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -57,7 +54,6 @@ impl Stream {
         self.keeping.store(false, Ordering::Relaxed);
     }
 
-    /// Everything the stream said, once the grace for the last of it has run out.
     pub fn finish(self) -> Vec<u8> {
         let deadline = Instant::now() + GRACE;
         while !self.reader.is_finished() && Instant::now() < deadline {
@@ -67,8 +63,6 @@ impl Stream {
     }
 }
 
-/// One line of what a stream said, trimmed: the first line it finished, or the whole of it when it
-/// ended without a newline ever being written.
 pub fn first_line(said: &[u8]) -> String {
     let text = String::from_utf8_lossy(said);
     let whole = match text.rfind('\n') {

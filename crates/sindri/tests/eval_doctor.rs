@@ -1,7 +1,3 @@
-//! `doctor`'s description is the `bash` tool's, byte for byte: the bytes printed under its heading are held
-//! against what the tool set registers, over a stand-in `bwrap` first on `PATH`, so both worlds are walked
-//! on a runner whose kernel forbids an unprivileged sandbox. An eval is judged by `make evals`, not `make test`.
-
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
@@ -13,14 +9,11 @@ use sindri_core::skills::Catalog;
 use sindri_core::tools::{BASH, FrontEnd, ToolSet};
 use tempfile::TempDir;
 
-/// A stand-in `bwrap` that answers the version and builds every sandbox it is asked for: a proof this
-/// machine's kernel has no say in.
 const PROVES: &str = "if [ \"${1:-}\" = --version ]; then\n  \
                       echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
                       exit 0";
 
 struct Ground {
-    /// Held so the directories outlive the paths that name them.
     _root: TempDir,
     workspace: PathBuf,
     config: PathBuf,
@@ -43,8 +36,6 @@ impl Ground {
         ground
     }
 
-    /// A config naming a wire and a model, which is the least a launch asks for: doctor reports
-    /// nothing to a ground that names no run.
     fn naming_a_run(&self) {
         let directory = self.config.join("sindri");
         std::fs::create_dir_all(&directory).expect("the config directory");
@@ -55,14 +46,10 @@ impl Ground {
         .expect("a config naming a run");
     }
 
-    /// The workspace as the child's `getcwd` spells it: the boundary the description is rendered from is built
-    /// from that path.
     fn workspace(&self) -> PathBuf {
         std::fs::canonicalize(&self.workspace).expect("the workspace resolves")
     }
 
-    /// The stand-in `bwrap`, first on the child's `PATH`: a sandbox the eval lends the run rather than one
-    /// it asks the kernel for.
     fn machine(&self) -> String {
         let bin = self.config.join("machine");
         std::fs::create_dir_all(&bin).expect("a machine directory");
@@ -105,8 +92,6 @@ fn printed_description(stdout: &str) -> &str {
         .0
 }
 
-/// The `bash` tool's description as a run at `enforcement` registers it, built here from the boundary and
-/// the catalog doctor had: the independent half of the byte-for-byte assertion.
 fn registered(ground: &Ground, enforcement: Enforcement) -> String {
     let boundary = Boundary::from_config(&Config::default(), &ground.workspace(), enforcement)
         .expect("a boundary over the temp workspace");

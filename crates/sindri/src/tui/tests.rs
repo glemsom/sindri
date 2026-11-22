@@ -1,7 +1,3 @@
-//! The launch's own contracts, each driving one event through a pseudo-terminal of this process's
-//! own: a copy written down the wire, a settings visit whose value is saved or refused, a run that
-//! cannot start leaving its row, a focus report, and a key typed before the first frame.
-
 use std::io::Read;
 use std::os::fd::AsFd;
 use std::path::PathBuf;
@@ -94,8 +90,6 @@ fn the_harness_resolves_the_config_a_launch_runs_on() {
     );
 }
 
-/// A pseudo-terminal of this process's own, with the launch standing on it: the keyboard and the
-/// screen it was handed, and the reader that says what the screen has been given.
 struct Stage {
     pty: Pty,
     terminal: Terminal,
@@ -137,7 +131,6 @@ impl Stage {
         }
     }
 
-    /// The config the launch resolves from `environment`, resolved as `main` resolves one.
     fn config(&self, environment: &impl Environment) -> Config {
         FirstRun::resolve(environment, self.cli.flags())
             .expect("a config")
@@ -145,8 +138,6 @@ impl Stage {
             .clone()
     }
 
-    /// The launch this terminal draws, with `view` as the frame it draws and `config` as the run a
-    /// prompt will ask for.
     fn launch<'a>(
         &'a self,
         view: View,
@@ -156,7 +147,6 @@ impl Stage {
         self.told_in(view, config, environment, false).0
     }
 
-    /// The same launch, with the wake it waits on handed back: the one a test raises a cause on.
     fn launch_woken<'a>(
         &'a self,
         view: View,
@@ -166,8 +156,6 @@ impl Stage {
         self.told_in(view, config, environment, false)
     }
 
-    /// The same launch where the stream carries a window, which is the only thing that reports the
-    /// reader's focus and raises a notification.
     fn launch_in_a_window<'a>(
         &'a self,
         view: View,
@@ -177,8 +165,6 @@ impl Stage {
         self.told_in(view, config, environment, true).0
     }
 
-    /// Every byte this terminal has been handed, once it has gone quiet: a frame is several
-    /// writes, and the last of them lands no later than the terminal says nothing more.
     fn drawn(&self) -> String {
         let mut waited = self.drawn.lock().expect("the frame").len();
         loop {
@@ -323,8 +309,6 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
 
 const FRAME: (u16, u16) = (120, 40);
 
-/// The frame a launch opens on, with a rail of facts and a terminal that places pictures: the face
-/// is drawn over the rail's top rows and takes no row of the block's band.
 fn railed(config: &Config) -> View {
     let boot = Boot {
         wire: Some(Wire::Anthropic),
@@ -344,7 +328,6 @@ fn painted(view: &mut View) -> ratatui::buffer::Buffer {
     painted_and_told(view).0
 }
 
-/// The cells of the frame `view` paints, and what that pass told the terminal of them.
 fn painted_and_told(view: &mut View) -> (ratatui::buffer::Buffer, Painted) {
     let (cols, rows) = FRAME;
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(cols, rows))
@@ -360,7 +343,6 @@ fn painted_and_told(view: &mut View) -> (ratatui::buffer::Buffer, Painted) {
     (frame, told)
 }
 
-/// Whether this frame paints the face, read off the cells a placement covers.
 fn draws_the_face(view: &mut View) -> bool {
     let frame = painted(view);
     let area = frame.area;
@@ -427,9 +409,6 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     );
 }
 
-/// The face a visit turns off is the one picture the launch's first frame has already placed over
-/// the rail's top rows: a value handed again is the frame's own, so no placement is made into pixels
-/// a second time.
 #[test]
 fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again() {
     let (_home, environment) = config_home("face = true\n");
@@ -461,8 +440,6 @@ fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again()
     );
 }
 
-/// What a test asks of a launch: the frame it holds, the config the run will ask by, and the words it
-/// has told. A test never reads a field of it.
 impl Loop<'_> {
     fn mode(&self) -> sindri::keys::Mode {
         self.view.mode()
@@ -492,14 +469,10 @@ impl Loop<'_> {
         draws_the_face(&mut self.view)
     }
 
-    /// How many times this frame has made `source` into pixels: a picture placed twice is a
-    /// transmission the reader waited for twice.
     fn rasterises(&self, source: &str) -> usize {
         self.view.capabilities().pictures().rasterises(source)
     }
 
-    /// The cells of the composer's head row the live run's pulse walks in the accent: the one ink
-    /// of the row that recedes with the reader.
     fn lit(&mut self, palette: &Palette) -> Vec<(u16, u16)> {
         let (frame, told) = painted_and_told(&mut self.view);
         let Some(head) = told.layout().map(|laid| laid.composer.y) else {
@@ -517,7 +490,6 @@ impl Loop<'_> {
             .collect()
     }
 
-    /// The look each of the cells at `at` is drawn in, read off the frame the launch holds now.
     fn looks(&mut self, palette: &Palette, at: &[(u16, u16)]) -> Vec<Option<Look>> {
         let frame = painted(&mut self.view);
         at.iter()
@@ -533,7 +505,6 @@ fn sequences(written: &str) -> Vec<&str> {
         .collect()
 }
 
-/// A prompt as the composer hands one back: typed, then sent.
 fn prompt_of(text: &str) -> Prompt {
     let mut composer = Composer::new();
     composer.paste(text);
@@ -610,8 +581,6 @@ fn a_refused_prompt_out_of_the_queue_is_the_draft_again_and_the_launch_stands() 
     );
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
-    // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
-    // wire.
     let environment = std::collections::BTreeMap::new();
     let mut live = stage.launch(view, Config::default(), &environment);
 
@@ -645,8 +614,6 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
     view.enqueue(prompt_of("run the test that failed and read it"));
     view.enqueue(prompt_of("then the fmt check"));
     view.paste("and then the release check");
-    // No provider and no model: `Launch::open` refuses before it touches a sandbox, a session or a
-    // wire.
     let environment = std::collections::BTreeMap::new();
     let mut live = stage.launch(view, Config::default(), &environment);
 
@@ -846,7 +813,6 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
         Transcript::none(),
     );
     view.paste("the draft the composer band is drawn from");
-    // A stream that carries a window: nothing else raises a notification at all.
     let mut live = stage.launch_in_a_window(view, Config::default(), &environment);
     let lit = live.lit(&palette);
     assert!(

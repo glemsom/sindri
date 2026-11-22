@@ -1,10 +1,7 @@
-//! One turn taken: the wire replays it and the run keeps it.
-
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-/// A turn already taken: the next ask replays it, so the model reads what its calls printed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Turn {
     pub turn: u32,
@@ -17,7 +14,6 @@ pub struct Turn {
 }
 
 impl Turn {
-    /// A turn that asked for nothing: the words it was asked with and the words it answered.
     pub fn answered(turn: u32, prompt: impl Into<String>, text: impl Into<String>) -> Turn {
         Turn {
             turn,
@@ -31,11 +27,8 @@ impl Turn {
     }
 }
 
-/// A call the model asked for: the wire's identity for it, the tool's name, and the arguments
-/// as JSON text, so a call that does not parse still reaches the executor that judges it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Call {
-    /// The wire's own identity for this call, which its result is answered against.
     pub id: String,
     pub name: String,
     pub arguments: String,
@@ -87,7 +80,6 @@ pub struct Acted {
     pub exit: Exit,
 }
 
-/// What one ask reported spending, and the running total a record keeps.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Usage {

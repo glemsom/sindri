@@ -1,7 +1,3 @@
-//! Proves the Copilot sign-in with no socket and no GitHub account: the code a person is shown, the
-//! wait between polls, the owner-only file the session is kept in, a session refreshed when it
-//! expires, and the wording a revoked one comes back with.
-
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;

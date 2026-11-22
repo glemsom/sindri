@@ -1,6 +1,3 @@
-//! Proves the first-run card asks the config in force: which wire and model are missing, which
-//! variable and path the row offers, and that resolving one writes no file at all.
-
 use std::collections::BTreeMap;
 use std::path::Path;
 

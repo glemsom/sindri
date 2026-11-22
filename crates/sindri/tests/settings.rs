@@ -1,7 +1,3 @@
-//! The settings modal where it meets the file: a visit writes only the rows a reader touched, `Enter` writes
-//! at once and the next prompt runs on what it left, `Esc` writes nothing, an emptied row unsets its key so
-//! the environment speaks again, and a refused value is said on the screen with nothing written.
-
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -15,8 +11,6 @@ use sindri::view::{Transcript, View};
 use sindri_core::config::{Config, MODE, Touched};
 use tempfile::TempDir;
 
-/// A config file a person wrote: comments above keys and beside them, keys in an order no serializer would
-/// choose, and a blank line where they wanted one.
 const HAND_WRITTEN: &str = "\
 # My settings, and my notes on them. The comments are the point.
 status = false   # OSC 7501 reporting, off until I trust it

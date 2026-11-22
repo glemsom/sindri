@@ -13,10 +13,8 @@ use sindri_core::tools::FrontEnd;
 use crate::cli::{Cli, Format};
 use crate::window::Window;
 
-/// The exit code for a run that had nothing to run *with*, or an answer it could not write.
 const SETUP: u8 = 3;
 
-/// The exit code for a command line or a prompt that cannot be used.
 const USAGE: u8 = 2;
 
 pub struct Job {
@@ -47,7 +45,6 @@ impl Job {
     }
 }
 
-/// Batch mode's answer is written once it is whole, so the fragments land and go no further.
 struct Quiet;
 
 impl Deltas for Quiet {
@@ -60,7 +57,6 @@ pub fn stdin_is_terminal() -> bool {
     io::stdin().is_terminal()
 }
 
-/// A terminal is never read here: a run waiting on a keyboard nobody is at would hang.
 fn piped_words() -> Option<String> {
     if stdin_is_terminal() {
         return None;
@@ -90,7 +86,6 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
     };
     let figure = launch.figure();
     let max_turns = launch.max_turns();
-    // A filter took no screen: its stderr carries the status document and no window.
     let mut telling = Window::new(io::stderr(), tells(config), &figure.workspace, false);
 
     narrate(
@@ -122,7 +117,6 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
             Err(refusal) => return refuse(refusal.message(), refusal.code()),
         }
     };
-    // One run is one session's whole conversation: its temp goes once the run has stopped.
     launch.close();
 
     narrate(
@@ -135,7 +129,6 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
             outcome.tool_calls()
         ),
     );
-    // On stderr, where a script reads it: stdout is the answer's alone.
     if let Some(reason) = why(&outcome, max_turns) {
         eprintln!("sindri: {reason}");
     }
@@ -151,7 +144,6 @@ pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
         return refuse(&format!("cannot write the answer: {error}"), SETUP);
     }
 
-    // The last line of the verbose stream, whatever the run's stop reason.
     if cli.is_verbose() {
         eprintln!("{}", outcome.session());
     }
@@ -168,7 +160,6 @@ impl Turns for Says<'_> {
     fn turn(&mut self, ended: &Turn) {
         self.turns = ended.turn;
         narrate(self.cli, &format!("turn {}", self.turns));
-        // Before this turn's own word: a filter nobody watches has no other clock to go by.
         quietly(self.telling.due());
     }
 
@@ -177,7 +168,6 @@ impl Turns for Says<'_> {
     }
 }
 
-/// A model that ended its answer with a newline does not get a second one.
 fn write_line(line: &str) -> io::Result<()> {
     let mut stdout = io::stdout().lock();
     stdout.write_all(line.trim_end_matches('\n').as_bytes())?;
@@ -191,8 +181,6 @@ fn tells(config: &Config) -> bool {
     config.tells_status() && io::stderr().is_terminal()
 }
 
-/// A status nobody could write does not fail a run that is answering: a terminal that has
-/// gone away is one there is nothing left to tell.
 fn quietly(written: io::Result<()>) {
     let _ = written;
 }

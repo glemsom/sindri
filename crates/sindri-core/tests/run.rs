@@ -1,7 +1,3 @@
-//! What the run loop promises: a turn is one request and the calls it asks for, a complete answer
-//! stops it as `final`, and the turn cap and the two run-scoped budgets stop it as their own
-//! reason. The model is a script of replies, the tools a script of costs: no network, no sleep.
-
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -160,7 +156,6 @@ fn requests(log: &Arc<Mutex<Vec<Request>>>) -> Vec<Request> {
     log.lock().expect("the log is not poisoned").clone()
 }
 
-/// A witness that keeps what the loop told it, in the order it was told.
 #[derive(Default)]
 struct Watching {
     began: usize,
@@ -188,8 +183,6 @@ impl Witness for Watching {
     }
 }
 
-/// The turns the run told, split into the ones it asked and the ones it waited on, each in the
-/// order it said them.
 fn told_turns(watching: &Watching) -> (Vec<u32>, Vec<u32>) {
     let mut asking = Vec::new();
     let mut waiting = Vec::new();
@@ -884,8 +877,6 @@ impl Responder for Complete {
     }
 }
 
-// `raise(3)`, so a test can send itself the signal a terminal's `^C` sends: a signal cannot be
-// faked, and a fake is not what the rule about `^C` is about.
 unsafe extern "C" {
     fn raise(signal: i32) -> i32;
 }
@@ -949,8 +940,6 @@ fn the_output_bytes_are_a_budget_of_the_whole_run() {
 
 #[test]
 fn two_turns_of_half_an_hour_spend_the_run_an_hour_budget() {
-    // Turn-scoped budgets would let this run go on forever: every call is half an hour, inside the
-    // hour. Run-scoped, the second turn spends the last of it and there is no third.
     let limits = Limits::new(250, Duration::from_secs(60 * 60), 8 * 1024 * 1024);
     let model = Scripted::answering([Reply::asking("working", [command("true")])]);
     let log = model.log();
@@ -1002,7 +991,6 @@ fn cancellation_wins_over_a_budget_spent_in_the_same_turn() {
 
 #[test]
 fn the_budget_that_fired_first_wins_over_the_turn_cap() {
-    // The budget is spent inside turn one, so it lands before the next turn's cap check can speak.
     let limits = Limits::new(1, Duration::from_secs(60 * 60), 8 * 1024 * 1024);
     let mut run = Run::new(
         "work",
@@ -1096,8 +1084,6 @@ fn a_second_load_of_one_skill_is_already_loaded() {
 
 #[test]
 fn a_sigint_stops_the_run_as_cancelled_with_nothing_on_stdout() {
-    // `^C` lands while the request is in flight, and the wire then hands back a complete answer:
-    // the user's word still wins, so the answer is not printed.
     struct Interrupted;
 
     impl Responder for Interrupted {
@@ -1131,8 +1117,6 @@ fn a_stopped_run_starts_no_further_turn() {
     assert_eq!(requests(&log).len(), 1, "no request after the stop landed");
 }
 
-/// A boundary over a real directory, because the writable set is canonicalised through the
-/// filesystem rather than tidied as a string.
 fn ground() -> (tempfile::TempDir, PathBuf, Boundary) {
     let root = tempfile::tempdir().expect("a temp ground");
     let workspace = std::fs::canonicalize(root.path()).expect("the ground resolves");
@@ -1152,8 +1136,6 @@ fn the_config_names_the_turn_cap_and_the_boundary_names_the_budgets() {
     let limits = Limits::from_config(&configured, &boundary);
 
     assert_eq!(limits.max_turns(), 7, "the cap is the config's to set");
-    // The two numbers written out rather than restated from the constants the code uses, so this
-    // test can disagree with the code.
     assert_eq!(limits.clock(), Duration::from_secs(60 * 60));
     assert_eq!(limits.output(), 8 * 1024 * 1024);
     assert_eq!(
@@ -1238,8 +1220,6 @@ fn the_bash_executor_says_how_the_call_ended() {
         "a signal leaves no code to report"
     );
 
-    // One second is the shortest per-call timeout a policy allows, and a command that outlives it
-    // is killed rather than waited out.
     let impatient = Boundary::from_config(
         &Config {
             timeout: Some(1),
@@ -1281,8 +1261,6 @@ fn a_bash_call_that_names_no_command_is_an_error() {
     );
 }
 
-/// A shell standing on a ground of real directories, and the opener it was handed: a run's own
-/// work lands in the session temp, which is beside the workspace and not inside it.
 struct OpenGround {
     _root: tempfile::TempDir,
     workspace: PathBuf,
@@ -1310,35 +1288,30 @@ impl OpenGround {
         }
     }
 
-    /// A file in the session temp, resolved: what a run's own work is written to.
     fn file(&self, name: &str) -> PathBuf {
         let path = self.temp.join(name);
         std::fs::write(&path, "the page").expect("the file");
         path
     }
 
-    /// A file in the workspace: the place a run stands and may write to.
     fn inside(&self, name: &str) -> PathBuf {
         let path = self.workspace.join(name);
         std::fs::write(&path, "the page").expect("the file");
         path
     }
 
-    /// A file above both places, resolved: a target no ground holds.
     fn outside(&self, name: &str) -> PathBuf {
         let path = self._root.path().join(name);
         std::fs::write(&path, "the page").expect("the file");
         std::fs::canonicalize(&path).expect("the file resolves")
     }
 
-    /// A link in the workspace to `target`: what a judgement resolves before it judges.
     fn link(&self, name: &str, target: &Path) -> PathBuf {
         let path = self.workspace.join(name);
         std::os::unix::fs::symlink(target, &path).expect("the link");
         path
     }
 
-    /// A directory in the workspace whose name claims an extension a file may carry.
     fn directory(&self, name: &str) -> PathBuf {
         let path = self.workspace.join(name);
         std::fs::create_dir_all(&path).expect("the directory");
@@ -1352,8 +1325,6 @@ impl OpenGround {
     }
 }
 
-/// An opener that hands nothing anywhere and keeps what it was handed, so a test reads the target
-/// the run judged rather than what a browser did with it.
 #[derive(Debug, Default)]
 struct Logged {
     openings: Mutex<Vec<Opening>>,
@@ -1378,7 +1349,6 @@ impl Opener for Logged {
     }
 }
 
-/// The same log, as the seam a shell is handed.
 fn shared(logged: &Arc<Logged>) -> Arc<dyn Opener> {
     let held: Arc<Logged> = Arc::clone(logged);
     held
@@ -1396,8 +1366,6 @@ impl Opener for Broken {
     }
 }
 
-/// An opener still working on the target it was handed, the way a browser that keeps its opener
-/// alive while it starts does.
 #[derive(Debug)]
 struct Lingering;
 
@@ -1407,8 +1375,6 @@ impl Opener for Lingering {
     }
 }
 
-/// An opener that ran and left the call failing in its own words, the way a browser that holds no
-/// handler for the target's extension does.
 #[derive(Debug)]
 struct Complained;
 
@@ -2128,8 +2094,6 @@ fn a_builtin_skill_loads_from_the_binary_and_lists_no_files_beside_it() {
     );
 }
 
-/// Waits until `path` exists, and says whether it ever did: a command is made to say it has started
-/// by writing a file, so no test guesses with a sleep.
 fn started_at(path: &Path) -> bool {
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     while std::time::Instant::now() < deadline {

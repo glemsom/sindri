@@ -1,9 +1,5 @@
-//! What one paint pass hands back: the frame it laid out, the destinations the frame names, the runs
-//! it draws at more than one cell, the rows a press chooses, and what it drew of the transcript, read
-//! off the value rather than off the frame.
-
-mod caps; // the terminals these frames are drawn on
-mod frame; // one paint-and-read for every test
+mod caps;
+mod frame;
 
 use frame::Frame;
 
@@ -28,8 +24,6 @@ fn turns(count: u32) -> Vec<Entry> {
     (1..=count).map(thought).collect()
 }
 
-/// One row of the band that says which turn it is: a turn draws no row of its own, so a
-/// transcript of one row to a turn says which one they stand on with a thought.
 fn thought(turn: u32) -> Entry {
     Entry::Reasoning {
         turn,
@@ -44,12 +38,10 @@ fn answer(text: &str) -> Vec<Entry> {
     }]
 }
 
-/// One fence line wider than the band it is drawn in, and a row of prose under it.
 const FENCE: &str = "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_\
                      the_shape_the_model_wrote_it_in_and_no_band_reflows_one = 1;\n```\n\n\
                      the prose under the fence";
 
-/// What the frame's last row says.
 fn footer(frame: &Frame, laid: &sindri::view::Layout) -> String {
     frame
         .row(laid.footer.y)
@@ -346,8 +338,6 @@ fn a_pass_hands_back_the_bands_it_shared_the_frame_out_in() {
     );
 }
 
-/// The row a border glyph of a card is drawn on, and the columns it is drawn in: the glyph's first
-/// and last cell along that row, read off the frame rather than measured from the card's width.
 fn border(frame: &Frame, glyph: char) -> (u16, u16, u16) {
     let area = frame.area();
     for y in area.y..area.bottom() {
@@ -418,8 +408,6 @@ fn a_pass_under_a_card_hands_back_the_body_the_screens_rows_were_drawn_in() {
     );
 }
 
-/// Enough facts that the rail is drawn: a frame beside a rail has its rows cut before they are
-/// shared out.
 fn railed() -> Facts {
     Facts::default().asked().railed(ledger::Facts {
         wire: Some(String::from("anthropic")),
@@ -689,7 +677,6 @@ fn a_frame_with_no_card_keeps_the_caret_placed_in_the_band_the_pass_handed_back(
     );
 }
 
-/// Every cell of `area` the frame draws in the mark ink, read off the cells a reader is shown.
 fn mark_cells(frame: &Frame, area: Rect) -> Vec<(u16, u16)> {
     let mut found = Vec::new();
     for y in area.y..area.bottom() {

@@ -1,7 +1,3 @@
-//! The turn in flight, held to the value the wire feeds: the runs a turn was said in, in the order
-//! they land, and the revision that counts them. The rows they are drawn as belong to `rows`, and
-//! the frame that shows the same turn beside the settled entries is `frames`' `streaming-120x40`.
-
 use std::fs;
 
 use sindri::stream::{Said, Stream};

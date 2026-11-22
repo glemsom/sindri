@@ -8,8 +8,6 @@ use crate::term::pty::Pty;
 
 use super::*;
 
-/// The payload of every OSC sequence the stream was handed, in the order it was handed them:
-/// what a terminal at the far end reads, with the bytes around it taken off.
 fn sequences(written: &[u8]) -> Vec<String> {
     let text = String::from_utf8_lossy(written).into_owned();
     let mut said = Vec::new();

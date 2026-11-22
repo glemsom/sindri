@@ -1,13 +1,8 @@
-//! The terminal's own hyperlink: a run of cells can be a way to somewhere, and the way is written
-//! around that run by the backend that draws the frame, because no cell carries a destination.
-
 use std::path::Path;
 
 /// The oldest VTE that places a hyperlink: 0.50, said as a terminal says it.
 const OLDEST_VTE: u32 = 5000;
 
-/// One run of a row's cells that is a way to somewhere: the columns it covers, measured from the
-/// left edge of the row it was laid out in, and the destination a cell of it opens.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Link {
     left: u16,
@@ -24,8 +19,6 @@ impl Link {
         }
     }
 
-    /// The same run `by` columns further right: a run is measured from the left edge of the row it
-    /// was laid on, so a row set further right moves it with the words it names.
     pub(crate) fn shifted(&self, by: u16) -> Link {
         Link {
             left: self.left.saturating_add(by),
@@ -38,8 +31,6 @@ impl Link {
     }
 }
 
-/// The links a frame names, laid on the rows it drew: what travels beside the cells, because a
-/// cell is a glyph and a look and has no room for a destination.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Links {
     laid: Vec<(u16, Link)>,
@@ -50,14 +41,11 @@ impl Links {
         Links::default()
     }
 
-    /// Lays the links a row names at the frame's row `row`, from the frame's column `left`: a row
-    /// is laid out from its own left edge and drawn where the frame puts it.
     pub fn lay(&mut self, row: u16, left: u16, links: &[Link]) {
         self.laid
             .extend(links.iter().map(|link| (row, link.shifted(left))));
     }
 
-    /// The destination the cell at `row`'s `column` names, when it names one.
     pub fn at(&self, row: u16, column: u16) -> Option<&str> {
         self.laid
             .iter()
@@ -89,8 +77,6 @@ fn destination(path: &Path) -> String {
     url
 }
 
-/// The words of a tool row that are a way to a file, and where they go: the path as the call wrote
-/// it, which is how the row's cells are found, and the destination the run's judgement made of it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Way {
     written: String,
@@ -98,8 +84,6 @@ pub struct Way {
 }
 
 impl Way {
-    /// The path a call wrote and the file the run judged those words to be: the destination is made
-    /// from the file, so a way is never two strings in an order somebody has to remember.
     pub fn of(written: impl Into<String>, path: &Path) -> Way {
         Way {
             written: written.into(),
@@ -107,7 +91,6 @@ impl Way {
         }
     }
 
-    /// The path as the words it was written with.
     pub fn written(&self) -> &str {
         &self.written
     }
@@ -143,9 +126,6 @@ pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> b
         })
 }
 
-/// Whether a terminal names itself after one of `names`: the one read every capability is asked
-/// from, because what a terminal can do is said by the name it gives itself and never guessed at
-/// one that says nothing. Each capability names the terminals it can vouch for.
 pub fn named(term: Option<&str>, program: Option<&str>, names: &[&str]) -> bool {
     let names_one = |word: &str| {
         let word = word.to_ascii_lowercase();

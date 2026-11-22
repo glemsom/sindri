@@ -1,7 +1,3 @@
-//! The wire is a provider dialect and its endpoint: anthropic, openai, copilot. What a
-//! wire says it serves is read off it, and kept beside the pair that produced it, never
-//! invented here.
-
 use std::fmt;
 
 use serde::Deserialize;
@@ -27,8 +23,6 @@ impl Wire {
         }
     }
 
-    /// The variable this dialect's own key is read from, or `None`: a Copilot session is
-    /// never an API key, it is a sign-in.
     pub fn credential_variable(self) -> Option<&'static str> {
         match self {
             Wire::Anthropic => Some("ANTHROPIC_API_KEY"),

@@ -1,7 +1,3 @@
-//! The launch: the boundary, the sandbox proof, the session, the record, the tools, the secrets
-//! and the client, joined in the one order that holds — nothing is recorded and no turn is asked
-//! before the sandbox has proved the boundary.
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -25,14 +21,10 @@ use crate::skills::{self, Catalog, Diagnostic, home};
 use crate::tools::{BASH, FrontEnd, Tool, ToolSet};
 use crate::wire::Wire;
 
-/// The exit code for a launch that had nothing to run *with*.
 const SETUP: u8 = 3;
 
-/// The exit code for a command line or a config that holds no run.
 const USAGE: u8 = 2;
 
-/// Why no run could start: no credential, a sandbox that will not build, a config the schema
-/// refuses. No run started, so a refusal is no stop reason and nothing is recorded.
 pub struct Refusal {
     message: String,
     code: u8,
@@ -55,16 +47,12 @@ impl Refusal {
     }
 }
 
-/// The machine a launch stands on: the environment its homes and its sign-in are read from, and the
-/// program its sandbox is proved with. One value, so the launch reads the outside world through a
-/// seam, and a test stands a launch on a machine that refuses on demand.
 pub struct Machine<'a> {
     environment: &'a dyn Environment,
     bwrap: PathBuf,
 }
 
 impl Machine<'static> {
-    /// The machine this process stands on.
     pub fn this() -> Machine<'static> {
         Machine::new(&Process, BWRAP)
     }
@@ -121,8 +109,6 @@ impl Launch<Asking> {
 }
 
 impl<R> Launch<R> {
-    /// Where a launch's replies come from, for a launch that must not ask the wire: `adapter` is the
-    /// one responder every run on it asks, so a test drives the run's loop with a script under it.
     pub fn answered_by(
         machine: &Machine<'_>,
         config: &Config,
@@ -174,7 +160,7 @@ impl<R> Launch<R> {
         let environment = machine.environment;
         let boundary = Boundary::from_config(config, &workspace, enforcement)
             .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
-        // Before a turn or a record: the alternative is a run that proceeds unconfined.
+        // Proved before a turn is asked or a record written: nothing here proceeds unconfined.
         let proof = sandbox::prove_with(&machine.bwrap, &boundary, session.temp())
             .map_err(|card| Refusal::new(card.to_string(), card.exit_code()))?;
         let limits = Limits::from_config(config, &boundary);
@@ -187,8 +173,6 @@ impl<R> Launch<R> {
             config.secrets(),
             &environment,
         );
-        // A sign-in that cannot be read is a setup fault, refused here rather than at the first
-        // turn: nothing has been recorded yet, and a run that cannot be signed in writes nothing.
         if let Some(Signing::Unreadable(reason)) = client.sign_in() {
             return Err(Refusal::new(reason.to_string(), USAGE));
         }
@@ -210,7 +194,6 @@ impl<R> Launch<R> {
         )
         .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
         let asking = adapter(client, ask, tools.clone());
-        // Resolved once: the ground a frame draws a path against is the one the run judges by.
         let ground = Ground::new(&boundary, session.temp(), &workspace).ok();
         let shell = Shell::new(boundary.clone(), session.temp(), catalog.clone())
             .ground(ground)
@@ -248,14 +231,10 @@ impl<R> Launch<R> {
         }
     }
 
-    /// Where this run stands when it judges a target, or nothing when a session has no temp to
-    /// resolve: a frame handed none draws every path as the words it was written as.
     pub fn ground(&self) -> Option<Ground> {
         self.shell.grounded().cloned()
     }
 
-    /// The words a run on this launch hands the model about `bash`, the one tool every run
-    /// registers.
     pub fn bash_description(&self) -> &str {
         self.tools
             .get(BASH)
@@ -263,34 +242,26 @@ impl<R> Launch<R> {
             .description()
     }
 
-    /// The tools this launch registers, in the order its front end offers them.
     pub fn tools(&self) -> &[Tool] {
         self.tools.tools()
     }
 
-    /// The executor a run on this launch answers the calls those tools name with.
     pub fn executor(&self) -> &Shell {
         &self.shell
     }
 
-    /// The loaded-skill set every run on this launch writes and reads: the launch's, so it outlives
-    /// the run that loaded a name and `/new` empties it.
     pub fn loaded(&self) -> &Loaded {
         &self.loaded
     }
 
-    /// The skills a run on this launch would be offered, by name and with the scope each came
-    /// from.
     pub fn listing(&self) -> Vec<skills::Listing> {
         self.catalog.listing()
     }
 
-    /// The skill files discovery could not read, and where each one lies.
     pub fn diagnostics(&self) -> &[Diagnostic] {
         self.catalog.diagnostics()
     }
 
-    /// A launch nobody drove recorded no run, so the session it made goes whole.
     pub fn discard(self) {
         self.session.discard();
     }
@@ -299,30 +270,20 @@ impl<R> Launch<R> {
         self.limits.max_turns()
     }
 
-    /// The session the run on this launch uses, held by whoever started the run: a run owns the
-    /// launch while it is in flight, so the temp of the session has to be reachable without it.
     pub fn session(&self) -> Session {
         self.session.clone()
     }
 
-    /// The conversation the session held is over: its temp goes and the directory, the record and the
-    /// spill are kept, so a launch that ended still reads.
     pub fn close(&mut self) {
         note(self.record.finish());
     }
 
-    /// Whether a run on this session would still be the run its record names. A session records one
-    /// wire, one model, one route, one boundary and one set of dials, so a config that decides
-    /// another run is the end of it.
     pub fn runs_on(&self, config: &Config) -> bool {
         self.config.decides_the_same_run(config)
     }
 }
 
 impl<R: Responder + Clone> Launch<R> {
-    /// Drives `prompt` on the turns this launch has already ended. The session it writes is the one
-    /// the prompt before it wrote: the record counts the turns of both, and the temp a command wrote
-    /// in is still there.
     pub fn drive(
         &mut self,
         prompt: &str,
@@ -338,7 +299,6 @@ impl<R: Responder + Clone> Launch<R> {
             .earlier(earlier.iter().cloned())
             .loaded(self.loaded.clone())
             .cancel(cancel);
-        // Ahead of the loop, so the transcript opens with the words it answers.
         note(self.record.asked(prompt));
         run.drive(
             deltas,
@@ -361,9 +321,6 @@ impl<R: Responder + Clone> Launch<R> {
     }
 }
 
-/// What a launch hands whoever drives it when its record moves: the session it writes, the document
-/// and transcript it holds, and the size the newest report measured against the window the reader
-/// named.
 pub struct Handed<'a> {
     pub session: &'a Session,
     pub document: &'a SessionDocument,
@@ -376,15 +333,10 @@ pub struct Handed<'a> {
 pub trait Turns {
     fn turn(&mut self, ended: &Turn);
 
-    /// Handed as the run says each phase it is in, and once more when it stops: the word the record
-    /// wrote, so a front end tells what the status document says.
     fn told(&mut self, _told: Told) {}
 
-    /// Handed once, when the run stops: the prompt it was asked with beside the answer it got, which
-    /// is what a conversation keeps for the prompt after it.
     fn kept(&mut self, _kept: &Turn) {}
 
-    /// Handed when the run opens, as each turn ends, and once more when it stops.
     fn facts(&mut self, _facts: Handed<'_>) {}
 }
 
@@ -392,8 +344,6 @@ impl Turns for () {
     fn turn(&mut self, _ended: &Turn) {}
 }
 
-/// The launch watching a run it drives: it writes the record from what the loop reports, and hands the
-/// front end the facts each time the record moves.
 struct Recording<'a, R> {
     launch: &'a mut Launch<R>,
     turns: &'a mut dyn Turns,
@@ -407,7 +357,6 @@ impl<R> Witness for Recording<'_, R> {
 
     fn ended(&mut self, ended: &Turn) {
         note(self.launch.record.wrote(ended));
-        // A turn whose report carries no size leaves the one the turn before stated.
         if ended.usage.input.is_some() {
             self.launch.measured = ended.usage;
         }
@@ -415,8 +364,6 @@ impl<R> Witness for Recording<'_, R> {
         hand(self.turns, self.launch);
     }
 
-    /// The run's own word about itself, written and handed on: the record and the front end are
-    /// told the same one, so the file and the terminal cannot disagree.
     fn told(&mut self, told: Told) {
         note(self.launch.record.told(told.clone()));
         self.turns.told(told);
@@ -441,8 +388,6 @@ fn hand<R>(turns: &mut dyn Turns, launch: &Launch<R>) {
     });
 }
 
-/// The names a wire serves, read off the endpoint a run would ask: not a run, so the client a
-/// listing signs in with is the one a run builds, with no session to expand.
 pub fn served(machine: &Machine<'_>, config: &Config) -> Option<Listing> {
     let endpoint = config.endpoint()?;
     let client = Client::for_endpoint(
@@ -462,7 +407,6 @@ fn ask(config: &Config, endpoint: Endpoint, model: String, workspace: &std::path
         .thinking(config.thinking.unwrap_or(false))
 }
 
-/// A line with no colon is dropped rather than sent as a header with an empty value.
 fn headers(config: &Config) -> Vec<(String, String)> {
     config
         .extra_headers
@@ -475,7 +419,6 @@ fn headers(config: &Config) -> Vec<(String, String)> {
         .collect()
 }
 
-/// A record that would not write is a diagnostic: the run it belongs to goes on regardless.
 fn note(written: Result<(), impl std::fmt::Display>) {
     if let Err(error) = written {
         eprintln!("sindri: {error}");

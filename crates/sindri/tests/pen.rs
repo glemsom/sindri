@@ -1,7 +1,4 @@
-//! The pen is the one module that writes a glyph into a cell, measures a column, fills a row to its
-//! edge and hangs a run on one, and each of those is a search of the tree with a test behind it.
-
-mod modules; // the module a source file belongs to
+mod modules;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,8 +9,6 @@ struct Source {
 }
 
 impl Source {
-    /// The file and the line of every `needle` in it, as a search would report them, so a failure
-    /// says where the copy is and not only that one exists.
     fn naming<'a>(&'a self, needle: &'a str) -> impl Iterator<Item = String> + 'a {
         self.body
             .lines()
@@ -27,7 +22,6 @@ impl Source {
     }
 }
 
-/// The one module a search may find.
 const PEN: &str = "src/pen.rs";
 
 fn front_end() -> Vec<Source> {
@@ -62,7 +56,6 @@ fn walk(directory: &Path, sources: &mut Vec<Source>) {
     }
 }
 
-/// Every place `needle` is written, across the tree, in one list.
 fn everywhere(sources: &[Source], needle: &str) -> Vec<String> {
     sources
         .iter()
@@ -96,8 +89,6 @@ fn the_pen_is_the_only_module_that_writes_a_glyph_into_a_cell() {
 fn no_module_but_the_pen_answers_a_column_by_counting_glyphs() {
     let sources = front_end();
 
-    // A column is the cells a run draws in and never the glyphs it is made of, so a module that
-    // counts a run's glyphs to answer one is a second measure: the pen is where columns are counted.
     let counted = everywhere(&sources, "chars().count()");
     assert!(
         counted.iter().all(|at| modules::of(at) == modules::of(PEN)),

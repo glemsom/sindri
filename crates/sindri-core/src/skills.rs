@@ -5,14 +5,10 @@ use serde::Deserialize;
 
 use crate::config::Environment;
 
-/// The home a skills catalog is read from, so the catalog a run holds and the one a frame lists are
-/// read through one environment.
 pub fn home(environment: &impl Environment) -> Option<PathBuf> {
     environment.var("HOME").map(PathBuf::from)
 }
 
-/// The declaration order is the precedence order, so a comparison of two scopes says
-/// which one wins.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Scope {
     Builtin,
@@ -36,8 +32,6 @@ impl std::fmt::Display for Scope {
     }
 }
 
-/// Kept positive, so no caller reads the frontmatter's negations: an absent flag means the
-/// door is open, and only a plain boolean moves it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Invocation {
     model: bool,
@@ -63,9 +57,6 @@ impl Skill {
         self.invocation.human
     }
 
-    /// A directory is descended; a link is listed and never followed, because a link to
-    /// a parent would walk for ever, while a link to a file is exactly what listing one
-    /// is for. A builtin has no directory and so no files.
     pub fn files(&self) -> Vec<String> {
         let Some(directory) = &self.directory else {
             return Vec::new();
@@ -96,8 +87,6 @@ impl Skill {
         files
     }
 
-    /// The body in a tag naming the skill, behind a line naming the scope it came from, and
-    /// the files beside its `SKILL.md` so a relative reference in the body resolves.
     pub fn wrapper(&self) -> String {
         let mut text = format!(
             "The `{}` skill was loaded, from the {} scope.\n\n<skill name=\"{}\">\n{}\n</skill>\n",
@@ -200,9 +189,6 @@ impl Catalog {
         self.skills.iter().find(|skill| skill.name == name)
     }
 
-    /// The `skill` tool's description: the catalog as the model may name it. A skill whose
-    /// frontmatter says `disable-model-invocation: true` is not here at all, because the
-    /// description *is* the schema; `None` when no skill is left to name.
     pub fn tool_description(&self) -> Option<String> {
         let listing: Vec<Listing> = self
             .listing()
@@ -394,8 +380,6 @@ fn child_skill(child: &Path, scope: Scope, catalog: &mut Catalog) -> Option<Skil
     };
 
     if !target.is_dir() {
-        // A link to a file is a mistake worth naming; a plain file beside the skills — a
-        // README, a licence — is simply not a skill.
         if std::fs::symlink_metadata(child).is_ok_and(|meta| meta.is_symlink()) {
             catalog.diagnostics.push(Diagnostic {
                 path: child.to_path_buf(),
@@ -466,8 +450,6 @@ impl Refusal {
     }
 }
 
-/// The parser's complaint without its own line and column, which count from the
-/// frontmatter rather than the file and would contradict the line the diagnostic names.
 fn problem(message: &str) -> String {
     match message.find(" at line ") {
         Some(offset) => message[..offset].to_owned(),

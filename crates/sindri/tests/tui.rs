@@ -1,8 +1,4 @@
-//! A pseudo-terminal is opened here, the binary is spawned on its slave, and the bytes it draws —
-//! and the bytes a key makes it give back — are read off the master. Every child gets `env_clear`
-//! and homes of its own, so nothing of this process's environment, least of all a real key, reaches it.
-
-mod frame; // one paint-and-read for every test
+mod frame;
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -26,24 +22,17 @@ use sindri::ledger::Rail;
 use sindri::pen;
 use sindri::rows::MARGIN;
 
-/// How long a frame is given to arrive before a test calls it absent: generous,
-/// because a test that is merely slow must not read as a program that never drew.
 const PATIENCE: Duration = Duration::from_secs(10);
 
-/// The size the pty is told it has, and so the size every frame here is read at: the two cannot
-/// disagree about what a launch drew.
 const COLS: u16 = 120;
 const ROWS: u16 = 40;
 
-/// A terminal's size, in the two numbers a window change moves.
 #[derive(Clone, Copy)]
 struct Size {
     cols: u16,
     rows: u16,
 }
 
-/// The size a window change gives the terminal: taller and wider than the boot size, so a frame laid
-/// at it claims rows and columns the frame before it never reached.
 const RESIZED: Size = Size {
     cols: 140,
     rows: 50,
@@ -66,16 +55,10 @@ const ANSWER_CACHED: &str =
 
 const FIRST_KEY: &[u8] = b"Enter";
 
-/// The stream's word, split the way it streams: a frame repaints only the cells a fragment
-/// changed, so a test looks for both halves and never for one run of words.
 const ANSWER_WORDS: [&str; 2] = ["Hello", "world"];
 
-/// Those two halves as one answer: a request's body carries the words whole, where a frame
-/// above them repaints them in fragments.
 const ANSWER_SAID: &str = "Hello world";
 
-/// The turns a request's body carries, in the order the wire reads them: each one's role and its
-/// words, so a test asserts what a wire was asked rather than the bytes that asked it.
 fn replayed(request: &str) -> Vec<(String, String)> {
     let (_, body) = request
         .split_once("\r\n\r\n")
@@ -103,8 +86,6 @@ fn said(role: &str, words: &str) -> (String, String) {
 /// the nominal cell — which is what makes the question visible as the bytes it is.
 const ASK_CELL: &[u8] = b"\x1b[16t";
 
-/// `CSI > 1 u` pushes the key protocol with `disambiguate escape codes` set: the flag that makes
-/// `Shift+Enter` a report of its own rather than the byte the `Enter` key sends.
 const ASK_KEYS: &[u8] = b"\x1b[>1u";
 
 /// `CSI < u` pops that push, so the shell gets back the terminal it lent.
@@ -128,7 +109,6 @@ const FIRST_SERVED: &str = "claude-sonnet-4-6";
 const SECOND_SERVED: &str = "claude-haiku-4-5";
 
 struct Ground {
-    /// Held so the directories outlive the paths that name them.
     _root: TempDir,
     workspace: PathBuf,
     config: PathBuf,
@@ -150,8 +130,6 @@ impl Ground {
         ground
     }
 
-    /// A path under the ground's own root: the bin directory a fake opener lives in, and the file
-    /// it records its argv in.
     fn at(&self, relative: &str) -> PathBuf {
         self._root.path().join(relative)
     }
@@ -198,8 +176,6 @@ fn on_a_branch(ground: &Ground) {
     }
 }
 
-/// A wire on a loopback socket holding one reply, so a request is in flight while a test types and
-/// lands when the test lets it go.
 struct Wire {
     port: u16,
     arrived: Receiver<()>,
@@ -220,8 +196,6 @@ impl Wire {
         Wire::scripted([reply])
     }
 
-    /// A wire holding a script: each request is answered by the next reply, and a request past the
-    /// end of the script by its last, so a run that asks again is never left waiting for one.
     fn scripted(replies: impl IntoIterator<Item = &'static str>) -> Wire {
         let replies: Vec<&'static str> = replies.into_iter().collect();
         assert!(
@@ -239,8 +213,6 @@ impl Wire {
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { break };
                 let request = read_request(&mut stream).unwrap_or_default();
-                // A wire asked what it serves answers at once: a listing is not a run, and
-                // nothing waits on one the way a test waits on a reply it is holding.
                 let listing = request.starts_with("GET ");
                 listening.lock().expect("the wire's requests").push(request);
                 if listing {
@@ -296,8 +268,6 @@ impl Wire {
     }
 }
 
-/// The whole of an HTTP request: the head, then the body its `content-length` promised, because a
-/// run waits on a reply nothing can send until its request has been read to the end.
 fn read_request(stream: &mut TcpStream) -> std::io::Result<String> {
     let mut request = Vec::new();
     let mut buffer = [0u8; 1024];
@@ -323,8 +293,6 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<String> {
     }
 }
 
-/// The recorded reply, written as a wire writes one: its length is given so the client does not
-/// wait for a close to find the end of it.
 fn answer(stream: &mut TcpStream, reply: &'static str) -> std::io::Result<()> {
     let head = format!(
         "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
@@ -402,8 +370,6 @@ impl Pty {
             .expect("a second handle on the slave")
     }
 
-    /// The terminal's state, as the program left it: the flags are the terminal's, not a fd's, so the
-    /// parent reads what the child installed.
     fn attrs(&self) -> Termios {
         tcgetattr(&self.slave).expect("the terminal's state")
     }
@@ -414,9 +380,6 @@ impl Pty {
     }
 }
 
-/// What a child has drawn so far, read off the master by a thread of its own so a test never blocks
-/// on a frame that may never come. Each read is kept apart, in the order it landed, so a test can
-/// ask what the terminal had been told part-way through a frame.
 struct Drawn {
     reads: Arc<Mutex<Vec<Vec<u8>>>>,
 }
@@ -429,8 +392,6 @@ impl Drawn {
             let mut master = master;
             let mut buffer = [0u8; 4096];
             loop {
-                // A closed terminal — or one whose child has gone — is the end of
-                // the frame, not a failure: nothing more will ever be drawn.
                 match master.read(&mut buffer) {
                     Ok(0) | Err(_) => return,
                     Ok(count) => landing
@@ -443,7 +404,6 @@ impl Drawn {
         Drawn { reads }
     }
 
-    /// The drawing as the reads that delivered it, in the order they landed.
     fn reads(&self) -> Vec<Vec<u8>> {
         self.reads.lock().expect("the frame").clone()
     }
@@ -456,9 +416,6 @@ impl Drawn {
         text(&self.bytes())
     }
 
-    /// Waits until what has been drawn says `ready`, and says whether it ever did: a frame is only as
-    /// caught up as the bytes that reached the terminal, so a test waits for the fact it needs rather
-    /// than for a sleep and a hope.
     fn wait_until(&self, mut ready: impl FnMut(&str) -> bool) -> bool {
         let deadline = Instant::now() + PATIENCE;
         while Instant::now() < deadline {
@@ -470,8 +427,6 @@ impl Drawn {
         false
     }
 
-    /// What has been drawn once the terminal has gone quiet, and no later than the patience: an
-    /// idle launch paints nothing more, so two frames are compared once theirs have landed.
     fn settled(&self) -> Vec<u8> {
         let mut last = self.bytes().len();
         let deadline = Instant::now() + PATIENCE;
@@ -497,8 +452,6 @@ impl Drawn {
     }
 }
 
-/// A launch on a terminal, held so a test that fails early still ends it: a child left holding a
-/// pseudo-terminal would keep the harness waiting for a frame that never comes.
 struct Session {
     child: Child,
 }
@@ -508,8 +461,6 @@ impl Session {
         Session::starting(ground.command())
     }
 
-    /// A launch as a filter: the prompt on its own command line and no screen at all, on a terminal so
-    /// that a probe would have somewhere to land if anything asked.
     fn filtering(ground: &Ground, wire: &Wire) -> (Session, Pty, Drawn) {
         let mut command = ground.command();
         command
@@ -520,9 +471,6 @@ impl Session {
         Session::starting(command)
     }
 
-    /// A launch that can run a prompt: the ground's own child, pointed at `wire` so its run asks a socket
-    /// on this machine, and taking the escape hatch from the sandbox because confinement is not what a
-    /// cancellation test is about — the kill reaches the process group either way.
     fn asking(ground: &Ground, wire: &Wire) -> (Session, Pty, Drawn) {
         let mut command = ground.command();
         command
@@ -531,8 +479,6 @@ impl Session {
         Session::starting(command)
     }
 
-    /// A launch on a terminal that names itself, which is the whole of what a terminal that takes
-    /// the window's sequences is read from.
     fn named(ground: &Ground, wire: &Wire, term: &str) -> (Session, Pty, Drawn) {
         let mut command = ground.command();
         command
@@ -584,9 +530,6 @@ impl Session {
             .success()
     }
 
-    /// Waits for the launch to end, and reports what it ended as, within a bound: a child that never
-    /// ends is a test that never finishes, which reads as a broken harness rather than as a program
-    /// that failed to quit.
     fn wait(mut self) -> std::process::ExitStatus {
         let deadline = Instant::now() + PATIENCE;
         loop {
@@ -617,15 +560,12 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
     at(haystack, needle).is_some()
 }
 
-/// Where a sequence first sits in the bytes a terminal was written, and `None` if it was not.
 fn at(bytes: &[u8], needle: &[u8]) -> Option<usize> {
     bytes
         .windows(needle.len())
         .position(|window| window == needle)
 }
 
-/// The pixels in a cell are the one thing a launch asks the terminal rather than draws into it, so it
-/// asks once, before the event loop, and every frame that follows reads the answer it kept.
 #[test]
 fn the_cell_size_is_asked_of_the_terminal_once_however_many_frames_it_paints() {
     let ground = Ground::new();
@@ -636,8 +576,6 @@ fn the_cell_size_is_asked_of_the_terminal_once_however_many_frames_it_paints() {
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
-    // Three keys and three frames: a launch that asked once per frame would have asked four
-    // times by the time the third digit is on the screen.
     pty.type_bytes(b"777");
     assert!(
         drawn.wait_until(|drawn| drawn.matches('7').count() >= 3),
@@ -794,8 +732,6 @@ fn a_terminal_nobody_can_vouch_for_is_handed_no_pointer_at_all() {
     );
 }
 
-/// The notification bodies on the wire: the progress mark shares their sequence and is told apart
-/// by the state digit after it.
 fn notifications(bytes: &[u8]) -> usize {
     let text = text(bytes);
     text.match_indices("\x1b]9;")
@@ -814,9 +750,6 @@ fn a_run_that_ends_while_nobody_is_looking_raises_one_notification() {
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
-    // The terminal says nobody is looking, which is the report no key can stand in for: typed
-    // before the prompt, because a report and a stop that land in one pass are answered in the
-    // loop's own order, and a test may not lean on which of the two is read first.
     pty.type_bytes(b"\x1b[O");
     ask(&mut pty, &drawn, &wire);
     wire.release();
@@ -983,9 +916,6 @@ fn an_idle_terminal_is_painted_once_and_then_left_alone() {
         drawn.text()
     );
 
-    // Everything after it is a repaint nobody asked for: no timer, no tick, no idle frame —
-    // the loop is asleep in `read` until a key or a fact arrives. The count is taken once the frame
-    // has landed: a paint is many writes, so the length the moment its last word arrives is short.
     let painted = drawn.settled().len();
     thread::sleep(Duration::from_millis(600));
     assert_eq!(
@@ -1015,8 +945,6 @@ fn a_quit_during_a_run_closes_the_session_that_run_holds() {
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
-    // The run is in flight and the wire is holding its reply, so the session is the run thread's
-    // and not the loop's: the ending has to reach the thread to close it.
     ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
     let directory = directories(&ground.state)
         .into_iter()
@@ -1099,22 +1027,16 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
     );
 }
 
-/// The rows the composer's band took in the last frame that painted it, read off a screen that
-/// carries no layout to ask: the head is the lowest row whose glyphs are a hairline up to its last
-/// one, and the hints are on the last row.
 fn composer_rows(drawn: &str) -> Option<u16> {
     let screen = frame::read(drawn, COLS, ROWS);
     let rows = screen.rows();
     let last = u16::try_from(rows.len()).ok()?.checked_sub(1)?;
-    // The band's head is a row of blanks now, so the rows the band draws are counted from the
-    // draft's own spine down: no other row of the frame carries it.
     let spine = |y: u16| rows[usize::from(y)].contains('\u{2503}');
     let drafted = (0..last).rev().find(|y| spine(*y))?;
     let top = (0..=drafted).rev().take_while(|y| spine(*y)).last()?;
     last.checked_sub(top)?.checked_add(1)
 }
 
-/// The last row of the screen that says `needle`, counted from the frame's first row.
 fn row_of(drawn: &str, needle: &str) -> Option<u16> {
     frame::read(drawn, COLS, ROWS)
         .rows()
@@ -1123,8 +1045,6 @@ fn row_of(drawn: &str, needle: &str) -> Option<u16> {
         .and_then(|at| u16::try_from(at).ok())
 }
 
-/// The screen the terminal holds after every frame drawn so far: each row that has a glyph on it,
-/// cut at the trailing blanks the screen pads it with.
 fn picture(drawn: &str) -> BTreeMap<u16, String> {
     frame::read(drawn, COLS, ROWS)
         .rows()
@@ -1137,19 +1057,14 @@ fn picture(drawn: &str) -> BTreeMap<u16, String> {
         .collect()
 }
 
-/// Whether a row of the screen the terminal holds says `needle`: a card's word is painted over the
-/// frame behind it, and painting the frame again takes it off.
 fn showing(drawn: &str, needle: &str) -> bool {
     picture(drawn).values().any(|row| row.contains(needle))
 }
 
-/// The frame every byte drawn so far leaves in a terminal of that size.
 fn at_size(drawn: &str, size: Size) -> frame::Frame {
     frame::read(drawn, size.cols, size.rows)
 }
 
-/// Whether that frame wears `needle` on its last row: only a frame laid at that size draws the
-/// composer's footer there, so the row is the proof of the size the launch read for itself.
 fn footer(drawn: &str, size: Size, needle: &str) -> bool {
     at_size(drawn, size)
         .words()
@@ -1157,15 +1072,10 @@ fn footer(drawn: &str, size: Size, needle: &str) -> bool {
         .is_some_and(|row| row.contains(needle))
 }
 
-/// A row of a screen with the card's border and inset taken off it, so a row of facts is read as
-/// the screen draws it and not as the card frames it.
 fn inside(row: &str) -> &str {
     row.trim_matches(['\u{2502}', ' '])
 }
 
-/// Whether the rail says `value` at the end of the row `label` heads. The blanks between the
-/// glyphs are the layout's and not the fact's, so they are dropped from both sides: a block pads
-/// its pairs into one slash column, and a path shorter than its column is drawn whole.
 fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
     fn tightened(text: &str) -> String {
         text.chars()
@@ -1179,15 +1089,10 @@ fn rail_reads(drawn: &str, label: &str, value: &str) -> bool {
     })
 }
 
-/// The cell the terminal's own cursor stands in after the last frame, and none where the frame hid
-/// it: a frame that places a caret shows it in the cell it places it in.
 fn placed(drawn: &str) -> Option<(u16, u16)> {
     frame::read(drawn, COLS, ROWS).caret()
 }
 
-/// Whether the bytes ask the terminal for a cursor colour, `OSC 12`, or one of the seven shapes
-/// `DECSCUSR` names: the one thing a launch never says, the shape and the colour of the cursor being
-/// the reader's to choose.
 fn asked_a_cursor(drawn: &str) -> bool {
     drawn.contains("\u{1b}]12;")
         || (0..=6).any(|shape| {
@@ -1195,7 +1100,6 @@ fn asked_a_cursor(drawn: &str) -> bool {
         })
 }
 
-/// The one claim no painted frame can make: the cells a launch's own bytes leave, glyph by glyph.
 #[test]
 fn the_boot_frame_is_read_as_the_cells_and_the_caret_its_terminal_holds() {
     let ground = Ground::new();
@@ -1248,7 +1152,6 @@ fn a_launch_drawing_is_read_as_the_reads_that_delivered_it_and_as_one_string() {
     let reads = drawn.reads();
     let lengths: Vec<usize> = reads.iter().map(Vec::len).collect();
 
-    // A read is one `read` off the master, capped at 4096 bytes, so a frame is many of them.
     assert!(
         reads.len() > 1,
         "the boot frame is more than one read's worth of bytes, so the drawing arrived as more \
@@ -1585,8 +1488,6 @@ fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
         drawn.text()
     );
 
-    // A draft as wide as the room the frame leaves it: every column of it less the two the
-    // gutter is set in and the two the band keeps in its margin at the right.
     let room = COLS - GUTTER - MARGIN;
     let draft = format!("\u{1b}[200~{}\u{1b}[201~", "x".repeat(usize::from(room)));
     pty.type_bytes(draft.as_bytes());
@@ -1618,8 +1519,6 @@ fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
 /// after it, so a placement is the end of a frame.
 const SHOW_CARET: &[u8] = b"\x1b[?25h";
 
-/// Where every frame in `drawing` placed the caret: the offset its placement ends at beside the cell
-/// it names, in the order the frames landed.
 fn placed_cells(drawing: &[u8]) -> Vec<(usize, (u16, u16))> {
     let mut placed = Vec::new();
     let mut from = 0;
@@ -1640,8 +1539,6 @@ fn placed_cells(drawing: &[u8]) -> Vec<(usize, (u16, u16))> {
     placed
 }
 
-/// The placement a `{row};{column}H` names from `from`: the offset it ends at, and the cell it names,
-/// counted from nought where the terminal counts it from one.
 fn placement(drawing: &[u8], from: usize) -> Option<(usize, (u16, u16))> {
     fn number(said: &[u8]) -> Option<(u16, usize)> {
         let end = said.iter().position(|byte| !byte.is_ascii_digit())?;
@@ -1682,8 +1579,6 @@ fn a_streamed_answer_leaves_the_caret_where_the_frame_placed_it() {
         placed.len(),
         reads.len()
     );
-    // The thought and the answer both reached this terminal as frames, so the reads judged below
-    // are the ones a streamed run wrote.
     for streamed in ["think.", ANSWER_WORDS[1]] {
         assert!(
             at(&drawing, streamed.as_bytes()).is_some(),
@@ -1692,8 +1587,6 @@ fn a_streamed_answer_leaves_the_caret_where_the_frame_placed_it() {
         );
     }
 
-    // A terminal repaints between two of a launch's writes, so a read that leaves the caret away
-    // from the cell a frame placed it in is the reader shown a caret in a cell that is not its own.
     let mut asked = 0;
     let mut shown = 0;
     let mut so_far: Vec<u8> = Vec::new();
@@ -1731,8 +1624,6 @@ fn a_streamed_answer_leaves_the_caret_where_the_frame_placed_it() {
     );
 }
 
-/// Whether the screen is given back with the terminal's own cursor shown on the way out: the paste
-/// report given up, then the cursor, and the screen left last, which is the order a shell reads.
 fn gave_back_showing_the_cursor(bytes: &[u8]) -> bool {
     let given = bytes
         .windows(b"\x1b[?2004l".len())
@@ -1790,8 +1681,6 @@ fn a_bracketed_paste_arrives_as_one_draft_with_its_line_breaks_kept() {
         drawn.text()
     );
 
-    // One paste, the way a terminal that offers a bracketed paste sends it: the line breaks are
-    // the clipboard's, and not one of them is a pressed Enter.
     pty.type_bytes(b"\x1b[200~first line\rsecond line\r\nthird line\x1b[201~");
 
     assert!(
@@ -1831,8 +1720,6 @@ fn a_paste_that_arrives_as_a_burst_is_one_draft_too() {
         drawn.text()
     );
 
-    // A terminal with no bracketed paste sends the whole prompt as the bytes a typist would have
-    // made, carriage return and all.
     pty.type_bytes(b"one\rtwo");
 
     assert!(
@@ -1955,8 +1842,6 @@ fn a_terminal_that_reports_nothing_is_handed_the_same_frame_and_the_same_draft()
     );
 }
 
-/// The frame a launch holds once a draft is typed into it as the given keys, and the launch quit:
-/// two spells of one draft are compared on what a terminal was written.
 fn drafted(ground: &Ground, keys: &[&[u8]]) -> String {
     let (session, mut pty, drawn) = Session::open(ground);
 
@@ -2111,7 +1996,6 @@ fn document(state: &std::path::Path) -> String {
     document_in(directory)
 }
 
-/// The entries a session's transcript holds, one line each, in the order they were written.
 fn transcript(directory: &Path) -> Vec<serde_json::Value> {
     std::fs::read_to_string(directory.join("transcript.jsonl"))
         .expect("the session's transcript")
@@ -2121,7 +2005,6 @@ fn transcript(directory: &Path) -> Vec<serde_json::Value> {
         .collect()
 }
 
-/// The prompts a session was asked, in the order they were asked.
 fn prompts(directory: &Path) -> Vec<String> {
     transcript(directory)
         .iter()
@@ -2130,7 +2013,6 @@ fn prompts(directory: &Path) -> Vec<String> {
         .collect()
 }
 
-/// The model a request's body names, which is the name the wire was asked with.
 fn model_of(request: &str) -> String {
     let (_, body) = request
         .split_once("\r\n\r\n")
@@ -2160,16 +2042,10 @@ fn recorded(state: &std::path::Path, needle: &str) -> bool {
     false
 }
 
-/// The columns the composer sets a draft in before the first of its words: the gutter's blank and
-/// the sigil standing past it.
 const GUTTER: u16 = 2;
 
-/// The cell an empty draft's caret waits in: the placeholder's first glyph, at the gutter's edge.
 const EMPTY_CARET: u16 = GUTTER;
 
-/// Types a draft and sends it, and waits until the run it started has a request in flight. The caret
-/// is what the draft is waited on and not the words: a glyph typed is a glyph painted, so a caret
-/// past the last of them is the one drawing that says the whole draft is in the box.
 fn ask_words(pty: &mut Pty, drawn: &Drawn, wire: &Wire, words: &str) {
     pty.type_bytes(words.as_bytes());
     let typed = pen::cells(words) + GUTTER;
@@ -2186,9 +2062,6 @@ fn ask(pty: &mut Pty, drawn: &Drawn, wire: &Wire) {
     ask_words(pty, drawn, wire, "triage this");
 }
 
-/// Waits for the recorded answer and for the run that said it to stop, so a test types its next key
-/// into a launch whose run has settled: the words land while the run is still live, and the settled
-/// marker is the check a live one has not drawn.
 fn answered(drawn: &Drawn) {
     assert!(
         drawn.wait_until(|frame| ANSWER_WORDS.iter().all(|word| frame.contains(word))
@@ -2239,8 +2112,6 @@ fn ctrl_c_in_a_run_cancels_it_and_keeps_the_draft() {
         document(&ground.state)
     );
 
-    // The frame learns the run ended from the marker the run settles on, and not from the record:
-    // a key typed while that report is still in flight would read as one pressed during a live run.
     assert!(
         drawn.wait_until(|frame| frame.contains('\u{2717}')),
         "the cancelled run's marker has settled: {:?}",
@@ -2544,8 +2415,6 @@ fn an_outside_sigint_stops_the_run_and_gives_the_terminal_back() {
     let interrupted = session.interrupt();
     assert!(interrupted, "the signal was delivered to the launch");
 
-    // The signal and the wire's answer are two roads into the same run, and the run stops on an
-    // answer that lands first: the word is given time to be heard before the answer is let go.
     thread::sleep(Duration::from_millis(200));
     wire.release();
     let status = session.wait();
@@ -2678,8 +2547,6 @@ fn two_window_changes_queued_together_are_one_read_and_the_newest_size_is_drawn(
         drawn.text()
     );
 
-    // Held still across both reports, so the two of them are waiting behind one readiness when the
-    // launch reads again — a burst, as a dragged window makes one.
     assert!(session.sent("-STOP"), "the launch is held where it stands");
     pty.resized(Size {
         cols: 100,
@@ -2743,8 +2610,6 @@ fn a_window_change_with_a_run_live_stops_nothing_and_the_run_still_lands_its_ans
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
-/// Types `prompt` and sends it, and waits until the box is empty again: the trace a prompt typed
-/// while a run is live leaves when it goes into the queue instead of dying with the draft.
 fn queue(pty: &mut Pty, drawn: &Drawn, prompt: &str) {
     pty.type_bytes(prompt.as_bytes());
     let typed = pen::cells(prompt) + GUTTER;
@@ -2858,8 +2723,6 @@ fn ctrl_x_drops_the_newest_prompt_the_queue_holds() {
     queue(&mut pty, &drawn, "keep this");
     queue(&mut pty, &drawn, "drop this");
 
-    // The `x` typed straight after `Ctrl-X` is the proof the key was answered: the loop answers one
-    // key before the next, so a glyph the frame painted is a `Ctrl-X` already acted on.
     pty.type_bytes(&[0x18]);
     pty.type_bytes(b"x");
     assert!(
@@ -2930,9 +2793,6 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
-/// A `/` line typed and sent: the words, and then `Enter` as a key of its own once the frame has
-/// caught up. A burst of bytes is read as a paste, where a line break is a line break and never a
-/// send, so a command line is only sent by letting the draft land first.
 fn command(pty: &mut Pty, drawn: &Drawn, line: &str) {
     pty.type_bytes(line.as_bytes());
     let column = pen::cells(line) + GUTTER;
@@ -2945,8 +2805,6 @@ fn command(pty: &mut Pty, drawn: &Drawn, line: &str) {
     pty.type_bytes(b"\r");
 }
 
-/// The config file a launch would write, holding a reader's own comment and a key the save must not
-/// touch: what a save that patched the whole file would destroy.
 fn a_readers_config(ground: &Ground) -> PathBuf {
     let path = ground.config.join("sindri").join("config.toml");
     std::fs::create_dir_all(path.parent().expect("a directory")).expect("the config's directory");
@@ -2960,8 +2818,6 @@ fn a_readers_config(ground: &Ground) -> PathBuf {
     path
 }
 
-/// Waits until the config at `path` says `model = <name>`, and hands the file back: the save happens
-/// on the launch's own thread, so a test waits for the file rather than for a sleep.
 fn written_model(path: &Path, name: &str) -> String {
     let deadline = Instant::now() + PATIENCE;
     loop {
@@ -3061,8 +2917,6 @@ fn slash_model_with_a_name_sets_a_model_the_wire_never_offered() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
-/// A launch that takes its model from the config file alone: the environment outranks the file, so a
-/// `/model` the file holds is the name the next run is asked with only where nothing exported one.
 fn reading_the_model_from_the_config(ground: &Ground, wire: &Wire) -> (Session, Pty, Drawn) {
     let mut command = ground.command();
     command
@@ -3153,8 +3007,6 @@ fn slash_help_opens_the_keys_in_force_and_slash_settings_its_own_screen() {
         drawn.text()
     );
 
-    // `Backspace` is a word only the keys screen says: the footer the composer keeps names two hints,
-    // and the screen that lists every key in force names this one.
     command(&mut pty, &drawn, "/help");
     assert!(
         drawn.wait_until(|frame| showing(frame, "Backspace")),
@@ -3349,8 +3201,6 @@ fn a_file_in_the_session_temp_outlives_the_next_prompt_and_goes_when_the_launch_
     );
 }
 
-/// Waits until the record of the one session a launch holds counts `turns`, so a test sends its next
-/// prompt into a session whose last run has stopped.
 fn turn_counted(state: &std::path::Path, turns: u32) -> bool {
     recorded(state, &format!(r#""turns": {turns}"#))
 }
@@ -3725,8 +3575,6 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
 
     ask_words(&mut pty, &drawn, &wire, "hi my name is Glenn");
     pty.type_bytes(&[0x03]);
-    // The key and the wire's answer are two roads into one run: a glyph typed after it is the proof
-    // the cancel was answered, because the loop answers one key before the next.
     pty.type_bytes(b"x");
     assert!(
         drawn.wait_until(|frame| placed(frame).is_some_and(|(_, column)| column == GUTTER + 1)),
@@ -3766,8 +3614,6 @@ fn a_cancelled_run_leaves_the_turn_it_ended_in_what_the_next_prompt_carries() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
-/// The row and the column a placement at `at` is made at, read off the cursor move it is written
-/// after: the one thing that says where on the screen a plane is.
 fn placed_at(bytes: &[u8], at: usize) -> (u16, u16) {
     let before = String::from_utf8_lossy(&bytes[..at]);
     let (_, moved) = before
@@ -3783,7 +3629,6 @@ fn placed_at(bytes: &[u8], at: usize) -> (u16, u16) {
     )
 }
 
-/// The columns and the rows a placement at `at` covers, read off its own header.
 fn covers(bytes: &[u8], at: usize) -> (u16, u16) {
     let header = String::from_utf8_lossy(&bytes[at..]);
     let named = |key: &str| -> u16 {
@@ -3798,16 +3643,12 @@ fn covers(bytes: &[u8], at: usize) -> (u16, u16) {
     (named("c="), named("r="))
 }
 
-/// Whether the placement at `at` asks the terminal to leave the cursor where it placed the plane,
-/// read off its own header.
 fn leaves_the_cursor(bytes: &[u8], at: usize) -> bool {
     String::from_utf8_lossy(&bytes[at..])
         .split_once(';')
         .is_some_and(|(header, _)| header.split(',').any(|key| key == "C=1"))
 }
 
-/// The frame a launch opens on is drawn before any prompt and is the bands' frame as much as any
-/// other: a terminal that places pictures is handed both grounds from that first paint.
 #[test]
 fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     let ground = Ground::new();
@@ -3885,8 +3726,6 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
-/// The rail's rows as the failing runs read them: the session's temp beside the session's row, and
-/// the turns the launch had counted.
 fn rail_picture() -> BTreeMap<u16, String> {
     BTreeMap::from([
         (0, String::from("temp  41b0c336/tmp")),
@@ -3944,7 +3783,6 @@ fn a_document_a_frame_was_read_in_the_middle_of_paints_no_cell_of_its_words() {
     );
 }
 
-/// The argv a recording opener wrote, one word per line, once the last word is down.
 fn argv_from(record: &Path) -> Option<Vec<String>> {
     let written = std::fs::read_to_string(record).ok()?;
     written
@@ -3952,7 +3790,6 @@ fn argv_from(record: &Path) -> Option<Vec<String>> {
         .then(|| written.lines().map(str::to_owned).collect())
 }
 
-/// The words a recording opener wrote into `record`, one per line, once the last is down.
 fn awaited(record: &Path, absent: &str) -> Vec<String> {
     let deadline = Instant::now() + PATIENCE;
     loop {
@@ -3964,7 +3801,6 @@ fn awaited(record: &Path, absent: &str) -> Vec<String> {
     }
 }
 
-/// A skill the workspace offers a person, discovered the way a run discovers it.
 fn offering(workspace: &Path) {
     let directory = workspace.join(".agents/skills/deploy");
     std::fs::create_dir_all(&directory).expect("the skill's directory");
@@ -3975,8 +3811,6 @@ fn offering(workspace: &Path) {
     .expect("a SKILL.md");
 }
 
-/// Whether the rail is drawing one loaded skill: the count hangs on the far edge of the row its
-/// label opens.
 fn rail_holds_one_skill(frame: &str) -> bool {
     frame::read(frame, COLS, ROWS)
         .rows()
@@ -4072,8 +3906,6 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
     std::fs::write(&page, "<p>the page</p>").expect("the page");
     let target = std::fs::canonicalize(&page).expect("the page resolves");
 
-    // `Opener::host()` finds the opener through `PATH`, so the first entry is a script of this
-    // test's own and the argv it records is the argv the host opener really received.
     let bin = ground.at("bin");
     std::fs::create_dir_all(&bin).expect("the bin directory");
     let argv = ground.at("argv");
@@ -4095,7 +3927,6 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
     command
         .arg("--yolo-unsafe")
         .env("SINDRI_BASE_URL", wire.base_url())
-        // `/usr/bin` and `/bin` behind the script, because the launch asks `git` for the branch.
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
         .env("DISPLAY", ":42");
     let (session, mut pty, drawn) = Session::starting(command);
@@ -4128,8 +3959,6 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
         "the display the launch has is the display the target opens on"
     );
 
-    // The call has settled and the run is asking again: the band draws its work while it is live,
-    // and one row once the run has ended.
     assert!(
         drawn.wait_until(|frame| frame.contains("exit 0") && frame.contains("opened.html")),
         "the band draws the call settled with the target it opened and its exit: {:?}",
@@ -4155,8 +3984,6 @@ fn an_opener_that_fails_is_drawn_under_its_call_with_its_own_exit_and_words() {
     let page = ground.workspace.join("opened.html");
     std::fs::write(&page, "<p>the page</p>").expect("the page");
 
-    // The first entry is this test's own opener, found through `PATH` the way the host finds the
-    // one this machine really has.
     let bin = ground.at("bin");
     std::fs::create_dir_all(&bin).expect("the bin directory");
     let opener = bin.join("xdg-open");
@@ -4172,7 +3999,6 @@ fn an_opener_that_fails_is_drawn_under_its_call_with_its_own_exit_and_words() {
     command
         .arg("--yolo-unsafe")
         .env("SINDRI_BASE_URL", wire.base_url())
-        // `/usr/bin` and `/bin` behind the script, because the launch asks `git` for the branch.
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()));
     let (session, mut pty, drawn) = Session::starting(command);
 
@@ -4216,8 +4042,6 @@ fn a_refused_open_call_is_drawn_under_its_call_and_the_run_answers_on() {
     command
         .arg("--yolo-unsafe")
         .env("SINDRI_BASE_URL", wire.base_url())
-        // `/usr/bin` and `/bin`, because the launch asks `git` for the branch and nothing here
-        // is spawned to open a target the ground refused.
         .env("PATH", "/usr/bin:/bin");
     let (session, mut pty, drawn) = Session::starting(command);
 

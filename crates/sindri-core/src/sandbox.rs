@@ -1,7 +1,3 @@
-//! Boot proves the sandbox once, before a turn or a record is made, with a real bubblewrap
-//! invocation, so what boot proves is the sandbox the run's own commands will get. There is no
-//! fallback, and the one route to unconfined execution is `--yolo-unsafe` on the command line.
-
 use std::error::Error;
 use std::fmt;
 use std::io::ErrorKind;
@@ -13,7 +9,6 @@ use crate::policy::{Boundary, Enforcement};
 
 pub const EXIT_CODE: u8 = 3;
 
-/// The smallest thing that proves the sandbox starts: a failure is then the sandbox's.
 const PROBE: &str = "true";
 
 /// The three checks `scripts/sandbox-probe.sh` distinguishes, in its order, so a person reading
@@ -21,8 +16,6 @@ const PROBE: &str = "true";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Check {
     Installed,
-    /// A binary that cannot report a version is a broken install — a thing someone can fix —
-    /// rather than an absent capability.
     Runs,
     /// Unprivileged user namespaces, which some kernels forbid and no retry can supply.
     Namespaces,
@@ -86,8 +79,6 @@ impl fmt::Display for Proof {
     }
 }
 
-/// Plain lines — no colour, no width, no terminal — because the frame paints these lines and
-/// batch mode prints them, and two surfaces must not say two things about why nothing ran.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Card {
     check: Check,
@@ -131,8 +122,6 @@ impl fmt::Display for Card {
 
 impl Error for Card {}
 
-/// The same three checks over a program named rather than looked up: the seam a test reaches
-/// with a stand-in that refuses on demand, so every refusal is provable without a broken kernel.
 pub fn prove_with(bwrap: &Path, boundary: &Boundary, session_temp: &Path) -> Result<Proof, Card> {
     if boundary.enforcement() == Enforcement::Unsafe {
         return Ok(Proof { checks: Vec::new() });
@@ -194,8 +183,6 @@ fn said_of(output: &Output) -> String {
     }
 }
 
-/// Trimmed, with every run of whitespace collapsed to one space, so a card's second line stays
-/// a line.
 fn one_line(words: &str) -> String {
     words.split_whitespace().collect::<Vec<&str>>().join(" ")
 }

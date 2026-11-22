@@ -1,5 +1,3 @@
-//! What a source file is a file of: the module the tree reads, where `foo.rs` and the `tests.rs`
-//! beside it are one module.
 #![allow(dead_code)]
 
 pub fn of(file: &str) -> &str {
