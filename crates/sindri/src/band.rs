@@ -9,8 +9,8 @@ use crate::pen::{self, Clip};
 use crate::rows::{SIGIL, SPINE};
 
 /// The gutter a row of the band opens with: the spine a prompt's words are quoted by and the sigil
-/// the row a prompt opens on wears — the accent's while the band holds the keys, the dim ink's
-/// everywhere else.
+/// the row the draft opens on wears — the accent's while the band holds the keys, the dim ink's on
+/// a row the caret waits elsewhere in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Gutter {
     Lit,

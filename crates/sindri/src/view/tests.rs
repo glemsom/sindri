@@ -164,7 +164,7 @@ fn glyph_at(buffer: &Buffer, x: u16, y: u16) -> char {
 
 /// The ground the `row`th row of a composer's band `rows` rows tall sits on, read off the shade the
 /// band is claimed from rather than worked out a second time.
-fn shaded(palette: &Palette, row: u16, rows: u16) -> Color {
+fn shade_row(palette: &Palette, row: u16, rows: u16) -> Color {
     Shade::composer(Rect::new(0, 0, 1, rows), None, None, palette)
         .expect("a band of rows")
         .row(row)
@@ -191,7 +191,7 @@ fn the_composer_is_drawn_on_the_prompts_band_down_to_the_rails_own_tone() {
                 for x in band.x..band.right() {
                     assert_eq!(
                         under(&buffer, x, band.y + row),
-                        shaded(&palette, row, band.height),
+                        shade_row(&palette, row, band.height),
                         "row {row} of the {} at {cols}x{rows} sits on no shade of the band, \
                              so the band is not one surface down to its last row",
                         band.height
@@ -278,7 +278,7 @@ fn the_head_reads_as_one_hairline_over_the_band_every_palette_draws_the_prompt_o
             );
             assert_eq!(
                 under(&buffer, band.x, band.y + 1),
-                shaded(&palette, 1, band.height),
+                shade_row(&palette, 1, band.height),
                 "the row under the head is the band a prompt is read on in {palette:?}, so the \
                  head sits over the draft"
             );
@@ -1383,7 +1383,7 @@ fn the_band_beside_a_rail_is_drawn_in_the_frames_whole_width_and_the_rail_closes
             for x in rail.x..rail.right() {
                 assert_eq!(
                     under(&buffer, x, y),
-                    shaded(&palette, y - band.y, band.height),
+                    shade_row(&palette, y - band.y, band.height),
                     "row {y}, column {x} of the band at {cols} columns is not the band's own \
                      shade: the rail may not be drawn over a row the band holds"
                 );
@@ -1557,7 +1557,7 @@ fn a_prompt_drawn_beside_a_live_draft_stands_on_the_one_band_both_are_read_on() 
         );
     }
     assert_eq!(
-        shaded(&palette, 1, composer.height),
+        shade_row(&palette, 1, composer.height),
         palette.band(Band::Prompt),
         "and every row of the draft's band but its closing one is that same band"
     );
@@ -5410,7 +5410,7 @@ fn an_empty_drafts_placeholder_is_drawn_whole_with_no_cell_of_it_reversed() {
     );
     assert_eq!(
         under(&buffer, x, y),
-        shaded(&palette, ends(&view).above, band.height),
+        shade_row(&palette, ends(&view).above, band.height),
         "and that cell keeps the ground the row it stands on is drawn in"
     );
     assert_eq!(

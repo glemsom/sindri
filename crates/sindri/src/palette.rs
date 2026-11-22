@@ -160,8 +160,8 @@ impl Palette {
         Look::plain(Ink::Dim)
     }
 
-    /// Whether this palette draws an edge at all: the accent edge where it does, and the dim edge
-    /// where it has no light to spend.
+    /// Whether this palette has a lit edge to spend: the accent edge where it has, and the dim edge
+    /// where every edge it draws is the dim one.
     pub fn draws_edge(&self) -> bool {
         self.edge(Edge::Lit) != Color::Reset
     }

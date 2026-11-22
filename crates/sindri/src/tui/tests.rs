@@ -341,16 +341,23 @@ fn railed(config: &Config) -> View {
 }
 
 fn painted(view: &mut View) -> ratatui::buffer::Buffer {
+    painted_and_told(view).0
+}
+
+/// The cells of the frame `view` paints, and what that pass told the terminal of them.
+fn painted_and_told(view: &mut View) -> (ratatui::buffer::Buffer, Painted) {
     let (cols, rows) = FRAME;
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(cols, rows))
         .expect("a headless screen of that size");
-    terminal
+    let mut told = Painted::none();
+    let frame = terminal
         .draw(|frame| {
-            view.paint(frame.area(), frame.buffer_mut());
+            told = view.paint(frame.area(), frame.buffer_mut());
         })
         .expect("the frame is painted")
         .buffer
-        .clone()
+        .clone();
+    (frame, told)
 }
 
 /// Whether this frame paints the face, read off the cells a placement covers.
@@ -494,17 +501,11 @@ impl Loop<'_> {
     /// The cells of the composer's head row the rule is drawn across in the accent edge: the row
     /// the band wears while it takes the keys.
     fn lit(&mut self, palette: &Palette) -> Vec<(u16, u16)> {
-        let (cols, rows) = FRAME;
-        let area = ratatui::layout::Rect::new(0, 0, cols, rows);
-        let mut frame = ratatui::buffer::Buffer::empty(area);
-        let Some(head) = self
-            .view
-            .paint(area, &mut frame)
-            .layout()
-            .map(|laid| laid.composer.y)
-        else {
+        let (frame, told) = painted_and_told(&mut self.view);
+        let Some(head) = told.layout().map(|laid| laid.composer.y) else {
             return Vec::new();
         };
+        let area = frame.area;
         (area.x..area.right())
             .map(|x| (x, head))
             .filter(|at| {

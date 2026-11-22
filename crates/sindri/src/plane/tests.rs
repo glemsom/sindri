@@ -124,21 +124,6 @@ fn no_row_of_the_bands_band_is_a_blend_of_the_two_tones_it_closes_through() {
 }
 
 #[test]
-fn an_ansi_band_is_drawn_in_the_two_greys_its_tones_are_spelled_as() {
-    for rows in MIN_ROWS..=MAX_ROWS {
-        let band = shaded(rows, &Palette::ANSI);
-        for row in 0..rows {
-            assert!(
-                matches!(band.row(row), Color::Indexed(235 | 236)),
-                "ansi draws row {row} of a {rows}-row band in {:?}, outside the two greys the \
-                 rail's tone and the prompt's are spelled as",
-                band.row(row)
-            );
-        }
-    }
-}
-
-#[test]
 fn no_row_of_the_bands_band_is_darker_than_the_well() {
     for (spelling, palette) in SPELLED {
         let well = luminance(palette.band(Band::Well));

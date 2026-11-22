@@ -255,7 +255,8 @@ _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 **Shade**:
 What a band sits on: the colour each of its rows is claimed in and the seams it makes with the band
 beside it — the transcript band on the well, the rail on its own tone on every row of it, the
-composer's band on the band a prompt is read on, closing into the rail's tone on its last row. A
+composer's band drawn in the band a prompt is read on, closing into the rail's tone on its last
+row. A
 seam is a fall of its own, in the columns it takes from the band beside the rail, and a frame draws
 it once, after the bands it parts. It holds every fact the band's cells and its
 **Plane** are drawn from and nothing else, the cell the plane is drawn at and the caret's column

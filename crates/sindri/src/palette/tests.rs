@@ -239,6 +239,18 @@ fn the_prompt_band_is_the_highest_rung_and_the_well_the_lowest() {
 }
 
 #[test]
+fn every_palette_spells_the_prompt_band_and_the_rails_tone_apart() {
+    for (spelling, palette) in SPELLED {
+        assert_ne!(
+            palette.band(Band::Prompt),
+            palette.band(Band::Rail),
+            "{spelling} spells the prompt's band and the rail's tone one colour, so the band a \
+             draft closes on is the band it rises on"
+        );
+    }
+}
+
+#[test]
 fn the_rails_tone_stands_a_quiet_step_of_lightness_above_the_well_beside_it() {
     for (spelling, palette) in SPELLED {
         let rail = palette.band(Band::Rail);
