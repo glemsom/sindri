@@ -233,8 +233,12 @@ fn the_cell_a_window_kept_leaves_the_pictures_and_every_other_fact_where_they_we
         capabilities.sizes_text(),
         "and no sizing"
     );
-    assert_eq!(kept.reports_pointer(), capabilities.reports_pointer());
-    assert_eq!(kept.draws_face(), capabilities.draws_face());
+    assert_eq!(
+        kept.reports_pointer(),
+        capabilities.reports_pointer(),
+        "and no pointer"
+    );
+    assert_eq!(kept.draws_face(), capabilities.draws_face(), "and no face");
 }
 
 #[test]

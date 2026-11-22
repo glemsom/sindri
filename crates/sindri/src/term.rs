@@ -648,8 +648,9 @@ impl Asked for Terminal {
     }
 }
 
-/// The cell size a terminal's own `winsize` implies, when it carries pixels. A terminal that
-/// reports no pixels, or fewer pixels than it has cells, has not said, and `None` says so.
+/// The cell a terminal's own `winsize` implies, when it carries pixels: the one read a pass makes
+/// of the window, where a question would cost a round trip. A terminal that reports no pixels, or
+/// fewer pixels than it has cells, has not said, and `None` says so.
 fn of_winsize(size: Winsize) -> Option<CellSize> {
     let (cols, rows) = (size.ws_col, size.ws_row);
     let (xpixel, ypixel) = (size.ws_xpixel, size.ws_ypixel);

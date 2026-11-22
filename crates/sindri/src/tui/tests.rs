@@ -804,7 +804,7 @@ fn a_window_that_crossed_to_another_cell_is_painted_at_it_and_the_cell_is_never_
     let ended = live.keys(b"").expect("the cancel is answered");
     assert!(
         matches!(ended, Ending::Cancelled),
-        "the window change raises no ending of its own: the cancel behind it is the launch's"
+        "the launch is ended by the cancel raised behind the window change"
     );
     assert_eq!(
         live.view.capabilities().cell(),

@@ -572,7 +572,7 @@ impl View {
     pub fn celled(&mut self, cell: Option<CellSize>) {
         let Some(cell) = cell else { return };
         if cell != self.capabilities.cell() {
-            self.drawn_on(self.capabilities.clone().celled(cell));
+            self.capabilities = self.capabilities.clone().celled(cell);
         }
     }
 

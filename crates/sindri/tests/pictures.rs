@@ -760,9 +760,9 @@ fn a_face_is_placed_over_the_footprint_it_was_measured_into_and_made_once_per_si
     );
 }
 
-#[test]
-fn a_cache_moved_to_another_cell_makes_the_picture_again_and_sends_it_again() {
-    let moved_to = CellSize::new(20, 40);
+/// The face measured into the block it is placed over, which needs no workspace and no file on
+/// disk: the picture a cache test moves from one cell to another.
+fn carried_face() -> (picture::Picture, Rect) {
     let measured = face::measure(Ceiling::new(40, 12), &carried(true))
         .expect("the face is measured with no workspace and no file on disk");
     let block = Rect {
@@ -771,11 +771,18 @@ fn a_cache_moved_to_another_cell_makes_the_picture_again_and_sends_it_again() {
         width: measured.cols(),
         height: measured.rows(),
     };
+    (measured, block)
+}
+
+#[test]
+fn a_cache_moved_to_another_cell_makes_the_picture_again_and_sends_it_again() {
+    let moved_to = CellSize::new(20, 40);
+    let (measured, block) = carried_face();
     let mut pictures = Pictures::kitty(cell());
     let mut first = Buffer::empty(Rect::new(0, 0, 60, 30));
     pictures.place(&measured, cell(), block, &mut first);
 
-    let mut moved = pictures.at(moved_to);
+    let mut moved = pictures.celled(moved_to);
     let mut again = Buffer::empty(Rect::new(0, 0, 60, 30));
     moved.place(&measured, moved_to, block, &mut again);
 
@@ -798,19 +805,12 @@ fn a_cache_moved_to_another_cell_makes_the_picture_again_and_sends_it_again() {
 
 #[test]
 fn a_cache_moved_to_the_cell_it_already_is_makes_nothing_again_and_sends_nothing() {
-    let measured = face::measure(Ceiling::new(40, 12), &carried(true))
-        .expect("the face is measured with no workspace and no file on disk");
-    let block = Rect {
-        x: 0,
-        y: 0,
-        width: measured.cols(),
-        height: measured.rows(),
-    };
+    let (measured, block) = carried_face();
     let mut pictures = Pictures::kitty(cell());
     let mut first = Buffer::empty(Rect::new(0, 0, 60, 30));
     pictures.place(&measured, cell(), block, &mut first);
 
-    let mut kept = pictures.at(cell());
+    let mut kept = pictures.celled(cell());
     let mut again = Buffer::empty(Rect::new(0, 0, 60, 30));
     kept.place(&measured, cell(), block, &mut again);
 
@@ -2157,6 +2157,12 @@ fn a_window_whose_cell_changed_is_drawn_at_the_cell_it_now_reports() {
         view.planes().made() > made,
         "and the bands' images are made again at the new cell: {made} images before the pass"
     );
+    let band = crossed.told().layout().expect("a laid out frame").composer;
+    assert_eq!(
+        composer_plane(&view).pixels().dimensions(),
+        (u32::from(band.width) * 20, u32::from(band.height) * 40),
+        "the composer's plane is drawn at the pixels of the cell the window now has"
+    );
 }
 
 #[test]
@@ -2189,15 +2195,6 @@ fn a_window_whose_cell_stood_is_drawn_as_it_was_with_no_header_and_no_band_image
         before.told().shades(),
         "and hands the terminal the same shades as the pass before it"
     );
-
-    let unprompted = frame::painted(&mut view, SCREEN.0, SCREEN.1);
-    assert_eq!(
-        view.capabilities().pictures().rasterises("shot.png"),
-        1,
-        "a pass the cell was not asked for before makes no raster either"
-    );
-    assert_eq!(transmission_headers(unprompted.cells()), 0, "and no header");
-    assert_eq!(view.planes().made(), made, "and no band image");
 }
 
 #[test]

@@ -63,7 +63,7 @@ impl Pictures {
 
     /// The same cache measured at `cell`: a cell that moved makes every placement again and sends
     /// it again, though the work already counted stays counted.
-    pub fn at(self, cell: CellSize) -> Pictures {
+    pub fn celled(self, cell: CellSize) -> Pictures {
         match self.draws() && self.cell() != Some(cell) {
             true => Pictures {
                 rasterises: self.rasterises,

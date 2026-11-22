@@ -376,7 +376,8 @@ _Avoid_: Block (a caret is no cell), insertion point
 What the terminal a frame draws on can do — whether it places pictures, the colours it holds,
 whether it reports a **Pointer**, and whether this window is the one being read. Probed once before
 the first frame and handed to the frame whole, the focus asked for as the screen is taken and given
-up on the way out. A terminal that reports nothing is drawn as one that reports everything, less
+up on the way out — save the cell, which every pass reads again off the kernel's own report of the
+window's pixels, so a window that crossed to another scale draws what it holds at the new one. A terminal that reports nothing is drawn as one that reports everything, less
 what it lacks.
 _Avoid_: Terminal features, environment, detection, caps
 
