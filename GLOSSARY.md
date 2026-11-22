@@ -254,10 +254,12 @@ _Avoid_: Collapse, truncate, expand (that one is the other half), summary, previ
 A band's surface drawn as one image placed under its cells, so it is drawn at the pixels of the cell
 rather than in whole cells: the image a frame holds against that band's **Shade**, and makes only
 when the shade moves. Every pixel of it is the **Rung** the cell row it falls in is drawn on with
-light added, never a blend of two rungs, and the light it carries is the most its rung can take
-while every ink the palette spells keeps its floor on the lit pixel — the transcript band's lit at
-its head and fallen back to the well by its third row, and the **Rail**'s on the rows **Sindri's
-face** stands on. The light the **Caret** casts is a plane of its own over the composer's band,
+light added, never a blend of two rungs, and the light it carries is at most the most its rung
+can take while every ink the palette spells keeps its floor on the lit pixel — at the share its
+band names of that most, and a lamp a pixel reads rather than a row: the transcript band's crowned
+at its head and fallen back to the well by its third row, and the **Rail**'s centred on **Sindri's
+face**, brightest at it and gone by the rail's own margin on both axes, with no step of it visible
+between two pixels. The light the **Caret** casts is a plane of its own over the composer's band,
 which is placed again on the column the caret moved to and is made again for no keystroke. A plane
 covers the band's own columns and no column of the band beside it, and a frame holds one image under
 each band and one under that light, each by its own identity, placed at one depth that a cell
@@ -271,10 +273,10 @@ What a band sits on: the **Rung** each of its rows is claimed in and the cell of
 but its first column, the composer's band drawn in the band a prompt is read on and closing into the
 rail's tone on its last row, under a head row that is the seam's. It holds every fact the band's
 cells and its **Plane** are drawn from and nothing else: the cell the plane is drawn at, the light
-its rows carry — the band's proved lift and the rect **Sindri's face** stands on, which is the rows
-the rail is lit on — and a frame holds each band's image against it, so a pass in which it stands
-makes no image. The **Caret**'s light is a shade of its own, and the column it is placed on is no
-part of any image. Where no picture is placed, that same shade is claimed cell by cell.
+its band carries — the peak it spends of the proved lift and the rect that light is a lamp around —
+and a frame holds each band's image against it, so a pass in which it stands makes no image. The
+**Caret**'s light is a shade of its own, and the column it is placed on is no part of any image.
+Where no picture is placed, that same shade is claimed cell by cell.
 _Avoid_: Colour, tone, gradient, paint, style
 
 **Seam**:

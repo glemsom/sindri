@@ -673,6 +673,61 @@ fn the_lift_a_band_is_handed_is_the_most_light_every_ink_of_it_can_take() {
 }
 
 #[test]
+fn the_light_a_band_spends_is_the_share_it_names_of_the_ceiling_the_proof_hands_it() {
+    for (spelling, palette) in SPELLED {
+        let inks = spelled_inks(&palette);
+        for band in Band::ALL {
+            let rung = spelled(palette.band(band));
+            let lift = palette.lift(band);
+            let peak = palette.peak(band);
+            let lit = Color::Rgb(
+                rung[0].saturating_add(peak),
+                rung[1].saturating_add(peak),
+                rung[2].saturating_add(peak),
+            );
+
+            assert_eq!(
+                peak,
+                (f64::from(lift) * band.share()).round() as u8,
+                "{spelling} hands {band:?} a peak of {peak} where the share it names of the {lift} \
+                 its rung can take is {}: a band's light is a share of the ceiling the proof \
+                 hands it, and the whole of it where the band spends all of it",
+                (f64::from(lift) * band.share()).round()
+            );
+            for ink in &inks {
+                let kept = contrast(palette.colour(*ink), lit);
+                assert!(
+                    kept >= LEGIBLE,
+                    "{spelling} reads {} at {kept} on the {band:?} spent to its peak {lit:?}: a \
+                     share of a proved ceiling is still under it, so no word of the band is \
+                     washed out by the light it is drawn on",
+                    ink.name()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_rails_light_is_spent_at_eighty_five_per_cent_of_its_ceiling() {
+    assert_eq!(
+        Palette::TRUECOLOR.peak(Band::Rail),
+        18,
+        "the rail's light peaks at eighteen channels over its tone where the ceiling the proof \
+         hands it is twenty-one: a tint on a rectangle is read at the whole of it, and the \
+         fifteen per cent a lamp gives up is what makes it light on a surface"
+    );
+    for band in [Band::Well, Band::Prompt] {
+        assert_eq!(
+            Palette::TRUECOLOR.peak(band),
+            Palette::TRUECOLOR.lift(band),
+            "{band:?} spends the whole of the ceiling it is handed, as the bands beside the rail \
+             were lit before it"
+        );
+    }
+}
+
+#[test]
 fn a_palette_that_spells_no_colour_hands_no_band_a_lift() {
     for band in Band::ALL {
         assert_eq!(

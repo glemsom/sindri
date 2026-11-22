@@ -6,12 +6,17 @@ use crate::graphics::CellSize;
 use crate::ledger::{Rail, RailBand};
 use crate::palette::{Band, Palette, channels};
 use crate::pen;
+use crate::rows::MARGIN;
 
 const EDGE_RULE: char = '│';
 
 /// The cells the caret's light spans, centred on the caret's own: the fall is spent a dozen
 /// cells out, so the box the light is drawn in leaves no step of its own.
 pub const LIGHT_COLS: u16 = 25;
+
+/// The cells either side of the caret the light it casts is spent over: the fall is gone by the
+/// box it is drawn in, so the box leaves no step of its own.
+const LIGHT_REACH: u16 = 12;
 
 /// The placement identity every image is put under. An image whose light moved is put under the
 /// identity it stood by before, so the terminal replaces it and no pixel of it travels.
@@ -55,7 +60,7 @@ pub enum Shade {
         area: Rect,
         cell: Option<CellSize>,
         well: Color,
-        lift: u8,
+        peak: u8,
     },
     Rail {
         area: Rect,
@@ -63,7 +68,7 @@ pub enum Shade {
         tone: Color,
         shape: Rail,
         face: Option<Rect>,
-        lift: u8,
+        peak: u8,
     },
     Composer {
         area: Rect,
@@ -78,7 +83,7 @@ pub enum Shade {
         cell: Option<CellSize>,
         prompt: Color,
         rail: Color,
-        lift: u8,
+        peak: u8,
         caret: u16,
     },
 }
@@ -93,7 +98,7 @@ impl Shade {
             area,
             cell: cell.filter(|_| channels(well).is_some()),
             well,
-            lift: palette.lift(Band::Well),
+            peak: palette.peak(Band::Well),
         })
     }
 
@@ -129,7 +134,7 @@ impl Shade {
             tone,
             shape,
             face: band.picture,
-            lift: palette.lift(Band::Rail),
+            peak: palette.peak(Band::Rail),
         })
     }
 
@@ -150,7 +155,7 @@ impl Shade {
             cell: cell.filter(|_| spelled),
             prompt,
             rail,
-            lift: palette.lift(Band::Prompt),
+            peak: palette.peak(Band::Prompt),
             caret,
         })
     }
@@ -214,25 +219,25 @@ impl Shade {
         let cell = self.cell()?;
         Some(match self {
             Shade::Transcript {
-                area, well, lift, ..
+                area, well, peak, ..
             } => Image::Transcript {
                 area: *area,
                 cell,
                 well: channels(*well)?,
-                lift: *lift,
+                peak: *peak,
             },
             Shade::Rail {
                 area,
                 tone,
                 face,
-                lift,
+                peak,
                 ..
             } => Image::Rail {
                 area: *area,
                 cell,
                 tone: channels(*tone)?,
                 face: *face,
-                lift: *lift,
+                peak: *peak,
             },
             Shade::Composer {
                 area, prompt, rail, ..
@@ -246,14 +251,14 @@ impl Shade {
                 band,
                 prompt,
                 rail,
-                lift,
+                peak,
                 ..
             } => Image::Caret {
                 rows: band.height,
                 cell,
                 prompt: channels(*prompt)?,
                 rail: channels(*rail)?,
-                lift: *lift,
+                peak: *peak,
             },
         })
     }
@@ -369,14 +374,14 @@ pub enum Image {
         area: Rect,
         cell: CellSize,
         well: [u8; 3],
-        lift: u8,
+        peak: u8,
     },
     Rail {
         area: Rect,
         cell: CellSize,
         tone: [u8; 3],
         face: Option<Rect>,
-        lift: u8,
+        peak: u8,
     },
     Composer {
         area: Rect,
@@ -389,7 +394,7 @@ pub enum Image {
         cell: CellSize,
         prompt: [u8; 3],
         rail: [u8; 3],
-        lift: u8,
+        peak: u8,
     },
 }
 
@@ -450,29 +455,52 @@ impl Image {
         }
     }
 
-    fn light(self, row: u16, x: f64) -> f64 {
+    /// The lamp this image's pixels stand in, at the image's own pixel origin.
+    fn light(self) -> Light {
+        let cell = self.cell();
+        let (across, down) = (f64::from(cell.width()), f64::from(cell.height()));
         match self {
-            Image::Transcript { lift, .. } => match row {
-                0 => f64::from(lift),
-                1 => f64::from(lift / 2),
-                _ => 0.0,
-            },
+            Image::Transcript { peak, .. } => Light::lamp(
+                peak,
+                At { x: 0.0, y: 0.0 },
+                At {
+                    x: f64::INFINITY,
+                    y: CROWN_ROWS * down,
+                },
+            ),
             Image::Rail {
-                area, face, lift, ..
+                area,
+                face: Some(face),
+                peak,
+                ..
             } => {
-                let y = area.y.saturating_add(row);
-                match face {
-                    Some(face) if face.y <= y && y < face.bottom() => f64::from(lift),
-                    _ => 0.0,
-                }
+                let centre = At {
+                    x: (f64::from(face.x.saturating_sub(area.x)) + f64::from(face.width) / 2.0)
+                        * across,
+                    y: (f64::from(face.y.saturating_sub(area.y)) + f64::from(face.height) / 2.0)
+                        * down,
+                };
+                // The light is spent a margin out on each axis: at the rail's own margin
+                // across, and a margin past the rows the face stands on.
+                let width = f64::from(area.width) * across;
+                let reach = At {
+                    x: (centre.x.min(width - centre.x) - f64::from(MARGIN) * across).max(1.0),
+                    y: (f64::from(face.height) / 2.0 + f64::from(MARGIN)) * down,
+                };
+                Light::lamp(peak, centre, reach)
             }
-            Image::Composer { .. } => 0.0,
-            Image::Caret { lift, cell, .. } => {
-                let across = f64::from(cell.width());
-                let centre = (f64::from(LIGHT_COLS / 2) + 0.5) * across;
-                let distance = (x - centre) / (across * 8.0);
-                f64::from(lift) * (-(distance * distance) * 2.0).exp()
-            }
+            Image::Rail { .. } | Image::Composer { .. } => Light::NONE,
+            Image::Caret { rows, peak, .. } => Light::lamp(
+                peak,
+                At {
+                    x: (f64::from(LIGHT_COLS / 2) + 0.5) * across,
+                    y: 0.0,
+                },
+                At {
+                    x: f64::from(LIGHT_REACH) * across,
+                    y: f64::from(rows.saturating_sub(1).max(1)) * down,
+                },
+            ),
         }
     }
 
@@ -484,14 +512,91 @@ impl Image {
             u32::from(area.height) * cell.height(),
         );
         let down = cell.height();
+        let light = self.light();
         image::RgbaImage::from_fn(width, height, |x, y| {
             let row = u16::try_from(y / down).unwrap_or(u16::MAX).min(self.rows());
-            let rung = self.rung(row);
-            let light = self.light(row, f64::from(x));
-            let channel = |at: u8| (f64::from(at) + light).clamp(0.0, 255.0) as u8;
-            image::Rgba([channel(rung[0]), channel(rung[1]), channel(rung[2]), 255])
+            let lit = dithered(light.at(f64::from(x), f64::from(y)), (x, y));
+            let [red, green, blue] = self.rung(row).map(|at| at.saturating_add(lit));
+            image::Rgba([red, green, blue, 255])
         })
     }
+}
+
+/// The rows the transcript band's light falls over: a crown spent by the band's third row, where
+/// the prose under it is read on the well.
+const CROWN_ROWS: f64 = 2.0;
+
+/// How far into its reach a lamp has fallen when it is spent: under half a channel of any peak
+/// the palette hands a band, so what the dither rounds up at the rim is a pixel and no step.
+const SPENT: f64 = 4.0;
+
+/// The thresholds a pixel's light is quantised through, eight by eight and a sixty-fourth apart:
+/// a fall of a few levels over a band is dithered, and no band of its own shows.
+const THRESHOLDS: [[u8; 8]; 8] = [
+    [0, 32, 8, 40, 2, 34, 10, 42],
+    [48, 16, 56, 24, 50, 18, 58, 26],
+    [12, 44, 4, 36, 14, 46, 6, 38],
+    [60, 28, 52, 20, 62, 30, 54, 22],
+    [3, 35, 11, 43, 1, 33, 9, 41],
+    [51, 19, 59, 27, 49, 17, 57, 25],
+    [15, 47, 7, 39, 13, 45, 5, 37],
+    [63, 31, 55, 23, 61, 29, 53, 21],
+];
+
+/// A point in the pixels of the image a light is drawn as.
+#[derive(Clone, Copy, Debug)]
+struct At {
+    x: f64,
+    y: f64,
+}
+
+/// The light a band carries: one lamp, its peak, the point it stands on and the reach it is spent
+/// over on each axis.
+#[derive(Clone, Copy, Debug)]
+struct Light {
+    peak: f64,
+    centre: At,
+    reach: At,
+}
+
+impl Light {
+    /// A band with nothing standing on it, which its pixels read as a peak of no light.
+    const NONE: Light = Light {
+        peak: 0.0,
+        centre: At { x: 0.0, y: 0.0 },
+        reach: At { x: 1.0, y: 1.0 },
+    };
+
+    /// A lamp at `centre`, spent over `reach` on each axis: a reach of no bound is an axis the
+    /// light does not fall on, and one past the reach is where it is exactly nothing.
+    fn lamp(peak: u8, centre: At, reach: At) -> Light {
+        Light {
+            peak: f64::from(peak),
+            centre,
+            reach,
+        }
+    }
+
+    /// The light at a pixel: the peak at the lamp's centre, and nothing at all past the reach.
+    fn at(self, x: f64, y: f64) -> f64 {
+        let across = (x - self.centre.x) / self.reach.x;
+        let down = (y - self.centre.y) / self.reach.y;
+        let away = across * across + down * down;
+        match away < 1.0 {
+            true => self.peak * (-(SPENT * away)).exp(),
+            false => 0.0,
+        }
+    }
+}
+
+/// The light a pixel carries in the channel it is drawn in: the ordered matrix's threshold is
+/// added before the floor, so an amount of light that is no whole channel is dithered rather
+/// than blended into the rung beside it.
+fn dithered(light: f64, (x, y): (u32, u32)) -> u8 {
+    let down = usize::try_from(y % 8).unwrap_or(0);
+    let across = usize::try_from(x % 8).unwrap_or(0);
+    let threshold = (f64::from(THRESHOLDS[down][across]) + 0.5) / 64.0;
+    (light + threshold).floor().clamp(0.0, 255.0) as u8
 }
 
 /// Where an image stands and which columns of it are shown there.

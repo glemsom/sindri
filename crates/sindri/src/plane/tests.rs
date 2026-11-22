@@ -14,6 +14,11 @@ const SPELLED: [(&str, Palette); 2] = [("ansi", Palette::ANSI), ("truecolor", Pa
 
 const COLUMNS: u16 = 80;
 
+/// How far two pixels either side of a fall may be apart: the channel the ordered dither adds,
+/// which says an amount of light in one pixel where the floor would have quantised it away, and
+/// the one the steepest lamp falls over a pixel.
+const DITHER_STEP: i32 = 2;
+
 const CELL: CellSize = CellSize::NOMINAL;
 
 fn shaded(rows: u16, palette: &Palette) -> Shade {
@@ -66,6 +71,14 @@ fn faced(shape: Rail, area: Rect, rows: u16, cell: Option<CellSize>, palette: &P
         palette,
     )
     .expect("a band to shade")
+}
+
+/// The light a pixel of a band's plane carries over the rung of the row it falls in.
+fn light_over(shade: &Shade, plane: &Plane, x: u32, y: u32) -> i32 {
+    let down = CELL.height();
+    let rung = spelled(shade.row((y / down) as u16));
+    let pixel = plane.pixels().get_pixel(x, y);
+    i32::from(pixel[0]) - i32::from(rung[0])
 }
 
 fn drawn(shade: Shade) -> Plane {
@@ -123,30 +136,6 @@ fn caret_light(band: Rect, caret: u16, palette: &Palette) -> Shade {
 /// Where the light is centred, in the pixels of the image it is drawn as.
 fn light_centre() -> u32 {
     u32::from(LIGHT_COLS / 2) * CELL.width() + CELL.width() / 2
-}
-
-fn carried(shade: &Shade, row: u16, palette: &Palette) -> [u8; 3] {
-    let at = band_of(shade);
-    let light = match shade {
-        Shade::Transcript { .. } => match row {
-            0 => palette.lift(at),
-            1 => palette.lift(at) / 2,
-            _ => 0,
-        },
-        Shade::Rail {
-            area,
-            face: Some(face),
-            ..
-        } => {
-            let y = area.y.saturating_add(row);
-            match face.y <= y && y < face.bottom() {
-                true => palette.lift(at),
-                false => 0,
-            }
-        }
-        _ => 0,
-    };
-    spelled(shade.row(row)).map(|channel| channel.saturating_add(light))
 }
 
 #[test]
@@ -237,10 +226,11 @@ fn a_band_drawn_in_no_colour_draws_no_ground_on_any_row() {
 }
 
 #[test]
-fn a_bands_plane_is_its_shade_sampled_at_the_cell() {
+fn a_bands_plane_is_its_shade_drawn_at_the_pixels_of_the_cell_it_covers() {
     for (spelling, palette) in SPELLED {
         for (band, shade) in bands(&palette) {
             let plane = drawn(shade);
+            let peak = palette.peak(band_of(&shade));
             assert_eq!(
                 plane.area(),
                 shade.area(),
@@ -256,14 +246,18 @@ fn a_bands_plane_is_its_shade_sampled_at_the_cell() {
                 "{spelling} draws {band}'s plane at other than the pixels of the cell it is drawn on"
             );
             for row in 0..shade.area().height {
+                let rung = spelled(shade.row(row));
                 let pixel = middle(&plane, row, CELL);
-                let said = carried(&shade, row, &palette);
-                assert_eq!(
-                    pixel, said,
-                    "{spelling} draws the middle of row {row} of {band} at {pixel:?} where the \
-                     shade says {said:?}: a plane is the shade sampled at the cell, and no \
-                     colour of its own"
-                );
+                for channel in 0..3 {
+                    assert!(
+                        pixel[channel] >= rung[channel]
+                            && pixel[channel] <= rung[channel].saturating_add(peak),
+                        "{spelling} draws the middle of row {row} of {band} at {pixel:?} where the \
+                         row's own rung is {rung:?} and the light it spends is at most {peak} \
+                         channels: a plane is the shade's own rung with its light added, and no \
+                         colour of its own"
+                    );
+                }
             }
         }
     }
@@ -299,52 +293,89 @@ fn a_composers_plane_opens_on_the_prompts_band_and_covers_no_pixel_of_the_well()
 }
 
 #[test]
-fn a_rails_plane_is_lit_on_the_rows_the_face_stands_on_and_is_its_own_tone_below() {
-    for (spelling, palette) in SPELLED {
-        let area = Rect::new(6, 2, 32, 8);
-        let shade = faced(Rail::Ledger, area, 3, Some(CELL), &palette);
-        let Shade::Rail {
-            face: Some(face), ..
-        } = shade
-        else {
-            panic!("a rail a face stands on carries the rows it stands on");
-        };
-        let plane = drawn(shade);
-        let tone = spelled(palette.band(Band::Rail));
-        let lift = palette.lift(Band::Rail);
-        let lit = tone.map(|channel| channel.saturating_add(lift));
-        let (width, height) = plane.pixels().dimensions();
+fn a_rails_light_is_a_lamp_centred_on_the_face_and_gone_by_its_margins() {
+    let palette = Palette::TRUECOLOR;
+    let area = Rect::new(6, 2, 32, 12);
+    let shade = faced(Rail::Ledger, area, 3, Some(CELL), &palette);
+    let Shade::Rail {
+        face: Some(face), ..
+    } = shade
+    else {
+        panic!("a rail a face stands on carries the rect its light is centred on");
+    };
+    let plane = drawn(shade);
+    let peak = palette.peak(Band::Rail);
+    let (width, height) = plane.pixels().dimensions();
+    let (across, down) = (CELL.width(), CELL.height());
+    let lit = |x: u32, y: u32| light_over(&shade, &plane, x, y);
+    let (most, (left, top)) = (0..height)
+        .flat_map(|y| (0..width).map(move |x| (x, y)))
+        .map(|at| (lit(at.0, at.1), at))
+        .max()
+        .expect("a plane with pixels in it");
 
-        assert_eq!(
-            height,
-            u32::from(area.height) * CELL.height(),
-            "{spelling} draws the rail's plane at other than the pixels of the cell it is drawn on"
-        );
-        for row in 0..area.height {
-            let y = area.y + row;
-            let stands = y < face.bottom();
-            for down in 0..CELL.height() {
-                for x in 0..width {
-                    let pixel = plane
-                        .pixels()
-                        .get_pixel(x, u32::from(row) * CELL.height() + down);
-                    let drawn = [pixel[0], pixel[1], pixel[2]];
-                    match stands {
-                        true => assert_eq!(
-                            drawn, lit,
-                            "{spelling} draws row {row}, column {x} of the rail at {drawn:?} \
-                             where the face stands on it: the rows Sindri's face stands on are \
-                             the rows the frame's light falls on"
-                        ),
-                        false => assert_eq!(
-                            drawn, tone,
-                            "{spelling} draws row {row}, column {x} of the rail at {drawn:?} \
-                             where the rail's own tone is {tone:?}: no light falls below the \
-                             face, and a row with no word on it is no lighter than the band"
-                        ),
-                    }
-                }
+    assert_eq!(
+        most,
+        i32::from(peak),
+        "the rail's light peaks at {most} channels over its tone where it spends the {peak} the \
+         palette hands it as a share of its rung's ceiling"
+    );
+    assert!(
+        (u32::from(face.x - area.x) * across..u32::from(face.x - area.x + face.width) * across)
+            .contains(&left)
+            && (u32::from(face.y - area.y) * down..u32::from(face.y - area.y + face.height) * down)
+                .contains(&top),
+        "the brightest pixel of the rail stands at column {left}, pixel row {top}, outside the \
+         columns and rows Sindri's face stands on at {face:?}: the light is a lamp centred on the \
+         face and not a tint across the band"
+    );
+
+    let words = u32::from(MARGIN);
+    let foot = u32::from(face.y - area.y + face.height) * down + words * down;
+    for y in 0..height {
+        for x in 0..width {
+            let inside = x / across >= words && x / across < u32::from(area.width) - words;
+            if inside && y < foot {
+                continue;
             }
+            assert_eq!(
+                lit(x, y),
+                0,
+                "pixel row {y}, column {x} of the rail is lit where the light has left it: the \
+                 lamp is spent at the margin the rail's words open in across, and a margin past \
+                 the rows the face stands on, so it draws no edge of its own"
+            );
+        }
+    }
+
+    let walks = [
+        (
+            (left..width).map(|x| (x, top)).collect::<Vec<(u32, u32)>>(),
+            "across the rail, away from the face towards its further margin",
+        ),
+        (
+            (0..=left).rev().map(|x| (x, top)).collect(),
+            "across the rail, away from the face towards its nearer margin",
+        ),
+        (
+            (top..height).map(|y| (left, y)).collect(),
+            "down the column the face's middle falls in",
+        ),
+        (
+            (0..=top).rev().map(|y| (left, y)).collect(),
+            "up the column the face's middle falls in",
+        ),
+    ];
+    for (walk, where_to) in walks {
+        for pair in walk.windows(2) {
+            let (here, next) = (lit(pair[0].0, pair[0].1), lit(pair[1].0, pair[1].1));
+            assert!(
+                next <= here + DITHER_STEP,
+                "{where_to}, the light is {here} channels at {:?} and {next} at {:?}: it falls \
+                 away from the face there, and no row of it is a constant",
+                pair[0],
+                pair[1]
+            );
         }
     }
 }
@@ -429,86 +460,66 @@ fn the_composers_plane_carries_no_light_wherever_the_caret_waits() {
 }
 
 #[test]
-fn the_carets_light_stands_the_bands_own_lift_over_the_caret_and_over_the_row_it_closes_on() {
+fn the_carets_light_peaks_on_the_head_row_of_its_band_and_is_spent_by_its_foot() {
     for (spelling, palette) in SPELLED {
         let area = Rect::new(0, 20, 80, 5);
         let shade = caret_light(area, 12, &palette);
         let plane = drawn(shade);
         let (width, height) = plane.pixels().dimensions();
-        let lift = palette.lift(Band::Prompt);
         let centre = light_centre();
         let down = CELL.height();
+        let peak = palette.peak(Band::Prompt);
+        let carried = |x: u32, y: u32| light_over(&shade, &plane, x, y);
 
         assert_eq!(
             (width, height),
             (
                 u32::from(LIGHT_COLS) * CELL.width(),
-                u32::from(area.height) * CELL.height()
+                u32::from(area.height) * down
             ),
-            "{spelling} draws the caret's light at other than the cells it spans over the band's own rows"
+            "{spelling} draws the caret's light at other than the cells it spans over the band's \
+             own rows"
         );
-        for row in 0..area.height {
-            let rung = spelled(shade.row(row));
-            let lit = rung.map(|channel| channel.saturating_add(lift));
-            for y in u32::from(row) * down..u32::from(row + 1) * down {
-                let lit_pixel = plane.pixels().get_pixel(centre, y);
-                assert_eq!(
-                    [lit_pixel[0], lit_pixel[1], lit_pixel[2]],
-                    lit,
-                    "{spelling} draws the caret's own column of row {row}, pixel row {y}, at \
-                     {:?} where the row lit to the most the band can take is {lit:?}: the light's \
-                     peak is the band's own lift, on the row the band closes on too",
-                    [lit_pixel[0], lit_pixel[1], lit_pixel[2]]
-                );
-                let edge = plane.pixels().get_pixel(width - 1, y);
-                assert_eq!(
-                    [edge[0], edge[1], edge[2]],
-                    rung,
-                    "{spelling} draws the light's own edge of row {row}, pixel row {y}, at {:?} where \
-                     the row's own rung is {rung:?}: the light is spent by the last cell it spans, \
-                     so the box it is drawn in leaves no step of its own",
-                    [edge[0], edge[1], edge[2]]
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn the_carets_light_lights_a_column_alike_on_every_pixel_row_of_the_band() {
-    for (spelling, palette) in SPELLED {
-        let shade = caret_light(Rect::new(0, 20, 80, 5), 12, &palette);
-        let plane = drawn(shade);
-        let (width, height) = plane.pixels().dimensions();
-        let down = CELL.height();
-
-        for x in 0..width {
-            let added = |y: u32| {
-                let ground = spelled(shade.row((y / down) as u16));
-                let pixel = plane.pixels().get_pixel(x, y);
-                [0, 1, 2].map(|channel| i32::from(pixel[channel]) - i32::from(ground[channel]))
-            };
-            let first = added(0);
-            for y in 1..height {
-                assert_eq!(
-                    added(y),
-                    first,
-                    "{spelling} draws column {x} of the caret's light on pixel row {y} over the row it \
-                     falls in where its first pixel row adds {first:?}: the light falls across the \
-                     band alone, and no pixel row of it is a light of another strength"
-                );
-            }
+        assert_eq!(
+            carried(centre, 0),
+            i32::from(peak),
+            "{spelling} draws the caret's own column of the band's head row at {} channels over \
+             the row it lights where the light's peak is {peak}: the band is lit from above, and \
+             the light the caret casts lands on its head",
+            carried(centre, 0)
+        );
+        for y in 0..height.saturating_sub(1) {
             assert!(
-                (0..3).all(|channel| first[channel] >= 0),
-                "{spelling} draws column {x} of the caret's light under the tone it lights, and light \
-                 only ever adds: {first:?}"
+                carried(centre, y + 1) <= carried(centre, y) + DITHER_STEP,
+                "{spelling} draws pixel row {y} of the caret's own column at {} channels over the \
+                 row it lights where the row under it carries {}: the light falls down the band \
+                 rather than being painted across it",
+                carried(centre, y),
+                carried(centre, y + 1)
             );
         }
-        assert_eq!(
-            height,
-            5 * down,
-            "{spelling} draws the caret's light over no rows of its own"
-        );
+        for x in 0..width {
+            assert_eq!(
+                carried(x, height - 1),
+                0,
+                "{spelling} draws column {x} of the band's foot at {} channels over the row it \
+                 lights: the light is spent by the band it falls down, and the band is read on \
+                 its own tone at the foot",
+                carried(x, height - 1)
+            );
+        }
+        for y in 0..height {
+            for x in [0, width - 1] {
+                assert_eq!(
+                    carried(x, y),
+                    0,
+                    "{spelling} draws column {x}, pixel row {y} of the light's own edge at {} \
+                     channels over the row it lights: the light is spent by the last cell it \
+                     spans, so the box it is drawn in leaves no step of its own",
+                    carried(x, y)
+                );
+            }
+        }
     }
 }
 
@@ -572,6 +583,53 @@ fn no_pixel_of_any_bands_plane_is_darker_than_the_rung_it_sits_on() {
 }
 
 #[test]
+fn no_two_pixels_of_a_band_are_a_step_apart_the_eye_can_find() {
+    for (spelling, palette) in SPELLED {
+        for (band, _, shade) in lit_bands(&palette) {
+            let plane = drawn(shade);
+            let (width, height) = plane.pixels().dimensions();
+            let down = CELL.height();
+            let rung = |y: u32| spelled(shade.row((y / down) as u16));
+            let at = |x: u32, y: u32| {
+                let pixel = plane.pixels().get_pixel(x, y);
+                [pixel[0], pixel[1], pixel[2]]
+            };
+            let apart = |left: [u8; 3], right: [u8; 3]| {
+                (0..3).all(|channel| {
+                    i32::from(left[channel]).abs_diff(i32::from(right[channel]))
+                        <= u32::try_from(DITHER_STEP).unwrap_or(1)
+                })
+            };
+
+            for y in 0..height {
+                for x in 0..width {
+                    if x + 1 < width {
+                        assert!(
+                            apart(at(x, y), at(x + 1, y)),
+                            "{spelling} draws pixel row {y} of {band} at {:?} in column {x} and \
+                             {:?} in the column beside it: a fall of light is spent by the pixel, \
+                             so no two neighbouring pixels are a step the eye can find",
+                            at(x, y),
+                            at(x + 1, y)
+                        );
+                    }
+                    if y + 1 < height && rung(y) == rung(y + 1) {
+                        assert!(
+                            apart(at(x, y), at(x, y + 1)),
+                            "{spelling} draws column {x} of {band} at {:?} in pixel row {y} and \
+                             {:?} in the pixel row under it: the light falls by the pixel and \
+                             never steps between two of them",
+                            at(x, y),
+                            at(x, y + 1)
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn the_carets_light_dies_away_either_side_of_the_caret() {
     let palette = Palette::TRUECOLOR;
     let plane = drawn(caret_light(Rect::new(0, 20, 80, 5), 4, &palette));
@@ -582,21 +640,21 @@ fn the_carets_light_dies_away_either_side_of_the_caret() {
     for x in 0..centre {
         let pixel = plane.pixels().get_pixel(x, row);
         assert!(
-            pixel[0] >= last,
+            i32::from(pixel[0]) + DITHER_STEP >= last,
             "the light at pixel {x} of row {row} is darker than the pixel further from its centre \
              before it, so it does not rise towards the caret"
         );
-        last = pixel[0];
+        last = i32::from(pixel[0]);
     }
-    let mut last = u8::MAX;
+    let mut last = i32::from(u8::MAX);
     for x in centre..plane.pixels().width() {
         let pixel = plane.pixels().get_pixel(x, row);
         assert!(
-            pixel[0] <= last,
+            i32::from(pixel[0]) <= last + DITHER_STEP,
             "the light at pixel {x} of row {row} is lighter than the pixel nearer its centre \
              before it, so it does not fall away from the caret"
         );
-        last = pixel[0];
+        last = i32::from(pixel[0]);
     }
     let lit = plane.pixels().get_pixel(centre, row);
     let far = plane.pixels().get_pixel(plane.pixels().width() - 1, row);
@@ -607,16 +665,16 @@ fn the_carets_light_dies_away_either_side_of_the_caret() {
 }
 
 #[test]
-fn a_transcript_bands_plane_is_its_head_lit_and_the_well_by_its_third_row() {
+fn a_transcripts_light_crowns_its_head_and_falls_to_the_well_by_its_third_row() {
     for (spelling, palette) in SPELLED {
         let area = Rect::new(0, 0, 20, 6);
         let shade =
             Shade::transcript(area, Some(CELL), &palette).expect("a band the plane stands under");
         let plane = drawn(shade);
-        let well = spelled(palette.band(Band::Well));
-        let lift = palette.lift(Band::Well);
-        let lit = |light: u8| well.map(|channel| channel.saturating_add(light));
+        let peak = palette.peak(Band::Well);
         let (width, height) = plane.pixels().dimensions();
+        let down = CELL.height();
+        let lit = |x: u32, y: u32| light_over(&shade, &plane, x, y);
 
         assert_eq!(
             plane.area(),
@@ -626,47 +684,54 @@ fn a_transcript_bands_plane_is_its_head_lit_and_the_well_by_its_third_row() {
         );
         assert_eq!(
             height,
-            u32::from(area.height) * CELL.height(),
+            u32::from(area.height) * down,
             "{spelling} draws the transcript's plane at other than the pixels of the cell it is \
              drawn on"
         );
         for x in 0..width {
-            let head = plane.pixels().get_pixel(x, 0);
             assert_eq!(
-                [head[0], head[1], head[2]],
-                lit(lift),
-                "{spelling} draws column {x} of the plane's first pixel row at {:?} where the \
-                 band's own head row lit to the most it can take is {:?}: the head of the band \
-                 is where the frame's light falls",
-                [head[0], head[1], head[2]],
-                lit(lift)
+                lit(x, 0),
+                i32::from(peak),
+                "{spelling} draws column {x} of the plane's first pixel row at {} channels over \
+                 the well where the band's head is lit to the {peak} it spends: the head of the \
+                 band is where a page's light falls, and it falls on every column of it",
+                lit(x, 0)
             );
         }
-        for y in 0..CELL.height() {
-            let second = plane.pixels().get_pixel(0, y + CELL.height());
-            assert_eq!(
-                [second[0], second[1], second[2]],
-                lit(lift / 2),
-                "{spelling} draws pixel row {y} of the band's second cell row at {:?} where half \
-                 the light it can take is {:?}: the light falls away from the head in whole \
-                 channels",
-                [second[0], second[1], second[2]],
-                lit(lift / 2)
-            );
+        for x in [0, width / 2, width - 1] {
+            for y in 1..height {
+                assert!(
+                    lit(x, y) <= lit(x, y - 1) + DITHER_STEP,
+                    "{spelling} draws pixel row {y} of column {x} at {} channels over the well \
+                     where the row above it carries {}: the crown falls away from the band's head \
+                     by the pixel and never steps back up it",
+                    lit(x, y),
+                    lit(x, y - 1)
+                );
+            }
         }
+        let second = lit(0, down);
+        assert!(
+            second > 0 && second < i32::from(peak),
+            "{spelling} draws the second cell row at {second} channels over the well where the head \
+             carries {peak}: the light is neither the head's own nor spent at the cell's boundary, \
+             so it falls through the pixels of a row instead of stepping by the row",
+        );
+        assert!(
+            lit(0, 2 * down - 1) < i32::from(peak) / 4,
+            "{spelling} draws the last pixel row of the band's second cell at {} channels over the \
+             well: the crown is all but spent by the foot of that row",
+            lit(0, 2 * down - 1)
+        );
         for row in 2..area.height {
-            for y in 0..CELL.height() {
+            for y in 0..down {
                 for x in 0..width {
-                    let pixel = plane
-                        .pixels()
-                        .get_pixel(x, u32::from(row) * CELL.height() + y);
+                    let carried = lit(x, u32::from(row) * down + y);
                     assert_eq!(
-                        [pixel[0], pixel[1], pixel[2]],
-                        well,
+                        carried, 0,
                         "{spelling} draws pixel row {y} of cell row {row} of the transcript's \
-                         band at {:?} where the well is {well:?}: the prose is read on the well, \
-                         and the light has fallen back to it by the band's third row",
-                        [pixel[0], pixel[1], pixel[2]]
+                         band at {carried} channels over the well: the prose is read on the well, \
+                         and the light has fallen back to it by the band's third row"
                     );
                 }
             }
