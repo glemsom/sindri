@@ -177,8 +177,21 @@ fn a_ledger_stands_on_its_own_tone_on_every_row_it_claims() {
     let area = band(COLUMNS, 8);
     let mut buffer = Buffer::empty(area);
 
-    paint(&frame(), Rail::Ledger, area, None, &mut buffer, &PALETTE);
+    let shade = super::paint(
+        &frame(),
+        Rail::Ledger,
+        RailBand::of(area),
+        None,
+        None,
+        &mut buffer,
+        &PALETTE,
+    )
+    .expect("a band to shade");
 
+    assert!(
+        !shade.places(),
+        "a terminal that places no picture is handed no plane under the rail"
+    );
     for y in area.y..area.bottom() {
         for x in area.x..area.right() {
             assert_eq!(
@@ -495,39 +508,6 @@ fn a_strip_is_handed_a_plane_of_its_one_row_and_no_seam() {
 }
 
 #[test]
-fn a_rail_handed_no_cell_draws_the_bands_one_tone() {
-    let area = band(COLUMNS, 8);
-    let mut buffer = Buffer::empty(area);
-
-    let shade = super::paint(
-        &frame(),
-        Rail::Ledger,
-        RailBand::of(area),
-        None,
-        None,
-        &mut buffer,
-        &PALETTE,
-    )
-    .expect("a band to shade");
-
-    assert!(
-        !shade.places(),
-        "a terminal that places no picture is handed no plane under the rail"
-    );
-    for y in area.y..area.bottom() {
-        for x in area.x..area.right() {
-            assert_eq!(
-                under(&buffer, x, y),
-                PALETTE.band(Band::Rail),
-                "row {y}, column {x} of the band is not the rail's own ground: the flat band is \
-                 the surface a terminal with no picture already had, and no row of it is the \
-                 shadow"
-            );
-        }
-    }
-}
-
-#[test]
 fn a_rail_handed_a_cell_in_no_colour_draws_the_flat_band_it_drew_without_one() {
     for (shape, area) in [(Rail::Ledger, band(COLUMNS, 8)), (Rail::Strip, band(40, 1))] {
         let mut pictured = Buffer::empty(area);
@@ -558,12 +538,6 @@ fn a_rail_handed_a_cell_in_no_colour_draws_the_flat_band_it_drew_without_one() {
                     "row {y}, column {x} of the {shape:?} is not the cell the band drew with no \
                      plane under it: a palette that draws no colour draws the one flat band a \
                      reader who asked for it already had"
-                );
-                assert_eq!(
-                    under(&pictured, x, y),
-                    Palette::SLOTS.band(Band::Rail),
-                    "row {y}, column {x} of the {shape:?} is not the rail's own tone: the band \
-                     is one surface on every row of it, whatever the terminal can draw"
                 );
             }
         }

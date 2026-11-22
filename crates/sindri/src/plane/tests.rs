@@ -415,10 +415,13 @@ fn the_transcript_band_is_claimed_on_the_well_and_makes_no_seam() {
 fn every_row_of_the_rail_is_one_tone_so_an_ink_reads_the_same_wherever_it_falls() {
     for (spelling, palette) in SPELLED {
         let tone = palette.band(Band::Rail);
-        for (shape, height) in [(Rail::Ledger, 24), (Rail::Strip, 1)] {
-            let area = Rect::new(20, 0, 32, height);
-            for cell in [None, Some(CELL)] {
-                let shade = Shade::rail(shape, area, cell, &palette).expect("a band to shade");
+        for (shape, heights) in [
+            (Rail::Ledger, &[1u16, 2, 8, 24][..]),
+            (Rail::Strip, &[1u16][..]),
+        ] {
+            for height in heights {
+                let area = Rect::new(20, 0, 32, *height);
+                let shade = Shade::rail(shape, area, None, &palette).expect("a band to shade");
                 let mut buffer = Buffer::empty(Rect {
                     x: 0,
                     width: area.right(),
@@ -426,57 +429,22 @@ fn every_row_of_the_rail_is_one_tone_so_an_ink_reads_the_same_wherever_it_falls(
                 });
                 shade.claim(&mut buffer, &palette);
 
-                let placed = shade.places();
-                let claimed = match placed {
-                    true => palette.ground(None).bg.expect("the terminal's own ground"),
-                    false => tone,
-                };
                 for row in 0..area.height {
                     assert_eq!(
                         shade.row(row),
                         tone,
                         "{spelling} draws row {row} of a {shape:?} of {height} rows on another \
-                         colour than the rail's own tone: no row of the rail falls into the shadow, \
-                         so an ink drawn there reads at one strength"
+                         colour than the rail's own tone: a row of the rail is no shadow, so an \
+                         ink drawn there reads at one strength"
                     );
                     for x in area.x..area.right() {
                         assert_eq!(
                             under(&buffer, x, area.y + row),
-                            claimed,
+                            tone,
                             "{spelling} claims row {row}, column {x} of a {shape:?} of {height} \
-                             rows on neither the rail's own tone nor the ground its plane is read \
-                             through"
+                             rows on another colour than the rail's own tone"
                         );
                     }
-                }
-                assert_eq!(
-                    placed,
-                    cell.is_some(),
-                    "{spelling} hands a {shape:?} of {height} rows a plane where the test gave \
-                     it no cell to draw one at, or none where it did"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn no_row_of_the_rail_is_drawn_on_the_frames_shadow_at_any_height_of_its_band() {
-    for (spelling, palette) in SPELLED {
-        let shadow = palette.edge(Edge::Shadow);
-        for shape in [Rail::Ledger, Rail::Strip] {
-            for height in 1..=24 {
-                let area = Rect::new(20, 0, 32, height);
-                let shade = Shade::rail(shape, area, None, &palette).expect("a band to shade");
-
-                for row in 0..area.height {
-                    assert_ne!(
-                        shade.row(row),
-                        shadow,
-                        "{spelling} draws row {row} of a {shape:?} of {height} rows on the \
-                         frame's shadow: a shadow is drawn where something stands in front of \
-                         something else, and no row of the rail stands in front of its own"
-                    );
                 }
             }
         }

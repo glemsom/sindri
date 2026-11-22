@@ -45,7 +45,6 @@ pub enum Shade {
     Rail {
         area: Rect,
         cell: Option<CellSize>,
-        shape: Rail,
         tone: Color,
         seam: Option<Seam>,
     },
@@ -99,8 +98,8 @@ impl Shade {
         })
     }
 
-    /// The rail's band over the rows and columns it covers, in its own tone on every one of them,
-    /// and the seam it makes with the transcript band beside it.
+    /// The rail's band over the rows and columns it covers, and the seam it makes with the
+    /// transcript band beside it.
     pub fn rail(
         shape: Rail,
         area: Rect,
@@ -115,7 +114,6 @@ impl Shade {
         Some(Shade::Rail {
             area,
             cell,
-            shape,
             tone,
             seam: Seam::of(area, shape, palette),
         })

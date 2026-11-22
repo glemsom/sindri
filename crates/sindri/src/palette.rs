@@ -31,8 +31,8 @@ struct Bands {
     well: Color,
 }
 
-/// The two ends a boundary is drawn at: the lit row a band's head meets the frame on and the
-/// shadow a seam falls into, and no ink of its own.
+/// The two ends a boundary is drawn at: the light a band meets the frame on and the shadow it is
+/// set down into, and no ink of its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Ends {
     lit: Color,
