@@ -19,7 +19,7 @@ use crate::palette::{Band, Edge, channels};
 use crate::pen;
 use crate::plane::{Plane, SEAM};
 use crate::readback::{column_of, inks, under};
-use crate::rows::MARGIN;
+use crate::rows::{MARGIN, margins};
 
 /// The band a ledger test draws a meter and the size it is a share of in: the floor's columns and
 /// the two the frame's margin takes at either edge, which that pair needs of a row.
@@ -32,12 +32,6 @@ const LEFT: u16 = 20;
 /// The columns `text` draws in, which is the pen's question and not a count of its glyphs.
 fn columns(text: &str) -> usize {
     usize::from(pen::cells(text))
-}
-
-/// The columns a band `width` wide lays its words in, once the frame's margin is taken off both
-/// edges.
-fn room(width: u16) -> u16 {
-    width.saturating_sub(MARGIN * 2)
 }
 
 const PALETTE: Palette = Palette::TRUECOLOR;
@@ -109,9 +103,11 @@ const CUT: &str = "claude-sonnet-4-5…";
 const BRANCH: &str = "spec/1-capability";
 
 /// The row a ctx fact of `value` is drawn on in a band `width` wide: the frame's margin, its label
-/// in the ten-column field, and the value against the last column of the band the margin leaves.
+/// in the ten-column field, and the value against the last column the margin leaves.
 fn ctx_line(width: u16, value: &str) -> String {
-    let at = pen::hanging(band(room(width), 1), pen::cells(value)).expect("a rail that holds it");
+    let at = width
+        .saturating_sub(margins())
+        .saturating_sub(pen::cells(value));
     format!(
         "{}{}{}{value}{}",
         pen::blank(MARGIN),
@@ -211,8 +207,9 @@ fn the_foot_is_drawn_on_the_row_the_band_shadows() {
     paint(&spent(), Rail::Ledger, area, None, &mut buffer, &PALETTE);
 
     let floor = area.bottom() - 1;
-    let at =
-        pen::hanging(band(room(COLUMNS), 1), pen::cells("51.3k")).expect("a row that holds it");
+    let at = COLUMNS
+        .saturating_sub(margins())
+        .saturating_sub(pen::cells("51.3k"));
     assert_eq!(
         under(&buffer, area.x, floor),
         PALETTE.edge(Edge::Shadow),
@@ -1333,7 +1330,7 @@ fn no_fact_is_ever_drawn_partially_at_any_width_between_twenty_and_two_hundred()
         );
         let drawn = columns(screen.trim_end()).saturating_sub(usize::from(MARGIN));
         assert!(
-            drawn + columns(GAP) + columns(&more) > usize::from(room(width)),
+            drawn + columns(GAP) + columns(&more) > usize::from(width.saturating_sub(margins())),
             "at {width} columns the strip dropped the {more} count it had room to draw \
                  beside the {drawn} columns it kept"
         );

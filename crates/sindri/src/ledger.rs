@@ -18,7 +18,7 @@ use crate::ink::Ink;
 use crate::palette::Palette;
 use crate::pen;
 use crate::pulse::Pulse;
-use crate::rows::{MARGIN, stop_mark};
+use crate::rows::{MARGIN, margined, stop_mark};
 
 /// The columns `text` draws in, a wide glyph counted as the two cells it takes: a value is
 /// measured by what a row shows and never by how many glyphs it is made of.
@@ -820,9 +820,9 @@ pub fn split(facts: &Facts, area: Rect) -> Share {
 
 /// The rows `shape` lays in a band `band` wide and tall, from that band's own origin: the row each
 /// stands on and the column each part starts at, never more of them than the band holds. `draw` is
-/// what places them where the band sits, in the columns the frame's margin leaves.
+/// what places them where the band sits, and a live rail's state row wears the marker's step.
 pub(crate) fn rows(facts: &Facts, shape: Shape, band: Rect, marker: Option<&Pulse>) -> Vec<Row> {
-    let area = Rect::new(0, 0, band.width.saturating_sub(inset()), band.height);
+    let area = Rect::new(0, 0, margined(band).width, band.height);
     match shape {
         Shape::Screen => sheet_rows(facts, area),
         Shape::Ledger => rail_rows(facts, Rail::Ledger, area, marker),
@@ -845,11 +845,6 @@ pub(crate) fn draw(rows: &[Row], at: Rect, buffer: &mut Buffer, palette: &Palett
             );
         }
     }
-}
-
-/// The columns a band gives up to the frame's margin: two at its left edge and two at its right.
-const fn inset() -> u16 {
-    MARGIN.saturating_mul(2)
 }
 
 /// The ledger's rows, or the strip's one: the blocks the rail reads, an empty row between two that

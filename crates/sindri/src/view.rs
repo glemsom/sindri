@@ -44,7 +44,7 @@ use crate::pointer::{self, Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{Fence, INDENT, MARGIN, Measure, Row, Rows, Scroll, Sideways};
+use crate::rows::{Fence, INDENT, MARGIN, Measure, Row, Rows, Scroll, Sideways, margined};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
@@ -1602,7 +1602,7 @@ impl View {
         let Some(place) = self.notice() else {
             return;
         };
-        let band = View::seat(area);
+        let band = margined(area);
         // A band of no rows stands on the composer's head row: the row is given up, never drawn
         // over the surface under it.
         if area.height == 0 {
@@ -1775,8 +1775,13 @@ impl View {
             .filter(|first| *first > edge.x)
             .map(|_| counted)
             .unwrap_or(0);
+        // The rule stops short of the count and of the margin the count hangs inside, and spans the
+        // whole band while there is no count to leave room for.
         let room = Rect {
-            width: row.width.saturating_sub(hung),
+            width: match hung {
+                0 => row.width,
+                hung => row.width.saturating_sub(hung).saturating_sub(MARGIN),
+            },
             ..row
         };
         if !self.head_lit() {
@@ -1882,16 +1887,6 @@ impl View {
             .saturating_sub(MARGIN)
     }
 
-    /// The columns of `band` its words are drawn in: the margin in from its left edge, and the
-    /// margin kept at its right.
-    fn seat(band: Rect) -> Rect {
-        Rect {
-            x: band.x.saturating_add(MARGIN),
-            width: band.width.saturating_sub(MARGIN.saturating_mul(2)),
-            ..band
-        }
-    }
-
     /// The facts the screen draws: the ones the frame holds, and the ones the record wrote. A
     /// frame with no record has no screen, because what a run spent is the record's to say.
     fn stats(&self) -> ledger::Facts {
@@ -1926,7 +1921,7 @@ impl View {
         let depth = self.queue.label().unwrap_or_default();
         hints_row(
             buffer,
-            View::seat(area),
+            margined(area),
             &self.hints(),
             &depth,
             &self.capabilities.palette(),

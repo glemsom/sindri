@@ -718,7 +718,7 @@ fn no_frame_at_any_width_draws_a_corner_or_an_upright_in_the_composer() {
         Facts::default().asked(),
         Facts::default().asked().railed(rail()),
     ] {
-        for cols in 5..=200 {
+        for cols in 3..=200 {
             let (buffer, laid) = drafted(facts.clone(), palette, 1, cols, 24);
             let band = laid.composer;
             for y in band.y..band.bottom() {
@@ -730,8 +730,10 @@ fn no_frame_at_any_width_draws_a_corner_or_an_upright_in_the_composer() {
                 );
             }
             let drafted = drawn_glyphs(&buffer, band.y + 1);
+            // The margin takes two columns at each edge, so a band of four columns or fewer keeps
+            // no column for the gutter and the word beside it.
             assert!(
-                drafted.starts_with(" \u{203a}1"),
+                cols <= MARGIN * 2 || drafted.starts_with(" \u{203a}1"),
                 "the draft of a {cols} column frame does not open past the blank and the sigil of \
                  its gutter: {drafted:?}"
             );

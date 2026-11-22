@@ -80,7 +80,7 @@ pub fn assert_frame(name: &str, cols: u16, rows: u16) {
         println!("frame {fixture}: {differed}");
     }
 
-    crate::frame::assert_seat(&frame, &fixture);
+    crate::frame::assert_margin(&frame, &fixture);
     frame.snapshot(name, &fixture);
     frame.assert_caret(&fixture);
 

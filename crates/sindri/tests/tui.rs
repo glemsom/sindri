@@ -24,6 +24,7 @@ use tempfile::TempDir;
 
 use sindri::ledger::Rail;
 use sindri::pen;
+use sindri::rows::MARGIN;
 
 /// How long a frame is given to arrive before a test calls it absent: generous,
 /// because a test that is merely slow must not read as a program that never drew.
@@ -1107,6 +1108,8 @@ fn composer_rows(drawn: &str) -> Option<u16> {
     let last = u16::try_from(rows.len()).ok()?.checked_sub(1)?;
     let opens = |y: u16| rows[usize::from(y)].starts_with(" \u{203a}");
     let sigil = (0..last).find(|y| opens(*y))?;
+    // The hints open in the margin as a wrapped row of the draft does, and the hints are the last
+    // row: the row under the sigil is a wrap only when it is not that one.
     let wraps = sigil + 1 < last && rows[usize::from(sigil) + 1].starts_with("  ");
     last.checked_sub(sigil)?
         .checked_add(1)?
@@ -1582,8 +1585,8 @@ fn a_caret_at_the_bands_right_margin_waits_on_that_column() {
     );
 
     // A draft as wide as the room the frame leaves it: every column of it less the two the
-    // gutter is set in and the two the band keeps at its right edge.
-    let room = COLS - GUTTER - 2;
+    // gutter is set in and the two the band keeps in its margin at the right.
+    let room = COLS - GUTTER - MARGIN;
     let draft = format!("\u{1b}[200~{}\u{1b}[201~", "x".repeat(usize::from(room)));
     pty.type_bytes(draft.as_bytes());
 

@@ -15,6 +15,7 @@ use sindri_core::wire::Wire;
 use super::*;
 use crate::pen;
 use crate::readback::{column_of, inks};
+use crate::rows::margins;
 
 /// The columns a rail's row leaves a value: the rail's floor less the ten its label field
 /// holds.
@@ -749,7 +750,7 @@ fn the_strip_carries_the_state_beside_the_size_and_lets_it_go_after_every_fact_i
 
     assert_eq!(
         strip(80),
-        inset_row(
+        margined_row(
             "ctx █░░░░░ · state ⠋ running · model claude-sonnet-4-5… · sandbox bwrap",
             80
         ),
@@ -758,13 +759,13 @@ fn the_strip_carries_the_state_beside_the_size_and_lets_it_go_after_every_fact_i
     );
     assert_eq!(
         strip(40),
-        inset_row("ctx █░░░░░ · state ⠋ running", 40),
+        margined_row("ctx █░░░░░ · state ⠋ running", 40),
         "and a narrower one keeps the state where the model has gone, and gives up the count \
              of what went beside it because the margin leaves no room for the two"
     );
     assert_eq!(
         strip(27),
-        inset_row("ctx █░░░░░ · +12 more", 27),
+        margined_row("ctx █░░░░░ · +12 more", 27),
         "a strip too narrow to hold the size and the state beside it keeps the size alone, \
              because the state is the last fact the strip lets go and never the first"
     );
@@ -891,7 +892,7 @@ fn painted(facts: &Facts, area: Rect) -> Buffer {
 }
 
 /// A row `width` columns wide with `text` laid inside the frame's margin and the air beside it.
-fn inset_row(text: &str, width: u16) -> String {
+fn margined_row(text: &str, width: u16) -> String {
     let mut row = format!("{}{text}", pen::blank(MARGIN));
     row.push_str(&pen::blank(width.saturating_sub(pen::cells(&row))));
     row
@@ -900,15 +901,16 @@ fn inset_row(text: &str, width: u16) -> String {
 /// A row `width` columns wide whose value says its own name: a bare name is no number, so it
 /// starts the row it stands on.
 fn bare_row(value: &str, width: u16) -> String {
-    inset_row(value, width)
+    margined_row(value, width)
 }
 
 /// A labelled row `width` columns wide whose value is a number: the label in the field and the
 /// value on the far edge.
 fn hung_row(label: &str, value: &str, width: u16) -> String {
-    let inset = band(width.saturating_sub(inset()), 1);
-    let at = pen::hanging(inset, pen::cells(value)).expect("a row that holds it");
-    inset_row(
+    let at = width
+        .saturating_sub(margins())
+        .saturating_sub(pen::cells(value));
+    margined_row(
         &format!(
             "{}{}{value}",
             pen::pad(label, FIELD),
@@ -921,7 +923,7 @@ fn hung_row(label: &str, value: &str, width: u16) -> String {
 /// A labelled row `width` columns wide whose value is a word: the label in the field and the
 /// value reading on from it.
 fn said_row(label: &str, value: &str, width: u16) -> String {
-    inset_row(&format!("{}{value}", pen::pad(label, FIELD)), width)
+    margined_row(&format!("{}{value}", pen::pad(label, FIELD)), width)
 }
 
 /// One row of a painted band, as a reader sees its glyphs.
@@ -1140,8 +1142,8 @@ fn a_band_s_rows_are_drawn_at_the_origin_it_is_handed() {
     assert_eq!(
         (laid[0].y(), laid[0].parts()[0].0),
         (0, 0),
-        "a shape lays its rows from the band's own origin, so its first row is row 0 column 0 \
-             whatever row and column the band it was handed sits at"
+        "a shape lays its rows from the band's own origin, so its first row is row 0 whatever row \
+             and column the band it was handed sits at, and its first word opens in the margin"
     );
     let start = at.x.saturating_add(MARGIN);
     assert_eq!(
@@ -1307,8 +1309,8 @@ fn a_screen_row_sets_its_label_dim_and_its_value_plain_where_the_value_hangs() {
     );
     assert_eq!(
         glyphs(&buffer, 5),
-        inset_row(
-            &pen::filled(area.width.saturating_sub(inset()), '─'),
+        margined_row(
+            &pen::filled(area.width.saturating_sub(margins()), '─'),
             area.width
         ),
         "the rule spans the column between the run's last fact and the name of the block \
@@ -1623,7 +1625,7 @@ fn a_numbers_digits_line_up_on_the_last_column_and_a_words_read_on_from_its_labe
         let (at, glyphs) = value(label);
         assert_eq!(
             usize::from(at) + usize::from(pen::cells(&glyphs)),
-            usize::from(COLUMNS - inset()),
+            usize::from(COLUMNS - margins()),
             "{label}'s {glyphs:?} does not end on the column the frame's margin leaves: a \
                  number hangs against that edge so its digits line up with every other \
                  number's"
@@ -1659,7 +1661,7 @@ fn a_name_that_goes_for_want_of_room_is_drawn_whole_once_the_rail_grew_to_hold_i
         };
         let drawn_whole = match rail {
             Rail::Ledger => {
-                value_room(room.saturating_sub(inset())) >= pen::cells(UNNAMED) as usize
+                value_room(room.saturating_sub(margins())) >= pen::cells(UNNAMED) as usize
             }
             Rail::Strip => false,
         };

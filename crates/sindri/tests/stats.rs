@@ -146,7 +146,7 @@ fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
 
     assert!(
         rows[last].starts_with("  Enter send"),
-        "the footer is painted in the gutter the card leaves it, so the reader sees the frame \
+        "the footer is painted in the margin the card leaves it, so the reader sees the frame \
          they will return to: {:?}",
         rows[last]
     );

@@ -225,7 +225,7 @@ holds: the **Transcript**'s prose past the gutter a row wears, the **Composer**'
 hints and the row that says the frame stands off the tail, and the **Rail**'s sections, its fields
 and the values that hang in it. A gutter's glyph stands in the column before it and is no word of
 the band, and the air a band keeps on its right is what stops a word on the frame's own edge.
-_Avoid_: Seat, inset, padding, indent (that one is the gutter a row opens with)
+_Avoid_: Seat, padding, indent (that one is the gutter a row opens with)
 
 **Measure**:
 The three facts the rows of a band are laid at: its width, the surface a picture in an answer is
