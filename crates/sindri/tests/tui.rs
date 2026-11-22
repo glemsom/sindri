@@ -24,7 +24,6 @@ use tempfile::TempDir;
 
 use sindri::ledger::Rail;
 use sindri::pen;
-use sindri::plane::SEAM;
 
 /// How long a frame is given to arrive before a test calls it absent: generous,
 /// because a test that is merely slow must not read as a program that never drew.
@@ -3662,14 +3661,13 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     assert_eq!(
         u32::from(left) + u32::from(columns) - 1,
         u32::from(COLS),
-        "over the rail's own columns and the seam it widens across the transcript, which end at \
-         the frame's right-hand edge"
+        "over the rail's own columns, which end at the frame's right-hand edge"
     );
     assert_eq!(
         u32::from(columns),
-        u32::from(Rail::columns(COLS)) + u32::from(SEAM),
-        "and the plane takes {SEAM} columns of the transcript besides, so the rail comes out of \
-         the transcript's edge rather than being parted from it"
+        u32::from(Rail::columns(COLS)),
+        "and the plane covers the rail's own columns and no column of the transcript's: the \
+         seam beside it is drawn in cells"
     );
     assert_eq!(
         rows,

@@ -1267,9 +1267,7 @@ impl View {
             self.notice_rows(),
         );
         layout.rail = share.rail_band(area, layout.composer.y, &mut layout.transcript);
-        // The band the rail's plane is drawn under, which the transcript claims as the terminal's
-        // own ground once its rows are down.
-        let mut under = None;
+        let mut seam = None;
         if let Some((shape, band)) = layout.rail {
             // A ledger carries the face wherever it is drawn, and a strip is one row of facts with
             // no band to carry one in: a terminal that places no picture, or a config that turned
@@ -1291,9 +1289,7 @@ impl View {
                 buffer,
                 &self.capabilities.palette(),
             ) {
-                if shade.places() {
-                    under = Some(shade.area());
-                }
+                seam = shade.seam();
                 painted.shaded(shade);
             }
             if let (Some(picture), Some(cells)) = (&picture, band.picture) {
@@ -1305,7 +1301,6 @@ impl View {
         }
         let drawn = self.transcript(
             layout.transcript,
-            under,
             buffer,
             &mut painted.links,
             &mut painted.sizes,
@@ -1320,6 +1315,10 @@ impl View {
             );
         }
         self.notice_band(layout.notice, buffer, &drawn);
+        // The seam is drawn once, after the bands it parts and before the composer's band.
+        if let Some(seam) = seam {
+            seam.claim(buffer, &self.capabilities.palette());
+        }
         if let Some(shade) = self.composer_band(layout.composer, layout.queue, buffer) {
             painted.shaded(shade);
         }
@@ -1421,7 +1420,6 @@ impl View {
     fn transcript(
         &mut self,
         area: Rect,
-        under: Option<Rect>,
         buffer: &mut Buffer,
         links: &mut Links,
         sizes: &mut Sizes,
@@ -1531,11 +1529,6 @@ impl View {
                 band: top..y.saturating_sub(area.y),
                 head: piece.skip == 0,
             });
-        }
-        // Set now the rows and their pictures are down, so a row standing on a band of its own never
-        // paints over the seam the rail's plane widens across, and never the ink it wrote there.
-        if let Some(cells) = under.map(|under| area.intersection(under)) {
-            pen::beneath(buffer, cells, palette.ground(None));
         }
         // What this band placed is all the cache keeps: a picture scrolled past is a raster
         // nobody is looking at.

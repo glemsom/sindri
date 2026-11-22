@@ -31,8 +31,8 @@ struct Bands {
     well: Color,
 }
 
-/// The two ends a boundary is drawn at: the lit column a band meets the frame on and the shadow
-/// across its last row, and no ink of its own.
+/// The two ends a boundary is drawn at: the lit row a band's head meets the frame on and the
+/// shadow across its last row, and no ink of its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Ends {
     lit: Color,
@@ -168,6 +168,12 @@ impl Palette {
     /// the same rule in the dim edge where it draws none.
     pub fn draws_edge(&self) -> bool {
         self.edge(Edge::Lit) != Color::Reset
+    }
+
+    /// Whether this palette draws a ground of its own under a band: a terminal that asked for no
+    /// colour leaves every band on the ground its cells already stand on.
+    pub fn draws_colour(&self) -> bool {
+        self.bands.well != Color::Reset
     }
 
     /// The colour an edge is drawn in: the lit end at its lightest, the shadow at its darkest.

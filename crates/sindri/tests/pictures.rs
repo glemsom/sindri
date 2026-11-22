@@ -22,7 +22,7 @@ use sindri::markdown;
 use sindri::palette::{Band, Edge, Palette, channels};
 use sindri::picture::{self, Surface};
 use sindri::pictures::{PLACEHOLDER, Pictures};
-use sindri::plane::{Plane, PlaneId, SEAM, Shade};
+use sindri::plane::{Plane, PlaneId, Shade};
 use sindri::pulse::Pulse;
 use sindri::rows::Row;
 use sindri::view::{Transcript, View};
@@ -1513,8 +1513,9 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
         (band.x..band.right()).all(|x| !frame.cells()[(x, y)].symbol().contains(PLACEHOLDER))
     }));
     let palette = *frame.palette();
+    let shade = shade_of(&frame, PlaneId::Composer);
     let (head, foot) = (
-        channels(palette.band(Band::Composer)).expect("the band's head in pixels"),
+        channels(shade.row(0)).expect("the band's head in pixels"),
         channels(palette.band(Band::Rail)).expect("its foot in pixels"),
     );
     let top = ground.pixels().get_pixel(400, 0);
@@ -1522,8 +1523,8 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
     let bottom = ground.pixels().get_pixel(400, ground.pixels().height() - 1);
     assert_eq!(
         top.0[..3],
-        channels(palette.band(Band::Well)).expect("the well in pixels"),
-        "the ground starts at the well the transcript stands on, under the band's own rule"
+        head,
+        "the ground starts at the band's own head, and no pixel row of the well stands above it"
     );
     for at in 0..3 {
         assert!(
@@ -1562,7 +1563,7 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
         "at the pixels of the cell it is drawn on"
     );
     let palette = *frame.palette();
-    for row in 1..band.height {
+    for row in 0..band.height {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
             frame.cells()[(x, y)].bg,
@@ -1571,10 +1572,12 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
              cell by cell over it"
         );
     }
-    assert!(
-        (band.x..band.right()).all(|x| frame.cells()[(x, band.y)].bg == palette.edge(Edge::Lit)),
-        "and its head row is claimed in the lit edge over that ground, which is how the light \
-         reads over the band's pixels"
+    let (width, _) = ground.pixels().dimensions();
+    assert_eq!(
+        ground.pixels().get_pixel(width - 1, 0).0[..3],
+        channels(palette.edge(Edge::Lit)).expect("the lit edge in pixels"),
+        "and the light the band's head meets the frame on is the plane's first pixel row, \
+         which is how it reads over the band's own ground"
     );
 }
 
@@ -1592,28 +1595,34 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
     let ground = composer_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     let well = channels(palette.band(Band::Well)).expect("the band's well in pixels");
+    let shade = shade_of(&frame, PlaneId::Composer);
     let head = channels(palette.band(Band::Composer)).expect("the band's head in pixels");
     let foot = channels(palette.band(Band::Rail)).expect("its foot in pixels");
     assert_eq!(
-        (well, head, foot),
-        ([28, 28, 28], [48, 48, 48], [38, 38, 38]),
-        "the band this palette spells rises out of the well's grey and runs down from the grey of \
-             the composer's tone to the rail's own"
+        (head, foot),
+        ([48, 48, 48], [38, 38, 38]),
+        "the band this palette spells runs down from the grey of the composer's tone to the \
+         rail's own"
     );
     assert_eq!(
         ground.pixels().get_pixel(width - 1, 0).0[..3],
-        well,
-        "the plane's top row is the well the palette's raised band rises out of"
+        channels(shade.row(0)).expect("the band's head row in pixels"),
+        "the plane's top row is the band's own head row, lit where the band takes the keys"
     );
     assert_eq!(
-        ground.pixels().get_pixel(width - 1, cell().height()).0[..3],
-        head,
-        "one cell down the rise it is the head the raised band rises to"
+        ground.pixels().get_pixel(width - 1, height - 1).0[..3],
+        foot,
+        "and its last is the foot the band comes down to"
     );
     assert_ne!(
         ground.pixels().get_pixel(width - 1, 0).0[..3],
-        [14, 21, 29],
-        "and not the well of the design's truecolour band"
+        well,
+        "and not the well of the transcript band, which the composer's band stands on"
+    );
+    assert_ne!(
+        ground.pixels().get_pixel(width - 1, 0).0[..3],
+        [25, 35, 47],
+        "and not the head of the design's truecolour band"
     );
     for y in 0..height {
         let pixel = ground.pixels().get_pixel(width - 1, y);
@@ -1649,19 +1658,13 @@ fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
         ),
         "the plane covers the band's own rect, at the pixels of the cell it is drawn on"
     );
-    let (well, head, foot) = ([14, 21, 29], [25, 35, 47], [19, 27, 37]);
+    let (head, foot) = ([25, 35, 47], [19, 27, 37]);
     let column = width - 1;
     let top = ground.pixels().get_pixel(column, 0).0;
     assert_eq!(
         top[..3],
-        well,
-        "the plane's top row is the well the design's raised band rises out of"
-    );
-    let risen = ground.pixels().get_pixel(column, cell().height()).0;
-    assert_eq!(
-        risen[..3],
-        head,
-        "and one cell down the rise it is the head the raised band rises to"
+        channels(shade_of(&frame, PlaneId::Composer).row(0)).expect("the band's head row"),
+        "the plane's top row is the band's own head row, and no pixel row of the well above it"
     );
     let bottom = ground.pixels().get_pixel(column, height - 1).0;
     assert_eq!(
@@ -1680,91 +1683,47 @@ fn a_truecolour_frames_band_is_drawn_at_the_two_ends_the_palette_gives_it() {
 }
 
 #[test]
-fn the_bands_ground_rises_out_of_the_well_over_its_first_cell() {
+fn the_bands_ground_is_the_shades_ladder_from_its_head_down_to_its_foot() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
     let palette = *frame.palette();
+    let band = frame.told().layout().expect("a laid out frame").composer;
     let ground = composer_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     let column = width - 1;
-    assert_eq!(
-        ground.pixels().get_pixel(column, 0).0[..3],
-        channels(palette.band(Band::Well)).expect("the well in pixels"),
-        "the plane's topmost pixel row is the well the transcript's band stands on, and no longer \
-         the band's head"
-    );
-    assert_eq!(
-        ground.pixels().get_pixel(column, cell().height()).0[..3],
-        channels(palette.band(Band::Composer)).expect("the band's head in pixels"),
-        "and one cell down the rise has come out at the band's head"
-    );
-    let bottom = ground.pixels().get_pixel(column, height - 1).0;
-    assert_eq!(
-        bottom[..3],
-        channels(palette.band(Band::Rail)).expect("the band's foot"),
-        "and the last row is still the foot the band comes down to"
-    );
-}
+    let shade = shade_of(&frame, PlaneId::Composer);
+    let head = channels(shade.row(0)).expect("the band's head row in pixels");
+    let foot = channels(palette.band(Band::Rail)).expect("the band's foot");
 
-#[test]
-fn the_rise_out_of_the_well_eases_into_the_bands_head() {
-    let (_root, workspace) = workspace(10, 20);
-    let mut view = frame(caps::at(cell()), &workspace, "hello");
-    let frame = frame::painted(&mut view, 80, 24);
-    let palette = *frame.palette();
-    let ground = composer_plane(&view);
-    let (width, _height) = ground.pixels().dimensions();
-    let well = channels(palette.band(Band::Well)).expect("the well in pixels");
-    let head = channels(palette.band(Band::Composer)).expect("the band's head in pixels");
-    let rise = cell().height();
-    let at = |y| {
-        let pixel = ground.pixels().get_pixel(width - 1, y);
-        [pixel[0], pixel[1], pixel[2]]
-    };
-    assert_eq!(at(0), well, "the rise starts where the transcript stands");
-    assert_eq!(at(rise), head, "and is done by the row under the edge");
-    for y in 1..=rise {
-        let (above, row) = (at(y - 1), at(y));
+    for row in 0..band.height {
+        let at = u32::from(row) * cell().height() + cell().height() / 2;
+        let pixel = ground.pixels().get_pixel(column, at).0;
+        let said = channels(shade.row(row)).expect("a row in pixels");
         for channel in 0..3 {
-            let step = head[channel].abs_diff(well[channel]).max(1);
             assert!(
-                row[channel].abs_diff(above[channel]) < step,
-                "channel {channel} of pixel row {y} takes the whole well to head step from the row \
-                 above it: {row:?} against {above:?}"
-            );
-            assert!(
-                row[channel].abs_diff(head[channel]) <= above[channel].abs_diff(head[channel]),
-                "channel {channel} of pixel row {y} is further from the head than the row above \
-                 it: {row:?} against {above:?}"
+                pixel[channel].abs_diff(said[channel]) <= 1,
+                "channel {channel} of row {row} of the plane is {} where the shade says {}: the \
+                 plane is the shade sampled at the cell",
+                pixel[channel],
+                said[channel]
             );
         }
     }
-    let half = rise / 2;
-    for (channel, start) in well.iter().enumerate() {
-        let (leaving, arriving) = (
-            at(half)[channel].abs_diff(*start),
-            at(rise)[channel].abs_diff(at(half)[channel]),
-        );
-        assert!(
-            leaving > arriving,
-            "channel {channel} of the rise takes {leaving} of its step in the first half and \
-             {arriving} in the second, so it eases out into the head"
-        );
-    }
-    let foot = channels(palette.band(Band::Rail)).expect("the band's foot");
-    let under = at(rise + 1);
-    for channel in 0..3 {
-        assert!(
-            under[channel] <= head[channel] && under[channel] >= foot[channel],
-            "channel {channel} of the row under the head {under:?} is inside the fall from \
-             {head:?} to {foot:?}, so no seam shows where the rise ends"
-        );
-    }
+    assert_eq!(
+        ground.pixels().get_pixel(column, 0).0[..3],
+        head,
+        "the plane opens on the band's head"
+    );
+    assert_eq!(
+        ground.pixels().get_pixel(column, height - 1).0[..3],
+        foot,
+        "and closes on the foot the band comes down to"
+    );
 }
 
 #[test]
-fn the_carets_glow_carries_across_the_rise_out_of_the_well() {
+fn the_carets_glow_is_the_same_light_on_every_pixel_row_of_its_column() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
@@ -1774,18 +1733,30 @@ fn the_carets_glow_carries_across_the_rise_out_of_the_well() {
         .told()
         .caret()
         .expect("a draft that takes the keys places the terminal's cursor");
-    let caret = (caret.x, caret.y);
     let ground = composer_plane(&view);
-    let (width, _height) = ground.pixels().dimensions();
-    let at = u32::from(caret.0 - band.x) * cell().width() + cell().width() / 2;
-    for row in 0..cell().height() {
-        let lit = ground.pixels().get_pixel(at, row);
-        let far = ground.pixels().get_pixel(width - 1, row);
+    let (width, height) = ground.pixels().dimensions();
+    let at = u32::from(caret.x - band.x) * cell().width() + cell().width() / 2;
+    let step = |y: u32| {
+        let lit = ground.pixels().get_pixel(at, y);
+        let far = ground.pixels().get_pixel(width - 1, y);
+        [0, 1, 2].map(|channel| lit[channel].saturating_sub(far[channel]))
+    };
+
+    let waited = step(0);
+    assert!(
+        waited.iter().any(|channel| *channel > 0),
+        "the column the caret waits in is no lighter than the band's far side on its first pixel \
+         row: {waited:?}"
+    );
+    for y in 1..height {
+        let row = step(y);
         for channel in 0..3 {
             assert!(
-                lit[channel] > far[channel],
-                "channel {channel} of pixel row {row} of the rise is no lighter under the caret \
-                 than the band's far side: {lit:?} against {far:?}"
+                row[channel].abs_diff(waited[channel]) <= 1,
+                "channel {channel} of the light over the caret is {} on pixel row {y} and {} on \
+                 the row above it, so the glow follows the caret's column alone",
+                row[channel],
+                waited[channel]
             );
         }
     }
@@ -1831,7 +1802,7 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
 }
 
 #[test]
-fn the_bands_head_row_reads_back_as_the_lit_edge_over_its_rise() {
+fn the_bands_head_row_is_the_light_a_band_that_takes_the_keys_meets_the_frame_on() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
@@ -1841,22 +1812,32 @@ fn the_bands_head_row_reads_back_as_the_lit_edge_over_its_rise() {
     assert_eq!(
         ground.area(),
         band,
-        "the rise stands under the band's own head row"
+        "the plane stands under the band's own head row"
     );
-    let edge = palette.edge(Edge::Lit);
-    let mut lit = 0;
+    let edge = channels(shade_of(&frame, PlaneId::Composer).row(0)).expect("the light in pixels");
+    let head = middle_of(ground, 0);
+    for channel in 0..3 {
+        assert!(
+            head[channel].abs_diff(edge[channel]) <= 1,
+            "channel {channel} of the middle of the band's head cell is {} where the light the \
+             band meets the frame on is {}",
+            head[channel],
+            edge[channel]
+        );
+    }
+    let mut claimed = 0;
     for x in band.x..band.right() {
         assert_eq!(
             frame.cells()[(x, band.y)].bg,
-            edge,
-            "column {x} of the band's head row is claimed in the light the band meets the frame \
-             on, and not as a cell the rise under it lent a tone"
+            palette.ground(None).bg.expect("the terminal's own ground"),
+            "column {x} of the band's head row is not the ground the plane is drawn at, so the \
+             light over it is the plane's and no cell's"
         );
-        lit += 1;
+        claimed += 1;
     }
     assert_eq!(
-        lit, band.width,
-        "every column of the head row is that light, and no glyph of a rule stands on it"
+        claimed, band.width,
+        "every column of the head row stands on the plane"
     );
 }
 
@@ -1887,41 +1868,42 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     let band = plane_of(&view, PlaneId::Rail);
     assert_eq!(
         band.area(),
-        Rect {
-            x: rail.x - SEAM,
-            width: rail.width + SEAM,
-            ..rail
-        },
-        "the plane covers the rail's own rows and columns beside the {SEAM} columns of the \
-         transcript the seam widens it across, so the rail comes out of the transcript's edge"
+        rail,
+        "the plane covers the rail's own rows and columns, and the columns the seam reaches back \
+         over are the transcript band's"
     );
     assert_eq!(
         band.pixels().dimensions(),
         (
-            u32::from(band.area().width) * cell().width(),
+            u32::from(rail.width) * cell().width(),
             u32::from(rail.height) * cell().height()
         ),
         "at the pixels of the cell it is drawn on"
     );
     let (width, height) = band.pixels().dimensions();
+    let tone = channels(palette.band(Band::Rail)).expect("a band in pixels");
+    let shadow = channels(palette.edge(Edge::Shadow)).expect("a shadow in pixels");
     assert_eq!(
         band.pixels().get_pixel(0, 0).0[..3],
-        channels(palette.band(Band::Well)).expect("a well in pixels"),
-        "the plane's head is the well its seam opens out of, and no column of the rail stands \
-         there"
+        tone,
+        "the plane's head is the rail's own tone, and no column of its own is lit"
     );
     assert_eq!(
         band.pixels().get_pixel(width - 1, height - 1).0[..3],
-        channels(palette.edge(Edge::Shadow)).expect("a shadow in pixels"),
+        shadow,
         "and its foot is the shadow colour, so the band falls into it in pixels rather than \
          into a hard dark row"
     );
-    let middle = band.pixels().get_pixel(width - 1, height / 2);
-    assert!(
-        middle[0] > channels(palette.edge(Edge::Shadow)).expect("a shadow")[0]
-            && middle[0] < channels(palette.band(Band::Rail)).expect("a band")[0],
-        "and half way down it is a pixel between the two, and no whole cell of either: {middle:?}"
-    );
+    let middle = band.pixels().get_pixel(width - 1, height / 2).0;
+    for channel in 0..3 {
+        assert!(
+            middle[channel].abs_diff(tone[channel]) <= 1,
+            "channel {channel} of the plane half way down the rail is {} where the rail's own \
+             tone is {}: the shade is flat above its last row",
+            middle[channel],
+            tone[channel]
+        );
+    }
     for y in rail.y..rail.bottom() {
         assert!(
             !rail_row(frame.cells(), rail, y).contains(PLACEHOLDER),
@@ -2005,26 +1987,29 @@ fn a_terminal_that_places_no_picture_keeps_the_cell_ramp_and_hands_back_no_plane
     let band = plain_frame.told().layout().unwrap().composer;
     assert_eq!(band, picture_frame.told().layout().unwrap().composer);
     let palette = plain_frame.palette();
-    let shade = Shade::composer(band, None, None, false, palette).expect("a band to shade");
-    for row in 1..band.height {
+    let shade = Shade::composer(band, None, None, true, palette).expect("a band to shade");
+    let lit = shade.row(0);
+    for row in 0..band.height {
         let x = band.x + band.width / 2;
         let y = band.y + row;
         assert_eq!(plain_frame.cells()[(x, y)].bg, shade.row(row));
         assert_eq!(
             picture_frame.cells()[(x, y)].bg,
-            palette.ground(None).bg.unwrap()
+            palette.ground(None).bg.unwrap(),
+            "row {row} of the band a plane is placed under stands on the terminal's own ground"
         );
     }
     for x in band.x..band.right() {
         assert_eq!(
             plain_frame.cells()[(x, band.y)].bg,
-            palette.edge(Edge::Lit),
-            "column {x} of the head row stands on the lit edge where no plane is placed"
+            lit,
+            "column {x} of the head row stands on the light the band takes the keys in where no \
+             plane is placed"
         );
         assert_eq!(
             picture_frame.cells()[(x, band.y)].bg,
-            palette.edge(Edge::Lit),
-            "and on the same light over the plane a terminal that places one is handed"
+            palette.ground(None).bg.unwrap(),
+            "and on the terminal's own ground over the plane a terminal that places one is handed"
         );
     }
 }
@@ -2144,9 +2129,29 @@ fn composer_plane(view: &View) -> &Plane {
     plane_of(view, PlaneId::Composer)
 }
 
+/// The shade the frame handed the terminal for the plane it holds under `id`, which is the one
+/// description of the colours that plane is drawn from.
+fn shade_of(drawn: &frame::Frame, id: PlaneId) -> Shade {
+    *drawn
+        .told()
+        .shades()
+        .iter()
+        .find(|shade| shade.id() == Some(id))
+        .unwrap_or_else(|| panic!("the frame handed no shade under {id:?}"))
+}
+
+/// The pixel at the middle of `row`'s cells of a plane drawn at `cell`, read as its channels.
+fn middle_of(plane: &Plane, row: u16) -> [u8; 3] {
+    let pixel = plane.pixels().get_pixel(
+        plane.pixels().width() / 2,
+        u32::from(row) * cell().height() + cell().height() / 2,
+    );
+    [pixel[0], pixel[1], pixel[2]]
+}
+
 /// The two frames compared cell by cell, on a terminal that places pictures and one that places
 /// none: a band the frame draws a plane under is read through its cells, so only the glyphs on it
-/// are the frame's, and every cell off both bands and off the seam is the frame's whole.
+/// are the frame's, and every cell off both bands is the frame's whole.
 fn same_cells_outside_ground(
     pictured: &Buffer,
     placeless: &Buffer,
@@ -2158,16 +2163,15 @@ fn same_cells_outside_ground(
         for x in pictured.area.x..pictured.area.right() {
             let with = &pictured[(x, y)];
             let without = &placeless[(x, y)];
-            let rows = (rail.y..rail.bottom()).contains(&y);
-            let on_rail = rows && (rail.x..rail.right()).contains(&x);
-            let on_seam = rows && (rail.x.saturating_sub(SEAM)..rail.x).contains(&x);
-            if y < pictured.area.bottom() - composer_rows - 1 && !on_rail && !on_seam {
-                assert_eq!(with, without, "outside the composer at ({x}, {y})");
-            } else if on_rail || on_seam {
+            let on_rail =
+                (rail.y..rail.bottom()).contains(&y) && (rail.x..rail.right()).contains(&x);
+            if y < pictured.area.bottom() - composer_rows - 1 && !on_rail {
+                assert_eq!(with, without, "outside the two bands at ({x}, {y})");
+            } else if on_rail {
                 assert_eq!(
                     (with.symbol(), with.fg, with.modifier),
                     (without.symbol(), without.fg, without.modifier),
-                    "the words beside the seam at ({x}, {y})"
+                    "the rail's words at ({x}, {y})"
                 );
             } else {
                 assert_eq!(
