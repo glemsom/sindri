@@ -20,7 +20,7 @@ use sindri::picture::{self, Surface};
 use sindri::pictures::{PLACEHOLDER, Pictures};
 use sindri::plane::{Placement, Plane, PlaneId, Shade};
 use sindri::pulse::Pulse;
-use sindri::rows::Row;
+use sindri::rows::{MARGIN, Row};
 use sindri::view::{Transcript, View};
 use sindri_core::policy::Enforcement;
 use sindri_core::records::Entry;
@@ -1876,9 +1876,10 @@ fn the_carets_light_peaks_on_the_head_of_the_band_and_is_spent_by_its_foot() {
         waited > 0,
         "the column the caret waits in is no lighter than the band's far side on its first pixel          row: the band is lit from above, and the caret's light lands on its head"
     );
+    let dither = 2;
     for y in 1..height.saturating_sub(1) {
         assert!(
-            step(y + 1) <= step(y) + 2,
+            step(y + 1) <= step(y) + dither,
             "the light over the caret is {0} on pixel row {y} and {1} on the row above it, so the              glow does not fall down the band: it is painted across it",
             step(y + 1),
             step(y)
@@ -2201,14 +2202,14 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
                 "row {row}, column {column} of the rail's plane is darker than the rail's own \
                  tone: the light only ever falls onto the band"
             );
-            if u32::from(row) >= face_y + 2 * u32::from(face.height) {
+            if u32::from(row) >= face_y + u32::from(face.height) + u32::from(MARGIN) {
                 assert_eq!(
                     carried,
                     0,
                     "row {row}, column {column} of the rail's plane carries {carried} channels of \
-                     light where the face stands on rows {face_y} to {}: the light falls away \
-                     from the face by half its own height either side and leaves the rail's own \
-                     tone under the facts below it",
+                     light where the face stands on rows {face_y} to {}: the lamp is spent a \
+                     margin past the face's own rows and leaves the rail's own tone under the \
+                     facts below it",
                     face_y + u32::from(face.height)
                 );
             }

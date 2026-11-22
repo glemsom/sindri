@@ -73,6 +73,14 @@ fn faced(shape: Rail, area: Rect, rows: u16, cell: Option<CellSize>, palette: &P
     .expect("a band to shade")
 }
 
+/// The light a pixel of a band's plane carries over the rung of the row it falls in.
+fn light_over(shade: &Shade, plane: &Plane, x: u32, y: u32) -> i32 {
+    let down = CELL.height();
+    let rung = spelled(shade.row((y / down) as u16));
+    let pixel = plane.pixels().get_pixel(x, y);
+    i32::from(pixel[0]) - i32::from(rung[0])
+}
+
 fn drawn(shade: Shade) -> Plane {
     Plane::draw(shade).expect("a band a plane is drawn under")
 }
@@ -288,8 +296,7 @@ fn a_composers_plane_opens_on_the_prompts_band_and_covers_no_pixel_of_the_well()
 fn a_rails_light_is_a_lamp_centred_on_the_face_and_gone_by_its_margins() {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(6, 2, 32, 12);
-    let rows = 3;
-    let shade = faced(Rail::Ledger, area, rows, Some(CELL), &palette);
+    let shade = faced(Rail::Ledger, area, 3, Some(CELL), &palette);
     let Shade::Rail {
         face: Some(face), ..
     } = shade
@@ -297,14 +304,10 @@ fn a_rails_light_is_a_lamp_centred_on_the_face_and_gone_by_its_margins() {
         panic!("a rail a face stands on carries the rect its light is centred on");
     };
     let plane = drawn(shade);
-    let tone = spelled(palette.band(Band::Rail));
     let peak = palette.peak(Band::Rail);
     let (width, height) = plane.pixels().dimensions();
     let (across, down) = (CELL.width(), CELL.height());
-    let lit = |x: u32, y: u32| {
-        let pixel = plane.pixels().get_pixel(x, y);
-        i32::from(pixel[0]) - i32::from(tone[0])
-    };
+    let lit = |x: u32, y: u32| light_over(&shade, &plane, x, y);
     let (most, (left, top)) = (0..height)
         .flat_map(|y| (0..width).map(move |x| (x, y)))
         .map(|at| (lit(at.0, at.1), at))
@@ -327,65 +330,54 @@ fn a_rails_light_is_a_lamp_centred_on_the_face_and_gone_by_its_margins() {
          face and not a tint across the band"
     );
 
+    let words = u32::from(MARGIN);
+    let foot = u32::from(face.y - area.y + face.height) * down + words * down;
     for y in 0..height {
         for x in 0..width {
-            if x / across >= u32::from(MARGIN)
-                && x / across < u32::from(area.width) - u32::from(MARGIN)
-            {
+            let inside = x / across >= words && x / across < u32::from(area.width) - words;
+            if inside && y < foot {
                 continue;
             }
             assert_eq!(
                 lit(x, y),
                 0,
-                "pixel row {y}, column {x} of the rail is lit inside the margin the rail's words \
-                 open in: the light is gone by the margin and leaves no edge of its own"
+                "pixel row {y}, column {x} of the rail is lit where the light has left it: the \
+                 lamp is spent at the margin the rail's words open in across, and a margin past \
+                 the rows the face stands on, so it draws no edge of its own"
             );
         }
     }
 
-    let centre = top;
-    for y in centre..height.saturating_sub(1) {
-        assert!(
-            lit(left, y + 1) >= lit(left, y) - DITHER_STEP,
-            "pixel row {y} of the rail's lamp is {} channels and the row under it {}, so the light \
-             rises where it has left the face: it falls away from the face on that axis",
-            lit(left, y),
-            lit(left, y + 1)
-        );
+    let walks = [
+        (
+            (left..width).map(|x| (x, top)).collect::<Vec<(u32, u32)>>(),
+            "across the rail, away from the face towards its further margin",
+        ),
+        (
+            (0..=left).rev().map(|x| (x, top)).collect(),
+            "across the rail, away from the face towards its nearer margin",
+        ),
+        (
+            (top..height).map(|y| (left, y)).collect(),
+            "down the column the face's middle falls in",
+        ),
+        (
+            (0..=top).rev().map(|y| (left, y)).collect(),
+            "up the column the face's middle falls in",
+        ),
+    ];
+    for (walk, where_to) in walks {
+        for pair in walk.windows(2) {
+            let (here, next) = (lit(pair[0].0, pair[0].1), lit(pair[1].0, pair[1].1));
+            assert!(
+                next <= here + DITHER_STEP,
+                "{where_to}, the light is {here} channels at {:?} and {next} at {:?}: it falls \
+                 away from the face there, and no row of it is a constant",
+                pair[0],
+                pair[1]
+            );
+        }
     }
-    for y in 0..centre {
-        assert!(
-            lit(left, y) <= lit(left, y + 1) + DITHER_STEP,
-            "pixel row {y} of the rail is {} channels and the row under it {}: the light rises \
-             towards the face and never away from it",
-            lit(left, y),
-            lit(left, y + 1)
-        );
-    }
-    for x in left..width.saturating_sub(1) {
-        assert!(
-            lit(x + 1, centre) <= lit(x, centre) + DITHER_STEP,
-            "column {x} of the row the face's middle falls on carries {} channels and the column \
-             beside it {}: the light falls across the rail and never rises away from the face",
-            lit(x, centre),
-            lit(x + 1, centre)
-        );
-    }
-    for x in 0..left {
-        assert!(
-            lit(x, centre) <= lit(x + 1, centre) + DITHER_STEP,
-            "column {x} of the row the face's middle falls on carries {} channels and the column \
-             beside it {}: the light falls towards the face from either side of it",
-            lit(x, centre),
-            lit(x + 1, centre)
-        );
-    }
-    let row: Vec<i32> = (0..width).map(|x| lit(x, centre)).collect();
-    assert!(
-        row.iter().max() > row.iter().min(),
-        "every pixel of the row the face's middle falls on carries the same light: a lamp falls \
-         across a row as well as down a column"
-    );
 }
 
 #[test]
@@ -477,11 +469,7 @@ fn the_carets_light_peaks_on_the_head_row_of_its_band_and_is_spent_by_its_foot()
         let centre = light_centre();
         let down = CELL.height();
         let peak = palette.peak(Band::Prompt);
-        let carried = |x: u32, y: u32| {
-            let ground = spelled(shade.row((y / down) as u16));
-            let pixel = plane.pixels().get_pixel(x, y);
-            i32::from(pixel[0]) - i32::from(ground[0])
-        };
+        let carried = |x: u32, y: u32| light_over(&shade, &plane, x, y);
 
         assert_eq!(
             (width, height),
@@ -683,14 +671,10 @@ fn a_transcripts_light_crowns_its_head_and_falls_to_the_well_by_its_third_row() 
         let shade =
             Shade::transcript(area, Some(CELL), &palette).expect("a band the plane stands under");
         let plane = drawn(shade);
-        let well = spelled(palette.band(Band::Well));
         let peak = palette.peak(Band::Well);
         let (width, height) = plane.pixels().dimensions();
         let down = CELL.height();
-        let lit = |x: u32, y: u32| {
-            let pixel = plane.pixels().get_pixel(x, y);
-            i32::from(pixel[0]) - i32::from(well[0])
-        };
+        let lit = |x: u32, y: u32| light_over(&shade, &plane, x, y);
 
         assert_eq!(
             plane.area(),
@@ -714,32 +698,31 @@ fn a_transcripts_light_crowns_its_head_and_falls_to_the_well_by_its_third_row() 
                 lit(x, 0)
             );
         }
-        for y in 1..down {
-            assert!(
-                lit(0, y) <= lit(0, y - 1) + DITHER_STEP,
-                "{spelling} draws pixel row {y} of the band's first cell row at {} channels over \
-                 the well where the row above it carries {}: the light falls away from the head \
-                 by the pixel and never steps by the row",
-                lit(0, y),
-                lit(0, y - 1)
-            );
+        for x in [0, width / 2, width - 1] {
+            for y in 1..height {
+                assert!(
+                    lit(x, y) <= lit(x, y - 1) + DITHER_STEP,
+                    "{spelling} draws pixel row {y} of column {x} at {} channels over the well \
+                     where the row above it carries {}: the crown falls away from the band's head \
+                     by the pixel and never steps back up it",
+                    lit(x, y),
+                    lit(x, y - 1)
+                );
+            }
         }
+        let second = lit(0, down);
         assert!(
-            lit(0, down - 1) + i32::from(peak) / 2 < i32::from(peak),
-            "{spelling} draws the last pixel row of the band's head cell at {} channels over the \
-             well where the head carries {peak}: the crown is half spent by the foot of the cell \
-             it falls across, so it is no light on a whole row",
-            lit(0, down - 1)
+            second > 0 && second < i32::from(peak),
+            "{spelling} draws the second cell row at {second} channels over the well where the head \
+             carries {peak}: the light is neither the head's own nor spent at the cell's boundary, \
+             so it falls through the pixels of a row instead of stepping by the row",
         );
-        for y in down..2 * down {
-            let carried = lit(width / 2, y);
-            assert!(
-                carried >= 0 && carried < i32::from(peak),
-                "{spelling} draws pixel row {y} of the band's second cell row at {carried} \
-                 channels over the well where the head carries {peak}: the crown falls through \
-                 it and is not the head's light halved on the row below"
-            );
-        }
+        assert!(
+            lit(0, 2 * down - 1) < i32::from(peak) / 4,
+            "{spelling} draws the last pixel row of the band's second cell at {} channels over the \
+             well: the crown is all but spent by the foot of that row",
+            lit(0, 2 * down - 1)
+        );
         for row in 2..area.height {
             for y in 0..down {
                 for x in 0..width {

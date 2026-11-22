@@ -274,8 +274,9 @@ but its first column, the composer's band drawn in the band a prompt is read on 
 rail's tone on its last row, under a head row that is the seam's. It holds every fact the band's
 cells and its **Plane** are drawn from and nothing else: the cell the plane is drawn at, the light
 its band carries — the peak it spends of the proved lift and the rect that light is a lamp around —
-and a frame holds each band's image against it, so a pass in which it stands makes no image. The **Caret**'s light is a shade of its own, and the column it is placed on is no
-part of any image. Where no picture is placed, that same shade is claimed cell by cell.
+and a frame holds each band's image against it, so a pass in which it stands makes no image. The
+**Caret**'s light is a shade of its own, and the column it is placed on is no part of any image.
+Where no picture is placed, that same shade is claimed cell by cell.
 _Avoid_: Colour, tone, gradient, paint, style
 
 **Seam**:

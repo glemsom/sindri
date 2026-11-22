@@ -167,8 +167,8 @@ impl Palette {
         held
     }
 
-    /// The light a band spends: the share it names of the most its rung can take, which is the
-    /// peak of its plane and never a channel over the ceiling the proof hands it.
+    /// The light a band spends: the share it names of the most its rung can take, and never a
+    /// channel over that most.
     pub fn peak(&self, band: Band) -> u8 {
         (f64::from(self.lift(band)) * band.share()).round() as u8
     }
@@ -213,8 +213,8 @@ pub enum Band {
 impl Band {
     pub const ALL: [Band; 3] = [Band::Well, Band::Rail, Band::Prompt];
 
-    /// The share of its proved ceiling a band spends: the rail's light is spent at 85 % so it
-    /// reads as light on a surface, and a band that spends all of it keeps its brightness.
+    /// The share of its proved ceiling a band spends: the rail's is 85 %, and a band that
+    /// spends all of it keeps its brightness.
     pub fn share(self) -> f64 {
         match self {
             Band::Rail => 0.85,

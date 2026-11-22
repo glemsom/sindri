@@ -455,40 +455,51 @@ impl Image {
         }
     }
 
-    /// The lamp this image's pixels stand in: the one place a band's light is decided, so a
-    /// second light is a value the pixels ask and not a branch of its own.
+    /// The lamp this image's pixels stand in, at the image's own pixel origin.
     fn light(self) -> Light {
         let cell = self.cell();
         let (across, down) = (f64::from(cell.width()), f64::from(cell.height()));
         match self {
-            Image::Transcript { peak, .. } => {
-                Light::lamp(peak, (0.0, 0.0), (f64::INFINITY, CROWN_ROWS * down))
-            }
+            Image::Transcript { peak, .. } => Light::lamp(
+                peak,
+                At { x: 0.0, y: 0.0 },
+                At {
+                    x: f64::INFINITY,
+                    y: CROWN_ROWS * down,
+                },
+            ),
             Image::Rail {
                 area,
                 face: Some(face),
                 peak,
                 ..
             } => {
-                let centre = (
-                    (f64::from(face.x.saturating_sub(area.x)) + f64::from(face.width) / 2.0)
+                let centre = At {
+                    x: (f64::from(face.x.saturating_sub(area.x)) + f64::from(face.width) / 2.0)
                         * across,
-                    (f64::from(face.y.saturating_sub(area.y)) + f64::from(face.height) / 2.0)
+                    y: (f64::from(face.y.saturating_sub(area.y)) + f64::from(face.height) / 2.0)
                         * down,
-                );
+                };
+                // The light is spent a margin out on each axis: at the rail's own margin
+                // across, and a margin past the rows the face stands on.
                 let width = f64::from(area.width) * across;
-                // Gone by the margin the rail's words open in, on either side of the face.
-                let reach = (centre.0.min(width - centre.0) - f64::from(MARGIN) * across).max(1.0);
-                Light::lamp(peak, centre, (reach, f64::from(face.height) * down))
+                let reach = At {
+                    x: (centre.x.min(width - centre.x) - f64::from(MARGIN) * across).max(1.0),
+                    y: (f64::from(face.height) / 2.0 + f64::from(MARGIN)) * down,
+                };
+                Light::lamp(peak, centre, reach)
             }
             Image::Rail { .. } | Image::Composer { .. } => Light::NONE,
             Image::Caret { rows, peak, .. } => Light::lamp(
                 peak,
-                ((f64::from(LIGHT_COLS / 2) + 0.5) * across, 0.0),
-                (
-                    f64::from(LIGHT_REACH) * across,
-                    f64::from(rows.saturating_sub(1).max(1)) * down,
-                ),
+                At {
+                    x: (f64::from(LIGHT_COLS / 2) + 0.5) * across,
+                    y: 0.0,
+                },
+                At {
+                    x: f64::from(LIGHT_REACH) * across,
+                    y: f64::from(rows.saturating_sub(1).max(1)) * down,
+                },
             ),
         }
     }
@@ -504,24 +515,24 @@ impl Image {
         let light = self.light();
         image::RgbaImage::from_fn(width, height, |x, y| {
             let row = u16::try_from(y / down).unwrap_or(u16::MAX).min(self.rows());
-            let lit = dithered(light.at((f64::from(x), f64::from(y))), (x, y));
+            let lit = dithered(light.at(f64::from(x), f64::from(y)), (x, y));
             let [red, green, blue] = self.rung(row).map(|at| at.saturating_add(lit));
             image::Rgba([red, green, blue, 255])
         })
     }
 }
 
-/// The rows the transcript band's head is lit over: a crown falls away over its first rows and
-/// is spent by the third, so the prose under it is read on the well.
+/// The rows the transcript band's light falls over: a crown spent by the band's third row, where
+/// the prose under it is read on the well.
 const CROWN_ROWS: f64 = 2.0;
 
-/// How far into its reach a lamp falls before it is spent: `e^-4` of any peak the palette hands a
-/// band is under a channel, so the pixels there are the band's own rung again.
+/// How far into its reach a lamp has fallen when it is spent: under half a channel of any peak
+/// the palette hands a band, so what the dither rounds up at the rim is a pixel and no step.
 const SPENT: f64 = 4.0;
 
-/// The ordered matrix a pixel's light is quantised through: eight by eight thresholds a
-/// sixty-fourth apart, so a fall of a few levels over a band is dithered and shows no step.
-const DITHER: [[u8; 8]; 8] = [
+/// The thresholds a pixel's light is quantised through, eight by eight and a sixty-fourth apart:
+/// a fall of a few levels over a band is dithered rather than drawn as a band of its own.
+const THRESHOLDS: [[u8; 8]; 8] = [
     [0, 32, 8, 40, 2, 34, 10, 42],
     [48, 16, 56, 24, 50, 18, 58, 26],
     [12, 44, 4, 36, 14, 46, 6, 38],
@@ -532,26 +543,33 @@ const DITHER: [[u8; 8]; 8] = [
     [63, 31, 55, 23, 61, 29, 53, 21],
 ];
 
+/// A point in the pixels of the image a light is drawn as.
+#[derive(Clone, Copy, Debug)]
+struct At {
+    x: f64,
+    y: f64,
+}
+
 /// The light a band carries: one lamp, its peak, the point it stands on and the reach it is spent
-/// over on each axis, so the light a band falls by is a value and not a path through its rows.
+/// over on each axis.
 #[derive(Clone, Copy, Debug)]
 struct Light {
     peak: f64,
-    centre: (f64, f64),
-    reach: (f64, f64),
+    centre: At,
+    reach: At,
 }
 
 impl Light {
     /// A band with nothing standing on it, which its pixels read as a peak of no light.
     const NONE: Light = Light {
         peak: 0.0,
-        centre: (0.0, 0.0),
-        reach: (1.0, 1.0),
+        centre: At { x: 0.0, y: 0.0 },
+        reach: At { x: 1.0, y: 1.0 },
     };
 
-    /// A lamp at `centre`, in the pixels of the image it is drawn as, spent over `reach` on each
-    /// axis: a reach of no bound is an axis the light does not fall on.
-    fn lamp(peak: u8, centre: (f64, f64), reach: (f64, f64)) -> Light {
+    /// A lamp at `centre`, spent over `reach` on each axis: a reach of no bound is an axis the
+    /// light does not fall on, and one past the reach is where it is exactly nothing.
+    fn lamp(peak: u8, centre: At, reach: At) -> Light {
         Light {
             peak: f64::from(peak),
             centre,
@@ -559,11 +577,10 @@ impl Light {
         }
     }
 
-    /// The light at a pixel: the peak at the lamp's centre, nothing past its reach on either axis,
-    /// and a fall between them that no step of its own can be read in.
-    fn at(self, (x, y): (f64, f64)) -> f64 {
-        let across = (x - self.centre.0) / self.reach.0;
-        let down = (y - self.centre.1) / self.reach.1;
+    /// The light at a pixel: the peak at the lamp's centre, and nothing at all past the reach.
+    fn at(self, x: f64, y: f64) -> f64 {
+        let across = (x - self.centre.x) / self.reach.x;
+        let down = (y - self.centre.y) / self.reach.y;
         let away = across * across + down * down;
         match away < 1.0 {
             true => self.peak * (-(SPENT * away)).exp(),
@@ -578,7 +595,7 @@ impl Light {
 fn dithered(light: f64, (x, y): (u32, u32)) -> u8 {
     let down = usize::try_from(y % 8).unwrap_or(0);
     let across = usize::try_from(x % 8).unwrap_or(0);
-    let threshold = (f64::from(DITHER[down][across]) + 0.5) / 64.0;
+    let threshold = (f64::from(THRESHOLDS[down][across]) + 0.5) / 64.0;
     (light + threshold).floor().clamp(0.0, 255.0) as u8
 }
 

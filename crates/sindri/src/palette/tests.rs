@@ -711,24 +711,18 @@ fn the_light_a_band_spends_is_the_share_it_names_of_the_ceiling_the_proof_hands_
 #[test]
 fn the_rails_light_is_spent_at_eighty_five_per_cent_of_its_ceiling() {
     assert_eq!(
-        Band::Rail.share(),
-        0.85,
-        "the rail is a quarter of the frame and its light stood at +21 channels of a tone of \
-         twenty-seven: the reader asked for about fifteen per cent less, and the share is where \
-         that is decided"
-    );
-    assert_eq!(
         Palette::TRUECOLOR.peak(Band::Rail),
         18,
         "the rail's light peaks at eighteen channels over its tone where the ceiling the proof \
-         hands it is twenty-one"
+         hands it is twenty-one: a tint on a rectangle is read at the whole of it, and the \
+         fifteen per cent a lamp gives up is what makes it light on a surface"
     );
     for band in [Band::Well, Band::Prompt] {
         assert_eq!(
             Palette::TRUECOLOR.peak(band),
             Palette::TRUECOLOR.lift(band),
-            "{band:?} spends the whole of the ceiling it is handed, as it was spent before the \
-             rail was dimmed"
+            "{band:?} spends the whole of the ceiling it is handed, as the bands beside the rail \
+             were lit before it"
         );
     }
 }
