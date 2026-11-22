@@ -11,7 +11,7 @@ use clap::Parser;
 
 use sindri::composer::{Composer, Key, Outcome, Prompt};
 use sindri::graphics::CellSize;
-use sindri::ink::Look;
+use sindri::ink::{Ink, Look};
 use sindri::ledger::Boot;
 use sindri::palette::Palette;
 use sindri::pictures::PLACEHOLDER;
@@ -498,8 +498,8 @@ impl Loop<'_> {
         self.view.capabilities().pictures().rasterises(source)
     }
 
-    /// The cells of the composer's head row the live run's pulse walks in the accent edge: the
-    /// one ink of the row that recedes with the reader.
+    /// The cells of the composer's head row the live run's pulse walks in the accent: the one ink
+    /// of the row that recedes with the reader.
     fn lit(&mut self, palette: &Palette) -> Vec<(u16, u16)> {
         let (frame, told) = painted_and_told(&mut self.view);
         let Some(head) = told.layout().map(|laid| laid.composer.y) else {
@@ -511,7 +511,7 @@ impl Loop<'_> {
             .filter(|at| {
                 frame.cell(*at).is_some_and(|cell| {
                     cell.symbol() == "\u{2501}"
-                        && Look::of(cell, palette) == Some(palette.accent_edge())
+                        && Look::of(cell, palette) == Some(Look::plain(Ink::Accent))
                 })
             })
             .collect()

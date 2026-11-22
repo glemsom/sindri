@@ -86,7 +86,7 @@ impl Palette {
             prompt: Color::Rgb(22, 31, 42),
             well: Color::Rgb(14, 21, 29),
         },
-        edge: Color::Rgb(8, 13, 19),
+        edge: Color::Rgb(5, 8, 13),
     };
 
     /// The palette a terminal is drawn in, from the three facts that say what it can do.
@@ -143,21 +143,13 @@ impl Palette {
         Look::plain(Ink::Dim)
     }
 
-    /// Whether this palette spells an edge of its own: the one ink a seam is drawn in, and no colour
-    /// at all for a reader who asked for none.
     pub fn draws_edge(&self) -> bool {
         self.edge != Color::Reset
     }
 
-    /// Whether this palette draws a ground of its own under a band: a terminal that asked for no
-    /// colour leaves every band on the ground its cells already stand on.
-    pub fn draws_colour(&self) -> bool {
-        self.bands.well != Color::Reset
-    }
-
-    /// The one ink the frame's seams are drawn in: the rail's first column and the composer's head
-    /// row, a rung below every band and every ink.
-    pub fn edge(&self) -> Color {
+    /// The one ink the frame's seams are drawn in: a rung below every band, and the ground the
+    /// composer's head row carries its words on.
+    pub fn edge_ink(&self) -> Color {
         self.edge
     }
 

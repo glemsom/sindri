@@ -709,16 +709,15 @@ impl RailBand {
         }
     }
 
-    /// The same band with a picture `cols` by `rows` drawn over its top, centred in its columns, a
-    /// row under it kept for the rule that closes the face, and every fact laid beneath that. A
-    /// picture larger than the band is cut to it rather than drawn past the rail's own rows.
+    /// The same band with a picture `cols` by `rows` drawn over its top, centred in the columns past
+    /// the first, a row under it kept for the rule that closes the face, and every fact laid beneath
+    /// that. A picture larger than the band is cut to it rather than drawn past the rail's own rows.
     pub fn with_picture(mut self, cols: u16, rows: u16) -> RailBand {
-        let cols = cols.min(self.area.width);
+        let opened = self.area.x.saturating_add(1);
+        let across = self.area.width.saturating_sub(1);
+        let cols = cols.min(across);
         let rows = rows.min(self.area.height);
-        let x = self
-            .area
-            .x
-            .saturating_add(self.area.width.saturating_sub(cols) / 2);
+        let x = opened.saturating_add(across.saturating_sub(cols) / 2);
         self.picture = Some(Rect {
             x,
             y: self.area.y,

@@ -20,7 +20,7 @@ queue-long at 120x24
 14 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
 15 |▏    │row.paint(area, buffer);                                                session   9f2c7a41                        | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:63 dim:10 plain:32
 16 |▏ }                                                                           +4 more                                   | dim:2 plain:76 muted:7 plain:35
-17 |━                                                                                                                       | accent+faint:1 plain:119
+17 |━                                                                                                                       | accent:1 plain:119
 18 |┃›and this one while they wait                                                                                          | dim:1 accent:1 plain:118
 19 |┃ 4 more queued                                                                                                         | dim:15 plain:105
 20 |┃›then the row that counts it                                                                                           | dim:29 plain:91

@@ -10,9 +10,8 @@ use crate::ledger::Rail;
 use crate::palette::{Band, Palette, channels};
 use crate::pen;
 
-/// The glyph the rail's first column is ruled in where a palette spells no edge: the seam a terminal
-/// with no colour of its own is given, so its bands are parted by a line rather than by nothing.
-const COLUMN: char = '│';
+/// The glyph a seam is ruled in for a palette that spells no edge.
+const EDGE_RULE: char = '│';
 
 /// Which band's ground a plane is, and the identity a placement is named by: the two planes of one
 /// frame are told apart by it and by nothing else.
@@ -34,14 +33,14 @@ impl PlaneId {
     }
 }
 
-/// The one description of what a band sits on: the colour each of its rows is claimed in, the seams
-/// it makes with the band beside it, and every fact an image of it is drawn from.
+/// The one description of what a band sits on: the colour each of its rows is claimed in, the cell of
+/// it the frame's seam is drawn in, and every fact an image of it is drawn from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shade {
     /// The transcript band, on the well, with no seam of its own.
     Transcript { area: Rect, well: Color },
-    /// The rail on its own tone down every row it claims, parted from the transcript band beside it
-    /// by its first column where it is a ledger.
+    /// The rail on its own tone down every row it claims, its first column the frame's seam where it
+    /// is a ledger.
     Rail {
         area: Rect,
         cell: Option<CellSize>,
@@ -113,17 +112,17 @@ impl Shade {
         })
     }
 
-    /// The cells of this band the frame's seam is drawn in, and none for a band that parts nothing:
-    /// the rail's first column down every row it claims, and the row that heads the composer's band.
-    pub fn seam(&self) -> Option<Rect> {
+    /// The cells of this band the frame's seam is drawn in, the way it runs through them, and none
+    /// for a band that parts nothing.
+    pub fn seam(&self) -> Option<(Axis, Rect)> {
         let area = self.area();
         match self {
             Shade::Transcript { .. } => None,
             Shade::Rail {
                 shape: Rail::Strip, ..
             } => None,
-            Shade::Rail { .. } => Some(Rect { width: 1, ..area }),
-            Shade::Composer { .. } => Some(Rect { height: 1, ..area }),
+            Shade::Rail { .. } => Some((Axis::Down, Rect { width: 1, ..area })),
+            Shade::Composer { .. } => Some((Axis::Across, Rect { height: 1, ..area })),
         }
     }
 
@@ -182,12 +181,17 @@ impl Shade {
                 height: 1,
                 ..area
             };
-            let Some(taken) = seam
-                .filter(|seam| seam.y <= y && y < seam.bottom())
-                .map(|seam| Rect {
-                    x: seam.x,
-                    width: seam.width,
-                    ..line
+            let Some((axis, taken)) = seam
+                .filter(|(_, seam)| seam.y <= y && y < seam.bottom())
+                .map(|(axis, seam)| {
+                    (
+                        axis,
+                        Rect {
+                            x: seam.x,
+                            width: seam.width,
+                            ..line
+                        },
+                    )
                 })
             else {
                 pen::claim(buffer, line, ground);
@@ -210,14 +214,8 @@ impl Shade {
                 },
                 ground,
             );
-            seam_cell(buffer, taken, self.column_seam(), palette);
+            seam_cell(buffer, taken, axis, palette);
         }
-    }
-
-    /// Whether this band's seam runs down its columns, which the rail's does and the composer's band
-    /// does not.
-    fn column_seam(&self) -> bool {
-        matches!(self, Shade::Rail { .. })
     }
 
     fn cell(&self) -> Option<CellSize> {
@@ -226,6 +224,14 @@ impl Shade {
             Shade::Rail { cell, .. } | Shade::Composer { cell, .. } => *cell,
         }
     }
+}
+
+/// The way the frame's seam runs through a band: down the rail's first column, and across the row
+/// that heads the composer's band.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Axis {
+    Down,
+    Across,
 }
 
 /// A band's ground as the image the terminal draws under its cells, held with the shade it was drawn
@@ -341,17 +347,15 @@ fn extent(area: Rect, cell: CellSize) -> (u32, u32) {
     )
 }
 
-/// The cells of one row the frame's seam is drawn in: filled in the one edge ink, and ruled in the
-/// dim ink where the palette spells no edge at all.
-fn seam_cell(buffer: &mut Buffer, line: Rect, column: bool, palette: &Palette) {
-    match (palette.draws_edge(), column) {
-        (true, _) => pen::claim(buffer, line, palette.over(palette.edge())),
-        (false, true) => {
+fn seam_cell(buffer: &mut Buffer, line: Rect, axis: Axis, palette: &Palette) {
+    match (palette.draws_edge(), axis) {
+        (true, _) => pen::claim(buffer, line, palette.over(palette.edge_ink())),
+        (false, Axis::Down) => {
             for x in line.x..line.right() {
-                pen::glyph(buffer, x, line.y, COLUMN, palette.dim_edge(), palette);
+                pen::glyph(buffer, x, line.y, EDGE_RULE, palette.dim_edge(), palette);
             }
         }
-        (false, false) => {}
+        (false, Axis::Across) => {}
     }
 }
 

@@ -140,17 +140,6 @@ pub fn claim(buffer: &mut Buffer, area: Rect, style: Style) {
     });
 }
 
-/// Claims the ground under every cell of `area` in `style`'s colour and leaves each glyph and the ink
-/// it was written in: a row's ground takes no ink, so the words already laid on it keep their own.
-pub fn beneath(buffer: &mut Buffer, area: Rect, style: Style) {
-    let Some(background) = style.bg else {
-        return;
-    };
-    each(area, buffer, |cell| {
-        cell.set_bg(background);
-    });
-}
-
 /// Claims every cell of `area` in `style` with every face it wore stripped, so a mark under a scrim
 /// is read as the words it says and not as a mark.
 pub fn wash(buffer: &mut Buffer, area: Rect, style: Style) {

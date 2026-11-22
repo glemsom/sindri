@@ -1282,7 +1282,9 @@ impl View {
             // no band to carry one in: a terminal that places no picture, or a config that turned
             // it off, is handed no cells and reserves no row.
             let picture = match shape {
-                Rail::Ledger => face::over_rail(band.area.width, &self.face_surface()),
+                Rail::Ledger => {
+                    face::over_rail(band.area.width.saturating_sub(1), &self.face_surface())
+                }
                 Rail::Strip => None,
             };
             let band = match &picture {
@@ -1787,7 +1789,7 @@ impl View {
             ..row
         };
         if !palette.draws_edge() {
-            pen::rule(buffer, room, HAIRLINE, look, &palette);
+            pen::rule(buffer, room, HAIRLINE, palette.dim_edge(), &palette);
         }
         if self.facts.live() && room.width > 0 {
             let step = self.edge_step() % u64::from(room.width);
@@ -1831,12 +1833,10 @@ impl View {
         }
     }
 
-    /// The look the pulse and the rule of the composer's head row are drawn in: the accent at rest,
-    /// and the dim edge while the band takes no keys.
     fn composer_edge(&self) -> Look {
         let palette = self.capabilities.palette();
-        match self.band_takes_keys() {
-            true => palette.accent_edge(),
+        match self.band_takes_keys() && palette.draws_edge() {
+            true => Look::plain(Ink::Accent),
             false => palette.dim_edge(),
         }
     }

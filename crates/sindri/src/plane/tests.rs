@@ -387,7 +387,7 @@ fn every_row_of_the_rail_is_one_tone_so_an_ink_reads_the_same_wherever_it_falls(
                         assert_eq!(
                             under(&buffer, x, area.y + row),
                             match x == area.x && shade.seam().is_some() {
-                                true => palette.edge(),
+                                true => palette.edge_ink(),
                                 false => tone,
                             },
                             "{spelling} claims row {row}, column {x} of a {shape:?} of {height} \
@@ -418,12 +418,12 @@ fn a_rails_plane_covers_the_rails_own_columns_and_no_column_of_the_transcript() 
     pen::claim(&mut buffer, frame, palette.ground(Some(Band::Well)));
     shade.claim(&mut buffer, &palette);
 
-    for x in band.x.saturating_sub(6)..band.x {
+    for x in 0..band.x {
         assert_eq!(
             under(&buffer, x, 0),
             palette.band(Band::Well),
-            "column {x} beside the rail is not the transcript band's own: no claim of the rail's \
-             is made past the columns it is drawn in, and the crease the well fell into is gone"
+            "column {x} of the transcript band is not the band's own: no claim of the rail's is \
+             made past the columns it is drawn in, and the crease the well fell into is gone"
         );
     }
     for y in band.y..band.bottom() {
@@ -431,7 +431,7 @@ fn a_rails_plane_covers_the_rails_own_columns_and_no_column_of_the_transcript() 
             assert_eq!(
                 under(&buffer, x, y),
                 match x == band.x {
-                    true => palette.edge(),
+                    true => palette.edge_ink(),
                     false => palette.ground(None).bg.expect("the terminal's own ground"),
                 },
                 "row {y}, column {x} of the band is not the terminal's own ground, which its \
@@ -490,7 +490,7 @@ fn the_composers_band_is_claimed_row_by_row_from_its_shade() {
             assert_eq!(
                 under(&buffer, x, area.y + row),
                 match row {
-                    0 => palette.edge(),
+                    0 => palette.edge_ink(),
                     row => shade.row(row),
                 },
                 "column {x} of row {row} is not the shade the band's own rows sit on, and the \
@@ -518,7 +518,7 @@ fn a_band_a_plane_stands_under_is_claimed_on_the_terminals_own_ground() {
             assert_eq!(
                 under(&buffer, x, area.y + row),
                 match row {
-                    0 => palette.edge(),
+                    0 => palette.edge_ink(),
                     _ => palette.ground(None).bg.expect("the terminal's own ground"),
                 },
                 "column {x} of row {row} is not the terminal's own ground, so the image drawn \
@@ -537,7 +537,7 @@ fn a_ledgers_seam_is_its_own_first_column_and_takes_no_column_beside_it() {
 
     assert_eq!(
         shade.seam(),
-        Some(Rect { width: 1, ..rail }),
+        Some((Axis::Down, Rect { width: 1, ..rail })),
         "the seam is one column of the rail's own down every row it claims, and no column of the \
          transcript band's"
     );
@@ -560,7 +560,7 @@ fn a_seam_is_claimed_in_the_one_edge_ink_and_the_rail_keeps_its_tone_beside_it()
             for y in rail.y..rail.bottom() {
                 assert_eq!(
                     under(&buffer, rail.x, y),
-                    palette.edge(),
+                    palette.edge_ink(),
                     "row {y} of the rail's first column is not the one edge ink, and that column \
                      is the seam the rail is parted from the transcript band by"
                 );
@@ -625,14 +625,14 @@ fn the_composers_seam_is_the_row_that_heads_its_band() {
 
     assert_eq!(
         shade.seam(),
-        Some(Rect { height: 1, ..band }),
+        Some((Axis::Across, Rect { height: 1, ..band })),
         "the composer's band is headed by the one row that parts it from the rail above it"
     );
     shade.claim(&mut buffer, &palette);
     for x in band.x..band.right() {
         assert_eq!(
             under(&buffer, x, band.y),
-            palette.edge(),
+            palette.edge_ink(),
             "column {x} of the composer's head row is not the one edge ink, and the row carries \
              the draft's count"
         );
@@ -669,7 +669,7 @@ fn a_palette_that_draws_no_edge_rules_the_seam_in_the_dim_ink_instead() {
         let cell = buffer.cell((rail.x, y)).expect("a cell of the seam");
         assert_eq!(
             cell.symbol(),
-            COLUMN.to_string(),
+            EDGE_RULE.to_string(),
             "row {y} of the seam is no rule, and a terminal with no colour of its own is given \
              the dim one rather than nothing"
         );
@@ -709,7 +709,7 @@ fn a_seam_leaves_every_word_beside_it_whole() {
         let cell = buffer.cell((rail.x, y)).expect("a cell of the seam");
         assert_eq!(
             under(&buffer, rail.x, y),
-            palette.edge(),
+            palette.edge_ink(),
             "row {y} of the seam is not the one edge ink"
         );
         assert_eq!(

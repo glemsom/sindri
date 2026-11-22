@@ -184,7 +184,7 @@ fn a_row_raised_on_the_frames_edge_still_reads_back_as_the_inks_written_on_it() 
             Clip::Edge,
             &palette,
         );
-        claim(&mut row, area, Style::default().bg(palette.edge()));
+        claim(&mut row, area, Style::default().bg(palette.edge_ink()));
 
         assert_eq!(
             crate::readback::inks(&row, 0, &palette),
@@ -193,7 +193,7 @@ fn a_row_raised_on_the_frames_edge_still_reads_back_as_the_inks_written_on_it() 
         );
         assert_eq!(
             row.cell((0, 0)).expect("a cell of the row").bg,
-            palette.edge(),
+            palette.edge_ink(),
             "and the edge it was given is the surface the row sits on"
         );
     }

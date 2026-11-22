@@ -180,7 +180,7 @@ fn the_composer_is_drawn_on_the_prompts_band_down_to_the_rails_own_tone() {
                     assert_eq!(
                         under(&buffer, x, band.y + row),
                         match row {
-                            0 => palette.edge(),
+                            0 => palette.edge_ink(),
                             row => shade_row(&palette, row, band.height),
                         },
                         "row {row} of the {} at {cols}x{rows} sits on no shade of the band, \
@@ -191,7 +191,7 @@ fn the_composer_is_drawn_on_the_prompts_band_down_to_the_rails_own_tone() {
             }
             assert_eq!(
                 under(&buffer, band.x, band.y),
-                palette.edge(),
+                palette.edge_ink(),
                 "the head row of the {} at {cols}x{rows} is not the one edge ink, and the head \
                      is the seam that parts the band from the frame above it",
                 band.height
@@ -218,7 +218,7 @@ fn the_band_that_takes_the_keys_is_headed_by_one_row_of_the_edge_ink_across_the_
             for x in band.x..band.right() {
                 assert_eq!(
                     under(&buffer, x, band.y),
-                    palette.edge(),
+                    palette.edge_ink(),
                     "column {x} of the {} row composer's head row at {cols} columns is not the \
                         one edge ink the frame's seams are drawn in",
                     band.height
@@ -254,7 +254,7 @@ fn the_head_is_the_edge_ink_where_a_palette_spells_one_and_a_dim_rule_where_it_d
                     for x in band.x..band.right() {
                         assert_eq!(
                             under(&buffer, x, band.y),
-                            palette.edge(),
+                            palette.edge_ink(),
                             "column {x} of the head of a {cols} column frame in {palette:?} is \
                              not the one edge ink: the frame's two seams are one ink"
                         );
@@ -303,14 +303,14 @@ fn no_row_of_the_composer_band_under_its_head_is_drawn_on_the_edge() {
                 match y == band.y {
                     true => assert_eq!(
                         under(&buffer, x, y),
-                        palette.edge(),
+                        palette.edge_ink(),
                         "row {y}, column {x} of the {}-row band is not the edge ink, and the one \
                          edge of the band is across the row that heads it",
                         band.height
                     ),
                     false => assert_ne!(
                         under(&buffer, x, y),
-                        palette.edge(),
+                        palette.edge_ink(),
                         "row {y}, column {x} of the {}-row band is drawn on the edge, and the \
                          seam is one row of the frame rather than a field of it",
                         band.height
@@ -401,7 +401,7 @@ fn the_head_keeps_the_one_edge_in_the_gutters_of_the_card_that_takes_the_keys() 
         for x in (band.x..left).chain(right + 1..band.right()) {
             assert_eq!(
                 under(&buffer, x, band.y),
-                palette.edge(),
+                palette.edge_ink(),
                 "column {x} of the composer's head row under {} is not the one edge ink, and the \
                      card taking the keys leaves the seam where it is",
                 mode.name()
@@ -438,7 +438,7 @@ fn the_head_is_the_one_edge_whether_the_window_is_read_and_only_the_pulse_recede
         for x in band.x..band.right() {
             assert_eq!(
                 under(frame, x, band.y),
-                palette.edge(),
+                palette.edge_ink(),
                 "column {x} of the head while {spelling} is not the one edge ink: the row has no \
                  rule to recede to, so the reader coming and going leaves it alone"
             );
@@ -446,7 +446,7 @@ fn the_head_is_the_one_edge_whether_the_window_is_read_and_only_the_pulse_recede
     }
     assert_eq!(
         look_at(&lit, &palette, at, band.y),
-        palette.accent_edge(),
+        Look::plain(Ink::Accent),
         "the pulse walks the head in the accent while the band takes the keys"
     );
     assert_eq!(
@@ -540,7 +540,7 @@ fn a_frame_with_two_rows_gives_the_composer_its_head_and_its_hints_and_no_draft(
     );
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.edge(),
+        palette.edge_ink(),
         "the first of them is the head of the band the draft is typed on, filled in the one edge \
          ink and never the frame's own ground"
     );
@@ -564,7 +564,7 @@ fn a_frame_with_one_row_gives_the_composer_its_head_and_the_hints_up() {
     );
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.edge(),
+        palette.edge_ink(),
         "the one row is the head and the closing row at once, and the head is the frame's seam"
     );
     assert_eq!(
@@ -582,7 +582,7 @@ fn sixty_columns_show_the_band_and_lose_no_hint_from_its_last_row() {
 
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.edge(),
+        palette.edge_ink(),
         "a sixty-column frame heads the composer with the row of the one edge ink"
     );
     assert_eq!(
@@ -611,7 +611,7 @@ fn a_composer_at_rest_is_the_prompts_band_down_to_the_rails_and_no_glyph_of_a_bo
 
         assert_eq!(
             under(&buffer, band.x, band.y),
-            palette.edge(),
+            palette.edge_ink(),
             "the {} row band a draft of {lines} lines takes is not headed by the one edge ink",
             band.height
         );
@@ -664,7 +664,7 @@ fn the_head_of_a_band_at_rest_is_the_edge_ink_with_no_pulse_on_it() {
         for x in band.x..band.right() {
             assert_eq!(
                 under(&buffer, x, band.y),
-                palette.edge(),
+                palette.edge_ink(),
                 "column {x} of the head row is not the one edge ink: the head is one row in one \
                      ink"
             );
@@ -768,7 +768,7 @@ fn the_count_is_refused_where_the_head_would_lose_its_last_column_and_drawn_one_
     );
     assert_eq!(
         under(&drawn, band.x, band.y),
-        palette.edge(),
+        palette.edge_ink(),
         "and the column it keeps is still the one edge ink the head is filled in"
     );
 }
@@ -835,7 +835,7 @@ fn the_head_of_a_band_a_run_is_live_in_is_the_edge_ink_with_one_pulse_on_it() {
     for x in band.x..band.right() {
         assert_eq!(
             under(&buffer, x, band.y),
-            palette.edge(),
+            palette.edge_ink(),
             "column {x} of a live run's head row is not the one edge ink the resting one stands \
                  on: the pulse is how a live band is told apart, and the head keeps one ink for \
                  both"
@@ -843,8 +843,8 @@ fn the_head_of_a_band_a_run_is_live_in_is_the_edge_ink_with_one_pulse_on_it() {
     }
     assert_eq!(
         look_at(&buffer, &palette, head, band.y),
-        palette.accent_edge(),
-        "and the pulse itself is the accent drawn faint, over that row"
+        Look::plain(Ink::Accent),
+        "and the pulse itself is the accent at one weight, over that row"
     );
 }
 
@@ -929,7 +929,7 @@ fn the_pulse_recedes_to_the_dim_edge_while_the_window_is_away_and_under_a_screen
         );
         assert_eq!(
             under(&buffer, x, band.y),
-            palette.edge(),
+            palette.edge_ink(),
             "column {x} of the head a window nobody reads is not the one edge ink: the row has \
                  no rule to recede to, and only the pulse recedes"
         );
@@ -949,7 +949,7 @@ fn the_pulse_recedes_to_the_dim_edge_while_the_window_is_away_and_under_a_screen
     for x in (band.x..left).chain(right + 1..band.right()) {
         assert_eq!(
             under(&buffer, x, band.y),
-            palette.edge(),
+            palette.edge_ink(),
             "column {x} of the head under {} is not the one edge ink, and the card taking the \
                  keys leaves the seam where it is",
             Mode::Keys.name()
@@ -1243,7 +1243,7 @@ fn a_queues_rows_stand_above_the_hints_which_are_the_bands_last_row() {
     );
     assert_eq!(
         under(&buffer, band.x, band.y),
-        palette.edge(),
+        palette.edge_ink(),
         "a band holding a queue is still headed by the row of the one edge ink"
     );
     assert_eq!(
@@ -1305,7 +1305,7 @@ fn a_frame_asked_for_no_colour_draws_the_band_in_the_same_glyphs() {
     );
     assert_eq!(
         under(&coloured, band.x, band.y),
-        Palette::TRUECOLOR.edge(),
+        Palette::TRUECOLOR.edge_ink(),
         "and the head of the coloured one is the row of the one edge ink it is given in place \
          of that rule"
     );
@@ -1423,7 +1423,7 @@ fn the_band_beside_a_rail_is_drawn_in_the_frames_whole_width_and_the_rail_closes
 /// pictures and the face switched off or on one that places none: the two differ in the plane under
 /// their cells and in no row the rail gives a picture.
 fn seamed(draws: bool) -> View {
-    View::of(
+    let mut view = View::of(
         match draws {
             true => pictured().faced(false),
             false => Capabilities::default(),
@@ -1436,44 +1436,9 @@ fn seamed(draws: bool) -> View {
                  before the seam fell between them, and no column of either is cut",
             ),
         }]),
-    )
-}
-
-#[test]
-fn the_two_frames_claim_the_one_seam_in_the_rails_first_column_and_no_column_beside_it() {
-    let palette = Palette::TRUECOLOR;
-    let (pictured_frame, told) = painted_and_told(&mut seamed(true), 120, 40);
-    let (placeless, without) = painted_and_told(&mut seamed(false), 120, 40);
-    let laid = laid_out(&told);
-    let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
-
-    assert_eq!(
-        laid_out(&without).transcript,
-        laid.transcript,
-        "a terminal that places a picture and one that places none part the same bands, so the \
-         seam stands in the same column in both"
     );
-    for y in laid.transcript.y..laid.transcript.bottom() {
-        for (frame, spelling) in [
-            (&pictured_frame, "a terminal that places a picture"),
-            (&placeless, "a terminal that places none"),
-        ] {
-            assert_eq!(
-                under(frame, rail.x, y),
-                palette.edge(),
-                "row {y} of the rail's first column in the frame {spelling} is drawn on is not \
-                 the one edge ink"
-            );
-        }
-        for x in laid.transcript.x..rail.x {
-            assert_eq!(
-                under(&pictured_frame, x, y),
-                palette.band(Band::Well),
-                "row {y}, column {x} of the transcript band is claimed by the seam drawn beside \
-                 it, and the rail's claims stop at its own first column"
-            );
-        }
-    }
+    view.paste("the draft the head row is drawn above");
+    view
 }
 
 #[test]
@@ -1505,7 +1470,7 @@ fn a_frame_that_places_pictures_and_one_that_does_not_agree_on_the_shade_of_ever
             if area == laid.composer && row == 0 {
                 assert_eq!(
                     under(&placeless, area.x + area.width / 2, area.y),
-                    Palette::TRUECOLOR.edge(),
+                    Palette::TRUECOLOR.edge_ink(),
                     "the head of the composer's band is drawn in the one edge ink over the plane \
                      that shades it, so the plane's own first row is read through no cell"
                 );
@@ -1660,7 +1625,7 @@ fn cut_beside_a_rail() -> View {
 }
 
 #[test]
-fn the_well_keeps_the_ink_the_row_wrote_there() {
+fn the_transcript_band_keeps_the_ink_the_row_wrote_there() {
     let palette = Palette::TRUECOLOR;
     let (buffer, told) = painted_and_told(&mut cut_beside_a_rail(), 120, 40);
     let laid = laid_out(&told);
@@ -1748,7 +1713,7 @@ fn the_seam_runs_unbroken_under_the_face_and_the_rule_that_closes_it_opens_past_
             assert_eq!(
                 under(&buffer, x, y),
                 match x == band.area.x {
-                    true => palette.edge(),
+                    true => palette.edge_ink(),
                     false => palette.ground(None).bg.expect("the terminal's own ground"),
                 },
                 "row {y}, column {x} of the rail is painted by the seam, and the face stands over \
@@ -6957,27 +6922,16 @@ fn both_brackets_are_named_on_the_keys_screen() {
     }
 }
 
-/// A frame with the facts a ledger is drawn from and a draft in its band: the two seams of the
-/// frame are on it.
-fn seamed_frame(capabilities: Capabilities, cols: u16, rows: u16) -> (Buffer, Painted) {
-    let mut view = View::of(
-        capabilities,
-        Facts::default().asked().railed(rail()),
-        Transcript::of(vec![Entry::Assistant {
-            turn: 1,
-            text: SecretSet::default().redact(
-                "the last words of the transcript run to the column the rail's seam stands in",
-            ),
-        }]),
-    );
-    view.paste("the draft the head row is drawn above");
-    painted_and_told(&mut view, cols, rows)
+/// The frame `draws` is drawn on, painted at the size it asks for: both seams of the frame are on
+/// it, and the rail's facts fill its column.
+fn seamed_frame(draws: bool, cols: u16, rows: u16) -> (Buffer, Painted) {
+    painted_and_told(&mut seamed(draws), cols, rows)
 }
 
 #[test]
 fn the_frames_two_seams_are_one_ink_at_one_weight() {
     let palette = Palette::TRUECOLOR;
-    let (buffer, told) = seamed_frame(inked(palette), 120, 40);
+    let (buffer, told) = seamed_frame(false, 120, 40);
     let laid = laid_out(&told);
     let band = laid.composer;
     let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
@@ -6985,27 +6939,27 @@ fn the_frames_two_seams_are_one_ink_at_one_weight() {
     for y in rail.y..band.y {
         assert_eq!(
             under(&buffer, rail.x, y),
-            palette.edge(),
+            palette.edge_ink(),
             "row {y} of the rail's first column is not the one edge ink, and that column is the \
              seam that parts the rail from the transcript band"
         );
     }
-    for x in 0..laid.transcript.right().max(band.right()) {
+    for x in buffer.area.x..buffer.area.right() {
         assert_eq!(
             under(&buffer, x, band.y),
-            palette.edge(),
+            palette.edge_ink(),
             "column {x} of the composer's head row is not the same edge ink the rail's column is \
              drawn in: the frame's two seams are one edge, and they meet where they meet"
         );
     }
-    for y in 0..40 {
-        for x in 0..120 {
+    for y in buffer.area.y..buffer.area.bottom() {
+        for x in buffer.area.x..buffer.area.right() {
             if y == band.y || (x == rail.x && (rail.y..band.y).contains(&y)) {
                 continue;
             }
             assert_ne!(
                 under(&buffer, x, y),
-                palette.edge(),
+                palette.edge_ink(),
                 "row {y}, column {x} is drawn in the edge ink, and a seam is one column and one \
                  row of the frame rather than a field of it"
             );
@@ -7022,7 +6976,7 @@ fn the_frames_two_seams_are_one_ink_at_one_weight() {
 #[test]
 fn the_transcript_keeps_every_column_the_rail_leaves_it_and_falls_into_no_crease() {
     let palette = Palette::TRUECOLOR;
-    let (buffer, told) = seamed_frame(inked(palette), 120, 40);
+    let (buffer, told) = seamed_frame(false, 120, 40);
     let laid = laid_out(&told);
     let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
 
@@ -7040,8 +6994,8 @@ fn the_transcript_keeps_every_column_the_rail_leaves_it_and_falls_into_no_crease
 
 #[test]
 fn the_two_frames_claim_the_one_seam_in_the_same_cells_and_the_same_ink() {
-    let (pictured, told) = seamed_frame(pictured(), 120, 40);
-    let (placeless, without) = seamed_frame(Capabilities::default(), 120, 40);
+    let (pictured, told) = seamed_frame(true, 120, 40);
+    let (placeless, without) = seamed_frame(false, 120, 40);
     let palette = Palette::TRUECOLOR;
     let laid = laid_out(&told);
 
@@ -7059,15 +7013,15 @@ fn the_two_frames_claim_the_one_seam_in_the_same_cells_and_the_same_ink() {
         for y in rail.y..band.y {
             assert_eq!(
                 under(frame, rail.x, y),
-                palette.edge(),
+                palette.edge_ink(),
                 "row {y} of the seam in the frame {spelling} is drawn on is not the one edge ink: \
                  a seam is drawn once, in one pass, whatever the terminal can place"
             );
         }
-        for x in 0..120 {
+        for x in frame.area.x..frame.area.right() {
             assert_eq!(
                 under(frame, x, band.y),
-                palette.edge(),
+                palette.edge_ink(),
                 "column {x} of the seam's row in the frame {spelling} is drawn on is not the one \
                  edge ink"
             );

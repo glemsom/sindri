@@ -459,7 +459,7 @@ fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
     }
     assert_eq!(
         frame.cell(band.area.x, 0).bg,
-        Palette::TRUECOLOR.edge(),
+        Palette::TRUECOLOR.edge_ink(),
         "the seam stands in the rail's own first column, and the transcript keeps every column \
          the rail leaves it: {laid:?}"
     );
@@ -562,7 +562,7 @@ fn the_transcript_and_the_notice_stand_in_its_columns_and_the_bands_in_the_frame
         for x in rail.x..area.right() {
             let ground = frame.cell(x, y).bg;
             let wanted = match x == rail.x {
-                true => palette.edge(),
+                true => palette.edge_ink(),
                 false => palette.band(Band::Rail),
             };
             assert_eq!(

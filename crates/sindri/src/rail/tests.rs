@@ -17,7 +17,7 @@ use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 const COLUMNS: u16 = FLOOR;
 use crate::palette::{Band, channels};
 use crate::pen;
-use crate::plane::Plane;
+use crate::plane::{Axis, Plane};
 use crate::readback::{column_of, inks, under};
 use crate::rows::{MARGIN, margins};
 
@@ -197,7 +197,7 @@ fn a_ledger_stands_on_its_own_tone_on_every_row_it_claims() {
             assert_eq!(
                 under(&buffer, x, y),
                 match x == area.x {
-                    true => PALETTE.edge(),
+                    true => PALETTE.edge_ink(),
                     false => PALETTE.band(Band::Rail),
                 },
                 "row {y}, column {x} of the ledger is not the rail's own tone: the band is one \
@@ -280,7 +280,7 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
             assert_eq!(
                 under(&buffer, x, y),
                 match x == area.x {
-                    true => PALETTE.edge(),
+                    true => PALETTE.edge_ink(),
                     false => PALETTE.band(Band::Rail),
                 },
                 "row {y}, column {x} of the band the picture is drawn over is not the rail's own \
@@ -303,7 +303,7 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
     );
     assert_eq!(
         under(&buffer, area.x, 11),
-        PALETTE.edge(),
+        PALETTE.edge_ink(),
         "and it opens one column in, so the seam's first column runs unbroken down the rail"
     );
     assert_eq!(
@@ -351,7 +351,7 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_in_its_fi
     );
     assert_eq!(
         shade.seam().expect("a ledger beside a transcript band"),
-        Rect { width: 1, ..rail },
+        (Axis::Down, Rect { width: 1, ..rail }),
         "and the seam the shade draws is the one column of the rail's own band, down every row \
          it claims"
     );
@@ -383,7 +383,7 @@ fn a_ledger_stood_at_the_frames_edge_keeps_its_band_and_draws_its_seam_in_its_ow
     );
     assert_eq!(
         shade.seam().expect("a ledger beside a transcript band"),
-        Rect { width: 1, ..rail },
+        (Axis::Down, Rect { width: 1, ..rail }),
         "and its seam is the rail's own first column, so no column of a frame the rail does not \
          reach is claimed by it"
     );
@@ -448,7 +448,7 @@ fn a_ledger_handed_a_cell_lights_no_column_and_shadows_no_row_of_its_band() {
             assert_eq!(
                 under(&buffer, x, y),
                 match x == rail.x {
-                    true => PALETTE.edge(),
+                    true => PALETTE.edge_ink(),
                     false => PALETTE.ground(None).bg.expect("the terminal's own ground"),
                 },
                 "row {y}, column {x} of the band is not claimed as the terminal's own ground: a \

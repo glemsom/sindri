@@ -377,7 +377,7 @@ fn the_frame_behind_a_card_is_painted_and_dimmed() {
                     );
                     assert_eq!(
                         drawn.bg,
-                        Palette::TRUECOLOR.edge(),
+                        Palette::TRUECOLOR.edge_ink(),
                         "and the head the card leaves in its gutters is still the row of the one \
                          edge ink, at row {y}, column {x}"
                     );

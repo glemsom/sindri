@@ -1232,7 +1232,7 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
         let mut view = railed(true, true);
         let painted = frame::painted(&mut view, cols, 40);
         let rail = rail_band(&painted);
-        let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
+        let face = face::over_rail(rail.width - 1, &carried(true)).expect("the face a rail holds");
 
         assert_eq!(
             pictured_rows(painted.cells()),
@@ -1246,10 +1246,11 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
             assert_eq!(
                 (columns.first().copied(), columns.len()),
                 (
-                    Some(rail.x + (rail.width - face.cols()) / 2),
+                    Some(rail.x + 1 + (rail.width - 1 - face.cols()) / 2),
                     usize::from(face.cols())
                 ),
-                "row {y} of the face is {} columns centred in the rail's own columns: {columns:?}",
+                "row {y} of the face is {} columns centred in the rail's columns past the one the \
+                 frame's seam stands in: {columns:?}",
                 face.cols()
             );
             assert!(
@@ -1373,7 +1374,7 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
 
         let mut back_on = railed(true, true);
         let back_on = frame::painted(&mut back_on, cols, 40);
-        let face = face::over_rail(rail.width, &carried(true)).expect("a face the rail holds");
+        let face = face::over_rail(rail.width - 1, &carried(true)).expect("a face the rail holds");
         assert_eq!(
             pictured_rows(back_on.cells()).len(),
             usize::from(face.rows()),
@@ -1390,7 +1391,7 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let mut placeless = splash(false);
     let without = frame::painted(&mut placeless, 120, 40);
     let rail = rail_band(&with);
-    let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
+    let face = face::over_rail(rail.width - 1, &carried(true)).expect("the face a rail holds");
 
     let pictured_in_rail = |y: u16| -> Vec<u16> {
         pictured_cols(with.cells(), y)
@@ -1413,10 +1414,11 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
         assert_eq!(
             (columns.first().copied(), columns.len()),
             (
-                Some(rail.x + (rail.width - face.cols()) / 2),
+                Some(rail.x + 1 + (rail.width - 1 - face.cols()) / 2),
                 usize::from(face.cols())
             ),
-            "row {y} of the face is {} columns centred in the rail's own columns: {columns:?}",
+            "row {y} of the face is {} columns centred in the rail's columns past the one the \
+             frame's seam stands in: {columns:?}",
             face.cols()
         );
     }
@@ -1563,7 +1565,7 @@ fn the_placement_covers_the_band_the_ledger_reserved_for_it_and_no_cell_outside_
         let mut view = railed(true, true);
         let painted = frame::painted(&mut view, cols, 40);
         let rail = rail_band(&painted);
-        let face = face::over_rail(rail.width, &carried(true)).expect("the face a rail holds");
+        let face = face::over_rail(rail.width - 1, &carried(true)).expect("the face a rail holds");
         let reserved = painted
             .told()
             .layout()
@@ -1669,7 +1671,7 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
         assert_eq!(
             frame.cells()[(x, y)].bg,
             match row {
-                0 => palette.edge(),
+                0 => palette.edge_ink(),
                 _ => palette.ground(None).bg.unwrap(),
             },
             "row {row} of the band is claimed as the ground the pixels are, and not ramped \
@@ -1939,7 +1941,7 @@ fn the_bands_head_row_is_the_frames_seam_drawn_over_the_planes_light() {
     for x in band.x..band.right() {
         assert_eq!(
             frame.cells()[(x, band.y)].bg,
-            palette.edge(),
+            palette.edge_ink(),
             "column {x} of the band's head row is not the one edge ink, so the seam that heads \
              the band is read as a cell's light rather than the plane's"
         );
@@ -2100,7 +2102,7 @@ fn a_terminal_that_places_no_picture_keeps_the_bands_own_rows_and_hands_back_no_
         let x = band.x + band.width / 2;
         let y = band.y + row;
         let ground = match row {
-            0 => palette.edge(),
+            0 => palette.edge_ink(),
             _ => shade.row(row),
         };
         assert_eq!(
@@ -2111,7 +2113,7 @@ fn a_terminal_that_places_no_picture_keeps_the_bands_own_rows_and_hands_back_no_
         assert_eq!(
             picture_frame.cells()[(x, y)].bg,
             match row {
-                0 => palette.edge(),
+                0 => palette.edge_ink(),
                 _ => palette.ground(None).bg.unwrap(),
             },
             "row {row} of the band a plane is placed under stands on the terminal's own ground"
@@ -2120,12 +2122,12 @@ fn a_terminal_that_places_no_picture_keeps_the_bands_own_rows_and_hands_back_no_
     for x in band.x..band.right() {
         assert_eq!(
             plain_frame.cells()[(x, band.y)].bg,
-            palette.edge(),
+            palette.edge_ink(),
             "column {x} of the head row stands on the one edge ink where no plane is placed"
         );
         assert_eq!(
             picture_frame.cells()[(x, band.y)].bg,
-            palette.edge(),
+            palette.edge_ink(),
             "and on the same one edge ink over the plane a terminal that places one is handed"
         );
     }
