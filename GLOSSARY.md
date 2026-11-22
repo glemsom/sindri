@@ -255,7 +255,7 @@ A band's surface drawn as one image placed under its cells, so it is drawn at th
 rather than in whole cells: the image a frame holds against that band's **Shade**, and makes only
 when the shade moves. Every pixel of it is the **Rung** the cell row it falls in is drawn on with
 light added, never a blend of two rungs, and the light it carries is the most its rung can take
-while every ink the band is drawn in keeps its floor on the lit pixel — the transcript band's lit at
+while every ink the palette spells keeps its floor on the lit pixel — the transcript band's lit at
 its head and fallen back to the well by its third row, the **Rail**'s on the rows **Sindri's face**
 stands on, the **Composer**'s under the **Caret**'s column. It covers the band's own columns and no
 column of the band beside it, and a frame holds one image under each band, by its own identity. A

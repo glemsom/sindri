@@ -5,6 +5,7 @@ use ratatui::style::Color;
 use super::*;
 use crate::composer::{MAX_ROWS, MIN_ROWS};
 use crate::ink::Ink;
+use crate::ledger::RailBand;
 use crate::pen::Clip;
 use crate::readback::under;
 use crate::rows::MARGIN;
@@ -54,7 +55,17 @@ fn spelled(colour: Color) -> [u8; 3] {
 }
 
 fn railed(shape: Rail, area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Shade> {
-    Shade::rail(shape, crate::ledger::RailBand::of(area), cell, palette)
+    Shade::rail(shape, RailBand::of(area), cell, palette)
+}
+
+fn faced(shape: Rail, area: Rect, rows: u16, cell: Option<CellSize>, palette: &Palette) -> Shade {
+    Shade::rail(
+        shape,
+        RailBand::of(area).with_picture(area.width, rows),
+        cell,
+        palette,
+    )
+    .expect("a band to shade")
 }
 
 fn drawn(shade: Shade) -> Plane {
@@ -70,13 +81,7 @@ fn bands(palette: &Palette) -> [(&'static str, Shade); 4] {
         ),
         (
             "the ledger's rail",
-            Shade::rail(
-                Rail::Ledger,
-                RailBand::of(Rect::new(6, 2, 32, 8)).with_picture(10, 3),
-                Some(CELL),
-                palette,
-            )
-            .expect("a band to shade"),
+            faced(Rail::Ledger, Rect::new(6, 2, 32, 8), 3, Some(CELL), palette),
         ),
         (
             "a strip",
@@ -91,14 +96,26 @@ fn bands(palette: &Palette) -> [(&'static str, Shade); 4] {
     ]
 }
 
-fn lit_bands(palette: &Palette) -> Vec<(&'static str, Shade)> {
-    let mut all = bands(palette).to_vec();
+fn lit_bands(palette: &Palette) -> Vec<(&'static str, Band, Shade)> {
+    let mut all: Vec<(&'static str, Band, Shade)> = bands(palette)
+        .into_iter()
+        .map(|(band, shade)| (band, band_of(&shade), shade))
+        .collect();
     all.push((
         "the composer's band under a caret",
+        Band::Prompt,
         Shade::composer(Rect::new(0, 20, 80, 5), Some(CELL), Some(12), palette)
             .expect("a band to shade"),
     ));
     all
+}
+
+fn band_of(shade: &Shade) -> Band {
+    match shade {
+        Shade::Transcript { .. } => Band::Well,
+        Shade::Rail { .. } => Band::Rail,
+        Shade::Composer { .. } => Band::Prompt,
+    }
 }
 
 fn carried(shade: &Shade, row: u16) -> [u8; 3] {
@@ -256,12 +273,16 @@ fn a_composers_plane_opens_on_the_prompts_band_and_covers_no_pixel_of_the_well()
 }
 
 #[test]
-fn a_rails_plane_is_lit_on_the_rows_the_face_stands_on_and_its_own_tone_below() {
+fn a_rails_plane_is_lit_on_the_rows_the_face_stands_on_and_is_its_own_tone_below() {
     for (spelling, palette) in SPELLED {
         let area = Rect::new(6, 2, 32, 8);
-        let band = crate::ledger::RailBand::of(area).with_picture(10, 3);
-        let face = band.picture.expect("a face over the rail's first rows");
-        let shade = Shade::rail(Rail::Ledger, band, Some(CELL), &palette).expect("a band to shade");
+        let shade = faced(Rail::Ledger, area, 3, Some(CELL), &palette);
+        let Shade::Rail {
+            face: Some(face), ..
+        } = shade
+        else {
+            panic!("a rail a face stands on carries the rows it stands on");
+        };
         let plane = drawn(shade);
         let tone = spelled(palette.band(Band::Rail));
         let lift = palette.lift(Band::Rail);
@@ -478,23 +499,27 @@ fn the_carets_glow_is_the_only_blend_a_shade_makes() {
 #[test]
 fn no_pixel_of_any_bands_plane_is_a_blend_of_two_rungs() {
     for (spelling, palette) in SPELLED {
-        for (band, shade) in lit_bands(&palette) {
+        for (band, at, shade) in lit_bands(&palette) {
             let plane = drawn(shade);
             let (width, height) = plane.pixels().dimensions();
             let down = CELL.height();
+            let most = palette.lift(at);
 
             for y in 0..height {
                 let ground = spelled(shade.row((y / down) as u16));
                 for x in 0..width {
                     let pixel = plane.pixels().get_pixel(x, y);
                     let drawn = [pixel[0], pixel[1], pixel[2]];
-                    let lift = (0..=u8::MAX)
-                        .find(|light| ground.map(|c| c.saturating_add(*light)) == drawn);
+                    let carried: Vec<u16> = (0..3)
+                        .map(|channel| u16::from(drawn[channel]) - u16::from(ground[channel]))
+                        .collect();
                     assert!(
-                        lift.is_some(),
+                        carried.iter().all(|light| *light == carried[0])
+                            && carried[0] <= u16::from(most),
                         "{spelling} draws pixel row {y}, column {x} of {band} at {drawn:?} where \
                          the row it falls in is {ground:?}: a plane's pixel is its band's own rung \
-                         with light added, and never a blend of two rungs"
+                         with one light added to every channel — never a blend of two rungs, and \
+                         never more light than the {most} the band can take"
                     );
                 }
             }
@@ -505,7 +530,7 @@ fn no_pixel_of_any_bands_plane_is_a_blend_of_two_rungs() {
 #[test]
 fn no_pixel_of_any_bands_plane_is_darker_than_the_rung_it_sits_on() {
     for (spelling, palette) in SPELLED {
-        for (band, shade) in lit_bands(&palette) {
+        for (band, _, shade) in lit_bands(&palette) {
             let plane = drawn(shade);
             let (width, height) = plane.pixels().dimensions();
             let down = CELL.height();
@@ -1124,13 +1149,11 @@ fn a_transcript_band_a_plane_stands_under_makes_its_image_and_one_it_does_not_ma
 fn a_rails_light_moving_makes_its_image_again() {
     let area = Rect::new(2, 3, 40, 6);
     let palette = Palette::TRUECOLOR;
-    let shaded = |band: RailBand| {
-        Shade::rail(Rail::Ledger, band, Some(CELL), &palette).expect("a band to shade")
-    };
-    let mut planes = held(&[shaded(RailBand::of(area))]);
+    let mut planes =
+        held(&[railed(Rail::Ledger, area, Some(CELL), &palette).expect("a band to shade")]);
     let made = planes.made();
 
-    planes.hold(&[shaded(RailBand::of(area).with_picture(10, 3))]);
+    planes.hold(&[faced(Rail::Ledger, area, 3, Some(CELL), &palette)]);
 
     assert_eq!(
         (planes.made(), planes.held().len()),

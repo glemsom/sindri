@@ -1189,6 +1189,42 @@ fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_ar
 }
 
 #[test]
+fn a_rail_whose_light_moved_is_placed_again_by_its_own_identity() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let area = Rect::new(6, 3, 3, 6);
+    let rail = |face: u16| {
+        Shade::rail(
+            sindri::ledger::Rail::Ledger,
+            sindri::ledger::RailBand::of(area).with_picture(3, face),
+            Some(CellSize::NOMINAL),
+            &Palette::TRUECOLOR,
+        )
+        .expect("a band to shade")
+    };
+    for shade in [rail(2), rail(3)] {
+        backend.shades(&[shade], &held(&[shade])).unwrap();
+    }
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        2,
+        "the light falls on the rows the face stands on, so a rail whose face moved is placed \
+         once more: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=d").count(),
+        1,
+        "and the image it stood on is taken away rather than left under it: {wire:?}"
+    );
+    assert!(
+        wire.contains("_Ga=d,d=i,i=334") && wire.contains("_Ga=T,f=100,i=334,q=2"),
+        "both the delete and the new placement are under the rail's own identity: {wire:?}"
+    );
+}
+
+#[test]
 fn a_whole_frame_clear_drops_all_three_planes_before_it_clears_the_screen() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);

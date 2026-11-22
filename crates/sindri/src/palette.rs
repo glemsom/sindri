@@ -21,7 +21,7 @@ struct Inks {
     mark: (Color, Modifier),
 }
 
-/// The contrast a word keeps on the ground it is read on.
+/// The floor every ink is proved against on the rung it is read on.
 pub const LEGIBLE: f64 = 4.2;
 
 impl Palette {
@@ -144,8 +144,8 @@ impl Palette {
         self.ink(ink).0
     }
 
-    /// The most light a band's rung can take: the last channel of light every ink it is drawn in
-    /// can take and still clear its floor on the lit pixel.
+    /// The most light a band's rung can take: the last channel of light this palette's every ink
+    /// still clears its floor on, on the lit pixel.
     pub fn lift(&self, band: Band) -> u8 {
         let Some(rung) = channels(self.band(band)) else {
             return 0;

@@ -598,9 +598,29 @@ fn a_colour_is_spelled_in_the_channels_a_pixel_is_drawn_in_and_a_slots_colour_in
     }
 }
 
+/// Every ink a palette spells but the mark, which is no colour of its own: the reader's own
+/// reverse video.
+fn spelled_inks(palette: &Palette) -> Vec<Ink> {
+    let inks: Vec<Ink> = Ink::ALL
+        .into_iter()
+        .filter(|ink| channels(palette.colour(*ink)).is_some())
+        .collect();
+    assert_eq!(
+        inks,
+        Ink::ALL
+            .into_iter()
+            .filter(|ink| *ink != Ink::Mark)
+            .collect::<Vec<Ink>>(),
+        "a palette spells no colour for an ink the design draws words in, so the proof below \
+         leans on nothing it dropped"
+    );
+    inks
+}
+
 #[test]
 fn the_lift_a_band_is_handed_is_the_most_light_every_ink_of_it_can_take() {
     for (spelling, palette) in SPELLED {
+        let inks = spelled_inks(&palette);
         for band in Band::ALL {
             let rung = spelled(palette.band(band));
             let lit = |light: u8| {
@@ -612,17 +632,14 @@ fn the_lift_a_band_is_handed_is_the_most_light_every_ink_of_it_can_take() {
             };
             let lift = palette.lift(band);
 
-            for ink in Ink::ALL
-                .into_iter()
-                .filter(|ink| channels(palette.colour(*ink)).is_some())
-            {
-                let word = palette.colour(ink);
+            for ink in &inks {
+                let word = palette.colour(*ink);
                 let kept = contrast(word, lit(lift));
                 assert!(
                     kept >= LEGIBLE,
                     "{spelling} reads {} at {kept} on the lit {band:?} — {word:?} on {:?} — and \
-                     the most light the rung can take is the last light every ink it is drawn in \
-                     still clears its floor on",
+                     the most light the rung can take is the last light every ink the palette \
+                     spells still clears its floor on",
                     ink.name(),
                     lit(lift)
                 );
@@ -632,10 +649,9 @@ fn the_lift_a_band_is_handed_is_the_most_light_every_ink_of_it_can_take() {
             if over == lift {
                 continue;
             }
-            let fallen = Ink::ALL
-                .into_iter()
-                .filter(|ink| channels(palette.colour(*ink)).is_some())
-                .find(|ink| contrast(palette.colour(*ink), lit(over)) < LEGIBLE);
+            let fallen = inks
+                .iter()
+                .find(|ink| contrast(palette.colour(**ink), lit(over)) < LEGIBLE);
             let ink = fallen.unwrap_or_else(|| {
                 panic!(
                     "{spelling} keeps every ink of {band:?} above {LEGIBLE}:1 on {over} light \
@@ -643,13 +659,13 @@ fn the_lift_a_band_is_handed_is_the_most_light_every_ink_of_it_can_take() {
                      weaker one and the band is handed less than it can take"
                 )
             });
-            let under = contrast(palette.colour(ink), lit(over));
+            let under = contrast(palette.colour(*ink), lit(over));
             assert!(
                 under < LEGIBLE,
                 "{spelling} reads {} at {under} on {over} light over {band:?} — {:?} on {:?} — \
                  and no light past this one keeps a word of the band on its floor",
                 ink.name(),
-                palette.colour(ink),
+                palette.colour(*ink),
                 lit(over)
             );
         }
