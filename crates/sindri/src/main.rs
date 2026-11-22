@@ -9,7 +9,7 @@ mod osc; // sequences that carry words out of the terminal
 mod paste; // the terminal's echo is off while the key is typed
 mod reports; // the threads a run and a wire listing land their reports on
 mod sessions; // reads past runs back
-mod signal; // the one door an outside `SIGINT` comes through
+mod signal; // the one door an outside `SIGINT` and a window change come through
 mod term; // the terminal as a resource: raw mode, the alternate screen, the panic restore, the canvas, and the telling
 mod tui; // the launch: the loop, a key's outcome, where a prompt starts a run and a report lands, and the endings
 mod window; // the terminal outside the frame: its title, its mark, its notification and its focus

@@ -530,7 +530,7 @@ struct Restore {
 impl Restore {
     /// Puts the terminal back: the key protocol is popped and the screen left first, so nothing
     /// that follows — a panic message included — is drawn on a screen about to be somebody else's,
-    /// and then the state raw mode replaced is restored.
+    /// and then the state raw mode replaced and the signals the launch caught are restored.
     fn put_back(self) {
         let mut giving = Vec::new();
         for id in PlaneId::ALL {
@@ -548,6 +548,7 @@ impl Restore {
         }
         let _ = tell(&self.screen, &giving);
         let _ = tcsetattr(&self.keys, OptionalActions::Now, &self.saved);
+        crate::signal::give_signals_back();
     }
 }
 
@@ -747,4 +748,4 @@ pub(crate) mod pty {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
