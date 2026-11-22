@@ -8,7 +8,6 @@ use crate::ink::{Face, Faces, Ink, Look};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Palette {
     inks: Inks,
-    /// One colour per `Rung`, at the rung's own index: the well first, then the rail, then the prompt.
     ramp: [Color; Rung::ALL.len()],
     edge: Color,
 }
@@ -151,7 +150,7 @@ impl Palette {
         self.ramp[rung as usize]
     }
 
-    /// Every surface a frame's bands are drawn on, in the one order the ramp lays them by lightness.
+    /// Every surface a frame's bands are drawn on, in the one order the ramp lays them.
     pub fn ramp(&self) -> [(Rung, Color); Rung::ALL.len()] {
         Rung::ALL.map(|rung| (rung, self.rung(rung)))
     }
@@ -209,7 +208,7 @@ pub enum Band {
 }
 
 impl Band {
-    pub const ALL: [Band; 3] = [Band::Rail, Band::Well, Band::Prompt];
+    pub const ALL: [Band; 3] = [Band::Well, Band::Rail, Band::Prompt];
 
     pub fn rung(self) -> Rung {
         match self {
@@ -220,8 +219,8 @@ impl Band {
     }
 }
 
-/// The surfaces a band's ground is read off, in the one order the ramp lays them by lightness: the
-/// well a transcript is read in, the rail's tone beside it, and the band a prompt is asked on.
+/// A surface a band is drawn on: one rung of the frame's ramp, in the order `ALL` lays them, the well
+/// first and the prompt's band over it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rung {
     Well = 0,

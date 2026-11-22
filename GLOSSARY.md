@@ -201,11 +201,11 @@ never on its own edge, so the frame reads as one sheet of paper and not five.
 _Avoid_: Region, pane, panel, viewport
 
 **Rung**:
-One surface a band's ground is read off, held on the frame's ramp: the well a transcript is read in,
-the rail's tone beside it, and the band a **Prompt** is asked on, laid in that one order by
+One of the surfaces a band is drawn on, held on the frame's one ramp: the well a transcript is read
+in, the rail's tone beside it, and the band a **Prompt** is asked on, laid in that one order by
 lightness so no two rungs sit closer than the design's step or further apart than its ceiling. The
-hairline a **Seam** is drawn in is no rung of it.
-_Avoid_: Step, level, tier, shade
+edge ink a **Seam** is drawn in is no rung of it.
+_Avoid_: Step, level, tier
 
 **Transcript band**:
 The band every other strip is taken out of — the **Composer**'s, which runs under the rail in every

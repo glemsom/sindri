@@ -69,6 +69,27 @@ fn drawn(shade: Shade) -> Plane {
     Plane::draw(shade).expect("a band a plane is drawn under")
 }
 
+/// The three bands a frame draws a plane under, each against the name a failure is reported in.
+fn bands(palette: &Palette) -> [(&'static str, Shade); 3] {
+    [
+        (
+            "the ledger's rail",
+            Shade::rail(Rail::Ledger, Rect::new(6, 2, 32, 8), Some(CELL), palette)
+                .expect("a band to shade"),
+        ),
+        (
+            "a strip",
+            Shade::rail(Rail::Strip, Rect::new(6, 2, 32, 1), Some(CELL), palette)
+                .expect("a band to shade"),
+        ),
+        (
+            "the composer's band",
+            Shade::composer(Rect::new(0, 20, 80, 5), Some(CELL), None, palette)
+                .expect("a band to shade"),
+        ),
+    ]
+}
+
 #[test]
 fn the_bands_band_is_the_prompts_tone_but_its_last_row_which_closes_on_the_rails() {
     for (spelling, palette) in SPELLED {
@@ -159,22 +180,7 @@ fn a_band_drawn_in_no_colour_draws_no_ground_on_any_row() {
 #[test]
 fn a_bands_plane_is_its_shade_sampled_at_the_cell() {
     for (spelling, palette) in SPELLED {
-        let bands = [
-            (
-                "the ledger's rail",
-                Shade::rail(Rail::Ledger, Rect::new(6, 2, 32, 8), Some(CELL), &palette),
-            ),
-            (
-                "a strip",
-                Shade::rail(Rail::Strip, Rect::new(6, 2, 32, 1), Some(CELL), &palette),
-            ),
-            (
-                "the composer's band",
-                Shade::composer(Rect::new(0, 20, 80, 5), Some(CELL), None, &palette),
-            ),
-        ];
-        for (band, shade) in bands {
-            let shade = shade.expect("a band to shade");
+        for (band, shade) in bands(&palette) {
             let plane = drawn(shade);
             assert_eq!(
                 plane.area(),
@@ -339,22 +345,7 @@ fn the_carets_glow_is_the_only_blend_a_shade_makes() {
 #[test]
 fn no_row_of_a_shades_plane_is_a_blend_of_the_one_beside_it() {
     for (spelling, palette) in SPELLED {
-        let shades = [
-            (
-                "the composer's band",
-                Shade::composer(Rect::new(0, 20, 80, 5), Some(CELL), None, &palette),
-            ),
-            (
-                "the ledger's rail",
-                Shade::rail(Rail::Ledger, Rect::new(6, 2, 32, 8), Some(CELL), &palette),
-            ),
-            (
-                "a strip",
-                Shade::rail(Rail::Strip, Rect::new(6, 2, 32, 1), Some(CELL), &palette),
-            ),
-        ];
-        for (band, shade) in shades {
-            let shade = shade.expect("a band to shade");
+        for (band, shade) in bands(&palette) {
             let plane = drawn(shade);
             let (width, height) = plane.pixels().dimensions();
             let down = CELL.height();

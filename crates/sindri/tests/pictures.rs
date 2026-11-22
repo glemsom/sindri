@@ -1650,6 +1650,41 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
 }
 
 #[test]
+fn no_pixel_of_the_composers_band_is_a_blend_of_the_two_tones_it_closes_through() {
+    let (_root, workspace) = workspace(10, 20);
+    let mut view = frame(caps::at(cell()), &workspace, "hello");
+    view.paste("forge");
+    let painted = frame::painted(&mut view, 80, 24);
+    let palette = *painted.palette();
+    let shade = shade_of(&painted, PlaneId::Composer);
+    let ground = composer_plane(&view);
+    let down = cell().height();
+    let (prompt, rail) = (
+        channels(palette.band(Band::Prompt)).expect("the prompt's band in pixels"),
+        channels(palette.band(Band::Rail)).expect("the rail's tone in pixels"),
+    );
+
+    for y in 0..ground.pixels().height() {
+        let tone = channels(shade.row((y / down) as u16)).expect("a tone of the band in pixels");
+        assert!(
+            tone == prompt || tone == rail,
+            "pixel row {y} of the band sits on {tone:?}, which is neither of the two tones the \
+             band is drawn in"
+        );
+        for x in 0..ground.pixels().width() {
+            let pixel = ground.pixels().get_pixel(x, y);
+            let drawn = [pixel[0], pixel[1], pixel[2]];
+            assert!(
+                (0..3).all(|channel| drawn[channel] >= tone[channel]),
+                "column {x} of pixel row {y} is {drawn:?}, under the {tone:?} its row sits on: a \
+                 ground mixed between two surfaces is a state, and the caret's glow is the one \
+                 blend the band makes"
+            );
+        }
+    }
+}
+
+#[test]
 fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
     let mut view = splash(true);
     let frame = frame::painted(&mut view, 120, 40);

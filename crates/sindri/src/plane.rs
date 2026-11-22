@@ -244,8 +244,7 @@ pub struct Plane {
 }
 
 impl Plane {
-    /// The image a shade is drawn as, and nothing for a band no plane stands under: every pixel row
-    /// is the colour of the cell row it falls in, so no row is a blend of the one beside it.
+    /// The image a shade is drawn as, and nothing for a band no plane stands under.
     pub(crate) fn draw(shade: Shade) -> Option<Plane> {
         let id = shade.id()?;
         let cell = shade.cell()?;

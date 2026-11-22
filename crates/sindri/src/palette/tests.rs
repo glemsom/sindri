@@ -229,58 +229,41 @@ fn the_prompt_band_is_spelled_in_every_palette_and_flat_where_a_palette_spells_n
 }
 
 #[test]
-fn the_ramp_lays_the_grounds_a_frame_is_drawn_on_by_lightness_and_every_band_reads_its_own() {
+fn the_ramp_lays_the_surfaces_a_frame_is_drawn_on_by_lightness_and_no_two_bands_share_one() {
     for (spelling, palette) in SPELLED {
         let ramp = palette.ramp();
 
         assert_eq!(
             ramp.len(),
-            Rung::ALL.len(),
-            "{spelling} lays {} rungs where the design names {}",
+            Band::ALL.len(),
+            "{spelling} lays {} rungs where the frame draws {} bands",
             ramp.len(),
-            Rung::ALL.len()
+            Band::ALL.len()
         );
-        for (at, (rung, colour)) in ramp.iter().enumerate() {
-            assert_eq!(
-                *rung,
-                Rung::ALL[at],
-                "{spelling} lays {rung:?} at rung {at}, where the ramp's own order names {:?}",
-                Rung::ALL[at]
+        for at in 1..ramp.len() {
+            let (lower, under) = ramp[at - 1];
+            let (upper, over) = ramp[at];
+            let (under, over) = (lightness(under), lightness(over));
+            assert!(
+                over > under,
+                "{spelling} lays {upper:?} at L* {over} over {lower:?} at L* {under}: the ramp \
+                 is one order, and a rung is lighter than the one it stands on"
             );
-            if let Some((below, under)) = at.checked_sub(1).map(|below| ramp[below]) {
-                let (here, there) = (lightness(*colour), lightness(under));
-                assert!(
-                    here > there,
-                    "{spelling} lays {rung:?} at L* {here} over {below:?} at L* {there}: the \
-                     ramp is the one order its grounds are read in, and a rung is lighter than \
-                     the one it stands on"
-                );
-            }
         }
 
-        let mut named: Vec<Rung> = Vec::new();
+        let mut surfaces: Vec<Color> = Vec::new();
         for band in Band::ALL {
-            let rung = band.rung();
-            assert_eq!(
-                palette.band(band),
-                palette.rung(rung),
-                "{spelling} draws {band:?} in {:?} where {rung:?} reads {:?}: every band's \
-                 ground is read off the ramp",
-                palette.band(band),
-                palette.rung(rung)
+            let surface = palette.band(band);
+            assert!(
+                ramp.iter().any(|(_, colour)| *colour == surface),
+                "{spelling} draws {band:?} in {surface:?}, a colour no rung of the ramp holds"
             );
             assert!(
-                !named.contains(&rung),
-                "{spelling} draws {band:?} on {rung:?}, and a band beside it is drawn there too"
+                !surfaces.contains(&surface),
+                "{spelling} draws {band:?} in {surface:?}, and a band beside it is drawn there too"
             );
-            named.push(rung);
+            surfaces.push(surface);
         }
-        assert_eq!(
-            named.len(),
-            Rung::ALL.len(),
-            "{spelling} names {:?}, so a rung of the ramp is drawn on by no band",
-            named
-        );
     }
 }
 
@@ -323,47 +306,48 @@ fn no_two_rungs_of_the_ramp_sit_closer_than_the_designs_step_or_further_apart_th
     }
 }
 
-/// The step the ramp keeps between the edge and the grounds it parts, in the L* the ramp itself is
-/// laid out in: three is the least a reader can follow without a word beside it.
+/// The step the edge ink keeps above the surfaces it parts, in the L* the ramp is laid out in:
+/// three is the least a reader can follow without a word beside it.
 const APART: f64 = 3.0;
 
 #[test]
-fn the_hairline_is_no_rung_of_the_ramp_and_keeps_its_own_floor_below_every_rung() {
+fn the_edge_ink_is_no_rung_of_the_ramp_and_keeps_its_own_floor_below_every_rung() {
     let mut stands_further = false;
 
     for (spelling, palette) in SPELLED {
-        let hairline = palette.edge_ink();
-        let under = lightness(hairline);
+        let edge = palette.edge_ink();
+        let edge_lightness = lightness(edge);
 
         for (rung, colour) in palette.ramp() {
             assert_ne!(
-                colour, hairline,
-                "{spelling} draws {rung:?} in the hairline's own colour, so the ramp's step rule \
-                 touches the edge it parts"
+                colour, edge,
+                "{spelling} draws {rung:?} in the edge ink's own colour, and the edge is no rung \
+                 of the ramp"
             );
-            let over = lightness(colour);
+            let surface = lightness(colour);
             assert!(
-                under < over,
-                "{spelling} draws the hairline at L* {under} over {rung:?} at L* {over}: the \
-                 edge is the darkest surface of the frame, under every ground it parts"
+                edge_lightness < surface,
+                "{spelling} draws the edge ink at L* {edge_lightness} over {rung:?} at L* \
+                 {surface}: the edge is the darkest surface of the frame"
             );
             assert!(
-                over - under >= APART,
-                "{spelling} draws the hairline at L* {under} under {rung:?} at L* {over}: a \
-                 boundary {} L* below the ground it parts is a boundary the eye cannot follow",
-                over - under
+                surface - edge_lightness >= APART,
+                "{spelling} draws the edge ink at L* {edge_lightness} under {rung:?} at L* \
+                 {surface}: a boundary {} L* below the surface it parts is a boundary the eye \
+                 cannot follow",
+                surface - edge_lightness
             );
         }
 
         let lowest = lightness(palette.rung(Rung::ALL[0]));
-        if lowest - under > CEILING {
+        if lowest - edge_lightness > CEILING {
             stands_further = true;
         }
     }
 
     assert!(
         stands_further,
-        "no spelling stands its hairline further below the lowest rung than the ramp's ceiling \
+        "no spelling stands its edge ink further below the lowest rung than the ramp's ceiling \
          allows, so nothing proves an edge may sit a longer step below the surfaces it parts than \
          one surface may sit above another"
     );
@@ -440,25 +424,25 @@ fn no_two_inks_resolve_to_one_foreground_and_modifier() {
 const LEGIBLE: f64 = 4.2;
 
 #[test]
-fn every_ink_keeps_its_legibility_floor_on_every_rung_a_frame_draws_on() {
+fn every_ink_keeps_its_legibility_floor_on_every_surface_a_frame_draws_on() {
     for (spelling, palette) in SPELLED {
-        let mut grounds: Vec<(&str, Color)> = palette
+        let mut surfaces: Vec<(&str, Color)> = palette
             .ramp()
             .iter()
             .map(|(rung, colour)| (rung.name(), *colour))
             .collect();
-        grounds.push(("the hairline", palette.edge_ink()));
+        surfaces.push(("the edge ink", palette.edge_ink()));
 
         for ink in Ink::ALL
             .into_iter()
             .filter(|ink| channels(palette.colour(*ink)).is_some())
         {
-            for (ground, colour) in &grounds {
+            for (surface, colour) in &surfaces {
                 let ratio = contrast(palette.colour(ink), *colour);
 
                 assert!(
                     ratio >= LEGIBLE,
-                    "{spelling} reads {} on {ground} under {LEGIBLE}:1, and a word under that \
+                    "{spelling} reads {} on {surface} under {LEGIBLE}:1, and a word under that \
                      is a word a reader has to guess",
                     ink.name()
                 );
