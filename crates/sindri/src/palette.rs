@@ -24,6 +24,10 @@ struct Inks {
 /// The floor every ink is proved against on the rung it is read on.
 pub const LEGIBLE: f64 = 4.2;
 
+/// The channels a seam's shadow takes past the step it has to clear, so a joint reads as a fold
+/// and not as the rung beside it.
+const JOINT: u8 = 2;
+
 impl Palette {
     pub const SLOTS: Palette = Palette {
         inks: Inks {
@@ -171,6 +175,21 @@ impl Palette {
     /// channel over that most.
     pub fn peak(&self, band: Band) -> u8 {
         (f64::from(self.lift(band)) * band.share()).round() as u8
+    }
+
+    /// The channels a seam takes from the rung it is drawn in at the joint: the step from the
+    /// brightest rung a seam is drawn in down to the well, and the margin over it, so every joint
+    /// sits under both bands it parts.
+    pub fn seam(&self) -> u8 {
+        let Some(well) = channels(self.band(Band::Well)) else {
+            return 0;
+        };
+        let bright = channels(self.band(Band::Prompt)).unwrap_or(well);
+        let step = (0..3)
+            .map(|channel| bright[channel].saturating_sub(well[channel]))
+            .max()
+            .unwrap_or(0);
+        step.saturating_add(JOINT)
     }
 
     pub fn look_of(&self, cell: &Cell) -> Option<Look> {

@@ -1451,7 +1451,7 @@ fn a_whole_frame_clear_drops_every_plane_before_it_clears_the_screen() {
         rail_shade(),
         transcript_shade(),
         composer_shade(Rect::new(2, 3, 2, 1)),
-        light_shade(Rect::new(2, 3, 2, 1), 2),
+        light_shade(Rect::new(2, 3, 2, 2), 2),
     ];
     let images = held(&shades);
     backend.shades(&shades, &images).unwrap();
