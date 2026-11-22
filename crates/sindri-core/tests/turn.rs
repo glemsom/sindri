@@ -1,6 +1,3 @@
-//! One turn taken is one value: the wire replays it, the run keeps it, and the record sums the same
-//! usage it spent.
-
 use serde_json::json;
 use sindri_core::conversation::Conversation;
 use sindri_core::provider;

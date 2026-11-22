@@ -1,7 +1,3 @@
-//! What a wire says it serves, asked through the real listing wires of every dialect, against
-//! catalogues recorded from the two vendors. Nothing reaches the network: the transport hands back
-//! recorded bytes, so the parsing and the request are a live run's and only the socket is missing.
-
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -89,9 +85,6 @@ fn a_gateway_base_url_is_where_the_listing_is_read() {
     assert_eq!(listing.at().base_url(), Some("https://gateway.example/v1"));
 }
 
-/// A transport that lets the wire move while a request is in flight: the reply is the recorded one,
-/// but the pair in force changes on the way past, which is what a provider row edited during a
-/// fetch does.
 #[derive(Clone)]
 struct Moving {
     inner: Replay,

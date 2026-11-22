@@ -58,9 +58,6 @@ impl Settings {
         self.refusal.as_deref()
     }
 
-    /// The rows the screen's card holds: the config's keys with the values the visit carries, the row
-    /// the reader is on marked, and under them the refusal that turned the visit back. A value too
-    /// wide for the frame is cut at its right edge rather than dropped, as the picker's paths are.
     pub fn body(&self, width: u16) -> Vec<ScreenRow> {
         let keys: Vec<(&str, &str)> = self.rows().collect();
         let mut rows = list::List {
@@ -150,8 +147,6 @@ impl Settings {
         true
     }
 
-    /// A backspace on a row holding the mask unsets it whole: the secret is not something
-    /// this screen may hold even for one keystroke.
     fn backspace(&mut self) -> bool {
         let masked = self.unmask();
         let erased = self.standing().text.pop().is_some() || masked;
@@ -162,8 +157,6 @@ impl Settings {
         erased
     }
 
-    /// The mask is what the file holds and not what a reader typed: the first glyph replaces
-    /// it, and the row holds no value a save may write until one does.
     fn unmask(&mut self) -> bool {
         let row = self.standing();
         let masked = row.text == MASK;
@@ -183,7 +176,6 @@ impl Kept for Settings {
         self.key(key)
     }
 
-    /// A visit's rows hang no choice, so no press is ever read as one.
     fn pressed(&mut self, _at: usize) -> bool {
         false
     }

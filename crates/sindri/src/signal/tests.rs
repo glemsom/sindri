@@ -1,6 +1,3 @@
-//! The causes a wake carries: a cancel that outlives the drain behind it and a pipe already full,
-//! and a window change that one repaint answers however many arrived.
-
 use std::os::fd::AsFd;
 use std::time::Duration;
 
@@ -8,7 +5,6 @@ use rustix::event::{PollFd, PollFlags, Timespec, poll};
 
 use super::*;
 
-/// Far past the capacity a pipe of this process is opened with.
 const PINGS: usize = 1 << 18;
 
 #[test]
@@ -87,13 +83,11 @@ fn a_cancel_and_a_window_change_behind_one_readiness_are_read_apart() {
 /// ignored has to leave it that way.
 const SIG_IGN: usize = 1;
 
-/// The report a window manager sends, delivered to this process the way a launch waits for it.
 fn sent_window_change() {
     rustix::process::kill_process(rustix::process::getpid(), rustix::process::Signal::WINCH)
         .expect("the window change is delivered");
 }
 
-/// Waits until the pipe a handler pings has a byte in it, which is the readiness a launch wakes on.
 fn awakened(wake: &Wake) {
     let wait = Timespec::try_from(Duration::from_secs(5)).ok();
     let reader = wake.reader();

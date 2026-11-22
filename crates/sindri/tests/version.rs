@@ -1,7 +1,3 @@
-//! The binary says which commit it was built at and that commit's date, both compile-time constants
-//! with no clock near them, and the checkout is what it is held to: a version stamped from the wall
-//! clock fails here, and a source tarball has no checkout to compare against, which the test says.
-
 use std::path::Path;
 use std::process::Command;
 

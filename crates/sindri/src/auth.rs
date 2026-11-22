@@ -6,7 +6,6 @@ use sindri_core::provider::copilot::{self, Store};
 use crate::cli::{AuthAction, LoginWire};
 use crate::refuse;
 
-/// The exit code for a sign-in that did not finish.
 const USAGE: u8 = 2;
 
 pub fn run(action: AuthAction) -> ExitCode {

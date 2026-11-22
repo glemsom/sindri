@@ -1,6 +1,5 @@
 use super::*;
 
-/// The ways `links` name, laid at frame row `row` from its left edge.
 fn ways(row: u16, links: &[Link]) -> Links {
     let mut ways = Links::none();
     ways.lay(row, 0, links);

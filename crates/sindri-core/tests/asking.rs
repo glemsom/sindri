@@ -1,7 +1,3 @@
-//! What the seam between the run loop and a wire promises: a turn's own words are what the wire is
-//! asked, the answer's text is what the run answers with, a refusal stops the run in the one line
-//! safe to print, and thinking is asked for only when the run asked for it.
-
 use serde_json::{Value, json};
 use sindri_core::asking::Asking;
 use sindri_core::config::Config;

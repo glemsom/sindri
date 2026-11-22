@@ -1,8 +1,4 @@
-//! The `@` picker's contract with a reader, walked rather than eyeballed: the keys that open and close the
-//! screen, the glyphs that are the query and the ones still the prompt's, and the word a selection leaves in
-//! the draft. Every workspace is the test's own, so nothing of this repository decides what a picker offers.
-
-mod frame; // one paint-and-read for every test
+mod frame;
 
 use std::path::Path;
 
@@ -38,7 +34,6 @@ fn draft(view: &View) -> &str {
     view.composer().text()
 }
 
-/// A frame standing in `root` with `draft` typed through the keys a reader's fingers send.
 fn typing(root: &Path, draft: &str) -> View {
     let mut view = View::of(
         Capabilities::default(),
@@ -186,7 +181,6 @@ fn selecting_a_file_puts_its_path_in_the_draft_and_closes_the_screen() {
 fn a_path_chosen_in_the_middle_of_a_draft_lands_where_the_caret_is() {
     let root = workspace(&["rows.rs"]);
     let mut view = typing(root.path(), "read then say why");
-    // The caret back to just after `read `, where a path goes in front of a word already written.
     for _ in 0.."then say why".len() {
         view.key(Key::Left);
     }
@@ -253,8 +247,6 @@ fn escape_at_the_picker_leaves_the_draft_as_it_was() {
     assert_eq!(view.mode(), Mode::Composer);
 }
 
-/// The column of `said` where `needle` begins, counted in cells rather than bytes: a drawn row
-/// holds glyphs wider than the one byte they are written in.
 fn opens_at(said: &str, needle: &str) -> Option<usize> {
     let said: Vec<char> = said.chars().collect();
     let needle: Vec<char> = needle.chars().collect();
@@ -262,8 +254,6 @@ fn opens_at(said: &str, needle: &str) -> Option<usize> {
         .find(|at| said[*at..*at + needle.len()] == needle[..])
 }
 
-/// The rows a screen's body is drawn in, each as the words it says: between a card's two borders,
-/// or the whole of every row in a frame too narrow to be given one.
 fn body_rows(rows: &[String]) -> Vec<String> {
     let (Some(top), Some(bottom)) = (
         rows.iter().position(|row| row.contains('╭')),
@@ -309,9 +299,6 @@ fn the_workspace_a_frame_walks_is_the_one_it_was_told() {
     );
 }
 
-/// The widths a card is drawn at: a card is at most seventy-two columns wide, so a wide frame gives
-/// the body sixty-eight columns, fifty gives forty-six, and under fifty the card bleeds to the
-/// frame and gives thirty-six.
 const WIDTHS: [u16; 3] = [120, 50, 40];
 
 #[test]

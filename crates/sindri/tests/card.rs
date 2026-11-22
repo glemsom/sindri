@@ -1,9 +1,5 @@
-//! The card every screen is drawn on: the rounded border and the name in its top row, the key that
-//! leaves in its bottom row, the frame behind it painted and dimmed, and the geometry a card takes
-//! at a frame too narrow to hold one.
-
-mod caps; // the terminals these frames are drawn on
-mod frame; // one paint-and-read for every test
+mod caps;
+mod frame;
 
 use std::collections::HashSet;
 
@@ -35,12 +31,10 @@ const SCREENS: [Mode; 5] = [
     Mode::Stats,
 ];
 
-/// The name a screen wears in the border of the card it is drawn on.
 fn name(mode: Mode) -> &'static str {
     mode.title().expect("a screen has a name to wear")
 }
 
-/// The key the screen's own table binds to leaving it.
 fn leaves(mode: Mode) -> &'static str {
     mode.table()
         .iter()
@@ -49,7 +43,6 @@ fn leaves(mode: Mode) -> &'static str {
         .expect("a screen binds one key to leaving it")
 }
 
-/// `over` with the screen `mode` opened on it, through the key a reader sends.
 fn opened(over: View, mode: Mode) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
     std::fs::write(root.path().join("rows.rs"), "").expect("a file");
@@ -88,7 +81,6 @@ fn opened(over: View, mode: Mode) -> View {
 const ANTHROPIC_MODELS: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_models.json");
 
-/// The names a recorded Anthropic listing serves, read through the listing code the screen reads.
 fn served() -> Listing {
     let replay = Replay::new([Canned::reply(200, ANTHROPIC_MODELS)]);
     let at = Endpoint::own(Wire::Anthropic);
@@ -101,12 +93,10 @@ fn on_screen(mode: Mode) -> View {
     opened(conversation(), mode)
 }
 
-/// A frame with a run in it and no draft, so every screen opens on its own key.
 fn conversation() -> View {
     conversation_in(Capabilities::default())
 }
 
-/// The same conversation on `capabilities`: the frame a card is opened over, drawn in other colours.
 fn conversation_in(capabilities: Capabilities) -> View {
     let entries = [
         Entry::Turn { turn: 1 },
@@ -124,15 +114,12 @@ fn conversation_in(capabilities: Capabilities) -> View {
     )
 }
 
-/// The same frame with a draft typed into it, so the composer band is behind the card too.
 fn drafted() -> View {
     let mut view = conversation();
     view.paste("a draft behind the card");
     view
 }
 
-/// The rows the card's two borders stand on and the columns its corners are drawn at, or none for a
-/// card a frame under fifty columns draws with no border at all.
 fn corners(drawn: &Frame) -> Option<(u16, u16, u16, u16)> {
     let area = drawn.area();
     let rows = area.y..area.bottom();
@@ -146,8 +133,6 @@ fn corners(drawn: &Frame) -> Option<(u16, u16, u16, u16)> {
     ))
 }
 
-/// The card's own columns of one row: the frame a card was opened from is still on the screen
-/// either side of it.
 fn of_card(drawn: &Frame, y: u16) -> String {
     let (_, _, left, right) = corners(drawn).expect("a card drawn with its border");
     let (left, right) = (usize::from(left), usize::from(right));
@@ -159,8 +144,6 @@ fn of_card(drawn: &Frame, y: u16) -> String {
         .collect()
 }
 
-/// The words one row of the card's body draws, between its two sides, with the blanks it pads its
-/// end with dropped.
 fn said(drawn: &Frame, y: u16) -> String {
     let (_, _, left, right) = corners(drawn).expect("a card drawn with its border");
     let (left, right) = (usize::from(left), usize::from(right) + 1);
@@ -174,7 +157,6 @@ fn said(drawn: &Frame, y: u16) -> String {
         .to_owned()
 }
 
-/// Every row of the card's body, top to bottom, as the words each draws.
 fn body_rows(drawn: &Frame) -> Vec<String> {
     let (top, bottom, ..) = corners(drawn).expect("a card drawn with its border");
     (top + 1..bottom).map(|y| said(drawn, y)).collect()
@@ -248,8 +230,6 @@ fn every_screen_open_over_the_frame_carries_the_accent_on_the_edge_row_of_its_ca
     for (cols, rows) in [(120, 40), (40, 24)] {
         for mode in SCREENS {
             let frame = frame::painted(&mut on_screen(mode), cols, rows);
-            // A card too narrow to hold a border is the whole frame with its title row first, and
-            // one that holds it is drawn between its corners with the frame it dimmed either side.
             let card = corners(&frame);
             let (top, bottom, left, right) = match card {
                 Some((top, bottom, left, right)) => (top, bottom, left, right),
@@ -339,8 +319,6 @@ fn the_frame_behind_a_card_is_painted_and_dimmed() {
     view.open_settings(&Config::default());
     let after = frame::painted(&mut view, 120, 40);
 
-    // The card is seventy-two columns wide in a hundred and twenty, so its two gutters are all
-    // that is left of the frame it was opened from.
     let words = (0..40)
         .flat_map(|y| (0..24).map(move |x| (x, y)))
         .filter(|(x, y)| before.cell(*x, *y).symbol() != " ")
@@ -725,11 +703,8 @@ fn a_key_as_wide_as_the_bottom_row_allows_keeps_the_corners_it_hangs_between() {
     );
 }
 
-/// The ellipsis a card marks a row it keeps back with.
 const ELLIPSIS: char = '\u{22EF}';
 
-/// A blank screen `cols` by `rows` with the card `name` and `leaves` painted into it, and the body
-/// the paint hands the screen inside it.
 fn card_on(cols: u16, rows: u16, name: &str, leaves: &str, holds: u16) -> (Frame, Rect) {
     let mut cells = Buffer::empty(Rect::new(0, 0, cols, rows));
     let edge = Palette::TRUECOLOR.accent_edge();
@@ -745,14 +720,10 @@ fn card_on(cols: u16, rows: u16, name: &str, leaves: &str, holds: u16) -> (Frame
     (frame::holding(cells, Palette::TRUECOLOR), body)
 }
 
-/// The card a frame of `cols` by `rows` paints when the screen inside it holds `holds` rows, and
-/// the band the screen's own rows are drawn in.
 fn card_in(cols: u16, rows: u16, holds: u16) -> (Frame, Rect) {
     card_on(cols, rows, "? keys", "esc", holds)
 }
 
-/// Row `y` of the frame read through the `width` columns of `body`, with the blanks it leaves at
-/// its end dropped.
 fn words(drawn: &Frame, body: Rect, y: u16) -> String {
     drawn
         .row(y)

@@ -1,9 +1,5 @@
-//! The `/model` screen: the names the wire serves, ranked as a query is typed, and the one `Enter` takes.
-//! Every listing is read through the real listing code from a recorded catalogue, so no test passes on a name
-//! this tree made up. What happens to a chosen name afterwards is `tests/tui.rs`'s.
-
-mod caps; // the terminals these frames are drawn on
-mod frame; // one paint-and-read for every test
+mod caps;
+mod frame;
 
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
@@ -221,7 +217,6 @@ fn enter_takes_the_chosen_name_and_closes_the_screen() {
     );
 }
 
-/// The rows a card's two borders hold, each as the words it says.
 fn body(rows: &[String]) -> Vec<String> {
     let top = rows
         .iter()

@@ -18,9 +18,6 @@ use sindri::view::{Painted, View};
 
 const SNAPSHOTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
-/// A view painted once on a headless screen, or a screen read off the bytes a launch drew: the
-/// cells, the palette a paint drew them in, what a pass told the terminal of the cursor it placed,
-/// and the cell the caret is in after the frame.
 pub struct Frame {
     cells: Buffer,
     palette: Option<Palette>,
@@ -28,7 +25,6 @@ pub struct Frame {
     caret: Option<(u16, u16)>,
 }
 
-/// `view` painted once on a headless screen of that size: the one pass every reader here reads.
 pub fn painted(view: &mut View, cols: u16, rows: u16) -> Frame {
     let palette = view.capabilities().palette();
     let mut terminal =
@@ -47,9 +43,6 @@ pub fn painted(view: &mut View, cols: u16, rows: u16) -> Frame {
     }
 }
 
-/// The frame the bytes `drawn` left in a terminal of that size, read as the cells it holds, and the
-/// cell the caret was in when it went quiet. No pass here told a terminal anything, so the cells
-/// carry the colours it drew them in and there is no palette to name them by.
 pub fn read(drawn: &str, cols: u16, rows: u16) -> Frame {
     let mut terminal =
         avt::Terminal::new(usize::from(cols), usize::from(rows)).expect("a screen of that size");
@@ -72,13 +65,10 @@ pub fn read(drawn: &str, cols: u16, rows: u16) -> Frame {
     }
 }
 
-/// A row or a column a terminal counts: a terminal wider or taller than a `u16` names is no frame a
-/// test reads.
 fn narrow(at: usize) -> u16 {
     u16::try_from(at).expect("a row or a column of the screen")
 }
 
-/// A frame of cells written outside a paint, for the rules a real view cannot reach.
 pub fn holding(cells: Buffer, palette: Palette) -> Frame {
     Frame {
         cells,
@@ -110,12 +100,10 @@ impl Frame {
         )
     }
 
-    /// The cell the terminal's caret is in after the frame, and none where it placed none.
     pub fn caret(&self) -> Option<(u16, u16)> {
         self.caret
     }
 
-    /// One row of the cells as glyphs, one to a column and full width, from the frame's left edge.
     pub fn row(&self, y: u16) -> String {
         let area = self.cells.area;
         (area.x..area.right()).map(|x| self.glyph(x, y)).collect()
@@ -127,7 +115,6 @@ impl Frame {
             .collect()
     }
 
-    /// Every row as the words it says: the row it is, cut at the trailing blanks.
     pub fn words(&self) -> Vec<String> {
         self.rows()
             .iter()
@@ -159,7 +146,6 @@ impl Frame {
         &self.told
     }
 
-    /// The column `glyph` is drawn in on row `y`, counted from the frame's first column.
     pub fn column_of(&self, y: u16, glyph: char) -> Option<u16> {
         let area = self.cells.area;
         self.row(y)
@@ -169,7 +155,6 @@ impl Frame {
             .map(|at| area.x.saturating_add(at))
     }
 
-    /// The row of the frame whose cells say `said`, counted from the band's first row.
     pub fn row_holding(&self, band: Rect, said: &str) -> u16 {
         for y in band.y..band.bottom() {
             if self.row(y).contains(said) {
@@ -179,7 +164,6 @@ impl Frame {
         panic!("the frame draws {said:?} on no row of the band it was given");
     }
 
-    /// The row and the column the words `said` begin at.
     pub fn drawn_at(&self, said: &str) -> (u16, u16) {
         let wanted: Vec<char> = said.chars().collect();
         let area = self.cells.area;
@@ -198,9 +182,6 @@ impl Frame {
         panic!("the frame draws {said:?} on no row of it");
     }
 
-    /// The golden text: the name and size of the frame, then every row as its glyphs between two
-    /// bars and the runs of looks they are drawn in, so a frame one cell apart is a frame one word
-    /// apart.
     pub fn text(&self, name: &str) -> String {
         let area = self.cells.area;
         let mut text = format!("{name} at {}x{}", area.width, area.height);
@@ -224,30 +205,23 @@ impl Frame {
         text
     }
 
-    /// The golden `fixture` that the frame `name` draws: the snapshot the suite holds is this one
-    /// text, blessed from here and from no other file.
     pub fn snapshot(&self, name: &str, fixture: &str) {
         insta::with_settings!({ snapshot_path => SNAPSHOTS, prepend_module_to_snapshot => false }, {
             insta::assert_snapshot!(fixture, self.text(name));
         });
     }
 
-    /// Holds the caret the pass placed against the cell the cells draw a card's query row at: a
-    /// golden frame writes down cells and no positions, so the two are read apart.
     pub fn assert_caret(&self, fixture: &str) {
         if let Err(disagreed) = carets_agree(self.query_row(), self.told.caret()) {
             panic!("frame {fixture}: {disagreed}");
         }
     }
 
-    /// The cell a card's query row is typed at, and none while the frame drew no card.
     pub fn query_row(&self) -> Option<(u16, u16)> {
         drawn_query(&self.cells, self.told.layout()?.card?)
     }
 }
 
-/// Why the two readings are no one caret: a query row the pass placed no cursor in, or one it
-/// placed the cursor elsewhere in. A frame that draws no query row places its cursor where it likes.
 pub fn carets_agree(named: Option<(u16, u16)>, placed: Option<Position>) -> Result<(), String> {
     let placed = placed.map(|at| (at.x, at.y));
     match (named, placed) {
@@ -261,9 +235,6 @@ pub fn carets_agree(named: Option<(u16, u16)>, placed: Option<Position>) -> Resu
     }
 }
 
-/// The cell a card's query row is typed at, read off a frame's cells: the row of `body` that draws
-/// the words `query: `, and the column past the last glyph drawn after them — a blank the reader
-/// typed at the end of a query is that body's own fill by then.
 fn drawn_query(cells: &Buffer, body: Rect) -> Option<(u16, u16)> {
     let area = cells.area;
     let words: Vec<char> = QUERY.chars().collect();
@@ -316,7 +287,6 @@ fn glyph(cell: &Cell, x: u16, y: u16) -> char {
     }
 }
 
-/// The text the golden `fixture` holds, and none while no fixture of that name is blessed.
 pub fn accepted(fixture: &str) -> Option<String> {
     let path = PathBuf::from(SNAPSHOTS).join(format!("{fixture}.snap"));
     let text = std::fs::read_to_string(path).ok()?;
@@ -328,7 +298,6 @@ pub fn accepted(fixture: &str) -> Option<String> {
     Some(frame.join("\n"))
 }
 
-/// Where the golden `picture` and the frame `drawn` first disagree, and none where they agree.
 pub fn first_difference(picture: &str, drawn: &str) -> Option<String> {
     let picture: Vec<&str> = picture.lines().collect();
     let drawn: Vec<&str> = drawn.lines().collect();
@@ -408,9 +377,6 @@ fn looks_in(runs: &str) -> Option<Vec<Look>> {
     Some(looks)
 }
 
-/// Walks the cells of `frame` band by band and names the band that broke the margin: two columns of
-/// air at a band's left edge and never a word on its last column, and two of air where the rail
-/// stands against the frame's own right edge.
 pub fn assert_margin(frame: &Frame, fixture: &str) {
     let Some(laid) = frame.told().layout() else {
         return;

@@ -1,7 +1,3 @@
-//! What the terminal a frame draws on can do — its colours, its sizing, its pointer, its pictures and
-//! the face the config asks for over the rail — probed once before the first frame, save the cell,
-//! which every pass keeps current from the kernel's own report of the window's pixels.
-
 use sindri_core::config::Environment;
 
 use crate::graphics::CellSize;
@@ -20,7 +16,6 @@ const ASK_CELL: &[u8] = b"\x1b[16t";
 /// The screen is erased after the answer, because the block is no cell of any frame.
 const ASK_SIZING: &[u8] = b"\x1b[H\x1b[6n\x1b]66;s=2; \x1b\\\x1b[6n\x1b[2J";
 
-/// The two questions a launch puts to the terminal it draws on, and no third.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Question {
     Cell,
@@ -28,7 +23,6 @@ pub enum Question {
 }
 
 impl Question {
-    /// The bytes this question is put as.
     pub fn asked(&self) -> &'static [u8] {
         match self {
             Question::Cell => ASK_CELL,
@@ -37,15 +31,11 @@ impl Question {
     }
 }
 
-/// The terminal a probe asks: the pixel size its kernel already reports, and what it says to a
-/// question. A launch asks the terminal of this process; a test answers for one that is not there.
 pub trait Asked {
     fn winsize(&self) -> Option<CellSize>;
     fn ask(&self, question: Question) -> Option<Vec<u8>>;
 }
 
-/// The answers a terminal gave when a launch asked it what it can do: the cell it reported and
-/// whether it drew the block at size. `Asked`, so a test states them instead of a terminal.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Answers {
     cell: Option<CellSize>,
@@ -79,7 +69,6 @@ impl Asked for Answers {
 
     fn ask(&self, question: Question) -> Option<Vec<u8>> {
         match question {
-            // The cell is said through the kernel's own report, so these answers never carry one.
             Question::Cell => None,
             Question::Sizing => Some(match self.sized {
                 true => b"\x1b[1;1R\x1b[1;3R".to_vec(),
@@ -89,7 +78,6 @@ impl Asked for Answers {
     }
 }
 
-/// What the terminal a frame draws on can do, as one value.
 #[derive(Clone, Debug)]
 pub struct Capabilities {
     cell: CellSize,
@@ -101,7 +89,6 @@ pub struct Capabilities {
 }
 
 impl Default for Capabilities {
-    /// A terminal nobody probed, drawn in the colours the design is drawn in.
     fn default() -> Capabilities {
         Capabilities {
             cell: CellSize::NOMINAL,
@@ -115,8 +102,6 @@ impl Default for Capabilities {
 }
 
 impl Capabilities {
-    /// What `environment` says the terminal is and what it answered when asked, beside the keys a
-    /// reader typed while it thought and the face the config asks for.
     pub fn probed(
         environment: &impl Environment,
         asked: &impl Asked,
@@ -169,8 +154,6 @@ impl Capabilities {
         )
     }
 
-    /// The same value with Sindri's face drawn over the rail, or not: the one fact in it the config
-    /// holds, and the one a settings visit can move while a frame is open.
     pub fn faced(self, drawn: bool) -> Capabilities {
         Capabilities {
             face: drawn,
@@ -178,8 +161,6 @@ impl Capabilities {
         }
     }
 
-    /// The same value with the terminal reporting a pointer, or not: one terminal drawn both ways is
-    /// what proves the pointer is no cell of the frame.
     pub fn reporting(self, reports: bool) -> Capabilities {
         Capabilities {
             pointer: reports,
@@ -187,8 +168,6 @@ impl Capabilities {
         }
     }
 
-    /// The same value with the window's cell moved to `cell`, and the pictures measured at it: the
-    /// screen a window crossed to makes what it draws again.
     pub fn celled(self, cell: CellSize) -> Capabilities {
         Capabilities {
             cell,
@@ -205,7 +184,6 @@ impl Capabilities {
         self.palette
     }
 
-    /// Whether the terminal draws text at more than one cell.
     pub fn sizes_text(&self) -> bool {
         self.sizing
     }
@@ -218,7 +196,6 @@ impl Capabilities {
         &self.pictures
     }
 
-    /// The frame places pictures here; the placements are the frame's cache.
     pub fn pictures_mut(&mut self) -> &mut Pictures {
         &mut self.pictures
     }
@@ -270,8 +247,6 @@ fn sizing_reply(bytes: &[u8]) -> (bool, Vec<u8>) {
     (sized, typed)
 }
 
-/// The cursor reports in `bytes`, in the order the terminal wrote them, and every byte that was not
-/// one of them.
 fn reports(bytes: &[u8]) -> (Vec<(u16, u16)>, Vec<u8>) {
     let mut reports = Vec::new();
     let mut typed = Vec::with_capacity(bytes.len());
@@ -305,8 +280,6 @@ pub(crate) mod caps {
 
     use super::*;
 
-    /// A terminal that names Kitty and read the block as one cell: pictures at the nominal cell and
-    /// no large text.
     pub(crate) fn pictured() -> Capabilities {
         probed(
             &[("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")],
@@ -328,7 +301,6 @@ pub(crate) mod caps {
         )
     }
 
-    /// A terminal drawn in `palette`: the names a terminal gives itself that put a frame in it.
     pub(crate) fn inked(palette: Palette) -> Capabilities {
         probed(
             match palette {

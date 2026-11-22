@@ -1,16 +1,9 @@
-//! `mermaid-rs-renderer` draws a fence's source into an SVG in this process; one that will not
-//! draw is the source it was written as with one sentence under it. That renderer is a pure-Rust
-//! rewrite whose failure mode is a wrong picture, so a refusal is an answer of its own.
-
 use std::sync::OnceLock;
 use std::sync::mpsc;
 use std::time::Duration;
 
 use crate::graphics::{self, CellSize, Footprint, Svg};
 
-/// How long one fence is given to become an SVG, wall clock: generous for the diagrams a fence
-/// holds, and short enough that a pathological one costs a caption instead of a frame. It
-/// bounds a stall the reader feels, not the size of any diagram.
 pub const BOUND: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,16 +14,11 @@ pub enum Fence {
 
 #[derive(Debug)]
 pub enum Block {
-    /// Boxed because a drawing is most of this enum, so a fence that refuses pays for a pointer.
     Picture(Box<Diagram>),
-    Refused {
-        caption: String,
-    },
+    Refused { caption: String },
     Streaming,
 }
 
-/// The block a fence of `source` becomes. A fence still arriving never reaches the renderer,
-/// which is what makes a half-written diagram cost nothing and never flicker.
 pub fn block(source: &str, fence: Fence) -> Block {
     match fence {
         Fence::Streaming => Block::Streaming,
@@ -63,17 +51,14 @@ fn warmed() {
 const WARM_UP: &str = "flowchart TD\n  A-->B";
 
 impl Diagram {
-    /// Draws `source` within [`BOUND`].
     pub fn of(source: &str) -> Result<Diagram, Refusal> {
         Diagram::of_within(BOUND, source)
     }
 
-    /// Draws `source` within `bound`: the wall clock the caller can afford to wait.
     pub fn of_within(bound: Duration, source: &str) -> Result<Diagram, Refusal> {
         warmed();
         let fence = source.to_owned();
         let drawn = within(bound, move || {
-            // The renderer's error is kept as words: nothing downstream links its error type.
             mermaid_rs_renderer::render(&fence).map_err(|error| error.to_string())
         })?;
         let svg = drawn.map_err(|reason| Refusal::Unreadable { reason })?;
@@ -99,12 +84,10 @@ impl Diagram {
         &self.picture
     }
 
-    /// How many cells of a `cell` the diagram takes, without spending a pixel.
     pub fn footprint(&self, cell: CellSize) -> Result<Footprint, graphics::Refusal> {
         self.picture.footprint(cell)
     }
 
-    /// The diagram as the pixels a terminal is asked to place, at the footprint's own size.
     pub fn rasterise(&self, cell: CellSize) -> Result<image::RgbaImage, graphics::Refusal> {
         self.picture.rasterise(cell)
     }
@@ -112,13 +95,8 @@ impl Diagram {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refusal {
-    Unreadable {
-        reason: String,
-    },
-    TooSlow {
-        bound: Duration,
-    },
-    /// The renderer stopped without an answer: it panicked, or left in a way that sent nothing.
+    Unreadable { reason: String },
+    TooSlow { bound: Duration },
     Broken,
 }
 
@@ -157,7 +135,6 @@ pub fn within<T: Send + 'static>(
     match answer.recv_timeout(bound) {
         Ok(value) => Ok(value),
         Err(mpsc::RecvTimeoutError::Timeout) => Err(Refusal::TooSlow { bound }),
-        // The sender unwound without sending, which is all the channel can report of a panic.
         Err(mpsc::RecvTimeoutError::Disconnected) => Err(Refusal::Broken),
     }
 }

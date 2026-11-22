@@ -1,7 +1,3 @@
-//! The first run a person meets: the binary, no config file at all, and a key from the environment or
-//! pasted on stdin — the API-key row on stderr, and the pasted value in nothing the program writes.
-//! Every child gets `env_clear`, so no real `$HOME` with a real key in it can reach the binary.
-
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -30,7 +26,6 @@ fn config_file(home: &TempDir) -> PathBuf {
     home.path().join("sindri").join("config.toml")
 }
 
-/// What the row should say, worked out from `home` rather than copied from the text the core composes.
 fn expected_row(home: &TempDir) -> String {
     format!(
         "api key   from ANTHROPIC_API_KEY, SINDRI_API_KEY or --api-key\n          \

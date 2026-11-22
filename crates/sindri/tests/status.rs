@@ -1,8 +1,4 @@
-//! What a launch says about itself, measured as bytes: OSC 7501 on the stream that owns a terminal, and nothing
-//! at all where there is no terminal to own. Batch mode gets a pseudo-terminal on stderr — a pipe or a file in
-//! the other half of each test — the UI is spawned on one, and the wire is a loopback socket.
-
-mod frame; // one paint-and-read for every test
+mod frame;
 
 use std::fs::File;
 use std::io::{Read, Write};
@@ -20,24 +16,18 @@ use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
 use rustix::termios::{Winsize, tcsetwinsize};
 use tempfile::TempDir;
 
-/// How long a sequence is given to arrive before a test calls it absent: generous, because a test that is merely
-/// slow must not read as a program that never spoke.
 const PATIENCE: Duration = Duration::from_secs(10);
 
-/// The size the pty is told it has, and so the size every frame here is read at: the two cannot
-/// disagree about what a launch drew.
 const COLS: u16 = 80;
 const ROWS: u16 = 24;
 
 const ANSWER: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
 
-/// The recorded reply that asks for `bash ls` and answers nothing: the turn the run waits on.
 const TOOL_USE: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_tool_use.sse");
 
 struct Ground {
-    /// Held so the directories outlive the paths that name them.
     _root: TempDir,
     workspace: PathBuf,
     config: PathBuf,
@@ -59,8 +49,6 @@ impl Ground {
         ground
     }
 
-    /// A child pointed at this ground and at nothing else: a key it never has to ask for, no environment of
-    /// ours, and the escape hatch, because the sandbox is not what a status is about.
     fn command(&self, wire: &Wire) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
         command
@@ -89,8 +77,6 @@ impl Wire {
         Wire::scripted(&[ANSWER])
     }
 
-    /// A wire that answers each request with the next body of `bodies`, and the last one for every
-    /// request past it, so a test scripts the turn that asks for a call and the one after it.
     fn scripted(bodies: &'static [&'static str]) -> Wire {
         let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
         let port = listener.local_addr().expect("a bound address").port();
@@ -121,8 +107,6 @@ impl Wire {
     }
 }
 
-/// The whole request, head and the body it promises read before it is answered: a socket nobody finishes
-/// reading is a run waiting on its own request still in the kernel.
 fn read_request(stream: &mut TcpStream) {
     let mut request = Vec::new();
     let mut buffer = [0u8; 4096];
@@ -160,7 +144,6 @@ fn split(request: &[u8]) -> Option<(String, usize)> {
     Some((head, request.len() - (end + 4)))
 }
 
-/// The recorded reply, as a wire writes one.
 fn answer(stream: &mut TcpStream, body: &str) -> std::io::Result<()> {
     let head = format!(
         "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
@@ -289,8 +272,6 @@ impl Session {
         Session::frame_running(&mut ground.command(wire))
     }
 
-    /// A frame on a command the test shaped itself: the one it stands on is the terminal it is read
-    /// as, and a frame asks that terminal what it speaks before it wears a title.
     fn frame_running(command: &mut Command) -> (Session, Pty, Drawn) {
         let pty = Pty::open();
         let drawn = Drawn::watch(pty.reading_end());
@@ -326,7 +307,6 @@ impl Session {
         }
     }
 
-    /// Waits for the launch to end; the wait is bounded, so a child that never quits fails rather than hangs.
     fn wait(mut self) -> std::process::Output {
         let mut child = self
             .child
@@ -361,7 +341,6 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// The titles the window wore, in the order it wore them.
 fn titles(stream: &str) -> Vec<&str> {
     stream
         .match_indices("\x1b]2;")
@@ -566,8 +545,6 @@ fn the_status_key_turns_the_telling_off() {
     let output = session.wait();
 
     assert_eq!(output.status.code(), Some(0), "the run is unaffected");
-    // The child has quit, so everything it wrote is already in the terminal; the thread that reads it only
-    // has to catch up.
     thread::sleep(Duration::from_millis(200));
     assert!(
         sequences(&text(&drawn.bytes())).is_empty(),
@@ -666,8 +643,6 @@ fn a_batch_run_whose_turn_asks_for_a_command_is_told_it_is_blocked_between_worki
 fn a_frame_says_in_its_title_the_phase_its_run_was_handed() {
     let ground = Ground::new();
     let wire = Wire::scripted(&[TOOL_USE, ANSWER]);
-    // A terminal that speaks the sequences a window is drawn with, and names none of the picture
-    // protocols: this is a test about a title and nothing else.
     let mut command = ground.command(&wire);
     command.env("TERM", "alacritty");
     let (session, mut pty, drawn) = Session::frame_running(&mut command);

@@ -1,7 +1,3 @@
-//! `--format json` writes one compact object on one line whose fields arrive in a fixed
-//! order and are only ever appended to. A field the run knows nothing about is left out
-//! rather than written as `null`: a script cannot tell the two apart.
-
 use std::time::Duration;
 
 use serde::{Serialize, Serializer};
@@ -83,8 +79,6 @@ impl Outcome {
         self.stopped.exit_code()
     }
 
-    /// The one compact line `--format json` writes, with no newline: that belongs to whoever
-    /// writes it out.
     pub fn json(&self) -> String {
         serde_json::to_string(self).expect("a report of plain facts serializes")
     }
@@ -103,7 +97,6 @@ fn reported(usage: Usage) -> Option<Usage> {
     reported.then_some(usage)
 }
 
-/// Saturating rather than wrapping: no report may say a run was quicker than it was.
 fn millis(span: Duration) -> u64 {
     u64::try_from(span.as_millis()).unwrap_or(u64::MAX)
 }

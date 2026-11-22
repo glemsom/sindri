@@ -19,7 +19,6 @@ fn a_run_is_written_as_its_words_and_measured_as_the_cells_they_leave() {
     );
 }
 
-/// The words a row of `buffer` is drawn as, read cell by cell from its left edge.
 fn row_of(buffer: &Buffer, y: u16, width: u16) -> String {
     (0..width)
         .map(|x| buffer.cell((x, y)).expect("a cell of the row").symbol())

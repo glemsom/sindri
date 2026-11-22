@@ -1,6 +1,3 @@
-//! What a row of the composer's band is drawn as: the gutter it opens with, the ink each run of it is
-//! read in, and where a run the row has no room for stops.
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 

@@ -13,28 +13,19 @@ use sindri_core::open::{Handover, Opener, Opening};
 use sindri_core::pipe;
 use sindri_core::turn::Exit;
 
-/// The program a Linux host opens a target with. A front end on another machine
-/// builds its own [`HostOpener`] with that machine's opener instead.
 pub const HOST_OPENER: &str = "xdg-open";
 
-/// How long an opener is given to end before the target is settled as handed over.
 const GRACE: Duration = Duration::from_secs(2);
 
-/// The longest the wait between two looks at an opener that is still running, so a call that
-/// settles at once is back at once.
 const MAX_NAP: Duration = Duration::from_millis(25);
 
-/// This machine's opener, and the one argv word it is spawned with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HostOpener {
-    /// The program to spawn, as the host names it.
     program: OsString,
     grace: Duration,
 }
 
 impl HostOpener {
-    /// An opener running `program`, which is what a test hands a recording
-    /// script and what a front end hands its platform's opener.
     pub fn new(program: impl Into<OsString>) -> HostOpener {
         HostOpener {
             program: program.into(),
@@ -42,19 +33,16 @@ impl HostOpener {
         }
     }
 
-    /// The same opener, waiting at most `grace` for it to end.
     #[cfg(test)]
     pub fn within(mut self, grace: Duration) -> HostOpener {
         self.grace = grace;
         self
     }
 
-    /// This machine's opener: the one that knows which browser the user picked.
     pub fn host() -> HostOpener {
         HostOpener::new(HOST_OPENER)
     }
 
-    /// The program this opener spawns.
     #[cfg(test)]
     pub fn program(&self) -> &OsStr {
         &self.program
@@ -62,8 +50,6 @@ impl HostOpener {
 }
 
 impl Opener for HostOpener {
-    /// Hand a judged target to the opener — one argv word, and no shell — and settle on what
-    /// that opener did with it.
     fn open(&self, opening: &Opening) -> Handover {
         let program = self.program.to_string_lossy().into_owned();
         let mut child = match Command::new(&self.program)

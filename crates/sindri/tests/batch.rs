@@ -1,7 +1,3 @@
-//! What batch mode hands a script, measured where a script measures it: the built binary is spawned and its
-//! stdout, stderr and exit code read back as bytes, against a loopback socket serving a recorded stream, so no
-//! test needs a network or a key, and every child gets `env_clear` and this machine's `PATH`.
-
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -24,7 +20,6 @@ const COPILOT_RESPONSES: &str =
 
 const COPILOT_ANSWER: &str = "Hello from Copilot";
 
-/// A signed-in store's Copilot session: never an api key, and never printed anywhere a run writes.
 const SESSION: &str = "tid=recorded_copilot_session";
 
 const BAD_REQUEST: &str = r#"{"error":{"message":"unknown model","type":"invalid_request_error"}}"#;
@@ -56,7 +51,6 @@ impl Reply {
     }
 }
 
-/// A loopback wire: it answers in order, keeps every request, and can hold a reply until the test releases it.
 struct Wire {
     port: u16,
     seen: Arc<Mutex<Vec<String>>>,
@@ -69,7 +63,6 @@ impl Wire {
         Wire::start(replies, None)
     }
 
-    /// A wire that answers only once it is released, one release per request, so a test can act mid-request.
     fn holding(replies: Vec<Reply>) -> (Wire, Sender<()>) {
         let (release, gate) = channel();
         (Wire::start(replies, Some(gate)), release)
@@ -198,9 +191,6 @@ impl Ground {
         }
     }
 
-    /// A child pointed at this ground and at nothing else, with none of this process's environment but
-    /// `PATH`: without it a child finds only `/bin:/usr/bin`, so the bubblewrap a devbox or Nix install puts
-    /// on `PATH` would be invisible and every test here would read the card instead of the contract.
     fn launch(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_sindri"));
         command
@@ -288,9 +278,6 @@ fn path() -> String {
     std::env::var("PATH").expect("this machine has a PATH")
 }
 
-/// Why this machine cannot confine a command, or `None` where it can: asked once, of the machine rather than of
-/// the tree. A machine that answers no is handed `--yolo-unsafe`, and the answer goes to stderr's own
-/// descriptor, because a passing test's output is captured and a green run must still name the tier it missed.
 fn sandbox_refusal() -> Option<&'static str> {
     static REFUSAL: OnceLock<Option<String>> = OnceLock::new();
     REFUSAL
@@ -508,8 +495,6 @@ fn a_run_records_the_prompt_it_was_asked() {
     );
 }
 
-/// What a secret is written as, spelled out rather than imported: a test that read the constant
-/// could not tell a mask from a mask that never changed.
 const MASK: &str = "«redacted»";
 
 #[test]
@@ -991,8 +976,6 @@ fn a_signal_stops_the_run_with_nothing_on_stdout() {
 
     wire.wait_for_request();
     signal(&child);
-    // The reply is let go after the signal, so the run sees the user's word before it can settle as an
-    // answer.
     std::thread::sleep(Duration::from_millis(100));
     let _ = release.send(());
     let output = child.wait_with_output().expect("the binary should finish");
@@ -1005,7 +988,6 @@ fn a_signal_stops_the_run_with_nothing_on_stdout() {
     );
     assert!(output.stdout.is_empty(), "{}", text(&output.stdout));
 
-    // The record is written as the run goes, so a run the user's word stopped is a session that still reads.
     let document = std::fs::read_to_string(ground.session().join("session.json"))
         .expect("the session document");
     assert!(

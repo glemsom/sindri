@@ -1,7 +1,3 @@
-//! Proves the preamble is a function of the workspace and of nothing else: a build whose catalog
-//! offers skills and one whose offers none must render the same bytes, while the tool sets differ.
-//! Every fixture is a temp tree with its own `.git`, so the root read is never this tree.
-
 use std::path::{Path, PathBuf};
 
 use sindri_core::config::Config;
@@ -76,9 +72,6 @@ fn principle_bullets(preamble: &str) -> Vec<&str> {
 fn a_catalog_offering_no_skill_leaves_the_preamble_byte_identical() {
     let tree = Tree::new();
 
-    // One workspace, two builds of it: the real one, whose built-ins are compiled in, and a build
-    // carrying no skill support at all. Nothing on disk differs between them, so nothing but the
-    // tool set can.
     let offering = Catalog::discover(&tree.workspace(), Some(&tree.home()));
     let no_skill_support =
         Catalog::discover_with_builtin(&tree.workspace(), Some(&tree.home()), &[]);

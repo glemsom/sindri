@@ -1,7 +1,3 @@
-//! The system message a run is sent with, re-sent every turn, so nothing that moves
-//! inside a run may enter it: no timestamp, no session id, no turn count. A preamble
-//! that changed between turns would waste every cache breakpoint spent on it.
-
 use std::path::{Path, PathBuf};
 
 use crate::skills::repository_root;
@@ -66,7 +62,6 @@ fn environment(workspace: &Path) -> String {
     )
 }
 
-/// A file that will not read is treated as absent.
 fn project_instructions(root: &Path) -> Option<String> {
     let text = std::fs::read_to_string(root.join(PROJECT_INSTRUCTIONS_FILE)).ok()?;
     let text = text.trim_end();

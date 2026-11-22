@@ -1,7 +1,3 @@
-//! Proves a session directory reads back as the run it recorded: every session the state home
-//! holds, newest first, and the one a GUID or an unambiguous prefix names. Most are hand-written,
-//! so the reader meets files no writer here made, where an unknown field costs nothing.
-
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -66,8 +62,6 @@ impl Ground {
 #[test]
 fn every_session_the_state_home_holds_reads_newest_first() {
     let state = Ground::empty();
-    // Named so the directory's own order and the GUID's order both differ from the order the run's
-    // own start puts them in.
     state.session("1111-bbbb", "2024-03-01T00:00:00Z", "final");
     state.session("2222-aaaa", "2024-01-01T00:00:00Z", "final");
     state.session("3333-cccc", "2024-02-01T00:00:00Z", "cancelled");
@@ -174,8 +168,6 @@ fn a_prefix_no_session_carries_is_absent() {
 
 #[test]
 fn a_run_that_was_recorded_reads_back_as_the_run_it_was() {
-    // The reader against this build's own writer, which is the one shape no hand-written fixture
-    // can stand in for: a field the two spell differently would read as nothing at all.
     let state = Ground::empty();
     let workspace = state.home.join("workspace");
     std::fs::create_dir_all(&workspace).expect("a workspace");

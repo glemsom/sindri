@@ -1,7 +1,3 @@
-//! What the provider seam promises, asked through the real wire implementations and the real
-//! event-stream decoding, against replies recorded from the two providers. Nothing reaches the
-//! network: the transport hands back recorded bytes, so only the socket is missing.
-
 use serde_json::{Value, json};
 use sindri_core::provider::transport::{Canned, Http, Replay};
 use sindri_core::provider::{Ask, Client, Credential, Deltas, Route, Turn, Verdict};

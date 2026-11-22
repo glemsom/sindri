@@ -4,12 +4,10 @@ use crate::ink::Ink;
 use crate::pen;
 use crate::rows::stop_mark;
 
-/// Also the wait a live run gives the loop in `tui`.
 pub const STEP_MS: u64 = 80;
 
 const GLYPHS: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-/// The step of the pulse `elapsed_ms` stands on: the one clock a frame's motion keeps.
 pub fn step(elapsed_ms: u64) -> u64 {
     elapsed_ms / STEP_MS
 }
@@ -19,18 +17,14 @@ pub fn pulse_glyph(elapsed_ms: u64) -> char {
     GLYPHS[usize::try_from(step).unwrap_or(0)]
 }
 
-/// Truncated rather than rounded, because a run 999 ms in has not been running a second yet.
 pub fn format_duration(ms: u64) -> String {
     duration(ms, "")
 }
 
-/// The same duration spaced as a fact is read rather than as a clock is watched: `4.1 s`, `12 s`,
-/// `1m 30s`, `1h 02m`.
 pub fn format_duration_spaced(ms: u64) -> String {
     duration(ms, " ")
 }
 
-/// The one table both forms read, where `gap` is what stands between a number and its unit.
 fn duration(ms: u64, gap: &str) -> String {
     match ms {
         ms if ms < 10_000 => format!("{}.{}{gap}s", ms / 1_000, ms % 1_000 / 100),
@@ -40,18 +34,10 @@ fn duration(ms: u64, gap: &str) -> String {
     }
 }
 
-/// A frame with no marker on it holds no value of this type: that is what says a launch no
-/// run has touched apart from a run that has stopped.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Pulse {
-    Live {
-        elapsed_ms: u64,
-    },
-    /// The duration is carried here and never read off a clock again.
-    Settled {
-        stop: Stop,
-        elapsed_ms: u64,
-    },
+    Live { elapsed_ms: u64 },
+    Settled { stop: Stop, elapsed_ms: u64 },
 }
 
 impl Pulse {
@@ -66,8 +52,6 @@ impl Pulse {
         }
     }
 
-    /// A run that stopped says why: `cancelled 5.0s`, `error 3.1s`, and only a final answer
-    /// goes without a word.
     pub fn words(&self) -> String {
         match self {
             Pulse::Live { elapsed_ms } => format_duration(*elapsed_ms),
@@ -81,8 +65,6 @@ impl Pulse {
         }
     }
 
-    /// The glyph the marker wears while a run is live, and none once it has settled: the rail's state
-    /// row reads it, so the row and the answer's head never show two steps of one run.
     pub(crate) fn stepping(&self) -> Option<char> {
         match self {
             Pulse::Live { .. } => Some(self.mark().0),

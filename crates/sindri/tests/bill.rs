@@ -1,7 +1,4 @@
-//! The count the band's head row hangs of the draft: the files its words name and the command it
-//! opens with, as a reader's own keys and a card's own rows change it.
-
-mod frame; // one paint-and-read for every test
+mod frame;
 
 use std::path::Path;
 
@@ -24,7 +21,6 @@ fn workspace(files: &[&str]) -> tempfile::TempDir {
     root
 }
 
-/// A frame standing in `root` with `draft` typed through the keys a reader's fingers send.
 fn typing(root: &Path, draft: &str) -> View {
     let mut view = View::of(
         Capabilities::default(),
@@ -35,8 +31,6 @@ fn typing(root: &Path, draft: &str) -> View {
     view
 }
 
-/// The band's head row, as the glyphs it draws: the first row of the composer band the pass handed
-/// back, which is the row the draft's count hangs on.
 fn head_row(frame: &Frame) -> String {
     let band = frame
         .told()

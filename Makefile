@@ -1,28 +1,10 @@
-# `make check` is the definition of done: the stages below, in this order, the first
-# failure stopping the run and naming the stage that failed.
-
 # Run it inside `devbox shell`: cargo, rustfmt, clippy and the musl target come from
-# devbox's init hook, so nothing here names a toolchain path, and a check that cannot
-# run fails instead of reporting success.
+# devbox's init hook, so nothing here names a toolchain path and a check that cannot run
+# fails and does not report success.
 
-#     make check                       every stage, in order
-#     make audit                       only the audits
-#     make sandbox                     only the sandbox tier, and its contract test
-
-#     make check STAGES='fmt clippy'   a subset, in order
-#     make <stage>                     one stage alone, e.g. frames or test
-#     make frame F=boot-120x40         print one frame as the code draws it now
-
-#     make frame-update F=boot-120x40  bless a deliberate change to that frame
-#     SINDRI_BLESS=1 make evals        rewrite the evals' goldens from the tree
-#                                      itself; doctor and mermaid have none
-
-# A stage line reads `check: <stage> ... ok` or `... FAIL`, printed after the stage's
-# own output so the verdict is the last thing the eye lands on.
-
-# 77 is automake's skip status, and the reason is printed on the line above it: only a
-# skip keeps exit 0, where a stage that ran and failed stops the run. `make -j` changes
-# nothing: the stages are a loop, not prerequisites, so they stay in order.
+# 77 is automake's skip status and the line above says why: only a skip keeps exit 0,
+# where a stage that ran and failed stops the run. `make -j` changes nothing, because the
+# stages are a loop and not prerequisites.
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -53,7 +35,6 @@ endef
 fmt:
 	$(call stage,fmt,cargo fmt --all --check)
 
-# `-D warnings`: a clippy warning is a failure, not a note.
 clippy:
 	$(call stage,clippy,cargo clippy --all-targets -- -D warnings)
 
@@ -63,8 +44,8 @@ audit:
 test:
 	$(call stage,test,cargo test --workspace)
 
-# `--nocapture` lets each fixture's own `check: frame ... ok` line out beneath this stage's
-# verdict, and one thread keeps two runs reading in the same order.
+# One thread, so two runs' fixture lines read in the same order, and `--nocapture` so each
+# fixture's own `check: frame ... ok` line comes out beneath this stage's verdict.
 frames:
 	$(call stage,frames,cargo test -p sindri --test frames -- --nocapture --test-threads=1)
 
@@ -80,8 +61,6 @@ frame-update:
 	$(if $(F),,$(error make frame-update needs F=<frame>-<cols>x<rows>, e.g. F=boot-120x40))
 	INSTA_UPDATE=force cargo test -q -p sindri --test frames -- $(subst -,_,$(F))
 
-# The estimator is printed with the table, because it is an estimate of a token count and not
-# one; `--nocapture` is what lets both out.
 bench:
 	$(call stage,bench,cargo test -p sindri-core --test wording_bench -- --nocapture)
 

@@ -3,7 +3,6 @@ use tempfile::TempDir;
 use super::*;
 use crate::config::Config;
 
-/// Real directories, because the writable set is canonicalised through the filesystem.
 struct Ground {
     _root: TempDir,
     path: PathBuf,
@@ -23,7 +22,6 @@ impl Ground {
     }
 }
 
-/// `extra` is named in the order given, so a test can show the order does not reach the argv.
 fn boundary(ground: &Ground, extra: &[&str], enforcement: Enforcement) -> Boundary {
     let workspace = ground.directory("workspace");
     let config = Config {
@@ -38,14 +36,11 @@ fn boundary(ground: &Ground, extra: &[&str], enforcement: Enforcement) -> Bounda
     Boundary::from_config(&config, &workspace, enforcement).expect("the boundary holds")
 }
 
-/// Not on this machine on purpose: the argv is rendered from the value and never from what
-/// the filesystem says.
 const TEMP: &str = "/run/sindri/7f3c/tmp";
 
 #[test]
 fn the_sandbox_argv_is_the_boundary_and_nothing_else() {
     let ground = Ground::new();
-    // Named in reverse, so the vector shows the boundary's sorted order, not the caller's.
     let boundary = boundary(&ground, &["zdata", "adata"], Enforcement::Bubblewrap);
     let workspace = ground.path.join("workspace");
     let adata = ground.path.join("adata");
@@ -55,8 +50,6 @@ fn the_sandbox_argv_is_the_boundary_and_nothing_else() {
         .expect("the boundary renders an argv")
         .argv();
 
-    // Written out by hand rather than built by the code under test, so the
-    // builder cannot drift into saying otherwise.
     let expected: Vec<String> = vec![
         "bwrap",
         "--unshare-all",

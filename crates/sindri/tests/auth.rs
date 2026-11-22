@@ -1,5 +1,3 @@
-//! The sign-in command's edges without a socket: one wire to sign in to, the two that are asked
-//! with a key refused, and a launch with nowhere to keep a session refused before GitHub is reached.
 //! Every child gets `env_clear`, so no real `$HOME` and no session already kept in one reaches it.
 
 use std::process::{Command, Output};

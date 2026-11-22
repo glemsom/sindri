@@ -43,28 +43,17 @@ impl fmt::Display for Opening {
     }
 }
 
-/// What an opener did with a judged target, which is the call's answer: a spawn that only
-/// started says nothing about whether a browser appeared.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Handover {
-    /// The opener exited 0, so the target is on its way to the reader's screen.
     Opened,
-    /// The opener is still running past the grace it was given: handed over, and no failure.
     Handed,
-    /// No opening happened, in the opener's own words — a non-zero exit, or a spawn that could
-    /// not happen at all.
     Failed { exit: Exit, words: String },
 }
 
-/// What hands a judged target to the browser on this machine. The front end supplies it, because
-/// the sandbox has no display and the core never spawns.
 pub trait Opener: fmt::Debug + Send + Sync {
     fn open(&self, opening: &Opening) -> Handover;
 }
 
-/// Where a run stands when it asks to open something: the writable set, the session temp
-/// and the directory a relative path is read from — the places held canonical and sorted,
-/// so a judgement compares the filesystem's spelling, not a string a `..` can walk past.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ground {
     places: Vec<PathBuf>,
@@ -273,8 +262,6 @@ fn resolve(path: &Path, written: &Path) -> Result<PathBuf, Refusal> {
     })
 }
 
-/// A refusal names the value it refused, and the allowlist where one applies, because a
-/// model that cannot read the allowlist spends a turn guessing at it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Refusal {
     Unreadable {

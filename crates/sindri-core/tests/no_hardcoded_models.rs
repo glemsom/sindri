@@ -1,7 +1,3 @@
-//! Proves no model list is remembered anywhere in the tree: every Rust source is read for the shape
-//! a remembered list has, several model identifiers as literals in a bracketed collection or joined
-//! in one. Blunt on purpose — `[` only, two identifiers or more, `include_str!` unresolved.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -55,8 +51,6 @@ fn raw_quote(bytes: &[u8], index: usize) -> Option<usize> {
     (bytes.get(quote) == Some(&b'"')).then_some(quote)
 }
 
-/// How many bytes the `'` at `index` opens: one for a lifetime, and the whole literal for a
-/// character, so a `'"'` cannot open a string.
 fn character_width(bytes: &[u8], index: usize) -> usize {
     match bytes.get(index + 1) {
         Some(b'\\') => bytes
@@ -70,9 +64,6 @@ fn character_width(bytes: &[u8], index: usize) -> usize {
     }
 }
 
-/// `source` with its comments and character literals replaced by spaces, at the same offsets, so a
-/// line number found here is the line number in the file. A string literal is copied whole, because
-/// a `//` inside one is a URL and not a comment.
 fn masked(source: &str) -> String {
     let bytes = source.as_bytes();
     let mut out = vec![b' '; bytes.len()];
@@ -119,9 +110,6 @@ fn line_at(source: &str, offset: usize) -> usize {
     source[..offset].matches('\n').count() + 1
 }
 
-/// The body of the string literal opening at `open`, and the offset just past its closing quote,
-/// with raw strings read as raw so a body holding quotes cannot desynchronise the scan of
-/// everything after it.
 fn literal(source: &str, open: usize) -> (usize, usize) {
     let bytes = source.as_bytes();
     let hashes = bytes[..open]

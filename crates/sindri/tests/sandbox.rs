@@ -1,8 +1,4 @@
-//! What boot does when the sandbox cannot be made, measured where a script measures it: the binary is spawned with a
-//! stand-in `bwrap` first on `PATH`, and its stderr, stdout and exit code read back. A stand-in is a machine that
-//! refuses on demand, so all three failures are provable here without a broken kernel.
-
-mod modules; // the module a source file belongs to
+mod modules;
 
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
@@ -12,7 +8,6 @@ use std::process::{Command, Output};
 use tempfile::TempDir;
 
 struct Ground {
-    /// Held so the directories outlive the paths that name them.
     _root: TempDir,
     workspace: PathBuf,
     config: PathBuf,
@@ -83,8 +78,6 @@ impl Ground {
     }
 }
 
-/// An endpoint nothing listens on: a run that reaches it is refused at once instead of waiting out
-/// a timeout.
 const UNANSWERED_ENDPOINT: &str = "http://127.0.0.1:1";
 
 const RESTRICTED: &str = "if [ \"${1:-}\" = --version ]; then\n  \
@@ -245,7 +238,6 @@ fn a_yolo_key_in_the_config_is_refused_rather_than_honoured() {
 #[test]
 fn a_machine_that_can_make_a_sandbox_proves_it_before_the_first_turn() {
     let ground = Ground::new();
-    // This machine's own PATH, so the real bwrap is the one boot proves with.
     let path = std::env::var("PATH").expect("this machine has a PATH");
 
     let output = run(ground.command(&path).args(["-b", "triage this", "-v"]));
@@ -271,7 +263,6 @@ fn a_machine_that_can_make_a_sandbox_proves_it_before_the_first_turn() {
     }
 }
 
-/// `Enforcement::Unsafe` in the two crates' sources, as the file it is written in and the function that writes it.
 fn unsafe_sites() -> Vec<(String, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut found: Vec<(String, String)> = Vec::new();
@@ -330,8 +321,6 @@ fn enforcement_becomes_unsafe_only_where_the_command_line_flag_is_read() {
         "the scan reads the tree it means to: {sites:?}"
     );
 
-    // In the front end, one function may write the variant, and it is the one that reads `--yolo-unsafe` off
-    // this invocation: every other route to it would be a fallback nobody asked for.
     let front_end: Vec<&(String, String)> = sites
         .iter()
         .filter(|(file, _)| file.starts_with("crates/sindri/src"))
@@ -347,9 +336,6 @@ fn enforcement_becomes_unsafe_only_where_the_command_line_flag_is_read() {
         "and it is the flag's own constructor"
     );
 
-    // In the core the variant is read in the three modules that hold the fact — the one that defines it, the
-    // one that enforces it and the one that proves it — and in no module that could arrive at it from a
-    // file or a variable.
     let core: Vec<&(String, String)> = sites
         .iter()
         .filter(|(file, _)| file.starts_with("crates/sindri-core/src"))

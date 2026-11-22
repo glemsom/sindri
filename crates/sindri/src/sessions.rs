@@ -13,10 +13,8 @@ use sindri_core::session;
 use crate::cli::SessionsAction;
 use crate::refuse;
 
-/// The exit code for a state home or a session's files that cannot be read.
 const SETUP: u8 = 3;
 
-/// The exit code for an id that names no one session, or a `show` with no run to read.
 const USAGE: u8 = 2;
 
 pub fn run(action: SessionsAction) -> ExitCode {
@@ -57,7 +55,6 @@ fn list(sessions: &[Recorded]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// A session `/new` superseded keeps saying `running`: it did not stop, it was left.
 fn show(sessions: &[Recorded], id: Option<&str>, json: bool) -> ExitCode {
     let recorded = match id {
         Some(id) => match choose(sessions, id) {

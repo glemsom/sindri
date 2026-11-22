@@ -1,13 +1,7 @@
-//! The clock is an argument and never read here, so the pace is a value a test walks in
-//! microseconds instead of sleeping through a second. No words are built here either: a report is
-//! built from permitted facts and never from a string, so nothing paced here holds a prompt.
-
 use std::time::{Duration, Instant};
 
 use crate::records::Status;
 
-/// A turn cap is not a progress bar — turn 12 of 250 is not five percent of anything — so a
-/// run of turns is one word a second rather than a flicker.
 pub const WINDOW: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Default)]
@@ -24,7 +18,6 @@ impl Throttle {
     pub fn offer(&mut self, report: Status, now: Instant) -> Option<Status> {
         if let Some((said, at)) = &self.said {
             if said == &report {
-                // Already said: anything held for the window is dropped, not told late.
                 self.held = None;
                 return None;
             }

@@ -13,7 +13,6 @@ use sindri::pen;
 use crate::cli::Cli;
 use crate::refuse;
 
-/// The exit code a report that could not be written is reported by.
 const SETUP: u8 = 3;
 
 const LABEL: u16 = 14;
@@ -51,7 +50,6 @@ fn write(report: &str) -> io::Result<()> {
     stdout.flush()
 }
 
-/// Every fact is read off the launch the run would be made from.
 struct Report {
     enforcement: Enforcement,
     workspace: PathBuf,
@@ -117,8 +115,6 @@ fn skills(listing: &[Listing]) -> Vec<String> {
             .trim_end()
             .to_owned(),
         );
-        // A shadowed name reports the loser by the path that never loads, so a person can
-        // open the file discovery is ignoring.
         for lost in &entry.shadows {
             let worse_off = match &lost.loser_path {
                 Some(path) => format!("{} {}", lost.loser.word(), path.display()),

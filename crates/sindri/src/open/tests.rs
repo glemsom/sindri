@@ -9,19 +9,14 @@ use tempfile::TempDir;
 
 use super::*;
 
-/// How long a recording script is given to write its argv, which is generous
-/// because the spawner does not wait for it.
 const PATIENCE: Duration = Duration::from_secs(5);
 
-/// A workspace, a session temp beside it, and a place to keep what a fake
-/// opener records.
 struct Tree {
     /// Held so the directories outlive the ground that names them.
     root: TempDir,
 }
 
 impl Tree {
-    /// A tree of the three directories a judgement and a spawn need.
     fn new() -> Tree {
         let root = tempfile::tempdir().expect("a temp tree");
         for name in ["workspace", "tmp"] {
@@ -30,19 +25,16 @@ impl Tree {
         Tree { root }
     }
 
-    /// A directory of the tree, canonical.
     fn directory(&self, name: &str) -> PathBuf {
         std::fs::canonicalize(self.root.path().join(name)).expect("the directory resolves")
     }
 
-    /// A file in the workspace holding `body`.
     fn in_workspace(&self, name: &str) -> PathBuf {
         let path = self.directory("workspace").join(name);
         std::fs::write(&path, "body").expect("the file");
         path
     }
 
-    /// The ground a run standing in the workspace judges from.
     fn ground(&self) -> Ground {
         let boundary = Boundary::from_config(
             &Config::default(),
@@ -58,8 +50,6 @@ impl Tree {
         .expect("the ground resolves")
     }
 
-    /// A fake opener that writes each of its argv words on a line of its own,
-    /// so a test reads the argv the process was really spawned with.
     fn recording_opener(&self) -> HostOpener {
         let record = self.root.path().join("argv");
         let script = self.root.path().join("fake-opener");
@@ -116,8 +106,6 @@ impl Tree {
         HostOpener::new(script)
     }
 
-    /// The argv the fake opener recorded, one word per line, once it has
-    /// written them.
     fn recorded(&self) -> Vec<String> {
         let record = self.root.path().join("argv");
         let deadline = Instant::now() + PATIENCE;

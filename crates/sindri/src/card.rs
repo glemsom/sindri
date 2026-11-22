@@ -1,6 +1,3 @@
-//! The card every screen is drawn on: a rounded border carrying the screen's name in its top row
-//! and the key that leaves in its bottom row, over the frame it was opened from, dimmed.
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
@@ -9,18 +6,12 @@ use crate::keys;
 use crate::palette::Palette;
 use crate::pen::{self, Clip};
 
-/// The widest a card is drawn: the columns past it are the scrim's.
 const WIDTH: u16 = 72;
 
-/// The columns a card spends before its body begins: a border and a column of inset.
 const INSET: u16 = 2;
 
-/// The narrowest frame a card is drawn in: under it the border spends more columns than it gives
-/// back, so the card bleeds to the frame's own edges instead.
 const NARROW: u16 = 50;
 
-/// The columns the key that leaves keeps clear at each end of the bottom row: the corner's own
-/// column and one of rule.
 const LEAVES_INSET: u16 = 2;
 
 const TOP: (char, char) = ('╭', '╮');
@@ -31,16 +22,12 @@ const RULE: char = '─';
 
 const SIDE: char = '│';
 
-/// The mark a card says the rows it keeps back with: the ellipsis the fold counts in.
 const ELLIPSIS: char = '\u{22EF}';
 
-/// The columns a screen lays its rows in, so it can measure a body before a card is painted for it.
 pub fn body_width(area: Rect) -> u16 {
     area.width.min(WIDTH).saturating_sub(INSET * 2)
 }
 
-/// The columns a card's two borders stand at, given the body it hands the screen: the border and
-/// the column of inset it spends before that body begins, on either side of it.
 pub fn border_columns(body: Rect) -> (u16, u16) {
     (
         body.x.saturating_sub(INSET),
@@ -48,8 +35,6 @@ pub fn border_columns(body: Rect) -> (u16, u16) {
     )
 }
 
-/// The cells a card named for a body `rows` tall covers in `area`: the frame itself where it is too
-/// narrow for a border of its own, and the box it is drawn in otherwise.
 pub fn bounds(area: Rect, rows: u16) -> Rect {
     if area.width < NARROW {
         return area;
@@ -64,9 +49,6 @@ pub fn bounds(area: Rect, rows: u16) -> Rect {
     }
 }
 
-/// Paints a card named `name`, whose key that leaves is `leaves`, into `area`, and returns the rows
-/// the screen inside it draws in: the card's columns less its border and inset, and as many of the
-/// body's `rows` as the frame has room for.
 pub fn paint(
     area: Rect,
     name: &str,
@@ -79,14 +61,10 @@ pub fn paint(
     if area.width < NARROW {
         return bleeding(area, name, rows, buffer, edge, palette);
     }
-    // A card that is the whole frame has no gutter left to grey, and a scrim painted under it
-    // would be covered in the same pass.
     scrim(area, buffer, palette);
     boxed(area, name, leaves, rows, buffer, edge, palette)
 }
 
-/// The rows of a body `rows` tall that `room` rows hold, and how many of them it keeps back: a body
-/// with any row kept back gives one of the room's rows to the row that counts them.
 fn capped(rows: u16, room: u16) -> (u16, u16) {
     match rows > room && room > 0 {
         true => (room - 1, rows - (room - 1)),
@@ -94,7 +72,6 @@ fn capped(rows: u16, room: u16) -> (u16, u16) {
     }
 }
 
-/// The row under the body `held` that says how many rows of it the card could not hold.
 fn counted(buffer: &mut Buffer, held: Rect, rows: u16, palette: &Palette) {
     pen::write(
         buffer,
@@ -112,15 +89,10 @@ fn counted(buffer: &mut Buffer, held: Rect, rows: u16, palette: &Palette) {
     );
 }
 
-/// Dims every cell of the frame a card is opened from, so no glyph behind it is read at the
-/// strength the screen drew it. A cell keeps its background, because a band is the surface a cell
-/// sits on and the grey says the words are out of reach, not that the band has gone.
 fn scrim(area: Rect, buffer: &mut Buffer, palette: &Palette) {
     pen::wash(buffer, area, Ink::Dim.style(palette));
 }
 
-/// A card's own cells start at the frame's ground: neither a band nor a transcript behind it is
-/// read through the card that covers it.
 fn grounded(buffer: &mut Buffer, rect: Rect, palette: &Palette) {
     pen::ground(buffer, rect, palette.ground(None));
 }
@@ -163,8 +135,6 @@ fn boxed(
     body
 }
 
-/// The card a frame too narrow or too short to hold one is drawn as: the title row, and the body it
-/// heads at the card's own inset, with no border to spend columns and rows on.
 fn bleeding(
     area: Rect,
     name: &str,
@@ -213,7 +183,6 @@ fn sides(buffer: &mut Buffer, card: Rect, y: u16, palette: &Palette) {
     }
 }
 
-/// The key that leaves hangs in the bottom row as the name hangs in the top one, at the other end.
 fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
     let row = Rect {
         y: card.bottom() - 1,
@@ -238,8 +207,6 @@ fn footed(buffer: &mut Buffer, card: Rect, leaves: &str, palette: &Palette) {
     );
 }
 
-/// The name hangs in the edge row the card takes the keys by, so it is the accent dimmed no more
-/// than the row it hangs in, and the blanks either side of it are that row's own rule.
 fn labelled(buffer: &mut Buffer, row: Rect, name: &str, palette: &Palette) {
     if name.is_empty() {
         return;

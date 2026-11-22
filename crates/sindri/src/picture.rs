@@ -1,7 +1,3 @@
-//! A picture an answer points at, or one the binary carries: its source resolved inside the
-//! workspace or held as bytes, its extent read from its header rather than drawn from it, and its
-//! words kept beside it, because a picture's block copies as its words and never as its bytes.
-
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
@@ -22,9 +18,6 @@ impl Surface {
         Surface::default()
     }
 
-    /// A surface of the facts a row is measured against: the `workspace` a picture is found in, the
-    /// pixels in a `cell`, whether this terminal `draws` pictures, and whether it `sizing`s text.
-    /// A surface told of no band takes a picture's own rows for the rows it may be read in.
     pub fn of(workspace: Option<&Path>, cell: CellSize, draws: bool, sizing: bool) -> Surface {
         Surface {
             workspace: workspace.map(Path::to_path_buf),
@@ -35,8 +28,6 @@ impl Surface {
         }
     }
 
-    /// The same surface on a band `rows` tall: the rows a picture is read in, and the most a
-    /// picture may take before it gives way on that axis to fit.
     pub fn band(self, rows: u16) -> Surface {
         Surface {
             band: Some(rows),
@@ -44,8 +35,6 @@ impl Surface {
         }
     }
 
-    /// The rows the band this surface is read in has, and `u16::MAX` where it was told of none: a
-    /// picture told of no band is bounded by its own rows.
     pub fn rows(&self) -> u16 {
         self.band.unwrap_or(u16::MAX)
     }
@@ -78,11 +67,7 @@ pub struct Picture {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Drawn {
     File(PathBuf),
-    /// The SVG a mermaid fence's source became, kept as text rather than as a parsed tree: a
-    /// row is copied and compared like any other value, so the drawing is parsed when drawn.
     Drawing(String),
-    /// The bytes the binary carries: a picture that travels with the product, so no workspace
-    /// has to hold it and no path can be moved or deleted out from under it.
     Carried(&'static [u8]),
 }
 
@@ -106,9 +91,6 @@ impl Picture {
         )
     }
 
-    /// The pixels of this picture at the cells it was measured into, or nothing when what it was
-    /// measured from cannot be decoded: a file gone, or bytes that are not a picture. A raster is
-    /// averaged rather than dropped, because nearest loses letters, and it loses its plate.
     pub fn rasterise(&self, cell: CellSize) -> Option<image::RgbaImage> {
         let (width, height) = self.pixels(cell);
         let drawing = match &self.drawn {
@@ -153,8 +135,6 @@ pub fn drawing(
     of(source, Drawn::Drawing(svg.to_owned()), ceiling, surface)
 }
 
-/// A picture the binary carries, measured against `ceiling` with no workspace and nothing to
-/// resolve: the bytes are the source, so no path can be outside a workspace or gone.
 pub fn carried(
     source: &str,
     bytes: &'static [u8],
@@ -178,13 +158,8 @@ fn of(source: &str, drawn: Drawn, ceiling: Ceiling, surface: &Surface) -> Result
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Refusal {
     Nowhere,
-    Outside {
-        source: String,
-    },
-    Unreadable {
-        /// The read's own words, kept rather than its error type because the caption prints them.
-        reason: String,
-    },
+    Outside { source: String },
+    Unreadable { reason: String },
 }
 
 impl Refusal {
@@ -224,8 +199,6 @@ pub fn speaks_kitty(term: Option<&str>, program: Option<&str>) -> bool {
     link::named(term, program, &["kitty", "ghostty", "wezterm"])
 }
 
-/// The canonical path of `source` and of `workspace`, so neither `..` nor a symbolic link can
-/// walk an answer out of the directory the run was trusted with.
 fn resolve(source: &str, workspace: Option<&Path>) -> Result<PathBuf, Refusal> {
     let Some(workspace) = workspace else {
         return Err(Refusal::Nowhere);
@@ -249,8 +222,6 @@ fn resolve(source: &str, workspace: Option<&Path>) -> Result<PathBuf, Refusal> {
     }
 }
 
-/// The extent `drawn` declares: an SVG's own, or a raster's header read without decoding it,
-/// whether that raster is a file or the bytes the binary carries.
 fn extent(drawn: &Drawn) -> Result<(u32, u32), Refusal> {
     match drawn {
         Drawn::Drawing(svg) => measured(svg),
@@ -263,8 +234,6 @@ fn extent(drawn: &Drawn) -> Result<(u32, u32), Refusal> {
     }
 }
 
-/// The extent a raster's header declares, read off the first bytes of it rather than by
-/// decoding pixels: a carried picture is measured before anything is made of it.
 fn header(bytes: &[u8]) -> Result<(u32, u32), Refusal> {
     let reader = image::ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
@@ -272,17 +241,10 @@ fn header(bytes: &[u8]) -> Result<(u32, u32), Refusal> {
     reader.into_dimensions().map_err(Refusal::unreadable)
 }
 
-/// An alpha this faint is the plate a picture is made on rather than light of the picture, so it is
-/// dropped and the band under the picture shows through.
 const FLOOR: u8 = 16;
 
-/// The most of an axis a picture's alpha fades over, as a share of it: a picture only a few cells
-/// wide keeps a middle with light in it.
 const SHARE: u32 = 4;
 
-/// A raster at the pixels of the footprint it was measured into, losing its plate and carrying its
-/// alpha to nothing at that footprint's edge so the band beneath reads as one plane. Only the alpha
-/// is shaped: the colour decodes as the file held it.
 fn raster(
     picture: image::DynamicImage,
     (width, height): (u32, u32),
@@ -295,9 +257,6 @@ fn raster(
     pixels
 }
 
-/// The pixels of a decoded raster with their plate floored away and what is left of their alpha
-/// fading out toward the footprint's edge, so the band under a picture shows through wherever the
-/// picture has no light to give.
 fn feathered(pixels: &mut image::RgbaImage, cell: CellSize) {
     let (width, height) = pixels.dimensions();
     let across = feather(cell.width(), width);
@@ -313,14 +272,10 @@ fn feathered(pixels: &mut image::RgbaImage, cell: CellSize) {
     }
 }
 
-/// How far in from an edge a picture's alpha fades: a `cell` of it, never more than a [`SHARE`] of
-/// `extent`, and never less than the one pixel that carries a footprint's edge to nothing.
 fn feather(cell: u32, extent: u32) -> u32 {
     cell.min(extent / SHARE).max(1)
 }
 
-/// How much of a pixel's alpha survives `at` along an axis `extent` long: none of it on the
-/// outermost pixel, all of it `span` pixels in, and a linear fall between.
 fn fade(at: u32, extent: u32, span: u32) -> f32 {
     let distance = at.min(extent.saturating_sub(1).saturating_sub(at));
     distance.min(span) as f32 / span as f32

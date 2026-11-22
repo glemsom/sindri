@@ -5,10 +5,8 @@ use crate::ink::Ink;
 use crate::kept::{CAP, Kept, Move, Narrow, leaves};
 use crate::list::{self, Beside, ScreenRow};
 
-/// The one line the screen says in place of its rows while the wire has yet to answer.
 const ASKING: &str = "asking the wire what it serves";
 
-/// The one line it says when the wire answered serving nothing.
 const NO_NAME: &str = "no served name answers";
 
 pub type Row<'a> = (&'a str, &'a str);
@@ -24,9 +22,6 @@ impl Models {
         Models::default()
     }
 
-    /// The same screen with the names the wire served, which is the screen's own copy of a fact the
-    /// frame's value holds. A listing that is not the one the screen holds puts the mark back on the
-    /// first row; the same listing handed again leaves the reader where they were.
     pub fn served_by(mut self, listing: Option<Listing>) -> Models {
         if self.listing != listing {
             self.listing = listing;
@@ -47,7 +42,6 @@ impl Models {
         self.narrow.query()
     }
 
-    /// The first `CAP` names the query leaves, which are the rows the card draws.
     pub fn rows(&self) -> Vec<Row<'_>> {
         leaves(self.names(), self.narrow.query())
             .into_iter()
@@ -55,8 +49,6 @@ impl Models {
             .collect()
     }
 
-    /// The served names as the rank reads them, in the order the wire listed them: the id a query is
-    /// read against, and the row the card draws.
     fn names(&self) -> impl Iterator<Item = (&str, Row<'_>)> + '_ {
         self.listing
             .as_ref()
@@ -75,9 +67,6 @@ impl Models {
         self.narrow.mark()
     }
 
-    /// The rows the screen's card holds: the query at the head, one row per served name with the row
-    /// the reader is on marked, or the line it says in place of them. A wire that could not answer
-    /// offers its hint rather than a refusal, because a model named by hand still runs.
     pub fn body(&self) -> Vec<ScreenRow> {
         let names = self.rows();
         let said = match self.hint() {

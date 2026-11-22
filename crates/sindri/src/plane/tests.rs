@@ -1,5 +1,3 @@
-//! What a band's shade says of the rows it covers, and the images a frame holds of it.
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -11,21 +9,16 @@ use crate::pen::Clip;
 use crate::readback::under;
 use crate::rows::MARGIN;
 
-/// The two spellings that name colours of their own; `SLOTS` wears the reader's theme instead.
 const SPELLED: [(&str, Palette); 2] = [("ansi", Palette::ANSI), ("truecolor", Palette::TRUECOLOR)];
 
-/// The columns a band stands in, wide enough for every column these tests claim.
 const COLUMNS: u16 = 80;
 
-/// The cell the test terminals these tests speak of draw at.
 const CELL: CellSize = CellSize::NOMINAL;
 
-/// The composer's band of `rows` rows in `palette`, with no plane placed under it.
 fn shaded(rows: u16, palette: &Palette) -> Shade {
     Shade::composer(Rect::new(0, 0, COLUMNS, rows), None, None, palette).expect("a band of rows")
 }
 
-/// The relative luminance of a colour, from the channels it is spelled in.
 fn luminance(colour: Color) -> f64 {
     let [red, green, blue] = channels(colour)
         .expect("a colour in pixels")
@@ -39,14 +32,12 @@ fn luminance(colour: Color) -> f64 {
     0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
 
-/// The images a frame holds of the shades one pass hands it.
 fn held(shades: &[Shade]) -> Planes {
     let mut planes = Planes::default();
     planes.hold(shades);
     planes
 }
 
-/// The pixel at the middle of `row`'s cells in a plane drawn at `cell`, read as its channels.
 fn middle(plane: &Plane, row: u16, cell: CellSize) -> [u8; 3] {
     let x = plane.pixels().width() / 2;
     let y = u32::from(row) * cell.height() + cell.height() / 2;
@@ -54,22 +45,18 @@ fn middle(plane: &Plane, row: u16, cell: CellSize) -> [u8; 3] {
     [pixel[0], pixel[1], pixel[2]]
 }
 
-/// Whether two colours are within one step of each other, channel by channel.
 fn near(left: [u8; 3], right: [u8; 3]) -> bool {
     (0..3).all(|channel| left[channel].abs_diff(right[channel]) <= 1)
 }
 
-/// The channels of a colour the palette spells, and never a slot of the reader's own.
 fn spelled(colour: Color) -> [u8; 3] {
     channels(colour).expect("a colour in pixels")
 }
 
-/// The plane a shade is drawn as, and the band it covers.
 fn drawn(shade: Shade) -> Plane {
     Plane::draw(shade).expect("a band a plane is drawn under")
 }
 
-/// The three bands a frame draws a plane under, each against the name a failure is reported in.
 fn bands(palette: &Palette) -> [(&'static str, Shade); 3] {
     [
         (

@@ -1,7 +1,3 @@
-//! Proves a config save touches only the keys it was handed, through a staged temp file renamed
-//! into place: a person's comments and key order survive, the file lands owner-only, and a save
-//! that cannot land leaves the old one whole.
-
 use std::collections::BTreeMap;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -426,8 +422,6 @@ fn a_save_writes_the_keys_the_schema_has_and_invents_none() {
     );
 }
 
-/// The working directory a test stands in, put back when the test ends, so a repo-local
-/// `.sindri.toml` can be planted under the process's own feet.
 struct Standing {
     previous: PathBuf,
 }
@@ -716,8 +710,6 @@ fn every_key_a_screen_shows_is_the_text_a_save_of_it_reads_back() {
     let path = file_in(&home);
     let written = every_key_set();
 
-    // The one key a screen may not show: a secret is masked wherever it is drawn, so its row is a
-    // mask and never the text a file would hold.
     let mut readers = Vec::new();
     for field in Config::SCHEMA {
         if field.name != "api_key" {
@@ -757,8 +749,6 @@ fn every_key_a_row_is_handed_is_the_key_a_save_of_that_row_reads_back() {
     for field in Config::SCHEMA {
         let home = bare_home();
         let path = file_in(&home);
-        // The secret's row is a mask and never the secret, so what is typed into it is a value of
-        // its own; the row of the config read back shows that value as the same mask.
         let typed = match field.name {
             "api_key" => String::from("sk-not-a-real-key"),
             _ => field.shown(&set),

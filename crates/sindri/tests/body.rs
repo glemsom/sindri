@@ -1,9 +1,5 @@
-//! What a screen's body holds, asked of the screen rather than read off a painted frame: each
-//! description names the body its screen builds, and each screen builds it from the rows it keeps —
-//! the line it says in place of rows, its count row and its refusal row among them.
-
-mod caps; // the terminals these frames are drawn on
-mod frame; // one paint-and-read for every test
+mod caps;
+mod frame;
 
 use ratatui::layout::Rect;
 
@@ -27,7 +23,6 @@ mod fixture;
 
 use fixture::{document, facts};
 
-/// Every row of a body of rows.
 fn rows(body: &ScreenBody) -> &[ScreenRow] {
     let ScreenBody::Rows(rows) = body else {
         panic!("a card of rows is what a screen says, and this body is a ledger of facts");
@@ -35,7 +30,6 @@ fn rows(body: &ScreenBody) -> &[ScreenRow] {
     rows
 }
 
-/// The sheet a ledger body laid, once, which the card it is drawn on is as tall as.
 fn ledger(body: &ScreenBody) -> &Sheet {
     let ScreenBody::Ledger(sheet) = body else {
         panic!("a ledger is a screen of its own sheet, and this body is a card of rows");
@@ -43,12 +37,10 @@ fn ledger(body: &ScreenBody) -> &Sheet {
     sheet
 }
 
-/// The words of a body of rows, one string per row.
 fn said(body: &ScreenBody) -> Vec<String> {
     rows(body).iter().map(words).collect()
 }
 
-/// The words one row says, its spans joined in the order the card draws them.
 fn words(row: &ScreenRow) -> String {
     row.spans.iter().map(|(said, _)| said.as_str()).collect()
 }

@@ -1,7 +1,3 @@
-//! The run is the agent loop and the stop reason that ended it. The model is a
-//! [`Responder`] and the tools an [`Executor`], so the whole lifecycle is driven by
-//! fakes with no network and no clock, and nothing here names a client library.
-
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -34,16 +30,11 @@ const SIGINT: i32 = 2;
 /// lock is undefined behaviour inside a signal handler.
 static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 
-/// The handler `^C` runs: one store, so a signal arrives as a flag and never as an
-/// interrupted request. Nothing here cuts a request in flight short, so the run stops when
-/// that request ends.
 extern "C" fn interrupted(_signal: i32) {
     INTERRUPTED.store(true, Ordering::SeqCst);
 }
 
 unsafe extern "C" {
-    /// `signal(2)`, declared here because a cancellation is one flag and the core
-    /// names no crate to hear it.
     fn signal(signum: i32, handler: usize) -> usize;
 }
 
@@ -180,8 +171,6 @@ impl Serialize for State {
     }
 }
 
-/// The cap and the two budgets are separate facts, and the budgets are run-scoped:
-/// batching hides work inside one script, so what it spends accumulates over the run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
     max_turns: u32,
@@ -333,15 +322,12 @@ pub enum Load {
     AlreadyLoaded,
 }
 
-/// The loaded-skill set, held through a handle: the launch keeps it, the run writes it, the frame
-/// draws it, and they all mean the same names.
 #[derive(Clone, Debug, Default)]
 pub struct Loaded {
     names: Arc<Mutex<Vec<String>>>,
 }
 
 impl Loaded {
-    /// A clone, because no borrow can escape the lock the set is written through.
     pub fn names(&self) -> Vec<String> {
         self.lock().clone()
     }
@@ -350,8 +336,6 @@ impl Loaded {
         holds(&self.lock(), name)
     }
 
-    /// A name already in the set is `already_loaded` and carries no body: a tool result is
-    /// re-sent with every later turn, so a second body would be paid for on every turn.
     pub fn load(&self, name: impl Into<String>) -> Load {
         let name = name.into();
         let mut names = self.lock();
@@ -373,7 +357,6 @@ impl Loaded {
     }
 }
 
-/// Whether `names` already holds `name`, asked once so a load and a question of one set agree.
 fn holds(names: &[String], name: &str) -> bool {
     names.iter().any(|loaded| loaded == name)
 }
@@ -386,25 +369,16 @@ impl<S: Into<String>> FromIterator<S> for Loaded {
     }
 }
 
-/// What a run's loop reports to as it goes: the launch writes the record with it and hands the front
-/// end the facts it settled on.
 pub trait Witness {
-    /// The run opened, before it asks its first turn.
     fn began(&mut self);
 
-    /// A turn ended and is in the history, its calls run.
     fn ended(&mut self, ended: &Turn);
 
-    /// What the run says of itself as it goes: the phase it is in and the turn it is on, in the
-    /// run's own turns, never in the session's.
     fn told(&mut self, _told: Told) {}
 
-    /// The run stopped.
     fn settled(&mut self, settled: &Settled<'_>);
 }
 
-/// What a run settled on: the state it stopped in, the turn a conversation keeps for it, and what its
-/// turns spent.
 pub struct Settled<'a> {
     pub state: &'a State,
     pub kept: &'a Turn,
@@ -419,8 +393,6 @@ impl Witness for () {
     fn settled(&mut self, _settled: &Settled<'_>) {}
 }
 
-/// What the turns of one run reported spending, as the record's running total takes it: a responder
-/// that spends nothing of its own still writes what each reply said it cost.
 fn totaled(history: &[Turn]) -> Usage {
     let mut total = Usage::default();
     for turn in history {
@@ -478,15 +450,11 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self
     }
 
-    /// The turns that ended before this run, each beside the answer it got: a wire is asked with
-    /// the turn the new prompt joins, not with its own words alone.
     pub fn earlier(mut self, earlier: impl IntoIterator<Item = Turn>) -> Self {
         self.earlier = earlier.into_iter().collect();
         self
     }
 
-    /// The loaded-skill set this run writes to: the launch's own, so a name a run loads outlives the
-    /// run that loaded it.
     pub fn loaded(mut self, loaded: Loaded) -> Self {
         self.loaded = loaded;
         self
@@ -517,8 +485,6 @@ impl<R: Responder, A: Executor> Run<R, A> {
         &self.history
     }
 
-    /// The turn a conversation keeps for this run: the last turn it took, results and spend
-    /// included, and the prompt alone when it took none.
     pub fn kept(&self) -> Turn {
         self.history
             .last()
@@ -544,8 +510,6 @@ impl<R: Responder, A: Executor> Run<R, A> {
     pub fn clear_history(&mut self) {
         self.history.clear();
         self.earlier.clear();
-        // The set goes with the turns it was loaded beside: a name kept here while its body leaves
-        // the history is a name the model is told it already holds.
         self.loaded.clear();
     }
 
@@ -600,8 +564,6 @@ impl<R: Responder, A: Executor> Run<R, A> {
             }
         }
 
-        // The turn is kept once its calls have run, so the turn a later ask replays carries what
-        // each call answered rather than a call the model would read as never having run.
         self.history.push(Turn {
             turn: self.turns,
             prompt: self.prompt.clone(),
@@ -619,8 +581,6 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self.state()
     }
 
-    /// The one loop a run is driven by: a witness sees each turn as it settles. A run that has already
-    /// stopped is driven no further.
     pub fn drive(&mut self, deltas: &mut dyn Deltas, witness: &mut dyn Witness) -> State {
         if !self.state.is_running() {
             return self.state();
@@ -705,8 +665,6 @@ impl Shell {
         self
     }
 
-    /// Whether a call by `name` reaches an arm: the question a front end's tool set has to answer
-    /// for every name it registers.
     pub fn answers(&self, name: &str) -> bool {
         Arm::of(name).is_some()
     }
@@ -733,7 +691,6 @@ impl Shell {
         })
     }
 
-    /// A refusal is `Ok`: the call failed and the run did not.
     fn open(&self, arguments: &str) -> Result<Acted, Redacted> {
         let started = Instant::now();
         let settled = |words: String, exit: Exit| Acted {
@@ -853,8 +810,6 @@ fn listed(names: &[&str]) -> String {
     }
 }
 
-/// The names the model may call, as a refusal writes them. A skill the frontmatter
-/// withholds is left out: a refusal that named it would be the way around the flag.
 fn held(catalog: &Catalog) -> String {
     let names: Vec<String> = catalog
         .skills()

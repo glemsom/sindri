@@ -2,8 +2,6 @@ use super::*;
 
 use crate::pen;
 
-/// Rows of a band as the mark reads them: every glyph with the column it is drawn from and the
-/// columns it covers.
 fn band(rows: &[&str]) -> Vec<Line> {
     rows.iter()
         .map(|row| {
@@ -19,7 +17,6 @@ fn band(rows: &[&str]) -> Vec<Line> {
         .collect()
 }
 
-/// The same band with every row of it cut at the band's edge.
 fn cut(rows: &[&str]) -> Vec<Line> {
     band(rows)
         .into_iter()

@@ -1,6 +1,3 @@
-//! The contracts an integration test cannot reach from outside the process: a canvas's shape
-//! is a test's decision, and the guard and the panic hook both give the terminal back.
-
 use std::panic;
 use std::sync::Arc;
 
@@ -32,8 +29,6 @@ use super::*;
 /// hold this too: two screens at once is one of them given back down the other's terminal.
 pub(crate) static ONE_SCREEN: Mutex<()> = Mutex::new(());
 
-/// A terminal that fills its `winsize`'s pixel fields is asked nothing, because the kernel's
-/// own answer is the whole of what a picture needs.
 #[test]
 fn a_terminal_that_reports_its_pixels_is_asked_no_question() {
     let pty = Pty::open();
@@ -121,8 +116,6 @@ fn a_terminal_that_says_nothing_answers_nothing_to_the_sizing_question() {
     );
 }
 
-/// A buffer of `width` by `height` cells with the words each of `rows` holds drawn in it, the
-/// cells of a frame before a diff is taken against it.
 fn composed(width: u16, height: u16, rows: &[(u16, &str)]) -> Buffer {
     let area = Rect::new(0, 0, width, height);
     let mut buffer = Buffer::empty(area);
@@ -142,15 +135,10 @@ fn composed(width: u16, height: u16, rows: &[(u16, &str)]) -> Buffer {
     buffer
 }
 
-/// A frame of `width` by `height` cells, the words each of `rows` holds, and the destinations
-/// it names, drawn through a pseudo-terminal of this process's own: the bytes the terminal at
-/// the far end is handed.
 fn drawn(width: u16, height: u16, rows: &[(u16, &str)], links: Links, places: bool) -> String {
     handed(composed(width, height, rows), links, places)
 }
 
-/// The bytes a terminal at the far end of a pseudo-terminal is handed for a frame and the ways
-/// it names, told whether that terminal places a hyperlink.
 fn handed(buffer: Buffer, links: Links, places: bool) -> String {
     let area = *buffer.area();
     let pty = Pty::open();
@@ -169,8 +157,6 @@ fn handed(buffer: Buffer, links: Links, places: bool) -> String {
     pty.drawn()
 }
 
-/// The bytes a terminal at the far end of a pseudo-terminal is handed for a frame and the runs
-/// it draws at more than one cell.
 fn spelled(buffer: Buffer, sizes: Sizes) -> String {
     let area = *buffer.area();
     let pty = Pty::open();
@@ -189,8 +175,6 @@ fn spelled(buffer: Buffer, sizes: Sizes) -> String {
     pty.drawn()
 }
 
-/// The ground a run judges a target from in this test: the tree the product is built in, whose
-/// `GLOSSARY.md` is a file a call can name and be judged against.
 fn ground() -> Ground {
     let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -201,15 +185,12 @@ fn ground() -> Ground {
     Ground::new(&boundary, workspace, workspace).expect("the ground resolves")
 }
 
-/// The ways `links` name, laid at frame row 0: how a row hands the frame what it names.
 fn ways(links: &[Link]) -> Links {
     let mut ways = Links::none();
     ways.lay(0, 0, links);
     ways
 }
 
-/// What a terminal reads of a frame as the ways it opens and closes and the words it writes:
-/// every other sequence is dropped, because where a way begins and ends is what this proves.
 fn spoken(drawn: &str) -> Vec<String> {
     let mut said = Vec::new();
     let mut words = String::new();
@@ -239,7 +220,6 @@ fn spoken(drawn: &str) -> Vec<String> {
     said
 }
 
-/// What a terminal reads of a frame as words alone: the ways it opens and closes are not words.
 fn words(drawn: &str) -> String {
     spoken(drawn)
         .into_iter()
@@ -331,8 +311,6 @@ fn a_run_wider_than_the_row_it_was_laid_on_carries_nothing_to_the_row_below() {
     );
 }
 
-/// A frame written through `paint`, and the same frame written through the canvas's own draw with
-/// the cell the pass names placed by hand: the launch adds no byte of its own to the frame it paints.
 fn written(pty: &Pty, launch: bool) {
     let terminal =
         Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to write to");
@@ -476,8 +454,6 @@ fn a_run_drawn_at_twice_the_cell_is_the_sequence_that_draws_it_and_no_cell_of_it
         Clip::Edge,
         &Palette::TRUECOLOR,
     );
-    // A cell under the block that no row of the frame wrote: a block is two rows of cells, and
-    // the terminal draws the second of them.
     pen::write(
         &mut buffer,
         Rect {
@@ -520,9 +496,6 @@ fn a_terminal_that_places_no_hyperlink_is_handed_the_words_and_no_sequence() {
     );
 }
 
-/// A canvas a test paints through is the shape the test gave it, not the shape the terminal
-/// reports: no `/dev/tty` is opened and no `tput` is spawned to answer a question a
-/// pseudo-terminal was never going to answer anyway.
 #[test]
 fn a_canvas_told_its_size_is_the_shape_it_was_told() {
     let pty = Pty::open();
@@ -691,8 +664,6 @@ fn a_panic_gives_the_terminal_back_before_the_guard_can() {
     );
 }
 
-/// The bytes a backend wrote, read back between one paint and the next: a backend holds the wire
-/// it writes to, so the count a paint is measured by has to stand beside it.
 #[derive(Clone, Default)]
 struct Wire(std::rc::Rc<std::cell::RefCell<Vec<u8>>>);
 
@@ -713,13 +684,10 @@ impl Write for Wire {
     }
 }
 
-/// A writer that keeps each write apart where `Wire` joins them: a frame handed over in pieces and a
-/// frame handed over whole read the same through that one, and only this one says which it was.
 #[derive(Clone, Default)]
 struct Writes(std::rc::Rc<std::cell::RefCell<Vec<Vec<u8>>>>);
 
 impl Writes {
-    /// The writes as they landed, each apart from the next.
     fn kept(&self) -> Vec<Vec<u8>> {
         self.0.borrow().clone()
     }
@@ -740,25 +708,19 @@ impl Write for Writes {
     }
 }
 
-/// The words every row of a full frame drawn in a test holds.
 const A_ROW_OF_WORDS: &str = "the frame the launch paints at the pace the pulse paints it";
 
-/// A row of words that fills a wide band, so a screen of them is a frame past the bound one is held
-/// within.
 const A_ROW_PAST_THE_BOUND: &str = concat!(
     "the frame the launch paints at the pace the pulse paints it, and the caret stands in the ",
     "draft the whole time the frame is written: the frame the launch paints at the pace the ",
     "pulse paints it, and the caret stands in the draft the whole time it is written",
 );
 
-/// A frame that fills a screen of that shape, every row of it a row of words.
 fn a_full_frame(width: u16, height: u16) -> Buffer {
     let rows: Vec<(u16, &str)> = (0..height).map(|y| (y, A_ROW_OF_WORDS)).collect();
     composed(width, height, &rows)
 }
 
-/// Draws `frame` through `backend` the way ratatui's terminal does: the cells the diff finds, then
-/// the flush that hands them over.
 fn draw<W: Write>(backend: &mut Backend<W>, frame: &Buffer) {
     backend
         .draw(Buffer::empty(*frame.area()).diff(frame).into_iter())
@@ -831,7 +793,6 @@ fn the_cell_the_caret_is_placed_in_travels_in_the_one_write_the_cells_do() {
     );
 }
 
-/// A canvas at the shape the test gives it, over a writer that keeps each write apart.
 fn canvas_over(writes: &Writes, area: Rect) -> CanvasOver<Writes> {
     ratatui::Terminal::with_options(
         Backend::new(writes.clone(), false),
@@ -851,8 +812,6 @@ fn carried(writes: &[Vec<u8>]) -> Vec<String> {
         .collect()
 }
 
-/// The sequence that places the caret in the cell the frame named, counted from one as the terminal
-/// counts it where the pass counts from none.
 fn placed_in(painted: Painted) -> String {
     let caret = painted
         .caret()
@@ -1064,7 +1023,6 @@ fn the_words_a_launch_says_between_two_frames_keep_the_order_they_were_said_in()
     let mut backend = Backend::new(writes.clone(), false);
     draw(&mut backend, &frame);
 
-    // The launch says its own words on a second handle of one descriptor, between two frames.
     let mut launch = writes.clone();
     launch
         .write_all(b"\x1b[?1049h")
@@ -1092,22 +1050,17 @@ fn the_words_a_launch_says_between_two_frames_keep_the_order_they_were_said_in()
     );
 }
 
-/// The images a backend is handed beside the bands a frame shades: the ones the frame holds under
-/// them, which is where an upload is read from.
 fn held(shades: &[Shade]) -> Planes {
     let mut images = Planes::default();
     images.hold(shades);
     images
 }
 
-/// The composer's shading over `area`, with the caret waiting in `caret`'s column where one is
-/// given: the design's own colours, which is the palette a frame nobody told a palette about draws.
 fn composer_shade(area: Rect, caret: Option<u16>) -> Shade {
     Shade::composer(area, Some(CellSize::NOMINAL), caret, &Palette::TRUECOLOR)
         .expect("a band to shade")
 }
 
-/// The rail's shading over its own rows and columns: the other band a frame draws a plane under.
 fn rail_shade() -> Shade {
     Shade::rail(
         sindri::ledger::Rail::Ledger,

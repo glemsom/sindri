@@ -1,5 +1,5 @@
-# CI runs `make check` in the same devbox shell a developer uses: one command, one set of
-# stages, so there is no second, weaker definition of what "done" means.
+# CI runs the same `make check` a developer runs, in a devbox shell: one command, one set
+# of stages, and no second, weaker definition of what "done" means.
 
 # This runner refuses confinement: Ubuntu 24.04 ships AppArmor's
 # `kernel.apparmor_restrict_unprivileged_userns=1`, so `bwrap --unshare-all` is refused and
@@ -20,7 +20,6 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same ref makes the older run's verdict irrelevant.
 concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: true
@@ -41,9 +40,8 @@ jobs:
       - name: Check out the tree
         uses: actions/checkout@v7
 
-      # devbox needs Nix underneath it, and the action turns on the `nix-command` and
-      # `flakes` features devbox expects. Pinned to a commit, not a tag, so the code CI
-      # runs cannot change under us.
+      # devbox needs Nix underneath it, with the `nix-command` and `flakes` features the
+      # action turns on. Pinned to a commit and not a tag, so the code CI runs cannot change.
       - name: Install Nix
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
@@ -57,8 +55,6 @@ jobs:
           sudo install -m 0755 "$RUNNER_TEMP/devbox" /usr/local/bin/devbox
           devbox version
 
-      # Keyed on the lockfile and the manifest, so a toolchain change misses the cache
-      # instead of hiding behind a stale one.
       - name: Cache the pinned Rust toolchain
         uses: actions/cache@v6
         with:
@@ -77,8 +73,6 @@ jobs:
           devbox run -- make check 2>&1 | tee "$RUNNER_TEMP/check.log" || status=$?
           exit "$status"
 
-      # A skipped sandbox tier must be visible where a reviewer looks: the stage lines are
-      # copied verbatim, `... SKIPPED` and all, and a warning marks the uncovered tier.
       - name: Stage verdicts in the job summary
         if: always()
         shell: bash

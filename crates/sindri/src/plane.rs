@@ -1,6 +1,3 @@
-//! The planes a frame places under its cells: the shade a band's ground is drawn from, the image
-//! it is drawn as, the identity a placement is named by, and the bytes that take one away again.
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -10,11 +7,8 @@ use crate::ledger::Rail;
 use crate::palette::{Band, Palette, channels};
 use crate::pen;
 
-/// The glyph a seam is ruled in for a palette that spells no edge.
 const EDGE_RULE: char = '│';
 
-/// Which band's ground a plane is, and the identity a placement is named by: the two planes of one
-/// frame are told apart by it and by nothing else.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaneId {
     Composer,
@@ -24,7 +18,6 @@ pub enum PlaneId {
 impl PlaneId {
     pub const ALL: [PlaneId; 2] = [PlaneId::Composer, PlaneId::Rail];
 
-    /// The image id the terminal holds this plane under, which is what a delete names.
     pub fn image(self) -> u32 {
         match self {
             PlaneId::Composer => 333,
@@ -33,22 +26,18 @@ impl PlaneId {
     }
 }
 
-/// The one description of what a band sits on: the colour each of its rows is claimed in, the cell of
-/// it the frame's seam is drawn in, and every fact an image of it is drawn from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shade {
-    /// The transcript band, on the well, with no seam of its own.
-    Transcript { area: Rect, well: Color },
-    /// The rail on its own tone down every row it claims, its first column the frame's seam where it
-    /// is a ledger.
+    Transcript {
+        area: Rect,
+        well: Color,
+    },
     Rail {
         area: Rect,
         cell: Option<CellSize>,
         tone: Color,
         shape: Rail,
     },
-    /// The composer's band: the prompt's band on every row but its last, which closes into the
-    /// rail's tone under it.
     Composer {
         area: Rect,
         cell: Option<CellSize>,
@@ -59,7 +48,6 @@ pub enum Shade {
 }
 
 impl Shade {
-    /// The transcript band on the well, and nothing for an area with no rows or no columns.
     pub fn transcript(area: Rect, palette: &Palette) -> Option<Shade> {
         covers(area).then(|| Shade::Transcript {
             area,
@@ -67,9 +55,6 @@ impl Shade {
         })
     }
 
-    /// The composer's band, with no plane under it unless the palette spells both its tones as
-    /// pixels: the glow under the caret's column is drawn in the image, so it is a fact of the
-    /// shade.
     pub fn composer(
         area: Rect,
         cell: Option<CellSize>,
@@ -91,8 +76,6 @@ impl Shade {
         })
     }
 
-    /// The rail's band over the rows and columns it covers, with the one column that parts it from
-    /// the transcript band beside it.
     pub fn rail(
         shape: Rail,
         area: Rect,
@@ -112,8 +95,6 @@ impl Shade {
         })
     }
 
-    /// The cells of this band the frame's seam is drawn in, the way it runs through them, and none
-    /// for a band that parts nothing.
     pub fn seam(&self) -> Option<(Axis, Rect)> {
         let area = self.area();
         match self {
@@ -126,8 +107,6 @@ impl Shade {
         }
     }
 
-    /// The identity the terminal holds this band's plane under, and nothing for the transcript
-    /// band, which no plane stands under.
     pub fn id(&self) -> Option<PlaneId> {
         match self {
             Shade::Transcript { .. } => None,
@@ -144,13 +123,10 @@ impl Shade {
         }
     }
 
-    /// Whether a plane is drawn under the band, which is the one thing a cell of it is claimed by.
     pub fn places(&self) -> bool {
         self.cell().is_some()
     }
 
-    /// The colour that row of the band sits on: the well, the rail's own tone on every row of it,
-    /// or a composer's own two tones.
     pub fn row(&self, row: u16) -> Color {
         match self {
             Shade::Transcript { well, .. } => *well,
@@ -164,9 +140,6 @@ impl Shade {
         }
     }
 
-    /// Claims the band's cells from the shade: the terminal's own ground where a plane is drawn
-    /// under them, and otherwise every row on the colour the shade says it sits on. The seam's own
-    /// cells are claimed once, in the one edge ink, whatever the terminal can place.
     pub fn claim(&self, buffer: &mut Buffer, palette: &Palette) {
         let area = self.area();
         let seam = self.seam();
@@ -226,16 +199,12 @@ impl Shade {
     }
 }
 
-/// The way the frame's seam runs through a band: down the rail's first column, and across the row
-/// that heads the composer's band.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Axis {
     Down,
     Across,
 }
 
-/// A band's ground as the image the terminal draws under its cells, held with the shade it was drawn
-/// from: two planes of one frame are told apart by that shade and by nothing else.
 #[derive(Clone, Debug)]
 pub struct Plane {
     shade: Shade,
@@ -244,7 +213,6 @@ pub struct Plane {
 }
 
 impl Plane {
-    /// The image a shade is drawn as, and nothing for a band no plane stands under.
     pub(crate) fn draw(shade: Shade) -> Option<Plane> {
         let id = shade.id()?;
         let cell = shade.cell()?;
@@ -285,8 +253,6 @@ impl Plane {
     }
 }
 
-/// The band images one frame holds, each against the shade it was drawn from: a frame makes an image
-/// when a band's shade moves and keeps it while that shade stands.
 #[derive(Clone, Debug, Default)]
 pub struct Planes {
     held: Vec<Plane>,
@@ -294,8 +260,6 @@ pub struct Planes {
 }
 
 impl Planes {
-    /// Holds a pass's `shades`: a shade already held keeps its image, a new one is drawn, and one
-    /// the pass no longer names loses its image.
     pub fn hold(&mut self, shades: &[Shade]) {
         let mut held = Vec::with_capacity(shades.len());
         for shade in shades {
@@ -325,17 +289,14 @@ impl Planes {
     }
 }
 
-/// The bytes that delete the plane an id names, which is the only thing a delete says.
 pub fn delete(id: PlaneId) -> Vec<u8> {
     format!("\x1b_Ga=d,d=i,i={}\x1b\\", id.image()).into_bytes()
 }
 
-/// Whether a band `area` covers a pixel at all: one with no rows or no columns is no image.
 fn covers(area: Rect) -> bool {
     area.width > 0 && area.height > 0
 }
 
-/// The pixels a band `area` covers at `cell`, which a covered band always has.
 fn extent(area: Rect, cell: CellSize) -> (u32, u32) {
     (
         u32::from(area.width) * cell.width(),

@@ -1,7 +1,3 @@
-//! Markdown laid out as the rows a transcript draws, one construct at a time: `pulldown-cmark` finds
-//! the constructs and this front end decides what each of them looks like, so a heading's weight and
-//! a code block's gutter are held here, and one whole answer holds that no row claims a ground.
-
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -37,15 +33,12 @@ fn wears(row: &Row, word: &str, look: Look) -> bool {
         .any(|(said, worn)| said == word && *worn == look)
 }
 
-/// One kind of alert: the marker a source writes for it, the name its label reads and the ink that
-/// name is drawn in.
 struct Kind {
     written: &'static str,
     named: &'static str,
     ink: Ink,
 }
 
-/// The five kinds a quote can name itself, each in an ink of its own.
 fn kinds() -> [Kind; 5] {
     [
         Kind {
@@ -76,8 +69,6 @@ fn kinds() -> [Kind; 5] {
     ]
 }
 
-/// One level of heading as a reader meets it: the look its words wear, and the rule it carries
-/// under them.
 fn heading_block(level: usize) -> (Look, Option<String>) {
     let said = format!("{} L{level}", "#".repeat(level));
     let word = format!("L{level}");
@@ -103,12 +94,10 @@ fn heading_block(level: usize) -> (Look, Option<String>) {
     (looked[0], rule)
 }
 
-/// The run of columns a horizontal rule fills the room of the block that holds it with.
 fn hairline(room: usize) -> String {
     pen::filled(pen::columns(room), '─')
 }
 
-/// The one row of an answer a horizontal rule is drawn on.
 fn ruled_row(rows: &[Row]) -> &Row {
     rows.iter()
         .find(|row| words(row).contains('─'))
@@ -308,30 +297,22 @@ fn the_words_of_a_code_span_are_the_accent_and_never_a_reversed_face() {
     );
 }
 
-/// The look a way's words are drawn in where the block around them is prose: a way inside a heading
-/// wears the heading's own weight as well, which is a look of its own in the test below.
 fn way_in_prose() -> Look {
     Look::plain(Ink::Accent).underlined(Ink::Dim)
 }
 
-/// The rows painted into a frame 120 columns wide, one to a row, so a test reads the cells a ground
-/// was claimed on and not only the spans the words are said in.
 fn painted(rows: &[Row], links: &mut Links) -> Buffer {
     painted_over(rows, links, Style::default())
 }
 
-/// The same rows painted into a frame `cols` columns wide.
 fn painted_in(rows: &[Row], links: &mut Links, cols: u16) -> Buffer {
     painted_width(rows, links, Style::default(), cols)
 }
 
-/// The same rows painted over a frame whose every cell was first claimed in `ground`, so a test
-/// reads the cells a row leaves blank as well as the ones its words cover.
 fn painted_over(rows: &[Row], links: &mut Links, ground: Style) -> Buffer {
     painted_width(rows, links, ground, 120)
 }
 
-/// The same rows over that ground, in a frame `cols` columns wide.
 fn painted_width(rows: &[Row], links: &mut Links, ground: Style, cols: u16) -> Buffer {
     let area = Rect::new(
         0,
@@ -354,21 +335,16 @@ fn painted_width(rows: &[Row], links: &mut Links, ground: Style, cols: u16) -> B
     buffer
 }
 
-/// The ways `rows` name, painted one to a frame row from its first.
 fn ways(rows: &[Row]) -> Links {
     let mut links = Links::none();
     painted(rows, &mut links);
     links
 }
 
-/// The ground each cell of a frame's row `y` was painted on, column by column from `left` to
-/// `right`.
 fn grounded(buffer: &Buffer, y: u16, left: u16, right: u16) -> Vec<Color> {
     (left..right).map(|x| buffer[(x, y)].bg).collect()
 }
 
-/// The frame row the words `said` are drawn on: a row of `rows` laid out as its words alone, so a
-/// test reads the cells of a construct out of the picture instead of counting rows of the layout.
 fn row_of(rows: &[Row], said: &str) -> u16 {
     u16::try_from(
         drawn(rows)
@@ -714,8 +690,6 @@ fn a_code_span_that_a_table_and_a_way_both_hold_keeps_the_ways_line_and_no_groun
 
 #[test]
 fn a_code_span_in_a_heading_is_the_accent_and_the_headings_words_keep_their_weight() {
-    // The highest level is the one whose own ink the chip shares, so that is the level where a
-    // weight the chip does not wear is the whole of what tells the two apart.
     for (said, weight) in [
         ("# a `chip` in an h1", Look::new(Ink::Accent, Face::Bold)),
         ("## a `chip` in an h2", Look::new(Ink::Plain, Face::Bold)),
@@ -2522,8 +2496,6 @@ fn a_whole_answer_claims_no_ground_of_its_own_over_a_band_or_where_none_was_clai
         );
     }
 
-    // A row that painted no word at all would leave every ground as it found it, so the glyphs are
-    // read back too: the answer's words are drawn, and only their ground is the band's.
     let at = row_of(&rows, "A heading");
     let said: String = (0..rows[usize::from(at)].width())
         .map(|x| banded[(x, at)].symbol())
@@ -2565,8 +2537,6 @@ fn the_sentence_saying_a_diagram_will_not_draw_is_dim_prose_and_the_source_is_pl
     );
 }
 
-/// The surface a terminal that draws text at more than one cell is measured against: its headings
-/// are laid out as the cells the sizing leaves, and drawn as the words they are.
 fn large() -> Surface {
     Surface::of(None, CellSize::NOMINAL, false, true)
 }

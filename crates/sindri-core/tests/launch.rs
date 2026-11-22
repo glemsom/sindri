@@ -1,6 +1,3 @@
-//! What a launch is, proved at the core's own seam: one value that joins the boundary, the proof,
-//! the session, the record, the tools and the client in the one order a run can be asked for.
-
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
@@ -19,14 +16,10 @@ use sindri_core::tools::{FrontEnd, OPEN, SKILL};
 use sindri_core::wire::Wire;
 use tempfile::TempDir;
 
-/// A kernel that forbids unprivileged user namespaces: the stand-in answers a version and then
-/// refuses the sandbox it was asked to make.
 const RESTRICTED: &str = "if [ \"${1:-}\" = --version ]; then\n  \
                           echo 'bubblewrap 0.12.0 (stand-in)'\n  exit 0\nfi\n\
                           echo 'bwrap: setting up uid map: Permission denied' >&2\nexit 1";
 
-/// A machine and the homes a launch reads, all under one temporary root, so nothing a launch
-/// writes lands in the reader's own state.
 struct Homes {
     root: TempDir,
     environment: BTreeMap<String, String>,
@@ -56,7 +49,6 @@ impl Homes {
         Machine::new(&self.environment, self.at("bwrap"))
     }
 
-    /// A stand-in bwrap on disk, so every refusal is provable where the real one works.
     fn machine_that_refuses(&self) -> Machine<'_> {
         let bwrap = self.at("bin").join("bwrap");
         std::fs::create_dir_all(self.at("bin")).expect("a machine directory");
@@ -66,8 +58,6 @@ impl Homes {
         Machine::new(&self.environment, bwrap)
     }
 
-    /// A skill under the homes' own home: the launch reads its workspace from the process, so a
-    /// test cannot hand it a directory of its own.
     fn user_skill(&self, name: &str, description: &str) {
         let directory = self.at("home").join(".agents").join("skills").join(name);
         std::fs::create_dir_all(&directory).expect("a skill directory");
@@ -105,8 +95,6 @@ fn named(root: &Path, name: &str) -> Vec<PathBuf> {
     found
 }
 
-/// An endpoint nothing listens on: a scripted launch never asks it, and an opening that takes no
-/// turn asks nothing.
 const UNANSWERED_ENDPOINT: &str = "http://127.0.0.1:1";
 
 fn naming_wire(base_url: String) -> Config {
@@ -189,7 +177,6 @@ fn a_launch_refused_by_the_sandbox_keeps_no_record_and_asks_no_turn() {
     );
 }
 
-/// A front end that writes no fragment: batch mode's answer is written once it is whole.
 struct Quiet;
 
 impl Deltas for Quiet {
@@ -198,8 +185,6 @@ impl Deltas for Quiet {
     fn reasoning(&mut self, _fragment: &str) {}
 }
 
-/// A responder scripted in advance: each request is logged and the next reply handed back, so a
-/// launch's own loop is driven with no wire under it.
 #[derive(Clone)]
 struct Scripted {
     replies: Arc<Mutex<VecDeque<Reply>>>,
@@ -239,9 +224,6 @@ impl Responder for Scripted {
     }
 }
 
-/// A front end that keeps the newest document and transcript it is handed, which is what a launch's
-/// own record says once a run has stopped, the turn a run ended on, and the names the launch handed
-/// it with those facts.
 #[derive(Default)]
 struct Kept {
     document: Option<SessionDocument>,
@@ -280,7 +262,6 @@ impl Turns for Kept {
     }
 }
 
-/// A launch that answers through `script` and nothing else, on a config that names a run.
 fn launch_answering(homes: &Homes, script: &Scripted, front_end: FrontEnd) -> Launch<Scripted> {
     let script = script.clone();
     Launch::answered_by(
@@ -393,7 +374,6 @@ fn a_scripted_answer_ends_the_run_as_final_and_the_record_holds_it() {
     );
 }
 
-/// The status documents a session wrote, as the phase, the turn and the line, in the order written.
 fn statuses_written(directory: &Path) -> Vec<(&'static str, u32, String)> {
     read_status(directory)
         .expect("the statuses the launch wrote")
@@ -922,7 +902,6 @@ fn a_launch_the_sandbox_refuses_leaves_no_session_behind() {
     );
 }
 
-/// An opener that reports a target opened and opens it nowhere.
 #[derive(Debug)]
 struct OpensNowhere;
 
@@ -988,7 +967,6 @@ fn every_tool_a_batch_launch_registers_is_a_tool_its_own_executor_answers() {
     every_registered_tool_is_answered(&launch);
 }
 
-/// The turn numbers the record wrote, in the order it wrote them.
 fn turns_written(directory: &Path) -> Vec<u32> {
     read_transcript(directory)
         .expect("the record the launch wrote")

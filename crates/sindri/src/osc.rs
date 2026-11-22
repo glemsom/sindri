@@ -1,7 +1,5 @@
 use sindri_core::records::Status;
 
-/// `OSC 52 ; c ; <base64> ST`: the terminal at the far end owns the clipboard, so a copy
-/// needs no `xclip` and works over SSH. ST rather than BEL, so no terminal rings on a copy.
 pub fn copy(text: &str) -> Vec<u8> {
     let mut sequence = Vec::from(&b"\x1b]52;c;"[..]);
     sequence.extend_from_slice(base64(text.as_bytes()).as_bytes());

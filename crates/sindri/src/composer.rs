@@ -2,29 +2,17 @@ use sindri_core::config::Touched;
 
 use crate::pen;
 
-/// The band's floor: its head, the one row a draft of a single line sits on, and its footer under
-/// it.
 pub const MIN_ROWS: u16 = 3;
 
-/// The band's ceiling: its head and its footer, the air inside each of them and the rows of draft
-/// it showed before it had any air.
 pub const MAX_ROWS: u16 = DRAFT_ROWS + 2 * (AIR_ROWS + 1);
 
-/// The blank row a band keeps inside each end once the draft wraps, so no glyph of a draft of many
-/// rows touches the head above it or the footer under it.
 pub const AIR_ROWS: u16 = 1;
 
-/// The rows of draft a band at its ceiling draws: the window a draft has had since before the band
-/// kept air in its ends.
 pub const DRAFT_ROWS: u16 = 5;
 
-/// The rows a band spends on its two ends — its head above the draft's rows and its footer below
-/// them — by the height the draft is drawn at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Ends {
-    /// The head, and the air under it once the draft wraps.
     pub above: u16,
-    /// The air over the footer once the draft wraps, and the footer.
     pub below: u16,
 }
 
@@ -92,11 +80,8 @@ pub enum Outcome {
     Settings,
 }
 
-/// What the band says an empty draft can do there, in the dim ink: it leaves on the first glyph a
-/// reader types. It names no key, because the footer is where a key is named.
 pub const PLACEHOLDER: &str = "what should the run do?";
 
-/// One row of the draft as it is drawn: the bytes of it the reader's words cover.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Row {
     start: usize,
@@ -109,7 +94,6 @@ pub struct Composer {
     cursor: usize,
     scroll: usize,
     state: State,
-    /// The columns the frame gives the draft's words, and `None` until a frame has measured it.
     room: Option<u16>,
 }
 
@@ -134,9 +118,6 @@ impl Composer {
         self.state = state;
     }
 
-    /// The columns the frame gives the draft's words: the band's width less the gutter its sigil
-    /// stands in. The frame hands it over before the band is placed, so a draft wraps at the width it
-    /// is drawn at and at no other.
     pub fn set_room(&mut self, room: u16) {
         self.room = Some(room);
     }
@@ -145,13 +126,10 @@ impl Composer {
         self.laid().1
     }
 
-    /// The rows the band spends above and below its draft.
     pub fn ends(&self) -> Ends {
         Composer::ends_at(self.drawn().len())
     }
 
-    /// The ends a draft of `drawn` rows takes: the head and the footer alone while it sits on one
-    /// row, and a row of air inside each of them once it wraps.
     fn ends_at(drawn: usize) -> Ends {
         match drawn > 1 {
             true => Ends {
@@ -162,21 +140,16 @@ impl Composer {
         }
     }
 
-    /// The rows of the draft the band draws: the ceiling's window, less the row under it that
-    /// counts the rows kept back while any are.
     pub fn visible_rows(&self) -> u16 {
         Composer::visible(self.drawn().len())
     }
 
-    /// The rows of the draft the band does not draw, and `None` while it draws every one of them.
     pub fn kept_back(&self) -> Option<u16> {
         let drawn = u16::try_from(self.drawn().len()).unwrap_or(u16::MAX);
         let visible = Composer::visible(usize::from(drawn));
         (drawn > visible).then(|| drawn - visible)
     }
 
-    /// How many rows of a draft `drawn` rows long the band draws: the ceiling's window, and one row
-    /// less while the row under it counts the rows kept back.
     fn visible(drawn: usize) -> u16 {
         let room = u16::try_from(drawn).unwrap_or(u16::MAX).min(DRAFT_ROWS);
         match usize::from(room) < drawn {
@@ -185,8 +158,6 @@ impl Composer {
         }
     }
 
-    /// The first row the band draws: the scroll the caret gave the draft, and never past the last
-    /// row the band has room for.
     pub fn scroll(&self) -> usize {
         self.laid().2
     }
@@ -202,7 +173,6 @@ impl Composer {
             .collect()
     }
 
-    /// The row of the band the caret waits in, and its column in cells.
     pub fn caret(&self) -> (u16, u16) {
         let (drawn, _, first) = self.laid();
         let row = self.row_at(&drawn, self.cursor);
@@ -217,8 +187,6 @@ impl Composer {
         self.row_at(&self.drawn(), self.cursor) == 0
     }
 
-    /// The draft as the band draws it: the rows its words wrap into, the rows the band takes for
-    /// them with its ends counted, and the first of them the scroll reaches.
     fn laid(&self) -> (Vec<Row>, u16, usize) {
         let drawn = self.drawn();
         let ends = Composer::ends_at(drawn.len());
@@ -232,9 +200,6 @@ impl Composer {
         (drawn, rows, first)
     }
 
-    /// The rows the draft is drawn as, top to bottom: a row ends at the last cell that does not cut
-    /// a glyph, and after the last blank before it, so no word is broken. Unlike `rows::wrap_under`,
-    /// a blank the reader typed is neither trimmed nor closed.
     fn drawn(&self) -> Vec<Row> {
         let room = usize::from(self.room.unwrap_or(u16::MAX).max(1));
         let mut drawn: Vec<Row> = Vec::new();
@@ -252,7 +217,6 @@ impl Composer {
         drawn
     }
 
-    /// The breaks the reader typed, and never the wraps the room gave them.
     fn hard_lines(&self) -> Vec<(usize, usize)> {
         let mut lines = Vec::new();
         let mut start = 0;
@@ -294,8 +258,6 @@ impl Composer {
         }
     }
 
-    /// The row the offset `at` waits in: the first row that reaches it, so a caret at a row's last
-    /// cell is drawn there and not at the first cell of the row below.
     fn row_at(&self, drawn: &[Row], at: usize) -> usize {
         drawn
             .iter()
@@ -392,8 +354,6 @@ impl Composer {
         }
     }
 
-    /// The whole draft rewritten as `text`, the caret after its last glyph: what a card's row sends,
-    /// where the reader's own words are given up for the row's.
     pub fn rewrite(&mut self, text: &str) {
         self.text.clear();
         self.text.push_str(text);
@@ -496,14 +456,10 @@ impl Composer {
         }
     }
 
-    /// The column the cursor sits in, counted in cells from the row's first one: a wide glyph moves
-    /// it two.
     fn column(&self, row: Row) -> usize {
         usize::from(pen::cells(&self.text[row.start..self.cursor]))
     }
 
-    /// The offset in `row` nearest to `column` without passing it: a wide glyph the column lands
-    /// inside is not taken, so the cursor keeps the side of it it came from.
     fn at_column(&self, row: Row, column: usize) -> usize {
         let mut at = row.start;
         let mut reached = 0;

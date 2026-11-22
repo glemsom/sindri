@@ -1,7 +1,3 @@
-//! A mermaid fence becomes a picture or is refused with a reason the caption can print. What is held is the
-//! fence and never the drawing: a test says "it drew", by the ink of a raster and the count of raster passes
-//! the seam keeps, and the corpus of real fences is an eval whose golden a reader approves.
-
 use std::time::{Duration, Instant};
 
 use sindri::graphics::CellSize;
@@ -10,7 +6,6 @@ use sindri::mermaid::{self, Block, Diagram, Fence, Refusal};
 const FLOWCHART: &str =
     "flowchart TD\n  A[Start] --> B{Ready?}\n  B -->|yes| C[Ship]\n  B -->|no| A";
 
-/// A fence the renderer will not read: a refusal a test can quote a reason from.
 const PROSE: &str = "this is not a mermaid diagram";
 
 fn inked(image: &image::RgbaImage) -> usize {

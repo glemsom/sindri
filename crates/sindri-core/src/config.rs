@@ -86,7 +86,6 @@ impl Field {
         self
     }
 
-    /// For the rows whose variable speaks a dialect of its own rather than the reader's.
     const fn spoken(mut self, spoken: Reading) -> Field {
         self.spoken = spoken;
         self
@@ -100,7 +99,6 @@ impl Field {
         (self.shown)(config)
     }
 
-    /// Reads the variable's words into this key, naming the variable when it refuses them.
     pub fn speak(&self, text: &str, config: &mut Config) -> Result<(), ConfigError> {
         (self.spoken)(self.variable, config, text)
     }
@@ -109,14 +107,12 @@ impl Field {
         (self.merging)(config, lower)
     }
 
-    /// The config a reader's words name for this key alone, every other key left unset.
     pub fn read(&self, text: &str) -> Result<Config, ConfigError> {
         let mut config = Config::default();
         (self.reading)(self.name, &mut config, text)?;
         Ok(config)
     }
 
-    /// Leaves the document untouched when the config names no value for this key.
     pub fn write(&self, config: &Config, document: &mut DocumentMut) -> Result<(), ConfigError> {
         (self.writing)(self.name, config, document)
     }
@@ -343,7 +339,6 @@ impl Config {
         .switched(),
     ];
 
-    /// The field the schema names, and `None` when the table holds no such key.
     pub fn field(name: &str) -> Option<&'static Field> {
         Config::SCHEMA.iter().find(|field| field.name == name)
     }
@@ -351,9 +346,6 @@ impl Config {
     pub fn tells_status(&self) -> bool {
         self.status.unwrap_or(true)
     }
-    /// Whether a run under this config would be the same run as under `other`. Only `status` and
-    /// `face` decide nothing a run does — a frame reads them — so a config differing in any other key
-    /// names another run, and a session that recorded the one is not the session of the other.
     pub fn decides_the_same_run(&self, other: &Config) -> bool {
         fn run_only(config: &Config) -> Config {
             Config {
@@ -473,7 +465,6 @@ impl Config {
         Ok(config)
     }
 
-    /// The endpoint this config names, and `None` when it names no wire.
     pub fn endpoint(&self) -> Option<Endpoint> {
         let wire = self.provider?;
         let endpoint = match &self.base_url {
@@ -483,7 +474,6 @@ impl Config {
         Some(endpoint.routed(self.route))
     }
 
-    /// The credential this config names, if any: a wire signed in to has none here.
     pub fn credential(&self) -> Credential {
         match &self.api_key {
             Some(key) => Credential::new(key.clone()),

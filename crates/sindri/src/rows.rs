@@ -1,6 +1,3 @@
-//! The rows an entry is drawn as, cached beside the measure they were laid out at: a row's height is
-//! a fact of that measure and of nothing else, so a measure that moved drops every one of them.
-
 use std::collections::BTreeSet;
 use std::ops::Range;
 
@@ -25,19 +22,14 @@ use crate::size::{self, Sized, Sizes};
 use crate::spell;
 use crate::stream::{Said, Stream};
 
-/// The gutter every row of every entry opens with, two columns of it: the glyph that says what the
-/// row is and the blank after it, so every entry's words begin in one column.
 pub(crate) const INDENT: &str = "  ";
 
-/// The two columns every band opens its words in and keeps at its right edge: the frame's margin.
 pub const MARGIN: u16 = 2;
 
-/// The columns a band gives up to the margin, both of its edges counted.
 pub(crate) const fn margins() -> u16 {
     MARGIN.saturating_mul(2)
 }
 
-/// The columns of `band` its words are drawn in: the margin in from each of its edges.
 pub(crate) const fn margined(band: Rect) -> Rect {
     Rect {
         x: band.x.saturating_add(MARGIN),
@@ -46,11 +38,8 @@ pub(crate) const fn margined(band: Rect) -> Rect {
     }
 }
 
-/// The sigil the reader's own words are set from, two columns of it: the row a prompt is asked on and
-/// the draft that asks the next one alike.
 pub(crate) const SIGIL: &str = "› ";
 
-/// The spine a prompt's words are quoted by: one column down the left edge of every row they occupy.
 pub(crate) const SPINE: &str = "┃";
 
 const THOUGHT: &str = "│ ";
@@ -60,19 +49,12 @@ const CHECK: char = '✓';
 const CROSS: char = '✗';
 const KEPT: char = '⋯';
 
-/// The one cell that says a fence's line carries more words past the band's edge.
 const CUT: char = '…';
 
-/// The rows of its own head that a fold keeps: four of a result's output, and four of a prompt's
-/// words.
 const FOLD_HEAD: usize = 4;
 
-/// The fewest rows a fold is worth keeping back, so a count is always a plural: an entry that would
-/// keep back fewer is drawn whole rather than spending a row to hand the reader nothing.
 const FOLD_KEPT: usize = 3;
 
-/// Whether what holds this fold is drawn whole, or as the head a reader is handed to begin with: a
-/// result's own, a prompt's, or the whole work a settled exchange's row stands for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fold {
     Closed,
@@ -80,7 +62,6 @@ enum Fold {
 }
 
 impl Fold {
-    /// The fold this one is not: what the reader's key or press leaves the entry in.
     fn other(self) -> Fold {
         match self {
             Fold::Closed => Fold::Open,
@@ -89,9 +70,6 @@ impl Fold {
     }
 }
 
-/// Where an entry stands in the work the band draws: a prompt, the answer a run ended on and a stop
-/// stand alone, and the thoughts, calls, results and answers the run went past are one work. Its
-/// fold is held on the entry that opens it, and is never the fold a result keeps.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Place {
     Alone,
@@ -100,44 +78,23 @@ enum Place {
 }
 
 impl Place {
-    /// Whether this entry stands in a work at all: it opens one, or it is drawn in one.
     fn in_work(self) -> bool {
         matches!(self, Place::Opens(_) | Place::Within)
     }
 }
 
-/// One row of the transcript: never wider than the width it was laid out at, bar the one glyph that
-/// is itself wider than that whole width and no layout can split — and bar a fence's line, which is
-/// the shape the model wrote it in and no band reflows one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     spans: Vec<(String, Look)>,
-    /// The runs of this row's cells that are ways to somewhere, measured from its left edge: a
-    /// destination is no cell's own, so it is kept beside the words and written by the frame.
     links: Vec<Link>,
-    /// The picture this row stands on, when it is the first row of a block one is drawn
-    /// over: the placement goes to the terminal, the row's words are what a copy takes.
     picture: Option<picture::Picture>,
-    /// The runs of this row a terminal draws at more than one cell: the row is measured by the
-    /// cells they leave, and its spans say the words they are written as.
     sizes: Vec<Sized>,
-    /// The fence this row is a line of, when it is one: a line of a fence is laid whole and the
-    /// reader may walk it sideways, where every other row is wrapped to the band.
     fence: Option<Fence>,
-    /// The line of source this row was drawn from, on the rows of a fence and on no other: a copy
-    /// of a fence takes the words it was written as, and never the guide or the cut drawn over them.
     source: Option<String>,
-    /// The fence whose tag row this is, on that row and no other: a mark over a fence's name takes
-    /// the fence whole, where the row itself is no line of it — it never walks and is never cut.
     names: Option<usize>,
-    /// The band this row is drawn on, when it stands on one of its own rather than on the ground
-    /// the band it is read in lays under every row of it.
     band: Option<Band>,
 }
 
-/// A fence line: the block it is a line of, the columns of gutter its words are set past, and how
-/// far the reader has walked it sideways. A fence line is never reflowed, so a band too narrow for
-/// it carries the words past its edge and the cut marks the rest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Fence {
     id: usize,
@@ -160,8 +117,6 @@ impl Fence {
 }
 
 impl Row {
-    /// A span of no glyphs is dropped here, so a band too narrow to hold a gutter beside
-    /// one glyph of prose leaves no empty span behind.
     pub fn of<V, I>(spans: I) -> Row
     where
         V: Into<Look>,
@@ -183,8 +138,6 @@ impl Row {
         }
     }
 
-    /// The same row with one more run drawn at more than one cell: the run covers the cells of the
-    /// words its span says, so a row of them is measured by the footprint and not by the glyphs.
     pub fn sized(mut self, run: Sized) -> Row {
         self.sizes.push(run);
         self
@@ -212,19 +165,15 @@ impl Row {
         }
     }
 
-    /// This row standing on `band`: its whole width is claimed in that band's ground before its
-    /// words are written, so the row is read as a surface of its own.
     pub fn standing(mut self, band: Band) -> Row {
         self.band = Some(band);
         self
     }
 
-    /// The band this row stands on, and none for a row drawn on the ground it was handed.
     pub fn stands_on(&self) -> Option<Band> {
         self.band
     }
 
-    /// This row as a line of fence `id`, its words set past `gutter` columns and walked nowhere yet.
     pub fn fenced(mut self, id: usize, gutter: u16) -> Row {
         self.fence = Some(Fence {
             id,
@@ -238,8 +187,6 @@ impl Row {
         self.fence
     }
 
-    /// This row as the line of source it was drawn from: what a copy of the fence it belongs to
-    /// hands back, where the row's own cells are what the band made of that line.
     pub fn sourced(mut self, source: impl Into<String>) -> Row {
         self.source = Some(source.into());
         self
@@ -249,47 +196,35 @@ impl Row {
         self.source.as_deref()
     }
 
-    /// This row as the tag row of fence `fence`, which names it and is no line of it.
     pub fn naming(mut self, fence: usize) -> Row {
         self.names = Some(fence);
         self
     }
 
-    /// The fence this row stands in, as a line of it or as the row that names it: a mark over any
-    /// row of a fence is a mark over the fence.
     pub fn fence_id(&self) -> Option<usize> {
         self.fence.map(Fence::id).or(self.names)
     }
 
-    /// Whether this row is a line of fence `id`, which is what a walk and a copy of it are made of.
     pub fn line_of(&self, id: usize) -> bool {
         self.fence.is_some_and(|line| line.id() == id)
     }
 
-    /// This row walked `by` columns sideways, which only the rows of one fence ever are.
     pub(crate) fn walked(&mut self, by: u16) {
         if let Some(fence) = &mut self.fence {
             fence.walk = by;
         }
     }
 
-    /// Whether a band `room` columns wide cuts this row's words at its edge, which only a fence's
-    /// line ever has more of than the band holds.
     pub fn cut(&self, room: u16) -> bool {
         self.fence
             .is_some_and(|fence| u32::from(fence.walk) + u32::from(room) < u32::from(self.width()))
     }
 
-    /// The run of this row's cells that begins `left` columns in and is `width` columns wide is a
-    /// way to `destination`: the words are drawn as they are, and the frame writes the way around
-    /// them. A row that names none is drawn as it was.
     pub fn linking(mut self, left: u16, width: u16, destination: impl Into<String>) -> Row {
         self.links.push(Link::new(left, width, destination));
         self
     }
 
-    /// The columns this row is drawn in: its spans measured as they are written, and the cells a
-    /// sized run leaves around them, which is what a row of them takes of the band.
     pub fn width(&self) -> u16 {
         let written = self
             .spans
@@ -308,9 +243,6 @@ impl Row {
         &self.spans
     }
 
-    /// This row moved `by` columns right: the ways it names and the cells a terminal draws at more
-    /// than one are measured from its left edge, so they move with the words while the picture
-    /// placed over it stays where the row does.
     fn shifted(self, by: u16) -> Row {
         Row {
             spans: self.spans,
@@ -324,7 +256,6 @@ impl Row {
         }
     }
 
-    /// This row opening with `gutter` the way every row of an entry does, its words set past it.
     pub fn guttered(self, gutter: &str, ink: Ink) -> Row {
         if self.spans.is_empty() {
             return self;
@@ -337,8 +268,6 @@ impl Row {
         row
     }
 
-    /// This row with `other`'s words set after its own, and the ways `other` names moved past the
-    /// columns this row covers: two cells of a table are one row, and each keeps its own ways.
     pub(crate) fn followed_by(self, other: &Row) -> Row {
         let shifts = self.width();
         let mut moved = other.clone().shifted(shifts);
@@ -349,9 +278,6 @@ impl Row {
         row
     }
 
-    /// This row with `head`'s words standing in the place of the span it opens with, and a blank
-    /// after them: `by` is how many columns past that span the head takes, which is the shift every
-    /// run the row keeps moves by.
     pub(crate) fn headed_by(self, head: &Row, by: u16) -> Row {
         let mut row = self.shifted(by);
         let mut spans = head.spans.clone();
@@ -365,8 +291,6 @@ impl Row {
         self.spans.iter().map(|(text, _)| text.as_str()).collect()
     }
 
-    /// The glyphs this row says, each with the column it is drawn from and the columns it covers: a
-    /// glyph of a run drawn at more than one cell is one word over that many.
     pub fn glyph_columns(&self) -> Vec<mark::Glyph> {
         let mut glyphs = Vec::new();
         let mut column = 0u16;
@@ -396,8 +320,6 @@ impl Row {
         if let Some(band) = self.band {
             pen::claim(buffer, area, palette.ground(Some(band)));
         }
-        // A fence walked sideways keeps its gutter where it is and carries its words back by what
-        // the reader walked past, so the bar still stands in the column it always did.
         match self.fence.filter(|fence| fence.walk > 0) {
             Some(fence) => {
                 let (gutter, words) = gutter_and_words(&self.spans, fence.gutter);
@@ -422,11 +344,8 @@ impl Row {
     }
 }
 
-/// The words a row is drawn as, and the look each of them is written in.
 type Spans = Vec<(String, Look)>;
 
-/// `spans` split at `columns` of their left edge: the gutter before it and the words after, a span
-/// that straddles the column cut in two so no glyph is drawn twice.
 fn gutter_and_words(spans: &[(String, Look)], columns: u16) -> (Spans, Spans) {
     let mut left = Vec::new();
     let mut right = Vec::new();
@@ -451,8 +370,6 @@ fn gutter_and_words(spans: &[(String, Look)], columns: u16) -> (Spans, Spans) {
     (left, right)
 }
 
-/// `spans` with the first `columns` of them dropped, whole glyphs only: a glyph that straddles the
-/// boundary goes with them rather than being drawn by halves.
 fn walked(spans: &[(String, Look)], columns: u16) -> Spans {
     let mut past = columns;
     let mut kept = Vec::new();
@@ -466,8 +383,6 @@ fn walked(spans: &[(String, Look)], columns: u16) -> Spans {
     kept
 }
 
-/// `text` without its first `columns` columns, and how many columns that took: the glyph that
-/// straddles the boundary goes with the ones before it.
 fn drop_columns(text: &str, columns: u16) -> (u16, &str) {
     let mut at = 0u16;
     for (index, glyph) in text.char_indices() {
@@ -483,15 +398,10 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
     layout_on(entry, cols, &Surface::none(), None)
 }
 
-/// The same entry on a `surface`, with the `ground` a run judges a target from: a path a call names
-/// is a way only where that judgement holds it openable, and a frame handed none lays every path as
-/// the words it was written as.
 pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Ground>) -> Vec<Row> {
     laid(entry, cols, surface, ground, Fold::Closed, None).0
 }
 
-/// The rows of one entry in the fold it is drawn as, and how many rows of it that fold keeps back:
-/// a fold is a fact of its last layout, and a width change re-lays it.
 fn laid(
     entry: &Entry,
     cols: u16,
@@ -502,8 +412,6 @@ fn laid(
 ) -> (Vec<Row>, Option<usize>) {
     let cols = cols.max(1);
     match entry {
-        // A turn is no row of the band, and a stop that ended on the answer under it says nothing
-        // that answer does not: the record writes both, and the drawing leaves them out.
         Entry::Turn { .. } | Entry::Stop { stop: Stop::Final } => (Vec::new(), None),
         Entry::Call {
             name, arguments, ..
@@ -558,9 +466,6 @@ fn laid(
     }
 }
 
-/// A result's rows as the reader is handed them: the rows of its head, one row counting the rows
-/// kept back, and its last row — unless the reader opened the fold, or it holds the whole result.
-/// The count comes back beside them for as long as the result has a fold at all.
 fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>) {
     let Some(kept) = rows
         .len()
@@ -581,9 +486,6 @@ fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>
     (rows, Some(kept))
 }
 
-/// A prompt's words as the reader is handed them: the rows of its head and one row counting the rows
-/// kept back, in the shape and the word a folded result's count wears — and no last row, because a
-/// prompt has none to keep. The count comes back beside them for as long as the prompt has a fold.
 fn folded_prompt(mut words: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>) {
     let Some(kept) = words
         .len()
@@ -600,16 +502,11 @@ fn folded_prompt(mut words: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Optio
     (words, Some(kept))
 }
 
-/// The row that says how many rows the fold keeps back, drawn as any other row of that entry: the
-/// marker in the gutter and the count in the dim ink of the fold's own words, a rung quieter than
-/// the output it stands among.
 fn kept_back(kept: usize, cols: u16) -> Row {
     let words = format!("{kept} rows kept back");
     marked(&KEPT.to_string(), Ink::Dim, vec![(words, Ink::Dim)], cols)
 }
 
-/// What a work holds: the calls it made, the files its opens read and the time its results took, as
-/// the one row a settled work is drawn as says them.
 #[derive(Debug, Default)]
 struct Tally {
     calls: usize,
@@ -618,8 +515,6 @@ struct Tally {
 }
 
 impl Tally {
-    /// The words the one row a settled work is drawn as says: each number only where the work holds
-    /// it, in the order a reader reads them.
     fn words(&self) -> String {
         let mut said: Vec<String> = Vec::new();
         if self.calls > 0 {
@@ -639,8 +534,6 @@ impl Tally {
     }
 }
 
-/// The time a work took, in the words of a fact: a work under a second says the milliseconds it
-/// took, because a tenth of a second is no reading a reader can tell from none.
 fn took(ms: u64) -> String {
     match ms {
         ms if ms < 1_000 => format!("{ms} ms"),
@@ -655,8 +548,6 @@ fn plural(count: usize) -> &'static str {
     }
 }
 
-/// The rows a stop is drawn as: the mark it wears with its own word beside it, and one line of the
-/// run's own words under it when the stop is an error, since a reader is owed one line and no more.
 fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
     let (marker, ink) = stop_mark(stop);
     let mut rows = vec![marked(
@@ -673,9 +564,6 @@ fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
     rows
 }
 
-/// The rows a prompt is drawn as: the blank row that separates its exchange from the one above it —
-/// the one `Rows` drops for the first exchange — and the reader's own words down the spine of a
-/// quoted block. The blank row is no word of the prompt, so no fold counts it.
 fn asked(text: &str, cols: u16) -> (Row, Vec<Row>) {
     let opening = format!("{SPINE}{}", SIGIL.trim_end());
     let (gutter, room) = margin(&opening, cols);
@@ -687,9 +575,6 @@ fn asked(text: &str, cols: u16) -> (Row, Vec<Row>) {
     (Row::blank(), words)
 }
 
-/// One row of a prompt's words: the spine down its left edge, the sigil standing in the column
-/// beside it on the row the prompt is asked on and a blank on every row under it, and the words set
-/// past both. A band too narrow to hold that gutter beside one word gives the gutter up.
 fn quoted(opens: bool, line: String, cols: u16) -> Row {
     let marker = match opens {
         true => SIGIL.trim_end(),
@@ -715,9 +600,6 @@ fn thought(text: &str, cols: u16) -> Vec<Row> {
         .collect()
 }
 
-/// The rows an answer is drawn as, set in the answer's gutter — except the row the run's marker
-/// heads, which stands the marker and its blank column in that gutter and lays that row's words
-/// out beside them.
 fn answer_on(
     text: &str,
     cols: u16,
@@ -735,18 +617,13 @@ fn answer_on(
     rows
 }
 
-/// `row` with the marker `head` laid in it, standing where the row's gutters do: the row is laid from
-/// its own words first, so the marker is set over it rather than laid in its place.
 fn headed(row: &mut Row, head: &Head, cols: u16, reserve: u16) {
     let first = std::mem::replace(row, Row::blank());
     *row = first.headed_by(&head_row(head, cols), reserve);
 }
 
-/// The marker a band can hold beside one word of an answer, and the columns its own words reserve:
-/// a marker the band cannot hold beside that word is given up whole rather than the word.
 fn reserved(head: Option<&Head>, cols: u16) -> (Option<&Head>, u16) {
     let (gutter, room) = margin(INDENT, cols);
-    // The marker's own words count against the width; the gutter it stands in the place of does not.
     let reserve = head.map_or(0, |head| {
         head.width()
             .saturating_add(1)
@@ -758,8 +635,6 @@ fn reserved(head: Option<&Head>, cols: u16) -> (Option<&Head>, u16) {
     }
 }
 
-/// The rows an answer's words are drawn as, wrapped to leave `reserve` columns for a marker beside
-/// them and with no marker laid in them: a marker that moved steps over this laying, not through it.
 fn answer_rows(
     text: &str,
     cols: u16,
@@ -771,8 +646,6 @@ fn answer_rows(
     markdown::rows_in(text, cols, reserve, gutter, surface, wholeness)
 }
 
-/// The row a run's marker heads: the mark stands in the gutter and the words it says begin where
-/// the entry's own do.
 fn head_row(head: &Head, cols: u16) -> Row {
     let Some(((glyph, ink), words)) = head.spans().split_first() else {
         return Row::blank();
@@ -784,9 +657,6 @@ fn head_row(head: &Head, cols: u16) -> Row {
     marked(glyph, *ink, words, cols)
 }
 
-/// A row whose marker stands in the gutter: the glyph in the gutter's first column, the gutter's
-/// blank after it, and the words fitted to the columns beside them. A band too narrow to hold both
-/// gives up the marker rather than a word.
 fn marked(marker: &str, ink: Ink, words: Vec<(String, Ink)>, cols: u16) -> Row {
     let (gutter, room) = margin(INDENT, cols);
     let words = fitted(words, room);
@@ -797,8 +667,6 @@ fn marked(marker: &str, ink: Ink, words: Vec<(String, Ink)>, cols: u16) -> Row {
     }
 }
 
-/// The gutter a body opens with at `cols`, and the columns its words have beside it: a band no
-/// wider than the gutter holds none of it, and the marker is given up rather than the words.
 fn margin(gutter: &str, cols: u16) -> (&str, u16) {
     let width = pen::cells(gutter);
     match cols > width {
@@ -807,9 +675,6 @@ fn margin(gutter: &str, cols: u16) -> (&str, u16) {
     }
 }
 
-/// The rows a call opens with: the mark it wears and the tool's name in the gutter, and under them
-/// the words the call is drawn as. The mark is the check or the cross of the verdict that settled
-/// it, and the `…` of a call still out.
 fn opening(
     name: &str,
     arguments: &str,
@@ -837,9 +702,6 @@ fn opening(
     rows
 }
 
-/// The way a call names, when the run judged it one: the words the row says are the path the run
-/// read, which is how its cells are found, and the file the judgement resolved them to. A call that
-/// names nothing the run would open is no way at all.
 fn way(name: &str, arguments: &str, written: &str, ground: Option<&Ground>) -> Option<Way> {
     if name != OPEN || written.is_empty() {
         return None;
@@ -850,8 +712,6 @@ fn way(name: &str, arguments: &str, written: &str, ground: Option<&Ground>) -> O
     }
 }
 
-/// The rows a result is drawn as: the row that says the verdict, the duration and the size, and the
-/// body it wrote under them. `name` is the tool's own where no call row above already says it.
 fn result_rows(
     name: Option<&str>,
     exit: Option<Exit>,
@@ -865,9 +725,6 @@ fn result_rows(
     rows
 }
 
-/// The row a result opens with: the verdict, how long the call took and how much it wrote, and the
-/// name of its tool when `name` gives one. A result with no verdict says the numbers alone rather
-/// than guessing `exit 0` from the text beside it.
 fn settled(name: Option<&str>, exit: Option<Exit>, bytes: u64, elapsed_ms: u64, cols: u16) -> Row {
     let numbers = match name {
         Some(name) => format!("{name}  {elapsed_ms} ms · {bytes} bytes"),
@@ -887,9 +744,6 @@ fn settled(name: Option<&str>, exit: Option<Exit>, bytes: u64, elapsed_ms: u64, 
     }
 }
 
-/// The rows a call and the result that settled it are drawn as: the call's own words first, wearing
-/// the mark its verdict settled on, and the result's rows under them, which say no name the call's
-/// row above already holds. The fold is the result's rows' and never the call's.
 fn answered(
     call: &Entry,
     result: &Entry,
@@ -933,8 +787,6 @@ fn answered(
     (rows, kept)
 }
 
-/// The check a run that answered settles on and the cross every other stop wears: the marker at the
-/// head of an answer and the stop's own entry read this pair, so no two drawings of one stop disagree.
 pub(crate) fn stop_mark(stop: &Stop) -> (char, Ink) {
     match stop {
         Stop::Final => (CHECK, Ink::Ok),
@@ -946,8 +798,6 @@ fn mark(exit: Exit) -> char {
     if exit.is_ok() { CHECK } else { CROSS }
 }
 
-/// Two inks for four states: the words tell `✗ exit N` from `✗ timed out`, never a
-/// shade of red.
 fn ink_of(exit: Exit) -> Ink {
     if exit.is_ok() { Ink::Ok } else { Ink::Err }
 }
@@ -969,9 +819,6 @@ fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
     Row::of(kept)
 }
 
-/// The words of a tool's arguments or its result, set in the gutter a body is set from and in the
-/// ink that kind of body is drawn in. A body that names a way to a file is laid with that path's
-/// own cells a way there, and every other body is laid as the wrapping lays it.
 fn body(text: &str, cols: u16, way: Option<Way>, ink: Ink) -> Vec<Row> {
     if text.is_empty() {
         return Vec::new();
@@ -990,9 +837,6 @@ fn body(text: &str, cols: u16, way: Option<Way>, ink: Ink) -> Vec<Row> {
     }
 }
 
-/// One row of `line` set past `gutter`, the gutter in `mark`'s ink and the words in `words`'': the
-/// gutter is given up when the line holds a glyph wider than the room it left, because a marker is
-/// given up before a word is cut.
 fn words_past(gutter: &str, mark: Ink, words: Ink, line: String, cols: u16) -> Row {
     let drawn = pen::cells(gutter).saturating_add(pen::cells(&line));
     let gutter = match drawn > cols {
@@ -1045,8 +889,6 @@ pub(crate) fn wrap_under(text: &str, first: u16, room: u16) -> Vec<String> {
     rows
 }
 
-/// The longest head of `word` that fits in `room` columns, and what is left of it. A
-/// first glyph wider than the room is taken anyway, or the word would never be broken.
 pub(crate) fn split_at(word: &str, room: usize) -> (String, &str) {
     let mut width = 0;
     for (at, glyph) in word.char_indices() {
@@ -1067,7 +909,6 @@ pub enum Scroll {
 }
 
 impl Scroll {
-    /// How many rows back from the tail this window stands.
     pub fn back(self) -> u32 {
         match self {
             Scroll::Tail => 0,
@@ -1075,7 +916,6 @@ impl Scroll {
         }
     }
 
-    /// The window standing `rows` behind the tail, and the tail itself for none.
     pub fn of(rows: u32) -> Scroll {
         match rows {
             0 => Scroll::Tail,
@@ -1083,17 +923,13 @@ impl Scroll {
         }
     }
 
-    /// Whether this window stands where the run is still being drawn.
     pub fn is_tail(self) -> bool {
         self == Scroll::Tail
     }
 }
 
-/// The cell a thumb is drawn of.
 pub(crate) const THUMB: char = '█';
 
-/// Where a window stands in a transcript taller than the band it is read in: the rows of the
-/// gutter its thumb covers, counted from the band's first row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Thumb {
     top: u16,
@@ -1109,8 +945,6 @@ impl Thumb {
         self.top..self.top + self.span
     }
 
-    /// The thumb stands in the gutter's glyph column, where the blank column after it is what keeps
-    /// the words off it.
     pub(crate) fn paint(&self, area: Rect, y: u16, buffer: &mut Buffer, palette: &Palette) {
         if let Some(row) = y.checked_sub(area.y)
             && self.rows().contains(&row)
@@ -1120,19 +954,14 @@ impl Thumb {
     }
 }
 
-/// Which way a sideways key walks a fence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sideways {
     Back,
     Forward,
 }
 
-/// How many columns one press of a sideways key walks a fence.
 const WALK: u16 = 8;
 
-/// The three facts a band is laid at: the `cols` it is drawn in, the `surface` a picture in an answer
-/// is measured against, and the `ground` a call's path is judged against. Rows laid at another measure
-/// are rows drawn from facts that have moved.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Measure {
     cols: u16,
@@ -1140,8 +969,6 @@ pub struct Measure {
     ground: Option<Ground>,
 }
 
-/// A cache no band has been handed yet holds the narrowest one, because a band is never narrower than
-/// the column that draws nothing.
 impl Default for Measure {
     fn default() -> Measure {
         Measure {
@@ -1153,8 +980,6 @@ impl Default for Measure {
 }
 
 impl Measure {
-    /// The measure of a band `cols` wide, held at no fewer than one column: a band narrower than that
-    /// draws nothing.
     pub fn new(cols: u16, surface: Surface, ground: Option<&Ground>) -> Measure {
         Measure {
             cols: cols.max(1),
@@ -1164,41 +989,21 @@ impl Measure {
     }
 }
 
-/// Every entry a transcript holds, each with the rows it was laid out as at one measure,
-/// and nothing it was not drawn as.
 #[derive(Clone, Debug, Default)]
 pub struct Rows {
-    /// The measure every row here was laid at, and the one the next rows will be laid at.
     measure: Measure,
     held: Vec<Held>,
-    /// The words the wire has fed the run's newest turn, which the live entry is laid from and
-    /// retired with.
     in_flight: Stream,
-    /// How many layouts this cache has done: the instrument the rows tests hold the laying out to,
-    /// read from outside this crate and never by it.
     lays: usize,
-    /// How many rows those layouts drew: the one count a step of the marker and a landing fragment
-    /// are told apart by, read from outside this crate and never by it.
     laid: usize,
-    /// Whether the stop this cache holds last is the one the turn in flight ended, which stands above
-    /// it, and never the stop a run before it left.
     ended: bool,
-    /// The marker the newest answer the record holds wears, and none while the frame's marker heads
-    /// a turn in flight or a row of its own.
     head: Option<Head>,
-    /// The row the newest answer of the turn in flight opens with, kept as the answer laid it, so a
-    /// marker that moved is laid over that row alone.
     unmarked: Option<Unmarked>,
 }
 
-/// The row a marker heads as the answer laid it, with no marker in it: a marker that moved is laid
-/// over this row and the rows under it stand, because what they wrap at is the columns the marker's
-/// own words reserve.
 #[derive(Clone, Debug)]
 struct Unmarked {
-    /// The columns the marker reserved when this row was laid, which is what the answer wraps at.
     reserve: u16,
-    /// Where this row stands in the live entry's rows.
     first: usize,
     row: Row,
 }
@@ -1206,27 +1011,15 @@ struct Unmarked {
 #[derive(Clone, Debug)]
 struct Held {
     what: What,
-    /// What came back, when this holds a call whose result has landed: kept rather than
-    /// layered over the rows, so a width change re-lays the settled row.
     result: Option<Entry>,
     rows: Option<Vec<Row>>,
-    /// Where this entry stands in the work around it, and the fold the reader left that whole work
-    /// in where this entry opens one.
     place: Place,
-    /// The fold the reader left this result or prompt in, which is theirs and survives every re-lay
-    /// of the rows under it.
     fold: Fold,
-    /// How many rows this entry's closed fold keeps back, and nothing where its whole fold holds
-    /// it: a fact of its last layout, because what a fold holds depends on the width.
     kept: Option<usize>,
-    /// How far each fence of this entry has been walked, by the block's ordinal: kept off the rows so
-    /// a line laid again is walked where the reader left it, and dropped with them at a new width.
     walks: Vec<(usize, u16)>,
 }
 
 impl Held {
-    /// `row` walked where the reader left the fence it is a line of: a row laid again keeps the walk
-    /// its entry was left in.
     fn walk(&self, row: &mut Row) {
         let Some(fence) = row.fence() else {
             return;
@@ -1240,12 +1033,7 @@ impl Held {
 #[derive(Clone, Debug)]
 enum What {
     Fact(Entry),
-    Live {
-        revision: u64,
-        /// The marker the newest answer wore: laid into the rows it heads, so a change here
-        /// is a change to the picture.
-        head: Option<Head>,
-    },
+    Live { revision: u64, head: Option<Head> },
 }
 
 impl Rows {
@@ -1253,11 +1041,7 @@ impl Rows {
         Rows::default()
     }
 
-    /// Holds the stop a run ended on at the transcript's end: the words that run last said are theirs
-    /// to keep above it, so the reason a run stopped is the last word of the run it ended.
     pub(crate) fn stopped(&mut self, stop: Stop) {
-        // The record draws the stop it wrote, so a stop the band already holds is that stop drawn
-        // once, and never another under it.
         let drawn = self
             .held
             .iter()
@@ -1273,8 +1057,6 @@ impl Rows {
         self.ended = true;
     }
 
-    /// Lays `head` over the newest answer the record holds, and drops that answer's rows where it
-    /// moved: a marker that moved is laid again where it now stands. Nothing else wears it.
     pub fn heading(&mut self, head: Option<Head>) {
         if self.head == head {
             return;
@@ -1285,23 +1067,18 @@ impl Rows {
         }
     }
 
-    /// The newest answer the record holds: the one entry a marker with no run in flight heads.
     fn newest_answer(&self) -> Option<usize> {
         self.held
             .iter()
             .rposition(|held| matches!(held.what, What::Fact(Entry::Assistant { .. })))
     }
 
-    /// Whether the record holds an answer, which is the one row a marker with no run in flight can
-    /// head.
     pub(crate) fn holds_answer(&self) -> bool {
         self.newest_answer().is_some()
     }
 
     pub fn push(&mut self, entry: Entry) {
         let answer = matches!(entry, Entry::Assistant { .. });
-        // A newer answer takes the marker from the one that wore it, so that one is laid again
-        // without it: two answers never wear one marker.
         if self.head.is_some()
             && answer
             && let Some(at) = self.newest_answer()
@@ -1314,8 +1091,6 @@ impl Rows {
             self.settle(at, entry);
             return;
         }
-        // An answer landing is the record holding the turn's words, so the turn goes with it: one
-        // word drawn twice is one word in two rows.
         if answer {
             self.retire();
         } else {
@@ -1333,9 +1108,6 @@ impl Rows {
         });
     }
 
-    /// Where an entry landing at the transcript's end stands, and what its landing does to the work
-    /// around it: a thought, call or result joins the work above it, and a prompt or a stop ends
-    /// that work.
     fn land(&mut self, entry: &Entry) -> Place {
         let of_work = work_entry(entry);
         if of_work {
@@ -1354,16 +1126,12 @@ impl Rows {
         }
     }
 
-    /// The entry that opens the last work the transcript holds, which is the work a prompt or a stop
-    /// landing now settles: the answer above it is the exchange's end and no row of that work.
     fn last_work(&self) -> Option<usize> {
         (0..self.held.len())
             .rev()
             .find(|at| matches!(self.held[*at].place, Place::Opens(_)))
     }
 
-    /// The entry that opens the work the transcript ends in, and nothing where the entry it ends on
-    /// stands alone.
     fn open_work(&self) -> Option<usize> {
         let last = self.held.len().checked_sub(1)?;
         if !self.held[last].place.in_work() {
@@ -1374,9 +1142,6 @@ impl Rows {
             .find(|at| matches!(self.held[*at].place, Place::Opens(_)))
     }
 
-    /// An answer the run went past is work of its own: a thought, call or result after it says the
-    /// turn ended and the run went on, so the answer joins the work and the rows it drew are the
-    /// work's.
     fn past(&mut self) {
         let Some(at) = self.held.len().checked_sub(1) else {
             return;
@@ -1396,9 +1161,6 @@ impl Rows {
         self.held[at].rows = None;
     }
 
-    /// Holds the turn this cache owns as its last entry. A turn asked again without having moved
-    /// lays nothing, and the mark counts as movement because it is laid into the rows it heads: a
-    /// held one would wear a clock that has moved on.
     pub fn live(&mut self, head: Option<&Head>) {
         if self.in_flight.is_empty() && head.is_none() {
             self.drop_live();
@@ -1451,9 +1213,6 @@ impl Rows {
         self.lays += 1;
     }
 
-    /// Lays the row a marker heads over the answer it heads, and answers whether this pass was one:
-    /// a turn that has said a word since its rows were laid is laid whole, and so is one whose marker
-    /// no longer reserves the columns those rows wrap at.
     fn stepped(&mut self, at: usize, revision: u64, head: Option<Head>) -> bool {
         let cols = self.measure.cols;
         let (fitted, reserve) = reserved(head.as_ref(), cols);
@@ -1490,9 +1249,6 @@ impl Rows {
         true
     }
 
-    /// The newest answer alone wears `head`, and a turn that has said no answer gets a row of its own
-    /// for it: a frame waiting on a wire must not look idle. The row the marker heads is kept as the
-    /// answer laid it, so a marker that moves after this lays that row and no other.
     fn live_rows(&mut self, head: Option<&Head>) -> Vec<Row> {
         let cols = self.measure.cols;
         let surface = &self.measure.surface;
@@ -1540,28 +1296,21 @@ impl Rows {
         rows
     }
 
-    /// Whether the turn this cache holds has said an answer rather than a thought alone.
     pub(crate) fn says_answer(&self) -> bool {
         self.in_flight.says_answer()
     }
 
-    /// Where the turn in flight stands, which a stop that landed under it leaves in its own place:
-    /// the turn is found rather than taken to be the newest entry.
     fn live_at(&self) -> Option<usize> {
         self.held
             .iter()
             .position(|held| matches!(held.what, What::Live { .. }))
     }
 
-    /// Drops the turn in flight with its entry: the run it belonged to has said its last word, or
-    /// the record holds those words as entries now.
     pub(crate) fn retire(&mut self) {
         self.in_flight = Stream::new();
         self.drop_live();
     }
 
-    /// Drops the live entry alone, wherever it stands: an entry landing takes its place in the band,
-    /// and the turn it was laid from is still the one in flight.
     fn drop_live(&mut self) {
         self.held
             .retain(|held| !matches!(held.what, What::Live { .. }));
@@ -1569,9 +1318,6 @@ impl Rows {
         self.unmarked = None;
     }
 
-    /// The call a result of `turn` settles: the one whose identity it names, and a result that names
-    /// none — one a transcript written before calls had identities holds — the oldest call of that
-    /// turn still waiting, so a wave of calls and the wave answering it pair in written order.
     fn pending(&self, turn: u32, id: Option<&Redacted>) -> Option<usize> {
         let mut waiting = self
             .held
@@ -1611,15 +1357,10 @@ impl Rows {
         self.lays
     }
 
-    /// The rows this cache has laid out, a pass telling what it drew by the difference: every row a
-    /// fact, a thought or an answer was drawn as, and the one row a marker's step lays over the
-    /// answer it heads. Read from outside this crate, never by it.
     pub fn laid(&self) -> usize {
         self.laid
     }
 
-    /// Hands the cache the band it is drawn at, answering whether the band reflowed: true only when
-    /// the width moved.
     pub fn measure(&mut self, measure: Measure) -> bool {
         if measure == self.measure {
             return false;
@@ -1630,9 +1371,6 @@ impl Rows {
         reflowed
     }
 
-    /// Walks the fence `fence` of entry `at` one step sideways, answering whether it moved: every row
-    /// of that fence moves and no other, and a fence walked as far as its widest line goes no further.
-    /// The walk is the entry's, so a line laid again keeps it until a new width drops it.
     pub fn sideways(&mut self, at: usize, fence: usize, way: Sideways) -> bool {
         let cols = self.measure.cols;
         let Some(held) = self.held.get_mut(at) else {
@@ -1654,8 +1392,6 @@ impl Rows {
             .iter()
             .find(|(id, _)| *id == fence)
             .map_or(0, |(_, walk)| *walk);
-        // The widest line is the bound: walked past it, the tail would stand past the band's edge
-        // with nothing left to bring to it.
         let most = widest.saturating_sub(cols);
         let to = match way {
             Sideways::Back => walk.saturating_sub(WALK),
@@ -1678,8 +1414,6 @@ impl Rows {
         true
     }
 
-    /// `rows` walked where the reader left this entry's fences: the one thing about them that is the
-    /// entry's and not the width's.
     fn walking(&self, at: usize, rows: &mut [Row]) {
         let held = &self.held[at];
         for row in rows {
@@ -1687,8 +1421,6 @@ impl Rows {
         }
     }
 
-    /// Drops every row, and the walk its fences were left in with them: a fact a row was laid out
-    /// against has moved, and a row is only a drawing of the facts that made it.
     fn unlay(&mut self) {
         for held in &mut self.held {
             held.rows = None;
@@ -1697,9 +1429,6 @@ impl Rows {
         self.unmarked = None;
     }
 
-    /// The rows of entry `at`, laid out now if they do not exist and kept for the next paint: a
-    /// settled call is its own rows and then the result's under them, a settled work is the one row
-    /// that counts it, and the live entry has no fact behind it, so nothing here.
     pub fn rows(&mut self, at: usize) -> &[Row] {
         let work = self.work(at);
         let one = self.one_row(&work);
@@ -1728,8 +1457,6 @@ impl Rows {
             if let Some((mut rows, kept)) = laid {
                 self.lays += 1;
                 self.walking(at, &mut rows);
-                // The transcript's first row has nothing above it to be separated from, so the
-                // exchange that opens it opens on its own words.
                 if at == 0 && is_prompt(&self.held[at]) {
                     rows.remove(0);
                 }
@@ -1741,8 +1468,6 @@ impl Rows {
         self.held[at].rows.as_deref().unwrap_or_default()
     }
 
-    /// The entries of the work `at` stands in: the run of work entries around it, and an entry that
-    /// stands alone in a work of one.
     fn work(&self, at: usize) -> Range<usize> {
         let start = (0..=at)
             .rev()
@@ -1755,8 +1480,6 @@ impl Rows {
         start..end
     }
 
-    /// Whether the record has written past `work`, which is a prompt or a stop standing after it: a
-    /// turn's answer and the turn in flight both leave the run filling the work it is in.
     fn written_past(&self, work: &Range<usize>) -> bool {
         self.held[work.end..].iter().any(|held| {
             matches!(
@@ -1766,8 +1489,6 @@ impl Rows {
         })
     }
 
-    /// What `work` holds, counted off the entries it stands in: the calls it made with the files
-    /// they read, and the time of every result, the result that settled a call included.
     fn tally(&self, work: &Range<usize>) -> Tally {
         let mut tally = Tally::default();
         for held in &self.held[work.clone()] {
@@ -1787,8 +1508,6 @@ impl Rows {
         tally
     }
 
-    /// Whether `work` holds a number to say, counted without laying the row that says it: a row
-    /// that would count nothing is no row.
     fn says_something(&self, work: &Range<usize>) -> bool {
         self.held[work.clone()].iter().any(|held| {
             matches!(held.what, What::Fact(Entry::Call { .. }))
@@ -1796,20 +1515,14 @@ impl Rows {
         })
     }
 
-    /// Whether `work` is a work the band draws as a row: the record has written past it and it
-    /// holds a number to say, so it is one row closed and the rows it stood for opened.
     fn worth_a_row(&self, work: &Range<usize>) -> bool {
         self.written_past(work) && self.says_something(work)
     }
 
-    /// Whether `work` is drawn as the one row that counts it: a work worth a row the reader has not
-    /// opened.
     fn one_row(&self, work: &Range<usize>) -> bool {
         matches!(self.held[work.start].place, Place::Opens(Fold::Closed)) && self.worth_a_row(work)
     }
 
-    /// The one row a settled work is drawn as: what it holds rather than how many rows it stands
-    /// in, in the dim ink of a fact.
     fn work_row(&self, work: &Range<usize>, cols: u16) -> Row {
         marked(
             &KEPT.to_string(),
@@ -1819,8 +1532,6 @@ impl Rows {
         )
     }
 
-    /// The newest fold a key may move: the newest work the band draws as a row and the newest prompt
-    /// that keeps rows back, whichever stands last. A result inside a work is never the one.
     fn newest_fold(&mut self) -> Option<usize> {
         for at in (0..self.held.len()).rev() {
             if is_prompt(&self.held[at]) {
@@ -1837,8 +1548,6 @@ impl Rows {
         None
     }
 
-    /// The newest fold the reader may move, opened if it is closed and folded if it is open: a work
-    /// drawn as a row, or a prompt that keeps rows back. False where neither holds a fold.
     pub fn toggle_newest(&mut self) -> bool {
         let Some(at) = self.newest_fold() else {
             return false;
@@ -1849,8 +1558,6 @@ impl Rows {
         }
     }
 
-    /// The fold of the work `at` stands in, opened if closed and folded if open: what a press on a
-    /// work's head row does. A work the band draws as no row, and an entry in no work, move nothing.
     pub fn toggle(&mut self, at: usize) -> bool {
         let work = self.work(at);
         if !self.worth_a_row(&work) {
@@ -1862,9 +1569,6 @@ impl Rows {
         self.opened(work.start, fold.other())
     }
 
-    /// The fold the row `row` of entry `at` answers to, opened or folded where that row is the one a
-    /// press stands on: a prompt opens on the row counting what it keeps back and folds on the row its
-    /// words begin, and a work opens or folds on the one row it is drawn as.
     pub fn press(&mut self, at: usize, row: u16) -> bool {
         let Some(held) = self.held.get(at) else {
             return false;
@@ -1884,27 +1588,20 @@ impl Rows {
         moves && self.fold(at, fold.other())
     }
 
-    /// The work entry `at` stands in, which is the one row of it a press opens or folds, and none
-    /// for an entry the cache does not hold.
     pub fn work_of(&self, at: usize) -> Option<Range<usize>> {
         (at < self.held.len()).then(|| self.work(at))
     }
 
-    /// The prompt that asked the exchange entry `at` belongs to: the one at it, or the last one
-    /// above it.
     fn prompt_above(&self, at: usize) -> Option<usize> {
         (0..=at).rev().find(|entry| is_prompt(&self.held[*entry]))
     }
 
-    /// Whether entry `at` is the answer a run ended on rather than the work of one.
     pub fn is_answer(&self, at: usize) -> bool {
         self.held.get(at).is_some_and(|held| {
             matches!(held.what, What::Fact(Entry::Assistant { .. })) && held.place == Place::Alone
         })
     }
 
-    /// The entries of the exchange entry `at` belongs to: from the prompt that asked it to the entry
-    /// before the next prompt, and none where no prompt stands above it.
     pub fn exchange(&self, at: usize) -> Option<Range<usize>> {
         if at >= self.held.len() {
             return None;
@@ -1916,9 +1613,6 @@ impl Rows {
         Some(start..end)
     }
 
-    /// Opens the fold entry `at` stands on, and answers whether this call is what moved it: the work
-    /// where `at` belongs to a settled one the reader has not opened, and otherwise the fold the
-    /// entry itself keeps. A work drawn as no row and an entry with no fold answer nothing.
     pub fn open(&mut self, at: usize) -> bool {
         if at >= self.held.len() {
             return false;
@@ -1930,8 +1624,6 @@ impl Rows {
         self.fold(at, Fold::Open)
     }
 
-    /// The work opening at `at` left in the fold `to`, which is a frame to paint when this call
-    /// moved it: one already in `to` repaints nothing, and the rows it drew are laid once again.
     fn opened(&mut self, at: usize, to: Fold) -> bool {
         match self.held[at].place {
             Place::Opens(fold) if fold != to => {}
@@ -1942,8 +1634,6 @@ impl Rows {
         true
     }
 
-    /// The entry `at` left in the fold `to`, which is a frame to paint when this call moved it: one
-    /// already in `to` repaints nothing, and an entry its whole fold holds is no key's.
     fn fold(&mut self, at: usize, to: Fold) -> bool {
         let Some(held) = self.held.get(at) else {
             return false;
@@ -1962,8 +1652,6 @@ impl Rows {
         true
     }
 
-    /// The whole of the prompt entry `at` where its fold is closed, which is what a copy takes in
-    /// place of the head and the count it draws.
     pub fn folded_prompt(&self, at: usize) -> Option<String> {
         let held = self.held.get(at)?;
         let closed = held.fold == Fold::Closed && held.kept.is_some();
@@ -1973,8 +1661,6 @@ impl Rows {
         }
     }
 
-    /// A copy of the last answer takes the line breaks the model wrote, not the ones the
-    /// band wrapped.
     pub fn last_answer(&self) -> Option<String> {
         self.held.iter().rev().find_map(|held| match &held.what {
             What::Fact(Entry::Assistant { text, .. }) => Some(text.to_string()),
@@ -1982,9 +1668,6 @@ impl Rows {
         })
     }
 
-    /// The source of fence `fence` in entry `at`, one line per row it was laid as and the line breaks
-    /// it was written with, a row that keeps none standing as a blank line: nothing where no row of
-    /// the fence is laid, which is a fence that drew no line of its own.
     pub fn source(&self, at: usize, fence: usize) -> Option<String> {
         let rows = self.held.get(at)?.rows.as_ref()?;
         let lines: Vec<&str> = rows
@@ -1995,8 +1678,6 @@ impl Rows {
         (!lines.is_empty()).then(|| lines.join("\n"))
     }
 
-    /// The transcript's whole height in rows, laying out every entry this cache has never
-    /// seen: the one door to measuring a history, and a window never needs it.
     pub fn height(&mut self) -> u32 {
         let mut height: u32 = 0;
         for at in 0..self.held.len() {
@@ -2005,9 +1686,6 @@ impl Rows {
         height
     }
 
-    /// The top row of every prompt the record holds, counted from the transcript's first row: the
-    /// blank row it opens under, but for the prompt the transcript opens with, whose words are its
-    /// own top row.
     pub fn prompts(&mut self) -> Vec<u32> {
         let mut tops = Vec::new();
         let mut at: u32 = 0;
@@ -2020,12 +1698,8 @@ impl Rows {
         tops
     }
 
-    /// The thumb a window `scroll` rows behind the tail of this transcript draws in a band `band`
-    /// rows tall, and none where there is nothing left out of view or the band holds no gutter.
     pub fn thumb(&mut self, scroll: Scroll, band: u16) -> Option<Thumb> {
         let total = self.height();
-        // A band this narrow leaves a wide glyph no room beside the gutter, and the row gives the
-        // gutter up for it: there the thumb would stand on the word instead.
         if self.measure.cols <= pen::cells(INDENT) + 1
             || band < 2
             || total <= u32::from(band)
@@ -2037,8 +1711,6 @@ impl Rows {
         let above = deepest.saturating_sub(u64::from(scroll.back()));
         let band = u64::from(band);
         let total = u64::from(total);
-        // The band's share of the whole, rounded to the nearest cell and never to none: a thumb the
-        // reader cannot see says nothing about where they stand.
         let span = ((band * band + total / 2) / total).max(1);
         let room = band - span;
         let top = (room * above + deepest / 2) / deepest;
@@ -2048,14 +1720,10 @@ impl Rows {
         })
     }
 
-    /// How far back a window of `height` rows may stand so its top is the transcript's first row.
     pub fn deepest(&mut self, height: u16) -> u32 {
         self.height().saturating_sub(u32::from(height))
     }
 
-    /// The entries a band of `height` rows at `scroll` intersects, in order. The walk is
-    /// measured from the tail and stops once the band is filled, so a window costs the
-    /// entries between the tail and it, laid out once each.
     pub fn window(&mut self, scroll: Scroll, height: u16) -> Window {
         let back = scroll.back();
         let top = back.saturating_add(u32::from(height));
@@ -2096,13 +1764,10 @@ impl Deltas for Rows {
     }
 }
 
-/// Whether this entry is the reader's own words, which is the row an exchange opens with.
 fn is_prompt(held: &Held) -> bool {
     matches!(held.what, What::Fact(Entry::Prompt { .. }))
 }
 
-/// Whether this entry is the work of its exchange: a turn, a thought, a call or a result. A
-/// prompt, an answer and a stop are the exchange's ends and stand alone.
 fn work_entry(entry: &Entry) -> bool {
     matches!(
         entry,
@@ -2110,8 +1775,6 @@ fn work_entry(entry: &Entry) -> bool {
     )
 }
 
-/// The result this entry holds: either the fact itself, or the result that settled the call it
-/// holds.
 fn result_of(held: &Held) -> Option<&Entry> {
     match &held.what {
         What::Fact(result @ Entry::Result { .. }) => Some(result),
@@ -2119,7 +1782,6 @@ fn result_of(held: &Held) -> Option<&Entry> {
     }
 }
 
-/// Whether this entry is a result or a prompt, and so holds a fold of its own.
 fn holds_fold(held: &Held) -> bool {
     result_of(held).is_some() || is_prompt(held)
 }

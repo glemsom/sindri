@@ -1,7 +1,3 @@
-//! Proves the three record files in a session directory: `session.json` says what the run was and
-//! how it ended, `transcript.jsonl` one fact per line as the run goes, and `status.json` what the
-//! run said it was doing. The files are read with the test's own eyes, not the writer's.
-
 use std::io::{BufRead, BufReader};
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
@@ -238,8 +234,6 @@ fn the_thinking_field_lands_after_the_route_because_later_fields_only_append() {
 
 #[test]
 fn a_timestamp_is_rfc3339_in_utc_by_the_date_command() {
-    // `date` is the independent statement of what an instant is called: not a second copy of this
-    // code's own arithmetic.
     for seconds in [0u64, 1_000_000_000, 1_717_000_000, 4_102_444_800] {
         let instant = UNIX_EPOCH + Duration::from_secs(seconds);
         let truth = Command::new("date")
@@ -258,8 +252,6 @@ fn a_timestamp_is_rfc3339_in_utc_by_the_date_command() {
         "1970-01-01T00:00:00Z",
         "the epoch is the epoch"
     );
-    // A clock that is wrong is still a clock: an instant before the epoch counts backwards through
-    // a whole day and does not wrap.
     let before = UNIX_EPOCH - Duration::from_secs(1);
     let truth = Command::new("date")
         .args(["-u", "-d", "@-1", "+%Y-%m-%dT%H:%M:%SZ"])
@@ -346,8 +338,6 @@ fn a_record_keeps_the_entries_it_writes_in_its_transcript() {
         .stopped(&State::Stopped(Stop::Final))
         .expect("the stop is recorded");
 
-    // Compared as written, because a `Redacted` keeps the set it was made with and a reader of the
-    // file does not restore one.
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
     assert_eq!(
         serde_json::to_value(record.transcript()).expect("a transcript is JSON"),
@@ -1437,8 +1427,6 @@ fn each_of_the_five_states_says_its_own_coarse_line() {
 
 #[test]
 fn a_status_line_never_carries_a_word_the_run_was_handed() {
-    // The one place a run's own text could reach a status line is a stop reason that carries it — a
-    // wire's refusal names the request back — so the line is the enum's own words and nothing else.
     let refused = "the model refused: temperature 9000 is outside [0, 1]";
     let told = Told::Stopped {
         turn: 2,
@@ -1457,8 +1445,6 @@ fn a_status_line_never_carries_a_word_the_run_was_handed() {
 
 #[test]
 fn every_turn_a_status_names_is_the_turn_it_was_told_at() {
-    // `idle` is a run with no turn in it and says nothing rather than a turn zero, so a reader is
-    // never told a turn the run has not had.
     assert_eq!(Told::Idle.turn(), 0);
     assert_eq!(Told::Asking { turn: 7 }.turn(), 7);
     assert_eq!(Told::Waiting { turn: 7 }.turn(), 7);
@@ -1482,8 +1468,6 @@ fn a_kind_this_build_does_not_know_is_skipped_and_the_rest_loads() {
     record
         .wrote(&Turn::answered(1, "triage this", "one file."))
         .expect("a turn is written whole");
-    // What a newer `sindri` may write: a kind this build has never heard of, its own fields, and a
-    // line that was cut short by a kill.
     push(
         &path,
         r#"{"kind": "thinking", "turn": 1, "thought": "a newer build wrote this"}"#,
@@ -1657,7 +1641,6 @@ fn a_workspace_that_is_no_checkout_says_so_rather_than_guessing() {
 #[ignore = "spawned by a_killed_run_still_reads, which kills it"]
 fn child_writes_entries_until_it_is_killed() {
     let Ok(state) = std::env::var("SINDRI_RECORDS_CHILD") else {
-        // Run by hand with nothing to write into: there is no session to kill.
         return;
     };
     let state = PathBuf::from(state);
@@ -1710,7 +1693,6 @@ fn child_writes_entries_until_it_is_killed() {
             })
             .expect("an ask is charged");
         println!("turn {turn}");
-        // Slow enough that the parent's kill lands mid-run and not after it.
         std::thread::sleep(Duration::from_millis(20));
     }
 }

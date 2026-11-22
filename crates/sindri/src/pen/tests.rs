@@ -11,7 +11,6 @@ fn row_of(width: u16) -> Buffer {
     Buffer::empty(Rect::new(0, 0, width, 1))
 }
 
-/// `buffer`'s one row written as `spans`, the way the card writes a row of its own.
 fn run(buffer: &mut Buffer, spans: &[(&str, Ink)], clip: Clip) {
     let row = buffer.area;
     write(buffer, row, spans, clip, &PALETTE);

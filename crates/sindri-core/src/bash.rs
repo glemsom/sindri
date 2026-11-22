@@ -1,7 +1,3 @@
-//! The `bash` tool is the only way a run acts: one command string, run by a shell, confined by
-//! the boundary in force. The network is kept on purpose, because search, fetch and HTTP run
-//! through this shell: the boundary is on writes and not on reads.
-
 use std::error::Error;
 use std::fmt;
 use std::os::unix::process::CommandExt;
@@ -24,14 +20,10 @@ pub const BWRAP: &str = "bwrap";
 
 pub const TEMP_VARIABLE: &str = "TMPDIR";
 
-/// Short enough that a call which ends at once is back at once, long enough that a long one
-/// costs nothing.
 const MAX_NAP: Duration = Duration::from_millis(25);
 
 const SIGKILL: i32 = 9;
 
-/// One argv, the program and its arguments. It has no public constructor, so the only route to a
-/// command's argv is `invocation`: a call site cannot hand-assemble a boundary of its own.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Invocation {
     program: String,
@@ -57,8 +49,6 @@ impl Invocation {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Outcome {
     pub enforcement: Enforcement,
-    /// The exit code, or nothing when a signal killed it: left out of the JSON rather than
-    /// written as `null`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<i32>,
     pub timed_out: bool,
@@ -255,8 +245,6 @@ fn stop(child: &mut Child) {
 }
 
 unsafe extern "C" {
-    /// `kill(2)`, declared here so the module names no crate to stop a command: one syscall that
-    /// names a process group.
     fn kill(pid: i32, signal: i32) -> i32;
 }
 

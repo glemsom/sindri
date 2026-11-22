@@ -1,6 +1,3 @@
-//! The one adapter between the run loop and the provider seam: the tools a run holds out, the
-//! calls a reply asks for back, and each turn replayed beside what its calls answered.
-
 use std::sync::{Arc, Mutex};
 
 use crate::provider::{Answer, Ask, Client, Deltas, Failure};

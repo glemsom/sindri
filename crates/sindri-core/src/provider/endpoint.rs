@@ -1,7 +1,3 @@
-//! The wire at the address it is asked and on the route it serves. Which client carries it is
-//! decided here and nowhere else, so a fourth wire is one arm of one match, and a listing cannot
-//! learn what a run asks from a client of its own.
-
 use std::fmt;
 
 use rig_core::error::ProviderError;
@@ -65,14 +61,12 @@ impl Endpoint {
     /// rig reads the route off the served name unless the run named one, and a dialect that serves
     /// one endpoint names none.
     pub fn route_of(&self, model: &str) -> Option<Route> {
-        // The client is built with no key: routing reads the served name, never a credential.
         match self.serving("") {
             Serving::Messages(_) => None,
             Serving::OpenAi(config) => Some(Route::of(&OpenAiWire::new(config, model.to_owned()))),
         }
     }
 
-    /// The dialect's client: the one place a wire decides what carries it.
     pub(super) fn serving(&self, key: &str) -> Serving {
         match self.wire {
             Wire::Anthropic => Serving::Messages(self.at_base(AnthropicConfig::new(key))),
@@ -112,8 +106,6 @@ impl fmt::Display for Endpoint {
     }
 }
 
-// rig's two configurations are far apart in size and one of each is built per job: the box clippy
-// asks for is an allocation bought with nothing.
 #[allow(clippy::large_enum_variant)]
 pub(super) enum Serving {
     Messages(AnthropicConfig),
@@ -121,7 +113,6 @@ pub(super) enum Serving {
 }
 
 impl Serving {
-    /// The names this dialect serves, through the same client a run asks with.
     #[allow(clippy::result_large_err)]
     pub(super) async fn names(self, transport: DynHttpClient) -> Result<ModelList, ProviderError> {
         match self {

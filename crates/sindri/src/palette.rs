@@ -3,8 +3,6 @@ use ratatui::style::{Color, Modifier, Style};
 
 use crate::ink::{Face, Faces, Ink, Look};
 
-/// The colours one spelling of the design is drawn in: three palettes, one design, and never a
-/// second look for a terminal that names fewer colours than another.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Palette {
     inks: Inks,
@@ -24,8 +22,6 @@ struct Inks {
 }
 
 impl Palette {
-    /// The terminal's own six slots, no background and no edge: what a reader who asked for no
-    /// colour gets, and every frame drawn in it is flat.
     pub const SLOTS: Palette = Palette {
         inks: Inks {
             plain: (Color::Reset, Modifier::empty()),
@@ -40,7 +36,6 @@ impl Palette {
         edge: Color::Reset,
     };
 
-    /// The design in the colours a terminal with no twenty-four-bit colour has.
     pub const ANSI: Palette = Palette {
         inks: Inks {
             plain: (Color::Indexed(255), Modifier::empty()),
@@ -59,7 +54,6 @@ impl Palette {
         edge: Color::Indexed(232),
     };
 
-    /// The design as it was drawn.
     pub const TRUECOLOR: Palette = Palette {
         inks: Inks {
             plain: (Color::Rgb(231, 240, 250), Modifier::empty()),
@@ -78,7 +72,6 @@ impl Palette {
         edge: Color::Rgb(5, 8, 13),
     };
 
-    /// The palette a terminal is drawn in, from the three facts that say what it can do.
     pub fn probed(no_color: Option<&str>, term: Option<&str>, colorterm: Option<&str>) -> Palette {
         if no_color.is_some() || term == Some("dumb") {
             return Palette::SLOTS;
@@ -101,15 +94,10 @@ impl Palette {
         }
     }
 
-    /// The style the cells of a flat band start as: the plain ink over the band's own colour, and
-    /// over the terminal's own for a cell on no band. A cell a band's words leave blank is still the
-    /// frame's ink, and a band that shrank leaves no stripe of the frame before it behind.
     pub fn ground(&self, band: Option<Band>) -> Style {
         self.over(band.map_or(Color::Reset, |band| self.band(band)))
     }
 
-    /// The plain ink over a ground the caller names, so a cell claimed in it reads back as the ink
-    /// it is written in whatever colour it sits on.
     pub(crate) fn over(&self, colour: Color) -> Style {
         let (foreground, modifier) = self.ink(Ink::Plain);
         Style::default()
@@ -118,8 +106,6 @@ impl Palette {
             .add_modifier(modifier)
     }
 
-    /// The look an edge row is drawn in while its surface takes the keys: the accent in the faint
-    /// face, and the dim edge for a palette that draws no edge at all.
     pub fn accent_edge(&self) -> Look {
         match self.draws_edge() {
             true => Look::new(Ink::Accent, Face::Faint),
@@ -127,7 +113,6 @@ impl Palette {
         }
     }
 
-    /// The look an edge row is drawn in while its surface takes no keys.
     pub fn dim_edge(&self) -> Look {
         Look::plain(Ink::Dim)
     }
@@ -136,8 +121,6 @@ impl Palette {
         self.edge != Color::Reset
     }
 
-    /// The one ink the frame's seams are drawn in: a rung below every band, and the ground the
-    /// composer's head row carries its words on.
     pub fn edge_ink(&self) -> Color {
         self.edge
     }
@@ -150,20 +133,14 @@ impl Palette {
         self.ramp[rung as usize]
     }
 
-    /// Every surface a frame's bands are drawn on, in the one order the ramp lays them.
     pub fn ramp(&self) -> [(Rung, Color); Rung::ALL.len()] {
         Rung::ALL.map(|rung| (rung, self.rung(rung)))
     }
 
-    /// The colour an ink is drawn in, and never the face it wears: the colour the line under a
-    /// cell is drawn in, read back to the ink it is.
     pub fn colour(&self, ink: Ink) -> Color {
         self.ink(ink).0
     }
 
-    /// The look a cell is read back as, against the palette it was drawn with. The most specific ink
-    /// wins, because only one spends a modifier: reverse video over no colour is both `mark` and
-    /// `plain` reversed. A cell's background is never read, so a rail cell reads back on its surface.
     pub fn look_of(&self, cell: &Cell) -> Option<Look> {
         let underlined = cell.modifier.contains(Modifier::UNDERLINED);
         if !underlined && cell.underline_color != Color::Reset {
@@ -183,23 +160,17 @@ impl Palette {
         })
     }
 
-    /// The ink a colour is drawn in: the first ink that draws it, because a palette whose inks
-    /// share a colour still has to read the line under a cell back as one of them.
     fn ink_of(&self, colour: Color) -> Option<Ink> {
         Ink::ALL.into_iter().find(|ink| self.colour(*ink) == colour)
     }
 }
 
 impl Default for Palette {
-    /// The design as it was drawn: the probe is what decides a terminal cannot hold it, so a frame
-    /// nobody told a palette about draws the one this product is designed in.
     fn default() -> Palette {
         Palette::TRUECOLOR
     }
 }
 
-/// The three places a frame paints a ground under its cells: the well a transcript is read in, the
-/// band the reader's own words stand on above it, and the rail beside them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Band {
     Rail,
@@ -219,8 +190,6 @@ impl Band {
     }
 }
 
-/// A surface a band is drawn on: one rung of the frame's ramp, in the order `ALL` lays them, the well
-/// first and the prompt's band over it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rung {
     Well = 0,
@@ -240,8 +209,6 @@ impl Rung {
     }
 }
 
-/// The channels a colour is spelled in, and nothing for a colour the terminal draws in a slot of
-/// the reader's own: the sixteen slots and `Reset` have none this design can put in a pixel.
 pub fn channels(colour: Color) -> Option<[u8; 3]> {
     match colour {
         Color::Rgb(red, green, blue) => Some([red, green, blue]),

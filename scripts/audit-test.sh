@@ -76,7 +76,7 @@ assert_rules() { # desc rule...
 run "$clean"
 assert_code 0 "a tree whose blocks stop at three lines"
 assert_rules "a tree whose blocks stop at three lines" \
-  undeclared-test-file inline-test-module test-name comment-block comment-citation
+  undeclared-test-file inline-test-module test-name comment-block comment-citation comment-rationale
 
 inline="$scratch/inline-test-module"
 cp -a "$clean" "$inline"
@@ -234,6 +234,8 @@ citations=(
   'issue #88|cites an issue number'
   '(#124)|cites an issue number'
   'spec §16|cites a spec section'
+  'RFC 4122|cites an RFC'
+  'RFC-3339|cites an RFC'
 )
 for path in crates/demo/src/field.rs scripts/demo.sh Makefile Cargo.toml .github/workflows/ci.yml; do
   marker='#'
@@ -319,12 +321,39 @@ for rule in undeclared-test-file test-name; do
   assert_line "audit: $rule ... FAIL" "both rules broken"
 done
 
+for entry in \
+  'crates/demo/src/field.rs|//|we name the field rather than the struct|rather than' \
+  'crates/demo/src/doc.rs|///|we name the field Rather than the struct|Rather than' \
+  'crates/demo/src/inner.rs|//!|we name the field instead of the struct|instead of' \
+  'scripts/demo.sh|#|we name the field Instead of the struct|Instead of' \
+  'Makefile|#|we name the field rather than the struct|rather than' \
+  'Cargo.toml|#|we name the field instead of the struct|instead of' \
+  '.github/workflows/ci.yml|#|we name the field Rather than the struct|Rather than'; do
+  IFS='|' read -r path marker text phrase <<<"$entry"
+  debated="$scratch/rationale-${path//\//-}-${phrase// /_}"
+  cp -a "$clean" "$debated"
+  write_citation "$debated" "$path" "$marker" "$text"
+  run "$debated"
+  assert_code 1 "comment-rationale, '$phrase' in $path"
+  assert_line 'audit: comment-rationale ... FAIL' "comment-rationale, '$phrase' in $path"
+  assert_has "$path:1: debates a choice ($phrase)" "comment-rationale, '$phrase' in $path"
+  assert_line 'audit: comment-block ... ok' "comment-rationale, '$phrase' in $path leaves the block rule alone"
+  assert_line 'audit: comment-citation ... ok' "comment-rationale, '$phrase' in $path leaves the citation rule alone"
+done
+
+nearby="$scratch/rationale-nearby"
+cp -a "$clean" "$nearby"
+write_citation "$nearby" crates/demo/src/field.rs '//' 'we name the field and then the struct'
+run "$nearby"
+assert_code 0 "comment-rationale, 'and then' debates nothing"
+assert_line 'audit: comment-rationale ... ok' "comment-rationale, 'and then' debates nothing"
+
 start=$(date +%s%N)
 run "$repo_root"
 elapsed_ms=$(( ($(date +%s%N) - start) / 1000000 ))
 assert_code 0 "this tree"
 assert_rules "this tree" \
-  undeclared-test-file inline-test-module test-name comment-block comment-citation
+  undeclared-test-file inline-test-module test-name comment-block comment-citation comment-rationale
 if (( elapsed_ms < 1000 )); then ok "this tree: ${elapsed_ms}ms, under a second"; else
   bad "this tree: ${elapsed_ms}ms, want under a second"; fi
 

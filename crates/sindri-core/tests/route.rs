@@ -1,7 +1,3 @@
-//! Proves the route an OpenAI-shaped wire serves is chosen from the model's own name — `chat` for
-//! `POST /chat/completions`, `responses` for `POST /responses` — that the Copilot dialect answers
-//! on either, and that a person can make a run take the other route when one misbehaves.
-
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Deltas, Route};
 use sindri_core::redact::SecretSet;

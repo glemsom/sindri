@@ -3,8 +3,6 @@ use sindri_core::config::{Config, WINDOW_REFUSAL};
 use sindri_core::policy::Enforcement;
 use sindri_core::provider::Route;
 
-/// The `git describe` and commit date `build.rs` fixes at compile time, never read from a
-/// clock. A build standing on no commit — a source tarball — says it knows no date.
 pub const VERSION: &str = concat!(
     env!("SINDRI_DESCRIBE"),
     " (",
@@ -33,7 +31,7 @@ pub struct Cli {
     #[arg(short = 'b', long = "batch", value_name = "PROMPT", num_args = 0..=1)]
     pub batch: Option<Option<String>>,
 
-    /// The credential to run with, instead of one the environment exports.
+    /// The credential to run with, overriding the one the environment exports.
     ///
     /// Visible to anything that can read this process's arguments.
     #[arg(long, value_name = "KEY")]
@@ -67,21 +65,21 @@ pub struct Cli {
     )]
     pub verbose: u8,
 
-    /// What to do instead of running.
+    /// What to do without running.
     #[command(subcommand)]
     pub command: Option<Command>,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Sign in to a provider rather than run one.
+    /// Sign in to a provider; nothing is run.
     Auth {
         #[command(subcommand)]
         action: AuthAction,
     },
-    /// Prove the sandbox and say what the model is given, rather than run.
+    /// Prove the sandbox and say what the model is given; nothing is run.
     Doctor,
-    /// Read past runs back rather than start one.
+    /// Read past runs back; no run starts.
     Sessions {
         /// What to do with the recorded sessions.
         #[command(subcommand)]
@@ -114,8 +112,8 @@ pub enum AuthAction {
     },
 }
 
-/// `anthropic` and `openai` are asked with a key rather than signed in to, so the parser has
-/// no word for them and cannot be handed one.
+/// `anthropic` and `openai` are sent a key and never signed in to, so
+/// the parser has no word for them and cannot be handed one.
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum LoginWire {
     Copilot,
@@ -162,8 +160,8 @@ impl Cli {
         self.verbose > 0
     }
 
-    /// The only route to `unsafe` there is: `tests/sandbox.rs` scans the tree and holds that
-    /// no other file in this crate names the variant.
+    /// The only route to `unsafe`: `tests/sandbox.rs` holds that no other file
+    /// in this crate names the variant.
     pub fn enforcement(&self) -> Enforcement {
         if self.yolo_unsafe {
             Enforcement::Unsafe

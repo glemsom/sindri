@@ -1,7 +1,3 @@
-//! An ask goes out in Sindri's own words and an [`Answer`] or a [`Failure`] comes back,
-//! never a client library's own error type: nothing above this module knows which client
-//! library carried it, how a reply was framed, or which dialect spoke.
-
 pub mod copilot;
 pub mod endpoint;
 pub mod retry;
@@ -111,8 +107,6 @@ impl Ask {
         self
     }
 
-    /// The tools the model may call, as their names, descriptions and argument schemas. A wire that
-    /// is told none is a wire the model can only answer with words.
     pub fn tools(mut self, tools: &[Tool]) -> Self {
         self.tools = tools
             .iter()
@@ -125,7 +119,6 @@ impl Ask {
         self
     }
 
-    /// The turns this run has already taken, each beside what its calls answered.
     pub fn turns(mut self, turns: impl IntoIterator<Item = Turn>) -> Self {
         self.turns = turns.into_iter().collect();
         self
@@ -145,8 +138,6 @@ impl Ask {
         self
     }
 
-    /// Whether the model reasons before it answers. `false` asks for nothing rather than
-    /// forbidding thought: a model that cannot stop thinking must still answer.
     pub fn thinking(mut self, thinking: bool) -> Self {
         self.thinking = thinking;
         self
@@ -178,8 +169,6 @@ impl Ask {
         let mut conversation = self.replayed();
         conversation.push(Message::user(self.prompt.clone()));
         conversation.extend(self.turns.iter().flat_map(turn_messages));
-        // A request's last message is what is being asked, and `messages` adds ahead of it: the run's
-        // newest turn ends the conversation, and its prompt when it has taken none.
         let last = conversation.pop().expect("the prompt was pushed");
         let mut request = CompletionRequest::new(last)
             .messages(conversation)
@@ -193,9 +182,6 @@ impl Ask {
     }
 }
 
-/// The messages one turn adds to the conversation: what the model said and asked for, then a
-/// message of results answering those calls. Anthropic pairs results to calls by the wire's own id,
-/// so the id is carried rather than minted here.
 fn turn_messages(turn: &Turn) -> Vec<Message> {
     let mut content = Vec::new();
     if !turn.text.trim().is_empty() {
@@ -423,13 +409,10 @@ impl Client {
         &self.secrets
     }
 
-    /// The sign-in this client asks its wire with, kept even when it could not be read.
     pub fn sign_in(&self) -> Option<&copilot::Signing> {
         self.signing.as_ref()
     }
 
-    /// The sign-in the wire is asked with: the store's own literals join the run's, so nothing it
-    /// holds can reach a record or a line of chatter.
     pub fn signing(mut self, signing: Option<copilot::Signing>) -> Self {
         if let Some(copilot::Signing::Store(store)) = &signing {
             self.secrets = self.secrets.union(store.secrets());
@@ -477,8 +460,6 @@ impl Client {
         )
     }
 
-    /// The credential a wire is asked with: the one the job was given, or the session the sign-in
-    /// resolves when it has none of its own.
     fn credential(
         &self,
         given: &Credential,

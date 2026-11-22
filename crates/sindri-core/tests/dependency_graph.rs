@@ -1,7 +1,3 @@
-//! Proves the core cannot link a terminal, by walking the dependency graph `cargo metadata`
-//! resolves rather than trusting a comment: every edge kind counts, dev-dependencies included, and
-//! the resolve is filtered to the pinned host so the check stays offline.
-
 use std::collections::{HashMap, VecDeque};
 use std::process::Command;
 

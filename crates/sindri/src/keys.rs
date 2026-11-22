@@ -2,10 +2,8 @@ use crate::composer::Key;
 use crate::ink::{Faces, Ink, Look};
 use crate::list::{self, Column, ScreenRow};
 
-/// The look a key is drawn in wherever a key is named.
 pub const KEY: Look = Look::plain(Ink::Plain).wearing(Faces::BOLD);
 
-/// The look the words that say what a key does hang in, quieter than the key they explain.
 pub const MEANING: Look = Look::plain(Ink::Muted);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,13 +37,10 @@ impl Mode {
         self.description().name
     }
 
-    /// The two labels a screen wears on its card: its name, and the key its own table binds to
-    /// leaving it. A draft has neither, because it is no screen.
     pub fn labels(self) -> Option<(&'static str, &'static str)> {
         Some((self.title()?, self.leaves()?))
     }
 
-    /// The key this mode's table binds to leaving it, and `None` when it binds none.
     pub fn leaves(self) -> Option<&'static str> {
         Some(
             self.description()
@@ -56,8 +51,6 @@ impl Mode {
         )
     }
 
-    /// The name a screen wears in its card's top border, and `None` for the draft, which is no
-    /// screen and takes no card.
     pub fn title(self) -> Option<&'static str> {
         self.description().title
     }
@@ -66,13 +59,10 @@ impl Mode {
         self.description().table
     }
 
-    /// The body this screen's description names, and `None` for the draft, which is no screen.
     pub fn body(self) -> Option<Body> {
         self.description().body
     }
 
-    /// A screen has none — nothing is typed into a screen — where a draft, a query and a
-    /// settings value fall to that text box's own map.
     fn fallback(self) -> Option<Act> {
         self.description().fallback
     }
@@ -425,21 +415,15 @@ const STATS: [Binding; 1] = [Binding {
     act: Act::Close,
 }];
 
-/// What a screen's body holds: the rows the screen keeping them builds, and — the one body that is
-/// not rows — the facts a ledger lays out whole.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Body {
     Keys,
     Files,
     Models,
     Settings,
-    /// The facts a run holds, laid out whole as the record wrote them rather than set in rows.
     Ledger,
 }
 
-/// What a mode is called, what its card wears, the keys it answers, what a printable key falls back
-/// to and the body its screen builds. The draft states no title and no body, which is how a mode is
-/// handed no card.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Description {
     pub mode: Mode,
@@ -537,9 +521,6 @@ impl Stack {
         }
     }
 
-    /// Every mode's name as a heading over the keys it binds, each key in one column and what it does
-    /// beside it: a description wider than the card wraps under its own column rather than losing its
-    /// tail, because a key without the line that explains it is a key a reader has to try.
     pub fn body(&self, width: u16) -> Vec<ScreenRow> {
         let modes: Vec<Mode> = self.modes().collect();
         let column = Column::of(

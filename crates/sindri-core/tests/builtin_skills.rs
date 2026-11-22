@@ -1,7 +1,3 @@
-//! Proves the built-in skills are compiled into the binary rather than read from a path: they
-//! appear in a catalog under the `builtin` scope, they parse under the discovery a run uses, and
-//! they survive their source directory being taken away.
-
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -114,8 +110,6 @@ fn a_repo_skill_takes_the_name_and_the_listing_names_the_builtin_it_shadowed() {
     );
 }
 
-/// The directory the built-ins are written in, as this build saw it: the text is already compiled
-/// in, so this is where a person edits a skill and never where a run reads one.
 const SOURCE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/skills");
 
 const PROOF_CHILD: &str = "SINDRI_BUILTIN_PROOF_CHILD";
@@ -181,9 +175,6 @@ fn removing_the_source_directory_leaves_the_builtin_in_a_fresh_process() {
     assert!(source.is_dir(), "the source directory is back where it was");
 }
 
-/// The child's whole job: start from nothing, discover, and print what the catalog holds. It exits
-/// rather than returning, so the harness never reports on a run whose only purpose is to answer
-/// this question.
 fn prove_the_builtin_survives() -> ! {
     let (_root, workspace, home) = empty_world();
     let catalog = Catalog::discover(&workspace, Some(&home));

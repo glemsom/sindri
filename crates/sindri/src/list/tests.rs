@@ -3,7 +3,6 @@ use crate::ink::Face;
 
 const MARKER: &str = "\u{203a} ";
 
-/// The words of a row, each with the ink it is drawn in.
 fn spans(row: &ScreenRow) -> Vec<(&str, Ink)> {
     row.spans
         .iter()

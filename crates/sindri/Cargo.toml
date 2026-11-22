@@ -37,8 +37,8 @@ unicode-width = "0.2"
 syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 
 [dev-dependencies]
-# A real screen parser for the end-to-end tests: the cells a launch drew are read as a terminal
-# holds them, rather than by a reader grown here.
+# A real screen parser for the end-to-end tests: the cells a launch drew are read
+# as a terminal holds them.
 avt = "0.21"
 # `insta` hard-codes the `.snap` extension, which is why a frame's fixture carries one.
 insta = "1.49"

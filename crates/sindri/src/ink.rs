@@ -61,13 +61,10 @@ pub enum Face {
     Italic,
     Crossed,
     Reversed,
-    /// The accent at half its weight, so a face can recede without a second ink being named.
     Faint,
 }
 
 impl Face {
-    /// Every face in the one order a name reads them, with the plain one first because it is the
-    /// face of a look that wears none.
     pub(crate) const ALL: [Face; 6] = [
         Face::Plain,
         Face::Bold,
@@ -103,8 +100,6 @@ impl Face {
         }
     }
 
-    /// The one bit this face holds in a set, and no bit at all for the face a look wearing none is
-    /// named by: `plain` is the empty set rather than a weight beside the others.
     const fn bit(self) -> u8 {
         match self {
             Face::Plain => 0,
@@ -117,8 +112,6 @@ impl Face {
     }
 }
 
-/// The faces one ink wears: a set, because a strong word inside a heading is bold and italic at
-/// once rather than a third weight nobody named.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Faces(u8);
 
@@ -134,7 +127,6 @@ impl Faces {
         Faces(face.bit())
     }
 
-    /// The faces both sets name, so two faces compose into one look.
     pub const fn and(self, other: Faces) -> Faces {
         Faces(self.0 | other.0)
     }
@@ -147,7 +139,6 @@ impl Faces {
         self.0 == 0
     }
 
-    /// The set read in the one order a name writes it.
     pub fn iter(self) -> impl Iterator<Item = Face> {
         Face::ALL.into_iter().filter(move |face| self.has(*face))
     }
@@ -171,9 +162,6 @@ impl Faces {
         })
     }
 
-    /// The faces `modifier` wears, and nothing at all when it carries a weight no face names: a
-    /// cell is read back only as a look the product could have drawn. The underline is spent
-    /// first, because it is the line a look carries and never a weight the ink wears.
     pub fn of_modifier(modifier: Modifier) -> Option<Faces> {
         let mut rest = modifier - Modifier::UNDERLINED;
         let mut worn = Faces::PLAIN;
@@ -195,8 +183,6 @@ impl From<Face> for Faces {
     }
 }
 
-/// How a look is written down: its ink, the faces it wears after a `+`, and the ink of the line
-/// under it after a `~`. The fixture names every cell of a frame this way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Look {
     ink: Ink,
@@ -221,8 +207,6 @@ impl Look {
         }
     }
 
-    /// The same look wearing `faces` as well, so a strong word inside a heading is the heading's
-    /// weight and the strong one together and the ink stays the block's own.
     pub const fn wearing(self, faces: Faces) -> Look {
         Look {
             faces: self.faces.and(faces),
@@ -230,7 +214,6 @@ impl Look {
         }
     }
 
-    /// The same look with a line drawn under it, in an ink of its own: what a link will wear.
     pub const fn underlined(self, underline: Ink) -> Look {
         Look {
             underline: Some(underline),

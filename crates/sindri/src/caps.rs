@@ -1,11 +1,7 @@
-//! The terminals a test states rather than probes: the binary's own frames are drawn on these.
-
 use std::collections::BTreeMap;
 
 use sindri::capability::{Answers, Capabilities};
 
-/// A terminal that names Kitty and read the block as one cell: pictures at the nominal cell and no
-/// large text.
 pub(crate) fn pictured() -> Capabilities {
     probed(
         &[("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")],

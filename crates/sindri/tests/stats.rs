@@ -1,9 +1,5 @@
-//! `/stats` from the outside: opened by a `/stats` line, closed by `Esc`, and drawn on a card over the
-//! bands it was opened from rather than in place of them. The screen's own rows are the module's to
-//! prove; the frame's half is that a reader can reach the screen and that it draws what it was handed.
-
-mod caps; // the terminals these frames are drawn on
-mod frame; // one paint-and-read for every test
+mod caps;
+mod frame;
 
 use sindri::capability::Capabilities;
 use sindri::commands::{self, Command};
@@ -14,7 +10,7 @@ use sindri::view::{Transcript, View};
 use sindri_core::run::Loaded;
 
 #[allow(dead_code)] // the harness draws every frame; this binary asks it for the run only
-mod fixture; // one frame rendered at a fixed size into the text a fixture holds
+mod fixture;
 
 use fixture::{GUID, document, facts};
 

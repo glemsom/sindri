@@ -186,8 +186,6 @@ fn a_struck_run_is_a_face_the_look_wears_and_no_ink_hands_it_out() {
     }
 }
 
-/// Every set the faces compose, from the one a look wearing none has up to all of them: `Face::ALL`
-/// names them once, so a face added there is crossed with the others without a second list.
 fn sets_of_faces() -> impl Iterator<Item = Faces> {
     (0u8..(1 << (Face::ALL.len() - 1))).map(|worn| {
         Face::ALL
@@ -216,8 +214,6 @@ fn every_set_of_faces_reads_back_as_the_look_it_is_drawn_in() {
                          fixture writes is not the picture it holds",
                     look.name()
                 );
-                // Reverse video is the mark ink's, so an ink the palette draws in the mark's
-                // colour wears it as the mark: one picture, and so one name for it.
                 if palette.colour(ink) != palette.colour(Ink::Mark) || !faces.has(Face::Reversed) {
                     assert_eq!(
                         read,

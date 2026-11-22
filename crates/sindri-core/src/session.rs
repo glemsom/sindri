@@ -33,8 +33,6 @@ impl Session {
     pub fn create(state_home: &Path) -> Result<Session, SessionError> {
         Session::open(state_home, fresh_guid()?)
     }
-    /// A session under a state home and a GUID the caller names: the name is one directory, so the
-    /// same name under the same home is one session, its temp and spill shared by whoever opens it.
     pub fn named(state_home: &Path, guid: &str) -> Result<Session, SessionError> {
         if !one_component(guid) {
             return Err(SessionError::Unnameable {
@@ -109,8 +107,6 @@ impl Session {
             }
         }
     }
-    /// A session nothing was written to goes whole, because a directory no run kept is one no
-    /// reader should find; a removal that fails is not a run's to report.
     pub fn discard(&self) {
         let _ = std::fs::remove_dir_all(&self.directory);
     }

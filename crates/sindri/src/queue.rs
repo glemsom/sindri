@@ -2,11 +2,8 @@ use std::collections::VecDeque;
 
 use crate::composer::Prompt;
 
-/// The rows the queue adds to the composer's band at most, the count of the rest among them.
 pub const MAX_ROWS: u16 = 4;
 
-/// What the band draws of the queue in the rows it gives it: the count stands above the prompts
-/// it counts, and takes one of those rows to do it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Shown {
     pub kept_back: Option<usize>,
@@ -43,13 +40,10 @@ impl Queue {
         self.waiting.pop_back()
     }
 
-    /// The count and never the prompts, which `↑` hands back whole.
     pub fn label(&self) -> Option<String> {
         (!self.waiting.is_empty()).then(|| format!("{} queued", self.waiting.len()))
     }
 
-    /// The count takes a row only while a prompt keeps one: a band of a single row is handed the
-    /// newest prompt, and the footer says how deep the queue is.
     pub fn shown(&self, room: u16) -> Shown {
         let room = usize::from(room);
         let len = self.waiting.len();
@@ -76,7 +70,6 @@ impl Queue {
     }
 }
 
-/// The one row a prompt is drawn as, however many lines it was typed in.
 fn first_line(prompt: &Prompt) -> String {
     prompt.text().lines().next().unwrap_or_default().to_owned()
 }

@@ -15,7 +15,6 @@ const SIGINT: i32 = 2;
 /// `rustix`'s own name for it is behind a feature this binary does not enable.
 const SIGWINCH: i32 = 28;
 
-/// Its value means nothing: a reader counts readiness, not letters.
 const PING: &[u8] = b"!";
 
 /// What a signal was before this launch took it. `usize::MAX` is no disposition at all — and is also
@@ -26,8 +25,6 @@ const NOT_TAKEN: usize = usize::MAX;
 /// and leaked there, because a signal reads it for as long as the process runs.
 static HANDLER: AtomicPtr<Wake> = AtomicPtr::new(std::ptr::null_mut());
 
-/// The signals a launch catches, each beside the handler it takes it with and the disposition it
-/// found: the whole of what a launch has to give back.
 static CAUGHT: [Caught; 2] = [
     Caught {
         signum: SIGINT,
@@ -48,7 +45,6 @@ struct Caught {
 }
 
 impl Caught {
-    /// The handler is this process's own from here on, and what it replaced is kept to be given back.
     fn take(&self) {
         let was = unsafe { signal(self.signum, self.handler as usize) };
         self.was.store(was, Ordering::SeqCst);
@@ -63,8 +59,6 @@ impl Caught {
     }
 }
 
-/// Why a wake was raised, as a set: a cancel and a window change can both be waiting behind one
-/// readiness. A report that lands carries none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Causes(u8);
 
@@ -72,7 +66,6 @@ impl Causes {
     pub const CANCEL: Causes = Causes(0b01);
     pub const RESIZE: Causes = Causes(0b10);
 
-    /// Whether `cause` is among them.
     pub fn holds(self, cause: Causes) -> bool {
         self.0 & cause.0 != 0
     }
@@ -82,7 +75,6 @@ impl Causes {
 /// a byte in it is a readiness the next `poll` returns.
 pub struct Wake {
     reader: OwnedFd,
-    /// Shared, because a run thread and a signal handler both raise one and neither owns it.
     writer: Arc<OwnedFd>,
     /// A cancel is never cleared, because a launch ends on it; a resize is taken by the read that
     /// paints it, so a burst of them is one repaint.
@@ -126,7 +118,6 @@ impl Wake {
         self.reader.as_fd()
     }
 
-    /// A report that landed, and no cause with it: the loop takes the report and nothing else.
     pub fn ping(&self) {
         ping(self.writer.as_fd());
     }
@@ -138,8 +129,6 @@ impl Wake {
         ping(self.writer.as_fd());
     }
 
-    /// What the loop reads every pass: the cancel is a flag no drain can take away, and the resize
-    /// is taken here, so two behind one readiness are one repaint.
     pub fn causes(&self) -> Causes {
         Causes(self.raised.fetch_and(!Causes::RESIZE.0, Ordering::SeqCst))
     }
@@ -166,8 +155,6 @@ fn raised(cause: Causes) {
     }
 }
 
-/// Gives the signals back as this process held them: a launch is the terminal's guest, so nothing it
-/// caught is left pointing at a pipe that went with it.
 pub(crate) fn give_signals_back() {
     for caught in &CAUGHT {
         caught.give_back();
@@ -178,7 +165,6 @@ pub(crate) fn give_signals_back() {
 #[cfg(test)]
 pub(crate) static SIGNALLED: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-/// Held from the install to the give-back, so no two tests read each other's dispositions.
 #[cfg(test)]
 pub(crate) fn one_at_a_time() -> std::sync::MutexGuard<'static, ()> {
     SIGNALLED
@@ -190,7 +176,6 @@ unsafe extern "C" {
     fn signal(signum: i32, handler: usize) -> usize;
 }
 
-/// Best effort: a pipe already full is a wake already waiting.
 fn ping(fd: BorrowedFd<'_>) {
     let _ = tell_fd(fd, PING);
 }
