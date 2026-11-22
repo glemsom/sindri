@@ -116,10 +116,7 @@ impl Shade {
             cell: cell.filter(|_| spelled),
             prompt,
             rail,
-            seam: Some(Seam {
-                axis: Axis::Across,
-                weight: palette.joint(Band::Prompt),
-            }),
+            seam: Some(Seam::across(palette)),
         })
     }
 
@@ -174,8 +171,13 @@ impl Shade {
         })
     }
 
+    /// The one cell of the band the seam is drawn in, on the axis that parts it from the band
+    /// beside, and nothing where this band parts nothing.
     pub fn seam(&self) -> Option<(Axis, Rect)> {
-        let seam = self.parted()?;
+        let seam = match self {
+            Shade::Transcript { .. } | Shade::Caret { .. } => return None,
+            Shade::Rail { seam, .. } | Shade::Composer { seam, .. } => (*seam)?,
+        };
         let area = self.area();
         Some((
             seam.axis,
@@ -184,14 +186,6 @@ impl Shade {
                 Axis::Across => Rect { height: 1, ..area },
             },
         ))
-    }
-
-    /// The joint the bands either side of this shade are parted by, which its plane draws.
-    fn parted(&self) -> Option<Seam> {
-        match self {
-            Shade::Transcript { .. } | Shade::Caret { .. } => None,
-            Shade::Rail { seam, .. } | Shade::Composer { seam, .. } => *seam,
-        }
     }
 
     pub fn id(&self) -> Option<PlaneId> {
@@ -239,7 +233,6 @@ impl Shade {
     /// left out, so a light that moved is a placement and no transmission.
     pub fn image(&self) -> Option<Image> {
         let cell = self.cell()?;
-        let seam = self.parted();
         Some(match self {
             Shade::Transcript {
                 area, well, peak, ..
@@ -254,6 +247,7 @@ impl Shade {
                 tone,
                 face,
                 peak,
+                seam,
                 ..
             } => Image::Rail {
                 area: *area,
@@ -261,16 +255,20 @@ impl Shade {
                 tone: channels(*tone)?,
                 face: *face,
                 peak: *peak,
-                seam,
+                seam: *seam,
             },
             Shade::Composer {
-                area, prompt, rail, ..
+                area,
+                prompt,
+                rail,
+                seam,
+                ..
             } => Image::Composer {
                 area: *area,
                 cell,
                 prompt: channels(*prompt)?,
                 rail: channels(*rail)?,
-                seam,
+                seam: *seam,
             },
             Shade::Caret {
                 band,
@@ -402,6 +400,13 @@ pub struct Seam {
 }
 
 impl Seam {
+    fn across(palette: &Palette) -> Seam {
+        Seam {
+            axis: Axis::Across,
+            weight: palette.seam(),
+        }
+    }
+
     /// The point `along` pixels from the joint, in the pixels of the image a shade is drawn as.
     fn at(self, along: f64) -> At {
         match self.axis {
@@ -811,7 +816,7 @@ fn seam_of(shape: Rail, palette: &Palette) -> Option<Seam> {
     match shape {
         Rail::Ledger => Some(Seam {
             axis: Axis::Down,
-            weight: palette.joint(Band::Rail),
+            weight: palette.seam(),
         }),
         Rail::Strip => None,
     }

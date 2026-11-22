@@ -249,25 +249,23 @@ the count is a fact of the **Measure** the rows were last laid at — so a width
 never leaves a count that lies. A fold the reader opened is theirs, held on the entry, and no reflow
 closes it.
 _Avoid_: Collapse, truncate, expand (that one is the other half), summary, preview
-
 **Plane**:
-A band's surface drawn as one image placed under its cells, so it is drawn at the pixels of the cell
-rather than in whole cells: the image a frame holds against that band's **Shade**, and makes only
-when the shade moves. Every pixel of it is the **Rung** the cell row it falls in is drawn on with
-light added or taken away, never a blend of two rungs, and the light it carries is at most the most
-its rung can take while every ink the palette spells keeps its floor on the lit pixel — at the share
-its band names of that most, and a lamp a pixel reads rather than a row: the transcript band's
-crowned at its head and fallen back to the well by its third row, and the **Rail**'s centred on
-**Sindri's face**, brightest at it and gone by the rail's own margin on both axes, with no step of it
-visible between two pixels. A band's joint is a light that goes the other way: a shadow at the joint
-and a hairline on the band's own edge, one weight on both axes. The light the **Caret** casts is a
-plane of its own over the composer's band, which is placed again on the column the caret moved to
-and is made again for no keystroke: it falls on the band under the row its **Seam** heads, and no
-light falls on a joint. A plane covers the band's own columns and no column of the band beside it,
-and a frame holds one image under each band and one under that light, each by its own identity,
-placed at one depth that a cell carrying a background still wins over. A terminal that
-places no picture, or a band in a palette with no colour, is given none, and the band's own rows are
-claimed from its shade.
+A band's surface drawn as one image placed under its cells, so it is drawn at the pixels
+of the cell rather than in whole cells: the image a frame holds against that band's **Shade**, and
+makes only when the shade moves. Every pixel of it is the **Rung** the cell row it falls in is drawn
+on with light added or taken away, never a blend of two rungs, and the light it carries is at most
+the most its rung can take while every ink the palette spells keeps its floor on the lit pixel — at
+the share its band names of that most, and a lamp a pixel reads rather than a row: the transcript
+band's crowned at its head and fallen back to the well by its third row, and the **Rail**'s centred
+on **Sindri's face**, brightest at it and gone by the rail's own margin on both axes, with no step
+of it visible between two pixels. A band's joint is a light that goes the other way: a shadow at the
+joint and a hairline on the band's own edge, at one weight on both axes. The light the **Caret**
+casts is a plane of its own over the band under the composer's **Seam**, and it is no light on a
+joint: it is placed again on the column the caret moved to and is made again for no keystroke. A
+plane covers the band's own columns and no column of the band beside it, and a frame holds one image
+under each band and one under that light, each by its own identity, placed at one depth that a cell
+carrying a background still wins over. A terminal that places no picture, or a band in a palette
+with no colour, is given none, and the band's own rows are claimed from its shade.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer, blend
 
 **Shade**:
@@ -282,17 +280,16 @@ pass in which it stands makes no image. The **Caret**'s light is a shade of its 
 it is placed on is no part of any image. Where no picture is placed, that same shade is claimed cell
 by cell.
 _Avoid_: Colour, tone, gradient, paint, style
-
 **Seam**:
-The one column of the frame's pixels on the axis that parts two bands, drawn as a fall into the
-shadow at the joint that ends in a hairline lifted off the band it stands on: the **Rail**'s first
-column down every row it claims, and the row that heads the **Composer**'s band, across the frame.
-The two meet where they meet, and the rail's band runs to the composer's head row and dies in it.
-The fall stands in the band's own **Plane**, so a seam is claimed once, in the cells of the band it
-parts, and the cell the frame claims for it is the edge ink only where no plane stands — the count
-the head row carries is read over the pixels there. A palette that spells no colour rules the seam
-in the dim ink instead, and a strip parts nothing and draws none.
-_Avoid_: Border, divider, crease, gutter, step
+The one cell of the frame's pixels that parts two bands, on the axis that parts them,
+drawn as a fall into the shadow at the joint that ends in a hairline lifted off the band it stands
+on: the **Rail**'s first column down every row it claims, and the row that heads the **Composer**'s
+band, across the frame. The two meet where they meet, and the rail's band runs to the composer's
+head row and dies in it. The fall stands in the band's own **Plane**, so a seam is claimed once, in
+the cells of the band it parts, and the cell the frame claims for it is the edge ink only where no
+plane stands — the count the head row carries is read over the pixels there. A palette that spells
+no colour rules the seam in the dim ink instead, and a strip parts nothing and draws none.
+_Avoid_: Border, divider, crease, gutter
 
 **Footprint**:
 The columns by rows a picture is fitted into under a ceiling: one scale on both axes, so the

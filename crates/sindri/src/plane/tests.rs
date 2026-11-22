@@ -134,9 +134,9 @@ fn parted_bands(palette: &Palette, cell: CellSize) -> [(Axis, Shade); 2] {
     ]
 }
 
-/// The channels a seam drawn in this shade's band takes from its rung at the joint.
-fn weight_of(shade: &Shade, palette: &Palette) -> i32 {
-    i32::from(palette.joint(band_of(shade)))
+/// The channels a seam takes from its band's rung at the joint.
+fn weight_of(palette: &Palette) -> i32 {
+    i32::from(palette.seam())
 }
 
 fn drawn(shade: Shade) -> Plane {
@@ -148,7 +148,7 @@ fn keeps_its_fall(shade: Shade, palette: &Palette, cell: CellSize, what: &str) {
     let plane = drawn(shade);
     let (width, height) = plane.pixels().dimensions();
     let (axis, _) = shade.seam().expect("a band the frame parts");
-    let weight = weight_of(&shade, palette);
+    let weight = weight_of(palette);
     let extent = seam_extent(axis, cell);
     let lit = |along: u32| {
         let (x, y) = along_seam(axis, along);
@@ -361,7 +361,7 @@ fn a_seams_joint_is_darker_than_both_bands_and_ends_in_a_hairline_on_its_own() {
         let well = spelled(palette.band(Band::Well));
         for (axis, shade) in parted_bands(&palette, CELL) {
             let plane = drawn(shade);
-            let weight = weight_of(&shade, &palette);
+            let weight = weight_of(&palette);
             let extent = seam_extent(axis, CELL);
             let rung = spelled(shade.row(0));
             let lit = |along: u32| {
@@ -423,7 +423,7 @@ fn a_seam_falls_at_one_rate_across_its_cell_on_both_axes() {
         let mut halves: Vec<u32> = Vec::new();
         for (axis, shade) in parted_bands(&palette, cell) {
             let plane = drawn(shade);
-            let weight = weight_of(&shade, &palette);
+            let weight = weight_of(&palette);
             let extent = seam_extent(axis, cell);
             let along = (0..extent)
                 .find(|along| {
@@ -712,19 +712,17 @@ fn the_composers_plane_carries_no_light_of_the_caret_wherever_it_waits() {
         for y in 0..height {
             let rung = spelled(shade.row((y / CELL.height()) as u16));
             for x in 0..width {
+                if in_seam(Axis::Across, CELL, x, y) {
+                    continue;
+                }
                 let pixel = plane.pixels().get_pixel(x, y);
                 let carried = i32::from(pixel[0]) - i32::from(rung[0]);
-                let weight = weight_of(&shade, &palette);
-                let allowed = match in_seam(Axis::Across, CELL, x, y) {
-                    true => (-weight..=weight).contains(&carried),
-                    false => carried == 0,
-                };
-                assert!(
-                    allowed,
+                assert_eq!(
+                    carried, 0,
                     "{spelling} draws pixel row {y}, column {x} of the composer's band {carried} \
-                     channels over the {rung:?} it sits on, where the band's own seam is the one \
-                     light it carries: the light the caret casts is an image of its own, and a \
-                     keystroke places it again and repaints no band"
+                     channels over the {rung:?} it sits on, away from the seam its head row is: \
+                     the light the caret casts is an image of its own, and a keystroke places it \
+                     again and repaints no band"
                 );
             }
         }
@@ -833,7 +831,7 @@ fn no_pixel_of_any_bands_plane_is_a_blend_of_two_rungs() {
                          with one light on every channel — never a blend of two rungs"
                     );
                     let parted = seam.is_some_and(|axis| in_seam(axis, CELL, x, y));
-                    let weight = weight_of(&shade, &palette);
+                    let weight = weight_of(&palette);
                     assert!(
                         match parted {
                             true => (-weight..=weight).contains(&one),

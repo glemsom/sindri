@@ -177,15 +177,16 @@ impl Palette {
         (f64::from(self.lift(band)) * band.share()).round() as u8
     }
 
-    /// The channels a seam drawn in this band takes from its rung at the joint: the step from that
-    /// rung down to the well and the margin over it, so the joint sits under every band it parts.
-    pub fn joint(&self, band: Band) -> u8 {
-        let (Some(rung), Some(well)) = (channels(self.band(band)), channels(self.band(Band::Well)))
-        else {
+    /// The channels a seam takes from the rung it is drawn in at the joint: the step from the
+    /// brightest rung a seam is drawn in down to the well, and the margin over it, so every joint
+    /// sits under both bands it parts.
+    pub fn seam(&self) -> u8 {
+        let Some(well) = channels(self.band(Band::Well)) else {
             return 0;
         };
+        let bright = channels(self.band(Band::Prompt)).unwrap_or(well);
         let step = (0..3)
-            .map(|channel| rung[channel].saturating_sub(well[channel]))
+            .map(|channel| bright[channel].saturating_sub(well[channel]))
             .max()
             .unwrap_or(0);
         step.saturating_add(JOINT)
