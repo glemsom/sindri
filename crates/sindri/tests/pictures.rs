@@ -1252,13 +1252,13 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
         let first = rule + 1;
         assert_eq!(
             rail_row(painted.cells(), rail, first).trim_end(),
-            "wire      anthropic",
+            "  wire      anthropic",
             "and the first block stands on the row under that rule, whole"
         );
         assert_eq!(
             rail_row(painted.cells(), rail, first + 1).trim_end(),
             format!(
-                "model     {}",
+                "  model     {}",
                 match cols {
                     100 => "claude-sonnet-4-5…",
                     _ => "claude-sonnet-4-5-20250929",
@@ -1291,14 +1291,19 @@ fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
         assert_eq!(
             stated(with.cells(), rail.y + under),
             stated(without.cells(), rail.y),
-            "the {cols}-column frame draws the same twelve facts under the face that it drew \
-             from the rail's first row: none is given up to the face"
+            "the {cols}-column frame draws the same facts under the face that it drew from the \
+             rail's first row: none is given up to the face"
         );
-        assert!(
-            !stated(with.cells(), rail.y + under)
-                .iter()
-                .any(|row| row.contains("more")),
-            "and none is counted as gone, so the rail grows no row saying one went: {:?}",
+        let counted = |rows: Vec<String>| -> Vec<String> {
+            rows.into_iter()
+                .filter(|row| row.contains("more"))
+                .collect()
+        };
+        assert_eq!(
+            counted(stated(with.cells(), rail.y + under)),
+            counted(stated(without.cells(), rail.y)),
+            "and the rail counts as gone under the face exactly what it counts from its first row, \
+             the width taking the facts it takes and the face none: {:?}",
             stated(with.cells(), rail.y + under)
         );
     }
@@ -1335,7 +1340,7 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
         );
         assert_eq!(
             rail_row(off.cells(), rail, rail.y).trim_end(),
-            "wire      anthropic",
+            "  wire      anthropic",
             "the facts stand from the rail's first row, and the row under them is the second \
              fact: no band is reserved for a face that is not drawn, and no rule closes one"
         );
@@ -1400,7 +1405,7 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let first = hairline + 1;
     assert_eq!(
         rail_row(with.cells(), rail, first).trim_end(),
-        "wire      anthropic",
+        "  wire      anthropic",
         "and the first fact stands on the row under that rule, whole"
     );
 
@@ -1440,7 +1445,7 @@ fn a_splash_screen_the_face_is_turned_off_for_is_the_one_a_placeless_terminal_dr
     );
     assert_eq!(
         rail_row(off.cells(), rail, rail.y).trim_end(),
-        "wire      anthropic",
+        "  wire      anthropic",
         "the facts stand from the rail's first row: no band is reserved for a face that is not \
          drawn, and no rule closes one"
     );
@@ -1481,7 +1486,7 @@ fn a_terminal_that_places_no_picture_draws_the_facts_from_the_rails_first_row() 
         );
         assert_eq!(
             rail_row(painted.cells(), rail, rail.y).trim_end(),
-            "wire      anthropic",
+            "  wire      anthropic",
             "the facts stand from the rail's first row, as they did before the face was drawn"
         );
     }

@@ -3,19 +3,19 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 markdown-table-narrow at 40x24
-00 |  a heading of the  │ a table wider than| plain:2 plain+bold:1 plain:1 plain+bold:7 plain:1 plain+bold:2 plain:1 plain+bold:3 plain:1 dim:3 plain+bold:1 plain:1 plain+bold:5 plain:1 plain+bold:5 plain:1 plain+bold:4
-01 |  first level is    │ the band it is    | plain:2 plain+bold:5 plain:1 plain+bold:5 plain:1 plain+bold:2 plain:3 dim:3 plain+bold:3 plain:1 plain+bold:4 plain:1 plain+bold:2 plain:1 plain+bold:2 plain:4
-02 |  bold and stands   │ drawn in wraps    | plain:2 plain+bold:4 plain:1 plain+bold:3 plain:1 plain+bold:6 plain:2 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:5 plain:4
-03 |  under one blank   │ inside its cells  | plain:2 plain+bold:5 plain:1 plain+bold:3 plain:1 plain+bold:5 plain:2 dim:3 plain+bold:6 plain:1 plain+bold:3 plain:1 plain+bold:5 plain:2
-04 |  row wherever it   │ and keeps the rule| plain:2 plain+bold:3 plain:1 plain+bold:8 plain:1 plain+bold:2 plain:2 dim:3 plain+bold:3 plain:1 plain+bold:5 plain:1 plain+bold:3 plain:1 plain+bold:4
-05 |  stands            │ under its header  | plain:2 plain+bold:6 plain:11 dim:3 plain+bold:5 plain:1 plain+bold:3 plain:1 plain+bold:6 plain:2
-06 |  ──────────────────┼───────────────────| plain:2 dim:38
-07 |  a code block      │ is guttered by its| plain:19 dim:3 plain:18
-08 |                    │ language's tag and| plain:19 dim:3 plain:18
-09 |                    │ highlighted by    | plain:19 dim:3 plain:18
-10 |                    │ syntect           | plain:19 dim:3 plain:18
-11 |                                        | plain:40
-12 |                                        | plain:40
+00 |  a heading of the │ a table wider      | plain:2 plain+bold:1 plain:1 plain+bold:7 plain:1 plain+bold:2 plain:1 plain+bold:3 dim:3 plain+bold:1 plain:1 plain+bold:5 plain:1 plain+bold:5 plain:6
+01 |  first level is   │ than the band it   | plain:2 plain+bold:5 plain:1 plain+bold:5 plain:1 plain+bold:2 plain:2 dim:3 plain+bold:4 plain:1 plain+bold:3 plain:1 plain+bold:4 plain:1 plain+bold:2 plain:3
+02 |  bold and stands  │ is drawn in wraps  | plain:2 plain+bold:4 plain:1 plain+bold:3 plain:1 plain+bold:6 plain:1 dim:3 plain+bold:2 plain:1 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:5 plain:2
+03 |  under one blank  │ inside its cells   | plain:2 plain+bold:5 plain:1 plain+bold:3 plain:1 plain+bold:5 plain:1 dim:3 plain+bold:6 plain:1 plain+bold:3 plain:1 plain+bold:5 plain:3
+04 |  row wherever it  │ and keeps the      | plain:2 plain+bold:3 plain:1 plain+bold:8 plain:1 plain+bold:2 plain:1 dim:3 plain+bold:3 plain:1 plain+bold:5 plain:1 plain+bold:3 plain:6
+05 |  stands           │ rule under its     | plain:2 plain+bold:6 plain:10 dim:3 plain+bold:4 plain:1 plain+bold:5 plain:1 plain+bold:3 plain:5
+06 |                   │ header             | plain:18 dim:3 plain+bold:6 plain:13
+07 |  ─────────────────┼──────────────────  | plain:2 dim:36 plain:2
+08 |  a code block     │ is guttered by     | plain:18 dim:3 plain:19
+09 |                   │ its language's     | plain:18 dim:3 plain:19
+10 |                   │ tag and            | plain:18 dim:3 plain:19
+11 |                   │ highlighted by     | plain:18 dim:3 plain:19
+12 |                   │ syntect            | plain:18 dim:3 plain:19
 13 |                                        | plain:40
 14 |                                        | plain:40
 15 |                                        | plain:40
@@ -26,4 +26,4 @@ markdown-table-narrow at 40x24
 20 |                                        | plain:40
 21 |                                        | plain:40
 22 | ›what should the run do?               | dim:25 plain:15
-23 |Enter send · / commands · @ files       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 plain:7
+23 |  Enter send · / commands · @ files     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 plain:5

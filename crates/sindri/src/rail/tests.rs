@@ -19,6 +19,11 @@ use crate::palette::{Band, Edge, channels};
 use crate::pen;
 use crate::plane::{Plane, SEAM};
 use crate::readback::{column_of, inks, under};
+use crate::rows::MARGIN;
+
+/// The band a ledger test draws a meter and the size it is a share of in: the floor's columns and
+/// the two the frame's margin takes at either edge, which that pair needs of a row.
+const METERED: u16 = COLUMNS + MARGIN * 2;
 
 /// How far into the frame a seamed test stands its rail: the transcript's own columns are to its
 /// left, so the seam has room to reach back over them.
@@ -27,6 +32,12 @@ const LEFT: u16 = 20;
 /// The columns `text` draws in, which is the pen's question and not a count of its glyphs.
 fn columns(text: &str) -> usize {
     usize::from(pen::cells(text))
+}
+
+/// The columns a band `width` wide lays its words in, once the frame's margin is taken off both
+/// edges.
+fn room(width: u16) -> u16 {
+    width.saturating_sub(MARGIN * 2)
 }
 
 const PALETTE: Palette = Palette::TRUECOLOR;
@@ -97,14 +108,16 @@ const CUT: &str = "claude-sonnet-4-5…";
 
 const BRANCH: &str = "spec/1-capability";
 
-/// The row a ctx fact of `value` is drawn on: its label in the ten-column field, and the value
-/// against the rail's last column.
-fn ctx_line(value: &str) -> String {
-    let at = pen::hanging(band(COLUMNS, 1), pen::cells(value)).expect("a rail that holds it");
+/// The row a ctx fact of `value` is drawn on in a band `width` wide: the frame's margin, its label
+/// in the ten-column field, and the value against the last column of the band the margin leaves.
+fn ctx_line(width: u16, value: &str) -> String {
+    let at = pen::hanging(band(room(width), 1), pen::cells(value)).expect("a rail that holds it");
     format!(
-        "{}{}{value}",
+        "{}{}{}{value}{}",
+        pen::blank(MARGIN),
         pen::pad("ctx", FIELD),
-        pen::blank(at.saturating_sub(FIELD))
+        pen::blank(at.saturating_sub(FIELD)),
+        pen::blank(MARGIN)
     )
 }
 
@@ -155,7 +168,7 @@ const CONTRACT: [(&str, &str); 12] = [
     ("turns", "3 / 250"),
     ("ctx", "48.2k"),
     ("cache", "88%"),
-    ("workspace", "…/.worktrees/46-rail"),
+    ("workspace", "…/46-rail"),
     ("branch", "spec/1-capability"),
     ("skills", "2"),
     ("sandbox", "bwrap"),
@@ -198,7 +211,8 @@ fn the_foot_is_drawn_on_the_row_the_band_shadows() {
     paint(&spent(), Rail::Ledger, area, None, &mut buffer, &PALETTE);
 
     let floor = area.bottom() - 1;
-    let at = pen::hanging(area, pen::cells("51.3k")).expect("a row that holds it");
+    let at =
+        pen::hanging(band(room(COLUMNS), 1), pen::cells("51.3k")).expect("a row that holds it");
     assert_eq!(
         under(&buffer, area.x, floor),
         PALETTE.edge(Edge::Shadow),
@@ -207,7 +221,8 @@ fn the_foot_is_drawn_on_the_row_the_band_shadows() {
     assert_eq!(
         glyphs(&buffer, floor).trim_end(),
         format!(
-            "{}{}",
+            "{}{}{}",
+            pen::blank(MARGIN),
             pen::pad("total", FIELD),
             pen::blank(at.saturating_sub(FIELD))
         ) + "51.3k",
@@ -223,10 +238,10 @@ fn a_fact_standing_on_the_rails_first_column_reads_back_as_the_ink_it_is_written
     paint(&frame(), Rail::Ledger, area, None, &mut buffer, &PALETTE);
 
     let first = buffer
-        .cell((area.x, area.y))
+        .cell((area.x + MARGIN, area.y))
         .expect("the label's first column");
     assert_eq!(
-        under(&buffer, area.x, area.y),
+        under(&buffer, area.x + MARGIN, area.y),
         PALETTE.band(Band::Rail),
         "the label's first glyph stands on the rail's own band"
     );
@@ -283,7 +298,7 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
     );
     assert_eq!(
         glyphs(&buffer, 12).trim_end(),
-        "wire      anthropic",
+        "  wire      anthropic",
         "so the first block stands on the row under that rule"
     );
 }
@@ -646,7 +661,7 @@ fn a_runs_size_is_spelled_in_tokens_and_never_counted_out() {
 
         assert_eq!(
             glyphs(&buffer, 0),
-            ctx_line(value),
+            ctx_line(COLUMNS, value),
             "{size} tokens is drawn as {value} and never as the count itself"
         );
     }
@@ -670,12 +685,12 @@ fn a_run_with_a_window_draws_the_window_and_the_meter_of_the_share_it_fills() {
             }),
             ..Facts::default()
         };
-        let mut buffer = Buffer::empty(band(COLUMNS, 1));
+        let mut buffer = Buffer::empty(band(METERED, 1));
 
         paint(
             &facts,
             Rail::Ledger,
-            band(COLUMNS, 1),
+            band(METERED, 1),
             None,
             &mut buffer,
             &PALETTE,
@@ -683,7 +698,7 @@ fn a_run_with_a_window_draws_the_window_and_the_meter_of_the_share_it_fills() {
 
         assert_eq!(
             glyphs(&buffer, 0),
-            ctx_line(value),
+            ctx_line(METERED, value),
             "{size} tokens against a window of {window} is drawn as {value}: a share under \
                  half a cell of the meter lights none of it, a run past its window has no larger \
                  share to claim, and a window of no tokens is no window at all"
@@ -720,11 +735,15 @@ fn a_nearly_full_window_is_the_one_share_the_rail_raises_its_voice_about() {
         let filled = meter.chars().filter(|cell| *cell == FULL_CELL).count();
         assert_eq!(
             glyphs(&ledger, 0),
-            ctx_line(&format!("{meter} {} / 200k", tokens(size))),
+            ctx_line(COLUMNS, &format!("{meter} {} / 200k", tokens(size))),
             "{size} tokens of two hundred thousand fills {filled} of the meter's six cells"
         );
-        // the meter stands where a value of "178k / 200k" leaves it, one column from the edge
-        let at = usize::from(COLUMNS) - METER - 1 - usize::from(pen::cells("178k / 200k"));
+        // the meter stands where a value of "178k / 200k" leaves it, one margin from the edge
+        let at = usize::from(COLUMNS)
+            - usize::from(MARGIN)
+            - METER
+            - 1
+            - usize::from(pen::cells("178k / 200k"));
         for cell in 0..METER {
             let column = u16::try_from(at + cell).unwrap_or(u16::MAX);
             let drawn = Ink::of(
@@ -749,7 +768,10 @@ fn a_nearly_full_window_is_the_one_share_the_rail_raises_its_voice_about() {
         paint(&facts, Rail::Strip, band(40, 1), None, &mut strip, &PALETTE);
 
         assert_eq!(
-            Ink::of(strip.cell((4, 0)).expect("a cell of the meter"), &PALETTE),
+            Ink::of(
+                strip.cell((4 + MARGIN, 0)).expect("a cell of the meter"),
+                &PALETTE,
+            ),
             Some(ink),
             "the strip draws the same meter and reads it in the same ink the ledger does: \
                  one threshold, in one place"
@@ -776,12 +798,12 @@ fn a_frame_handed_no_size_draws_no_ctx_row_and_counts_nothing_for_it() {
     assert_eq!(
         rows[..7],
         [
-            "wire      anthropic             ",
-            "model     claude-sonnet-4-5…    ",
-            "think     high                  ",
+            "  wire      anthropic           ",
+            "  model     claude-sonnet-4-5…  ",
+            "  think     high                ",
             "                                ",
-            "turns                    3 / 250",
-            "cache                        88%",
+            "  turns                3 / 250  ",
+            "  cache                    88%  ",
             "                                ",
         ],
         "a frame before the first reply has no size, so it draws no ctx row and the \
@@ -803,7 +825,7 @@ fn a_frame_handed_no_size_draws_no_ctx_row_and_counts_nothing_for_it() {
 
     assert_eq!(
         (with.trim_end(), without.trim_end()),
-        ("+7 more", "+6 more"),
+        ("  +7 more", "  +6 more"),
         "the count is of the facts the frame knew: the size joining the frame is one \
              more fact given up at this height and no fact the rail draws, so its absence \
              leaves the count one shorter and never one longer"
@@ -833,9 +855,9 @@ fn the_ledger_draws_whether_the_model_thinks_below_the_model_it_belongs_to() {
     assert_eq!(
         rows,
         [
-            "wire      anthropic             ",
-            "model     claude-sonnet         ",
-            "think     high                  ",
+            "  wire      anthropic           ",
+            "  model     claude-sonnet       ",
+            "  think     high                ",
         ],
         "the model block holds the fact, one row below the model it is about"
     );
@@ -858,23 +880,23 @@ fn the_ledger_reads_its_blocks_in_the_contracts_order_with_air_between_two() {
     assert_eq!(
         rows,
         [
-            "wire      anthropic             ",
-            "model     claude-sonnet-4-5…    ",
-            "think     high                  ",
+            "  wire      anthropic           ",
+            "  model     claude-sonnet-4-5…  ",
+            "  think     high                ",
             "                                ",
-            "turns                    3 / 250",
-            "ctx                        48.2k",
-            "cache                        88%",
+            "  turns                3 / 250  ",
+            "  ctx                    48.2k  ",
+            "  cache                    88%  ",
             "                                ",
-            "workspace …/.worktrees/46-rail  ",
-            "branch    spec/1-capability     ",
+            "  workspace …/46-rail           ",
+            "  branch    spec/1-capability   ",
             "                                ",
-            "skills                         2",
+            "  skills                     2  ",
             "                                ",
-            "sandbox   bwrap                 ",
+            "  sandbox   bwrap               ",
             "                                ",
-            "session   9f2c7a41              ",
-            "temp      …/9f2c7a41/tmp        ",
+            "  session   9f2c7a41            ",
+            "  temp      …/9f2c7a41/tmp      ",
         ],
         "six blocks, an empty row between two of them, nothing given up at this width"
     );
@@ -885,9 +907,9 @@ fn the_ledger_reads_its_blocks_in_the_contracts_order_with_air_between_two() {
     );
     assert_eq!(
         inks(&buffer, 4, &PALETTE),
-        [(Ink::Dim, 10), (Ink::Plain, 22)],
-        "the label field is `dim`, the ground stands between it and the value, and the \
-             value is `plain`"
+        [(Ink::Plain, 2), (Ink::Dim, 10), (Ink::Plain, 20)],
+        "the margin is the ground's own ink, the label field is `dim`, the ground stands \
+             between it and the value, and the value is `plain`"
     );
 }
 
@@ -911,7 +933,7 @@ fn a_frame_handed_no_wire_draws_no_wire_row() {
 
     assert_eq!(
         (glyphs(&buffer, 0).trim_end(), glyphs(&buffer, 1).trim_end()),
-        ("model     claude-sonnet", ""),
+        ("  model     claude-sonnet", ""),
         "a rail handed no wire has no wire row, and nothing went, so no row counts it"
     );
 }
@@ -919,9 +941,9 @@ fn a_frame_handed_no_wire_draws_no_wire_row() {
 #[test]
 fn a_ledger_row_draws_the_wire_by_its_word_and_nothing_beside_it() {
     for (word, row) in [
-        ("anthropic", "wire      anthropic             "),
-        ("openai", "wire      openai                "),
-        ("copilot", "wire      copilot               "),
+        ("anthropic", "  wire      anthropic           "),
+        ("openai", "  wire      openai              "),
+        ("copilot", "  wire      copilot             "),
     ] {
         let facts = Facts {
             wire: Some(String::from(word)),
@@ -941,7 +963,7 @@ fn a_ledger_row_draws_the_wire_by_its_word_and_nothing_beside_it() {
         assert_eq!(
             glyphs(&buffer, 0),
             row,
-            "the label in its field and the word against the rail's last column, and nothing else"
+            "the label in its field and the word after it, with the band's margin either side"
         );
     }
 }
@@ -965,7 +987,7 @@ fn a_fact_with_no_cut_rule_of_its_own_is_dropped_when_no_column_is_left_for_it()
 
     assert_eq!(
         glyphs(&buffer, 0),
-        "+1 more                         ",
+        "  +1 more                       ",
         "a branch wider than the rail's whole column leaves no room for its value, so the \
              fact goes and the row says so"
     );
@@ -994,7 +1016,7 @@ fn a_served_name_longer_than_the_column_is_drawn_by_its_head_and_its_mark() {
 
     assert_eq!(
         glyphs(&ledger, 0),
-        "model     claude-sonnet-4-5…    ",
+        "  model     claude-sonnet-4-5…  ",
         "a dated name takes the value column whole, and the mark says the date stamp went"
     );
 
@@ -1004,7 +1026,7 @@ fn a_served_name_longer_than_the_column_is_drawn_by_its_head_and_its_mark() {
 
     assert_eq!(
         glyphs(&strip, 0).trim_end(),
-        "model claude-sonnet-4-5…",
+        "  model claude-sonnet-4-5…",
         "and the strip's copy of the same name is cut the same way"
     );
 }
@@ -1028,7 +1050,7 @@ fn a_served_name_with_no_segment_to_keep_is_dropped_and_counted() {
 
     assert_eq!(
         glyphs(&ledger, 0),
-        "+1 more                         ",
+        "  +1 more                       ",
         "a name cut to nothing says nothing, so the fact goes and the row counts it"
     );
     assert!(
@@ -1042,7 +1064,7 @@ fn a_served_name_with_no_segment_to_keep_is_dropped_and_counted() {
 
     assert_eq!(
         glyphs(&strip, 0).trim_end(),
-        "+1 more",
+        "  +1 more",
         "and the strip gives up the same fact, and says so in the same words"
     );
 }
@@ -1064,14 +1086,14 @@ fn a_band_too_short_for_every_block_gives_facts_up_in_the_sacrifice_order() {
     assert_eq!(
         rows,
         [
-            "wire      anthropic             ",
-            "model     claude-sonnet-4-5…    ",
-            "think     high                  ",
+            "  wire      anthropic           ",
+            "  model     claude-sonnet-4-5…  ",
+            "  think     high                ",
             "                                ",
-            "turns                    3 / 250",
+            "  turns                3 / 250  ",
             "                                ",
-            "sandbox   bwrap                 ",
-            "+7 more                         ",
+            "  sandbox   bwrap               ",
+            "  +7 more                       ",
         ],
         "temp, cache, session, branch, skills, ctx and workspace went, in that \
              order, and the foot of the rail says seven"
@@ -1095,10 +1117,10 @@ fn a_band_that_can_only_hold_the_model_block_draws_the_model_without_its_think_r
     assert_eq!(
         rows,
         [
-            "model     claude-sonnet-4-5…    ",
+            "  model     claude-sonnet-4-5…  ",
             "                                ",
-            "sandbox   bwrap                 ",
-            "+10 more                        ",
+            "  sandbox   bwrap               ",
+            "  +10 more                      ",
         ],
         "thinking is given up before the model it sits under, so the model keeps its row"
     );
@@ -1113,12 +1135,12 @@ fn a_strip_carries_the_share_of_a_named_window_and_gives_up_the_size_beside_it()
         }),
         ..Facts::default()
     };
-    let mut ledger = Buffer::empty(band(COLUMNS, 1));
+    let mut ledger = Buffer::empty(band(METERED, 1));
 
     paint(
         &facts,
         Rail::Ledger,
-        band(COLUMNS, 1),
+        band(METERED, 1),
         None,
         &mut ledger,
         &PALETTE,
@@ -1126,7 +1148,7 @@ fn a_strip_carries_the_share_of_a_named_window_and_gives_up_the_size_beside_it()
 
     assert_eq!(
         glyphs(&ledger, 0),
-        "ctx          █░░░░░ 48.2k / 200k",
+        "  ctx          █░░░░░ 48.2k / 200k  ",
         "the ledger's ctx row says the size against the window it is a share of, and draws \
              that share as a meter beside them"
     );
@@ -1137,7 +1159,7 @@ fn a_strip_carries_the_share_of_a_named_window_and_gives_up_the_size_beside_it()
 
     assert_eq!(
         glyphs(&strip, 0).trim_end(),
-        "ctx █░░░░░",
+        "  ctx █░░░░░",
         "the strip's one row has no room for the size or the window it is a share of, so \
              it keeps the meter that says how much of the window is left"
     );
@@ -1158,7 +1180,7 @@ fn forty_columns_hold_the_fact_a_reader_watches_and_the_model_they_are() {
 
     assert_eq!(
         glyphs(&buffer, 0),
-        "ctx 48.2k · model claude-sonnet-4-5…    ",
+        "  ctx 48.2k · model claude-sonnet-4-5…  ",
         "forty columns hold the run's size and the model, because the four facts this \
              frame carries leave no room for the count beside the two"
     );
@@ -1184,7 +1206,7 @@ fn ninety_nine_columns_hold_the_four_facts_this_frame_carries_and_count_the_rest
 
     assert_eq!(
         glyphs(&buffer, 0).trim_end(),
-        format!("ctx █░░░░░ · model {CUT} · sandbox bwrap · branch {BRANCH} · +8 more"),
+        format!("  ctx █░░░░░ · model {CUT} · sandbox bwrap · branch {BRANCH} · +8 more"),
         "ninety-nine columns hold every fact this frame's list carries and the count of \
              the eight the strip does not carry at all"
     );
@@ -1205,8 +1227,9 @@ fn the_strip_gives_its_facts_up_from_the_tail_of_its_own_list() {
 
     assert_eq!(
         glyphs(&counted, 0).trim_end(),
-        "ctx 48.2k · model claude-sonnet-4-5… · +10 more",
-        "the branch and the sandbox posture went, and the count that fits says so"
+        "  ctx 48.2k · model claude-sonnet-4-5…",
+        "the branch and the sandbox posture went, and the eleven columns the count takes \
+             are past the six the row has left beside them"
     );
 
     let mut facts_win = Buffer::empty(band(60, 1));
@@ -1222,7 +1245,7 @@ fn the_strip_gives_its_facts_up_from_the_tail_of_its_own_list() {
 
     assert_eq!(
         glyphs(&facts_win, 0).trim_end(),
-        "ctx 48.2k · model claude-sonnet-4-5… · sandbox bwrap",
+        "  ctx 48.2k · model claude-sonnet-4-5… · sandbox bwrap",
         "three facts beat the count: the room the count would take is the room the \
              sandbox posture is drawn in"
     );
@@ -1240,7 +1263,7 @@ fn a_strip_with_one_fact_draws_it_and_counts_the_fact_it_does_not_carry() {
 
     assert_eq!(
         glyphs(&buffer, 0).trim_end(),
-        "sandbox bwrap",
+        "  sandbox bwrap",
         "the one fact the frame knows is drawn, and no count stands where nothing went"
     );
 
@@ -1261,7 +1284,7 @@ fn a_strip_with_one_fact_draws_it_and_counts_the_fact_it_does_not_carry() {
 
     assert_eq!(
         glyphs(&buffer, 0).trim_end(),
-        "+1 more",
+        "  +1 more",
         "a fact the strip does not carry is counted rather than drawn, because the \
              strip's four are the whole of what its row reads"
     );
@@ -1308,9 +1331,9 @@ fn no_fact_is_ever_drawn_partially_at_any_width_between_twenty_and_two_hundred()
             Rail::Strip,
             "at {width} columns the ledger dropped the {more} row it had room to draw"
         );
-        let drawn = columns(screen.trim_end());
+        let drawn = columns(screen.trim_end()).saturating_sub(usize::from(MARGIN));
         assert!(
-            drawn + columns(GAP) + columns(&more) > usize::from(width),
+            drawn + columns(GAP) + columns(&more) > usize::from(room(width)),
             "at {width} columns the strip dropped the {more} count it had room to draw \
                  beside the {drawn} columns it kept"
         );
@@ -1334,7 +1357,7 @@ fn a_strip_row_is_the_four_facts_of_its_list_beside_each_other_with_one_gap() {
 
     assert_eq!(
         glyphs(&buffer, 0).trim_end(),
-        format!("ctx 48.2k · model {CUT} · sandbox bwrap · branch {BRANCH} · +8 more"),
+        format!("  ctx 48.2k · model {CUT} · sandbox bwrap · branch {BRANCH} · +8 more"),
         "one row, the strip's own four facts in its own order, a gap between two of \
              them, and the count of the eight it does not carry even with the room to"
     );
@@ -1352,7 +1375,7 @@ fn a_strip_row_is_the_four_facts_of_its_list_beside_each_other_with_one_gap() {
 
     assert_eq!(
         glyphs(&narrower, 0).trim_end(),
-        format!("ctx 48.2k · model {CUT} · sandbox bwrap · branch {BRANCH}"),
+        format!("  ctx 48.2k · model {CUT} · sandbox bwrap · branch {BRANCH}"),
         "eighty-eight columns hold the four facts and no count: the count's own \
              eleven columns are the ones this row does not have"
     );
@@ -1378,19 +1401,20 @@ fn a_ledger_row_sets_its_label_dim_and_its_value_plain_on_one_hanging_edge() {
 
     assert_eq!(
         glyphs(&buffer, 0),
-        "model     claude-sonnet         ",
-        "the label in its ten-column field and the value against the rail's last column"
+        "  model     claude-sonnet       ",
+        "the label in its ten-column field and the value inside the band's margin"
     );
     assert_eq!(
         glyphs(&buffer, 1),
-        "think     high                  ",
+        "  think     high                ",
         "and a value of another width ends in that same column: one hanging edge, and \
              no run of leaders out to it"
     );
     assert_eq!(
         inks(&buffer, 0, &PALETTE),
-        [(Ink::Dim, 10), (Ink::Plain, 22)],
-        "the field is `dim` and the value is the fact, so it is `plain`"
+        [(Ink::Plain, 2), (Ink::Dim, 10), (Ink::Plain, 20)],
+        "the margin is the ground's own ink, the field is `dim` and the value is the fact, \
+             so it is `plain`"
     );
 }
 
@@ -1428,12 +1452,12 @@ fn a_window_is_drawn_as_a_meter_beside_the_size_it_is_a_share_of() {
         cache: Some(88),
         ..Facts::default()
     };
-    let mut buffer = Buffer::empty(band(COLUMNS, 3));
+    let mut buffer = Buffer::empty(band(METERED, 3));
 
     paint(
         &facts,
         Rail::Ledger,
-        band(COLUMNS, 3),
+        band(METERED, 3),
         None,
         &mut buffer,
         &PALETTE,
@@ -1443,9 +1467,9 @@ fn a_window_is_drawn_as_a_meter_beside_the_size_it_is_a_share_of() {
     assert_eq!(
         rows,
         [
-            "turns                   3 /  250",
-            "ctx          █░░░░░ 48.2k / 200k",
-            "cache                        88%",
+            "  turns                   3 /  250  ",
+            "  ctx          █░░░░░ 48.2k / 200k  ",
+            "  cache                        88%  ",
         ],
         "a quarter of the window is one cell of the meter and the size is the number beside \
              it, and the hit rate is no meter at all"

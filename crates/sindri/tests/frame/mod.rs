@@ -407,3 +407,54 @@ fn looks_in(runs: &str) -> Option<Vec<Look>> {
     }
     Some(looks)
 }
+
+/// The two columns every band opens its words in: the frame's one margin.
+const MARGIN: u16 = 2;
+
+/// Walks the cells of `frame` band by band and names the band that broke the seat: two columns of
+/// air at the band's left edge and one at its right, and two where the rail stands at the frame's.
+pub fn assert_seat(frame: &Frame, fixture: &str) {
+    let Some(laid) = frame.told().layout() else {
+        return;
+    };
+    // A card is drawn over the frame it was opened from and is no band of it.
+    if laid.card.is_some() {
+        return;
+    }
+    let mut bands = vec![
+        ("the transcript band", laid.transcript, 1),
+        ("the notice row", laid.notice, 1),
+        ("the composer's band", laid.composer, 1),
+        ("the footer", laid.footer, 1),
+    ];
+    if let Some((_, rail)) = laid.rail {
+        bands.push(("the rail's band", rail.area, MARGIN));
+    }
+    for (name, band, air) in bands {
+        assert_band(frame, fixture, name, band, air);
+    }
+}
+
+fn assert_band(frame: &Frame, fixture: &str, name: &str, band: Rect, air: u16) {
+    if band.width <= MARGIN.saturating_mul(2) {
+        return;
+    }
+    for y in band.y..band.bottom() {
+        for x in band.x..band.x.saturating_add(MARGIN) {
+            let glyph = frame.glyph(x, y);
+            assert!(
+                !glyph.is_alphanumeric(),
+                "frame {fixture}: {name} draws {glyph:?} in column {x} of row {y}, where a band's \
+                 first {MARGIN} columns are air"
+            );
+        }
+        for x in band.right().saturating_sub(air)..band.right() {
+            let glyph = frame.glyph(x, y);
+            assert!(
+                !glyph.is_alphanumeric(),
+                "frame {fixture}: {name} draws {glyph:?} in column {x} of row {y}, where the right \
+                 edge keeps {air} columns of air"
+            );
+        }
+    }
+}

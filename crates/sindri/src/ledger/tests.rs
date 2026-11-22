@@ -634,7 +634,9 @@ fn the_rail_s_first_row_says_the_run_is_running_and_steps_with_the_marker() {
     );
     assert_eq!(
         Ink::of(
-            buffer.cell((10, 0)).expect("the state's first cell"),
+            buffer
+                .cell((MARGIN + FIELD, 0))
+                .expect("the state's first cell"),
             &Palette::TRUECOLOR
         ),
         Some(Ink::Accent),
@@ -667,7 +669,7 @@ fn a_stopped_run_s_row_is_the_stop_s_own_word_under_the_mark_that_stop_earns() {
         assert_eq!(
             Ink::of(
                 painted_shape(&facts, Shape::Ledger, area, None)
-                    .cell((10, 0))
+                    .cell((MARGIN + FIELD, 0))
                     .expect("the state's first cell"),
                 &Palette::TRUECOLOR
             ),
@@ -690,7 +692,7 @@ fn a_live_run_wears_no_stop_s_mark_whatever_the_frame_s_marker_settled_on() {
     assert_eq!(
         Ink::of(
             painted_shape(&live(), Shape::Ledger, area, Some(&settled))
-                .cell((10, 0))
+                .cell((MARGIN + FIELD, 0))
                 .expect("the state's first cell"),
             &Palette::TRUECOLOR
         ),
@@ -747,26 +749,27 @@ fn the_strip_carries_the_state_beside_the_size_and_lets_it_go_after_every_fact_i
 
     assert_eq!(
         strip(80),
-        format!(
-            "ctx █░░░░░ · state ⠋ running · model claude-sonnet-4-5… · sandbox bwrap{}",
-            pen::blank(9)
+        inset_row(
+            "ctx █░░░░░ · state ⠋ running · model claude-sonnet-4-5… · sandbox bwrap",
+            80
         ),
         "a strip under the rail's threshold carries the run's state beside the size it \
              watches, and holds it where the branch it carries no room for has gone"
     );
     assert_eq!(
         strip(40),
-        format!("ctx █░░░░░ · state ⠋ running · +11 more{}", pen::blank(1)),
-        "and a narrower one keeps the state where the model has gone, counting what went"
+        inset_row("ctx █░░░░░ · state ⠋ running", 40),
+        "and a narrower one keeps the state where the model has gone, and gives up the count \
+             of what went beside it because the margin leaves no room for the two"
     );
     assert_eq!(
         strip(27),
-        format!("ctx █░░░░░ · +12 more{}", pen::blank(6)),
+        inset_row("ctx █░░░░░ · +12 more", 27),
         "a strip too narrow to hold the size and the state beside it keeps the size alone, \
              because the state is the last fact the strip lets go and never the first"
     );
 
-    for width in 28..NARROW {
+    for width in 32..NARROW {
         let row = strip(width);
         assert!(
             row.contains("state ⠋ running"),
@@ -887,31 +890,38 @@ fn painted(facts: &Facts, area: Rect) -> Buffer {
     buffer
 }
 
+/// A row `width` columns wide with `text` laid inside the frame's margin and the air beside it.
+fn inset_row(text: &str, width: u16) -> String {
+    let mut row = format!("{}{text}", pen::blank(MARGIN));
+    row.push_str(&pen::blank(width.saturating_sub(pen::cells(&row))));
+    row
+}
+
 /// A row `width` columns wide whose value says its own name: a bare name is no number, so it
 /// starts the row it stands on.
 fn bare_row(value: &str, width: u16) -> String {
-    let mut row = String::from(value);
-    row.push_str(&pen::blank(width.saturating_sub(pen::cells(value))));
-    row
+    inset_row(value, width)
 }
 
 /// A labelled row `width` columns wide whose value is a number: the label in the field and the
 /// value on the far edge.
 fn hung_row(label: &str, value: &str, width: u16) -> String {
-    let at = pen::hanging(band(width, 1), pen::cells(value)).expect("a row that holds it");
-    format!(
-        "{}{}{value}",
-        pen::pad(label, FIELD),
-        pen::blank(at.saturating_sub(FIELD))
+    let inset = band(width.saturating_sub(inset()), 1);
+    let at = pen::hanging(inset, pen::cells(value)).expect("a row that holds it");
+    inset_row(
+        &format!(
+            "{}{}{value}",
+            pen::pad(label, FIELD),
+            pen::blank(at.saturating_sub(FIELD))
+        ),
+        width,
     )
 }
 
 /// A labelled row `width` columns wide whose value is a word: the label in the field and the
 /// value reading on from it.
 fn said_row(label: &str, value: &str, width: u16) -> String {
-    let mut row = format!("{}{value}", pen::pad(label, FIELD));
-    row.push_str(&pen::blank(width.saturating_sub(pen::cells(&row))));
-    row
+    inset_row(&format!("{}{value}", pen::pad(label, FIELD)), width)
 }
 
 /// One row of a painted band, as a reader sees its glyphs.
@@ -989,16 +999,16 @@ fn a_narrow_column_cuts_a_path_at_its_head_and_a_name_at_its_tail_and_draws_no_o
     let drawn = read(&facts, area);
 
     assert!(
-        drawn.contains(&String::from("model anthropic.claude-3-5-sonnet…")),
+        drawn.contains(&String::from("model anthropic.claude-3-5…")),
         "a served name too long for its column keeps its head and marks the tail: {drawn:?}"
     );
     assert!(
-        drawn.contains(&String::from("a-skill-name-that-runs-past-any-column…")),
+        drawn.contains(&String::from("a-skill-name-that-runs-past-any…")),
         "a loaded name is cut the same way: {drawn:?}"
     );
     assert!(
         !drawn.iter().any(|row| row.starts_with("session ")),
-        "the GUID is thirty-six columns and the row holds thirty, so it is not drawn in \
+        "the GUID is thirty-six columns and the row holds twenty-six, so it is not drawn in \
              part: {drawn:?}"
     );
     for row in rows(&facts, Shape::Screen, area, None) {
@@ -1035,9 +1045,9 @@ fn a_block_is_drawn_whole_and_what_the_band_cannot_hold_is_counted_under_its_las
         [
             ("run", 0),
             ("meters", 0),
-            ("spend", 61),
-            ("place", 61),
-            ("+8 more", 61),
+            ("spend", 59),
+            ("place", 59),
+            ("+8 more", 59),
         ],
         "the blocks flow into the columns whole, a block that does not fit moves on rather \
              than being split, and the count of what went stands under the last column"
@@ -1045,7 +1055,7 @@ fn a_block_is_drawn_whole_and_what_the_band_cannot_hold_is_counted_under_its_las
     let (y, parts) = laid.last().cloned().expect("the band counts what went");
     assert_eq!(
         parts,
-        vec![(61, String::from("+8 more"))],
+        vec![(59, String::from("+8 more"))],
         "the count of what went belongs to the last column, under its last row: {laid:?}"
     );
     assert_eq!(
@@ -1133,11 +1143,12 @@ fn a_band_s_rows_are_drawn_at_the_origin_it_is_handed() {
         "a shape lays its rows from the band's own origin, so its first row is row 0 column 0 \
              whatever row and column the band it was handed sits at"
     );
+    let start = at.x.saturating_add(MARGIN);
     assert_eq!(
         glyphs(&buffer, at.y).trim_end(),
-        "              run",
-        "the run block's name is drawn from the column the door is handed, and its first \
-             glyph stands at column 14"
+        format!("{}run", pen::blank(start)),
+        "the run block's name is drawn from the column the door is handed and the frame's \
+             margin, and its first glyph stands at column {start}"
     );
     let blank = |y: u16, from: u16, to: u16| {
         (from..to).all(|x| buffer.cell((x, y)).expect("a cell of the band").symbol() == " ")
@@ -1147,8 +1158,8 @@ fn a_band_s_rows_are_drawn_at_the_origin_it_is_handed() {
         "no row stands above the origin row, so every cell of the four rows over it is blank"
     );
     assert!(
-        blank(at.y, 0, at.x),
-        "no row starts left of the origin column, so the cells before column 14 are blank"
+        blank(at.y, 0, start),
+        "no row starts left of the origin column, so the cells before column {start} are blank"
     );
 }
 
@@ -1164,9 +1175,9 @@ fn the_door_draws_no_row_past_the_rows_the_band_gives_it() {
 
     assert_eq!(
         glyphs(&buffer, 0).trim_end(),
-        "run",
-        "the first row of the screen's layout is drawn at the origin, however few rows the band \
-             holds"
+        format!("{}run", pen::blank(MARGIN)),
+        "the first row of the screen's layout is drawn from the origin and the frame's margin, \
+             however few rows the band holds"
     );
     assert!(
         (1..area.height).all(|y| glyphs(&buffer, y).trim().is_empty()),
@@ -1280,7 +1291,7 @@ fn a_screen_row_sets_its_label_dim_and_its_value_plain_where_the_value_hangs() {
     );
     assert_eq!(
         inks(&buffer, 1, &Palette::TRUECOLOR),
-        [(Ink::Dim, 10), (Ink::Plain, 71)],
+        [(Ink::Plain, 2), (Ink::Dim, 10), (Ink::Plain, 69)],
         "the field is `dim` and the value is the fact, so it is `plain`"
     );
     assert_eq!(
@@ -1296,18 +1307,21 @@ fn a_screen_row_sets_its_label_dim_and_its_value_plain_where_the_value_hangs() {
     );
     assert_eq!(
         glyphs(&buffer, 5),
-        pen::filled(area.width, '─'),
+        inset_row(
+            &pen::filled(area.width.saturating_sub(inset()), '─'),
+            area.width
+        ),
         "the rule spans the column between the run's last fact and the name of the block \
              under it"
     );
     assert!(
-        glyphs(&buffer, 4).trim_end().starts_with("think"),
+        glyphs(&buffer, 4).trim().starts_with("think"),
         "the fact above the rule is the last of the run block"
     );
-    assert_eq!(glyphs(&buffer, 6).trim_end(), "meters");
+    assert_eq!(glyphs(&buffer, 6).trim(), "meters");
     assert_eq!(
         inks(&buffer, 5, &Palette::TRUECOLOR),
-        [(Ink::Dim, 81)],
+        [(Ink::Plain, 2), (Ink::Dim, 77), (Ink::Plain, 2)],
         "the rule between two blocks is drawn in the ink a block's edge is read in"
     );
 }
@@ -1351,9 +1365,9 @@ fn the_fact_that_says_the_run_is_moving_wears_the_accent() {
         });
         let buffer = painted(&facts, area);
         let row = (0..area.height)
-            .find(|y| glyphs(&buffer, *y).trim_end().starts_with("stopped"))
+            .find(|y| glyphs(&buffer, *y).trim_start().starts_with("stopped"))
             .expect("the screen draws the state the run stopped in");
-        let at = (FIELD, row);
+        let at = (MARGIN + FIELD, row);
 
         assert_eq!(
             Ink::of(
@@ -1410,7 +1424,7 @@ fn every_fact_a_run_holds_has_its_row_in_the_block_the_screen_reads_it_in() {
             "rule",
             "session",
             "session 9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61",
-            "temp …/.local/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
+            "temp …/state/sindri/sessions/9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61/tmp",
         ],
         "every fact the run holds has its row, whole, in the block the screen reads it in: the \
              route it took, what it spent, the commit it stood on, the state it stopped in with its \
@@ -1449,14 +1463,14 @@ fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_air_between_two() 
             stated(&[(0, "model     "), (10, CUT)]),
             stated(&[(0, "think     "), (10, "high")]),
             stated(&[]),
-            stated(&[(0, "turns     "), (25, "3 / 250")]),
-            stated(&[(0, "ctx       "), (27, "48.2k")]),
-            stated(&[(0, "cache     "), (29, "88%")]),
+            stated(&[(0, "turns     "), (21, "3 / 250")]),
+            stated(&[(0, "ctx       "), (23, "48.2k")]),
+            stated(&[(0, "cache     "), (25, "88%")]),
             stated(&[]),
-            stated(&[(0, "workspace "), (10, "…/.worktrees/46-rail")]),
+            stated(&[(0, "workspace "), (10, "…/46-rail")]),
             stated(&[(0, "branch    "), (10, "spec/1-capability")]),
             stated(&[]),
-            stated(&[(0, "skills    "), (31, "2")]),
+            stated(&[(0, "skills    "), (27, "2")]),
             stated(&[]),
             stated(&[(0, "sandbox   "), (10, "bwrap")]),
             stated(&[]),
@@ -1490,9 +1504,9 @@ fn the_ledgers_foot_says_what_the_run_spent_on_the_frames_last_rows() {
     assert_eq!(
         &rows[rows.len() - 3..],
         [
-            (21, stated(&[(0, "input     "), (27, "48.2k")])),
-            (22, stated(&[(0, "output    "), (28, "3.1k")])),
-            (23, stated(&[(0, "total     "), (27, "51.3k")])),
+            (21, stated(&[(0, "input     "), (23, "48.2k")])),
+            (22, stated(&[(0, "output    "), (24, "3.1k")])),
+            (23, stated(&[(0, "total     "), (23, "51.3k")])),
         ],
         "the spend stands on the band's last three rows, read from the top down, with the total \
              on the frame's own floor"
@@ -1510,7 +1524,7 @@ fn the_foot_is_parted_from_the_blocks_above_it_by_one_row_of_air() {
     );
     assert_eq!(
         rows[17],
-        (18, stated(&[(0, "input     "), (27, "48.2k")])),
+        (18, stated(&[(0, "input     "), (23, "48.2k")])),
         "and the foot takes the band's last three rows from row 18, so the row above it is the \
              air that parts the two"
     );
@@ -1527,7 +1541,7 @@ fn a_band_with_no_room_for_the_foot_keeps_the_total_and_counts_the_two_it_gave_u
     );
     assert_eq!(
         rows[18],
-        (19, stated(&[(0, "total     "), (27, "51.3k")])),
+        (19, stated(&[(0, "total     "), (23, "51.3k")])),
         "and keeps the total on its floor, because that is the fact a reader glances at"
     );
 }
@@ -1538,7 +1552,7 @@ fn a_full_rail_keeps_the_foot_on_the_band_it_just_fits() {
 
     assert_eq!(
         rows.last(),
-        Some(&(23, stated(&[(0, "total     "), (27, "51.3k")]))),
+        Some(&(23, stated(&[(0, "total     "), (23, "51.3k")]))),
         "every fact a frame can hold and a spend beside them leave the total on the floor, so the \
          foot costs the blocks above it no row they held"
     );
@@ -1581,7 +1595,7 @@ fn a_band_too_short_gives_facts_up_in_the_sacrifice_order_and_the_last_row_count
             stated(&[(0, "model     "), (10, CUT)]),
             stated(&[(0, "think     "), (10, "high")]),
             stated(&[]),
-            stated(&[(0, "turns     "), (25, "3 / 250")]),
+            stated(&[(0, "turns     "), (21, "3 / 250")]),
             stated(&[]),
             stated(&[(0, "sandbox   "), (10, "bwrap")]),
             stated(&[(0, "+7 more")]),
@@ -1609,9 +1623,10 @@ fn a_numbers_digits_line_up_on_the_last_column_and_a_words_read_on_from_its_labe
         let (at, glyphs) = value(label);
         assert_eq!(
             usize::from(at) + usize::from(pen::cells(&glyphs)),
-            usize::from(COLUMNS),
-            "{label}'s {glyphs:?} does not end in the rail's last column: a number hangs \
-                 against that edge so its digits line up with every other number's"
+            usize::from(COLUMNS - inset()),
+            "{label}'s {glyphs:?} does not end on the column the frame's margin leaves: a \
+                 number hangs against that edge so its digits line up with every other \
+                 number's"
         );
     }
 
@@ -1643,7 +1658,9 @@ fn a_name_that_goes_for_want_of_room_is_drawn_whole_once_the_rail_grew_to_hold_i
             Rail::Strip => width,
         };
         let drawn_whole = match rail {
-            Rail::Ledger => value_room(room) >= pen::cells(UNNAMED) as usize,
+            Rail::Ledger => {
+                value_room(room.saturating_sub(inset())) >= pen::cells(UNNAMED) as usize
+            }
             Rail::Strip => false,
         };
         let expected = match drawn_whole {

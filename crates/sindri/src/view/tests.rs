@@ -547,7 +547,7 @@ fn a_frame_with_two_rows_gives_the_composer_its_head_and_its_hints_and_no_draft(
     );
     assert_eq!(
         drawn_row(&buffer, band.bottom() - 1).trim_end(),
-        "Enter send · / commands · @ files · ? keys · Ctrl-Q quit",
+        "  Enter send · / commands · @ files · ? keys · Ctrl-Q quit",
         "and the hints stand on the last one, the draft having been given up whole"
     );
 }
@@ -598,7 +598,7 @@ fn sixty_columns_show_the_band_and_lose_no_hint_from_its_last_row() {
     );
     assert_eq!(
         drawn_row(&buffer, laid.footer.y).trim_end(),
-        "Enter send · / commands · @ files · ? keys · Ctrl-Q quit",
+        "  Enter send · / commands · @ files · ? keys · Ctrl-Q quit",
         "and every hint that fits in sixty columns is still drawn"
     );
 }
@@ -624,7 +624,7 @@ fn a_composer_at_rest_is_three_rows_of_three_grounds_and_no_glyph_of_a_box() {
         );
         assert_eq!(
             drawn_row(&buffer, band.bottom() - 1)
-                .trim_end()
+                .trim()
                 .split(' ')
                 .next(),
             Some("Enter"),
@@ -683,12 +683,16 @@ fn the_head_hangs_the_drafts_own_count_on_its_far_edge() {
 
     assert_eq!(
         row,
-        format!("{}1 file", pen::filled(band.width - 6, ' ')),
+        format!(
+            "{}1 file{}",
+            pen::filled(band.width - 6 - MARGIN, ' '),
+            pen::filled(MARGIN, ' ')
+        ),
         "the head hangs the count of the file the draft names on its far edge, and no glyph \
          stands before it"
     );
     assert_eq!(
-        look_at(&buffer, &palette, band.right() - 1, band.y),
+        look_at(&buffer, &palette, band.right() - MARGIN - 1, band.y),
         Look::plain(Ink::Muted),
         "and the count is read in the ink a fact's words are drawn in, over the lit edge"
     );
@@ -714,7 +718,7 @@ fn no_frame_at_any_width_draws_a_corner_or_an_upright_in_the_composer() {
         Facts::default().asked(),
         Facts::default().asked().railed(rail()),
     ] {
-        for cols in 3..=200 {
+        for cols in 5..=200 {
             let (buffer, laid) = drafted(facts.clone(), palette, 1, cols, 24);
             let band = laid.composer;
             for y in band.y..band.bottom() {
@@ -739,9 +743,9 @@ fn no_frame_at_any_width_draws_a_corner_or_an_upright_in_the_composer() {
 fn the_count_is_refused_where_the_head_would_lose_its_last_column_and_drawn_one_column_wider() {
     let palette = Palette::TRUECOLOR;
     let root = workspace();
-    // The count of one file is six columns, so a six column band leaves the head none of its own and
-    // a seven column band leaves it one.
-    let (refused, laid) = drafting(palette, root.path(), "read src/rows.rs", 6, 24);
+    // The count of one file is six columns and the head keeps two beside it, so an eight column
+    // band leaves the head none of its own and a nine column band leaves it one.
+    let (refused, laid) = drafting(palette, root.path(), "read src/rows.rs", 8, 24);
     let band = laid.composer;
 
     assert_eq!(
@@ -751,12 +755,12 @@ fn the_count_is_refused_where_the_head_would_lose_its_last_column_and_drawn_one_
          keeps the row"
     );
 
-    let (drawn, laid) = drafting(palette, root.path(), "read src/rows.rs", 7, 24);
+    let (drawn, laid) = drafting(palette, root.path(), "read src/rows.rs", 9, 24);
     let band = laid.composer;
 
     assert_eq!(
         drawn_glyphs(&drawn, band.y),
-        " 1 file",
+        " 1 file  ",
         "one column wider, the count hangs and the head keeps the one column left before it"
     );
     assert_eq!(
@@ -782,7 +786,7 @@ fn the_count_is_drawn_in_the_quiet_inks_the_frame_already_gives_a_meaning() {
     let (buffer, told) = painted_and_told(&mut view, 120, 40);
     let band = laid_out(&told).composer;
     let counted = pen::cells("1 file · 1 command");
-    let mut x = band.right() - counted;
+    let mut x = band.right() - MARGIN - counted;
 
     for (width, ink) in [(6, Ink::Muted), (3, Ink::Dim), (9, Ink::Muted)] {
         for _ in 0..width {
@@ -797,8 +801,8 @@ fn the_count_is_drawn_in_the_quiet_inks_the_frame_already_gives_a_meaning() {
     }
     assert_eq!(
         x,
-        band.right(),
-        "the count is drawn whole, and its last column is the row's own"
+        band.right() - MARGIN,
+        "the count is drawn whole, and its last column is the last the row's margin leaves it"
     );
 }
 
@@ -1051,7 +1055,7 @@ fn an_empty_frame_and_a_one_line_draft_draw_the_band_in_three_rows() {
         "and the placeholder stands on the row under the head"
     );
     assert!(
-        drawn_glyphs(&buffer, band.y + 2).starts_with("Enter send"),
+        drawn_glyphs(&buffer, band.y + 2).starts_with("  Enter send"),
         "with the hints under it and no air row between them"
     );
 
@@ -1068,7 +1072,7 @@ fn an_empty_frame_and_a_one_line_draft_draw_the_band_in_three_rows() {
         "its words stand on the row under the head, past the blank and the sigil: {drafted:?}"
     );
     assert!(
-        drawn_glyphs(&buffer, band.y + 2).starts_with("Enter send"),
+        drawn_glyphs(&buffer, band.y + 2).starts_with("  Enter send"),
         "and the hints are the row under it"
     );
 }
@@ -1162,7 +1166,7 @@ fn a_forty_row_frame_gives_the_transcript_the_row_the_hints_used_to_hold() {
 
 #[test]
 fn a_draft_exactly_as_wide_as_the_room_fills_its_row_and_never_runs_past_the_band() {
-    let room = 60 - pen::cells(INDENT);
+    let room = 60 - pen::cells(INDENT) - MARGIN;
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -1175,7 +1179,11 @@ fn a_draft_exactly_as_wide_as_the_room_fills_its_row_and_never_runs_past_the_ban
 
     assert_eq!(
         drawn_glyphs(&buffer, band.y + ends(&view).above),
-        format!(" \u{203a}{}", pen::filled(room, 'x')),
+        format!(
+            " \u{203a}{}{}",
+            pen::filled(room, 'x'),
+            pen::filled(MARGIN, ' ')
+        ),
         "a draft of {room} glyphs does not fill the columns the band leaves it"
     );
     assert_eq!(
@@ -1211,7 +1219,7 @@ fn a_queues_rows_stand_above_the_hints_which_are_the_bands_last_row() {
     }
     assert_eq!(
         drawn_row(&buffer, band.bottom() - 1)
-            .trim_end()
+            .trim()
             .split(' ')
             .next(),
         Some("Ctrl-C"),
@@ -1347,7 +1355,7 @@ fn the_transcript_sits_in_the_well_and_the_rail_beside_it_carries_its_own_tone()
 fn the_band_beside_a_rail_is_drawn_in_the_frames_whole_width_and_the_rail_closes_above_it() {
     let palette = Palette::TRUECOLOR;
     for (cols, rows) in [(120, 40), (100, 40)] {
-        let room = cols - pen::cells(INDENT);
+        let room = cols - pen::cells(INDENT) - MARGIN;
         let mut view = View::of(
             inked(palette),
             Facts::default().asked().railed(rail()),
@@ -1377,7 +1385,11 @@ fn the_band_beside_a_rail_is_drawn_in_the_frames_whole_width_and_the_rail_closes
         );
         assert_eq!(
             drawn_glyphs(&buffer, band.y + ends(&view).above),
-            format!(" \u{203a}{}", pen::filled(room, 'x')),
+            format!(
+                " \u{203a}{}{}",
+                pen::filled(room, 'x'),
+                pen::filled(MARGIN, ' ')
+            ),
             "a draft of {room} glyphs fills the row the frame leaves it, past the columns the \
              rail takes from the transcript"
         );
@@ -2409,7 +2421,7 @@ fn footer(cols: u16, rows: u16) -> String {
 fn an_idle_frame_names_sending_the_commands_the_files_and_the_keys() {
     assert_eq!(
         footer(120, 24).trim_end(),
-        "Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline",
+        "  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline",
         "a boot frame draws every hint it can honour, in survival order and separated by one \
              gap, and no hint a draft in flight would answer instead"
     );
@@ -2419,7 +2431,7 @@ fn an_idle_frame_names_sending_the_commands_the_files_and_the_keys() {
 fn a_live_run_names_cancelling_and_never_sending() {
     assert_eq!(
         drawn_footer(&mut asking(0), 120, 24).trim_end(),
-        "Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline",
+        "  Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline",
         "a frame with its run in flight draws the key that stops it in the place sending \
              stands in an idle frame, and never names a send that would queue instead"
     );
@@ -2429,7 +2441,7 @@ fn a_live_run_names_cancelling_and_never_sending() {
 fn the_queue_s_depth_is_drawn_where_the_hint_that_recalls_it_stands() {
     assert_eq!(
         drawn_footer(&mut asking(3), 120, 24).trim_end(),
-        "Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys · Ctrl-Q quit · \
+        "  Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys · Ctrl-Q quit · \
              Ctrl-J newline",
         "three prompts waiting behind the draft are drawn as the count the queue itself \
              gives, standing where the hint that takes the newest back stands"
@@ -2603,7 +2615,7 @@ fn no_hint_is_cut_mid_word_at_any_width_between_twenty_and_two_hundred() {
         let set = whole(&view);
         for cols in 20..=200u16 {
             let drawn = drawn_footer(&mut view, cols, 24);
-            let row = drawn.trim_end();
+            let row = drawn.trim();
             let said = said_row(row);
             let prefix: Vec<&str> = set.iter().take(said.len()).map(String::as_str).collect();
 
@@ -2701,7 +2713,7 @@ fn a_hint_the_row_has_no_room_for_is_not_drawn_at_all() {
     // hint is drawn whole or not at all, and the gap that would have introduced it goes with it.
     assert_eq!(
         footer(15, 24).trim_end(),
-        "Enter send",
+        "  Enter send",
         "fifteen columns hold the first hint and neither the gap nor the second"
     );
     assert_eq!(
@@ -2766,7 +2778,7 @@ fn the_footer_draws_each_hint_as_a_key_and_the_words_that_say_what_it_does() {
             let drawn = drawn_row(&buffer, row);
             let depth = depth(&view);
             let mut tail = 0;
-            for hint in kept(&view.hints(), cols, &depth) {
+            for hint in kept(&view.hints(), cols - MARGIN * 2, &depth) {
                 let at = tail + drawn[tail..].find(hint.key).expect("a kept key is drawn");
                 let x = pen::cells(&drawn[..at]);
                 let key_look = look_at(&buffer, &palette, x, row);
@@ -3482,13 +3494,14 @@ fn scrolled_back() -> View {
     view
 }
 
-/// The one row a frame draws saying the transcript is scrolled back, and the row it stands on.
+/// The one row a frame draws saying the transcript is scrolled back, cut at the margin it opens
+/// past, and the row it stands on.
 fn notice_of(buffer: &Buffer) -> (String, u16) {
     let area = buffer.area;
     for y in area.y..area.bottom() {
         let row = drawn_row(buffer, y);
         if row.contains("rows back") || row.contains("1 row back") {
-            return (row, y);
+            return (row.trim_start().to_owned(), y);
         }
     }
     panic!(
@@ -3519,12 +3532,12 @@ fn a_frame_off_the_tail_says_how_far_back_it_stands_and_the_key_that_follows_the
 
     let back = drawn.find("rows back").expect("the count");
     assert_eq!(
-        look_at(&buffer, &palette, pen::cells(&drawn[..back]), y),
+        look_at(&buffer, &palette, MARGIN + pen::cells(&drawn[..back]), y),
         keys::MEANING,
         "the count is drawn in the look a meaning hangs in"
     );
     let end = drawn.find("End").expect("the key");
-    let column = pen::cells(&drawn[..end]);
+    let column = MARGIN + pen::cells(&drawn[..end]);
     assert_eq!(
         look_at(&buffer, &palette, column, y),
         keys::KEY,
@@ -4389,12 +4402,12 @@ fn wide(cols: u16) -> Buffer {
 
 #[test]
 fn a_band_that_leaves_a_row_no_gutter_keeps_its_word_and_gives_up_the_thumb() {
-    let buffer = wide(3);
+    let buffer = wide(5);
 
     assert_eq!(
         thumb_rows(&buffer),
         Vec::<u16>::new(),
-        "three columns leave a wide glyph no room beside the gutter, so the row gives the \
+        "five columns leave a wide glyph no room beside the gutter, so the row gives the \
              gutter up and the thumb has no column of its own to stand in"
     );
     let said: Vec<String> = (0..40)
@@ -4411,10 +4424,10 @@ fn a_band_that_leaves_a_row_no_gutter_keeps_its_word_and_gives_up_the_thumb() {
             .collect::<Vec<String>>()
     );
 
-    let roomy = wide(4);
+    let roomy = wide(6);
     assert!(
         !thumb_rows(&roomy).is_empty(),
-        "and four columns hold the gutter beside that glyph, so the thumb is drawn again"
+        "and six columns hold the gutter beside that glyph, so the thumb is drawn again"
     );
 }
 
@@ -4701,11 +4714,11 @@ fn a_draft_wider_than_the_band_wraps_under_the_gutter_and_never_splits_a_wide_gl
     assert_eq!(
         draft_rows(&buffer, band, ends(&view)),
         [
-            format!(" ›{}", wide(29)),
-            format!("  {}", wide(29)),
-            format!("  {}", wide(2)),
+            format!(" ›{}", wide(28)),
+            format!("  {}", wide(28)),
+            format!("  {}", wide(4)),
         ],
-        "a fifty-eight column room holds twenty-nine wide glyphs, and the sixtieth glyph \
+        "a fifty-six column room holds twenty-eight wide glyphs, and the fifty-seventh glyph \
              begins the third row of the draft with the gutter beside it"
     );
     assert_eq!(
@@ -5149,9 +5162,9 @@ fn the_caret_follows_the_draft_onto_the_row_the_wrap_gave_it() {
 
     assert_eq!(
         placed_at(&asking, 40, 12),
-        Some((24, 9)),
-        "a thirty-eight column room holds thirty-eight glyphs of a draft of sixty, so the caret \
-             is placed twenty-two columns into the band's second row rather than off the frame"
+        Some((26, 9)),
+        "a thirty-six column room holds thirty-six glyphs of a draft of sixty, so the caret \
+             is placed twenty-six columns into the band's second row rather than off the frame"
     );
     assert_eq!(
         placed_at(&asking, 80, 12),
@@ -5167,7 +5180,7 @@ fn a_caret_at_the_end_of_a_full_row_is_placed_in_the_bands_last_column() {
         Facts::default().asked(),
         Transcript::none(),
     );
-    let room = 40 - pen::cells(INDENT);
+    let room = 40 - pen::cells(INDENT) - MARGIN;
     view.paste(&pen::filled(room, 'x'));
 
     let (buffer, told) = painted_and_told(&mut view, 40, 12);
@@ -5176,9 +5189,9 @@ fn a_caret_at_the_end_of_a_full_row_is_placed_in_the_bands_last_column() {
 
     assert_eq!(
         column,
-        band.right() - 1,
+        band.right() - MARGIN - 1,
         "a draft that fills the row's {room} columns leaves the caret no column after it, so \
-             it is placed in the band's last one rather than off the frame"
+             it is placed in the last column of the band's margin rather than off the frame"
     );
     assert!(
         row < band.bottom() - ends(&view).below,
@@ -5186,7 +5199,7 @@ fn a_caret_at_the_end_of_a_full_row_is_placed_in_the_bands_last_column() {
     );
     assert!(
         buffer
-            .cell((band.right() - 1, row))
+            .cell((band.right() - MARGIN - 1, row))
             .is_some_and(|cell| cell.symbol() == "x"),
         "and the cell it marks is the draft's own last glyph"
     );
@@ -5854,7 +5867,7 @@ fn the_band_counts_every_row_the_whole_conversation_holds() {
     );
     let (_, told) = painted_and_told(&mut view, 100, 20);
 
-    let whole = laid_rows(&entries, 100);
+    let whole = laid_rows(&entries, 100 - MARGIN);
     assert!(
         whole > 20,
         "the conversation is taller than the band it is drawn in: {whole} rows"

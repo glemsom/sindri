@@ -5,19 +5,19 @@ expression: self.text(name)
 markdown-rule at 80x24
 00 |  A rule divides one paragraph from the next.                                   | plain:80
 01 |                                                                                | plain:80
-02 |  ──────────────────────────────────────────────────────────────────────────────| plain:2 dim:78
+02 |  ────────────────────────────────────────────────────────────────────────────  | plain:2 dim:76 plain:2
 03 |                                                                                | plain:80
 04 |  And the answer carries on under it.                                           | plain:80
 05 |                                                                                | plain:80
 06 |▏ a quote keeps its bar over the rule it holds                                  | dim:2 plain:78
 07 |                                                                                | plain:80
-08 |▏ ──────────────────────────────────────────────────────────────────────────────| dim:80
+08 |▏ ────────────────────────────────────────────────────────────────────────────  | dim:78 plain:2
 09 |                                                                                | plain:80
 10 |▏ and goes on behind the bar                                                    | dim:2 plain:78
 11 |                                                                                | plain:80
 12 |  • an item hangs its rule under its own gutter                                 | plain:2 accent:2 plain:76
 13 |                                                                                | plain:80
-14 |    ────────────────────────────────────────────────────────────────────────────| plain:4 dim:76
+14 |    ──────────────────────────────────────────────────────────────────────────  | plain:4 dim:74 plain:2
 15 |                                                                                | plain:80
 16 |    and goes on under the bullet                                                | plain:80
 17 |                                                                                | plain:80
@@ -26,4 +26,4 @@ markdown-rule at 80x24
 20 |                                                                                | plain:80
 21 |                                                                                | plain:80
 22 | ›what should the run do?                                                       | dim:25 plain:55
-23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7
+23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:5

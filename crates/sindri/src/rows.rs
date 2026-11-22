@@ -29,6 +29,10 @@ use crate::stream::{Said, Stream};
 /// row is and the blank after it, so every entry's words begin in one column.
 pub(crate) const INDENT: &str = "  ";
 
+/// The columns every band opens its words in and keeps at its right edge, whichever band it is: the
+/// frame's one margin, which the gutter a row opens with is the width of.
+pub(crate) const MARGIN: u16 = 2;
+
 /// The sigil the reader's own words are set from, two columns of it: the row a prompt is asked on and
 /// the draft that asks the next one alike.
 pub(crate) const SIGIL: &str = "› ";

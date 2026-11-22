@@ -9,21 +9,21 @@ rail at 40x24
 03 |✓ exit 0  23 ms · 412 bytes             | ok:1 plain:1 dim:25 plain:13
 04 |  src/rows.rs: the glyph a turn opens   | muted:37 plain:3
 05 |  with                                  | muted:6 plain:34
-06 |  src/rows.rs: a word longer than a row | muted:39 plain:1
-07 |  is broken                             | muted:11 plain:29
+06 |  src/rows.rs: a word longer than a     | muted:35 plain:5
+07 |  row is broken                         | muted:15 plain:25
 08 |  Rendering lives in the front end and  | plain:40
-09 |  not in the core, because an entry is a| plain:40
-10 |  fact and never a rendering: the TUI   | plain:40
-11 |  and any reader draw one run from one  | plain:40
-12 |  value, and the core may not name a    | plain:40
-13 |  terminal at all.                      | plain:40
+09 |  not in the core, because an entry is  | plain:40
+10 |  a fact and never a rendering: the     | plain:40
+11 |  TUI and any reader draw one run from  | plain:40
+12 |  one value, and the core may not name  | plain:40
+13 |  a terminal at all.                    | plain:40
 14 |⠹ 4.2s                                  | accent:1 plain:1 dim:4 plain:34
 15 |                                        | plain:40
 16 |                                        | plain:40
 17 |                                        | plain:40
 18 |                                        | plain:40
 19 |                                        | plain:40
-20 |ctx █░░░░░ · state ⠹ running · +11 more | dim:4 plain:1 dim:14 accent:9 dim:3 muted:8 plain:1
+20 |  ctx █░░░░░ · state ⠹ running          | plain:2 dim:4 plain:1 dim:14 accent:9 plain:10
 21 |            ━                           | plain:12 accent+faint:1 plain:27
 22 | ›what should the run do?               | dim:25 plain:15
-23 |Ctrl-C cancel · / commands · @ files    | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 plain:4
+23 |  Ctrl-C cancel · / commands · @ files  | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 plain:2

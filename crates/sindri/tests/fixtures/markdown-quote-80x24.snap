@@ -6,11 +6,11 @@ markdown-quote at 80x24
 00 |▏ A heading that keeps the bar                                                  | dim:2 plain+bold:28 plain:50
 01 |▏ ────────────────────────────                                                  | dim:2 accent+faint:28 plain:50
 02 |                                                                                | plain:80
-03 |▏ A fence still open while streaming renders as a code block, so a half-written | dim:2 plain:78
-04 |▏ diagram never costs a raster pass and never flickers while it is being typed. | dim:2 plain:78
-05 |                                                                                | plain:80
-06 |▏ • an item's heading, two columns further in                                   | dim:2 accent:2 muted+bold:41 plain:35
-07 |                                                                                | plain:80
+03 |▏ A fence still open while streaming renders as a code block, so a              | dim:2 plain:78
+04 |▏ half-written diagram never costs a raster pass and never flickers while it    | dim:2 plain:78
+05 |▏ is being typed.                                                               | dim:2 plain:78
+06 |                                                                                | plain:80
+07 |▏ • an item's heading, two columns further in                                   | dim:2 accent:2 muted+bold:41 plain:35
 08 |                                                                                | plain:80
 09 |                                                                                | plain:80
 10 |                                                                                | plain:80
@@ -26,4 +26,4 @@ markdown-quote at 80x24
 20 |                                                                                | plain:80
 21 |                                                                                | plain:80
 22 | ›what should the run do?                                                       | dim:25 plain:55
-23 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline       | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:7
+23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:5

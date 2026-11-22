@@ -3,25 +3,25 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 rail at 108x40
-00 |┃›where does rendering live?                                        state     ⠹ running                     | dim:1 plain:67 dim:10 accent:9 plain:21
+00 |┃›where does rendering live?                                          state     ⠹ running                   | dim:1 plain:69 dim:10 accent:9 plain:19
 01 |✓ bash                                                                                                      | ok:1 plain:1 dim:4 plain:102
-02 |  rg -n 'fence' src                                                 wire      anthropic                     | plain:68 dim:10 plain:30
-03 |✓ exit 0  23 ms · 412 bytes                                         model     claude-sonnet-4-5-20250929    | ok:1 plain:1 dim:25 plain:41 dim:10 plain:30
-04 |  src/rows.rs: the glyph a turn opens with                          think     high                          | muted:42 plain:26 dim:10 plain:30
+02 |  rg -n 'fence' src                                                   wire      anthropic                   | plain:70 dim:10 plain:28
+03 |✓ exit 0  23 ms · 412 bytes                                           model     claude-sonnet-4-5-20250929  | ok:1 plain:1 dim:25 plain:43 dim:10 plain:28
+04 |  src/rows.rs: the glyph a turn opens with                            think     high                        | muted:42 plain:28 dim:10 plain:28
 05 |  src/rows.rs: a word longer than a row is broken                                                           | muted:49 plain:59
-06 |  Rendering lives in the front end and not in the core, because an  turns                           6 /  250| plain:68 dim:10 plain:30
-07 |  entry is a fact and never a rendering: the TUI and any reader drawctx                  █░░░░░ 48.2k / 200k| plain:68 dim:10 plain:12 dim:5 plain:13
-08 |  one run from one value, and the core may not name a terminal at   cache                                88%| plain:68 dim:10 plain:30
-09 |  all.                                                                                                      | plain:108
-10 |⠹ 4.2s                                                              workspace …/sindri/.worktrees/46-rail   | accent:1 plain:1 dim:4 plain:62 dim:10 plain:30
-11 |                                                                    branch    spec/1-capability             | plain:68 dim:10 plain:30
+06 |  Rendering lives in the front end and not in the core, because an    turns                       6 /  250  | plain:70 dim:10 plain:28
+07 |  entry is a fact and never a rendering: the TUI and any reader       ctx              █░░░░░ 48.2k / 200k  | plain:70 dim:10 plain:8 dim:5 plain:15
+08 |  draw one run from one value, and the core may not name a            cache                            88%  | plain:70 dim:10 plain:28
+09 |  terminal at all.                                                                                          | plain:108
+10 |⠹ 4.2s                                                                workspace …/.worktrees/46-rail        | accent:1 plain:1 dim:4 plain:64 dim:10 plain:28
+11 |                                                                      branch    spec/1-capability           | plain:70 dim:10 plain:28
 12 |                                                                                                            | plain:108
-13 |                                                                    skills                                 2| plain:68 dim:10 plain:30
+13 |                                                                      skills                             2  | plain:70 dim:10 plain:28
 14 |                                                                                                            | plain:108
-15 |                                                                    sandbox   bwrap                         | plain:68 dim:10 plain:30
+15 |                                                                      sandbox   bwrap                       | plain:70 dim:10 plain:28
 16 |                                                                                                            | plain:108
-17 |                                                                    session   9f2c7a41                      | plain:68 dim:10 plain:30
-18 |                                                                    temp      …/sindri/sessions/9f2c7a41/tmp| plain:68 dim:10 plain:30
+17 |                                                                      session   9f2c7a41                    | plain:70 dim:10 plain:28
+18 |                                                                      temp      …/sessions/9f2c7a41/tmp     | plain:70 dim:10 plain:28
 19 |                                                                                                            | plain:108
 20 |                                                                                                            | plain:108
 21 |                                                                                                            | plain:108
@@ -37,9 +37,9 @@ rail at 108x40
 31 |                                                                                                            | plain:108
 32 |                                                                                                            | plain:108
 33 |                                                                                                            | plain:108
-34 |                                                                    input                              48.2k| plain:68 dim:10 plain:30
-35 |                                                                    output                              3.1k| plain:68 dim:10 plain:30
-36 |                                                                    total                              51.3k| plain:68 dim:10 plain:30
+34 |                                                                      input                          48.2k  | plain:70 dim:10 plain:28
+35 |                                                                      output                          3.1k  | plain:70 dim:10 plain:28
+36 |                                                                      total                          51.3k  | plain:70 dim:10 plain:28
 37 |                                                    ━                                                       | plain:52 accent+faint:1 plain:55
 38 | ›what should the run do?                                                                                   | dim:25 plain:83
-39 |Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                | plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:32
+39 |  Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                              | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:30

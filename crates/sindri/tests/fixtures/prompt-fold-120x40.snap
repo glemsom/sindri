@@ -3,23 +3,23 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 prompt-fold at 120x40
-00 |┃›why does the retry test fail?                                             wire      anthropic                         | dim:1 plain:75 dim:10 plain:34
-01 |⋯ 1 call · 97 ms                                                            model     claude-sonnet-4-5-20250929        | dim:1 plain:1 dim:14 plain:60 dim:10 plain:34
-02 |  The retry test fails on the line the patch moved, and the output under it think     high                              | plain:76 dim:10 plain:34
-03 |  says which.                                                                                                           | plain:120
-04 |                                                                            turns                               6 /  250| plain:76 dim:10 plain:34
-05 |┃›the retry test fails on the line the patch moved, and only there          ctx                      █░░░░░ 48.2k / 200k| dim:1 plain:75 dim:10 plain:16 dim:5 plain:13
-06 |┃ say which line the patch moved, and which row of the output disagrees     cache                                    88%| dim:1 plain:75 dim:10 plain:34
+00 |┃›why does the retry test fail?                                               wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
+01 |⋯ 1 call · 97 ms                                                              model     claude-sonnet-4-5-20250929      | dim:1 plain:1 dim:14 plain:62 dim:10 plain:32
+02 |  The retry test fails on the line the patch moved, and the output under      think     high                            | plain:78 dim:10 plain:32
+03 |  it says which.                                                                                                        | plain:120
+04 |                                                                              turns                           6 /  250  | plain:78 dim:10 plain:32
+05 |┃›the retry test fails on the line the patch moved, and only there            ctx                  █░░░░░ 48.2k / 200k  | dim:1 plain:77 dim:10 plain:12 dim:5 plain:15
+06 |┃ say which line the patch moved, and which row of the output disagrees       cache                                88%  | dim:1 plain:77 dim:10 plain:32
 07 |┃ the report names the file it read and the line it stopped on                                                          | dim:1 plain:119
-08 |┃ give me the test name and the assertion it failed on                      workspace …/git/sindri/.worktrees/46-rail   | dim:1 plain:75 dim:10 plain:34
-09 |⋯ 4 rows kept back                                                          branch    spec/1-capability                 | dim:1 plain:1 dim:16 plain:58 dim:10 plain:34
+08 |┃ give me the test name and the assertion it failed on                        workspace …/sindri/.worktrees/46-rail     | dim:1 plain:77 dim:10 plain:32
+09 |⋯ 4 rows kept back                                                            branch    spec/1-capability               | dim:1 plain:1 dim:16 plain:60 dim:10 plain:32
 10 |                                                                                                                        | plain:120
-11 |                                                                            skills                                     2| plain:76 dim:10 plain:34
+11 |                                                                              skills                                 2  | plain:78 dim:10 plain:32
 12 |                                                                                                                        | plain:120
-13 |                                                                            sandbox   bwrap                             | plain:76 dim:10 plain:34
+13 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
 14 |                                                                                                                        | plain:120
-15 |                                                                            session   9f2c7a41                          | plain:76 dim:10 plain:34
-16 |                                                                            temp      …/sindri/sessions/9f2c7a41/tmp    | plain:76 dim:10 plain:34
+15 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
+16 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
 17 |                                                                                                                        | plain:120
 18 |                                                                                                                        | plain:120
 19 |                                                                                                                        | plain:120
@@ -37,9 +37,9 @@ prompt-fold at 120x40
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
 33 |                                                                                                                        | plain:120
-34 |                                                                            input                                  48.2k| plain:76 dim:10 plain:34
-35 |                                                                            output                                  3.1k| plain:76 dim:10 plain:34
-36 |                                                                            total                                  51.3k| plain:76 dim:10 plain:34
+34 |                                                                              input                              48.2k  | plain:78 dim:10 plain:32
+35 |                                                                              output                              3.1k  | plain:78 dim:10 plain:32
+36 |                                                                              total                              51.3k  | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
 38 | ›what should the run do?                                                                                               | dim:25 plain:95
-39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47
+39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

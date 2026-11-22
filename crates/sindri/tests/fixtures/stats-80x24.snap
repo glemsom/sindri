@@ -4,26 +4,26 @@ expression: self.text(name)
 ---
 stats at 80x24
 00 |    ╭─ /stats ─────────────────────────────────────────────────────────────╮    | dim:4 accent+faint:72 dim:4
-01 |    │ run                                                                  │    | dim:5 plain:1 dim:3 plain:66 dim:5
-02 |    │ wire      anthropic                                                  │    | dim:5 plain:1 dim:10 plain:59 dim:5
-03 |    │ model     claude-sonnet-4-5-20250929                                 │    | dim:5 plain:1 dim:10 plain:59 dim:5
-04 |    │ route     chat                                                       │    | dim:5 plain:1 dim:10 plain:59 dim:5
-05 |    │ think     high                                                       │    | dim:5 plain:1 dim:10 plain:59 dim:5
-06 |    │ ──────────────────────────────────────────────────────────────────── │    | dim:5 plain:1 dim:68 plain:1 dim:5
-07 |    │ meters                                                               │    | dim:5 plain:1 dim:6 plain:63 dim:5
-08 |    │ turns                                                       6 /  250 │    | dim:5 plain:1 dim:10 plain:59 dim:5
-09 |    │ ctx                                              █░░░░░ 48.2k / 200k │    | dim:5 plain:1 dim:10 plain:40 dim:5 plain:14 dim:5
-10 |    │ cache                                                            88% │    | dim:5 plain:1 dim:10 plain:59 dim:5
-11 |    │ ──────────────────────────────────────────────────────────────────── │    | dim:5 plain:1 dim:68 plain:1 dim:5
-12 |    │ spend                                                                │    | dim:5 plain:1 dim:5 plain:64 dim:5
-13 |    │ input                                                          48.2k │    | dim:5 plain:1 dim:10 plain:59 dim:5
-14 |    │ output                                                          3.1k │    | dim:5 plain:1 dim:10 plain:59 dim:5
-15 |    │ total                                                          51.3k │    | dim:5 plain:1 dim:10 plain:59 dim:5
-16 |    │ cached                                                           12k │    | dim:5 plain:1 dim:10 plain:59 dim:5
-17 |    │ reasoning                                                        900 │    | dim:5 plain:1 dim:10 plain:59 dim:5
-18 |    │ ──────────────────────────────────────────────────────────────────── │    | dim:5 plain:1 dim:68 plain:1 dim:5
-19 |    │ place                                                                │    | dim:5 plain:1 dim:5 plain:64 dim:5
-20 |ctx │ workspace /home/glemsom/Documents/git/sindri/.worktrees/46-rail      │lity| dim:5 plain:1 dim:10 plain:59 dim:5
-21 |────│ branch    spec/1-capability                                          │────| dim:5 plain:1 dim:10 plain:59 dim:5
+01 |    │   run                                                                │    | dim:5 plain:3 dim:3 plain:64 dim:5
+02 |    │   wire      anthropic                                                │    | dim:5 plain:3 dim:10 plain:57 dim:5
+03 |    │   model     claude-sonnet-4-5-20250929                               │    | dim:5 plain:3 dim:10 plain:57 dim:5
+04 |    │   route     chat                                                     │    | dim:5 plain:3 dim:10 plain:57 dim:5
+05 |    │   think     high                                                     │    | dim:5 plain:3 dim:10 plain:57 dim:5
+06 |    │   ────────────────────────────────────────────────────────────────   │    | dim:5 plain:3 dim:64 plain:3 dim:5
+07 |    │   meters                                                             │    | dim:5 plain:3 dim:6 plain:61 dim:5
+08 |    │   turns                                                   6 /  250   │    | dim:5 plain:3 dim:10 plain:57 dim:5
+09 |    │   ctx                                          █░░░░░ 48.2k / 200k   │    | dim:5 plain:3 dim:10 plain:36 dim:5 plain:16 dim:5
+10 |    │   cache                                                        88%   │    | dim:5 plain:3 dim:10 plain:57 dim:5
+11 |    │   ────────────────────────────────────────────────────────────────   │    | dim:5 plain:3 dim:64 plain:3 dim:5
+12 |    │   spend                                                              │    | dim:5 plain:3 dim:5 plain:62 dim:5
+13 |    │   input                                                      48.2k   │    | dim:5 plain:3 dim:10 plain:57 dim:5
+14 |    │   output                                                      3.1k   │    | dim:5 plain:3 dim:10 plain:57 dim:5
+15 |    │   total                                                      51.3k   │    | dim:5 plain:3 dim:10 plain:57 dim:5
+16 |    │   cached                                                       12k   │    | dim:5 plain:3 dim:10 plain:57 dim:5
+17 |    │   reasoning                                                    900   │    | dim:5 plain:3 dim:10 plain:57 dim:5
+18 |    │   ────────────────────────────────────────────────────────────────   │    | dim:5 plain:3 dim:64 plain:3 dim:5
+19 |    │   place                                                              │    | dim:5 plain:3 dim:5 plain:62 dim:5
+20 |  ct│   workspace /home/glemsom/Documents/git/sindri/.worktrees/46-rail    │    | dim:5 plain:3 dim:10 plain:57 dim:5
+21 |────│   branch    spec/1-capability                                        │────| dim:5 plain:3 dim:10 plain:57 dim:5
 22 | ›wh│ ⋯ 18 rows kept back                                                  │    | dim:5 plain:1 dim:19 plain:50 dim:5
-23 |Ente╰──────────────────────────────────────────────────────────────── Esc ─╯    | dim:70 plain+bold:3 dim:7
+23 |  En╰──────────────────────────────────────────────────────────────── Esc ─╯    | dim:70 plain+bold:3 dim:7

@@ -3,16 +3,16 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 boot at 120x40
-00 |                                                                            wire      anthropic                         | plain:76 dim:10 plain:34
-01 |                                                                            model     claude-sonnet-4-5                 | plain:76 dim:10 plain:34
+00 |                                                                              wire      anthropic                       | plain:78 dim:10 plain:32
+01 |                                                                              model     claude-sonnet-4-5               | plain:78 dim:10 plain:32
 02 |                                                                                                                        | plain:120
-03 |                                                                            workspace /srv/workspace                    | plain:76 dim:10 plain:34
-04 |                                                                            branch    main                              | plain:76 dim:10 plain:34
+03 |                                                                              workspace /srv/workspace                  | plain:78 dim:10 plain:32
+04 |                                                                              branch    main                            | plain:78 dim:10 plain:32
 05 |                                                                                                                        | plain:120
-06 |                                                                            sandbox   bwrap                             | plain:76 dim:10 plain:34
+06 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
 07 |                                                                                                                        | plain:120
-08 |                                                                            session   —                                 | plain:76 dim:10 plain:34
-09 |                                                                            temp      —                                 | plain:76 dim:10 plain:34
+08 |                                                                              session   —                               | plain:78 dim:10 plain:32
+09 |                                                                              temp      —                               | plain:78 dim:10 plain:32
 10 |                                                                                                                        | plain:120
 11 |                                                                                                                        | plain:120
 12 |                                                                                                                        | plain:120
@@ -42,4 +42,4 @@ boot at 120x40
 36 |                                                                                                                        | plain:120
 37 |                                                                                                                        | plain:120
 38 | ›what should the run do?                                                                                               | dim:25 plain:95
-39 |Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                               | plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:47
+39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45
