@@ -330,7 +330,7 @@ for entry in \
   'Cargo.toml|#|we name the field instead of the struct|instead of' \
   '.github/workflows/ci.yml|#|we name the field Rather than the struct|Rather than'; do
   IFS='|' read -r path marker text phrase <<<"$entry"
-  debated="$scratch/rationale-${path//\//-}-${phrase// /_}"
+  debated="$scratch/rationale-${path//\//-}-${phrase//[^A-Za-z0-9]/_}"
   cp -a "$clean" "$debated"
   write_citation "$debated" "$path" "$marker" "$text"
   run "$debated"

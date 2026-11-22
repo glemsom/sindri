@@ -112,8 +112,8 @@ pub enum AuthAction {
     },
 }
 
-/// `anthropic` and `openai` are sent a key and never signed in to, so
-/// the parser has no word for them and cannot be handed one.
+/// `anthropic` and `openai` are sent a key and never signed in to, so the parser has no word
+/// for them and cannot be handed one.
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum LoginWire {
     Copilot,
@@ -160,8 +160,8 @@ impl Cli {
         self.verbose > 0
     }
 
-    /// The only route to `unsafe`: `tests/sandbox.rs` holds that no other file
-    /// in this crate names the variant.
+    /// The only route to `unsafe`: `tests/sandbox.rs` holds that no other file in this crate
+    /// names the variant.
     pub fn enforcement(&self) -> Enforcement {
         if self.yolo_unsafe {
             Enforcement::Unsafe

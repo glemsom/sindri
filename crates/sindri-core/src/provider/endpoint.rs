@@ -61,6 +61,7 @@ impl Endpoint {
     /// rig reads the route off the served name unless the run named one, and a dialect that serves
     /// one endpoint names none.
     pub fn route_of(&self, model: &str) -> Option<Route> {
+        // The client is built with no key: routing reads the served name, never a credential.
         match self.serving("") {
             Serving::Messages(_) => None,
             Serving::OpenAi(config) => Some(Route::of(&OpenAiWire::new(config, model.to_owned()))),
@@ -106,6 +107,8 @@ impl fmt::Display for Endpoint {
     }
 }
 
+// rig's two configurations are far apart in size and one of each is built per job, so the box
+// clippy asks for is an allocation bought with nothing.
 #[allow(clippy::large_enum_variant)]
 pub(super) enum Serving {
     Messages(AnthropicConfig),

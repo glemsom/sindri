@@ -131,7 +131,7 @@ fn a_session_owns_one_directory_named_by_its_guid() {
     );
     assert!(
         matches!(guid.chars().nth(19), Some('8' | '9' | 'a' | 'b')),
-        "the variant nibble is the RFC 4122 one: {guid}"
+        "the variant nibble is the 10 bits: {guid}"
     );
 
     let root = std::fs::canonicalize(state.path()).expect("the state home resolves");

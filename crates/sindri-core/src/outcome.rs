@@ -1,3 +1,7 @@
+//! `--format json` writes one compact object on one line whose fields arrive in a fixed
+//! order and are only ever appended to. A field the run knows nothing about is left out, and
+//! never written as `null`: a script cannot tell the two apart.
+
 use std::time::Duration;
 
 use serde::{Serialize, Serializer};
@@ -97,6 +101,7 @@ fn reported(usage: Usage) -> Option<Usage> {
     reported.then_some(usage)
 }
 
+/// Saturating: no report may say a run was quicker than it was.
 fn millis(span: Duration) -> u64 {
     u64::try_from(span.as_millis()).unwrap_or(u64::MAX)
 }

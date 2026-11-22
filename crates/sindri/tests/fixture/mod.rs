@@ -30,10 +30,13 @@ use sindri_core::wire::Wire;
 
 pub const GUID: &str = "9f2c7a41-6a1e-4b3d-8f5c-0d2e7a4b9c61";
 
+/// The recorded files a fixture's view is built from: the picture corpus under `pictures`.
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
 const LOADED_SKILLS: [&str; 2] = ["bash", "records"];
 
+/// The workspace the record names: a name and no directory of this machine, because the frame
+/// draws the whole of it and a golden may not be a picture of the box that blessed it.
 const WORKSPACE: &str = "/home/glemsom/Documents/git/sindri/.worktrees/46-rail";
 
 const CONTEXT_WINDOW: u64 = 200_000;

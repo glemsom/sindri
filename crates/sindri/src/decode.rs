@@ -22,12 +22,16 @@ const SHIFT: u32 = 1;
 
 const CTRL: u32 = 4;
 
+/// Alt, super, hyper and meta: no act of this frame's is held with one of them.
 const UNANSWERED: u32 = 2 | 8 | 16 | 32;
 
+/// Caps lock and num lock, which a report carries beside the keys held and name no key.
 const LOCKS: u32 = 64 | 128;
 
+/// The bits a modifier mask holds, counted from one: shift, then alt, ctrl and super.
 const MODIFIERS: u32 = 4 | 8 | 16;
 
+/// The bit a pointer report sets when the pointer moved and no button was pressed.
 const MOTION: u32 = 32;
 
 /// `ESC [ 2 0 1 ~`: the sequence that ends a bracketed paste, so all before it is one paste.
@@ -266,6 +270,8 @@ fn control(byte: u8) -> Option<Key> {
         0x19 => Some(Key::Copy),
         0x0f => Some(Key::Fold),
         0x7f | 0x08 => Some(Key::Backspace),
+        // `Ctrl-J` is the plain newline every terminal sends: it breaks a line and does not send
+        // one, and `Enter` is the carriage return `Ctrl-M` is.
         b'\n' => Some(Key::Newline),
         b'\r' => Some(Key::Enter),
         ESCAPE => Some(Key::Escape),

@@ -160,6 +160,7 @@ impl<R> Launch<R> {
         let environment = machine.environment;
         let boundary = Boundary::from_config(config, &workspace, enforcement)
             .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
+        // Proved before a turn is asked or a record written: nothing here proceeds unconfined.
         let proof = sandbox::prove_with(&machine.bwrap, &boundary, session.temp())
             .map_err(|card| Refusal::new(card.to_string(), card.exit_code()))?;
         let limits = Limits::from_config(config, &boundary);

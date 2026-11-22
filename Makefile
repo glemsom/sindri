@@ -2,9 +2,9 @@
 # devbox's init hook, so nothing here names a toolchain path and a check that cannot run
 # fails and does not report success.
 
-# 77 is automake's skip status and the line above says why: only a skip keeps exit 0,
-# where a stage that ran and failed stops the run. `make -j` changes nothing, because the
-# stages are a loop and not prerequisites.
+# 77 is automake's skip status, and the reason is printed on the line above the verdict: a
+# skip keeps exit 0 where a stage that ran and failed stops the run, and `make -j` changes
+# nothing, the stages being a loop and not prerequisites.
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
