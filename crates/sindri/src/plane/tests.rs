@@ -113,19 +113,30 @@ fn along_seam(axis: Axis, along: u32) -> (u32, u32) {
     }
 }
 
-/// The rail's band and the composer's band, each parted from the band beside it on its own axis.
-fn parted_bands(palette: &Palette) -> [(Axis, Shade); 2] {
+/// The rail's band and the composer's band, each parted from the band beside it on its own axis and
+/// drawn at `cell`.
+fn parted_bands(palette: &Palette, cell: CellSize) -> [(Axis, Shade); 2] {
     [
         (
             Axis::Down,
-            railed(Rail::Ledger, Rect::new(20, 0, 32, 6), Some(CELL), palette)
-                .expect("a band to shade"),
+            faced(
+                Rail::Ledger,
+                Rect::new(20, 0, 32, 6),
+                3,
+                Some(cell),
+                palette,
+            ),
         ),
         (
             Axis::Across,
-            Shade::composer(Rect::new(0, 20, 40, 4), Some(CELL), palette).expect("a band to shade"),
+            Shade::composer(Rect::new(0, 20, 40, 4), Some(cell), palette).expect("a band to shade"),
         ),
     ]
+}
+
+/// The channels a seam drawn in this shade's band takes from its rung at the joint.
+fn weight_of(shade: &Shade, palette: &Palette) -> i32 {
+    i32::from(palette.joint(band_of(shade)))
 }
 
 fn drawn(shade: Shade) -> Plane {
@@ -133,9 +144,11 @@ fn drawn(shade: Shade) -> Plane {
 }
 
 /// The fall a seam draws, which stands in the seam's own cell whatever the band beside it is.
-fn keeps_its_fall(shade: Shade, axis: Axis, cell: CellSize, what: &str) {
+fn keeps_its_fall(shade: Shade, palette: &Palette, cell: CellSize, what: &str) {
     let plane = drawn(shade);
     let (width, height) = plane.pixels().dimensions();
+    let (axis, _) = shade.seam().expect("a band the frame parts");
+    let weight = weight_of(&shade, palette);
     let extent = seam_extent(axis, cell);
     let lit = |along: u32| {
         let (x, y) = along_seam(axis, along);
@@ -153,9 +166,9 @@ fn keeps_its_fall(shade: Shade, axis: Axis, cell: CellSize, what: &str) {
     }
     assert_eq!(
         darkest,
-        (-i32::from(SEAM), along_seam(axis, 0)),
+        (-weight, along_seam(axis, 0)),
         "{what}, at {} by {} pixels: the plane is darkest at {:?}, carrying {} channels over its \
-         rung, where the joint stands at {:?}",
+         rung, where the joint stands at {:?} and the weight it takes is {weight}",
         cell.width(),
         cell.height(),
         darkest.1,
@@ -164,9 +177,9 @@ fn keeps_its_fall(shade: Shade, axis: Axis, cell: CellSize, what: &str) {
     );
     assert_eq!(
         lit(extent - 1),
-        i32::from(SEAM),
+        weight,
         "{what}, at {} by {} pixels: the last pixel of the seam's cell carries {} channels over \
-         its rung where the hairline is the one weight {SEAM}",
+         its rung where the hairline lifts the same {weight} the joint takes",
         cell.width(),
         cell.height(),
         lit(extent - 1)
@@ -346,8 +359,9 @@ fn a_band_drawn_in_no_colour_draws_no_ground_on_any_row() {
 fn a_seams_joint_is_darker_than_both_bands_and_ends_in_a_hairline_on_its_own() {
     for (spelling, palette) in SPELLED {
         let well = spelled(palette.band(Band::Well));
-        for (axis, shade) in parted_bands(&palette) {
+        for (axis, shade) in parted_bands(&palette, CELL) {
             let plane = drawn(shade);
+            let weight = weight_of(&shade, &palette);
             let extent = seam_extent(axis, CELL);
             let rung = spelled(shade.row(0));
             let lit = |along: u32| {
@@ -390,31 +404,44 @@ fn a_seams_joint_is_darker_than_both_bands_and_ends_in_a_hairline_on_its_own() {
                      pixel nearer the joint carries {nearer}: the shadow rises out of the joint \
                      to the band and never steps back down into it"
                 );
+                let step = i32::from(here) - i32::from(nearer);
+                assert!(
+                    step <= weight / 2 + DITHER_STEP,
+                    "{spelling} draws the pixel {along} away from the joint {step} channels over \
+                     the pixel beside it: the joint is a fall of {weight} channels and not a step \
+                     of them"
+                );
             }
         }
     }
 }
 
 #[test]
-fn a_seam_is_one_shape_of_fall_on_both_axes() {
+fn a_seam_falls_at_one_rate_across_its_cell_on_both_axes() {
     let palette = Palette::TRUECOLOR;
-    let cell = CellSize::new(12, 12);
-    let rail = railed(Rail::Ledger, Rect::new(20, 0, 32, 6), Some(cell), &palette)
-        .expect("a band to shade");
-    let composer =
-        Shade::composer(Rect::new(0, 20, 40, 4), Some(cell), &palette).expect("a band to shade");
-    let (down, across) = (drawn(rail), drawn(composer));
-
-    for along in 0..seam_extent(Axis::Down, cell) {
-        let (x, y) = along_seam(Axis::Down, along);
-        let column = lit_over(&rail, &down, cell, x, y);
-        let (x, y) = along_seam(Axis::Across, along);
-        let row = lit_over(&composer, &across, cell, x, y);
+    for cell in [CELL, CellSize::new(12, 12), CellSize::new(8, 30)] {
+        let mut halves: Vec<u32> = Vec::new();
+        for (axis, shade) in parted_bands(&palette, cell) {
+            let plane = drawn(shade);
+            let weight = weight_of(&shade, &palette);
+            let extent = seam_extent(axis, cell);
+            let along = (0..extent)
+                .find(|along| {
+                    let (x, y) = along_seam(axis, *along);
+                    lit_over(&shade, &plane, cell, x, y) <= weight / 2
+                })
+                .unwrap_or(extent - 1);
+            halves.push(along * 100 / extent);
+        }
         assert!(
-            column.abs_diff(row) <= u32::try_from(DITHER_STEP).unwrap_or(1),
-            "{along} pixels from the joint the rail's column carries {column} channels over its \
-             rung and the composer's row carries {row}: a seam is one shape of fall on both axes, \
-             and only the ordered dither tells the two pixels apart"
+            halves[0].abs_diff(halves[1]) <= 100 / 8,
+            "the rail's column is half its weight {} per cent of the way across its cell and the \
+             composer's row {} per cent of the way across its own, at {} by {} pixels: the two \
+             axes draw one fall, spent over the seam's own cell rather than over a run of pixels",
+            halves[0],
+            halves[1],
+            cell.width(),
+            cell.height()
         );
     }
 }
@@ -433,7 +460,7 @@ fn a_seams_fall_stands_in_the_seams_own_cell_whatever_the_band_is_wide() {
             .expect("a band to shade");
             keeps_its_fall(
                 shade,
-                Axis::Down,
+                &palette,
                 cell,
                 &format!("a rail of {columns} columns"),
             );
@@ -441,7 +468,7 @@ fn a_seams_fall_stands_in_the_seams_own_cell_whatever_the_band_is_wide() {
         for rows in [2u16, 5] {
             let shade = Shade::composer(Rect::new(0, 20, 40, rows), Some(cell), &palette)
                 .expect("a band to shade");
-            keeps_its_fall(shade, Axis::Across, cell, &format!("a band of {rows} rows"));
+            keeps_its_fall(shade, &palette, cell, &format!("a band of {rows} rows"));
         }
     }
 }
@@ -496,8 +523,15 @@ fn a_composers_plane_opens_on_the_prompts_band_and_covers_no_pixel_of_the_well()
         let top = middle(&plane, 0, CELL);
         assert!(
             near(top, prompt),
-            "{spelling} opens the composer's plane on {top:?} where the prompt's own band is \
-             {prompt:?}, so no pixel row of the well is drawn above the band"
+            "{spelling} draws the middle of the head cell at {top:?} where the prompt's own band \
+             is {prompt:?}: the seam the row is drawn as is spent by the middle of its cell, and \
+             no pixel row of the well is drawn above the band"
+        );
+        let under = middle(&plane, 1, CELL);
+        assert!(
+            near(under, prompt),
+            "{spelling} opens the composer's plane on {under:?} under the seam's row where the \
+             prompt's own band is {prompt:?}, so no pixel row of the well is drawn above the band"
         );
         assert_ne!(
             top, well,
@@ -668,7 +702,7 @@ fn a_strips_plane_is_the_one_row_it_has() {
 }
 
 #[test]
-fn the_composers_plane_carries_no_light_wherever_the_caret_waits() {
+fn the_composers_plane_carries_no_light_of_the_caret_wherever_it_waits() {
     for (spelling, palette) in SPELLED {
         let area = Rect::new(0, 20, 80, 5);
         let shade = Shade::composer(area, Some(CELL), &palette).expect("a band to shade");
@@ -680,8 +714,9 @@ fn the_composers_plane_carries_no_light_wherever_the_caret_waits() {
             for x in 0..width {
                 let pixel = plane.pixels().get_pixel(x, y);
                 let carried = i32::from(pixel[0]) - i32::from(rung[0]);
+                let weight = weight_of(&shade, &palette);
                 let allowed = match in_seam(Axis::Across, CELL, x, y) {
-                    true => (-i32::from(SEAM)..=i32::from(SEAM)).contains(&carried),
+                    true => (-weight..=weight).contains(&carried),
                     false => carried == 0,
                 };
                 assert!(
@@ -798,15 +833,16 @@ fn no_pixel_of_any_bands_plane_is_a_blend_of_two_rungs() {
                          with one light on every channel — never a blend of two rungs"
                     );
                     let parted = seam.is_some_and(|axis| in_seam(axis, CELL, x, y));
+                    let weight = weight_of(&shade, &palette);
                     assert!(
                         match parted {
-                            true => (-i32::from(SEAM)..=i32::from(SEAM)).contains(&one),
+                            true => (-weight..=weight).contains(&one),
                             false => (0..=most).contains(&one),
                         },
                         "{spelling} draws pixel row {y}, column {x} of {band} {one} channels over \
                          its rung, where a band away from its seam takes no more than the {most} \
-                         the palette hands it and the joint itself takes no more than the one \
-                         weight {SEAM} either way"
+                         the palette hands it and the joint itself takes no more than the {weight} \
+                         it is proved to take either way"
                     );
                 }
             }
@@ -1261,7 +1297,7 @@ fn a_ledgers_seam_is_its_own_first_column_and_takes_no_column_beside_it() {
 }
 
 #[test]
-fn a_seam_is_claimed_in_the_one_edge_ink_and_the_rail_keeps_its_tone_beside_it() {
+fn a_seams_column_is_claimed_in_the_ink_it_is_drawn_in_and_the_rail_keeps_its_tone_beside_it() {
     for palette in [Palette::TRUECOLOR, Palette::ANSI] {
         let rail = Rect::new(20, 2, 32, 8);
         let frame = Rect {
@@ -1360,7 +1396,7 @@ fn a_band_a_plane_is_placed_under_gives_its_seam_cell_to_the_pixels() {
     let palette = Palette::TRUECOLOR;
     let own = palette.ground(None).bg.expect("the terminal's own ground");
 
-    for (axis, shade) in parted_bands(&palette) {
+    for (axis, shade) in parted_bands(&palette, CELL) {
         let area = shade.area();
         let mut buffer = Buffer::empty(area);
 
@@ -1571,7 +1607,7 @@ fn a_transcript_band_a_plane_stands_under_makes_its_image_and_one_it_does_not_ma
 }
 
 #[test]
-fn a_seam_that_did_not_move_makes_no_image_and_a_band_of_another_width_does() {
+fn a_seam_that_did_not_move_makes_no_image_and_a_band_of_another_shape_does() {
     let palette = Palette::TRUECOLOR;
     let rail = |columns| {
         railed(
@@ -1598,6 +1634,19 @@ fn a_seam_that_did_not_move_makes_no_image_and_a_band_of_another_width_does() {
         (2, 1),
         "a rail of another width puts its seam in another column of the pixels, so the band is \
          drawn again and the image it stood on is taken away"
+    );
+
+    let folded =
+        Shade::composer(Rect::new(0, 20, 40, 6), Some(CELL), &palette).expect("a band to shade");
+    planes.hold(&[folded]);
+    planes.hold(&[
+        Shade::composer(Rect::new(0, 20, 40, 3), Some(CELL), &palette).expect("a band to shade"),
+    ]);
+    assert_eq!(
+        planes.made(),
+        4,
+        "a fold that gives the composer's band another foot moves the seam its head row is, so \
+         the band is drawn again and no joint of the one before it is left standing"
     );
 }
 

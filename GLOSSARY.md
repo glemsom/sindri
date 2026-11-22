@@ -262,9 +262,10 @@ crowned at its head and fallen back to the well by its third row, and the **Rail
 visible between two pixels. A band's joint is a light that goes the other way: a shadow at the joint
 and a hairline on the band's own edge, one weight on both axes. The light the **Caret** casts is a
 plane of its own over the composer's band, which is placed again on the column the caret moved to
-and is made again for no keystroke. A plane covers the band's own columns and no column of the band
-beside it, and a frame holds one image under each band and one under that light, each by its own
-identity, placed at one depth that a cell carrying a background still wins over. A terminal that
+and is made again for no keystroke: it falls on the band under the row its **Seam** heads, and no
+light falls on a joint. A plane covers the band's own columns and no column of the band beside it,
+and a frame holds one image under each band and one under that light, each by its own identity,
+placed at one depth that a cell carrying a background still wins over. A terminal that
 places no picture, or a band in a palette with no colour, is given none, and the band's own rows are
 claimed from its shade.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer, blend
@@ -291,7 +292,7 @@ The fall stands in the band's own **Plane**, so a seam is claimed once, in the c
 parts, and the cell the frame claims for it is the edge ink only where no plane stands — the count
 the head row carries is read over the pixels there. A palette that spells no colour rules the seam
 in the dim ink instead, and a strip parts nothing and draws none.
-_Avoid_: Border, divider, crease, gutter, fall
+_Avoid_: Border, divider, crease, gutter, step
 
 **Footprint**:
 The columns by rows a picture is fitted into under a ceiling: one scale on both axes, so the
