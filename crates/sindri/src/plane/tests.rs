@@ -412,39 +412,42 @@ fn the_transcript_band_is_claimed_on_the_well_and_makes_no_seam() {
 }
 
 #[test]
-fn a_rail_drawn_in_cells_is_its_tone_down_to_the_shadow_across_its_last_row() {
-    let palette = Palette::TRUECOLOR;
-    let area = Rect::new(20, 0, 32, 8);
-    let shade = Shade::rail(Rail::Ledger, area, None, &palette).expect("a band to shade");
-    let mut buffer = Buffer::empty(Rect {
-        x: 0,
-        width: area.right(),
-        ..area
-    });
+fn every_row_of_the_rail_is_one_tone_so_an_ink_reads_the_same_wherever_it_falls() {
+    for (spelling, palette) in SPELLED {
+        let tone = palette.band(Band::Rail);
+        for (shape, heights) in [
+            (Rail::Ledger, &[1u16, 2, 8, 24][..]),
+            (Rail::Strip, &[1u16][..]),
+        ] {
+            for height in heights {
+                let area = Rect::new(20, 0, 32, *height);
+                let shade = Shade::rail(shape, area, None, &palette).expect("a band to shade");
+                let mut buffer = Buffer::empty(Rect {
+                    x: 0,
+                    width: area.right(),
+                    ..area
+                });
+                shade.claim(&mut buffer, &palette);
 
-    assert!(
-        !shade.places(),
-        "a terminal that places no picture is handed no plane under the rail"
-    );
-    shade.claim(&mut buffer, &palette);
-
-    for y in area.y..area.bottom() - 1 {
-        for x in area.x..area.right() {
-            assert_eq!(
-                under(&buffer, x, y),
-                palette.band(Band::Rail),
-                "row {y}, column {x} of the band is not the rail's own tone: the rail's first \
-                 column is no lighter than the rest of it, because the seam is what parts it from \
-                 the transcript"
-            );
+                for row in 0..area.height {
+                    assert_eq!(
+                        shade.row(row),
+                        tone,
+                        "{spelling} draws row {row} of a {shape:?} of {height} rows on another \
+                         colour than the rail's own tone: a row of the rail is no shadow, so an \
+                         ink drawn there reads at one strength"
+                    );
+                    for x in area.x..area.right() {
+                        assert_eq!(
+                            under(&buffer, x, area.y + row),
+                            tone,
+                            "{spelling} claims row {row}, column {x} of a {shape:?} of {height} \
+                             rows on another colour than the rail's own tone"
+                        );
+                    }
+                }
+            }
         }
-    }
-    for x in area.x..area.right() {
-        assert_eq!(
-            under(&buffer, x, area.bottom() - 1),
-            palette.edge(Edge::Shadow),
-            "column {x} of the band's last row is not the shadow the band falls to"
-        );
     }
 }
 

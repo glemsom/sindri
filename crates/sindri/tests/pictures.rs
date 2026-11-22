@@ -1977,7 +1977,6 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     );
     let (width, height) = band.pixels().dimensions();
     let tone = channels(palette.band(Band::Rail)).expect("a band in pixels");
-    let shadow = channels(palette.edge(Edge::Shadow)).expect("a shadow in pixels");
     assert_eq!(
         band.pixels().get_pixel(0, 0).0[..3],
         tone,
@@ -1985,9 +1984,8 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     );
     assert_eq!(
         band.pixels().get_pixel(width - 1, height - 1).0[..3],
-        shadow,
-        "and its foot is the shadow colour, so the band falls into it in pixels rather than \
-         into a hard dark row"
+        tone,
+        "and its foot is that same tone, so no pixel of the band is drawn on the shadow"
     );
     let middle = band.pixels().get_pixel(width - 1, height / 2).0;
     for channel in 0..3 {

@@ -40,14 +40,12 @@ impl PlaneId {
 pub enum Shade {
     /// The transcript band, on the well, with no seam of its own.
     Transcript { area: Rect, well: Color },
-    /// The rail on its own tone, the frame's shadow across its last row, and the seam it meets the
-    /// transcript band on where it is a ledger.
+    /// The rail on its own tone down every row it claims, and the seam it makes with the transcript
+    /// band where it is a ledger.
     Rail {
         area: Rect,
         cell: Option<CellSize>,
-        shape: Rail,
         tone: Color,
-        shadow: Color,
         seam: Option<Seam>,
     },
     /// The composer's band from its head row down to the rail's own tone under it, its head row lit
@@ -112,14 +110,11 @@ impl Shade {
             return None;
         }
         let tone = palette.band(Band::Rail);
-        let shadow = palette.edge(Edge::Shadow);
-        let cell = cell.filter(|_| channels(tone).is_some() && channels(shadow).is_some());
+        let cell = cell.filter(|_| channels(tone).is_some());
         Some(Shade::Rail {
             area,
             cell,
-            shape,
             tone,
-            shadow,
             seam: Seam::of(area, shape, palette),
         })
     }
@@ -155,21 +150,12 @@ impl Shade {
         self.cell().is_some()
     }
 
-    /// The colour that row of the band sits on: the well, the rail's own tone, the shadow across a
-    /// ledger's last row, or the light a composer's head row takes the keys in.
+    /// The colour that row of the band sits on: the well, the rail's own tone on every row of it,
+    /// or the light a composer's head row takes the keys in.
     pub fn row(&self, row: u16) -> Color {
         match self {
             Shade::Transcript { well, .. } => *well,
-            Shade::Rail {
-                area,
-                shape,
-                tone,
-                shadow,
-                ..
-            } => match (*shape, row) {
-                (Rail::Ledger, row) if row == area.height.saturating_sub(1) => *shadow,
-                _ => *tone,
-            },
+            Shade::Rail { tone, .. } => *tone,
             Shade::Composer {
                 area,
                 head,
