@@ -1331,24 +1331,16 @@ fn the_transcript_sits_in_the_well_and_the_rail_beside_it_carries_its_own_tone()
                 );
             }
         }
-        for y in rail.y..rail.bottom() - 1 {
+        for y in rail.y..rail.bottom() {
             for x in rail.x..rail.right() {
                 assert_eq!(
                     under(&buffer, x, y),
                     palette.band(Band::Rail),
                     "row {y}, column {x} of the rail at {cols} columns is not the rail's own \
-                         tone: the seam is what parts it from the transcript, and no column of \
-                         the rail's own is lit"
+                         tone: the band is one surface down every row it claims, so the same ink \
+                         reads at one strength wherever it falls"
                 );
             }
-        }
-        for x in rail.x..rail.right() {
-            assert_eq!(
-                under(&buffer, x, rail.bottom() - 1),
-                palette.edge(Edge::Shadow),
-                "column {x} of the rail's last row at {cols} columns is not the shadow under \
-                     the band"
-            );
         }
     }
 }

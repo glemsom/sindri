@@ -876,8 +876,8 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
                     }
                 })
                 .collect();
-            // The foot is read up from the floor, so its last fact stands on the row the shadow is
-            // drawn across.
+            // The foot is read up from the floor, so its last fact stands on the band's own last
+            // row.
             for (at, fact) in foot.iter().enumerate() {
                 let back = u16::try_from(foot.len() - at).unwrap_or(u16::MAX);
                 rows.push(labelled(

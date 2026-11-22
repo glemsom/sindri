@@ -213,10 +213,9 @@ The column that carries the frame's facts: the frame's right-hand edge from its 
 row the **Composer**'s head is drawn on where the width holds one, so the **Transcript band** keeps
 the columns it leaves and the **Composer**'s band runs under it whole; and one row along the bottom
 of the **Transcript band**, the **Composer**'s band under that, where it does not. Its blocks are
-read from the top down, with the run's spend on the rows at its foot — the last of them on the row
-the frame's shadow falls across, and those rows air on a rail that knows no spend. Its words open
-in the **Margin** on both edges: no block name and no label stands on the rail's first column, and
-no value hangs on the frame's last one.
+read from the top down, with the run's spend on the rows at its foot, and those rows air on a rail
+that knows no spend. Its words open in the **Margin** on both edges: no block name and no label
+stands on the rail's first column, and no value hangs on the frame's last one.
 _Avoid_: Sidebar, side panel, gutter, fact bar
 
 **Margin**:
@@ -254,11 +253,11 @@ _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 
 **Shade**:
 What a band sits on: the colour each of its rows is claimed in and the seams it makes with the band
-beside it — the transcript band on the well, the rail on its own tone with the frame's shadow across
-its last row, the composer's band from its head row down to the rail's tone under it, its head row lit
-where it takes the keys. A seam is a fall of its own, in the columns it takes from the band beside the
-rail, and a frame draws it once, after the bands it parts. It holds every fact the band's cells and
-its **Plane** are drawn from and nothing else, the cell the plane is drawn at and the caret's column
+beside it — the transcript band on the well, the rail on its own tone on every row of it, the
+composer's band from its head row down to the rail's tone under it, its head row lit where it takes
+the keys. A seam is a fall of its own, in the columns it takes from the band beside the rail, and a
+frame draws it once, after the bands it parts. It holds every fact the band's cells and its
+**Plane** are drawn from and nothing else, the cell the plane is drawn at and the caret's column
 among them, and a frame holds each band's image against it, so a pass in which it stands makes no
 image. Where no picture is placed, that same shade is claimed cell by cell.
 _Avoid_: Colour, tone, gradient, paint, style

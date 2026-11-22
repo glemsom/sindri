@@ -16,7 +16,7 @@ use sindri::facts::Facts;
 use sindri::ink::{Faces, Ink, Look};
 use sindri::ledger;
 use sindri::mark::Cell;
-use sindri::palette::{Band, Edge, Palette};
+use sindri::palette::{Band, Palette};
 use sindri::pen::{self, Clip};
 use sindri::pointer::Pointer;
 use sindri::rows::Scroll;
@@ -555,13 +555,11 @@ fn the_transcript_and_the_notice_stand_in_its_columns_and_the_bands_in_the_frame
     for y in rail.y..rail.bottom() {
         for x in rail.x..area.right() {
             let ground = frame.cell(x, y).bg;
-            let wanted = match y == rail.bottom() - 1 {
-                true => palette.edge(Edge::Shadow),
-                false => palette.band(Band::Rail),
-            };
+            let wanted = palette.band(Band::Rail);
             assert_eq!(
                 ground, wanted,
-                "row {y}, column {x} of the rail is {ground:?} where the rail's band is {wanted:?}"
+                "row {y}, column {x} of the rail is {ground:?} where the rail's band is {wanted:?}, \
+                 and the band is one tone down every row of it"
             );
         }
     }

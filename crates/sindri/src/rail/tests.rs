@@ -15,7 +15,7 @@ use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 /// The band a ledger test stands in: the rail at its floor, which is what the narrowest frame
 /// that holds one is handed.
 const COLUMNS: u16 = FLOOR;
-use crate::palette::{Band, Edge, channels};
+use crate::palette::{Band, channels};
 use crate::pen;
 use crate::plane::{Plane, SEAM};
 use crate::readback::{column_of, inks, under};
@@ -173,34 +173,26 @@ const CONTRACT: [(&str, &str); 12] = [
 ];
 
 #[test]
-fn a_ledger_is_its_own_tone_down_to_the_shadow_under_its_last_row() {
+fn a_ledger_stands_on_its_own_tone_on_every_row_it_claims() {
     let area = band(COLUMNS, 8);
     let mut buffer = Buffer::empty(area);
 
     paint(&frame(), Rail::Ledger, area, None, &mut buffer, &PALETTE);
 
-    for y in area.y..area.bottom() - 1 {
+    for y in area.y..area.bottom() {
         for x in area.x..area.right() {
             assert_eq!(
                 under(&buffer, x, y),
                 PALETTE.band(Band::Rail),
-                "row {y}, column {x} of the ledger is not the rail's own tone: the seam is what \
-                 parts it from the transcript, and no column of the rail's own is lit"
+                "row {y}, column {x} of the ledger is not the rail's own tone: the band is one \
+                 surface from its first row to its last, and no row of it is the shadow"
             );
         }
-    }
-    for x in area.x..area.right() {
-        assert_eq!(
-            under(&buffer, x, area.bottom() - 1),
-            PALETTE.edge(Edge::Shadow),
-            "column {x} of the ledger's last row is not the shadow the band leaves under \
-                 itself"
-        );
     }
 }
 
 #[test]
-fn the_foot_is_drawn_on_the_row_the_band_shadows() {
+fn the_foot_is_drawn_on_the_bands_last_row_where_no_shadow_falls() {
     let area = band(COLUMNS, 24);
     let mut buffer = Buffer::empty(area);
 
@@ -212,8 +204,9 @@ fn the_foot_is_drawn_on_the_row_the_band_shadows() {
         .saturating_sub(pen::cells("51.3k"));
     assert_eq!(
         under(&buffer, area.x, floor),
-        PALETTE.edge(Edge::Shadow),
-        "the band's last row is the shadow, and the foot stands on it rather than above it"
+        PALETTE.band(Band::Rail),
+        "the band's last row is the rail's own tone, and the foot stands on it rather than above \
+         it"
     );
     assert_eq!(
         glyphs(&buffer, floor).trim_end(),
@@ -223,7 +216,7 @@ fn the_foot_is_drawn_on_the_row_the_band_shadows() {
             pen::pad("total", FIELD),
             pen::blank(at.saturating_sub(FIELD))
         ) + "51.3k",
-        "the total is the last row of the foot, so it is the row the shadow falls across"
+        "the total is the last row of the foot, so it stands on the band's own last row"
     );
 }
 
@@ -386,7 +379,7 @@ fn a_ledger_stood_at_the_frames_edge_keeps_its_band_and_reaches_the_one_column_b
 }
 
 #[test]
-fn the_rails_plane_is_its_own_tone_down_to_the_shadow_in_its_last_cell() {
+fn the_rails_plane_is_one_tone_in_every_pixel_it_covers() {
     let rail = stood(8);
     let mut buffer = Buffer::empty(framed(rail));
 
@@ -405,32 +398,22 @@ fn the_rails_plane_is_its_own_tone_down_to_the_shadow_in_its_last_cell() {
     let pixels = plane.pixels();
     let (width, height) = pixels.dimensions();
     let tone = channels(PALETTE.band(Band::Rail)).expect("a band in pixels");
-    let shadow = channels(PALETTE.edge(Edge::Shadow)).expect("a shadow in pixels");
 
     assert_eq!(
         pixels.get_pixel(0, 0).0[..3],
         tone,
         "the plane's first cell is the rail's own tone, and no column of its own is lit"
     );
-    for row in 0..rail.height - 1 {
-        let at = u32::from(row) * CellSize::NOMINAL.height() + CellSize::NOMINAL.height() / 2;
-        let pixel = pixels.get_pixel(width - 1, at).0;
-        for channel in 0..3 {
-            assert!(
-                pixel[channel].abs_diff(tone[channel]) <= 1,
-                "channel {channel} of row {row} of the rail's plane is {} where the rail's own \
-                 tone is {}: no row of the band falls into the shadow before the last",
-                pixel[channel],
-                tone[channel]
+    for y in 0..height {
+        for x in 0..width {
+            assert_eq!(
+                pixels.get_pixel(x, y).0[..3],
+                tone,
+                "pixel row {y}, column {x} of the rail's plane is not the rail's own tone: no row \
+                 of the band falls into the shadow, its last cell included"
             );
         }
     }
-    assert_eq!(
-        pixels.get_pixel(width - 1, height - 1).0[..3],
-        shadow,
-        "and its last row is the shadow the band ends in, so the foot is drawn in pixels and no \
-         row of it"
-    );
 }
 
 #[test]
@@ -512,7 +495,7 @@ fn a_strip_is_handed_a_plane_of_its_one_row_and_no_seam() {
 }
 
 #[test]
-fn a_rail_handed_no_cell_draws_todays_band_and_its_shadow_row() {
+fn a_rail_handed_no_cell_draws_the_bands_one_tone() {
     let area = band(COLUMNS, 8);
     let mut buffer = Buffer::empty(area);
 
@@ -531,28 +514,21 @@ fn a_rail_handed_no_cell_draws_todays_band_and_its_shadow_row() {
         !shade.places(),
         "a terminal that places no picture is handed no plane under the rail"
     );
-    for y in area.y..area.bottom() - 1 {
-        for x in area.x + 1..area.right() {
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
             assert_eq!(
                 under(&buffer, x, y),
                 PALETTE.band(Band::Rail),
                 "row {y}, column {x} of the band is not the rail's own ground: the flat band is \
-                 the surface a terminal with no picture already had"
+                 the surface a terminal with no picture already had, and no row of it is the \
+                 shadow"
             );
         }
-    }
-    for x in area.x..area.right() {
-        assert_eq!(
-            under(&buffer, x, area.bottom() - 1),
-            PALETTE.edge(Edge::Shadow),
-            "column {x} of the band's last row is not the shadow across it, which no plane is \
-             drawn under"
-        );
     }
 }
 
 #[test]
-fn a_rail_handed_a_cell_in_no_colour_draws_the_band_and_shadow_it_drew_without_one() {
+fn a_rail_handed_a_cell_in_no_colour_draws_the_flat_band_it_drew_without_one() {
     for (shape, area) in [(Rail::Ledger, band(COLUMNS, 8)), (Rail::Strip, band(40, 1))] {
         let mut pictured = Buffer::empty(area);
         let mut placeless = Buffer::empty(area);
@@ -580,8 +556,14 @@ fn a_rail_handed_a_cell_in_no_colour_draws_the_band_and_shadow_it_drew_without_o
                     pictured[(x, y)],
                     placeless[(x, y)],
                     "row {y}, column {x} of the {shape:?} is not the cell the band drew with no \
-                     plane under it: the flat band and the shadow across its last row are what a \
-                     reader who asked for no colour already had"
+                     plane under it: a palette that draws no colour draws the one flat band a \
+                     reader who asked for it already had"
+                );
+                assert_eq!(
+                    under(&pictured, x, y),
+                    Palette::SLOTS.band(Band::Rail),
+                    "row {y}, column {x} of the {shape:?} is not the rail's own tone: the band \
+                     is one surface on every row of it, whatever the terminal can draw"
                 );
             }
         }

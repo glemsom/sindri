@@ -1495,7 +1495,7 @@ fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_air_between_two() 
     assert!(
         rules.is_empty(),
         "the rail draws a rule on rows {rules:?}: the blocks are parted by air, and the \
-             column's only rules are the one under the face and the shadow under its last row"
+             column's only rule is the one under the face"
     );
 }
 

@@ -238,6 +238,23 @@ fn every_band_is_an_elevation_the_composer_highest_and_the_well_lowest() {
 }
 
 #[test]
+fn the_rails_tone_stands_a_quiet_step_of_lightness_above_the_well_beside_it() {
+    for (spelling, palette) in SPELLED {
+        let rail = palette.band(Band::Rail);
+        let well = palette.band(Band::Well);
+        let step = lightness(rail) - lightness(well);
+
+        assert!(
+            (2.0..=6.0).contains(&step),
+            "{spelling} lays the rail {rail:?} at L* {} over the well {well:?} at L* {}: a step \
+             of {step} leaves the band a second material or no neighbour at all",
+            lightness(rail),
+            lightness(well)
+        );
+    }
+}
+
+#[test]
 fn the_lit_edge_stands_above_every_band_and_the_shadow_below() {
     for (spelling, palette) in SPELLED {
         let lit = luminance(palette.edge(Edge::Lit));
@@ -426,6 +443,15 @@ fn luminance(color: Color) -> f64 {
         }
     });
     0.2126 * red + 0.7152 * green + 0.0722 * blue
+}
+
+/// The CIELAB lightness of a colour, read off the luminance of the channels it is spelled in.
+fn lightness(color: Color) -> f64 {
+    let luminance = luminance(color);
+    match luminance > 0.008_856 {
+        true => 116.0 * luminance.cbrt() - 16.0,
+        false => 903.3 * luminance,
+    }
 }
 
 /// The channels a colour is spelled in, so a ratio can be measured: the terminal's own sixteen
