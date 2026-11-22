@@ -1599,9 +1599,10 @@ fn the_transcript_band_keeps_the_ink_the_row_wrote_there() {
     };
     assert_eq!(
         under(&buffer, x, y),
-        palette.band(Band::Well),
-        "the cut mark at row {y} column {x} does not stand on the well the transcript is read \
-         on: a band's ground takes no ink, and the column it falls in is claimed once"
+        palette.ground(None).bg.expect("the terminal's own ground"),
+        "the cut mark at row {y} column {x} does not stand on the ground the transcript band's \
+         plane is read through: a band's ground takes no ink, and the column it falls in is \
+         claimed once"
     );
     assert_eq!(
         look_at(&buffer, &palette, x, y).ink(),
@@ -2095,7 +2096,7 @@ fn no_cell_of_the_band_a_launch_opens_on_is_a_picture() {
 }
 
 #[test]
-fn a_frame_too_narrow_for_a_rail_is_every_cell_a_terminal_that_places_no_picture_draws() {
+fn a_frame_too_narrow_for_a_rail_draws_the_words_a_terminal_that_places_no_picture_draws() {
     let launch = |draws: bool| {
         let mut view = View::of(
             match draws {
@@ -2107,23 +2108,47 @@ fn a_frame_too_narrow_for_a_rail_is_every_cell_a_terminal_that_places_no_picture
         );
         let mut buffer = Buffer::empty(screen(30, 24));
         let told = view.paint(buffer.area, &mut buffer);
-        (buffer, laid_out(&told).composer)
+        (buffer, told)
     };
-    let (pictured, band) = launch(true);
+    let (pictured, told) = launch(true);
     let (placeless, _) = launch(false);
     let area = pictured.area;
+    let laid = laid_out(&told);
+    let band = laid.composer;
+    let transcript = laid.transcript;
+    let own = Palette::TRUECOLOR
+        .ground(None)
+        .bg
+        .expect("the terminal's own ground");
 
     for y in area.y..area.bottom() {
         for x in area.x..area.right() {
             let (with, without) = (&pictured[(x, y)], &placeless[(x, y)]);
-            match band.contains(Position::new(x, y)) {
-                true => assert_eq!(
+            match (
+                band.contains(Position::new(x, y)),
+                transcript.contains(Position::new(x, y)),
+            ) {
+                (true, _) => assert_eq!(
                     with.symbol(),
                     without.symbol(),
                     "the band's words at ({x}, {y}) are the words a terminal that places no \
                      picture draws"
                 ),
-                false => assert_eq!(
+                (false, true) => {
+                    assert_eq!(
+                        with.bg, own,
+                        "the cell at ({x}, {y}) of the splash screen's band is not the \
+                         terminal's own ground, which the transcript band's plane is read through"
+                    );
+                    assert_eq!(
+                        (with.symbol(), with.fg, with.modifier),
+                        (without.symbol(), without.fg, without.modifier),
+                        "the cell at ({x}, {y}) of the splash screen's band is not the word a \
+                         terminal that places no picture draws, and a plane under a cell takes no \
+                         word and no ink of it"
+                    );
+                }
+                (false, false) => assert_eq!(
                     with, without,
                     "at 30 by 24 the frame is the splash screen and no rail beside it, so the \
                      cell at ({x}, {y}) is the one a terminal that places no picture draws"

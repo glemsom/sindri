@@ -656,6 +656,10 @@ fn strip_band(cols: u16, rows: u16) -> Rect {
     }
 }
 
+fn transcript_band(framed: &frame::Frame) -> Rect {
+    framed.told().layout().expect("a laid out frame").transcript
+}
+
 fn rail_band(framed: &frame::Frame) -> Rect {
     framed
         .told()
@@ -1306,7 +1310,12 @@ fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
             pictured_rows(with.cells()).is_empty(),
             "a {cols}-column frame draws one row of facts and no face: it has no band to reserve"
         );
-        same_cells_outside_ground(with.cells(), without.cells(), strip_band(cols, 24), 8);
+        same_cells_outside_ground(
+            with.cells(),
+            without.cells(),
+            [strip_band(cols, 24), transcript_band(&with)],
+            8,
+        );
     }
 }
 
@@ -1329,7 +1338,12 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
             "the facts stand from the rail's first row, and the row under them is the second \
              fact: no band is reserved for a face that is not drawn, and no rule closes one"
         );
-        same_cells_outside_ground(off.cells(), placeless.cells(), rail, 8);
+        same_cells_outside_ground(
+            off.cells(),
+            placeless.cells(),
+            [rail, transcript_band(&off)],
+            8,
+        );
 
         let mut back_on = railed(true, true);
         let back_on = frame::painted(&mut back_on, cols, 40);
@@ -1436,7 +1450,12 @@ fn a_splash_screen_the_face_is_turned_off_for_is_the_one_a_placeless_terminal_dr
         "the facts stand from the rail's first row: no band is reserved for a face that is not \
          drawn, and no rule closes one"
     );
-    same_cells_outside_ground(off.cells(), without.cells(), rail, 5);
+    same_cells_outside_ground(
+        off.cells(),
+        without.cells(),
+        [rail, transcript_band(&off)],
+        5,
+    );
 }
 
 #[test]
@@ -1968,8 +1987,9 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
             .iter()
             .filter_map(Shade::id)
             .collect::<Vec<PlaneId>>(),
-        vec![PlaneId::Rail, PlaneId::Composer],
-        "the frame hands back the rail's shading beside the composer's, each under its own identity"
+        vec![PlaneId::Rail, PlaneId::Transcript, PlaneId::Composer],
+        "the frame hands back the rail's shading beside the transcript band's and the \
+         composer's, each under its own identity"
     );
     let band = plane_of(&view, PlaneId::Rail);
     assert_eq!(
@@ -2013,6 +2033,278 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
             !rail_row(frame.cells(), rail, y).contains(PLACEHOLDER),
             "row {y} of the rail's band is drawn by the plane the cells stand on, and no cell of \
              it is replaced by the placeholder glyph"
+        );
+    }
+}
+
+fn railed_words(face: bool) -> View {
+    View::of(
+        caps::faced(face),
+        sindri::facts::Facts::default()
+            .asked()
+            .railed(railed_facts()),
+        Transcript::of(vec![
+            Entry::Assistant {
+                turn: 1,
+                text: SecretSet::default().redact(
+                    "the words the transcript band holds beside the rail that stands on its \
+                     right, row after row, so the band's head is lit over prose a reader reads",
+                ),
+            },
+            Entry::Assistant {
+                turn: 2,
+                text: SecretSet::default().redact(
+                    "and a second run's answer under it, so the band holds more than one row of \
+                     words and the light above them falls on no blank band",
+                ),
+            },
+        ]),
+    )
+}
+
+#[test]
+fn a_frames_three_bands_are_three_planes_of_their_own() {
+    let mut view = railed_words(true);
+    let frame = frame::painted(&mut view, 120, 40);
+    let palette = *frame.palette();
+    let laid = frame.told().layout().expect("a laid out frame");
+    let rail = laid.rail.expect("a rail on a frame that knows a fact").1;
+    let Shade::Rail {
+        face: Some(face), ..
+    } = shade_of(&frame, PlaneId::Rail)
+    else {
+        panic!(
+            "the rail's shade carries no face, and the rows Sindri's face stands on are the rows \
+             the frame's light falls on"
+        )
+    };
+    let bands = [
+        (PlaneId::Rail, rail.area),
+        (PlaneId::Transcript, laid.transcript),
+        (PlaneId::Composer, laid.composer),
+    ];
+
+    assert_eq!(
+        frame
+            .told()
+            .shades()
+            .iter()
+            .filter_map(Shade::id)
+            .collect::<Vec<PlaneId>>(),
+        vec![PlaneId::Rail, PlaneId::Transcript, PlaneId::Composer],
+        "a frame hands back a plane for each of the three bands it draws, each under its own \
+         identity, in the order it paints them"
+    );
+    for (id, area) in bands {
+        let plane = plane_of(&view, id);
+        assert_eq!(
+            plane.area(),
+            area,
+            "{id:?}'s plane covers a rect that is not its band's own"
+        );
+        assert_eq!(
+            plane.pixels().dimensions(),
+            (
+                u32::from(area.width) * cell().width(),
+                u32::from(area.height) * cell().height()
+            ),
+            "{id:?}'s plane is not drawn at the pixels of the cell it is drawn on"
+        );
+    }
+
+    let well = channels(palette.band(Band::Well)).expect("a band in pixels");
+    let lift = palette.lift(Band::Well);
+    let lit = well.map(|channel| channel.saturating_add(lift));
+    let band = plane_of(&view, PlaneId::Transcript);
+    let (width, height) = band.pixels().dimensions();
+    for x in 0..width {
+        let head = band.pixels().get_pixel(x, 0).0;
+        assert_eq!(
+            head[..3],
+            lit,
+            "column {x} of the transcript band's plane is not the well lit to the most it can \
+             take on its first pixel row: the head of the band is where the frame's light falls"
+        );
+    }
+    for y in cell().height()..2 * cell().height() {
+        let second = band.pixels().get_pixel(0, y).0;
+        assert_eq!(
+            second[..3],
+            well.map(|channel| channel.saturating_add(lift / 2)),
+            "pixel row {y} of the transcript band's plane is not the head's light halved: the \
+             light falls away from the band's head in whole channels"
+        );
+    }
+    for y in 2 * cell().height()..height {
+        for x in 0..width {
+            let pixel = band.pixels().get_pixel(x, y).0;
+            assert_eq!(
+                pixel[..3],
+                well,
+                "pixel row {y}, column {x} of the transcript band's plane is not the well: the \
+                 prose is read on the well, and the light has fallen back to it by the band's \
+                 third row"
+            );
+        }
+    }
+
+    let tone = channels(palette.band(Band::Rail)).expect("a band in pixels");
+    let lit = tone.map(|channel| channel.saturating_add(palette.lift(Band::Rail)));
+    let band = plane_of(&view, PlaneId::Rail);
+    let height = band.pixels().height();
+    for row in 0..rail.area.height {
+        let y = rail.area.y + row;
+        let stands = y < face.bottom();
+        for down in 0..cell().height() {
+            for x in 0..band.pixels().width() {
+                let pixel = band
+                    .pixels()
+                    .get_pixel(x, u32::from(row) * cell().height() + down)
+                    .0;
+                let wanted = match stands {
+                    true => lit,
+                    false => tone,
+                };
+                assert_eq!(
+                    pixel[..3],
+                    wanted,
+                    "row {row}, column {x} of the rail's plane is not {}: the rows Sindri's face \
+                     stands on are the rows the light falls on, and every row below them is the \
+                     rail's own tone",
+                    match stands {
+                        true => "the rail's tone lit",
+                        false => "the rail's own tone",
+                    }
+                );
+            }
+        }
+    }
+    assert!(
+        height >= u32::from(face.bottom() - rail.area.y) * cell().height(),
+        "the rail's plane is shorter than the rows the face stands on"
+    );
+    for y in face.y..face.bottom() {
+        let words: String = (rail.area.x + 1..rail.area.right())
+            .map(|x| frame.cells()[(x, y)].symbol().to_owned())
+            .filter(|symbol| !symbol.contains('\u{1b}'))
+            .collect();
+        assert!(
+            words.trim().is_empty(),
+            "row {y} of the rail holds a word where Sindri's face stands, and the light falls \
+             there because no word is read there: {words:?}"
+        );
+    }
+}
+
+fn ratio(one: [u8; 3], other: [u8; 3]) -> f64 {
+    let luminance = |colour: [u8; 3]| {
+        let [red, green, blue] = colour.map(|channel| {
+            let channel = f64::from(channel) / 255.0;
+            match channel <= 0.03928 {
+                true => channel / 12.92,
+                false => ((channel + 0.055) / 1.055).powf(2.4),
+            }
+        });
+        0.2126 * red + 0.7152 * green + 0.0722 * blue
+    };
+    let (one, other) = (luminance(one), luminance(other));
+    let (high, low) = match one > other {
+        true => (one, other),
+        false => (other, one),
+    };
+    (high + 0.05) / (low + 0.05)
+}
+
+#[test]
+fn every_ink_a_frame_draws_keeps_its_floor_on_the_pixel_its_cell_stands_on() {
+    let mut view = railed_words(true);
+    let frame = frame::painted(&mut view, 120, 40);
+    let palette = *frame.palette();
+    let area = frame.area();
+    let planes: Vec<&Plane> = PlaneId::ALL
+        .into_iter()
+        .map(|id| plane_of(&view, id))
+        .collect();
+    let mut read = 0;
+    let mut lit = 0;
+
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            let Some(ink) = frame.ink(x, y) else {
+                continue;
+            };
+            let colour = channels(palette.colour(ink));
+            let Some(colour) = colour else {
+                continue;
+            };
+            let Some(plane) = planes
+                .iter()
+                .find(|plane| plane.area().contains(Position::new(x, y)))
+            else {
+                continue;
+            };
+            let pixel = plane.pixels().get_pixel(
+                (u32::from(x) - u32::from(plane.area().x)) * cell().width() + cell().width() / 2,
+                (u32::from(y) - u32::from(plane.area().y)) * cell().height() + cell().height() / 2,
+            );
+            let under = [pixel[0], pixel[1], pixel[2]];
+            let kept = ratio(colour, under);
+            let row = (u32::from(y) - u32::from(plane.area().y)) / cell().height();
+            let rung = channels(shade_of(&frame, plane.id()).row(row as u16))
+                .expect("the band's own row in pixels");
+            read += 1;
+            lit += usize::from(under != rung);
+            assert!(
+                kept >= sindri::palette::LEGIBLE,
+                "{} reads at {kept}:1 on the pixel {:?} its cell stands on at row {y}, column \
+                 {x}: the light a plane carries is the most every ink can take and still clear \
+                 its floor, so no word of the frame is washed out by the band it is drawn on",
+                ink.name(),
+                under
+            );
+        }
+    }
+    assert!(
+        read > 0 && lit > 0,
+        "the frame draws no word on a plane, so nothing above is proved: {read} words read and \
+         {lit} of them on a lit pixel"
+    );
+}
+
+#[test]
+fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_transcript() {
+    let mut view = View::of(
+        caps::uncoloured(),
+        sindri::facts::Facts::default()
+            .asked()
+            .railed(railed_facts()),
+        Transcript::none(),
+    );
+    let frame = frame::painted(&mut view, 120, 40);
+    let palette = *frame.palette();
+    assert_eq!(
+        palette,
+        Palette::SLOTS,
+        "a terminal told NO_COLOR draws the reader's own slots"
+    );
+    assert!(
+        frame
+            .told()
+            .shades()
+            .iter()
+            .all(|shade| shade.id() != Some(PlaneId::Transcript)),
+        "a palette that draws no colour is handed no shading over the transcript band: its own \
+         rows are the flat band it already had"
+    );
+    let band = transcript_band(&frame);
+    let shade = Shade::transcript(band, None, &palette).expect("a band to shade");
+    for row in 0..band.height {
+        let (x, y) = (band.x + band.width / 2, band.y + row);
+        assert_eq!(
+            frame.cells()[(x, y)].bg,
+            shade.row(row),
+            "row {row} of the transcript band stands on a ground of its own, and a palette that \
+             spells no colour is handed no plane to stand on"
         );
     }
 }
@@ -2356,10 +2648,15 @@ fn middle_of(plane: &Plane, row: u16) -> [u8; 3] {
 fn same_cells_outside_ground(
     pictured: &Buffer,
     placeless: &Buffer,
-    rail: Rect,
+    planes: [Rect; 2],
     composer_rows: u16,
 ) {
+    let [rail, transcript] = planes;
     assert_eq!(pictured.area, placeless.area);
+    let own = Palette::TRUECOLOR
+        .ground(None)
+        .bg
+        .expect("the terminal's own ground");
     for y in pictured.area.y..pictured.area.bottom() {
         for x in pictured.area.x..pictured.area.right() {
             let with = &pictured[(x, y)];
@@ -2367,7 +2664,23 @@ fn same_cells_outside_ground(
             let on_rail =
                 (rail.y..rail.bottom()).contains(&y) && (rail.x..rail.right()).contains(&x);
             if y < pictured.area.bottom() - composer_rows - 1 && !on_rail {
-                assert_eq!(with, without, "outside the two bands at ({x}, {y})");
+                match transcript.contains(Position::new(x, y)) {
+                    true => {
+                        assert_eq!(
+                            (with.symbol(), with.fg, with.modifier),
+                            (without.symbol(), without.fg, without.modifier),
+                            "the word at ({x}, {y}) of the transcript band is not the one a \
+                             terminal that places no picture draws, and the plane under it takes \
+                             no word and no ink of it"
+                        );
+                        assert_eq!(
+                            with.bg, own,
+                            "the cell at ({x}, {y}) of the transcript band is not the terminal's \
+                             own ground, which the band's plane is read through"
+                        );
+                    }
+                    false => assert_eq!(with, without, "outside the two bands at ({x}, {y})"),
+                }
             } else if on_rail {
                 assert_eq!(
                     (with.symbol(), with.fg, with.modifier),

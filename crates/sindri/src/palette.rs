@@ -21,6 +21,9 @@ struct Inks {
     mark: (Color, Modifier),
 }
 
+/// The floor every ink is proved against on the rung it is read on.
+pub const LEGIBLE: f64 = 4.2;
+
 impl Palette {
     pub const SLOTS: Palette = Palette {
         inks: Inks {
@@ -141,6 +144,29 @@ impl Palette {
         self.ink(ink).0
     }
 
+    /// The most light a band's rung can take: the last channel of light this palette's every ink
+    /// still clears its floor on, on the lit pixel.
+    pub fn lift(&self, band: Band) -> u8 {
+        let Some(rung) = channels(self.band(band)) else {
+            return 0;
+        };
+        let inks: Vec<[u8; 3]> = Ink::ALL
+            .into_iter()
+            .filter_map(|ink| channels(self.colour(ink)))
+            .collect();
+        let mut held = 0;
+        for light in 0..=u8::MAX {
+            if inks
+                .iter()
+                .any(|ink| ratio(*ink, lit(rung, light)) < LEGIBLE)
+            {
+                break;
+            }
+            held = light;
+        }
+        held
+    }
+
     pub fn look_of(&self, cell: &Cell) -> Option<Look> {
         let underlined = cell.modifier.contains(Modifier::UNDERLINED);
         if !underlined && cell.underline_color != Color::Reset {
@@ -207,6 +233,30 @@ impl Rung {
             Rung::Prompt => "prompt",
         }
     }
+}
+
+fn lit(rung: [u8; 3], light: u8) -> [u8; 3] {
+    rung.map(|channel| channel.saturating_add(light))
+}
+
+fn ratio(one: [u8; 3], other: [u8; 3]) -> f64 {
+    let (one, other) = (luminance(one), luminance(other));
+    let (high, low) = match one > other {
+        true => (one, other),
+        false => (other, one),
+    };
+    (high + 0.05) / (low + 0.05)
+}
+
+fn luminance(colour: [u8; 3]) -> f64 {
+    let [red, green, blue] = colour.map(|channel| {
+        let channel = f64::from(channel) / 255.0;
+        match channel <= 0.03928 {
+            true => channel / 12.92,
+            false => ((channel + 0.055) / 1.055).powf(2.4),
+        }
+    });
+    0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
 
 pub fn channels(colour: Color) -> Option<[u8; 3]> {
