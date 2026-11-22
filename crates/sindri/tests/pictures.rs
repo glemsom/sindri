@@ -1180,6 +1180,30 @@ fn a_mermaid_fence_still_streaming_claims_no_cells_for_a_picture() {
 }
 
 #[test]
+fn a_diagram_writes_its_sequence_into_every_row_of_the_block_it_is_placed_over() {
+    let (_root, workspace) = workspace(40, 40);
+    let mut view = frame(
+        caps::at(cell()),
+        &workspace,
+        "```mermaid\nflowchart TD\n  A-->B\n  B-->C\n  C-->D\n```\n\nand the prose under it",
+    );
+
+    let painted = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let rows = pictured_rows(painted.cells());
+    assert!(
+        rows.len() > 3,
+        "a flowchart is placed over more rows than the one it opened on: {rows:?}"
+    );
+    for y in rows {
+        assert!(
+            (0..SCREEN.0).any(|x| painted.cell(x, y).symbol().contains(PLACEHOLDER)),
+            "row {y} of the block carries the picture's own sequence: a row whose cells are \
+             skipped and whose first cell holds no sequence is placed over nothing"
+        );
+    }
+}
+
+#[test]
 fn a_diagram_and_an_image_in_one_answer_are_placed_each_over_its_own_block() {
     let (_root, workspace) = workspace(400, 200);
     let mut view = frame(
@@ -2350,4 +2374,89 @@ fn same_cells_outside_ground(
             }
         }
     }
+}
+
+#[test]
+fn a_diagram_gives_way_on_its_rows_to_the_band_it_is_read_in() {
+    let (_root, workspace) = workspace(40, 40);
+    let source = "```mermaid\nflowchart TD\n  A-->B\n  B-->C\n  C-->D\n```";
+    let of = |surface: &Surface| {
+        let rows = markdown::rows_on(source, 60, 0, surface);
+        let at = rows
+            .iter()
+            .position(|row| row.picture().is_some())
+            .expect("the diagram is the picture of its block");
+        rows[at].picture().expect("the picture of that row").clone()
+    };
+
+    let unbounded = of(&surface(&workspace));
+    let banded = of(&surface(&workspace).band(8));
+
+    assert!(
+        unbounded.rows() > 8,
+        "a diagram is taller than a band of eight rows: {} rows",
+        unbounded.rows()
+    );
+    assert!(
+        banded.rows() <= 8 && banded.cols() < unbounded.cols(),
+        "so it is scaled to the band it is read in, keeping its shape: {} by {} cells against {} \
+         by {}",
+        banded.cols(),
+        banded.rows(),
+        unbounded.cols(),
+        unbounded.rows()
+    );
+}
+
+#[test]
+fn a_diagram_is_placed_over_the_rows_of_a_band_that_holds_its_block_alone() {
+    let (_root, workspace) = workspace(40, 40);
+    let source = "## a heading\n\n```mermaid\nflowchart TD\n  A-->B\n  B-->C\n  C-->D\n```";
+
+    let mut view = frame(caps::at(cell()), &workspace, source);
+    let painted = frame::painted(&mut view, 60, 16);
+    let placed = pictured_rows(painted.cells());
+
+    assert!(
+        !placed.is_empty(),
+        "a band that holds a diagram's block draws the diagram, and not a hole of blank rows: {:?}",
+        (0..16).map(|y| painted.row(y)).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        placed,
+        (*placed.first().expect("a placed row")..=*placed.last().expect("a placed row"))
+            .collect::<Vec<u16>>(),
+        "and the cells it is placed over are one unbroken block: {:?}",
+        (0..16).map(|y| painted.row(y)).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_picture_the_band_cuts_short_is_placed_over_the_rows_it_is_shown_in() {
+    let (_root, workspace) = workspace(400, 200);
+    let measured = picture::measure("shot.png", Ceiling::across(60), &surface(&workspace))
+        .expect("a picture inside the workspace");
+    let mut pictures = Pictures::kitty(cell());
+    let block = Rect {
+        x: 0,
+        y: 2,
+        width: measured.cols(),
+        height: measured.rows(),
+    };
+    let shown = Rect { height: 2, ..block };
+
+    let mut screen = Buffer::empty(Rect::new(0, 0, 80, 30));
+    pictures.place(&measured, cell(), shown, &mut screen);
+
+    assert_eq!(
+        pictured_rows(&screen),
+        [2, 3],
+        "the rows the band holds are the picture's, and the ones under it are left as they were"
+    );
+    assert_eq!(
+        transmission_headers(&screen),
+        1,
+        "and the picture is sent once, at the size it was measured into and not the size it is \
+         shown at"
+    );
 }

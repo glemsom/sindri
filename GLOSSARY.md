@@ -265,7 +265,8 @@ _Avoid_: Colour, tone, gradient, paint, style
 
 **Footprint**:
 The columns by rows a picture is fitted into under a ceiling: one scale on both axes, so the
-picture's shape is kept — shrunk until it fits and never grown.
+picture's shape is kept — shrunk until it fits and never grown. A picture in an answer gives way on
+its rows to the band it is read in, so a diagram never takes more rows than a band can hold.
 _Avoid_: Dimensions, bounding box, image size
 
 **Alert**:

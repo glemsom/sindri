@@ -1439,9 +1439,11 @@ impl View {
             shade.claim(buffer, &palette);
         }
         let cols = area.width.saturating_sub(MARGIN);
-        let reflowed = self
-            .rows
-            .measure(Measure::new(cols, self.surface(), self.facts.ground()));
+        let reflowed = self.rows.measure(Measure::new(
+            cols,
+            self.surface().band(area.height),
+            self.facts.ground(),
+        ));
         // Laid into the rows it heads, so the prose the marker introduces is never cut by it. It
         // heads the turn in flight's answer while that has said a word or the run is live, and the
         // newest answer the record holds once the run is over — a band holding none gets a row.
@@ -1481,11 +1483,13 @@ impl View {
         let mut lined = Vec::new();
         let mut strays = false;
         let mut drawn = Vec::new();
+        let mut placed = Vec::new();
         for piece in window.pieces() {
             let top = y.saturating_sub(area.y);
             let rows = self.rows.rows(piece.entry);
             let first = usize::from(piece.skip);
-            for row in &rows[first..first + usize::from(piece.rows)] {
+            let shown = &rows[first..first + usize::from(piece.rows)];
+            for (offset, row) in shown.iter().enumerate() {
                 row.paint(
                     Rect {
                         height: 1,
@@ -1500,10 +1504,9 @@ impl View {
                 if let Some(thumb) = &thumb {
                     thumb.paint(area, y, buffer, &self.capabilities.palette());
                 }
-                // Written after the row's words and the thumb, so a block's first cell is the
-                // picture's: a refused picture places nothing and leaves the thumb that cell.
-                let cell = self.capabilities.cell();
-                place(self.capabilities.pictures_mut(), cell, row, area, y, buffer);
+                if row.picture().is_some() {
+                    placed.push((piece.entry, first + offset, y));
+                }
                 // Gathered only when there is a mark: a mark's cells are counted in the rows this
                 // band draws.
                 if let Some(mark) = self.mark {
@@ -1538,6 +1541,15 @@ impl View {
                 band: top..y.saturating_sub(area.y),
                 head: piece.skip == 0,
             });
+        }
+        // Written once every row of the band is painted: a placement covers its rows by writing a
+        // sequence into the first cell of each, and a row painted after it would leave the words
+        // where that sequence belongs. A refused picture places nothing and leaves the row's own.
+        let cell = self.capabilities.cell();
+        for (entry, at, y) in placed {
+            if let Some(row) = self.rows.rows(entry).get(at) {
+                place(self.capabilities.pictures_mut(), cell, row, area, y, buffer);
+            }
         }
         // What this band placed is all the cache keeps: a picture scrolled past is a raster
         // nobody is looking at.
@@ -1970,9 +1982,9 @@ pub struct Layout {
     pub rail: Option<(Rail, RailBand)>,
 }
 
-/// Places the picture `row` stands on over the block of cells the transcript reserved. A
-/// block the band does not hold whole is not placed at all: a placement writes into every
-/// row of it, and half a picture would be drawn over the composer under it.
+/// Places the picture `row` stands on over the block of cells the transcript reserved, down to the
+/// last row the band holds. A block whose head the band has scrolled past is left as the words it
+/// was written as, because the protocol sends a picture with the first row of its block.
 fn place(
     pictures: &mut Pictures,
     cell: CellSize,
@@ -1990,10 +2002,14 @@ fn place(
         width: picture.cols(),
         height: picture.rows(),
     };
-    if block.right() > area.right() || block.bottom() > area.bottom() {
+    if block.right() > area.right() {
         return;
     }
-    pictures.place(picture, cell, block, buffer);
+    let shown = Rect {
+        height: block.height.min(area.bottom().saturating_sub(y)),
+        ..block
+    };
+    pictures.place(picture, cell, shown, buffer);
 }
 
 /// Every band a frame lays in `area`, with the transcript and the notice in `beside`'s columns:

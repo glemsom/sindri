@@ -4211,8 +4211,16 @@ fn the_draft_is_set_in_the_column_an_answers_prose_opens_in() {
 }
 
 /// The frame the picture fixtures draw: an answer naming a diagram outside the workspace and a
-/// tall field the workspace's own svg draws, read from the tail a long way back.
+/// tall field the workspace's own svg draws, then prose enough that a band of any size is read
+/// from inside the answer rather than from its tail alone.
 fn field(rows: u16) -> Buffer {
+    let mut text = String::from(
+        "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n\
+         ![a tall field](tall.svg)\n",
+    );
+    for line in 0..12 {
+        text.push_str(&format!("\n- prose row {line}, under the pictures"));
+    }
     let mut view = View::of(
         pictured(),
         Facts::default().asked().working(
@@ -4224,10 +4232,7 @@ fn field(rows: u16) -> Buffer {
         ),
         Transcript::of(vec![Entry::Assistant {
             turn: 1,
-            text: SecretSet::default().redact(
-                "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n\
-                     ![a tall field](tall.svg)",
-            ),
+            text: SecretSet::default().redact(&text),
         }])
         .scrolled(Scroll::Back(70)),
     );
@@ -4243,8 +4248,8 @@ fn placed_row(buffer: &Buffer, from: u16, to: u16) -> Option<u16> {
 
 #[test]
 fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
-    // A band this tall places the hundred-row field whole, where a fixture's frame refuses it.
-    let rows = 108;
+    // A band this tall holds the whole history, the hundred-row field among it.
+    let rows = 130;
     let buffer = field(rows);
 
     let over =
@@ -4261,26 +4266,22 @@ fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
     );
 }
 
-/// The frame the `picture` fixture draws at 120x40 places nothing: the tall field's block is
-/// taller than the band, so not one byte of it reaches a cell.
+/// The frame the `picture` fixture draws at 120x40, read from the head of an answer long enough
+/// that the band carries a thumb down its gutter.
 #[test]
 fn the_thumb_keeps_its_cell_on_a_row_whose_picture_was_refused() {
     let buffer = field(40);
 
-    assert_eq!(
-        placed_row(&buffer, 0, 40),
-        None,
-        "the tall field's block is taller than the band, so it is placed over no cell at all"
-    );
     let over = (0..40)
-        .find(|y| drawn_row(&buffer, *y).contains("a tall field"))
-        .expect("the tall field's caption stands on a row of the band");
+        .find(|y| drawn_row(&buffer, *y).contains("a diagram outside the workspace"))
+        .expect("the refused picture's words stand on a row of the band");
     let row = drawn_row(&buffer, over);
     assert!(
         row.starts_with(THUMB),
-        "row {over} stands on the block the tall field was refused over and carries no byte \
-             of it: giving its first cell up leaves the reader a hole in the thumb for a picture \
-             that is not there, where every other row of the thumb says where they stand"
+        "row {over} stands on the block the picture outside the workspace was refused over and \
+             carries no byte of it: giving its first cell up leaves the reader a hole in the thumb \
+             for a picture that is not there, where every other row of the thumb says where they \
+             stand"
     );
 }
 

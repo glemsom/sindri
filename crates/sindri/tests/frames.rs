@@ -116,7 +116,7 @@ fn mark_120x40_is_a_drag_over_the_transcript_it_covers() {
 }
 
 #[test]
-fn picture_120x40_is_a_picture_block_its_words_its_gutter_and_a_refused_caption() {
+fn picture_120x40_is_a_field_drawn_to_the_band_beside_a_refused_sources_caption() {
     fixture::assert_frame("picture", 120, 40);
 }
 
