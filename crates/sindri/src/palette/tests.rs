@@ -411,8 +411,6 @@ fn no_two_inks_resolve_to_one_foreground_and_modifier() {
     }
 }
 
-const LEGIBLE: f64 = 4.2;
-
 #[test]
 fn every_ink_keeps_its_legibility_floor_on_every_surface_a_frame_draws_on() {
     for (spelling, palette) in SPELLED {
@@ -596,6 +594,76 @@ fn a_colour_is_spelled_in_the_channels_a_pixel_is_drawn_in_and_a_slots_colour_in
             None,
             "{slots:?} is a colour the reader's own terminal holds, and no pixel of this design \
              is drawn in it"
+        );
+    }
+}
+
+#[test]
+fn the_lift_a_band_is_handed_is_the_most_light_every_ink_of_it_can_take() {
+    for (spelling, palette) in SPELLED {
+        for band in Band::ALL {
+            let rung = spelled(palette.band(band));
+            let lit = |light: u8| {
+                Color::Rgb(
+                    rung[0].saturating_add(light),
+                    rung[1].saturating_add(light),
+                    rung[2].saturating_add(light),
+                )
+            };
+            let lift = palette.lift(band);
+
+            for ink in Ink::ALL
+                .into_iter()
+                .filter(|ink| channels(palette.colour(*ink)).is_some())
+            {
+                let word = palette.colour(ink);
+                let kept = contrast(word, lit(lift));
+                assert!(
+                    kept >= LEGIBLE,
+                    "{spelling} reads {} at {kept} on the lit {band:?} — {word:?} on {:?} — and \
+                     the most light the rung can take is the last light every ink it is drawn in \
+                     still clears its floor on",
+                    ink.name(),
+                    lit(lift)
+                );
+            }
+
+            let over = lift.saturating_add(1);
+            if over == lift {
+                continue;
+            }
+            let fallen = Ink::ALL
+                .into_iter()
+                .filter(|ink| channels(palette.colour(*ink)).is_some())
+                .find(|ink| contrast(palette.colour(*ink), lit(over)) < LEGIBLE);
+            let ink = fallen.unwrap_or_else(|| {
+                panic!(
+                    "{spelling} keeps every ink of {band:?} above {LEGIBLE}:1 on {over} light \
+                     over where it keeps them on {lift}, so {lift} is no more light than a \
+                     weaker one and the band is handed less than it can take"
+                )
+            });
+            let under = contrast(palette.colour(ink), lit(over));
+            assert!(
+                under < LEGIBLE,
+                "{spelling} reads {} at {under} on {over} light over {band:?} — {:?} on {:?} — \
+                 and no light past this one keeps a word of the band on its floor",
+                ink.name(),
+                palette.colour(ink),
+                lit(over)
+            );
+        }
+    }
+}
+
+#[test]
+fn a_palette_that_spells_no_colour_hands_no_band_a_lift() {
+    for band in Band::ALL {
+        assert_eq!(
+            Palette::SLOTS.lift(band),
+            0,
+            "{band:?} is handed light on a palette that spells no colour, and a band drawn in no \
+             colour is drawn in no plane to light"
         );
     }
 }

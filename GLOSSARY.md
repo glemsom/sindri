@@ -253,20 +253,26 @@ _Avoid_: Collapse, truncate, expand (that one is the other half), summary, previ
 **Plane**:
 A band's surface drawn as one image placed under its cells, so it is drawn at the pixels of the cell
 rather than in whole cells: the image a frame holds against that band's **Shade**, and makes only
-when the shade moves. Every pixel row of it is the colour of the cell row it falls in, and the one
-blend it makes is the **Caret**'s glow, which only ever adds light; it covers the band's own columns
-and no column of the band beside it. A terminal that places no picture, or a band in a palette with
-no colour, is given none, and the band's own rows are claimed from its shade.
-_Avoid_: Ground (that one is where a run stands), backdrop, background, layer
+when the shade moves. Every pixel of it is the **Rung** the cell row it falls in is drawn on with
+light added, never a blend of two rungs, and the light it carries is the most its rung can take
+while every ink the band is drawn in keeps its floor on the lit pixel — the transcript band's lit at
+its head and fallen back to the well by its third row, the **Rail**'s on the rows **Sindri's face**
+stands on, the **Composer**'s under the **Caret**'s column. It covers the band's own columns and no
+column of the band beside it, and a frame holds one image under each band, by its own identity. A
+terminal that places no picture, or a band in a palette with no colour, is given none, and the
+band's own rows are claimed from its shade.
+_Avoid_: Ground (that one is where a run stands), backdrop, background, layer, blend
 
 **Shade**:
-What a band sits on: the colour each of its rows is claimed in and the cell of it the frame's
+What a band sits on: the **Rung** each of its rows is claimed in and the cell of it the frame's
 **Seam** is drawn in — the transcript band on the well, the rail on its own tone on every row of it
 but its first column, the composer's band drawn in the band a prompt is read on and closing into the
 rail's tone on its last row, under a head row that is the seam's. It holds every fact the band's
-cells and its **Plane** are drawn from and nothing else, the cell the plane is drawn at and the
-caret's column among them, and a frame holds each band's image against it, so a pass in which it
-stands makes no image. Where no picture is placed, that same shade is claimed cell by cell.
+cells and its **Plane** are drawn from and nothing else: the cell the plane is drawn at, the light
+its rows carry — the band's proved lift, the **Caret**'s column, and the rect **Sindri's face**
+stands on, which is the rows the rail is lit on — and a frame holds each band's image against it,
+so a pass in which it stands makes no image. Where no picture is placed, that same shade is claimed
+cell by cell.
 _Avoid_: Colour, tone, gradient, paint, style
 
 **Seam**:

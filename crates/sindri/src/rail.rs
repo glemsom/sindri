@@ -24,7 +24,7 @@ pub fn paint(
     if area.width == 0 || area.height == 0 {
         return None;
     }
-    let shade = Shade::rail(rail, area, pictures, palette);
+    let shade = Shade::rail(rail, band, pictures, palette);
     if let Some(shade) = shade {
         shade.claim(buffer, palette);
     }

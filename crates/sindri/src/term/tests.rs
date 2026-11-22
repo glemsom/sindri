@@ -1064,7 +1064,16 @@ fn composer_shade(area: Rect, caret: Option<u16>) -> Shade {
 fn rail_shade() -> Shade {
     Shade::rail(
         sindri::ledger::Rail::Ledger,
-        Rect::new(6, 3, 3, 4),
+        sindri::ledger::RailBand::of(Rect::new(6, 3, 3, 4)),
+        Some(CellSize::NOMINAL),
+        &Palette::TRUECOLOR,
+    )
+    .expect("a band to shade")
+}
+
+fn transcript_shade() -> Shade {
+    Shade::transcript(
+        Rect::new(0, 0, 6, 4),
         Some(CellSize::NOMINAL),
         &Palette::TRUECOLOR,
     )
@@ -1075,7 +1084,11 @@ fn rail_shade() -> Shade {
 fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
     let wire = Wire::default();
     let mut backend = Backend::new(wire.clone(), false);
-    let shades = [composer_shade(Rect::new(2, 3, 2, 1), None), rail_shade()];
+    let shades = [
+        rail_shade(),
+        transcript_shade(),
+        composer_shade(Rect::new(2, 3, 2, 1), None),
+    ];
     let images = held(&shades);
     backend.shades(&shades, &images).unwrap();
     let placed = wire.drawn().len();
@@ -1091,21 +1104,25 @@ fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
     let wire = wire.drawn();
     assert_eq!(
         wire.matches("_Ga=T").count(),
-        2,
-        "two planes, and each placed once: {wire:?}"
+        3,
+        "three planes, and each placed once: {wire:?}"
     );
-    assert!(
-        wire.contains("_Ga=T,f=100,i=333,q=2") && wire.contains("_Ga=T,f=100,i=334,q=2"),
-        "each plane is uploaded under its own identity: {wire:?}"
-    );
+    for id in [333, 334, 335] {
+        assert!(
+            wire.contains(&format!("_Ga=T,f=100,i={id},q=2")),
+            "a plane is uploaded under no identity of its own, and each band's image is its own: \
+             {wire:?}"
+        );
+    }
+    let deleted = wire.matches("_Ga=d").count();
     assert_eq!(
-        wire.matches("_Ga=d").count(),
-        1,
-        "the plane that left is deleted and the one that stands is not: {wire:?}"
+        deleted, 1,
+        "the plane that left is deleted and the two that stand are not: {wire:?}"
     );
     assert!(
-        wire.contains("_Ga=d,d=i,i=333"),
-        "and it is deleted by the identity it was placed under: {wire:?}"
+        wire.contains("_Ga=d,d=i,i=334"),
+        "and it is deleted by the identity it was placed under, leaving the transcript band's \
+         and the composer's standing: {wire:?}"
     );
 }
 
@@ -1172,32 +1189,45 @@ fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_ar
 }
 
 #[test]
-fn a_whole_frame_clear_drops_both_planes_before_it_clears_the_screen() {
+fn a_whole_frame_clear_drops_all_three_planes_before_it_clears_the_screen() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
-    let shades = [composer_shade(Rect::new(2, 3, 2, 1), None), rail_shade()];
+    let shades = [
+        rail_shade(),
+        transcript_shade(),
+        composer_shade(Rect::new(2, 3, 2, 1), None),
+    ];
     let images = held(&shades);
     backend.shades(&shades, &images).unwrap();
     RatatuiBackend::clear(&mut backend).unwrap();
     backend.shades(&shades, &images).unwrap();
     drop(backend);
     let wire = String::from_utf8(wire).unwrap();
-    assert_eq!(wire.matches("_Ga=T").count(), 4, "two planes, placed twice");
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        6,
+        "three planes, placed twice"
+    );
     assert_eq!(
         wire.matches("_Ga=d").count(),
-        2,
-        "a frame that clears drops both planes: {wire:?}"
+        3,
+        "a frame that clears drops every plane it placed: {wire:?}"
     );
     let dropped = wire.rfind("_Ga=d").unwrap();
-    assert!(wire.contains("_Ga=d,d=i,i=333") && wire.contains("_Ga=d,d=i,i=334"));
+    for id in [333, 334, 335] {
+        assert!(
+            wire.contains(&format!("_Ga=d,d=i,i={id}")),
+            "the plane under {id} is not dropped by its own identity: {wire:?}"
+        );
+    }
     assert!(
-        dropped < wire.match_indices("_Ga=T").nth(2).unwrap().0,
+        dropped < wire.match_indices("_Ga=T").nth(3).unwrap().0,
         "and the frame after it places them again"
     );
 }
 
 #[test]
-fn giving_the_screen_back_deletes_both_planes_before_the_shell_returns() {
+fn giving_the_screen_back_deletes_all_three_planes_before_the_shell_returns() {
     let _one_screen = lock(&ONE_SCREEN);
     let pty = Pty::open();
     let terminal = Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).unwrap();
@@ -1205,7 +1235,7 @@ fn giving_the_screen_back_deletes_both_planes_before_the_shell_returns() {
     drop(screen);
     let drawn = pty.drawn();
     let screen_back = drawn.find("\x1b[?1049l").expect("the screen is given back");
-    for id in [333, 334] {
+    for id in [333, 334, 335] {
         let deleted = drawn
             .find(&format!("_Ga=d,d=i,i={id}"))
             .unwrap_or_else(|| panic!("the plane under {id} is deleted: {drawn:?}"));

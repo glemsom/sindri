@@ -3,7 +3,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Color;
 
 use crate::graphics::CellSize;
-use crate::ledger::Rail;
+use crate::ledger::{Rail, RailBand};
 use crate::palette::{Band, Palette, channels};
 use crate::pen;
 
@@ -13,15 +13,17 @@ const EDGE_RULE: char = '│';
 pub enum PlaneId {
     Composer,
     Rail,
+    Transcript,
 }
 
 impl PlaneId {
-    pub const ALL: [PlaneId; 2] = [PlaneId::Composer, PlaneId::Rail];
+    pub const ALL: [PlaneId; 3] = [PlaneId::Composer, PlaneId::Rail, PlaneId::Transcript];
 
     pub fn image(self) -> u32 {
         match self {
             PlaneId::Composer => 333,
             PlaneId::Rail => 334,
+            PlaneId::Transcript => 335,
         }
     }
 }
@@ -30,13 +32,17 @@ impl PlaneId {
 pub enum Shade {
     Transcript {
         area: Rect,
+        cell: Option<CellSize>,
         well: Color,
+        lift: u8,
     },
     Rail {
         area: Rect,
         cell: Option<CellSize>,
         tone: Color,
         shape: Rail,
+        face: Option<Rect>,
+        lift: u8,
     },
     Composer {
         area: Rect,
@@ -44,14 +50,21 @@ pub enum Shade {
         prompt: Color,
         rail: Color,
         caret: Option<u16>,
+        lift: u8,
     },
 }
 
 impl Shade {
-    pub fn transcript(area: Rect, palette: &Palette) -> Option<Shade> {
-        covers(area).then(|| Shade::Transcript {
+    pub fn transcript(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Shade> {
+        if !covers(area) {
+            return None;
+        }
+        let well = palette.band(Band::Well);
+        Some(Shade::Transcript {
             area,
-            well: palette.band(Band::Well),
+            cell: cell.filter(|_| channels(well).is_some()),
+            well,
+            lift: palette.lift(Band::Well),
         })
     }
 
@@ -73,25 +86,28 @@ impl Shade {
             prompt,
             rail,
             caret,
+            lift: palette.lift(Band::Prompt),
         })
     }
 
     pub fn rail(
         shape: Rail,
-        area: Rect,
+        band: RailBand,
         cell: Option<CellSize>,
         palette: &Palette,
     ) -> Option<Shade> {
-        if !covers(area) {
+        if !covers(band.area) {
             return None;
         }
         let tone = palette.band(Band::Rail);
         let cell = cell.filter(|_| channels(tone).is_some());
         Some(Shade::Rail {
-            area,
+            area: band.area,
             cell,
             tone,
             shape,
+            face: band.picture,
+            lift: palette.lift(Band::Rail),
         })
     }
 
@@ -109,7 +125,7 @@ impl Shade {
 
     pub fn id(&self) -> Option<PlaneId> {
         match self {
-            Shade::Transcript { .. } => None,
+            Shade::Transcript { .. } => Some(PlaneId::Transcript),
             Shade::Rail { .. } => Some(PlaneId::Rail),
             Shade::Composer { .. } => Some(PlaneId::Composer),
         }
@@ -193,8 +209,33 @@ impl Shade {
 
     fn cell(&self) -> Option<CellSize> {
         match self {
-            Shade::Transcript { .. } => None,
-            Shade::Rail { cell, .. } | Shade::Composer { cell, .. } => *cell,
+            Shade::Transcript { cell, .. }
+            | Shade::Rail { cell, .. }
+            | Shade::Composer { cell, .. } => *cell,
+        }
+    }
+
+    /// The light a row of the band carries, in channels, before the fall across it.
+    fn light(&self, row: u16) -> f64 {
+        match self {
+            Shade::Transcript { lift, .. } => match row {
+                0 => f64::from(*lift),
+                1 => f64::from(*lift / 2),
+                _ => 0.0,
+            },
+            Shade::Rail {
+                area, face, lift, ..
+            } => {
+                let y = area.y.saturating_add(row);
+                match face {
+                    Some(face) if face.y <= y && y < face.bottom() => f64::from(*lift),
+                    _ => 0.0,
+                }
+            }
+            Shade::Composer { caret, lift, .. } => match caret {
+                Some(_) => f64::from(*lift),
+                None => 0.0,
+            },
         }
     }
 }
@@ -219,9 +260,9 @@ impl Plane {
         let area = shade.area();
         let (width, height) = extent(area, cell);
         let rows = (0..area.height)
-            .map(|row| channels(shade.row(row)))
-            .collect::<Option<Vec<[u8; 3]>>>()?;
-        let glow = match shade {
+            .map(|row| channels(shade.row(row)).map(|rung| (rung, shade.light(row))))
+            .collect::<Option<Vec<([u8; 3], f64)>>>()?;
+        let center = match shade {
             Shade::Composer {
                 caret: Some(caret), ..
             } => Some((f64::from(caret.saturating_sub(area.x)) + 0.5) * f64::from(cell.width())),
@@ -229,13 +270,14 @@ impl Plane {
         };
         let (down, across) = (cell.height(), f64::from(cell.width()));
         let pixels = image::RgbaImage::from_fn(width, height, |x, y| {
-            let tone = rows[(y / down) as usize];
-            let light = glow.map_or(0.0, |center| {
+            let (rung, carried) = rows[(y / down) as usize];
+            let fall = center.map_or(1.0, |center| {
                 let distance = (f64::from(x) - center) / (across * 8.0);
-                (-(distance * distance) * 2.0).exp() * 22.0
+                (-(distance * distance) * 2.0).exp()
             });
+            let light = carried * fall;
             let channel = |at: u8| (f64::from(at) + light).clamp(0.0, 255.0) as u8;
-            image::Rgba([channel(tone[0]), channel(tone[1]), channel(tone[2]), 255])
+            image::Rgba([channel(rung[0]), channel(rung[1]), channel(rung[2]), 255])
         });
         Some(Plane { shade, id, pixels })
     }

@@ -1102,12 +1102,7 @@ impl View {
                     .place(picture, cell, cells, buffer);
             }
         }
-        let drawn = self.transcript(
-            layout.transcript,
-            buffer,
-            &mut painted.links,
-            &mut painted.sizes,
-        );
+        let drawn = self.transcript(layout.transcript, buffer, &mut painted);
         if self.facts.splash() {
             splash::paint(
                 layout.transcript,
@@ -1198,16 +1193,12 @@ impl View {
         ledger::split(self.facts.rail(), area)
     }
 
-    fn transcript(
-        &mut self,
-        area: Rect,
-        buffer: &mut Buffer,
-        links: &mut Links,
-        sizes: &mut Sizes,
-    ) -> Drawn {
+    fn transcript(&mut self, area: Rect, buffer: &mut Buffer, painted: &mut Painted) -> Drawn {
         let palette = self.capabilities.palette();
-        if let Some(shade) = Shade::transcript(area, &palette) {
+        if let Some(shade) = Shade::transcript(area, self.capabilities.pictures().cell(), &palette)
+        {
             shade.claim(buffer, &palette);
+            painted.shaded(shade);
         }
         let cols = area.width.saturating_sub(MARGIN);
         let reflowed = self.rows.measure(Measure::new(
@@ -1263,8 +1254,8 @@ impl View {
                     },
                     buffer,
                     &self.capabilities.palette(),
-                    links,
-                    sizes,
+                    &mut painted.links,
+                    &mut painted.sizes,
                 );
                 if let Some(thumb) = &thumb {
                     thumb.paint(area, y, buffer, &self.capabilities.palette());
