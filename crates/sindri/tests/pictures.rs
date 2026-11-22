@@ -1595,12 +1595,19 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
         channels(shade.row(0)).expect("the band's first row in pixels"),
         channels(palette.band(Band::Rail)).expect("the tone it closes on"),
     );
-    let top = ground.pixels().get_pixel(400, 0);
+    let top = ground.pixels().get_pixel(400, 0).0;
+    assert!(
+        (0..3).all(|channel| top[channel] < prompt[channel]),
+        "the ground starts on {:?} where the band the prompt is read on is {prompt:?}: the head \
+         row is the seam, and it opens on the joint that parts the bands",
+        &top[..3]
+    );
+    let under = ground.pixels().get_pixel(400, cell().height()).0;
     assert_eq!(
-        top.0[..3],
+        under[..3],
         prompt,
-        "the ground starts on the band the prompt is read on, and no pixel row of the well \
-         stands above it"
+        "and the row under the seam's cell is the prompt's band whole, with no pixel row of the \
+         well above it"
     );
     let down = cell().height();
     for row in 1..band.height - 1 {
@@ -1658,14 +1665,27 @@ fn no_pixel_of_the_composers_band_is_a_blend_of_the_two_tones_it_closes_through(
             "pixel row {y} of the band sits on {tone:?}, which is neither of the two tones the \
              band is drawn in"
         );
+        let seam = y < cell().height();
         for x in 0..ground.pixels().width() {
             let pixel = ground.pixels().get_pixel(x, y);
             let drawn = [pixel[0], pixel[1], pixel[2]];
+            // The seam's cell is the frame's drawn line, and the shadow at its joint is no blend:
+            // every channel is the rung with the one light of the joint on it.
+            let carried: Vec<i32> = (0..3)
+                .filter(|channel| drawn[*channel] > 0)
+                .map(|channel| i32::from(drawn[channel]) - i32::from(tone[channel]))
+                .collect();
+            let one = carried.first().copied().unwrap_or(0);
             assert!(
-                (0..3).all(|channel| drawn[channel] >= tone[channel]),
-                "column {x} of pixel row {y} is {drawn:?}, under the {tone:?} its row sits on: a \
-                 ground mixed between two surfaces is a state, and the caret's glow is the one \
-                 blend the band makes"
+                carried.iter().all(|light| *light == one),
+                "column {x} of pixel row {y} is {drawn:?} where the {tone:?} its row sits on has \
+                 one light added to every channel: a ground mixed between two surfaces is a \
+                 state, and the caret's glow is the one blend the band makes"
+            );
+            assert!(
+                seam || one == 0,
+                "column {x} of pixel row {y} carries {one} channels over the {tone:?} its row sits \
+                 on, and the band carries no light of its own away from the seam that heads it"
             );
         }
     }
@@ -1692,20 +1712,19 @@ fn the_frame_a_launch_opens_on_stands_on_the_bands_own_pixel_ground() {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
             frame.cells()[(x, y)].bg,
-            match row {
-                0 => palette.edge_ink(),
-                _ => palette.ground(None).bg.unwrap(),
-            },
+            palette.ground(None).bg.unwrap(),
             "row {row} of the band is claimed as the ground the pixels are, and not ramped \
-             cell by cell over it \u{2014} the row it is headed by is the frame's seam"
+             cell by cell over it \u{2014} the row it is headed by is the frame's seam, drawn in \
+             the plane's own pixels"
         );
     }
     let (width, _) = ground.pixels().dimensions();
+    let prompt = channels(palette.band(Band::Prompt)).expect("the prompt's band in pixels");
     assert_eq!(
-        ground.pixels().get_pixel(width - 1, 0).0[..3],
-        channels(palette.band(Band::Prompt)).expect("the prompt's band in pixels"),
-        "and the band the prompt is read on is the plane's first pixel row, which is how it \
-         reads over the band's own ground"
+        ground.pixels().get_pixel(width - 1, cell().height()).0[..3],
+        prompt,
+        "and the band the prompt is read on is the pixel row under the seam's cell, which is how \
+         it reads over the band's own ground"
     );
 }
 
@@ -1733,10 +1752,22 @@ fn a_256_colour_palette_draws_the_bands_ground_in_its_own_greys() {
         ([48, 48, 48], [38, 38, 38]),
         "the band this palette spells runs from the prompt's grey down to the rail's own"
     );
+    let joint = ground.pixels().get_pixel(width - 1, 0).0;
+    assert!(
+        (0..3).all(|channel| joint[channel] < prompt[channel]),
+        "the plane's top row is {:?} where the band the prompt is read on is {prompt:?}: the \
+         head row is the seam, and it opens on the joint the two bands are parted by",
+        &joint[..3]
+    );
     assert_eq!(
-        ground.pixels().get_pixel(width - 1, 0).0[..3],
-        channels(shade.row(0)).expect("the band's first row in pixels"),
-        "the plane's top row is the band's own head row, the band the prompt is read on"
+        (joint[0], joint[1], joint[2]),
+        (joint[1], joint[1], joint[1]),
+        "and the joint is the band's own grey on every channel, with no colour of its own"
+    );
+    assert_eq!(
+        ground.pixels().get_pixel(width - 1, cell().height()).0[..3],
+        channels(shade.row(1)).expect("the band's second row in pixels"),
+        "and the row under the seam's cell is the prompt's band whole, where the shadow is spent"
     );
     assert_eq!(
         ground.pixels().get_pixel(width - 1, height - 1).0[..3],
@@ -1795,11 +1826,11 @@ fn a_truecolour_frames_band_is_drawn_in_the_two_tones_the_palette_gives_it() {
     );
     let column = width - 1;
     let top = ground.pixels().get_pixel(column, 0).0;
-    assert_eq!(
-        top[..3],
-        prompt,
-        "the plane's top row is the band the prompt is read on, and no pixel row of the well \
-         above it"
+    assert!(
+        (0..3).all(|channel| top[channel] < prompt[channel]),
+        "the plane's top row is {:?} where the band the prompt is read on is {prompt:?}: the head \
+         row is the seam, and it opens on the joint the bands are parted by",
+        &top[..3]
     );
     let bottom = ground.pixels().get_pixel(column, height - 1).0;
     assert_eq!(
@@ -1844,10 +1875,12 @@ fn the_bands_ground_is_the_shade_sampled_row_by_row_from_the_prompt_band_to_the_
             );
         }
     }
-    assert_eq!(
-        ground.pixels().get_pixel(column, 0).0[..3],
-        first,
-        "the plane opens on the band the prompt is read on"
+    let joint = ground.pixels().get_pixel(column, 0).0;
+    assert!(
+        (0..3).all(|channel| joint[channel] < first[channel]),
+        "the plane opens on {:?} where the band the prompt is read on is {first:?}: the head row \
+         is the seam, and its first pixel row is the joint the band falls into",
+        &joint[..3]
     );
     assert_eq!(
         ground.pixels().get_pixel(column, height - 1).0[..3],
@@ -1939,29 +1972,42 @@ fn the_bands_head_row_is_the_frames_seam_claimed_over_its_plane() {
         "the plane stands under the band's own head row"
     );
     let tone = channels(shade_of(&frame, PlaneId::Composer).row(0)).expect("the band in pixels");
-    let head = middle_of(ground, 0);
+    let joint = ground.pixels().get_pixel(ground.pixels().width() / 2, 0).0;
     for channel in 0..3 {
         assert!(
-            head[channel].abs_diff(tone[channel]) <= 1,
-            "channel {channel} of the middle of the band's head cell is {} where the band's own \
-             tone is {}",
-            head[channel],
+            joint[channel] < tone[channel],
+            "channel {channel} of the band's head cell at the joint is {} where the band's own \
+             tone is {}: the head row is the seam, and it opens on a shadow under the band",
+            joint[channel],
             tone[channel]
         );
     }
+    let spent = middle_of(ground, 0);
+    for channel in 0..3 {
+        assert!(
+            spent[channel].abs_diff(tone[channel]) <= 1,
+            "channel {channel} of the middle of the band's head cell is {} where the band's own \
+             tone is {}: the shadow the head cell opens on is all but spent by its middle, and \
+             the band is read whole under it",
+            spent[channel],
+            tone[channel]
+        );
+    }
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
     let mut claimed = 0;
     for x in band.x..band.right() {
         assert_eq!(
             frame.cells()[(x, band.y)].bg,
-            palette.edge_ink(),
-            "column {x} of the band's head row is not the one edge ink, so the seam that heads \
-             the band is read as a cell's light rather than the plane's"
+            own,
+            "column {x} of the band's head row is not the terminal's own ground, so the seam \
+             that heads the band is read through a cell of its own rather than through the \
+             plane's pixels"
         );
         claimed += 1;
     }
     assert_eq!(
         claimed, band.width,
-        "every column of the head row is claimed by the seam of the frame"
+        "every column of the head row is given to the plane the seam is drawn in"
     );
 }
 
@@ -2012,10 +2058,17 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     );
     let (width, height) = band.pixels().dimensions();
     let tone = channels(palette.band(Band::Rail)).expect("a band in pixels");
+    let joint = band.pixels().get_pixel(0, 0).0;
+    assert!(
+        (0..3).all(|channel| joint[channel] < tone[channel]),
+        "the plane's head is {:?} where the rail's own tone is {tone:?}: the first column is the \
+         seam, and it opens on the joint the rail is parted from the transcript band by",
+        &joint[..3]
+    );
     assert_eq!(
-        band.pixels().get_pixel(0, 0).0[..3],
+        band.pixels().get_pixel(cell().width(), 0).0[..3],
         tone,
-        "the plane's head is the rail's own tone, and no column of its own is lit"
+        "and the column under the seam's cell is the rail's own tone, with no pixel of it lit"
     );
     assert_eq!(
         band.pixels().get_pixel(width - 1, height - 1).0[..3],
@@ -2438,11 +2491,9 @@ fn a_terminal_that_places_no_picture_keeps_the_bands_own_rows_and_hands_back_no_
         );
         assert_eq!(
             picture_frame.cells()[(x, y)].bg,
-            match row {
-                0 => palette.edge_ink(),
-                _ => palette.ground(None).bg.unwrap(),
-            },
-            "row {row} of the band a plane is placed under stands on the terminal's own ground"
+            palette.ground(None).bg.unwrap(),
+            "row {row} of the band a plane is placed under stands on the terminal's own ground, \
+             the head row that carries the seam among them"
         );
     }
     for x in band.x..band.right() {
@@ -2453,8 +2504,9 @@ fn a_terminal_that_places_no_picture_keeps_the_bands_own_rows_and_hands_back_no_
         );
         assert_eq!(
             picture_frame.cells()[(x, band.y)].bg,
-            palette.edge_ink(),
-            "and on the same one edge ink over the plane a terminal that places one is handed"
+            palette.ground(None).bg.unwrap(),
+            "and on the terminal's own ground over the plane a terminal that places one is handed, \
+             which draws the parting in its pixels"
         );
     }
 }

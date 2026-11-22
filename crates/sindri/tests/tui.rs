@@ -3763,7 +3763,7 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
         u32::from(columns),
         u32::from(Rail::columns(COLS)),
         "and the plane covers the rail's own columns and no column of the transcript's: the \
-         seam beside it is drawn in cells"
+         seam beside it is drawn in the plane's own pixels"
     );
     assert_eq!(
         rows,

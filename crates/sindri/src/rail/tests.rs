@@ -388,19 +388,19 @@ fn the_rails_plane_is_one_tone_in_every_pixel_it_covers() {
     let pixels = plane.pixels();
     let (width, height) = pixels.dimensions();
     let tone = channels(PALETTE.band(Band::Rail)).expect("a band in pixels");
+    let seam = CellSize::NOMINAL.width();
 
-    assert_eq!(
-        pixels.get_pixel(0, 0).0[..3],
-        tone,
-        "the plane's first cell is the rail's own tone, and no column of its own is lit"
-    );
     for y in 0..height {
         for x in 0..width {
+            if x < seam {
+                continue;
+            }
             assert_eq!(
                 pixels.get_pixel(x, y).0[..3],
                 tone,
                 "pixel row {y}, column {x} of the rail's plane is not the rail's own tone: no row \
-                 of the band falls into the shadow, its last cell included"
+                 of the band falls into the shadow, its last cell included, and the only column \
+                 that is drawn is the seam's own"
             );
         }
     }
@@ -426,14 +426,11 @@ fn a_ledger_handed_a_cell_lights_no_column_and_shadows_no_row_of_its_band() {
         for x in rail.x..rail.right() {
             assert_eq!(
                 under(&buffer, x, y),
-                match x == rail.x {
-                    true => PALETTE.edge_ink(),
-                    false => PALETTE.ground(None).bg.expect("the terminal's own ground"),
-                },
+                PALETTE.ground(None).bg.expect("the terminal's own ground"),
                 "row {y}, column {x} of the band is not claimed as the terminal's own ground: a \
                  lit column down the rail or a shadow across its last is a line drawn where the \
-                 plane falls, and the shade is no line \u{2014} the one column the frame claims \
-                 is its seam, in the one edge ink"
+                 plane falls, and the shade is no line \u{2014} the seam's own cell included, \
+                 which the plane draws its parting in"
             );
         }
     }

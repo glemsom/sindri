@@ -144,6 +144,13 @@ impl Shade {
         caret: u16,
         palette: &Palette,
     ) -> Option<Shade> {
+        // The row a band is headed by is a seam, and the light the caret casts falls on the band
+        // under it.
+        let band = Rect {
+            y: band.y.saturating_add(1),
+            height: band.height.saturating_sub(1),
+            ..band
+        };
         if !covers(band) || caret < band.x || caret >= band.right() {
             return None;
         }
@@ -162,13 +169,26 @@ impl Shade {
 
     pub fn seam(&self) -> Option<(Axis, Rect)> {
         let area = self.area();
+        let axis = self.seam_axis()?;
+        Some((
+            axis,
+            match axis {
+                Axis::Down => Rect { width: 1, ..area },
+                Axis::Across => Rect { height: 1, ..area },
+            },
+        ))
+    }
+
+    /// The axis the bands either side of this shade are parted on, which is the axis its plane
+    /// draws its fall down.
+    fn seam_axis(&self) -> Option<Axis> {
         match self {
             Shade::Transcript { .. } | Shade::Caret { .. } => None,
             Shade::Rail {
                 shape: Rail::Strip, ..
             } => None,
-            Shade::Rail { .. } => Some((Axis::Down, Rect { width: 1, ..area })),
-            Shade::Composer { .. } => Some((Axis::Across, Rect { height: 1, ..area })),
+            Shade::Rail { .. } => Some(Axis::Down),
+            Shade::Composer { .. } => Some(Axis::Across),
         }
     }
 
@@ -217,6 +237,7 @@ impl Shade {
     /// left out, so a light that moved is a placement and no transmission.
     pub fn image(&self) -> Option<Image> {
         let cell = self.cell()?;
+        let seam = self.seam_axis();
         Some(match self {
             Shade::Transcript {
                 area, well, peak, ..
@@ -238,6 +259,7 @@ impl Shade {
                 tone: channels(*tone)?,
                 face: *face,
                 peak: *peak,
+                seam,
             },
             Shade::Composer {
                 area, prompt, rail, ..
@@ -246,6 +268,7 @@ impl Shade {
                 cell,
                 prompt: channels(*prompt)?,
                 rail: channels(*rail)?,
+                seam,
             },
             Shade::Caret {
                 band,
@@ -302,13 +325,14 @@ impl Shade {
             return;
         }
         let area = self.area();
+        if self.places() {
+            pen::claim(buffer, area, palette.ground(None));
+            return;
+        }
         let seam = self.seam();
         for row in 0..area.height {
             let y = area.y.saturating_add(row);
-            let ground = match self.places() {
-                true => palette.ground(None),
-                false => palette.over(self.row(row)),
-            };
+            let ground = palette.over(self.row(row));
             let line = Rect {
                 y,
                 height: 1,
@@ -382,12 +406,14 @@ pub enum Image {
         tone: [u8; 3],
         face: Option<Rect>,
         peak: u8,
+        seam: Option<Axis>,
     },
     Composer {
         area: Rect,
         cell: CellSize,
         prompt: [u8; 3],
         rail: [u8; 3],
+        seam: Option<Axis>,
     },
     Caret {
         rows: u16,
@@ -427,6 +453,13 @@ impl Image {
         }
     }
 
+    fn seam(self) -> Option<Axis> {
+        match self {
+            Image::Rail { seam, .. } | Image::Composer { seam, .. } => seam,
+            Image::Transcript { .. } | Image::Caret { .. } => None,
+        }
+    }
+
     fn rows(self) -> u16 {
         match self {
             Image::Transcript { area, .. }
@@ -455,11 +488,11 @@ impl Image {
         }
     }
 
-    /// The lamp this image's pixels stand in, at the image's own pixel origin.
+    /// The light this image's pixels stand in, at the image's own pixel origin.
     fn light(self) -> Light {
         let cell = self.cell();
         let (across, down) = (f64::from(cell.width()), f64::from(cell.height()));
-        match self {
+        let light = match self {
             Image::Transcript { peak, .. } => Light::lamp(
                 peak,
                 At { x: 0.0, y: 0.0 },
@@ -501,6 +534,10 @@ impl Image {
                     y: f64::from(rows.saturating_sub(1).max(1)) * down,
                 },
             ),
+        };
+        match self.seam() {
+            Some(axis) => light.parted(axis, cell),
+            None => light,
         }
     }
 
@@ -516,7 +553,9 @@ impl Image {
         image::RgbaImage::from_fn(width, height, |x, y| {
             let row = u16::try_from(y / down).unwrap_or(u16::MAX).min(self.rows());
             let lit = dithered(light.at(f64::from(x), f64::from(y)), (x, y));
-            let [red, green, blue] = self.rung(row).map(|at| at.saturating_add(lit));
+            let [red, green, blue] = self
+                .rung(row)
+                .map(|at| (i32::from(at) + lit).clamp(0, 255) as u8);
             image::Rgba([red, green, blue, 255])
         })
     }
@@ -525,6 +564,10 @@ impl Image {
 /// The rows the transcript band's light falls over: a crown spent by the band's third row, where
 /// the prose under it is read on the well.
 const CROWN_ROWS: f64 = 2.0;
+
+/// The channels a seam's shadow takes below the band's rung and its hairline adds over it: deep
+/// enough to part every rung the ramp holds, and one weight on both axes.
+const SEAM: u8 = 24;
 
 /// How far into its reach a lamp has fallen when it is spent: under half a channel of any peak
 /// the palette hands a band, so what the dither rounds up at the rim is a pixel and no step.
@@ -550,28 +593,34 @@ struct At {
     y: f64,
 }
 
-/// The light a band carries: one lamp, its peak, the point it stands on and the reach it is spent
-/// over on each axis.
+/// The light a band carries: the lamp its own light stands on, and the joint it is parted from.
 #[derive(Clone, Copy, Debug)]
 struct Light {
+    lamp: Lamp,
+    shadow: Lamp,
+    hairline: Lamp,
+}
+
+/// One lamp: the peak it stands at, the point it is centred on and the reach it is spent over on
+/// each axis.
+#[derive(Clone, Copy, Debug)]
+struct Lamp {
     peak: f64,
     centre: At,
     reach: At,
 }
 
-impl Light {
-    /// A band with nothing standing on it, which its pixels read as a peak of no light.
-    const NONE: Light = Light {
+impl Lamp {
+    /// A lamp that stands nowhere, which a pixel reads as no light at all.
+    const NONE: Lamp = Lamp {
         peak: 0.0,
         centre: At { x: 0.0, y: 0.0 },
         reach: At { x: 1.0, y: 1.0 },
     };
 
-    /// A lamp at `centre`, spent over `reach` on each axis: a reach of no bound is an axis the
-    /// light does not fall on, and one past the reach is where it is exactly nothing.
-    fn lamp(peak: u8, centre: At, reach: At) -> Light {
-        Light {
-            peak: f64::from(peak),
+    fn new(peak: f64, centre: At, reach: At) -> Lamp {
+        Lamp {
+            peak,
             centre,
             reach,
         }
@@ -589,14 +638,70 @@ impl Light {
     }
 }
 
-/// The light a pixel carries in the channel it is drawn in: the ordered matrix's threshold is
-/// added before the floor, so an amount of light that is no whole channel is dithered rather
-/// than blended into the rung beside it.
-fn dithered(light: f64, (x, y): (u32, u32)) -> u8 {
+impl Light {
+    /// A band with nothing standing on it: no lamp, and no joint to be parted from.
+    const NONE: Light = Light {
+        lamp: Lamp::NONE,
+        shadow: Lamp::NONE,
+        hairline: Lamp::NONE,
+    };
+
+    /// A lamp at `centre`, spent over `reach` on each axis: a reach of no bound is an axis the
+    /// light does not fall on, and one past the reach is where it is exactly nothing.
+    fn lamp(peak: u8, centre: At, reach: At) -> Light {
+        Light {
+            lamp: Lamp::new(f64::from(peak), centre, reach),
+            ..Light::NONE
+        }
+    }
+
+    /// This light with its band parted from the one beside it on `axis`: a shadow at the joint
+    /// falling to nothing by the middle of the seam's cell, and the hairline that is its last
+    /// pixel lifted off the band.
+    fn parted(self, axis: Axis, cell: CellSize) -> Light {
+        let along = |at: f64| match axis {
+            Axis::Down => At { x: at, y: 0.0 },
+            Axis::Across => At { x: 0.0, y: at },
+        };
+        let reach = |at: f64| match axis {
+            Axis::Down => At {
+                x: at,
+                y: f64::INFINITY,
+            },
+            Axis::Across => At {
+                x: f64::INFINITY,
+                y: at,
+            },
+        };
+        let extent = match axis {
+            Axis::Down => f64::from(cell.width()),
+            Axis::Across => f64::from(cell.height()),
+        };
+        Light {
+            shadow: Lamp::new(-f64::from(SEAM), along(0.0), reach(extent / 2.0)),
+            hairline: Lamp::new(f64::from(SEAM), along(extent - 1.0), reach(0.5)),
+            ..self
+        }
+    }
+
+    /// The light at a pixel: what each of the lamps this band carries stands there.
+    fn at(self, x: f64, y: f64) -> f64 {
+        self.lamp.at(x, y) + self.shadow.at(x, y) + self.hairline.at(x, y)
+    }
+}
+
+/// The light a pixel carries in the channels it is drawn in: the ordered matrix's threshold is
+/// added to its magnitude before the floor, so an amount of light that is no whole channel is
+/// dithered rather than blended into the rung beside it, and a shadow is dithered as a light is.
+fn dithered(light: f64, (x, y): (u32, u32)) -> i32 {
     let down = usize::try_from(y % 8).unwrap_or(0);
     let across = usize::try_from(x % 8).unwrap_or(0);
     let threshold = (f64::from(THRESHOLDS[down][across]) + 0.5) / 64.0;
-    (light + threshold).floor().clamp(0.0, 255.0) as u8
+    let whole = (light.abs() + threshold).floor().min(255.0) as i32;
+    match light < 0.0 {
+        true => -whole,
+        false => whole,
+    }
 }
 
 /// Where an image stands and which columns of it are shown there.
