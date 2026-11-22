@@ -30,7 +30,7 @@ use super::*;
 
 /// The guard a taken screen is held in is one for the whole process, so the tests that take one
 /// hold this too: two screens at once is one of them given back down the other's terminal.
-static ONE_SCREEN: Mutex<()> = Mutex::new(());
+pub(crate) static ONE_SCREEN: Mutex<()> = Mutex::new(());
 
 /// A terminal that fills its `winsize`'s pixel fields is asked nothing, because the kernel's
 /// own answer is the whole of what a picture needs.

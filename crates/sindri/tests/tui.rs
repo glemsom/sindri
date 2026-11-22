@@ -34,9 +34,19 @@ const PATIENCE: Duration = Duration::from_secs(10);
 const COLS: u16 = 120;
 const ROWS: u16 = 40;
 
+/// A terminal's size, in the two numbers a window change moves.
+#[derive(Clone, Copy)]
+struct Size {
+    cols: u16,
+    rows: u16,
+}
+
 /// The size a window change gives the terminal: taller and wider than the boot size, so a frame laid
 /// at it claims rows and columns the frame before it never reached.
-const RESIZED: (u16, u16) = (140, 50);
+const RESIZED: Size = Size {
+    cols: 140,
+    rows: 50,
+};
 
 const ANSWER: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_stream.sse");
@@ -372,7 +382,7 @@ impl Pty {
 
     /// The size the window now has, as a window manager sets it before it says so: the child is
     /// nobody's controlling terminal's, so this alone delivers no `SIGWINCH` and the test sends one.
-    fn resized(&self, (cols, rows): (u16, u16)) {
+    fn resized(&self, Size { cols, rows }: Size) {
         tcsetwinsize(
             &self.slave,
             Winsize {
@@ -561,7 +571,7 @@ impl Session {
 
     /// The report a window manager sends when the window changed size, sent the way `interrupt`
     /// sends a cancel: the size a pty is given reaches no process that is nobody's terminal's child.
-    fn window_changed(&self) -> bool {
+    fn sent_window_change(&self) -> bool {
         self.sent("-WINCH")
     }
 
@@ -1134,14 +1144,18 @@ fn showing(drawn: &str, needle: &str) -> bool {
     picture(drawn).values().any(|row| row.contains(needle))
 }
 
-/// The words on the last row of the frame a launch's bytes leave in a terminal of that size: the
-/// composer's footer, and so the proof that the frame was laid at that size and not another.
-fn footer(drawn: &str, (cols, rows): (u16, u16)) -> String {
-    frame::read(drawn, cols, rows)
+/// The frame every byte drawn so far leaves in a terminal of that size.
+fn at_size(drawn: &str, size: Size) -> frame::Frame {
+    frame::read(drawn, size.cols, size.rows)
+}
+
+/// Whether that frame wears `needle` on its last row: only a frame laid at that size draws the
+/// composer's footer there, so the row is the proof of the size the launch read for itself.
+fn footer(drawn: &str, size: Size, needle: &str) -> bool {
+    at_size(drawn, size)
         .words()
-        .pop()
-        .unwrap_or_default()
-        .to_owned()
+        .last()
+        .is_some_and(|row| row.contains(needle))
 }
 
 /// A row of a screen with the card's border and inset taken off it, so a row of facts is read as
@@ -2594,14 +2608,15 @@ fn a_window_change_alone_repaints_an_idle_launch_at_the_size_the_terminal_now_ho
 
     pty.resized(RESIZED);
     assert!(
-        session.window_changed(),
+        session.sent_window_change(),
         "the window manager's report reaches the launch"
     );
 
     assert!(
-        drawn.wait_until(|frame| footer(frame, RESIZED).contains("Enter send")),
+        drawn.wait_until(|frame| footer(frame, RESIZED, "Enter send")),
         "no key was typed and nothing landed, so the report is the whole of what the launch woke \
-         for, and the footer it paints is the last row of the size the terminal now holds: {:?}",
+         for: an idle launch waits on no clock at all, and the footer it paints is the last row of \
+         the size the terminal now holds: {:?}",
         drawn.text()
     );
 
@@ -2629,16 +2644,18 @@ fn a_window_change_is_no_keystroke_the_composer_reads() {
 
     pty.resized(RESIZED);
     assert!(
-        session.window_changed(),
+        session.sent_window_change(),
         "the window manager's report reaches the launch"
     );
 
     assert!(
         drawn.wait_until(|frame| {
-            let now = frame::read(frame, RESIZED.0, RESIZED.1);
-            footer(frame, RESIZED).contains("Enter send")
-                && now.words().iter().any(|row| row.contains(draft))
-                && now.caret() == Some((RESIZED.1 - 2, typed))
+            footer(frame, RESIZED, "Enter send")
+                && at_size(frame, RESIZED)
+                    .words()
+                    .iter()
+                    .any(|row| row.contains(draft))
+                && at_size(frame, RESIZED).caret() == Some((RESIZED.rows - 2, typed))
         }),
         "the draft the window change found is the draft it leaves, in the cell the caret is back \
          in once the frame is laid at the new size: no glyph of a report reached the composer: {:?}",
@@ -2650,7 +2667,7 @@ fn a_window_change_is_no_keystroke_the_composer_reads() {
 }
 
 #[test]
-fn two_window_changes_delivered_together_paint_the_newest_size_the_terminal_holds() {
+fn two_window_changes_queued_together_are_one_read_and_the_newest_size_is_drawn() {
     let ground = Ground::new();
     let (session, mut pty, drawn) = Session::open(&ground);
     assert!(
@@ -2662,16 +2679,19 @@ fn two_window_changes_delivered_together_paint_the_newest_size_the_terminal_hold
     // Held still across both reports, so the two of them are waiting behind one readiness when the
     // launch reads again — a burst, as a dragged window makes one.
     assert!(session.sent("-STOP"), "the launch is held where it stands");
-    pty.resized((100, 30));
-    assert!(session.window_changed(), "the first report is queued");
+    pty.resized(Size {
+        cols: 100,
+        rows: 30,
+    });
+    assert!(session.sent_window_change(), "the first report is queued");
     pty.resized(RESIZED);
-    assert!(session.window_changed(), "the second report is queued");
+    assert!(session.sent_window_change(), "the second report is queued");
     assert!(session.sent("-CONT"), "the launch reads both at once");
 
     assert!(
-        drawn.wait_until(|frame| footer(frame, RESIZED).contains("Enter send")),
-        "the report says the window changed and never what it changed to, so the paint reads the \
-         size itself: one frame, at the newest size the terminal holds: {:?}",
+        drawn.wait_until(|frame| footer(frame, RESIZED, "Enter send")),
+        "the report says the window changed and never what it changed to, so the one paint that \
+         answers both reads the size itself: the newest size, and never the one between them: {:?}",
         drawn.text()
     );
 
@@ -2693,20 +2713,27 @@ fn a_window_change_with_a_run_live_stops_nothing_and_the_run_still_lands_its_ans
 
     pty.resized(RESIZED);
     assert!(
-        session.window_changed(),
+        session.sent_window_change(),
         "the window manager's report reaches the launch"
+    );
+
+    assert!(
+        drawn.wait_until(|frame| footer(frame, RESIZED, "Ctrl-C cancel")),
+        "the run is still there to cancel and the frame laid at the new size is painted while the \
+         wire holds its answer, so the report neither stopped the run nor waited for it: {:?}",
+        drawn.text()
     );
 
     wire.release();
     answered(&drawn);
 
     assert!(
-        frame::read(&drawn.text(), RESIZED.0, RESIZED.1)
+        at_size(&drawn.text(), RESIZED)
             .words()
             .iter()
             .any(|row| row.contains(ANSWER_SAID)),
-        "the run the window change found is the run it leaves: it neither stopped nor started \
-         again, and the answer it landed is drawn at the size the terminal now holds: {:?}",
+        "the run the window change found is the run it leaves: the answer it landed is drawn at \
+         the size the terminal now holds: {:?}",
         drawn.text()
     );
 

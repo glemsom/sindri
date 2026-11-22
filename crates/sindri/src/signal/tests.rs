@@ -1,7 +1,7 @@
 //! The causes a wake carries: a cancel that outlives the drain behind it and a pipe already full,
 //! and a window change that one repaint answers however many arrived.
 
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::os::fd::AsFd;
 use std::time::Duration;
 
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
@@ -83,21 +83,12 @@ fn a_cancel_and_a_window_change_behind_one_readiness_are_read_apart() {
     );
 }
 
-/// One install at a time: a disposition belongs to the process, so two tests that take one would
-/// read each other's.
-static INSTALLED: Mutex<()> = Mutex::new(());
-
-fn installing() -> MutexGuard<'static, ()> {
-    INSTALLED.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-/// `SIG_IGN` as `signal()` names it: the report is the reader's to ignore, and a launch that found
-/// it ignored has to leave it that way.
+/// `SIG_IGN` as `signal()` names it: the report is the reader's to ignore, and a launch that found it
+/// ignored has to leave it that way.
 const SIG_IGN: usize = 1;
 
-/// The report a window manager sends, delivered to this process the way a launch waits for it. It
-/// may be handled on a thread of the harness's own, so the wake is waited on rather than assumed.
-fn window_changed() {
+/// The report a window manager sends, delivered to this process the way a launch waits for it.
+fn sent_window_change() {
     rustix::process::kill_process(rustix::process::getpid(), rustix::process::Signal::WINCH)
         .expect("the window change is delivered");
 }
@@ -116,13 +107,13 @@ fn awakened(wake: &Wake) {
 
 #[test]
 fn a_window_change_is_caught_beside_the_cancel_and_a_burst_of_them_is_one_read() {
-    let _installing = installing();
+    let _installing = one_at_a_time();
     let wake = Wake::installed().expect("a wake");
 
-    window_changed();
+    sent_window_change();
     awakened(&wake);
     wake.drain();
-    window_changed();
+    sent_window_change();
     awakened(&wake);
 
     let first = wake.causes();
@@ -138,27 +129,32 @@ fn a_window_change_is_caught_beside_the_cancel_and_a_burst_of_them_is_one_read()
         "however many reports arrived behind one readiness: a report is a repaint, and one repaint \
          answers all of them"
     );
-    give_back();
+    give_signals_back();
 }
 
 #[test]
-fn the_disposition_a_launch_found_is_given_back_with_the_screen() {
-    let _installing = installing();
+fn the_screen_gives_the_signals_back_where_it_found_them() {
+    let _installing = one_at_a_time();
+    let _one_screen = crate::term::lock(&crate::term::tests::ONE_SCREEN);
     let found = unsafe { signal(SIGWINCH, SIG_IGN) };
     let wake = Wake::installed().expect("a wake");
-    window_changed();
+    sent_window_change();
     awakened(&wake);
     assert!(
         wake.causes().holds(Causes::RESIZE),
         "a launch that holds the terminal catches the report while it holds it"
     );
 
-    give_back();
+    let pty = crate::term::pty::Pty::open();
+    let terminal = crate::term::Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd())
+        .expect("a terminal to draw on");
+    drop(crate::term::Screen::take(&terminal, false, false).expect("the screen is taken"));
 
     let left = unsafe { signal(SIGWINCH, found) };
     assert_eq!(
         left, SIG_IGN,
-        "a launch started on a terminal that ignored the report leaves it ignored, and never a \
-         handler pointing at a pipe that is gone"
+        "the screen gives the signals back where it found them, so a launch that began on a \
+         terminal that ignored the report leaves it ignored, and never a handler pointing at a \
+         pipe that is gone"
     );
 }
