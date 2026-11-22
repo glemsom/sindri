@@ -1804,6 +1804,185 @@ fn a_live_entry_is_laid_out_again_when_the_marker_moves() {
 }
 
 #[test]
+fn a_markers_step_lays_the_row_it_heads_and_no_other() {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(60, Surface::none(), None));
+    rows.text("a short answer.");
+    rows.live(Some(&Pulse::live(4_200).head()));
+
+    let before: Vec<Row> = rows.rows(0).to_vec();
+    let laid = rows.laid();
+    rows.live(Some(&Pulse::live(4_280).head()));
+    let stepped: Vec<Row> = rows.rows(0).to_vec();
+    assert_eq!(
+        rows.laid(),
+        laid + 1,
+        "a marker's step lays the row it heads"
+    );
+    assert_eq!(before[0].glyphs(), "⠹ 4.2s a short answer.");
+    assert_eq!(stepped[0].glyphs(), "⠸ 4.2s a short answer.");
+    let mut once = Rows::new();
+    once.measure(Measure::new(60, Surface::none(), None));
+    once.text("a short answer.");
+    once.live(Some(&Pulse::live(4_280).head()));
+    assert_eq!(
+        once.rows(0)[0],
+        stepped[0],
+        "the row a step lays is the row a first pass lays, cell for cell"
+    );
+    assert_eq!(
+        before[1..],
+        stepped[1..],
+        "every row under it stands as it was laid"
+    );
+}
+
+#[test]
+fn a_markers_step_lays_one_row_however_long_the_answer_under_it_is() {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(60, Surface::none(), None));
+    rows.text(&"word ".repeat(4_000));
+    rows.live(Some(&Pulse::live(4_200).head()));
+    let deep = rows.rows(0).len();
+    assert!(deep > 200, "the answer is {deep} rows deep");
+
+    let laid = rows.laid();
+    rows.live(Some(&Pulse::live(4_280).head()));
+    assert_eq!(
+        rows.laid(),
+        laid + 1,
+        "a step of the marker costs the same however long the answer under it is"
+    );
+}
+
+#[test]
+fn a_fragment_that_lands_lays_the_answers_rows_and_leaves_the_markers_cells() {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(40, Surface::none(), None));
+    rows.text("an answer arriving");
+    let head = Pulse::live(4_200).head();
+    rows.live(Some(&head));
+    let marker: Vec<(String, Look)> = rows.rows(0)[0].spans()[..3].to_vec();
+    let laid = rows.laid();
+
+    rows.text(" one word at a time, and the wrap under it moves with them");
+    rows.live(Some(&head));
+
+    let drawn: Vec<Row> = rows.rows(0).to_vec();
+    assert_eq!(drawn.len(), 3, "the answer is three rows now");
+    assert_eq!(
+        rows.laid(),
+        laid + drawn.len(),
+        "its rows are laid again, the one the marker heads among them"
+    );
+    assert_eq!(
+        drawn[0].spans()[..3],
+        marker[..],
+        "and the marker's own cells stand where they stood"
+    );
+
+    let laid = rows.laid();
+    rows.live(Some(&Pulse::live(4_280).head()));
+    assert_eq!(
+        rows.laid(),
+        laid + 1,
+        "a marker still steps in one row over an answer it landed under"
+    );
+}
+
+#[test]
+fn a_marker_the_band_gives_up_steps_without_laying_the_answer_again() {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(6, Surface::none(), None));
+    rows.text("an answer too wide for a marker beside it");
+    rows.live(Some(&Pulse::live(4_200).head()));
+    let first: Vec<Row> = rows.rows(0).to_vec();
+    assert!(
+        !first[0].glyphs().contains('⠹'),
+        "the band holds no marker beside a word of the answer: {:?}",
+        first[0].glyphs()
+    );
+
+    let laid = rows.laid();
+    rows.live(Some(&Pulse::live(4_280).head()));
+    assert_eq!(
+        rows.laid(),
+        laid + 1,
+        "the row the marker would head is laid, and the answer under it is not"
+    );
+    assert_eq!(
+        rows.rows(0).to_vec(),
+        first,
+        "and a marker the band gave up moves no cell of it"
+    );
+}
+
+#[test]
+fn a_marker_whose_words_widen_lays_the_rows_under_it_again() {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(40, Surface::none(), None));
+    rows.text("aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii");
+    rows.live(Some(&Pulse::live(9_900).head()));
+    let narrow: Vec<Row> = rows.rows(0).to_vec();
+    assert!(
+        narrow[0].glyphs().contains("9.9s"),
+        "the marker says the time it stands on"
+    );
+    let laid = rows.laid();
+
+    rows.live(Some(&Pulse::live(10_000).head()));
+
+    let wide: Vec<Row> = rows.rows(0).to_vec();
+    assert!(
+        rows.laid() > laid + 1,
+        "a wider marker lays the rows under it again, because what they wrap at moved"
+    );
+    assert_ne!(
+        narrow[0].spans()[3..],
+        wide[0].spans()[3..],
+        "and the answer's first words wrap at the columns the marker's own words reserve"
+    );
+}
+
+#[test]
+fn the_recorded_answers_marker_moves_the_row_it_heads_and_no_other_entries() {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(60, Surface::none(), None));
+    for entry in transcript() {
+        rows.push(entry);
+    }
+    rows.heading(Some(Pulse::live(4_200).head()));
+    let newest = rows.len() - 1;
+    for at in 0..rows.len() {
+        rows.rows(at);
+    }
+    let before: Vec<Row> = rows.rows(newest).to_vec();
+    assert!(
+        before[0].glyphs().contains("4.2s"),
+        "the marker heads the recorded answer's first row"
+    );
+    let laid = rows.laid();
+
+    rows.heading(Some(Pulse::live(4_280).head()));
+    for at in 0..rows.len() {
+        rows.rows(at);
+    }
+
+    let stepped: Vec<Row> = rows.rows(newest).to_vec();
+    assert_eq!(
+        rows.laid(),
+        laid + before.len(),
+        "the answer the marker heads is the only entry of the band laid again"
+    );
+    assert_ne!(before[0], stepped[0], "and that row is what moved");
+    assert_eq!(
+        before[1..],
+        stepped[1..],
+        "every row under it stands as it was laid"
+    );
+}
+
+#[test]
 fn a_reflow_lays_the_live_entry_once_and_a_pass_that_moved_nothing_lays_none() {
     let mut rows = Rows::new();
     rows.measure(Measure::new(40, Surface::none(), None));
