@@ -1620,10 +1620,15 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
         rail,
         "and it comes down to the rail's tone the band closes on"
     );
-    assert_ne!(
-        ground.pixels().get_pixel(25, 30),
-        ground.pixels().get_pixel(400, 30),
-        "the caret glows"
+    assert_eq!(
+        ground.pixels().get_pixel(25, 30).0[..3],
+        prompt,
+        "the composer's band carries the prompt's own tone at every column of it, and the light \
+         under the caret is a lamp of its own over the band"
+    );
+    assert!(
+        lamp_plane(&view).pixels().get_pixel(lamp_centre(), 30).0[..3] != prompt,
+        "the caret glows, on the lamp the frame stands on its cell"
     );
 }
 
@@ -1848,19 +1853,14 @@ fn the_bands_ground_is_the_shade_sampled_row_by_row_from_the_prompt_band_to_the_
 }
 
 #[test]
-fn the_carets_glow_is_the_same_light_on_every_pixel_row_of_its_column() {
+fn the_lamp_is_the_same_light_on_every_pixel_row_of_the_column_it_stands_on() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
-    let frame = frame::painted(&mut view, 80, 24);
-    let band = frame.told().layout().expect("a laid out frame").composer;
-    let caret = frame
-        .told()
-        .caret()
-        .expect("a draft that takes the keys places the terminal's cursor");
-    let ground = composer_plane(&view);
+    frame::painted(&mut view, 80, 24);
+    let ground = lamp_plane(&view);
     let (width, height) = ground.pixels().dimensions();
-    let at = u32::from(caret.x - band.x) * cell().width() + cell().width() / 2;
+    let at = lamp_centre();
     let step = |y: u32| {
         let lit = ground.pixels().get_pixel(at, y);
         let far = ground.pixels().get_pixel(width - 1, y);
@@ -1888,21 +1888,15 @@ fn the_carets_glow_is_the_same_light_on_every_pixel_row_of_its_column() {
 }
 
 #[test]
-fn the_bands_glow_still_falls_off_under_the_caret() {
+fn the_lamps_light_still_falls_off_away_from_the_caret() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
-    let frame = frame::painted(&mut view, 80, 24);
-    let band = frame.told().layout().expect("a laid out frame").composer;
-    let caret = frame
-        .told()
-        .caret()
-        .expect("a draft that takes the keys places the terminal's cursor");
-    let caret = (caret.x, caret.y);
-    let ground = composer_plane(&view);
+    frame::painted(&mut view, 80, 24);
+    let ground = lamp_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     let row = height / 10;
-    let at = u32::from(caret.0 - band.x) * cell().width() + cell().width() / 2;
+    let at = lamp_centre();
     let lit = ground.pixels().get_pixel(at, row);
     let mut step = cell().width();
     while step < width {
@@ -1920,7 +1914,7 @@ fn the_bands_glow_still_falls_off_under_the_caret() {
     for channel in 0..3 {
         assert!(
             lit[channel] > far[channel],
-            "pixel channel {channel} of the cell the caret waits in is no lighter than the band's \
+            "pixel channel {channel} of the cell the caret waits in is no lighter than the lamp's \
              far side: {lit:?} against {far:?}"
         );
     }
@@ -1987,9 +1981,14 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
             .iter()
             .filter_map(Shade::id)
             .collect::<Vec<PlaneId>>(),
-        vec![PlaneId::Rail, PlaneId::Transcript, PlaneId::Composer],
-        "the frame hands back the rail's shading beside the transcript band's and the \
-         composer's, each under its own identity"
+        vec![
+            PlaneId::Rail,
+            PlaneId::Transcript,
+            PlaneId::Composer,
+            PlaneId::Caret
+        ],
+        "the frame hands back the rail's shading beside the transcript band's, the composer's and \
+         the light under the caret, each under its own identity"
     );
     let band = plane_of(&view, PlaneId::Rail);
     assert_eq!(
@@ -2091,9 +2090,14 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
             .iter()
             .filter_map(Shade::id)
             .collect::<Vec<PlaneId>>(),
-        vec![PlaneId::Rail, PlaneId::Transcript, PlaneId::Composer],
-        "a frame hands back a plane for each of the three bands it draws, each under its own \
-         identity, in the order it paints them"
+        vec![
+            PlaneId::Rail,
+            PlaneId::Transcript,
+            PlaneId::Composer,
+            PlaneId::Caret
+        ],
+        "a frame hands back a plane for each of the three bands it draws and the light under its \
+         caret, each under its own identity, in the order it paints them"
     );
     for (id, area) in bands {
         let plane = plane_of(&view, id);
@@ -2356,7 +2360,7 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_composer() {
          its place is the flat one the frame already had"
     );
     let band = frame.told().layout().expect("a laid out frame").composer;
-    let shade = Shade::composer(band, None, None, &palette).expect("a band to shade");
+    let shade = Shade::composer(band, None, &palette).expect("a band to shade");
     for row in 0..band.height {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
@@ -2383,7 +2387,7 @@ fn a_terminal_that_places_no_picture_keeps_the_bands_own_rows_and_hands_back_no_
     let band = plain_frame.told().layout().unwrap().composer;
     assert_eq!(band, picture_frame.told().layout().unwrap().composer);
     let palette = plain_frame.palette();
-    let shade = Shade::composer(band, None, None, palette).expect("a band to shade");
+    let shade = Shade::composer(band, None, palette).expect("a band to shade");
     for row in 0..band.height {
         let x = band.x + band.width / 2;
         let y = band.y + row;
@@ -2445,13 +2449,16 @@ fn a_pass_that_shades_the_same_bands_makes_no_band_image() {
 }
 
 #[test]
-fn a_pass_whose_caret_column_moved_makes_the_composers_band_again() {
+fn a_pass_whose_caret_column_moved_makes_no_image_and_moves_the_lamp() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
     let first = frame::painted(&mut view, 80, 24);
     let made = view.planes().made();
     let band = first.told().layout().expect("a laid out frame").composer;
+    let stood = shade_of(&first, PlaneId::Caret)
+        .place()
+        .expect("the lamp stands on the cell the caret waits in");
     view.paste(" more");
     let again = frame::painted(&mut view, 80, 24);
     assert_eq!(
@@ -2461,9 +2468,16 @@ fn a_pass_whose_caret_column_moved_makes_the_composers_band_again() {
     );
     assert_eq!(
         view.planes().made(),
-        made + 1,
-        "a pass in which the caret's column moved makes the composer's band again, and no band \
-         whose shading stood"
+        made,
+        "a pass in which the caret's column moved makes no image at all: the light the frame \
+         carries is placed again where it stands, and the bands under it never changed"
+    );
+    assert_ne!(
+        shade_of(&again, PlaneId::Caret)
+            .place()
+            .expect("the lamp stands on the cell the caret waits in"),
+        stood,
+        "and the lamp the frame hands back stands on the column the caret moved to"
     );
 }
 
@@ -2626,6 +2640,15 @@ fn plane_of(view: &View, id: PlaneId) -> &Plane {
 
 fn composer_plane(view: &View) -> &Plane {
     plane_of(view, PlaneId::Composer)
+}
+
+fn lamp_plane(view: &View) -> &Plane {
+    plane_of(view, PlaneId::Caret)
+}
+
+/// Where the lamp's own light is centred, in the pixels of the image it is drawn as.
+fn lamp_centre() -> u32 {
+    u32::from(sindri::plane::LAMP_COLS / 2) * cell().width() + cell().width() / 2
 }
 
 fn shade_of(drawn: &frame::Frame, id: PlaneId) -> Shade {

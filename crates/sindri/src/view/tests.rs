@@ -130,7 +130,7 @@ fn glyph_at(buffer: &Buffer, x: u16, y: u16) -> char {
 }
 
 fn shade_row(palette: &Palette, row: u16, rows: u16) -> Color {
-    Shade::composer(Rect::new(0, 0, 1, rows), None, None, palette)
+    Shade::composer(Rect::new(0, 0, 1, rows), None, palette)
         .expect("a band of rows")
         .row(row)
 }

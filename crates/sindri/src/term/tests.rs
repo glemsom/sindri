@@ -5,7 +5,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use rustix::termios::{LocalModes, Winsize};
 
-use sindri::capability::{Asked, Capabilities, Question};
+use sindri::capability::{Answers, Asked, Capabilities, Question};
 use sindri::composer::Key;
 use sindri::facts::Facts;
 use sindri::ink::{Ink, Look};
@@ -325,6 +325,7 @@ fn written(pty: &Pty, launch: bool) {
             paint(&mut canvas, &mut view).expect("a painted frame");
         }
         false => {
+            canvas.backend_mut().open_frame().expect("a bracket");
             canvas
                 .draw(|frame| {
                     let told = view.paint(frame.area(), frame.buffer_mut());
@@ -382,9 +383,9 @@ fn the_launch_places_the_cursors_cell_after_the_frames_cells() {
         "the show comes first, and then the move: {drawn:?}"
     );
     assert!(
-        drawn.ends_with(&placement),
-        "the placement is the last thing written, so it lands on the frame just painted and \
-         never on a stale one: {drawn:?}"
+        drawn.ends_with(&then_closed(&placement)),
+        "the placement is the last thing written inside the frame, and the bracket closes after \
+         it, so it lands on the frame just painted and never on a stale one: {drawn:?}"
     );
 }
 
@@ -812,6 +813,15 @@ fn carried(writes: &[Vec<u8>]) -> Vec<String> {
         .collect()
 }
 
+/// What the frame's last write ends on: the caret shown and placed, and the bracket closed
+/// after them.
+fn then_closed(placement: &str) -> String {
+    format!(
+        "{placement}{}",
+        std::str::from_utf8(CLOSE_FRAME).expect("a printable close")
+    )
+}
+
 fn placed_in(painted: Painted) -> String {
     let caret = painted
         .caret()
@@ -825,10 +835,20 @@ fn gives_up_across(frame: &[String], placement: &str) {
         "the frame spans more than one write: {} write(s)",
         frame.len()
     );
+    let whole = frame.concat();
+    let open = std::str::from_utf8(OPEN_FRAME).expect("a printable open");
+    let given = std::str::from_utf8(GIVE_UP_CARET).expect("a printable give up");
     assert!(
-        frame[0].starts_with("\u{1b}[?25l"),
-        "the caret is given up before the frame's first byte: {:?}",
-        frame[0]
+        whole.starts_with(given),
+        "the caret is given up before the frame's first byte: {whole:?}"
+    );
+    assert!(
+        whole
+            .strip_prefix(given)
+            .unwrap_or(&whole)
+            .starts_with(open),
+        "and the bracket is opened before the frame's first cell, so the cells, the grounds and \
+         the placements of it are written inside: {whole:?}"
     );
     let given_up: usize = frame
         .iter()
@@ -844,8 +864,9 @@ fn gives_up_across(frame: &[String], placement: &str) {
         "no write the frame spans shows the caret: {before:?}"
     );
     assert!(
-        last.contains("\u{1b}[?25h") && last.ends_with(placement),
-        "and the frame's end shows it and places it, on the cell the frame names: {last:?}"
+        last.contains("\u{1b}[?25h") && last.ends_with(&then_closed(placement)),
+        "and the frame's end shows it, places it on the cell the frame names, and closes the \
+         bracket after them: {last:?}"
     );
 }
 
@@ -891,8 +912,13 @@ fn a_frame_that_fits_in_one_write_places_the_caret_and_never_gives_it_up() {
         "and the caret is never given up where it is placed by the one write: {frame:?}"
     );
     assert!(
-        frame.contains("\u{1b}[?25h") && frame.ends_with(&placement),
-        "the show and the placement are the last things written, as they were: {frame:?}"
+        frame.starts_with(std::str::from_utf8(OPEN_FRAME).expect("a printable open")),
+        "the frame opens the terminal's synchronised output before its first cell: {frame:?}"
+    );
+    assert!(
+        frame.contains("\u{1b}[?25h") && frame.ends_with(&then_closed(&placement)),
+        "the show and the placement are the last things inside the frame, and the bracket closes \
+         after them: {frame:?}"
     );
 }
 
@@ -945,13 +971,19 @@ fn the_launchs_first_frame_and_the_frame_a_resize_paints_give_the_caret_up_acros
     canvas
         .resize(Rect::new(0, 0, 200, 60))
         .expect("a canvas the size the window became");
+    canvas
+        .backend_mut()
+        .flush()
+        .expect("the clear the resize writes is no frame's");
+    let cleared = carried(&writes.kept()).len();
     let resized = placed_in(paint(&mut canvas, &mut view).expect("a painted frame"));
     drop(canvas);
 
     let made = carried(&writes.kept());
     let (first, after) = made.split_at(launched);
+    let (_, resized_frame) = after.split_at(cleared - launched);
     gives_up_across(first, &launch);
-    gives_up_across(after, &resized);
+    gives_up_across(resized_frame, &resized);
 }
 
 /// The bytes a terminal takes in while a frame is written to it, read off a thread of this test's
@@ -1056,9 +1088,22 @@ fn held(shades: &[Shade]) -> Planes {
     images
 }
 
-fn composer_shade(area: Rect, caret: Option<u16>) -> Shade {
-    Shade::composer(area, Some(CellSize::NOMINAL), caret, &Palette::TRUECOLOR)
-        .expect("a band to shade")
+fn composer_shade(area: Rect) -> Shade {
+    Shade::composer(area, Some(CellSize::NOMINAL), &Palette::TRUECOLOR).expect("a band to shade")
+}
+
+fn pictured() -> Capabilities {
+    let environment: std::collections::BTreeMap<String, String> =
+        [("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")]
+            .map(|(key, value)| (String::from(key), String::from(value)))
+            .into_iter()
+            .collect();
+    Capabilities::probed(&environment, &Answers::at(CellSize::NOMINAL), false).0
+}
+
+fn lamp_shade(band: Rect, caret: u16) -> Shade {
+    Shade::caret(band, Some(CellSize::NOMINAL), caret, &Palette::TRUECOLOR)
+        .expect("a lamp to light the band with")
 }
 
 fn rail_shade() -> Shade {
@@ -1087,7 +1132,7 @@ fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
     let shades = [
         rail_shade(),
         transcript_shade(),
-        composer_shade(Rect::new(2, 3, 2, 1), None),
+        composer_shade(Rect::new(2, 3, 2, 1)),
     ];
     let images = held(&shades);
     backend.shades(&shades, &images).unwrap();
@@ -1109,9 +1154,9 @@ fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
     );
     for id in [333, 334, 335] {
         assert!(
-            wire.contains(&format!("_Ga=T,f=100,i={id},q=2")),
-            "a plane is uploaded under no identity of its own, and each band's image is its own: \
-             {wire:?}"
+            wire.contains(&format!("_Ga=T,f=100,i={id},p=1,q=2,z={}", plane::DEPTH)),
+            "a plane is uploaded under no identity and no placement of its own, and each band's \
+             image is its own: {wire:?}"
         );
     }
     let deleted = wire.matches("_Ga=d").count();
@@ -1127,29 +1172,196 @@ fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
 }
 
 #[test]
-fn a_resized_plane_replaces_the_old_placement_and_a_moved_caret_refreshes_it() {
+fn a_resized_plane_takes_the_old_one_away_and_places_the_new_one_after_it() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
-    let first = composer_shade(Rect::new(2, 3, 2, 1), None);
-    let moved = composer_shade(Rect::new(2, 3, 2, 1), Some(3));
-    let resized = composer_shade(Rect::new(1, 5, 3, 2), Some(3));
-    for shade in [first, moved, resized] {
+    let first = composer_shade(Rect::new(2, 3, 2, 1));
+    let resized = composer_shade(Rect::new(1, 5, 3, 2));
+    for shade in [first, resized] {
         backend.shades(&[shade], &held(&[shade])).unwrap();
     }
     drop(backend);
     let wire = String::from_utf8(wire).unwrap();
-    assert_eq!(wire.matches("_Ga=T").count(), 3);
-    assert_eq!(wire.matches("_Ga=d").count(), 2);
-    let first_delete = wire.find("_Ga=d").unwrap();
-    let second_upload = wire.match_indices("_Ga=T").nth(1).unwrap().0;
-    let second_delete = wire.match_indices("_Ga=d").nth(1).unwrap().0;
-    let third_upload = wire.match_indices("_Ga=T").nth(2).unwrap().0;
+    assert_eq!(wire.matches("_Ga=T").count(), 2);
+    assert_eq!(wire.matches("_Ga=d").count(), 1);
+    let taken = wire.find("_Ga=d").unwrap();
+    let placed = wire.match_indices("_Ga=T").nth(1).unwrap().0;
     assert!(
-        first_delete < second_upload
-            && second_upload < second_delete
-            && second_delete < third_upload
+        taken < placed,
+        "the image a resize made stale is taken away before the one that stands in its place is \
+         written: {wire:?}"
     );
     assert!(wire.contains("\x1b[6;2H"));
+}
+
+#[test]
+fn every_ground_is_placed_under_the_depth_a_cells_own_background_cannot_cover() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let band = Rect::new(2, 3, 30, 4);
+    let shades = [
+        rail_shade(),
+        transcript_shade(),
+        composer_shade(band),
+        lamp_shade(band, 8),
+    ];
+    backend.shades(&shades, &held(&shades)).unwrap();
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+
+    let depth: i64 = wire
+        .split_once("z=")
+        .and_then(|(_, rest)| rest.split(',').next())
+        .and_then(|value| value.parse().ok())
+        .expect("a depth on the ground the frame places");
+    assert!(
+        depth < -1_073_741_824,
+        "a ground is placed below the depth at which a terminal draws an image under a cell \
+         that carries a background, and the seam's edge ink is one such cell: {depth}"
+    );
+    for id in [333, 334, 335, 336] {
+        assert!(
+            wire.contains(&format!("i={id},p=1,q=2,z={},C=1", plane::DEPTH)),
+            "the ground under {id} is placed at a depth a cell's background covers: {wire:?}"
+        );
+    }
+    assert!(
+        !wire.contains("z=-1,"),
+        "no ground stands at the depth the seam's ink was painted over at: {wire:?}"
+    );
+}
+
+#[test]
+fn no_ground_the_frame_places_expects_a_reply_from_the_terminal() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let band = Rect::new(2, 3, 30, 4);
+    let mut images = Planes::default();
+    for caret in [8, 9] {
+        let shades = [composer_shade(band), lamp_shade(band, caret)];
+        images.hold(&shades);
+        backend.shades(&shades, &images).unwrap();
+    }
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+
+    for command in wire.split("\u{1b}_G").skip(1) {
+        let head = command.split(';').next().unwrap_or_default();
+        if !head.starts_with("a=T") && !head.starts_with("a=p") {
+            continue;
+        }
+        assert!(
+            head.contains("q=2") && head.contains("C=1"),
+            "a placement asks the terminal a question, and an answer to it is read as the \
+             reader's next keystroke: {head:?}"
+        );
+    }
+    assert!(
+        wire.contains("_Ga=p"),
+        "and a placement is what the frame makes of a caret that moved: {wire:?}"
+    );
+}
+
+#[test]
+fn a_lamp_is_given_back_when_the_band_under_it_loses_its_caret() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let band = Rect::new(2, 3, 30, 4);
+    let lit = [composer_shade(band), lamp_shade(band, 8)];
+    backend.shades(&lit, &held(&lit)).unwrap();
+    let bare = [composer_shade(band)];
+    backend.shades(&bare, &held(&bare)).unwrap();
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+
+    assert!(
+        wire.contains(&format!("_Ga=d,d=i,i={}", PlaneId::Caret.image())),
+        "the lamp is given back when the band under it carries no caret, or the terminal is left \
+         holding a light that stands nowhere: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        2,
+        "and neither the band nor the lamp is made again for it: {wire:?}"
+    );
+}
+
+#[test]
+fn a_frame_is_written_inside_one_synchronised_output_bracket() {
+    let writes = Writes::default();
+    let mut canvas = canvas_over(&writes, painted_at());
+    let mut view = View::of(pictured(), Facts::default(), Transcript::none());
+    view.paste("a draft of mine");
+    paint(&mut canvas, &mut view).expect("a painted frame");
+    drop(canvas);
+
+    let whole = carried(&writes.kept()).concat();
+    let open = std::str::from_utf8(OPEN_FRAME).expect("a printable open");
+    let close = std::str::from_utf8(CLOSE_FRAME).expect("a printable close");
+    assert_eq!(
+        (whole.matches(open).count(), whole.matches(close).count()),
+        (1, 1),
+        "one frame is one bracket: {whole:?}"
+    );
+    let opened = whole.find(open).expect("the bracket opens");
+    let closed = whole.find(close).expect("and closes");
+    assert!(opened < closed, "in that order: {whole:?}");
+    let inside = &whole[opened..closed];
+    assert!(
+        inside.contains("_Ga=T"),
+        "the grounds the frame places are written inside the bracket, so no reader sees an old \
+         ground under new cells: {whole:?}"
+    );
+    assert!(
+        inside.contains("\u{1b}[38;2;"),
+        "and so are the cells it draws over them: {whole:?}"
+    );
+    assert!(
+        !whole[closed..].contains("_Ga="),
+        "and nothing of the frame is written after the bracket closes: {whole:?}"
+    );
+}
+
+#[test]
+fn a_frame_whose_caret_moved_transmits_no_image_and_places_the_lamp_again() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let band = Rect::new(2, 3, 30, 4);
+    let mut images = Planes::default();
+    for caret in [6, 7, 8] {
+        let shades = [composer_shade(band), lamp_shade(band, caret)];
+        images.hold(&shades);
+        backend.shades(&shades, &images).unwrap();
+    }
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        2,
+        "the band and the lamp are transmitted once each, and a caret that moved twelve pixels \
+         sends no pixel of either: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=p").count(),
+        2,
+        "and every caret after the first puts the image the terminal holds on the cells it stands \
+         on now: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=d").count(),
+        0,
+        "nothing the frame still holds is taken away for a light that moved: {wire:?}"
+    );
+    assert!(
+        wire.contains(&format!(
+            "_Ga=p,i={},p={},q=2,z={},C=1",
+            PlaneId::Caret.image(),
+            plane::PLACEMENT,
+            plane::DEPTH
+        )),
+        "the lamp is placed again under the identity and the placement it was held by, and the \
+         command is quiet: {wire:?}"
+    );
 }
 
 #[test]
@@ -1157,16 +1369,11 @@ fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_ar
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
     let area = Rect::new(2, 3, 2, 1);
-    let first = composer_shade(area, Some(3));
-    let finer = Shade::composer(
-        area,
-        Some(CellSize::new(20, 40)),
-        Some(3),
-        &Palette::TRUECOLOR,
-    )
-    .expect("a band to shade");
-    let greys = Shade::composer(area, Some(CellSize::NOMINAL), Some(3), &Palette::ANSI)
+    let first = composer_shade(area);
+    let finer = Shade::composer(area, Some(CellSize::new(20, 40)), &Palette::TRUECOLOR)
         .expect("a band to shade");
+    let greys =
+        Shade::composer(area, Some(CellSize::NOMINAL), &Palette::ANSI).expect("a band to shade");
     assert_eq!(
         (finer.area(), greys.area()),
         (first.area(), first.area()),
@@ -1183,7 +1390,10 @@ fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_ar
         "a band drawn on another cell or in another palette is placed again: {wire:?}"
     );
     assert!(
-        wire.contains("_Ga=T,f=100,i=333,q=2,z=-1,C=1,c=2,r=1"),
+        wire.contains(&format!(
+            "_Ga=T,f=100,i=333,p=1,q=2,z={},C=1,c=2,r=1,x=0,w=20",
+            plane::DEPTH
+        )),
         "at the area the band stands on, which never moved: {wire:?}"
     );
 }
@@ -1219,19 +1429,21 @@ fn a_rail_whose_light_moved_is_placed_again_by_its_own_identity() {
         "and the image it stood on is taken away rather than left under it: {wire:?}"
     );
     assert!(
-        wire.contains("_Ga=d,d=i,i=334") && wire.contains("_Ga=T,f=100,i=334,q=2"),
+        wire.contains("_Ga=d,d=i,i=334")
+            && wire.contains(&format!("_Ga=T,f=100,i=334,p=1,q=2,z={}", plane::DEPTH)),
         "both the delete and the new placement are under the rail's own identity: {wire:?}"
     );
 }
 
 #[test]
-fn a_whole_frame_clear_drops_all_three_planes_before_it_clears_the_screen() {
+fn a_whole_frame_clear_drops_every_plane_before_it_clears_the_screen() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
     let shades = [
         rail_shade(),
         transcript_shade(),
-        composer_shade(Rect::new(2, 3, 2, 1), None),
+        composer_shade(Rect::new(2, 3, 2, 1)),
+        lamp_shade(Rect::new(2, 3, 2, 1), 2),
     ];
     let images = held(&shades);
     backend.shades(&shades, &images).unwrap();
@@ -1241,29 +1453,29 @@ fn a_whole_frame_clear_drops_all_three_planes_before_it_clears_the_screen() {
     let wire = String::from_utf8(wire).unwrap();
     assert_eq!(
         wire.matches("_Ga=T").count(),
-        6,
-        "three planes, placed twice"
+        8,
+        "four planes, placed twice"
     );
     assert_eq!(
         wire.matches("_Ga=d").count(),
-        3,
+        4,
         "a frame that clears drops every plane it placed: {wire:?}"
     );
     let dropped = wire.rfind("_Ga=d").unwrap();
-    for id in [333, 334, 335] {
+    for id in [333, 334, 335, 336] {
         assert!(
             wire.contains(&format!("_Ga=d,d=i,i={id}")),
             "the plane under {id} is not dropped by its own identity: {wire:?}"
         );
     }
     assert!(
-        dropped < wire.match_indices("_Ga=T").nth(3).unwrap().0,
+        dropped < wire.match_indices("_Ga=T").nth(4).unwrap().0,
         "and the frame after it places them again"
     );
 }
 
 #[test]
-fn giving_the_screen_back_deletes_all_three_planes_before_the_shell_returns() {
+fn giving_the_screen_back_deletes_every_plane_before_the_shell_returns() {
     let _one_screen = lock(&ONE_SCREEN);
     let pty = Pty::open();
     let terminal = Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).unwrap();
@@ -1271,7 +1483,7 @@ fn giving_the_screen_back_deletes_all_three_planes_before_the_shell_returns() {
     drop(screen);
     let drawn = pty.drawn();
     let screen_back = drawn.find("\x1b[?1049l").expect("the screen is given back");
-    for id in [333, 334, 335] {
+    for id in [333, 334, 335, 336] {
         let deleted = drawn
             .find(&format!("_Ga=d,d=i,i={id}"))
             .unwrap_or_else(|| panic!("the plane under {id} is deleted: {drawn:?}"));
