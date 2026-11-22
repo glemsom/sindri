@@ -713,8 +713,8 @@ impl Light {
 }
 
 /// The light a pixel carries in the channels it is drawn in: the ordered matrix's threshold is
-/// added to its magnitude before the floor, so an amount of light that is no whole channel is
-/// dithered rather than blended into the rung beside it, and a shadow is dithered as a light is.
+/// added to its magnitude before the floor, so a light that is no whole channel is dithered into a
+/// pixel of its own and no rung beside it is blended, and a shadow is dithered as a light is.
 fn dithered(light: f64, (x, y): (u32, u32)) -> i32 {
     let down = usize::try_from(y % 8).unwrap_or(0);
     let across = usize::try_from(x % 8).unwrap_or(0);
