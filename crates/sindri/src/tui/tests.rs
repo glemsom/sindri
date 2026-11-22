@@ -152,7 +152,22 @@ impl Stage {
         config: Config,
         environment: &'a dyn Environment,
     ) -> Loop<'a> {
-        self.told_in(view, config, environment, false)
+        let wake = Arc::new(Wake::open().expect("a wake"));
+        self.told_in(view, config, environment, false, wake)
+    }
+
+    /// The same launch, with the wake it waits on handed back: the one a test raises a reason on.
+    fn launch_woken<'a>(
+        &'a self,
+        view: View,
+        config: Config,
+        environment: &'a dyn Environment,
+    ) -> (Loop<'a>, Arc<Wake>) {
+        let wake = Arc::new(Wake::open().expect("a wake"));
+        (
+            self.told_in(view, config, environment, false, Arc::clone(&wake)),
+            wake,
+        )
     }
 
     /// The same launch where the stream carries a window, which is the only thing that reports the
@@ -163,7 +178,8 @@ impl Stage {
         config: Config,
         environment: &'a dyn Environment,
     ) -> Loop<'a> {
-        self.told_in(view, config, environment, true)
+        let wake = Arc::new(Wake::open().expect("a wake"));
+        self.told_in(view, config, environment, true, wake)
     }
 
     /// Every byte this terminal has been handed, once it has gone quiet: a frame is several
@@ -187,6 +203,7 @@ impl Stage {
         config: Config,
         environment: &'a dyn Environment,
         carries: bool,
+        wake: Arc<Wake>,
     ) -> Loop<'a> {
         let telling = Window::new(
             self.pty
@@ -204,7 +221,7 @@ impl Stage {
             environment,
             view,
             telling,
-            Arc::new(Wake::open().expect("a wake")),
+            wake,
         )
         .expect("a launch")
     }
@@ -659,7 +676,7 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
 fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
-    let signals = Signals::install().expect("a signal pipe");
+    let _wake = Wake::installed().expect("a signal pipe");
     let mut live = stage.launch(
         View::of(
             Capabilities::default(),
@@ -670,11 +687,94 @@ fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
         &environment,
     );
 
-    let ended = live.keys(&signals, b"\x11").expect("the quit is answered");
+    let ended = live.keys(b"\x11").expect("the quit is answered");
 
     assert!(
         matches!(ended, Ending::Quit),
         "a quit typed before the first frame is the ending the loop hands back"
+    );
+}
+
+#[test]
+fn a_cancel_raised_with_no_key_typed_and_no_run_live_ends_the_launch() {
+    let stage = Stage::open();
+    let environment = std::collections::BTreeMap::new();
+    let (mut live, wake) = stage.launch_woken(
+        View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        ),
+        Config::default(),
+        &environment,
+    );
+
+    wake.raise(Reason::Cancel);
+    let ended = live.keys(b"").expect("the cancel is answered");
+
+    assert!(
+        matches!(ended, Ending::Cancelled),
+        "an outside `SIGINT` with nothing in flight is the ending the loop hands back"
+    );
+}
+
+#[test]
+fn a_cancel_whose_byte_a_drain_took_is_read_on_a_pass_a_landed_report_wakes() {
+    let stage = Stage::open();
+    let environment = std::collections::BTreeMap::new();
+    let (mut live, wake) = stage.launch_woken(
+        View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        ),
+        Config::default(),
+        &environment,
+    );
+
+    wake.raise(Reason::Cancel);
+    wake.drain();
+    wake.ping();
+
+    let ended = live.keys(b"").expect("the cancel is answered");
+
+    assert!(
+        matches!(ended, Ending::Cancelled),
+        "the report's byte is the only one left, and the cancel it no longer stood for is read \
+         on the pass that byte wakes"
+    );
+}
+
+#[test]
+fn a_resize_raised_while_the_loop_waits_paints_and_only_the_cancel_behind_it_ends_the_launch() {
+    let stage = Stage::open();
+    let environment = std::collections::BTreeMap::new();
+    let (mut live, wake) = stage.launch_woken(
+        View::of(
+            Capabilities::default(),
+            Facts::default().asked(),
+            Transcript::none(),
+        ),
+        Config::default(),
+        &environment,
+    );
+
+    wake.raise(Reason::Resize);
+    let later = Arc::clone(&wake);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        later.raise(Reason::Cancel);
+    });
+
+    let ended = live.keys(b"").expect("the cancel is answered");
+
+    assert!(
+        matches!(ended, Ending::Cancelled),
+        "the resize raises no ending, and the cancel behind it is the launch's"
+    );
+    assert!(
+        !stage.drawn().is_empty(),
+        "the window changed while the loop waited, so a frame was painted for it"
     );
 }
 

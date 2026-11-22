@@ -28,7 +28,7 @@ use sindri_core::tools::FrontEnd;
 use crate::cli::Cli;
 use crate::open::HostOpener;
 use crate::reports::{Asking, Report, Running, ask};
-use crate::signal::{Signals, Wake};
+use crate::signal::{Reason, Wake};
 use crate::term::{Canvas, Screen, Terminal, missing_terminal, paint, tell};
 use crate::window::{self, Window};
 
@@ -53,8 +53,8 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     }
     // Opened before the screen is taken: a `SIGINT` that arrives between raw mode and the loop
     // has to be a cancellation, not a process dying with the terminal left raw and the screen up.
-    let signals = match Signals::install() {
-        Ok(signals) => signals,
+    let wake = match Wake::installed() {
+        Ok(wake) => wake,
         Err(error) => {
             return crate::refuse(
                 &format!("the signal pipe could not be made: {error}"),
@@ -129,7 +129,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         &Process,
         view,
         telling,
-        signals.wake(),
+        Arc::clone(&wake),
     ) {
         Ok(live) => live,
         Err(error) => {
@@ -142,7 +142,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
     if let Err(error) = live.told(Told::Idle) {
         return crate::refuse(&format!("the status could not be written: {error}"), SETUP);
     }
-    let keys = live.keys(&signals, &typed);
+    let keys = live.keys(&typed);
     let launch = live.ending();
     drop(live);
     // Given back before a word is said about the ending: a refusal is a line for the shell, and
@@ -251,10 +251,10 @@ impl<'a> Loop<'a> {
         self.telling.say(told)
     }
 
-    /// Reads the terminal until the launch ends, one event at a time, and paints only when an event
-    /// changed the frame: the wait sleeps in `poll` and draws nothing meanwhile, so an idle frame
-    /// is never drawn. A key, a signal and a live run's fragment are all fds in that wait.
-    fn keys(&mut self, signals: &Signals, typed: &[u8]) -> io::Result<Ending> {
+    /// Reads the terminal until the launch ends, one event at a time, and paints only when a key, a
+    /// landed report or a raise changed the frame: the wait sleeps in `poll` and draws nothing
+    /// meanwhile. A key, a signal and a live run's fragment are all fds in that wait.
+    fn keys(&mut self, typed: &[u8]) -> io::Result<Ending> {
         let mut decoder = Decoder::new();
         let mut read = [0u8; 4096];
         let mut interrupted = false;
@@ -305,10 +305,12 @@ impl<'a> Loop<'a> {
                 self.view.handed(facts);
             }
 
-            // Read every pass and not only the pass the pipe woke: the word is a flag that is never
-            // cleared and the byte is only what wakes the loop, so a `SIGINT` that landed while the
-            // loop was awake for something else raised a byte a drain may have taken.
-            if signals.arrived() && !interrupted {
+            // Read every pass and not only the pass the pipe woke: a reason can be raised while the
+            // loop is painting or taking a report, and the byte it pinged is one a drain may have
+            // taken.
+            let reasons = wake.reasons();
+
+            if reasons.holds(Reason::Cancel) && !interrupted {
                 interrupted = true;
                 if let Some(flight) = &self.running {
                     flight.cancel();
@@ -346,9 +348,9 @@ impl<'a> Loop<'a> {
                 }
             }
 
-            // Not an idle frame: a live run's marker has stepped, so the frame that drew the last
-            // glyph is now wrong.
-            if !keyed && !woken && self.running.is_some() {
+            // Not an idle frame: a live run's marker has stepped or the window changed, and a paint
+            // reads the terminal's size as it draws.
+            if reasons.holds(Reason::Resize) || (!keyed && !woken && self.running.is_some()) {
                 self.paint()?;
             }
         }

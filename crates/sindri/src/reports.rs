@@ -138,7 +138,7 @@ struct Reports {
 impl Reports {
     fn push(&mut self, report: Report) {
         lock(&self.pending).push(report);
-        self.wake.raise();
+        self.wake.ping();
     }
 }
 
@@ -196,7 +196,7 @@ pub(crate) fn ask(config: &Config, wake: &Arc<Wake>) -> Option<Asking> {
         // answer this thread can leave is a listing.
         if let Some(listing) = served(&Machine::this(), &config) {
             *lock(&answer) = Some(listing);
-            wake.raise();
+            wake.ping();
         }
     });
     // The loop joins it when the listing lands: nothing blocks here, and the frame paints the
