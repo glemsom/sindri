@@ -20,10 +20,12 @@ use crate::composer::{AIR_ROWS, MAX_ROWS, MIN_ROWS, PLACEHOLDER};
 use crate::ledger::Boot;
 
 use crate::capability::caps::{inked, pictured, pointing, sized};
+use crate::graphics::CellSize;
 use crate::ink::{Face, Look};
+use crate::palette::channels;
 use crate::palette::{Band, Edge, Palette};
 use crate::pictures::PLACEHOLDER as PLACED;
-use crate::plane::{SEAM, Shade};
+use crate::plane::{SEAM, Seam, Shade};
 use crate::pulse::STEP_MS;
 use crate::readback::under;
 use crate::rows::{SIGIL, THUMB};
@@ -1282,7 +1284,7 @@ fn a_frame_asked_for_no_colour_draws_the_band_in_the_same_glyphs() {
 }
 
 #[test]
-fn the_transcript_sits_in_the_well_and_the_rail_beside_it_carries_the_light() {
+fn the_transcript_sits_in_the_well_and_the_rail_beside_it_carries_its_own_tone() {
     let palette = Palette::TRUECOLOR;
     for (cols, rows) in [(120, 40), (100, 40)] {
         let mut view = View::of(
@@ -1303,14 +1305,14 @@ fn the_transcript_sits_in_the_well_and_the_rail_beside_it_carries_the_light() {
         assert_eq!(
             transcript.right(),
             rail.x,
-            "the transcript loses a column to the lit rule: it ends at column {} and the rail \
-                 begins at {}",
+            "the transcript keeps the columns the rail leaves it: it ends at column {} and the \
+                 rail begins at {}",
             transcript.right(),
             rail.x
         );
 
         for y in transcript.y..transcript.bottom() {
-            for x in transcript.x..transcript.right() {
+            for x in transcript.x..transcript.right() - SEAM {
                 assert_eq!(
                     under(&buffer, x, y),
                     palette.band(Band::Well),
@@ -1320,18 +1322,15 @@ fn the_transcript_sits_in_the_well_and_the_rail_beside_it_carries_the_light() {
             }
         }
         for y in rail.y..rail.bottom() - 1 {
-            assert_eq!(
-                under(&buffer, rail.x, y),
-                palette.edge(Edge::Lit),
-                "row {y} of the rail at {cols} columns draws no lit rule on its boundary \
-                     with the transcript"
-            );
-            assert_eq!(
-                under(&buffer, rail.x + 1, y),
-                palette.band(Band::Rail),
-                "row {y} of the rail at {cols} columns is lit past its boundary column, so \
-                     the rail is no surface of its own"
-            );
+            for x in rail.x..rail.right() {
+                assert_eq!(
+                    under(&buffer, x, y),
+                    palette.band(Band::Rail),
+                    "row {y}, column {x} of the rail at {cols} columns is not the rail's own \
+                         tone: the seam is what parts it from the transcript, and no column of \
+                         the rail's own is lit"
+                );
+            }
         }
         for x in rail.x..rail.right() {
             assert_eq!(
@@ -1415,44 +1414,99 @@ fn seamed(draws: bool) -> View {
     )
 }
 
-/// The columns of the seam: the transcript's last few, where the rail's plane reaches back over
-/// them.
-fn seam_of(laid: Layout) -> Rect {
-    Rect {
-        x: laid.transcript.right() - SEAM,
-        width: SEAM,
-        ..laid.transcript
-    }
+/// The seam the frame's rail makes: the transcript's last columns, where the well falls into the
+/// shadow that parts the rail from the band beside it.
+fn seam_of(laid: Layout) -> Seam {
+    let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+    Seam::of(rail, Rail::Ledger, &Palette::TRUECOLOR)
+        .expect("a ledger beside a transcript band meets it in a seam")
 }
 
 #[test]
-fn a_frame_that_places_a_picture_claims_the_seam_as_the_terminals_own_ground() {
-    let palette = Palette::TRUECOLOR;
+fn the_two_frames_claim_the_same_seam_in_the_same_columns_and_the_same_shades() {
+    let (pictured_frame, told) = painted_and_told(&mut seamed(true), 120, 40);
+    let (placeless, without) = painted_and_told(&mut seamed(false), 120, 40);
+    let seam = seam_of(laid_out(&told));
 
-    let (pictured, told) = painted_and_told(&mut seamed(true), 120, 40);
-    let laid = laid_out(&told);
-    let seam = seam_of(laid);
-    for y in seam.y..seam.bottom() {
-        for x in seam.x..seam.right() {
-            assert_eq!(
-                under(&pictured, x, y),
-                palette.ground(None).bg.expect("the terminal's own ground"),
-                "row {y}, column {x} of the seam is not the ground the plane is drawn at, so the \
-                 transcript's last columns are no part of the fall toward the rail"
-            );
+    assert_eq!(
+        laid_out(&without).transcript,
+        laid_out(&told).transcript,
+        "a terminal that places a picture and one that places none part the same bands, so the \
+         seam reaches the same columns in both"
+    );
+    assert_eq!(
+        seam.area().right(),
+        laid_out(&told).transcript.right(),
+        "the seam ends at the transcript's own last column, and reaches no column of the rail's"
+    );
+    for y in seam.area().y..seam.area().bottom() {
+        for x in seam.area().x..seam.area().right() {
+            let shade = seam.column(x);
+            for (frame, spelling) in [
+                (&pictured_frame, "a terminal that places a picture"),
+                (&placeless, "a terminal that places none"),
+            ] {
+                assert_eq!(
+                    under(frame, x, y),
+                    shade,
+                    "row {y}, column {x} of the frame {spelling} is drawn on is not the shade \
+                     {shade:?} the seam falls in at that column: the seam is one fall, drawn in \
+                     both frames alike"
+                );
+            }
         }
     }
+    assert_eq!(
+        seam.column(seam.area().x),
+        Palette::TRUECOLOR.band(Band::Well),
+        "and it opens out of the well the transcript is read on"
+    );
+}
 
+#[test]
+fn a_frame_that_places_pictures_and_one_that_does_not_agree_on_the_shade_of_every_row() {
+    let cell = CellSize::NOMINAL;
+    let mut pictured = seamed(true);
     let (placeless, told) = painted_and_told(&mut seamed(false), 120, 40);
-    let seam = seam_of(laid_out(&told));
-    for y in seam.y..seam.bottom() {
-        for x in seam.x..seam.right() {
-            assert_eq!(
-                under(&placeless, x, y),
-                palette.band(Band::Well),
-                "row {y}, column {x} is claimed by a plane a terminal with no picture was \
-                 handed none of: where no picture is placed the transcript keeps its own ground"
+    let laid = laid_out(&told);
+    let (_, standing) = painted_and_told(&mut pictured, 120, 40);
+    assert_eq!(
+        laid_out(&standing).rail,
+        laid.rail,
+        "the two frames hold the rail in the same band, so a row of one is the same row of the \
+         other"
+    );
+    let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+    let bands = [("the rail", rail), ("the composer's band", laid.composer)];
+
+    for (band, area) in bands {
+        let Some(plane) = pictured
+            .planes()
+            .held()
+            .iter()
+            .find(|plane| plane.area() == area)
+        else {
+            panic!("the frame holds no plane over {band}");
+        };
+        for row in 0..area.height {
+            let drawn = channels(under(&placeless, area.x + area.width / 2, area.y + row))
+                .unwrap_or_else(|| {
+                    panic!("row {row} of {band} is claimed in no colour a pixel can hold")
+                });
+            let pixel = plane.pixels().get_pixel(
+                u32::from(area.width / 2) * cell.width(),
+                u32::from(row) * cell.height() + cell.height() / 2,
             );
+            for channel in 0..3 {
+                assert!(
+                    pixel[channel].abs_diff(drawn[channel]) <= 1,
+                    "channel {channel} of row {row} of {band} is {} in the plane the frame that \
+                     places pictures is drawn on and {} in the cells of the frame that places \
+                     none, so the two frames shade the same band differently",
+                    pixel[channel],
+                    drawn[channel]
+                );
+            }
         }
     }
 }
@@ -1510,43 +1564,59 @@ fn a_prompt_drawn_beside_a_live_draft_is_read_as_the_words_asked_and_not_the_dra
     );
 }
 
-/// A frame whose transcript opens on the reader's own words, on a terminal that places pictures and
-/// with a ledger rail beside it.
-fn asked_beside_a_rail() -> View {
+/// A frame whose transcript opens on the reader's own words, on a terminal that places pictures or
+/// on one that places none, with a ledger rail beside it.
+fn asked_beside_a_rail(draws: bool) -> View {
     View::of(
-        pictured().faced(false),
+        match draws {
+            true => pictured().faced(false),
+            false => Capabilities::default(),
+        },
         Facts::default().asked().railed(rail()),
         Transcript::of(vec![words_asked("triage the retry test")]),
     )
 }
 
 #[test]
-fn a_prompt_row_does_not_paint_its_band_over_the_seam() {
-    let palette = Palette::TRUECOLOR;
-    let (buffer, told) = painted_and_told(&mut asked_beside_a_rail(), 120, 40);
-    let laid = laid_out(&told);
-    let seam = seam_of(laid);
-    let asked = (seam.y..seam.bottom())
-        .find(|y| drawn_row(&buffer, *y).contains("triage the retry test"))
-        .expect("the frame draws the prompt the transcript opens on");
+fn the_seam_is_drawn_over_the_prompts_band_in_both_frames() {
+    for draws in [true, false] {
+        let (buffer, told) = painted_and_told(&mut asked_beside_a_rail(draws), 120, 40);
+        let seam = seam_of(laid_out(&told));
+        let area = seam.area();
+        let asked = (area.y..area.bottom())
+            .find(|y| drawn_row(&buffer, *y).contains("triage the retry test"))
+            .expect("the frame draws the prompt the transcript opens on");
 
-    for y in seam.y..seam.bottom() {
-        for x in seam.x..seam.right() {
-            assert_eq!(
-                under(&buffer, x, y),
-                palette.ground(None).bg.expect("the terminal's own ground"),
-                "row {y}, column {x} of the seam is claimed in the prompt's own band, so the \
-                 reader's own words paint over the seam the rail's plane widens across and the \
-                 rail stops coming out of the transcript's edge"
-            );
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                assert_eq!(
+                    under(&buffer, x, y),
+                    seam.column(x),
+                    "row {y}, column {x} of the frame that places {} a picture is claimed in the \
+                     prompt's own band, so the reader's own words paint over the seam and the \
+                     rail stops coming out of the transcript's edge",
+                    match draws {
+                        true => "",
+                        false => "no",
+                    }
+                );
+            }
         }
+        assert!(
+            (area.y..area.bottom()).contains(&asked),
+            "the prompt is drawn on a row of the seam's own rows, so its band is a band of the \
+             rows this test reads: {asked} against {area:?}"
+        );
+        assert_eq!(
+            Ink::of(
+                buffer.cell((area.x, asked)).expect("a cell of the prompt"),
+                &Palette::TRUECOLOR
+            ),
+            Some(Ink::Plain),
+            "and the reader's own words keep the ink they are written in, because the seam is \
+             claimed under them"
+        );
     }
-    assert!(
-        (seam.y..seam.bottom()).contains(&asked),
-        "the prompt is drawn on a row of the seam's own rows, so its band is a band of the rows \
-         this test reads: {asked} against {:?}",
-        seam
-    );
 }
 
 /// A frame whose answer holds a fence line wider than the band, so the band cuts it in the columns
@@ -1572,21 +1642,20 @@ fn the_seam_keeps_the_ink_the_row_wrote_there() {
     let palette = Palette::TRUECOLOR;
     let (buffer, told) = painted_and_told(&mut cut_beside_a_rail(), 120, 40);
     let seam = seam_of(laid_out(&told));
-    let cut = (0..seam.height)
+    let area = seam.area();
+    let cut = (0..area.height)
         .find_map(|down| {
-            let y = seam.y + down;
-            let x = (seam.x..seam.right())
+            let y = area.y + down;
+            let x = (area.x..area.right())
                 .find(|x| buffer.cell((*x, y)).expect("a cell of the seam").symbol() == "…")?;
             Some((x, y))
         })
-        .expect(
-            "the band cuts the fence line inside the columns the rail's plane reaches back over",
-        );
+        .expect("the band cuts the fence line inside the columns the seam reaches back over");
 
     assert_eq!(
         under(&buffer, cut.0, cut.1),
-        palette.ground(None).bg.expect("the terminal's own ground"),
-        "the cut mark at row {} column {} stands on the ground the rail's plane is drawn at",
+        seam.column(cut.0),
+        "the cut mark at row {} column {} stands on the shade the seam falls in at that column",
         cut.1,
         cut.0
     );
@@ -1611,7 +1680,7 @@ fn the_seam_draws_the_same_words_in_the_same_inks_with_a_picture_placed_and_with
     );
     let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
     for y in laid.transcript.y..laid.transcript.bottom() {
-        for x in seam_of(laid).x..rail.right() {
+        for x in seam_of(laid).area().x..rail.right() {
             let with = pictured_frame.cell((x, y)).expect("a cell of the frame");
             let not = placeless.cell((x, y)).expect("a cell of the frame");
             assert_eq!(
@@ -1622,6 +1691,70 @@ fn the_seam_draws_the_same_words_in_the_same_inks_with_a_picture_placed_and_with
             );
         }
     }
+}
+
+/// A frame whose rail carries Sindri's face over its top rows, with a transcript beside it.
+fn faced_beside_a_seam() -> View {
+    View::of(
+        pictured(),
+        Facts::default().asked().railed(rail()),
+        Transcript::of(vec![Entry::Assistant {
+            turn: 1,
+            text: SecretSet::default().redact("the words the seam is drawn beside"),
+        }]),
+    )
+}
+
+#[test]
+fn the_seam_cuts_neither_the_face_nor_the_rule_that_closes_it() {
+    let palette = Palette::TRUECOLOR;
+    let (buffer, told) = painted_and_told(&mut faced_beside_a_seam(), 120, 40);
+    let laid = laid_out(&told);
+    let seam = seam_of(laid);
+    let band = laid.rail.expect("a frame this wide holds a ledger").1;
+    let cell = faced_beside_a_seam().capabilities().cell();
+    let measured = crate::face::over_rail(
+        band.area.width,
+        &crate::picture::Surface::of(None, cell, true, false),
+    )
+    .expect("a rail this wide carries the face");
+    let face = band
+        .with_picture(measured.cols(), measured.rows())
+        .picture
+        .expect("the cells the rail reserved for the face");
+
+    assert_eq!(
+        seam.area().right(),
+        band.area.x,
+        "the seam ends at the rail's first column, so no column the face is drawn over is a \
+         column of the seam"
+    );
+    for y in face.y..face.y + face.height + 1 {
+        for x in band.area.x..band.area.right() {
+            assert_eq!(
+                under(&buffer, x, y),
+                palette.ground(None).bg.expect("the terminal's own ground"),
+                "row {y}, column {x} of the rail is painted by the seam, and the face stands over \
+                 the rail's shade and not over a fall beside it"
+            );
+        }
+    }
+    let rule = face.y + face.height;
+    let under_the_rule: String = (band.area.x..band.area.right())
+        .map(|x| {
+            buffer
+                .cell((x, rule))
+                .expect("a cell of the rail")
+                .symbol()
+                .to_owned()
+        })
+        .collect();
+    assert_eq!(
+        under_the_rule,
+        pen::filled(band.area.width, HAIRLINE),
+        "the rule that closes the face is drawn whole across the rail's columns, and the seam \
+         cuts none of it"
+    );
 }
 
 /// A band is a surface only because a name is read from a foreground and a modifier.

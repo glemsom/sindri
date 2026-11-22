@@ -442,14 +442,20 @@ fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
         .expect("a pass that drew a frame hands back the frame it laid out");
 
     let well = frame.cell(0, 0).bg;
-    let rail = (1..120)
-        .find(|x| frame.cell(*x, 0).bg != well)
-        .expect("the rail's ground stands beside the transcript's");
+    let band = laid.rail.expect("a frame this wide holds a ledger").1;
 
     assert_eq!(
         laid.transcript.right(),
-        rail,
+        band.area.x,
         "the transcript is given the columns up to the rail's and not the frame's: {laid:?}"
+    );
+    let seam = (laid.transcript.x..band.area.x)
+        .find(|x| frame.cell(*x, 0).bg != well)
+        .expect("the seam falls out of the well in the columns beside the rail");
+    assert!(
+        seam > laid.transcript.x && seam < band.area.x,
+        "the seam opens on the well at its first column and falls into the shadow before the rail \
+         begins, so the columns it takes are the transcript's own: column {seam} against {laid:?}"
     );
     assert!(
         laid.transcript.width < 120,
@@ -549,10 +555,9 @@ fn the_transcript_and_the_notice_stand_in_its_columns_and_the_bands_in_the_frame
     for y in rail.y..rail.bottom() {
         for x in rail.x..area.right() {
             let ground = frame.cell(x, y).bg;
-            let wanted = match (y == rail.bottom() - 1, x == rail.x) {
-                (true, _) => palette.edge(Edge::Shadow),
-                (false, true) => palette.edge(Edge::Lit),
-                _ => palette.band(Band::Rail),
+            let wanted = match y == rail.bottom() - 1 {
+                true => palette.edge(Edge::Shadow),
+                false => palette.band(Band::Rail),
             };
             assert_eq!(
                 ground, wanted,
