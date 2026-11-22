@@ -1652,13 +1652,7 @@ impl View {
     fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) -> Option<Shade> {
         let palette = self.capabilities.palette();
         let caret = self.caret(band, queue, None).map(|(x, _)| x);
-        let shade = Shade::composer(
-            band,
-            self.capabilities.pictures().cell(),
-            caret,
-            self.head_lit(),
-            &palette,
-        );
+        let shade = Shade::composer(band, self.capabilities.pictures().cell(), caret, &palette);
         if let Some(shade) = shade {
             shade.claim(buffer, &palette);
         }
@@ -1684,7 +1678,8 @@ impl View {
         };
         let empty = self.composer.text().is_empty();
         // The placeholder is no row of the draft, so it lights no sigil and keeps the dim ink.
-        let waited = (!empty).then(|| usize::from(self.composer.caret().0));
+        let waited =
+            (!empty && self.band_takes_keys()).then(|| usize::from(self.composer.caret().0));
         let scroll = self.composer.scroll();
         let rows: Vec<Vec<(&str, Ink)>> = match empty {
             true => vec![vec![(PLACEHOLDER, Ink::Dim)]],
@@ -1765,9 +1760,9 @@ impl View {
         }
     }
 
-    /// The band's head row over the light its shade claims: the one rule it is drawn as where the
-    /// palette draws no edge, a card covers the band or the window is away, the draft's count hung
-    /// on the row's far edge, and the pulse a live run walks it with.
+    /// The band's head row: the one hairline drawn across it, in the accent while the band takes
+    /// the keys and in the dim edge while it does not, the draft's count hung on the row's far
+    /// edge, and the pulse a live run walks it with.
     fn composer_head(&self, band: Rect, buffer: &mut Buffer) {
         if band.height == 0 {
             return;
@@ -1796,9 +1791,7 @@ impl View {
             },
             ..row
         };
-        if !self.head_lit() {
-            pen::rule(buffer, room, HAIRLINE, look, &palette);
-        }
+        pen::rule(buffer, room, HAIRLINE, look, &palette);
         if self.facts.live() && room.width > 0 {
             let step = self.edge_step() % u64::from(room.width);
             let at = room
@@ -1814,12 +1807,6 @@ impl View {
     /// Whether the band takes the keys: no screen stands over it and the window is the one being read.
     fn band_takes_keys(&self) -> bool {
         self.stack.modal().is_none() && self.facts.focus() == Focus::Focused
-    }
-
-    /// Whether the head row is claimed in the lit edge rather than ruled in the dim one: a band that
-    /// takes the keys in a palette that draws light.
-    fn head_lit(&self) -> bool {
-        self.band_takes_keys() && self.capabilities.palette().draws_edge()
     }
 
     /// The draft's count as the head hangs it: every part of the bill in the muted ink a fact's

@@ -2506,14 +2506,14 @@ fn a_whole_answer_claims_no_ground_of_its_own_over_a_band_or_where_none_was_clai
     let banded = painted_over(
         &rows,
         &mut Links::none(),
-        palette.ground(Some(Band::Composer)),
+        palette.ground(Some(Band::Prompt)),
     );
     let bare = painted_over(&rows, &mut Links::none(), palette.ground(None));
     for y in 0..u16::try_from(rows.len()).expect("a frame this short") {
         assert_eq!(
             grounded(&banded, y, 0, 120),
-            [palette.band(Band::Composer); 120],
-            "every cell of row {y} of {laid:?} is still the composer band it was laid on"
+            [palette.band(Band::Prompt); 120],
+            "every cell of row {y} of {laid:?} is still the prompt band it was laid on"
         );
         assert_eq!(
             grounded(&bare, y, 0, 120),

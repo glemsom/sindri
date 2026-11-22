@@ -20,10 +20,10 @@ queue-long at 120x24
 14 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
 15 |▏    │row.paint(area, buffer);                                                session   9f2c7a41                        | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:63 dim:10 plain:32
 16 |▏ }                                                                           +4 more                                   | dim:2 plain:76 muted:7 plain:35
-17 |━                                                                                                                       | accent+faint:1 plain:119
-18 | ›and this one while they wait                                                                                          | dim:1 accent:1 plain:118
-19 |  4 more queued                                                                                                         | dim:15 plain:105
-20 | ›then the row that counts it                                                                                           | dim:29 plain:91
-21 | ›then the caret that stays inside it                                                                                   | dim:37 plain:83
-22 | ›and then the report                                                                                                   | dim:21 plain:99
+17 |━───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
+18 |┃›and this one while they wait                                                                                          | dim:1 accent:1 plain:118
+19 |┃ 4 more queued                                                                                                         | dim:15 plain:105
+20 |┃›then the row that counts it                                                                                           | dim:29 plain:91
+21 |┃›then the caret that stays inside it                                                                                   | dim:37 plain:83
+22 |┃›and then the report                                                                                                   | dim:21 plain:99
 23 |  Ctrl-C cancel · ↑ 7 queued · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                             | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:29

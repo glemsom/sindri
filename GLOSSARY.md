@@ -193,7 +193,8 @@ A strip of rows the frame shares out — the **Transcript band**, the **Composer
 that says the frame stands off the tail — each drawn in the rows and the columns it was given and
 never past them: a frame that draws a **Rail**'s column hands the **Transcript band** the columns
 it leaves, and the **Composer**'s band the frame's whole width under it. The **Composer**'s band is
-raised as one surface, its **Footer** on its last row. What a band cannot hold it counts: a draft's
+the band a **Prompt** is read on, closing into the **Rail**'s tone on its last row, its **Footer**
+there. What a band cannot hold it counts: a draft's
 rows past the composer's ceiling, and a queue's prompts past the composer's rows under the draft. A
 fence it never reflows, and the **Caret** is no cell of it. Every band draws its words inside the
 **Margin** and never on its own edge, so the frame reads as one sheet of paper and not five.
@@ -254,8 +255,7 @@ _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 **Shade**:
 What a band sits on: the colour each of its rows is claimed in and the seams it makes with the band
 beside it — the transcript band on the well, the rail on its own tone on every row of it, the
-composer's band from its head row down to the rail's tone under it, its head row lit where it takes
-the keys. A seam is a fall of its own, in the columns it takes from the band beside the rail, and a
+composer's band on the band a prompt is read on, closing into the rail's tone on its last row. A seam is a fall of its own, in the columns it takes from the band beside the rail, and a
 frame draws it once, after the bands it parts. It holds every fact the band's cells and its
 **Plane** are drawn from and nothing else, the cell the plane is drawn at and the caret's column
 among them, and a frame holds each band's image against it, so a pass in which it stands makes no
@@ -283,9 +283,10 @@ tag row is no line of its source, and a mark on it takes the fence whole all the
 _Avoid_: Body, content, raw text
 
 **Spine**:
-The one column a sent **Prompt**'s rows are quoted by: a dim bar down their left edge, with the
-prompt's sigil standing in the column beside it, so its words begin where an answer's prose does.
-Every row the words occupy carries it, and no row of an answer, a call, a result or a stop does.
+The one column a **Prompt**'s rows are quoted by: a dim bar down their left edge, with the prompt's
+sigil standing in the column beside it, so its words begin where an answer's prose does. Every row a
+prompt's words occupy carries it, the draft being typed as the prompt it was asked with, and no row of
+an answer, a call, a result or a stop does.
 _Avoid_: Bar, quote mark, guide
 
 **Composer**:

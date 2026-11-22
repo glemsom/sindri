@@ -34,12 +34,12 @@ grown at 120x40
 28 |                                                                                                                        | plain:120
 29 |                                                                                                                        | plain:120
 30 |                                                                                                                        | plain:120
-31 |                                                                                                                        | plain:120
+31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
 32 |                                                                                                                        | plain:120
-33 | ›read the transcript, then the failing test,                                                                           | dim:2 plain:118
-34 |  then the patch, and say which line of the                                                                             | dim:2 plain:118
-35 |  patch the test disagrees with. Keep it to                                                                             | dim:2 plain:118
-36 |  one sentence and quote the line you mean,                                                                             | dim:2 plain:118
-37 |  the way the report does.                                                                                              | dim:2 plain:118
+33 |┃›read the transcript, then the failing test,                                                                           | dim:2 plain:118
+34 |┃ then the patch, and say which line of the                                                                             | dim:2 plain:118
+35 |┃ patch the test disagrees with. Keep it to                                                                             | dim:2 plain:118
+36 |┃ one sentence and quote the line you mean,                                                                             | dim:2 plain:118
+37 |┃ the way the report does.                                                                                              | dim:2 plain:118
 38 |                                                                                                                        | plain:120
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

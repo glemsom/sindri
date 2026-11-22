@@ -45,12 +45,7 @@ fn the_accent_drawn_faint_reads_back_as_the_accent_drawn_faint() {
         "the face a look is drawn in is its name"
     );
     for palette in PALETTES {
-        for band in [
-            None,
-            Some(Band::Rail),
-            Some(Band::Composer),
-            Some(Band::Well),
-        ] {
+        for band in [None, Some(Band::Rail), Some(Band::Prompt), Some(Band::Well)] {
             let mut cell = Cell::default();
             cell.set_style(faint.style(&palette));
             if let Some(band) = band {
@@ -135,12 +130,7 @@ fn a_look_may_carry_a_line_under_it_and_reads_back_as_its_ink_its_faces_and_that
     assert_eq!(Look::from_name("accent+italic~dim"), Some(linked));
 
     for palette in PALETTES {
-        for band in [
-            None,
-            Some(Band::Rail),
-            Some(Band::Composer),
-            Some(Band::Well),
-        ] {
+        for band in [None, Some(Band::Rail), Some(Band::Prompt), Some(Band::Well)] {
             let mut cell = Cell::default();
             cell.set_style(linked.style(&palette));
             if let Some(band) = band {
