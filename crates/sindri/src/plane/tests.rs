@@ -101,9 +101,9 @@ fn lit_bands(palette: &Palette) -> Vec<(&'static str, Band, Shade)> {
         .map(|(band, shade)| (band, band_of(&shade), shade))
         .collect();
     all.push((
-        "the caret's lamp",
+        "the caret's light",
         Band::Prompt,
-        lamp(Rect::new(0, 20, 80, 5), 12, palette),
+        caret_light(Rect::new(0, 20, 80, 5), 12, palette),
     ));
     all
 }
@@ -116,13 +116,13 @@ fn band_of(shade: &Shade) -> Band {
     }
 }
 
-fn lamp(band: Rect, caret: u16, palette: &Palette) -> Shade {
-    Shade::caret(band, Some(CELL), caret, palette).expect("a lamp to light the band with")
+fn caret_light(band: Rect, caret: u16, palette: &Palette) -> Shade {
+    Shade::caret(band, Some(CELL), caret, palette).expect("the light the caret casts")
 }
 
-/// Where the lamp's own light is centred, in the pixels of the image it is drawn as.
-fn lamp_centre() -> u32 {
-    u32::from(LAMP_COLS / 2) * CELL.width() + CELL.width() / 2
+/// Where the light is centred, in the pixels of the image it is drawn as.
+fn light_centre() -> u32 {
+    u32::from(LIGHT_COLS / 2) * CELL.width() + CELL.width() / 2
 }
 
 fn carried(shade: &Shade, row: u16, palette: &Palette) -> [u8; 3] {
@@ -419,7 +419,7 @@ fn the_composers_plane_carries_no_light_wherever_the_caret_waits() {
                     [pixel[0], pixel[1], pixel[2]],
                     rung,
                     "{spelling} draws pixel row {y}, column {x} of the composer's band at {:?} \
-                     where the band's own tone is {rung:?}: the light the caret casts is a lamp of \
+                     where the band's own tone is {rung:?}: the light the caret casts is an image of \
                      its own, and a keystroke places it again and repaints no band",
                     [pixel[0], pixel[1], pixel[2]]
                 );
@@ -429,23 +429,23 @@ fn the_composers_plane_carries_no_light_wherever_the_caret_waits() {
 }
 
 #[test]
-fn the_lamp_stands_the_bands_own_lift_over_the_caret_and_over_the_row_it_closes_on() {
+fn the_carets_light_stands_the_bands_own_lift_over_the_caret_and_over_the_row_it_closes_on() {
     for (spelling, palette) in SPELLED {
         let area = Rect::new(0, 20, 80, 5);
-        let shade = lamp(area, 12, &palette);
+        let shade = caret_light(area, 12, &palette);
         let plane = drawn(shade);
         let (width, height) = plane.pixels().dimensions();
         let lift = palette.lift(Band::Prompt);
-        let centre = lamp_centre();
+        let centre = light_centre();
         let down = CELL.height();
 
         assert_eq!(
             (width, height),
             (
-                u32::from(LAMP_COLS) * CELL.width(),
+                u32::from(LIGHT_COLS) * CELL.width(),
                 u32::from(area.height) * CELL.height()
             ),
-            "{spelling} draws the lamp at other than the cells it spans over the band's own rows"
+            "{spelling} draws the caret's light at other than the cells it spans over the band's own rows"
         );
         for row in 0..area.height {
             let rung = spelled(shade.row(row));
@@ -464,9 +464,9 @@ fn the_lamp_stands_the_bands_own_lift_over_the_caret_and_over_the_row_it_closes_
                 assert_eq!(
                     [edge[0], edge[1], edge[2]],
                     rung,
-                    "{spelling} draws the lamp's own edge of row {row}, pixel row {y}, at {:?} \
-                     where the row's own rung is {rung:?}: the light is spent by the last cell it \
-                     spans, so the lamp's box leaves no step of its own",
+                    "{spelling} draws the light's own edge of row {row}, pixel row {y}, at {:?} where \
+                     the row's own rung is {rung:?}: the light is spent by the last cell it spans, \
+                     so the box it is drawn in leaves no step of its own",
                     [edge[0], edge[1], edge[2]]
                 );
             }
@@ -475,9 +475,9 @@ fn the_lamp_stands_the_bands_own_lift_over_the_caret_and_over_the_row_it_closes_
 }
 
 #[test]
-fn the_lamp_lights_a_column_alike_on_every_pixel_row_of_the_band() {
+fn the_carets_light_lights_a_column_alike_on_every_pixel_row_of_the_band() {
     for (spelling, palette) in SPELLED {
-        let shade = lamp(Rect::new(0, 20, 80, 5), 12, &palette);
+        let shade = caret_light(Rect::new(0, 20, 80, 5), 12, &palette);
         let plane = drawn(shade);
         let (width, height) = plane.pixels().dimensions();
         let down = CELL.height();
@@ -493,21 +493,21 @@ fn the_lamp_lights_a_column_alike_on_every_pixel_row_of_the_band() {
                 assert_eq!(
                     added(y),
                     first,
-                    "{spelling} draws column {x} of the lamp {y:?} over the row it falls in where \
-                     its first pixel row adds {first:?}: the light falls across the band alone, \
-                     and no pixel row of it is a light of another strength"
+                    "{spelling} draws column {x} of the caret's light on pixel row {y} over the row it \
+                     falls in where its first pixel row adds {first:?}: the light falls across the \
+                     band alone, and no pixel row of it is a light of another strength"
                 );
             }
             assert!(
                 (0..3).all(|channel| first[channel] >= 0),
-                "{spelling} draws column {x} of the lamp under the tone it lights, and light only \
-                 ever adds: {first:?}"
+                "{spelling} draws column {x} of the caret's light under the tone it lights, and light \
+                 only ever adds: {first:?}"
             );
         }
         assert_eq!(
             height,
             5 * down,
-            "{spelling} draws the lamp over no rows of its own"
+            "{spelling} draws the caret's light over no rows of its own"
         );
     }
 }
@@ -572,19 +572,19 @@ fn no_pixel_of_any_bands_plane_is_darker_than_the_rung_it_sits_on() {
 }
 
 #[test]
-fn the_lamps_light_dies_away_either_side_of_the_caret() {
+fn the_carets_light_dies_away_either_side_of_the_caret() {
     let palette = Palette::TRUECOLOR;
-    let plane = drawn(lamp(Rect::new(0, 20, 80, 5), 4, &palette));
+    let plane = drawn(caret_light(Rect::new(0, 20, 80, 5), 4, &palette));
     let row = plane.pixels().height() / 2;
-    let centre = lamp_centre();
+    let centre = light_centre();
 
     let mut last = 0;
     for x in 0..centre {
         let pixel = plane.pixels().get_pixel(x, row);
         assert!(
             pixel[0] >= last,
-            "the lamp at pixel {x} of row {row} is darker than the pixel further from its centre \
-             before it, so the light does not rise towards the caret"
+            "the light at pixel {x} of row {row} is darker than the pixel further from its centre \
+             before it, so it does not rise towards the caret"
         );
         last = pixel[0];
     }
@@ -593,8 +593,8 @@ fn the_lamps_light_dies_away_either_side_of_the_caret() {
         let pixel = plane.pixels().get_pixel(x, row);
         assert!(
             pixel[0] <= last,
-            "the lamp at pixel {x} of row {row} is lighter than the pixel nearer its centre \
-             before it, so the light does not fall away from the caret"
+            "the light at pixel {x} of row {row} is lighter than the pixel nearer its centre \
+             before it, so it does not fall away from the caret"
         );
         last = pixel[0];
     }
@@ -602,7 +602,7 @@ fn the_lamps_light_dies_away_either_side_of_the_caret() {
     let far = plane.pixels().get_pixel(plane.pixels().width() - 1, row);
     assert!(
         lit[0] > far[0],
-        "the caret's own column is no lighter than the lamp's far side: {lit:?} against {far:?}"
+        "the caret's own column is no lighter than the light's far side: {lit:?} against {far:?}"
     );
 }
 
@@ -1186,13 +1186,13 @@ fn a_rails_light_moving_makes_its_image_again() {
 }
 
 #[test]
-fn a_caret_that_moved_makes_no_image_and_the_lamp_it_stands_from_is_held() {
+fn a_caret_that_moved_makes_no_image_and_the_light_it_stands_from_is_held() {
     let band = Rect::new(2, 3, 40, 4);
     let palette = Palette::TRUECOLOR;
     let frame = |caret| {
         [
             Shade::composer(band, Some(CELL), &palette).expect("a band to shade"),
-            lamp(band, caret, &palette),
+            caret_light(band, caret, &palette),
         ]
     };
     let mut planes = held(&frame(6));
@@ -1204,7 +1204,7 @@ fn a_caret_that_moved_makes_no_image_and_the_lamp_it_stands_from_is_held() {
     assert_eq!(
         planes.made(),
         made,
-        "a caret that moved makes no image at all: the lamp is placed again where it stands, and \
+        "a caret that moved makes no image at all: its light is placed again where it stands, and \
          the band under it never changed"
     );
     assert_eq!(
@@ -1214,29 +1214,29 @@ fn a_caret_that_moved_makes_no_image_and_the_lamp_it_stands_from_is_held() {
             .map(Plane::id)
             .collect::<Vec<PlaneId>>(),
         vec![PlaneId::Composer, PlaneId::Caret],
-        "and the frame still holds the band and the one lamp it was drawn from"
+        "and the frame still holds the band and the one light it was drawn from"
     );
 }
 
 #[test]
-fn the_lamp_is_placed_on_the_carets_own_cell_and_cut_to_the_bands_columns() {
+fn the_carets_light_is_placed_on_the_carets_own_cell_and_cut_to_the_bands_columns() {
     let band = Rect::new(4, 20, 40, 4);
     let palette = Palette::TRUECOLOR;
     let place = |caret| {
-        lamp(band, caret, &palette)
+        caret_light(band, caret, &palette)
             .place()
-            .expect("a lamp with cells of the band to stand on")
+            .expect("a light with cells of the band to stand on")
     };
 
     let middle = place(24);
     assert_eq!(
         (middle.left, middle.cols, middle.skip),
-        (12, LAMP_COLS, 0),
-        "a caret with room either side of it is the whole lamp, and the lamp starts where its \
-         own light does"
+        (12, LIGHT_COLS, 0),
+        "a caret with room either side of it is the whole of the light, and it starts where its \
+         own fall does"
     );
     assert_eq!(
-        middle.left + LAMP_COLS / 2,
+        middle.left + LIGHT_COLS / 2,
         24,
         "and it is placed so that its own centre falls on the caret's cell"
     );
@@ -1244,48 +1244,67 @@ fn the_lamp_is_placed_on_the_carets_own_cell_and_cut_to_the_bands_columns() {
     let left = place(4);
     assert_eq!(
         (left.left, left.cols, left.skip),
-        (4, LAMP_COLS - 12, 12),
-        "a caret at the band's first column keeps the lamp's own centre on it and shows only the \
-         columns of the lamp the band has room for"
+        (4, LIGHT_COLS - 12, 12),
+        "a caret at the band's first column keeps the light's own centre on it and shows only the \
+         columns of it the band has room for"
     );
     assert_eq!(
         (left.top, left.rows),
         (20, 4),
-        "the lamp stands on the band's own rows and no row beside them"
+        "the light stands on the band's own rows and no row beside them"
     );
 
     let right = place(43);
     assert_eq!(
         (right.left, right.cols, right.skip),
-        (31, LAMP_COLS - 12, 0),
-        "a caret at the band's last column loses the far columns of the lamp and no cell of it"
+        (31, LIGHT_COLS - 12, 0),
+        "a caret at the band's last column loses the far columns of the light and no cell of it"
     );
     for placement in [middle, left, right] {
         assert_eq!(
             u32::from(placement.skip) * CELL.width(),
             placement.from,
-            "the columns shown of the lamp are the ones its placement names, in pixels of it"
+            "the columns shown of the light are the ones its placement names, in pixels of it"
         );
         assert_eq!(
             u32::from(placement.cols) * CELL.width(),
             placement.width,
-            "and the columns it stands over are as many pixels of the lamp"
+            "and the columns it stands over are as many pixels of it"
         );
     }
 }
 
 #[test]
-fn a_lamp_claims_no_cell_of_the_band_it_lights() {
+fn the_carets_light_is_held_over_the_band_it_lights_and_no_band_over_it() {
+    let order = |id: PlaneId| id.image();
+    assert!(
+        order(PlaneId::Caret) > order(PlaneId::Composer),
+        "two images at the frame's one depth stand in the order of their identities, and the \
+         light the caret casts stands over the band it lights"
+    );
+    for band in [PlaneId::Rail, PlaneId::Transcript] {
+        assert!(
+            order(PlaneId::Caret) > order(band),
+            "and no band's plane stands over it: {band:?} is held under {} where the light is \
+             held under {}",
+            order(band),
+            order(PlaneId::Caret)
+        );
+    }
+}
+
+#[test]
+fn the_carets_light_claims_no_cell_of_the_band_it_lights() {
     let band = Rect::new(0, 20, 40, 4);
     let palette = Palette::TRUECOLOR;
-    let shade = lamp(band, 12, &palette);
+    let shade = caret_light(band, 12, &palette);
     let mut buffer = Buffer::empty(band);
     let ground = Color::Rgb(0x0a, 0x0b, 0x0c);
     pen::claim(&mut buffer, band, palette.over(ground));
 
     assert!(
         shade.places(),
-        "a lamp is placed under the words of the band it lights"
+        "the light a caret casts is placed under the words of the band it lights"
     );
     shade.claim(&mut buffer, &palette);
 
@@ -1294,8 +1313,8 @@ fn a_lamp_claims_no_cell_of_the_band_it_lights() {
             assert_eq!(
                 under(&buffer, x, y),
                 ground,
-                "row {y}, column {x} of the band is claimed again by the lamp: the band claims \
-                 the cells its words stand on, and the light under them is no cell of its own"
+                "row {y}, column {x} of the band is claimed again by the light the caret casts: the band \
+                 claims the cells its words stand on, and the light under them is no cell of its own"
             );
         }
     }

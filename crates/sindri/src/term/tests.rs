@@ -1101,9 +1101,9 @@ fn pictured() -> Capabilities {
     Capabilities::probed(&environment, &Answers::at(CellSize::NOMINAL), false).0
 }
 
-fn lamp_shade(band: Rect, caret: u16) -> Shade {
+fn light_shade(band: Rect, caret: u16) -> Shade {
     Shade::caret(band, Some(CellSize::NOMINAL), caret, &Palette::TRUECOLOR)
-        .expect("a lamp to light the band with")
+        .expect("the light the caret casts")
 }
 
 fn rail_shade() -> Shade {
@@ -1195,7 +1195,7 @@ fn a_resized_plane_takes_the_old_one_away_and_places_the_new_one_after_it() {
 }
 
 #[test]
-fn every_ground_is_placed_under_the_depth_a_cells_own_background_cannot_cover() {
+fn every_plane_is_placed_under_the_depth_a_cells_own_background_cannot_cover() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
     let band = Rect::new(2, 3, 30, 4);
@@ -1203,7 +1203,7 @@ fn every_ground_is_placed_under_the_depth_a_cells_own_background_cannot_cover() 
         rail_shade(),
         transcript_shade(),
         composer_shade(band),
-        lamp_shade(band, 8),
+        light_shade(band, 8),
     ];
     backend.shades(&shades, &held(&shades)).unwrap();
     drop(backend);
@@ -1216,29 +1216,29 @@ fn every_ground_is_placed_under_the_depth_a_cells_own_background_cannot_cover() 
         .expect("a depth on the ground the frame places");
     assert!(
         depth < -1_073_741_824,
-        "a ground is placed below the depth at which a terminal draws an image under a cell \
-         that carries a background, and the seam's edge ink is one such cell: {depth}"
+        "a plane is placed below the depth at which a terminal draws an image under a cell that \
+         carries a background, and the seam's edge ink is one such cell: {depth}"
     );
     for id in [333, 334, 335, 336] {
         assert!(
             wire.contains(&format!("i={id},p=1,q=2,z={},C=1", plane::DEPTH)),
-            "the ground under {id} is placed at a depth a cell's background covers: {wire:?}"
+            "the plane under {id} is placed at a depth a cell's background covers: {wire:?}"
         );
     }
     assert!(
         !wire.contains("z=-1,"),
-        "no ground stands at the depth the seam's ink was painted over at: {wire:?}"
+        "no plane stands at the depth the seam's ink was painted over at: {wire:?}"
     );
 }
 
 #[test]
-fn no_ground_the_frame_places_expects_a_reply_from_the_terminal() {
+fn no_plane_the_frame_places_expects_a_reply_from_the_terminal() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
     let band = Rect::new(2, 3, 30, 4);
     let mut images = Planes::default();
     for caret in [8, 9] {
-        let shades = [composer_shade(band), lamp_shade(band, caret)];
+        let shades = [composer_shade(band), light_shade(band, caret)];
         images.hold(&shades);
         backend.shades(&shades, &images).unwrap();
     }
@@ -1247,6 +1247,14 @@ fn no_ground_the_frame_places_expects_a_reply_from_the_terminal() {
 
     for command in wire.split("\u{1b}_G").skip(1) {
         let head = command.split(';').next().unwrap_or_default();
+        if head.starts_with("a=d") {
+            assert!(
+                head.contains("q=2"),
+                "an image given back asks the terminal a question, and an answer to it is read \
+                 as the reader's next keystroke: {head:?}"
+            );
+            continue;
+        }
         if !head.starts_with("a=T") && !head.starts_with("a=p") {
             continue;
         }
@@ -1263,11 +1271,11 @@ fn no_ground_the_frame_places_expects_a_reply_from_the_terminal() {
 }
 
 #[test]
-fn a_lamp_is_given_back_when_the_band_under_it_loses_its_caret() {
+fn the_carets_light_is_given_back_when_the_band_under_it_loses_its_caret() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
     let band = Rect::new(2, 3, 30, 4);
-    let lit = [composer_shade(band), lamp_shade(band, 8)];
+    let lit = [composer_shade(band), light_shade(band, 8)];
     backend.shades(&lit, &held(&lit)).unwrap();
     let bare = [composer_shade(band)];
     backend.shades(&bare, &held(&bare)).unwrap();
@@ -1276,13 +1284,13 @@ fn a_lamp_is_given_back_when_the_band_under_it_loses_its_caret() {
 
     assert!(
         wire.contains(&format!("_Ga=d,d=i,i={}", PlaneId::Caret.image())),
-        "the lamp is given back when the band under it carries no caret, or the terminal is left \
+        "the light is given back when the band under it carries no caret, or the terminal is left \
          holding a light that stands nowhere: {wire:?}"
     );
     assert_eq!(
         wire.matches("_Ga=T").count(),
         2,
-        "and neither the band nor the lamp is made again for it: {wire:?}"
+        "and neither the band nor the light is made again for it: {wire:?}"
     );
 }
 
@@ -1323,13 +1331,13 @@ fn a_frame_is_written_inside_one_synchronised_output_bracket() {
 }
 
 #[test]
-fn a_frame_whose_caret_moved_transmits_no_image_and_places_the_lamp_again() {
+fn a_frame_whose_caret_moved_transmits_no_image_and_places_the_light_again() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
     let band = Rect::new(2, 3, 30, 4);
     let mut images = Planes::default();
     for caret in [6, 7, 8] {
-        let shades = [composer_shade(band), lamp_shade(band, caret)];
+        let shades = [composer_shade(band), light_shade(band, caret)];
         images.hold(&shades);
         backend.shades(&shades, &images).unwrap();
     }
@@ -1338,7 +1346,7 @@ fn a_frame_whose_caret_moved_transmits_no_image_and_places_the_lamp_again() {
     assert_eq!(
         wire.matches("_Ga=T").count(),
         2,
-        "the band and the lamp are transmitted once each, and a caret that moved twelve pixels \
+        "the band and the light are transmitted once each, and a caret that moved twelve pixels \
          sends no pixel of either: {wire:?}"
     );
     assert_eq!(
@@ -1359,7 +1367,7 @@ fn a_frame_whose_caret_moved_transmits_no_image_and_places_the_lamp_again() {
             plane::PLACEMENT,
             plane::DEPTH
         )),
-        "the lamp is placed again under the identity and the placement it was held by, and the \
+        "the light is placed again under the identity and the placement it was held by, and the \
          command is quiet: {wire:?}"
     );
 }
@@ -1443,7 +1451,7 @@ fn a_whole_frame_clear_drops_every_plane_before_it_clears_the_screen() {
         rail_shade(),
         transcript_shade(),
         composer_shade(Rect::new(2, 3, 2, 1)),
-        lamp_shade(Rect::new(2, 3, 2, 1), 2),
+        light_shade(Rect::new(2, 3, 2, 1), 2),
     ];
     let images = held(&shades);
     backend.shades(&shades, &images).unwrap();

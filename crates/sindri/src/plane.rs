@@ -9,15 +9,15 @@ use crate::pen;
 
 const EDGE_RULE: char = '│';
 
-/// The cells the light under the caret spans, centred on the caret's own: the fall is spent a
-/// dozen cells out, so the lamp's own box leaves no step of its own.
-pub const LAMP_COLS: u16 = 25;
+/// The cells the caret's light spans, centred on the caret's own: the fall is spent a dozen
+/// cells out, so the box the light is drawn in leaves no step of its own.
+pub const LIGHT_COLS: u16 = 25;
 
-/// The placement identity every image is put under. A ground whose light moved is put under the
+/// The placement identity every image is put under. An image whose light moved is put under the
 /// identity it stood by before, so the terminal replaces it and no pixel of it travels.
 pub const PLACEMENT: u32 = 1;
 
-/// The depth every ground is placed at. Kitty draws an image under a cell that carries a
+/// The depth every plane is placed at. Kitty draws an image under a cell that carries a
 /// background only below `INT32_MIN / 2`, and a seam's edge ink is one such cell.
 pub const DEPTH: i64 = i32::MIN as i64 / 2 - 1;
 
@@ -37,8 +37,8 @@ impl PlaneId {
         PlaneId::Caret,
     ];
 
-    /// The identity the image is held under and layered by: grounds placed at the frame's one
-    /// depth stand by identity, so the lamp is read over the band it lights.
+    /// The identity the image is held under and layered by: two images at the frame's one depth
+    /// stand by identity, so the caret's light is read over the band it lights.
     pub fn image(self) -> u32 {
         match self {
             PlaneId::Composer => 333,
@@ -71,7 +71,7 @@ pub enum Shade {
         prompt: Color,
         rail: Color,
     },
-    /// The light the caret casts, drawn as an image of its own: the one ground whose placement
+    /// The light the caret casts, drawn as an image of its own: the one plane whose placement
     /// moves while the pixels it stands from do not.
     Caret {
         band: Rect,
@@ -133,7 +133,6 @@ impl Shade {
         })
     }
 
-    /// The light the caret casts on the band it waits in, at the column it waits in.
     pub fn caret(
         band: Rect,
         cell: Option<CellSize>,
@@ -196,13 +195,13 @@ impl Shade {
             Shade::Rail { tone, .. } => *tone,
             Shade::Composer {
                 area, prompt, rail, ..
-            } => match row.saturating_add(1) >= area.height {
+            } => match closes(row, area.height) {
                 true => *rail,
                 false => *prompt,
             },
             Shade::Caret {
                 band, prompt, rail, ..
-            } => match row.saturating_add(1) >= band.height {
+            } => match closes(row, band.height) {
                 true => *rail,
                 false => *prompt,
             },
@@ -259,7 +258,6 @@ impl Shade {
         })
     }
 
-    /// The cells of the frame the image stands on, and the columns of the image shown there.
     pub fn place(&self) -> Option<Placement> {
         let cell = self.cell()?;
         let whole = |area: Rect| Placement {
@@ -276,9 +274,9 @@ impl Shade {
             | Shade::Rail { area, .. }
             | Shade::Composer { area, .. } => whole(*area),
             Shade::Caret { band, caret, .. } => {
-                let wanted = i64::from(*caret) - i64::from(LAMP_COLS / 2);
+                let wanted = i64::from(*caret) - i64::from(LIGHT_COLS / 2);
                 let first = i64::from(band.x).max(wanted);
-                let last = i64::from(band.right()).min(wanted + i64::from(LAMP_COLS));
+                let last = i64::from(band.right()).min(wanted + i64::from(LIGHT_COLS));
                 let shown = u16::try_from(last - first).ok()?;
                 let skip = u16::try_from(first - wanted).ok()?;
                 Placement {
@@ -420,7 +418,7 @@ impl Image {
             Image::Transcript { area, .. }
             | Image::Rail { area, .. }
             | Image::Composer { area, .. } => area,
-            Image::Caret { rows, .. } => Rect::new(0, 0, LAMP_COLS, rows),
+            Image::Caret { rows, .. } => Rect::new(0, 0, LIGHT_COLS, rows),
         }
     }
 
@@ -439,13 +437,13 @@ impl Image {
             Image::Rail { tone, .. } => tone,
             Image::Composer {
                 area, prompt, rail, ..
-            } => match row.saturating_add(1) >= area.height {
+            } => match closes(row, area.height) {
                 true => rail,
                 false => prompt,
             },
             Image::Caret {
                 rows, prompt, rail, ..
-            } => match row.saturating_add(1) >= rows {
+            } => match closes(row, rows) {
                 true => rail,
                 false => prompt,
             },
@@ -471,7 +469,7 @@ impl Image {
             Image::Composer { .. } => 0.0,
             Image::Caret { lift, cell, .. } => {
                 let across = f64::from(cell.width());
-                let centre = (f64::from(LAMP_COLS / 2) + 0.5) * across;
+                let centre = (f64::from(LIGHT_COLS / 2) + 0.5) * across;
                 let distance = (x - centre) / (across * 8.0);
                 f64::from(lift) * (-(distance * distance) * 2.0).exp()
             }
@@ -503,8 +501,10 @@ pub struct Placement {
     pub top: u16,
     pub cols: u16,
     pub rows: u16,
+    /// The columns of the image skipped at its left edge, and the pixel those columns begin at.
     pub skip: u16,
     pub from: u32,
+    /// The pixels of the image shown, which are the ones the columns it stands over hold.
     pub width: u32,
 }
 
@@ -527,10 +527,6 @@ impl Plane {
 
     pub fn id(&self) -> PlaneId {
         self.id
-    }
-
-    pub fn image(&self) -> Image {
-        self.image
     }
 
     pub fn area(&self) -> Rect {
@@ -583,7 +579,12 @@ impl Planes {
 }
 
 pub fn delete(id: PlaneId) -> Vec<u8> {
-    format!("\x1b_Ga=d,d=i,i={}\x1b\\", id.image()).into_bytes()
+    format!("\x1b_Ga=d,d=i,i={},q=2\x1b\\", id.image()).into_bytes()
+}
+
+/// Whether a row of a band is the one the band closes on, drawn in the tone of the band it meets.
+fn closes(row: u16, rows: u16) -> bool {
+    row.saturating_add(1) >= rows
 }
 
 fn covers(area: Rect) -> bool {

@@ -538,11 +538,11 @@ struct Restore {
 }
 
 impl Restore {
-    /// Puts the terminal back: the key protocol is popped and the screen left first, so nothing
-    /// that follows — a panic message included — is drawn on a screen about to be somebody else's,
-    /// and then the state raw mode replaced and the signals the launch caught are restored.
+    /// Puts the terminal back: a frame that was interrupted closes its bracket first, then the key
+    /// protocol is popped and the screen left, so nothing that follows — a panic message included —
+    /// is drawn on a screen about to be somebody else's, and then raw mode and the signals return.
     fn put_back(self) {
-        let mut giving = Vec::new();
+        let mut giving = CLOSE_FRAME.to_vec();
         for id in PlaneId::ALL {
             giving.extend(plane::delete(id));
         }

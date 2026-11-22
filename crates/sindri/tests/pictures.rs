@@ -18,7 +18,7 @@ use sindri::markdown;
 use sindri::palette::{Band, Palette, channels};
 use sindri::picture::{self, Surface};
 use sindri::pictures::{PLACEHOLDER, Pictures};
-use sindri::plane::{Plane, PlaneId, Shade};
+use sindri::plane::{Placement, Plane, PlaneId, Shade};
 use sindri::pulse::Pulse;
 use sindri::rows::Row;
 use sindri::view::{Transcript, View};
@@ -1624,11 +1624,15 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
         ground.pixels().get_pixel(25, 30).0[..3],
         prompt,
         "the composer's band carries the prompt's own tone at every column of it, and the light \
-         under the caret is a lamp of its own over the band"
+         under the caret is a light of its own over the band"
     );
-    assert!(
-        lamp_plane(&view).pixels().get_pixel(lamp_centre(), 30).0[..3] != prompt,
-        "the caret glows, on the lamp the frame stands on its cell"
+    assert_ne!(
+        light_plane(&view)
+            .pixels()
+            .get_pixel(light_centre(light_plane(&view)), 30)
+            .0[..3],
+        prompt,
+        "the caret the frame stands on its cell glows, and that light is no tone of the band"
     );
 }
 
@@ -1853,14 +1857,14 @@ fn the_bands_ground_is_the_shade_sampled_row_by_row_from_the_prompt_band_to_the_
 }
 
 #[test]
-fn the_lamp_is_the_same_light_on_every_pixel_row_of_the_column_it_stands_on() {
+fn the_carets_light_is_the_same_on_every_pixel_row_of_the_column_it_stands_on() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
     frame::painted(&mut view, 80, 24);
-    let ground = lamp_plane(&view);
+    let ground = light_plane(&view);
     let (width, height) = ground.pixels().dimensions();
-    let at = lamp_centre();
+    let at = light_centre(ground);
     let step = |y: u32| {
         let lit = ground.pixels().get_pixel(at, y);
         let far = ground.pixels().get_pixel(width - 1, y);
@@ -1888,15 +1892,15 @@ fn the_lamp_is_the_same_light_on_every_pixel_row_of_the_column_it_stands_on() {
 }
 
 #[test]
-fn the_lamps_light_still_falls_off_away_from_the_caret() {
+fn the_carets_light_still_falls_off_away_from_the_caret() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
     frame::painted(&mut view, 80, 24);
-    let ground = lamp_plane(&view);
+    let ground = light_plane(&view);
     let (width, height) = ground.pixels().dimensions();
     let row = height / 10;
-    let at = lamp_centre();
+    let at = light_centre(ground);
     let lit = ground.pixels().get_pixel(at, row);
     let mut step = cell().width();
     while step < width {
@@ -1914,14 +1918,14 @@ fn the_lamps_light_still_falls_off_away_from_the_caret() {
     for channel in 0..3 {
         assert!(
             lit[channel] > far[channel],
-            "pixel channel {channel} of the cell the caret waits in is no lighter than the lamp's \
-             far side: {lit:?} against {far:?}"
+            "pixel channel {channel} of the cell the caret waits in is no lighter than the \
+             light's far side: {lit:?} against {far:?}"
         );
     }
 }
 
 #[test]
-fn the_bands_head_row_is_the_frames_seam_drawn_over_the_planes_light() {
+fn the_bands_head_row_is_the_frames_seam_claimed_over_its_plane() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     let frame = frame::painted(&mut view, 80, 24);
@@ -1933,15 +1937,15 @@ fn the_bands_head_row_is_the_frames_seam_drawn_over_the_planes_light() {
         band,
         "the plane stands under the band's own head row"
     );
-    let edge = channels(shade_of(&frame, PlaneId::Composer).row(0)).expect("the light in pixels");
+    let tone = channels(shade_of(&frame, PlaneId::Composer).row(0)).expect("the band in pixels");
     let head = middle_of(ground, 0);
     for channel in 0..3 {
         assert!(
-            head[channel].abs_diff(edge[channel]) <= 1,
-            "channel {channel} of the middle of the band's head cell is {} where the light the \
-             band meets the frame on is {}",
+            head[channel].abs_diff(tone[channel]) <= 1,
+            "channel {channel} of the middle of the band's head cell is {} where the band's own \
+             tone is {}",
             head[channel],
-            edge[channel]
+            tone[channel]
         );
     }
     let mut claimed = 0;
@@ -2225,9 +2229,13 @@ fn every_ink_a_frame_draws_keeps_its_floor_on_the_pixel_its_cell_stands_on() {
     let frame = frame::painted(&mut view, 120, 40);
     let palette = *frame.palette();
     let area = frame.area();
-    let planes: Vec<&Plane> = PlaneId::ALL
-        .into_iter()
-        .map(|id| plane_of(&view, id))
+    // Each plane is read through the cells it stands on and the columns of it shown there, so
+    // the light the caret casts answers for its own pixels and not for a band's.
+    let planes: Vec<(Placement, &Plane)> = frame
+        .told()
+        .shades()
+        .iter()
+        .filter_map(|shade| Some((shade.place()?, plane_of(&view, shade.id()?))))
         .collect();
     let mut read = 0;
     let mut lit = 0;
@@ -2241,19 +2249,19 @@ fn every_ink_a_frame_draws_keeps_its_floor_on_the_pixel_its_cell_stands_on() {
             let Some(colour) = colour else {
                 continue;
             };
-            let Some(plane) = planes
-                .iter()
-                .find(|plane| plane.area().contains(Position::new(x, y)))
-            else {
+            let Some((at, plane)) = planes.iter().rev().find(|(at, _)| {
+                (at.left..at.left + at.cols).contains(&x) && (at.top..at.top + at.rows).contains(&y)
+            }) else {
                 continue;
             };
+            let column = u32::from(x - at.left) + u32::from(at.skip);
+            let row = u32::from(y - at.top);
             let pixel = plane.pixels().get_pixel(
-                (u32::from(x) - u32::from(plane.area().x)) * cell().width() + cell().width() / 2,
-                (u32::from(y) - u32::from(plane.area().y)) * cell().height() + cell().height() / 2,
+                column * cell().width() + cell().width() / 2,
+                row * cell().height() + cell().height() / 2,
             );
             let under = [pixel[0], pixel[1], pixel[2]];
             let kept = ratio(colour, under);
-            let row = (u32::from(y) - u32::from(plane.area().y)) / cell().height();
             let rung = channels(shade_of(&frame, plane.id()).row(row as u16))
                 .expect("the band's own row in pixels");
             read += 1;
@@ -2642,13 +2650,14 @@ fn composer_plane(view: &View) -> &Plane {
     plane_of(view, PlaneId::Composer)
 }
 
-fn lamp_plane(view: &View) -> &Plane {
+fn light_plane(view: &View) -> &Plane {
     plane_of(view, PlaneId::Caret)
 }
 
-/// Where the lamp's own light is centred, in the pixels of the image it is drawn as.
-fn lamp_centre() -> u32 {
-    u32::from(sindri::plane::LAMP_COLS / 2) * cell().width() + cell().width() / 2
+/// Where the light is centred, in the pixels of the image it is drawn as.
+fn light_centre(plane: &Plane) -> u32 {
+    let cell = cell().width();
+    (plane.pixels().width() / 2 / cell) * cell + cell / 2
 }
 
 fn shade_of(drawn: &frame::Frame, id: PlaneId) -> Shade {
