@@ -91,17 +91,10 @@ impl Pictures {
         self.held.retain(|key, _| shown.contains(key));
     }
 
-    /// Draws `picture` over the cells `shown` of the block `block` it was measured into: the two
-    /// differ where a band holds only the top of a block, and the rows it has no cells for are left
-    /// as they were. A picture that will not rasterise is drawn as nothing.
-    pub fn place(
-        &mut self,
-        picture: &Picture,
-        cell: CellSize,
-        block: Rect,
-        shown: Rect,
-        buffer: &mut Buffer,
-    ) {
+    /// Draws `picture` over the cells `shown`, which are fewer than its own where a band holds only
+    /// the top of its block: the rows it has no cells for are left as they were. A picture that will
+    /// not rasterise is drawn as nothing.
+    pub fn place(&mut self, picture: &Picture, cell: CellSize, shown: Rect, buffer: &mut Buffer) {
         let Some(picker) = self.picker.as_ref() else {
             return;
         };
@@ -128,7 +121,8 @@ impl Pictures {
         let size = Rect {
             x: 0,
             y: 0,
-            ..block
+            width: picture.cols(),
+            height: picture.rows(),
         };
         if placed.needs_resize(&Resize::Scale(None), size).is_some() {
             placed.resize_encode(&Resize::Scale(None), size);

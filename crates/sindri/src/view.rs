@@ -1306,7 +1306,7 @@ impl View {
                 let cell = self.capabilities.cell();
                 self.capabilities
                     .pictures_mut()
-                    .place(picture, cell, cells, cells, buffer);
+                    .place(picture, cell, cells, buffer);
             }
         }
         let drawn = self.transcript(
@@ -2002,14 +2002,14 @@ fn place(
         width: picture.cols(),
         height: picture.rows(),
     };
-    if y < area.y || block.right() > area.right() {
+    if block.right() > area.right() {
         return;
     }
     let shown = Rect {
         height: block.height.min(area.bottom().saturating_sub(y)),
         ..block
     };
-    pictures.place(picture, cell, block, shown, buffer);
+    pictures.place(picture, cell, shown, buffer);
 }
 
 /// Every band a frame lays in `area`, with the transcript and the notice in `beside`'s columns:

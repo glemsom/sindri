@@ -14,7 +14,7 @@ pub struct Surface {
     cell: CellSize,
     draws: bool,
     sizing: bool,
-    band: u16,
+    band: Option<u16>,
 }
 
 impl Surface {
@@ -31,19 +31,23 @@ impl Surface {
             cell,
             draws,
             sizing,
-            band: u16::MAX,
+            band: None,
         }
     }
 
     /// The same surface on a band `rows` tall: the rows a picture is read in, and the most a
     /// picture may take before it gives way on that axis to fit.
     pub fn band(self, rows: u16) -> Surface {
-        Surface { band: rows, ..self }
+        Surface {
+            band: Some(rows),
+            ..self
+        }
     }
 
-    /// The rows the band this surface is read in has, and `u16::MAX` where it was told of none.
+    /// The rows the band this surface is read in has, and `u16::MAX` where it was told of none: a
+    /// picture told of no band is bounded by its own rows.
     pub fn rows(&self) -> u16 {
-        self.band
+        self.band.unwrap_or(u16::MAX)
     }
 
     pub fn sizing(&self) -> bool {

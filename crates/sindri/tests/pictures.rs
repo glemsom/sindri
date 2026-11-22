@@ -733,9 +733,9 @@ fn a_face_is_placed_over_the_footprint_it_was_measured_into_and_made_once_per_si
     };
 
     let mut first = Buffer::empty(Rect::new(0, 0, 60, 30));
-    pictures.place(&measured, cell(), block, block, &mut first);
+    pictures.place(&measured, cell(), block, &mut first);
     let mut again = Buffer::empty(Rect::new(0, 0, 60, 30));
-    pictures.place(&measured, cell(), block, block, &mut again);
+    pictures.place(&measured, cell(), block, &mut again);
 
     assert_eq!(
         pictured_rows(&first).len(),
@@ -901,15 +901,9 @@ fn a_picture_placed_again_after_a_scroll_carries_no_transmission_header() {
     };
 
     let mut first = Buffer::empty(Rect::new(0, 0, 80, 30));
-    pictures.place(&measured, cell(), block, block, &mut first);
+    pictures.place(&measured, cell(), block, &mut first);
     let mut scrolled = Buffer::empty(Rect::new(0, 0, 80, 30));
-    pictures.place(
-        &measured,
-        cell(),
-        block,
-        Rect { y: 8, ..block },
-        &mut scrolled,
-    );
+    pictures.place(&measured, cell(), Rect { y: 8, ..block }, &mut scrolled);
 
     assert_eq!(
         transmission_headers(&first),
@@ -2452,7 +2446,7 @@ fn a_picture_the_band_cuts_short_is_placed_over_the_rows_it_is_shown_in() {
     let shown = Rect { height: 2, ..block };
 
     let mut screen = Buffer::empty(Rect::new(0, 0, 80, 30));
-    pictures.place(&measured, cell(), block, shown, &mut screen);
+    pictures.place(&measured, cell(), shown, &mut screen);
 
     assert_eq!(
         pictured_rows(&screen),
