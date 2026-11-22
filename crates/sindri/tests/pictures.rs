@@ -1857,7 +1857,7 @@ fn the_bands_ground_is_the_shade_sampled_row_by_row_from_the_prompt_band_to_the_
 }
 
 #[test]
-fn the_carets_light_is_the_same_on_every_pixel_row_of_the_column_it_stands_on() {
+fn the_carets_light_peaks_on_the_head_of_the_band_and_is_spent_by_its_foot() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
@@ -1868,27 +1868,27 @@ fn the_carets_light_is_the_same_on_every_pixel_row_of_the_column_it_stands_on() 
     let step = |y: u32| {
         let lit = ground.pixels().get_pixel(at, y);
         let far = ground.pixels().get_pixel(width - 1, y);
-        [0, 1, 2].map(|channel| lit[channel].saturating_sub(far[channel]))
+        i32::from(lit[0]) - i32::from(far[0])
     };
 
     let waited = step(0);
     assert!(
-        waited.iter().any(|channel| *channel > 0),
-        "the column the caret waits in is no lighter than the band's far side on its first pixel \
-         row: {waited:?}"
+        waited > 0,
+        "the column the caret waits in is no lighter than the band's far side on its first pixel          row: the band is lit from above, and the caret's light lands on its head"
     );
-    for y in 1..height {
-        let row = step(y);
-        for channel in 0..3 {
-            assert!(
-                row[channel].abs_diff(waited[channel]) <= 1,
-                "channel {channel} of the light over the caret is {} on pixel row {y} and {} on \
-                 the row above it, so the glow follows the caret's column alone",
-                row[channel],
-                waited[channel]
-            );
-        }
+    for y in 1..height.saturating_sub(1) {
+        assert!(
+            step(y + 1) <= step(y) + 2,
+            "the light over the caret is {0} on pixel row {y} and {1} on the row above it, so the              glow does not fall down the band: it is painted across it",
+            step(y + 1),
+            step(y)
+        );
     }
+    assert!(
+        step(height - 1) <= 0,
+        "the foot of the band carries {} channels of the caret's light where its far side carries          none: the light is spent by the band it falls down",
+        step(height - 1)
+    );
 }
 
 #[test]
@@ -2121,8 +2121,8 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
     }
 
     let well = channels(palette.band(Band::Well)).expect("a band in pixels");
-    let lift = palette.lift(Band::Well);
-    let lit = well.map(|channel| channel.saturating_add(lift));
+    let peak = palette.peak(Band::Well);
+    let lit = well.map(|channel| channel.saturating_add(peak));
     let band = plane_of(&view, PlaneId::Transcript);
     let (width, height) = band.pixels().dimensions();
     for x in 0..width {
@@ -2130,19 +2130,27 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
         assert_eq!(
             head[..3],
             lit,
-            "column {x} of the transcript band's plane is not the well lit to the most it can \
-             take on its first pixel row: the head of the band is where the frame's light falls"
+            "column {x} of the transcript band's plane is not the well lit to the {peak} channels \
+             the band spends on its first pixel row: the head of the band is where the frame's \
+             light falls, and it falls on every column of it"
         );
     }
-    for y in cell().height()..2 * cell().height() {
-        let second = band.pixels().get_pixel(0, y).0;
-        assert_eq!(
-            second[..3],
-            well.map(|channel| channel.saturating_add(lift / 2)),
-            "pixel row {y} of the transcript band's plane is not the head's light halved: the \
-             light falls away from the band's head in whole channels"
+    let head = i32::from(lit[0]);
+    for y in 1..2 * cell().height() {
+        let carried = i32::from(band.pixels().get_pixel(0, y).0[0]) - i32::from(well[0]);
+        assert!(
+            carried >= 0 && carried < head,
+            "pixel row {y} of the transcript band's plane is {carried} channels over the well \
+             where the head is {head}: the crown falls continuously over the band's first rows, \
+             and no pixel row of them carries the head's light or steps past it"
         );
     }
+    let second = i32::from(band.pixels().get_pixel(0, cell().height()).0[0]) - i32::from(well[0]);
+    assert!(
+        second > 0,
+        "the second cell row of the transcript band's plane is the well, and the head above it \
+         is lit: the light steps by the row instead of falling through the pixels of one"
+    );
     for y in 2 * cell().height()..height {
         for x in 0..width {
             let pixel = band.pixels().get_pixel(x, y).0;
@@ -2157,32 +2165,51 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
     }
 
     let tone = channels(palette.band(Band::Rail)).expect("a band in pixels");
-    let lit = tone.map(|channel| channel.saturating_add(palette.lift(Band::Rail)));
+    let peak = palette.peak(Band::Rail);
     let band = plane_of(&view, PlaneId::Rail);
-    let height = band.pixels().height();
+    let (across, down) = (cell().width(), cell().height());
+    let lit = |column: u32, row: u32| {
+        let pixel = band
+            .pixels()
+            .get_pixel(column * across + across / 2, row * down + down / 2)
+            .0;
+        i32::from(pixel[0]) - i32::from(tone[0])
+    };
+    let (face_x, face_y) = (
+        u32::from(face.x - rail.area.x),
+        u32::from(face.y - rail.area.y),
+    );
+    assert_eq!(
+        lit(
+            face_x + u32::from(face.width) / 2,
+            face_y + u32::from(face.height) / 2
+        ),
+        i32::from(peak),
+        "the pixel Sindri's face stands on is not the rail's tone lit to the {peak} channels the \
+         rail spends: the light of the frame is a lamp centred on the face"
+    );
     for row in 0..rail.area.height {
-        let y = rail.area.y + row;
-        let stands = y < face.bottom();
-        for down in 0..cell().height() {
-            for x in 0..band.pixels().width() {
-                let pixel = band
-                    .pixels()
-                    .get_pixel(x, u32::from(row) * cell().height() + down)
-                    .0;
-                let wanted = match stands {
-                    true => lit,
-                    false => tone,
-                };
+        for column in 0..rail.area.width {
+            let inside = (face_y..face_y + u32::from(face.height)).contains(&u32::from(row))
+                && (face_x..face_x + u32::from(face.width)).contains(&u32::from(column));
+            if inside {
+                continue;
+            }
+            let carried = lit(u32::from(column), u32::from(row));
+            assert!(
+                carried >= 0,
+                "row {row}, column {column} of the rail's plane is darker than the rail's own \
+                 tone: the light only ever falls onto the band"
+            );
+            if u32::from(row) >= face_y + 2 * u32::from(face.height) {
                 assert_eq!(
-                    pixel[..3],
-                    wanted,
-                    "row {row}, column {x} of the rail's plane is not {}: the rows Sindri's face \
-                     stands on are the rows the light falls on, and every row below them is the \
-                     rail's own tone",
-                    match stands {
-                        true => "the rail's tone lit",
-                        false => "the rail's own tone",
-                    }
+                    carried,
+                    0,
+                    "row {row}, column {column} of the rail's plane carries {carried} channels of \
+                     light where the face stands on rows {face_y} to {}: the light falls away \
+                     from the face by half its own height either side and leaves the rail's own \
+                     tone under the facts below it",
+                    face_y + u32::from(face.height)
                 );
             }
         }
