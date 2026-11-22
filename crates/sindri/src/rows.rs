@@ -708,27 +708,50 @@ fn answer_on(
     surface: &Surface,
     wholeness: markdown::Wholeness,
 ) -> Vec<Row> {
+    let (head, reserve) = reserved(head, cols);
+    let mut rows = answer_rows(text, cols, reserve, surface, wholeness);
+    if let Some(head) = head
+        && let Some(first) = rows.first_mut()
+    {
+        headed(first, head, cols, reserve);
+    }
+    rows
+}
+
+/// `row` with the marker `head` laid in it, standing where the row's gutters do: the row is laid from
+/// its own words first, so the marker is set over it rather than laid in its place.
+fn headed(row: &mut Row, head: &Head, cols: u16, reserve: u16) {
+    let first = std::mem::replace(row, Row::blank());
+    *row = first.headed_by(&head_row(head, cols), reserve);
+}
+
+/// The marker a band can hold beside one word of an answer, and the columns its own words reserve:
+/// a marker the band cannot hold beside that word is given up whole rather than the word.
+fn reserved(head: Option<&Head>, cols: u16) -> (Option<&Head>, u16) {
     let (gutter, room) = margin(INDENT, cols);
-    // The marker's own words count against the width; the gutter it stands in the place of does
-    // not, and a marker the band cannot hold beside one word of the answer is given up whole.
+    // The marker's own words count against the width; the gutter it stands in the place of does not.
     let reserve = head.map_or(0, |head| {
         head.width()
             .saturating_add(1)
             .saturating_sub(pen::cells(gutter))
     });
-    let (head, reserve) = match reserve < room {
+    match reserve < room {
         true => (head, reserve),
         false => (None, 0),
-    };
-    let mut rows = markdown::rows_in(text, cols, reserve, gutter, surface, wholeness).into_iter();
-    let mut laid: Vec<Row> = Vec::new();
-    if let Some(head) = head
-        && let Some(first) = rows.next()
-    {
-        laid.push(first.headed_by(&head_row(head, cols), reserve));
     }
-    laid.extend(rows);
-    laid
+}
+
+/// The rows an answer's words are drawn as, wrapped to leave `reserve` columns for a marker beside
+/// them and with no marker laid in them: a marker that moved steps over this laying, not through it.
+fn answer_rows(
+    text: &str,
+    cols: u16,
+    reserve: u16,
+    surface: &Surface,
+    wholeness: markdown::Wholeness,
+) -> Vec<Row> {
+    let (gutter, _) = margin(INDENT, cols);
+    markdown::rows_in(text, cols, reserve, gutter, surface, wholeness)
 }
 
 /// The row a run's marker heads: the mark stands in the gutter and the words it says begin where
@@ -1137,12 +1160,30 @@ pub struct Rows {
     /// How many layouts this cache has done: the instrument the rows tests hold the laying out to,
     /// read from outside this crate and never by it.
     lays: usize,
+    /// How many rows those layouts drew: the one count a step of the marker and a landing fragment
+    /// are told apart by, read from outside this crate and never by it.
+    laid: usize,
     /// Whether the stop this cache holds last is the one the turn in flight ended, which stands above
     /// it, and never the stop a run before it left.
     ended: bool,
     /// The marker the newest answer the record holds wears, and none while the frame's marker heads
     /// a turn in flight or a row of its own.
     head: Option<Head>,
+    /// The row the newest answer of the turn in flight opens with, kept as the answer laid it, so a
+    /// marker that moved is laid over that row alone.
+    unmarked: Option<Unmarked>,
+}
+
+/// The row a marker heads as the answer laid it, with no marker in it: a marker that moved is laid
+/// over this row and the rows under it stand, because what they wrap at is the columns the marker's
+/// own words reserve.
+#[derive(Clone, Debug)]
+struct Unmarked {
+    /// The columns the marker reserved when this row was laid, which is what the answer wraps at.
+    reserve: u16,
+    /// Where this row stands in the live entry's rows.
+    first: usize,
+    row: Row,
 }
 
 #[derive(Clone, Debug)]
@@ -1164,6 +1205,19 @@ struct Held {
     /// How far each fence of this entry has been walked, by the block's ordinal: kept off the rows so
     /// a line laid again is walked where the reader left it, and dropped with them at a new width.
     walks: Vec<(usize, u16)>,
+}
+
+impl Held {
+    /// `row` walked where the reader left the fence it is a line of: a row laid again keeps the walk
+    /// its entry was left in.
+    fn walk(&self, row: &mut Row) {
+        let Some(fence) = row.fence() else {
+            return;
+        };
+        if let Some((_, walk)) = self.walks.iter().find(|(id, _)| *id == fence.id()) {
+            row.walked(*walk);
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1347,6 +1401,11 @@ impl Rows {
         {
             return;
         }
+        if let Some(at) = at
+            && self.stepped(at, revision, head.clone())
+        {
+            return;
+        }
         let mut rows = self.live_rows(head.as_ref());
         match at {
             Some(at) => {
@@ -1375,9 +1434,52 @@ impl Rows {
         self.lays += 1;
     }
 
+    /// Lays the row a marker heads over the answer it heads, and answers whether this pass was one:
+    /// a turn that has said a word since its rows were laid is laid whole, and so is one whose marker
+    /// no longer reserves the columns those rows wrap at.
+    fn stepped(&mut self, at: usize, revision: u64, head: Option<Head>) -> bool {
+        let cols = self.measure.cols;
+        let (fitted, reserve) = reserved(head.as_ref(), cols);
+        let What::Live { revision: laid, .. } = &self.held[at].what else {
+            return false;
+        };
+        if *laid != revision {
+            return false;
+        }
+        let Some(unmarked) = self
+            .unmarked
+            .as_ref()
+            .filter(|unmarked| unmarked.reserve == reserve)
+        else {
+            return false;
+        };
+        let mut row = unmarked.row.clone();
+        if let Some(head) = fitted {
+            headed(&mut row, head, cols, reserve);
+        }
+        let held = &mut self.held[at];
+        held.walk(&mut row);
+        let Some(stand) = held
+            .rows
+            .as_mut()
+            .and_then(|rows| rows.get_mut(unmarked.first))
+        else {
+            return false;
+        };
+        *stand = row;
+        held.what = What::Live { revision, head };
+        self.lays += 1;
+        self.laid += 1;
+        true
+    }
+
     /// The newest answer alone wears `head`, and a turn that has said no answer gets a row of its own
-    /// for it: a frame waiting on a wire must not look idle.
-    fn live_rows(&self, head: Option<&Head>) -> Vec<Row> {
+    /// for it: a frame waiting on a wire must not look idle. The row the marker heads is kept as the
+    /// answer laid it, so a marker that moves after this lays that row and no other.
+    fn live_rows(&mut self, head: Option<&Head>) -> Vec<Row> {
+        let cols = self.measure.cols;
+        let surface = &self.measure.surface;
+        let (head, reserve) = reserved(head, cols);
         let newest = self
             .in_flight
             .said()
@@ -1385,26 +1487,39 @@ impl Rows {
             .filter(|(_, (_, said))| *said == Said::Answer)
             .map(|(at, _)| at)
             .last();
-        let mut rows = Vec::new();
+        let mut unmarked = None;
+        let mut rows: Vec<Row> = Vec::new();
         for (at, (words, said)) in self.in_flight.said().enumerate() {
-            let head = match Some(at) == newest {
-                true => head,
-                false => None,
+            let heads = Some(at) == newest;
+            let reserve = match heads {
+                true => reserve,
+                false => 0,
             };
-            rows.extend(match said {
-                Said::Reasoning => thought(words, self.measure.cols),
-                Said::Answer => answer_on(
-                    words,
-                    self.measure.cols,
-                    head,
-                    &self.measure.surface,
-                    markdown::Wholeness::Arriving,
-                ),
-            });
+            let mut drawn = match said {
+                Said::Reasoning => thought(words, cols),
+                Said::Answer => {
+                    answer_rows(words, cols, reserve, surface, markdown::Wholeness::Arriving)
+                }
+            };
+            if heads && let Some(row) = drawn.first().cloned() {
+                unmarked = Some(Unmarked {
+                    reserve,
+                    first: rows.len(),
+                    row,
+                });
+                if let Some(head) = head
+                    && let Some(first) = drawn.first_mut()
+                {
+                    headed(first, head, cols, reserve);
+                }
+            }
+            rows.extend(drawn);
         }
         if let (None, Some(head)) = (newest, head) {
-            rows.push(head_row(head, self.measure.cols));
+            rows.push(head_row(head, cols));
         }
+        self.laid += rows.len();
+        self.unmarked = unmarked;
         rows
     }
 
@@ -1434,6 +1549,7 @@ impl Rows {
         self.held
             .retain(|held| !matches!(held.what, What::Live { .. }));
         self.ended = false;
+        self.unmarked = None;
     }
 
     /// The call a result of `turn` settles: the one whose identity it names, and a result that names
@@ -1476,6 +1592,13 @@ impl Rows {
 
     pub fn lays(&self) -> usize {
         self.lays
+    }
+
+    /// The rows this cache has laid out, a pass telling what it drew by the difference: every row a
+    /// fact, a thought or an answer was drawn as, and the one row a marker's step lays over the
+    /// answer it heads. Read from outside this crate, never by it.
+    pub fn laid(&self) -> usize {
+        self.laid
     }
 
     /// Hands the cache the band it is drawn at, answering whether the band reflowed: true only when
@@ -1541,14 +1664,9 @@ impl Rows {
     /// `rows` walked where the reader left this entry's fences: the one thing about them that is the
     /// entry's and not the width's.
     fn walking(&self, at: usize, rows: &mut [Row]) {
-        let walks = &self.held[at].walks;
+        let held = &self.held[at];
         for row in rows {
-            let Some(fence) = row.fence() else {
-                continue;
-            };
-            if let Some((_, walk)) = walks.iter().find(|(id, _)| *id == fence.id()) {
-                row.walked(*walk);
-            }
+            held.walk(row);
         }
     }
 
@@ -1559,6 +1677,7 @@ impl Rows {
             held.rows = None;
             held.walks.clear();
         }
+        self.unmarked = None;
     }
 
     /// The rows of entry `at`, laid out now if they do not exist and kept for the next paint: a
@@ -1597,6 +1716,7 @@ impl Rows {
                 if at == 0 && is_prompt(&self.held[at]) {
                     rows.remove(0);
                 }
+                self.laid += rows.len();
                 self.held[at].rows = Some(rows);
                 self.held[at].kept = kept;
             }
