@@ -211,25 +211,6 @@ fn no_boundary_of_the_frame_is_its_brightest_surface() {
 }
 
 #[test]
-fn every_ink_keeps_its_legibility_floor_on_the_edge_ink() {
-    for (spelling, palette) in SPELLED {
-        for ink in Ink::ALL
-            .into_iter()
-            .filter(|ink| channels(palette.colour(*ink)).is_some())
-        {
-            let ratio = contrast(palette.colour(ink), palette.edge_ink());
-
-            assert!(
-                ratio >= LEGIBLE,
-                "{spelling} reads {} on the edge under {LEGIBLE}:1, and the composer's head row \
-                 carries words on that ground",
-                ink.name()
-            );
-        }
-    }
-}
-
-#[test]
 fn the_prompt_band_is_spelled_in_every_palette_and_flat_where_a_palette_spells_no_ground() {
     assert_eq!(
         Palette::SLOTS.band(Band::Prompt),
@@ -248,26 +229,58 @@ fn the_prompt_band_is_spelled_in_every_palette_and_flat_where_a_palette_spells_n
 }
 
 #[test]
-fn the_prompt_band_is_the_highest_rung_and_the_well_the_lowest() {
+fn the_ramp_lays_the_grounds_a_frame_is_drawn_on_by_lightness_and_every_band_reads_its_own() {
     for (spelling, palette) in SPELLED {
-        let rail = luminance(palette.band(Band::Rail));
-        let prompt = luminance(palette.band(Band::Prompt));
-        let well = luminance(palette.band(Band::Well));
+        let ramp = palette.ramp();
 
-        assert!(
-            well < rail && rail < prompt,
-            "{spelling} draws the rail and the prompt at {rail} and {prompt} over the well at \
-             {well}: the reader's own words stand one rung above the conversation they were asked \
-             in, and the rail one above the well beside it"
+        assert_eq!(
+            ramp.len(),
+            Rung::ALL.len(),
+            "{spelling} lays {} rungs where the design names {}",
+            ramp.len(),
+            Rung::ALL.len()
         );
-        for band in Band::ALL {
-            let ground = luminance(palette.band(band));
-            assert!(
-                ground <= prompt,
-                "{spelling} draws {band:?} at {ground}, over the prompt's own {prompt}: a frame \
-                 paints the ladder the prompt is the highest rung of, and keeps no band above it"
+        for (at, (rung, colour)) in ramp.iter().enumerate() {
+            assert_eq!(
+                *rung,
+                Rung::ALL[at],
+                "{spelling} lays {rung:?} at rung {at}, where the ramp's own order names {:?}",
+                Rung::ALL[at]
             );
+            if let Some((below, under)) = at.checked_sub(1).map(|below| ramp[below]) {
+                let (here, there) = (lightness(*colour), lightness(under));
+                assert!(
+                    here > there,
+                    "{spelling} lays {rung:?} at L* {here} over {below:?} at L* {there}: the \
+                     ramp is the one order its grounds are read in, and a rung is lighter than \
+                     the one it stands on"
+                );
+            }
         }
+
+        let mut named: Vec<Rung> = Vec::new();
+        for band in Band::ALL {
+            let rung = band.rung();
+            assert_eq!(
+                palette.band(band),
+                palette.rung(rung),
+                "{spelling} draws {band:?} in {:?} where {rung:?} reads {:?}: every band's \
+                 ground is read off the ramp",
+                palette.band(band),
+                palette.rung(rung)
+            );
+            assert!(
+                !named.contains(&rung),
+                "{spelling} draws {band:?} on {rung:?}, and a band beside it is drawn there too"
+            );
+            named.push(rung);
+        }
+        assert_eq!(
+            named.len(),
+            Rung::ALL.len(),
+            "{spelling} names {:?}, so a rung of the ramp is drawn on by no band",
+            named
+        );
     }
 }
 
@@ -283,20 +296,30 @@ fn every_palette_spells_the_prompt_band_and_the_rails_tone_apart() {
     }
 }
 
-#[test]
-fn the_rails_tone_stands_a_quiet_step_of_lightness_above_the_well_beside_it() {
-    for (spelling, palette) in SPELLED {
-        let rail = palette.band(Band::Rail);
-        let well = palette.band(Band::Well);
-        let step = lightness(rail) - lightness(well);
+/// The least step the design lays between two rungs of its ramp, in L*: less and they read as one
+/// surface.
+const STEP: f64 = 1.5;
 
-        assert!(
-            (2.0..=6.0).contains(&step),
-            "{spelling} lays the rail {rail:?} at L* {} over the well {well:?} at L* {}: a step \
-             of {step} leaves the band a second material or no neighbour at all",
-            lightness(rail),
-            lightness(well)
-        );
+/// The most it lays, in L*: more and the band above reads as a second material, not a neighbour.
+const CEILING: f64 = 6.0;
+
+#[test]
+fn no_two_rungs_of_the_ramp_sit_closer_than_the_designs_step_or_further_apart_than_its_ceiling() {
+    for (spelling, palette) in SPELLED {
+        let ramp = palette.ramp();
+
+        for at in 1..ramp.len() {
+            let (lower, under) = ramp[at - 1];
+            let (upper, over) = ramp[at];
+            let (under, over) = (lightness(under), lightness(over));
+            let step = over - under;
+
+            assert!(
+                (STEP..=CEILING).contains(&step),
+                "{spelling} lays {upper:?} at L* {over} over {lower:?} at L* {under}, a step of \
+                 {step}: the ramp keeps its rungs between {STEP} and {CEILING}"
+            );
+        }
     }
 }
 
@@ -305,26 +328,45 @@ fn the_rails_tone_stands_a_quiet_step_of_lightness_above_the_well_beside_it() {
 const APART: f64 = 3.0;
 
 #[test]
-fn the_one_edge_stands_below_every_band_and_three_apart_from_the_grounds_it_parts() {
+fn the_hairline_is_no_rung_of_the_ramp_and_keeps_its_own_floor_below_every_rung() {
+    let mut stands_further = false;
+
     for (spelling, palette) in SPELLED {
-        let edge = lightness(palette.edge_ink());
+        let hairline = palette.edge_ink();
+        let under = lightness(hairline);
 
-        for band in Band::ALL {
-            let ground = lightness(palette.band(band));
-
+        for (rung, colour) in palette.ramp() {
+            assert_ne!(
+                colour, hairline,
+                "{spelling} draws {rung:?} in the hairline's own colour, so the ramp's step rule \
+                 touches the edge it parts"
+            );
+            let over = lightness(colour);
             assert!(
-                edge < ground,
-                "{spelling} draws the edge at L* {edge} over the {band:?} at L* {ground}: the \
-                 one edge ink is the rung every band of the frame stands above"
+                under < over,
+                "{spelling} draws the hairline at L* {under} over {rung:?} at L* {over}: the \
+                 edge is the darkest surface of the frame, under every ground it parts"
             );
             assert!(
-                ground - edge >= APART,
-                "{spelling} draws the edge at L* {edge} over the {band:?} at L* {ground}: a \
-                 boundary {} L* above the ground it parts is a boundary the eye cannot follow",
-                ground - edge
+                over - under >= APART,
+                "{spelling} draws the hairline at L* {under} under {rung:?} at L* {over}: a \
+                 boundary {} L* below the ground it parts is a boundary the eye cannot follow",
+                over - under
             );
         }
+
+        let lowest = lightness(palette.rung(Rung::ALL[0]));
+        if lowest - under > CEILING {
+            stands_further = true;
+        }
     }
+
+    assert!(
+        stands_further,
+        "no spelling stands its hairline further below the lowest rung than the ramp's ceiling \
+         allows, so nothing proves an edge may sit a longer step below the surfaces it parts than \
+         one surface may sit above another"
+    );
 }
 
 #[test]
@@ -398,16 +440,29 @@ fn no_two_inks_resolve_to_one_foreground_and_modifier() {
 const LEGIBLE: f64 = 4.2;
 
 #[test]
-fn the_dim_ink_carries_words_on_every_band() {
+fn every_ink_keeps_its_legibility_floor_on_every_rung_a_frame_draws_on() {
     for (spelling, palette) in SPELLED {
-        for band in Band::ALL {
-            let ratio = reads(&palette, Ink::Dim, band);
+        let mut grounds: Vec<(&str, Color)> = palette
+            .ramp()
+            .iter()
+            .map(|(rung, colour)| (rung.name(), *colour))
+            .collect();
+        grounds.push(("the hairline", palette.edge_ink()));
 
-            assert!(
-                ratio >= LEGIBLE,
-                "{spelling} reads dim on {band:?} under {LEGIBLE}:1, and a word under that \
-                     is a word a reader has to guess"
-            );
+        for ink in Ink::ALL
+            .into_iter()
+            .filter(|ink| channels(palette.colour(*ink)).is_some())
+        {
+            for (ground, colour) in &grounds {
+                let ratio = contrast(palette.colour(ink), *colour);
+
+                assert!(
+                    ratio >= LEGIBLE,
+                    "{spelling} reads {} on {ground} under {LEGIBLE}:1, and a word under that \
+                     is a word a reader has to guess",
+                    ink.name()
+                );
+            }
         }
     }
 }

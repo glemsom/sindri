@@ -200,6 +200,13 @@ reflows, and the **Caret** is no cell of it. Every band draws its words inside t
 never on its own edge, so the frame reads as one sheet of paper and not five.
 _Avoid_: Region, pane, panel, viewport
 
+**Rung**:
+One surface a band's ground is read off, held on the frame's ramp: the well a transcript is read in,
+the rail's tone beside it, and the band a **Prompt** is asked on, laid in that one order by
+lightness so no two rungs sit closer than the design's step or further apart than its ceiling. The
+hairline a **Seam** is drawn in is no rung of it.
+_Avoid_: Step, level, tier, shade
+
 **Transcript band**:
 The band every other strip is taken out of — the **Composer**'s, which runs under the rail in every
 column the frame has, and the row that says the frame stands off the tail — drawn in the columns
@@ -244,11 +251,12 @@ closes it.
 _Avoid_: Collapse, truncate, expand (that one is the other half), summary, preview
 
 **Plane**:
-A band's surface drawn as one image placed under its cells, so it shades in pixels rather than in
-whole rows: the image a frame holds against that band's **Shade**, and makes only when the shade
-moves. It is that shade sampled at the cell and read between one row and the next, and it covers the
-band's own columns and no column of the band beside it. A terminal that places no picture, or a band
-in a palette with no colour, is given none, and the band's own rows are claimed from its shade.
+A band's surface drawn as one image placed under its cells, so it is drawn at the pixels of the cell
+rather than in whole cells: the image a frame holds against that band's **Shade**, and makes only
+when the shade moves. Every pixel row of it is the colour of the cell row it falls in, and the one
+blend it makes is the **Caret**'s glow, which only ever adds light; it covers the band's own columns
+and no column of the band beside it. A terminal that places no picture, or a band in a palette with
+no colour, is given none, and the band's own rows are claimed from its shade.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 
 **Shade**:
