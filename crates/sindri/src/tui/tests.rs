@@ -152,22 +152,17 @@ impl Stage {
         config: Config,
         environment: &'a dyn Environment,
     ) -> Loop<'a> {
-        let wake = Arc::new(Wake::open().expect("a wake"));
-        self.told_in(view, config, environment, false, wake)
+        self.told_in(view, config, environment, false).0
     }
 
-    /// The same launch, with the wake it waits on handed back: the one a test raises a reason on.
+    /// The same launch, with the wake it waits on handed back: the one a test raises a cause on.
     fn launch_woken<'a>(
         &'a self,
         view: View,
         config: Config,
         environment: &'a dyn Environment,
     ) -> (Loop<'a>, Arc<Wake>) {
-        let wake = Arc::new(Wake::open().expect("a wake"));
-        (
-            self.told_in(view, config, environment, false, Arc::clone(&wake)),
-            wake,
-        )
+        self.told_in(view, config, environment, false)
     }
 
     /// The same launch where the stream carries a window, which is the only thing that reports the
@@ -178,8 +173,7 @@ impl Stage {
         config: Config,
         environment: &'a dyn Environment,
     ) -> Loop<'a> {
-        let wake = Arc::new(Wake::open().expect("a wake"));
-        self.told_in(view, config, environment, true, wake)
+        self.told_in(view, config, environment, true).0
     }
 
     /// Every byte this terminal has been handed, once it has gone quiet: a frame is several
@@ -203,8 +197,8 @@ impl Stage {
         config: Config,
         environment: &'a dyn Environment,
         carries: bool,
-        wake: Arc<Wake>,
-    ) -> Loop<'a> {
+    ) -> (Loop<'a>, Arc<Wake>) {
+        let wake = Arc::new(Wake::open().expect("a wake"));
         let telling = Window::new(
             self.pty
                 .slave
@@ -214,16 +208,17 @@ impl Stage {
             std::path::Path::new("/work/sindri"),
             carries,
         );
-        Loop::new(
+        let live = Loop::new(
             &self.terminal,
             &self.cli,
             config,
             environment,
             view,
             telling,
-            wake,
+            Arc::clone(&wake),
         )
-        .expect("a launch")
+        .expect("a launch");
+        (live, wake)
     }
 }
 
@@ -676,7 +671,6 @@ fn a_refused_prompt_waits_in_the_queue_again_while_the_reader_has_a_draft_of_the
 fn a_quit_typed_before_the_first_frame_is_answered_by_the_loop() {
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
-    let _wake = Wake::installed().expect("a signal pipe");
     let mut live = stage.launch(
         View::of(
             Capabilities::default(),
@@ -709,7 +703,7 @@ fn a_cancel_raised_with_no_key_typed_and_no_run_live_ends_the_launch() {
         &environment,
     );
 
-    wake.raise(Reason::Cancel);
+    wake.raise(Causes::CANCEL);
     let ended = live.keys(b"").expect("the cancel is answered");
 
     assert!(
@@ -732,7 +726,7 @@ fn a_cancel_whose_byte_a_drain_took_is_read_on_a_pass_a_landed_report_wakes() {
         &environment,
     );
 
-    wake.raise(Reason::Cancel);
+    wake.raise(Causes::CANCEL);
     wake.drain();
     wake.ping();
 
@@ -746,7 +740,7 @@ fn a_cancel_whose_byte_a_drain_took_is_read_on_a_pass_a_landed_report_wakes() {
 }
 
 #[test]
-fn a_resize_raised_while_the_loop_waits_paints_and_only_the_cancel_behind_it_ends_the_launch() {
+fn a_window_change_at_the_wait_paints_the_frame_it_woke_for_and_no_ending_of_its_own() {
     let stage = Stage::open();
     let environment = std::collections::BTreeMap::new();
     let (mut live, wake) = stage.launch_woken(
@@ -759,18 +753,18 @@ fn a_resize_raised_while_the_loop_waits_paints_and_only_the_cancel_behind_it_end
         &environment,
     );
 
-    wake.raise(Reason::Resize);
+    wake.raise(Causes::RESIZE);
     let later = Arc::clone(&wake);
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(100));
-        later.raise(Reason::Cancel);
+        later.raise(Causes::CANCEL);
     });
 
     let ended = live.keys(b"").expect("the cancel is answered");
 
     assert!(
         matches!(ended, Ending::Cancelled),
-        "the resize raises no ending, and the cancel behind it is the launch's"
+        "the window change raises no ending of its own: the cancel behind it is the launch's"
     );
     assert!(
         !stage.drawn().is_empty(),

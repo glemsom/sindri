@@ -28,7 +28,7 @@ use sindri_core::tools::FrontEnd;
 use crate::cli::Cli;
 use crate::open::HostOpener;
 use crate::reports::{Asking, Report, Running, ask};
-use crate::signal::{Reason, Wake};
+use crate::signal::{Causes, Wake};
 use crate::term::{Canvas, Screen, Terminal, missing_terminal, paint, tell};
 use crate::window::{self, Window};
 
@@ -305,12 +305,13 @@ impl<'a> Loop<'a> {
                 self.view.handed(facts);
             }
 
-            // Read every pass and not only the pass the pipe woke: a reason can be raised while the
-            // loop is painting or taking a report, and the byte it pinged is one a drain may have
-            // taken.
-            let reasons = wake.reasons();
+            // Drained before the causes are read and not after: a cause can be raised while the loop
+            // is painting, and a cancel whose byte this drain took away would otherwise wait for a
+            // key that is never coming.
+            wake.drain();
+            let causes = wake.causes();
 
-            if reasons.holds(Reason::Cancel) && !interrupted {
+            if causes.holds(Causes::CANCEL) && !interrupted {
                 interrupted = true;
                 if let Some(flight) = &self.running {
                     flight.cancel();
@@ -318,7 +319,6 @@ impl<'a> Loop<'a> {
             }
 
             if woken {
-                wake.drain();
                 self.served()?;
                 if self.take()? && !interrupted {
                     // A launch the user's own word ended starts nothing: the queue waits for a
@@ -348,9 +348,9 @@ impl<'a> Loop<'a> {
                 }
             }
 
-            // Not an idle frame: a live run's marker has stepped or the window changed, and a paint
-            // reads the terminal's size as it draws.
-            if reasons.holds(Reason::Resize) || (!keyed && !woken && self.running.is_some()) {
+            // The frame the last paint drew is now wrong: a live run's marker has stepped, or the
+            // window it was drawn on changed, which a paint reads the terminal's size for.
+            if causes.holds(Causes::RESIZE) || (!keyed && !woken && self.running.is_some()) {
                 self.paint()?;
             }
         }
