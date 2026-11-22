@@ -1360,10 +1360,10 @@ fn a_screen_over_the_band_places_no_caret_and_hides_the_terminals_own() {
 
     let frame = drawn.text();
     assert!(
-        frame.ends_with("\u{1b}[?25l"),
+        frame.ends_with("\u{1b}[?25l\u{1b}[?2026l"),
         "a screen takes the keys the draft behind it does not, so the frame places no caret and \
-         the terminal's own is hidden rather than left standing on a cell nobody can type in: \
-         {frame:?}"
+         the terminal's own is hidden rather than left standing on a cell nobody can type in, \
+         and the bracket closes after it: {frame:?}"
     );
 
     pty.type_bytes(b"\x1b");
@@ -3650,6 +3650,61 @@ fn leaves_the_cursor(bytes: &[u8], at: usize) -> bool {
 }
 
 #[test]
+fn a_frame_a_rich_terminal_is_handed_arrives_inside_one_bracket_and_answers_nothing() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::named(&ground, &wire, "xterm-kitty");
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    let bytes = drawn.bytes();
+    let opened = at(&bytes, b"\x1b[?2026h").expect("the frame opens the synchronised output");
+    let closed = at(&bytes, b"\x1b[?2026l").expect("and closes it");
+    assert!(
+        opened < closed,
+        "the bracket the frame opens it also closes: {:?}",
+        drawn.text()
+    );
+    let frame = &bytes[opened..closed];
+    assert!(
+        at(frame, b"\x1b_Ga=T").is_some(),
+        "the grounds the frame places are written inside the bracket, so a reader is shown an \
+         old ground under new cells by no frame: {:?}",
+        drawn.text()
+    );
+    let mut commands = 0;
+    for command in frame.split(|byte| *byte == 0x1b) {
+        let head = String::from_utf8_lossy(command);
+        let head = head.strip_prefix("_G").unwrap_or_default();
+        if !head.starts_with("a=T") && !head.starts_with("a=p") {
+            continue;
+        }
+        commands += 1;
+        let head = head.split(';').next().unwrap_or_default();
+        assert!(
+            head.contains("q=2") && head.contains("C=1"),
+            "a placement asks the terminal a question, and an answer to it is read as the \
+             reader's next keystroke: {head:?}"
+        );
+    }
+    assert!(
+        commands > 0,
+        "the frame on this terminal places a ground or more: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(
+        session.wait().code(),
+        Some(0),
+        "and the launch is still there to quit"
+    );
+}
+
+#[test]
 fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     let ground = Ground::new();
     let wire = Wire::holding();
@@ -3661,7 +3716,7 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
         drawn.text()
     );
     let bytes = drawn.bytes();
-    let placed = at(&bytes, b"\x1b_Ga=T,f=100,i=333,q=2,z=-1,C=1,c=").unwrap_or_else(|| {
+    let placed = at(&bytes, b"\x1b_Ga=T,f=100,i=333,p=1,q=2,z=").unwrap_or_else(|| {
         panic!(
             "the band of the boot frame is placed on a ground of its own cells: {:?}",
             drawn.text()
@@ -3686,7 +3741,7 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
         drawn.text()
     );
 
-    let rail = at(&bytes, b"\x1b_Ga=T,f=100,i=334,q=2,z=-1,C=1,c=").unwrap_or_else(|| {
+    let rail = at(&bytes, b"\x1b_Ga=T,f=100,i=334,p=1,q=2,z=").unwrap_or_else(|| {
         panic!(
             "the rail's band of the boot frame is placed on a plane of its own: {:?}",
             drawn.text()

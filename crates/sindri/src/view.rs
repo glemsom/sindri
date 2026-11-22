@@ -1113,9 +1113,7 @@ impl View {
             );
         }
         self.notice_band(layout.notice, buffer, &drawn);
-        if let Some(shade) = self.composer_band(layout.composer, layout.queue, buffer) {
-            painted.shaded(shade);
-        }
+        self.composer_band(layout.composer, layout.queue, buffer, &mut painted);
         self.footer(layout.footer, buffer);
         let screen = self.stack.top();
         let Some((name, leaves, body)) = self.over(area, screen) else {
@@ -1385,16 +1383,20 @@ impl View {
         whole_row(buffer, band, area.y, &spans, &self.capabilities.palette());
     }
 
-    fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer) -> Option<Shade> {
+    fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer, painted: &mut Painted) {
         let palette = self.capabilities.palette();
-        let caret = self.caret(band, queue, None).map(|(x, _)| x);
-        let shade = Shade::composer(band, self.capabilities.pictures().cell(), caret, &palette);
-        if let Some(shade) = shade {
+        let cell = self.capabilities.pictures().cell();
+        if let Some(shade) = Shade::composer(band, cell, &palette) {
             shade.claim(buffer, &palette);
+            painted.shaded(shade);
+            if let Some(caret) = self.caret(band, queue, None).map(|(x, _)| x)
+                && let Some(light) = Shade::caret(band, cell, caret, &palette)
+            {
+                painted.shaded(light);
+            }
         }
         self.composer_inside(band, queue, buffer);
         self.composer_head(band, buffer);
-        shade
     }
 
     fn composer_inside(&self, band: Rect, queue: Rect, buffer: &mut Buffer) {

@@ -16,7 +16,7 @@ use rustix::termios::{
 use sindri::capability::{Asked, Question};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
-use sindri::plane::{self, Plane, PlaneId, Planes, Shade};
+use sindri::plane::{self, Placement, Plane, PlaneId, Planes, Shade};
 use sindri::size::{Laid, Sizes};
 use sindri::view::{Painted, View};
 
@@ -120,6 +120,11 @@ const FRAME_HELD: usize = 8 * 1024;
 /// not placed it in.
 const GIVE_UP_CARET: &[u8] = b"\x1b[?25l";
 
+/// `CSI ? 2026 h` and `CSI ? 2026 l`: one frame's cells, grounds and placements are written
+/// between them, so a Reader is shown the frame whole or not at all.
+const OPEN_FRAME: &[u8] = b"\x1b[?2026h";
+const CLOSE_FRAME: &[u8] = b"\x1b[?2026l";
+
 #[derive(Default)]
 struct Writing {
     bytes: Vec<u8>,
@@ -198,7 +203,15 @@ pub(crate) struct Backend<W: Write> {
     links: Links,
     sizes: Sizes,
     places: bool,
-    shades: Vec<Shade>,
+    shades: Vec<Standing>,
+    framed: bool,
+}
+
+/// An image the terminal holds and the cells of the frame it was last put on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Standing {
+    shade: Shade,
+    at: Placement,
 }
 
 impl<W: Write> Backend<W> {
@@ -210,6 +223,7 @@ impl<W: Write> Backend<W> {
             sizes: Sizes::none(),
             places,
             shades: Vec::new(),
+            framed: false,
         }
     }
 
@@ -221,43 +235,59 @@ impl<W: Write> Backend<W> {
         self.sizes.clone_from(sizes);
     }
 
+    /// Opens the frame: no cell, ground or placement of it reaches the terminal outside the
+    /// bracket its own close ends.
+    fn open_frame(&mut self) -> io::Result<()> {
+        self.framed = true;
+        holding(&mut self.screen, &mut self.writing).write_all(OPEN_FRAME)
+    }
+
     fn shades(&mut self, shades: &[Shade], images: &Planes) -> io::Result<()> {
-        if self.shades == shades {
+        let standing: Vec<Standing> = shades
+            .iter()
+            .filter_map(|shade| shade.place().map(|at| Standing { shade: *shade, at }))
+            .collect();
+        if self.shades == standing {
             return Ok(());
         }
         let before = std::mem::take(&mut self.shades);
-        for shade in &before {
-            if !shades.contains(shade)
-                && let Some(id) = shade.id()
-            {
+        for held in &before {
+            let gone = standing
+                .iter()
+                .all(|next| next.shade.image() != held.shade.image());
+            if gone && let Some(id) = held.shade.id() {
                 holding(&mut self.screen, &mut self.writing).tell(&plane::delete(id))?;
             }
         }
-        for shade in shades {
-            if before.contains(shade) {
-                self.shades.push(*shade);
-                continue;
-            }
-            if let Some(plane) = images.image(shade) {
-                self.upload(plane)?;
-                self.shades.push(*shade);
+        for next in &standing {
+            match before
+                .iter()
+                .find(|held| held.shade.image() == next.shade.image())
+            {
+                None => {
+                    if let Some(plane) = images.image(&next.shade) {
+                        self.upload(plane, next.at)?;
+                    }
+                }
+                Some(held) if held.at != next.at => self.replace(next)?,
+                Some(_) => {}
             }
         }
+        self.shades = standing;
         Ok(())
     }
 
-    /// One plane sent as the picture a terminal keeps under a band: the pixels as a PNG, in the
-    /// chunks the protocol allows, under the identity, the rect and the depth the placement is made
-    /// of, and `C=1`: a placement tall as the frame would otherwise scroll the screen it shades.
-    fn upload(&mut self, plane: &Plane) -> io::Result<()> {
-        let area = plane.area();
+    /// One plane sent as the picture a terminal keeps under a band: its pixels as a PNG, in the
+    /// chunks the protocol allows, under its identity, its placement and the frame's depth. `C=1`
+    /// keeps a tall placement from scrolling, and `q=2` leaves no reply to read as a keystroke.
+    fn upload(&mut self, plane: &Plane, at: Placement) -> io::Result<()> {
         let mut png = Vec::new();
         image::DynamicImage::ImageRgba8(plane.pixels().clone())
             .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
             .map_err(io::Error::other)?;
         let encoded = base64::engine::general_purpose::STANDARD.encode(png);
         let mut sent = Vec::new();
-        write!(sent, "\x1b7\x1b[{};{}H", area.y + 1, area.x + 1)?;
+        write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
         for (index, chunk) in encoded.as_bytes().chunks(4096).enumerate() {
             let more = if (index + 1) * 4096 < encoded.len() {
                 1
@@ -267,10 +297,14 @@ impl<W: Write> Backend<W> {
             if index == 0 {
                 write!(
                     sent,
-                    "\x1b_Ga=T,f=100,i={},q=2,z=-1,C=1,c={},r={},m={more};",
+                    "\x1b_Ga=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},w={},m={more};",
                     plane.id().image(),
-                    area.width,
-                    area.height
+                    plane::PLACEMENT,
+                    plane::DEPTH,
+                    at.cols,
+                    at.rows,
+                    at.from,
+                    at.width
                 )?;
             } else {
                 write!(sent, "\x1b_Gm={more};")?;
@@ -278,6 +312,30 @@ impl<W: Write> Backend<W> {
             sent.extend_from_slice(chunk);
             sent.extend_from_slice(b"\x1b\\");
         }
+        sent.extend_from_slice(b"\x1b8");
+        holding(&mut self.screen, &mut self.writing).tell(&sent)
+    }
+
+    /// The image the terminal already holds, put on the cells it stands on now: no byte of it is
+    /// sent again, and the placement it is put under is the one it was held by.
+    fn replace(&mut self, standing: &Standing) -> io::Result<()> {
+        let Some(id) = standing.shade.id() else {
+            return Ok(());
+        };
+        let at = standing.at;
+        let mut sent = Vec::new();
+        write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
+        write!(
+            sent,
+            "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={},x={},w={}\x1b\\",
+            id.image(),
+            plane::PLACEMENT,
+            plane::DEPTH,
+            at.cols,
+            at.rows,
+            at.from,
+            at.width
+        )?;
         sent.extend_from_slice(b"\x1b8");
         holding(&mut self.screen, &mut self.writing).tell(&sent)
     }
@@ -394,8 +452,8 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     }
 
     fn clear(&mut self) -> io::Result<()> {
-        for shade in std::mem::take(&mut self.shades) {
-            if let Some(id) = shade.id() {
+        for standing in std::mem::take(&mut self.shades) {
+            if let Some(id) = standing.shade.id() {
                 holding(&mut self.screen, &mut self.writing).tell(&plane::delete(id))?;
             }
         }
@@ -411,6 +469,9 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        if std::mem::take(&mut self.framed) {
+            holding(&mut self.screen, &mut self.writing).write_all(CLOSE_FRAME)?;
+        }
         holding(&mut self.screen, &mut self.writing).hand_over()
     }
 
@@ -445,6 +506,7 @@ pub(crate) fn canvas_at(
 }
 
 pub(crate) fn paint<W: Write>(canvas: &mut CanvasOver<W>, view: &mut View) -> io::Result<Painted> {
+    canvas.backend_mut().open_frame()?;
     canvas.autoresize()?;
     let area = canvas.current_buffer_mut().area;
     let painted = view.paint(area, canvas.current_buffer_mut());
@@ -476,11 +538,11 @@ struct Restore {
 }
 
 impl Restore {
-    /// Puts the terminal back: the key protocol is popped and the screen left first, so nothing
-    /// that follows — a panic message included — is drawn on a screen about to be somebody else's,
-    /// and then the state raw mode replaced and the signals the launch caught are restored.
+    /// Puts the terminal back: a frame that was interrupted closes its bracket first, then the key
+    /// protocol is popped and the screen left, so nothing that follows — a panic message included —
+    /// is drawn on a screen about to be somebody else's, and then raw mode and the signals return.
     fn put_back(self) {
-        let mut giving = Vec::new();
+        let mut giving = CLOSE_FRAME.to_vec();
         for id in PlaneId::ALL {
             giving.extend(plane::delete(id));
         }
