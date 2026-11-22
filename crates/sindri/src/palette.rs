@@ -27,7 +27,6 @@ struct Inks {
 struct Bands {
     rail: Color,
     prompt: Color,
-    composer: Color,
     well: Color,
 }
 
@@ -55,7 +54,6 @@ impl Palette {
         bands: Bands {
             rail: Color::Reset,
             prompt: Color::Reset,
-            composer: Color::Reset,
             well: Color::Reset,
         },
         ends: Ends {
@@ -77,8 +75,7 @@ impl Palette {
         },
         bands: Bands {
             rail: Color::Indexed(235),
-            prompt: Color::Indexed(235),
-            composer: Color::Indexed(236),
+            prompt: Color::Indexed(236),
             well: Color::Indexed(234),
         },
         ends: Ends {
@@ -101,7 +98,6 @@ impl Palette {
         bands: Bands {
             rail: Color::Rgb(19, 27, 37),
             prompt: Color::Rgb(22, 31, 42),
-            composer: Color::Rgb(25, 35, 47),
             well: Color::Rgb(14, 21, 29),
         },
         ends: Ends {
@@ -164,8 +160,8 @@ impl Palette {
         Look::plain(Ink::Dim)
     }
 
-    /// Whether this palette draws an edge at all: a band's head is a row of light where it does, and
-    /// the same rule in the dim edge where it draws none.
+    /// Whether this palette has a lit edge to spend: the accent edge where it has, and the dim edge
+    /// where every edge it draws is the dim one.
     pub fn draws_edge(&self) -> bool {
         self.edge(Edge::Lit) != Color::Reset
     }
@@ -188,7 +184,6 @@ impl Palette {
         match band {
             Band::Rail => self.bands.rail,
             Band::Prompt => self.bands.prompt,
-            Band::Composer => self.bands.composer,
             Band::Well => self.bands.well,
         }
     }
@@ -236,19 +231,17 @@ impl Default for Palette {
     }
 }
 
-/// The four places a frame paints a ground under its cells: the well a transcript is read in, the
-/// band the reader's own words stand on above it, the composer's raised surface above that, and the
-/// rail beside them.
+/// The three places a frame paints a ground under its cells: the well a transcript is read in, the
+/// band the reader's own words stand on above it, and the rail beside them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Band {
     Rail,
-    Composer,
     Well,
     Prompt,
 }
 
 impl Band {
-    pub const ALL: [Band; 4] = [Band::Rail, Band::Composer, Band::Well, Band::Prompt];
+    pub const ALL: [Band; 3] = [Band::Rail, Band::Well, Band::Prompt];
 }
 
 /// A boundary's share of the light, painted under a row: never an ink, so a cell on an edge still

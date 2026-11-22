@@ -1100,20 +1100,21 @@ fn a_launch_with_no_screen_is_refused_at_exit_two() {
 }
 
 /// The rows the composer's band took in the last frame that painted it, read off a screen that
-/// carries no layout to ask: the hints are on its last row, the draft's sigil one row under its head,
-/// and the air row of a draft that wraps stands between them.
+/// carries no layout to ask: the head is the lowest row whose glyphs are a hairline up to its last
+/// one, and the hints are on the last row.
 fn composer_rows(drawn: &str) -> Option<u16> {
     let screen = frame::read(drawn, COLS, ROWS);
     let rows = screen.rows();
     let last = u16::try_from(rows.len()).ok()?.checked_sub(1)?;
-    let opens = |y: u16| rows[usize::from(y)].starts_with(" \u{203a}");
-    let sigil = (0..last).find(|y| opens(*y))?;
-    // The hints open in the margin as a wrapped row of the draft does, and the hints are the last
-    // row: the row under the sigil is a wrap only when it is not that one.
-    let wraps = sigil + 1 < last && rows[usize::from(sigil) + 1].starts_with("  ");
-    last.checked_sub(sigil)?
-        .checked_add(1)?
-        .checked_add(1 + u16::from(wraps))
+    let ruled = |y: u16| {
+        let row = rows[usize::from(y)].trim_end();
+        !row.is_empty()
+            && row
+                .chars()
+                .all(|glyph| glyph == '\u{2500}' || glyph == '\u{2501}')
+    };
+    let head = (0..last).rev().find(|y| ruled(*y))?;
+    last.checked_sub(head)?.checked_add(1)
 }
 
 /// The last row of the screen that says `needle`, counted from the frame's first row.
@@ -1212,11 +1213,14 @@ fn the_boot_frame_is_read_as_the_cells_and_the_caret_its_terminal_holds() {
     let band = composer_rows(&drawn.text()).expect("the boot frame draws the band");
     let head = ROWS - band;
     assert_eq!(
-        (boot.glyph(1, head + 1), boot.glyph(GUTTER, head + 1)),
-        ('\u{203a}', 'w'),
-        "the draft's row carries the sigil in the second column of its gutter and the \
-         placeholder's first glyph at the gutter, as cells and not as the escapes that wrote them: \
-         {:?}",
+        (
+            boot.glyph(0, head + 1),
+            boot.glyph(1, head + 1),
+            boot.glyph(GUTTER, head + 1),
+        ),
+        ('\u{2503}', '\u{203a}', 'w'),
+        "the draft's row carries the prompt's spine, the sigil beside it and the placeholder's \
+         first glyph at the gutter, as cells and not as the escapes that wrote them: {:?}",
         boot.row(head + 1)
     );
     assert_eq!(

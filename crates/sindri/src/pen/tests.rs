@@ -110,7 +110,7 @@ fn a_claim_keeps_the_face_a_cell_wore_and_a_wash_strips_it() {
 fn a_wide_glyph_leaves_no_cell_of_the_band_between_it_and_the_next_one() {
     let mut row = row_of(4);
     let area = row.area;
-    row.set_style(area, PALETTE.ground(Some(Band::Composer)));
+    row.set_style(area, PALETTE.ground(Some(Band::Prompt)));
     write(
         &mut row,
         area,
@@ -123,7 +123,7 @@ fn a_wide_glyph_leaves_no_cell_of_the_band_between_it_and_the_next_one() {
         let cell = row.cell((x, 0)).expect("a cell of the row");
         assert_eq!(
             cell.bg,
-            PALETTE.band(Band::Composer),
+            PALETTE.band(Band::Prompt),
             "column {x} is read through to the terminal's own ground: a wide glyph hides the \
                  cell after it and resets it, and the band a row sits on goes with it"
         );
@@ -213,7 +213,7 @@ fn a_ground_blanks_a_row_and_lays_the_surface_it_is_given() {
         &PALETTE,
     );
 
-    ground(&mut row, area, PALETTE.ground(Some(Band::Composer)));
+    ground(&mut row, area, PALETTE.ground(Some(Band::Prompt)));
 
     assert_eq!(
         drawn(&row),
@@ -223,7 +223,7 @@ fn a_ground_blanks_a_row_and_lays_the_surface_it_is_given() {
     assert_eq!(crate::readback::inks(&row, 0, &PALETTE), [(Ink::Plain, 4)]);
     assert_eq!(
         row.cell((0, 0)).expect("a cell of the row").bg,
-        PALETTE.band(Band::Composer),
+        PALETTE.band(Band::Prompt),
         "and the surface it was given is the one the row sits on"
     );
 }

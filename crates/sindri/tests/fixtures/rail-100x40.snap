@@ -40,6 +40,6 @@ rail at 100x40
 34 |                                                                      input                  48.2k  | plain:70 dim:10 plain:20
 35 |                                                                      output                  3.1k  | plain:70 dim:10 plain:20
 36 |                                                                      total                  51.3k  | plain:70 dim:10 plain:20
-37 |                                                    ━                                               | plain:52 accent+faint:1 plain:47
-38 | ›what should the run do?                                                                           | dim:25 plain:75
+37 |────────────────────────────────────────────────────━───────────────────────────────────────────────| accent+faint:100
+38 |┃›what should the run do?                                                                           | dim:25 plain:75
 39 |  Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                      | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:22

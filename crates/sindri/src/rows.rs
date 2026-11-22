@@ -51,7 +51,7 @@ pub(crate) const fn margined(band: Rect) -> Rect {
 pub(crate) const SIGIL: &str = "› ";
 
 /// The spine a prompt's words are quoted by: one column down the left edge of every row they occupy.
-const SPINE: &str = "┃";
+pub(crate) const SPINE: &str = "┃";
 
 const THOUGHT: &str = "│ ";
 

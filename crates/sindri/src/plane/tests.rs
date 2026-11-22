@@ -20,9 +20,8 @@ const COLUMNS: u16 = 80;
 const CELL: CellSize = CellSize::NOMINAL;
 
 /// The composer's band of `rows` rows in `palette`, with no plane placed under it.
-fn raised(rows: u16, palette: &Palette) -> Shade {
-    Shade::composer(Rect::new(0, 0, COLUMNS, rows), None, None, false, palette)
-        .expect("a band of rows")
+fn shaded(rows: u16, palette: &Palette) -> Shade {
+    Shade::composer(Rect::new(0, 0, COLUMNS, rows), None, None, palette).expect("a band of rows")
 }
 
 /// The relative luminance of a colour, from the channels it is spelled in.
@@ -70,105 +69,71 @@ fn drawn(shade: Shade) -> Plane {
 }
 
 #[test]
-fn a_raised_band_runs_from_the_composers_tone_down_to_the_rails_own() {
+fn the_bands_band_is_the_prompts_tone_but_its_last_row_which_closes_on_the_rails() {
     for (spelling, palette) in SPELLED {
         for rows in MIN_ROWS..=MAX_ROWS {
+            let band = shaded(rows, &palette);
+            for row in 0..rows - 1 {
+                assert_eq!(
+                    band.row(row),
+                    palette.band(Band::Prompt),
+                    "{spelling} draws row {row} of a {rows}-row band on a tone other than the \
+                     prompt's own, and the band the draft is typed in is the band a prompt is \
+                     read on"
+                );
+            }
             assert_eq!(
-                raised(rows, &palette).row(0),
-                palette.band(Band::Composer),
-                "{spelling} draws the top row of a raised band of {rows} rows on a tone other \
-                     than the composer's, the depth above the rail's"
-            );
-            assert_eq!(
-                raised(rows, &palette).row(rows - 1),
+                band.row(rows - 1),
                 palette.band(Band::Rail),
-                "{spelling} draws the last row of a raised band of {rows} rows on a tone other \
-                     than the rail's own"
+                "{spelling} closes a {rows}-row band on a tone other than the rail's own, so the \
+                 band is parted from the surface it stands on"
             );
         }
     }
 }
 
 #[test]
-fn a_one_row_band_has_no_room_for_both_ends_and_is_drawn_as_its_head() {
+fn a_one_row_band_is_the_bands_last_row_and_closes_on_the_rails_tone() {
     for (spelling, palette) in SPELLED {
         assert_eq!(
-            raised(1, &palette).row(0),
-            palette.band(Band::Composer),
-            "{spelling} draws a one-row band on anything but its head, and the one row is all \
-                 the band has to say it is raised"
+            shaded(1, &palette).row(0),
+            palette.band(Band::Rail),
+            "{spelling} draws the one row of a one-row band on anything but the tone it closes \
+             on, and the closing row is the last of the band"
         );
     }
 }
 
 #[test]
-fn a_raised_bands_rows_never_climb_and_never_leave_its_two_ends() {
+fn no_row_of_the_bands_band_is_a_blend_of_the_two_tones_it_closes_through() {
     for (spelling, palette) in SPELLED {
-        let head = luminance(palette.band(Band::Composer));
-        let foot = luminance(palette.band(Band::Rail));
+        let (prompt, rail) = (palette.band(Band::Prompt), palette.band(Band::Rail));
         for rows in MIN_ROWS..=MAX_ROWS {
-            let band = raised(rows, &palette);
+            let band = shaded(rows, &palette);
             for row in 0..rows {
-                let ground = luminance(band.row(row));
+                let ground = band.row(row);
                 assert!(
-                    (foot..=head).contains(&ground),
-                    "{spelling} draws row {row} of a raised band of {rows} rows at {ground}, \
-                         outside the two ends {foot} and {head} the band is shaded between"
+                    ground == prompt || ground == rail,
+                    "{spelling} draws row {row} of a {rows}-row band in {ground:?}, a tone \
+                     between the two it is drawn in: the band rises out of the well in whole rows \
+                     and closes into the rail's tone in one"
                 );
-                if row > 0 {
-                    assert!(
-                        ground <= luminance(band.row(row - 1)),
-                        "{spelling} draws row {row} of a raised band of {rows} rows brighter \
-                             than the row above it, so the surface climbs away from its foot"
-                    );
-                }
             }
         }
     }
 }
 
 #[test]
-fn a_truecolour_band_up_to_its_ceiling_draws_no_two_rows_in_one_ground() {
-    for rows in MIN_ROWS..=MAX_ROWS {
-        let band = raised(rows, &Palette::TRUECOLOR);
-        for row in 1..rows {
-            assert_ne!(
-                band.row(row),
-                band.row(row - 1),
-                "truecolour draws rows {} and {row} of a {rows}-row band in one ground, and \
-                     the design has a shade to spare for every row up to the ceiling",
-                row - 1
-            );
-        }
-    }
-}
-
-#[test]
-fn an_ansi_band_has_only_the_two_greys_its_two_ends_leave_it() {
-    for rows in MIN_ROWS..=MAX_ROWS {
-        let band = raised(rows, &Palette::ANSI);
-        for row in 0..rows {
-            assert!(
-                matches!(band.row(row), Color::Indexed(235 | 236)),
-                "ansi draws row {row} of a {rows}-row band in {:?}, outside the two greys the \
-                     rail's tone and the composer's leave between them",
-                band.row(row)
-            );
-        }
-    }
-}
-
-#[test]
-fn no_row_of_a_raised_band_is_darker_than_the_well() {
+fn no_row_of_the_bands_band_is_darker_than_the_well() {
     for (spelling, palette) in SPELLED {
         let well = luminance(palette.band(Band::Well));
         for rows in MIN_ROWS..=MAX_ROWS {
-            let band = raised(rows, &palette);
+            let band = shaded(rows, &palette);
             for row in 0..rows {
                 assert!(
                     luminance(band.row(row)) >= well,
-                    "{spelling} draws row {row} of a raised band of {rows} rows under the well, \
-                         so the band sits sunken and not raised"
+                    "{spelling} draws row {row} of a {rows}-row band under the well, so the band \
+                         sits sunken and not over the well it is typed above"
                 );
             }
         }
@@ -176,15 +141,15 @@ fn no_row_of_a_raised_band_is_darker_than_the_well() {
 }
 
 #[test]
-fn a_surface_drawn_in_no_colour_ramps_nowhere() {
+fn a_band_drawn_in_no_colour_draws_no_ground_on_any_row() {
     for rows in MIN_ROWS..=MAX_ROWS {
-        let band = raised(rows, &Palette::SLOTS);
+        let band = shaded(rows, &Palette::SLOTS);
         for row in 0..rows {
             assert_eq!(
                 band.row(row),
                 Color::Reset,
-                "row {row} of a raised band of {rows} rows draws no ground, so the frame stays \
-                     flat"
+                "row {row} of a {rows}-row band draws a ground, and a palette that asked for no \
+                 colour has none to draw"
             );
         }
     }
@@ -204,7 +169,7 @@ fn a_bands_plane_is_its_shade_sampled_at_the_cell() {
             ),
             (
                 "the composer's band",
-                Shade::composer(Rect::new(0, 20, 80, 5), Some(CELL), None, false, &palette),
+                Shade::composer(Rect::new(0, 20, 80, 5), Some(CELL), None, &palette),
             ),
         ];
         for (band, shade) in bands {
@@ -239,49 +204,31 @@ fn a_bands_plane_is_its_shade_sampled_at_the_cell() {
 }
 
 #[test]
-fn a_composers_plane_opens_on_its_head_and_covers_no_pixel_of_the_well() {
+fn a_composers_plane_opens_on_the_prompts_band_and_covers_no_pixel_of_the_well() {
     for (spelling, palette) in SPELLED {
         let area = Rect::new(0, 20, 80, 5);
-        let plane = drawn(
-            Shade::composer(area, Some(CELL), None, false, &palette).expect("a band to shade"),
-        );
-        let head = spelled(palette.band(Band::Composer));
-        let foot = spelled(palette.band(Band::Rail));
+        let plane =
+            drawn(Shade::composer(area, Some(CELL), None, &palette).expect("a band to shade"));
+        let prompt = spelled(palette.band(Band::Prompt));
+        let rail = spelled(palette.band(Band::Rail));
         let well = spelled(palette.band(Band::Well));
 
         let top = middle(&plane, 0, CELL);
         assert!(
-            near(top, head),
-            "{spelling} opens the composer's plane on {top:?} where the band's head is {head:?}, \
-             so no pixel row of the well is drawn above the band"
+            near(top, prompt),
+            "{spelling} opens the composer's plane on {top:?} where the prompt's own band is \
+             {prompt:?}, so no pixel row of the well is drawn above the band"
         );
         assert_ne!(
             top, well,
             "{spelling} draws the well over the top cell of the composer's band, which stands on \
-             its own head and not on the band under it"
+             the prompt's band and not on the band under it"
         );
         assert!(
-            near(middle(&plane, area.height - 1, CELL), foot),
-            "{spelling} closes the composer's plane on {:?} where the rail's own tone {foot:?} is \
-             the foot it falls to",
+            near(middle(&plane, area.height - 1, CELL), rail),
+            "{spelling} closes the composer's plane on {:?} where the rail's own tone {rail:?} \
+             is the tone it closes on",
             middle(&plane, area.height - 1, CELL)
-        );
-    }
-}
-
-#[test]
-fn a_composers_plane_opens_on_the_light_of_a_head_that_takes_the_keys() {
-    for (spelling, palette) in SPELLED {
-        let area = Rect::new(0, 20, 80, 5);
-        let plane = drawn(
-            Shade::composer(area, Some(CELL), None, true, &palette).expect("a band to shade"),
-        );
-
-        assert!(
-            near(middle(&plane, 0, CELL), spelled(palette.edge(Edge::Lit))),
-            "{spelling} opens the plane of a band that takes the keys on {:?} where its head row \
-             is the lit edge",
-            middle(&plane, 0, CELL)
         );
     }
 }
@@ -320,9 +267,8 @@ fn the_carets_glow_is_the_one_light_on_every_pixel_row_of_the_column_it_waits_in
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 20, 80, 5);
     let caret = 12;
-    let plane = drawn(
-        Shade::composer(area, Some(CELL), Some(caret), false, &palette).expect("a band to shade"),
-    );
+    let plane =
+        drawn(Shade::composer(area, Some(CELL), Some(caret), &palette).expect("a band to shade"));
     let (width, _) = plane.pixels().dimensions();
     let lit = u32::from(caret) * CELL.width() + CELL.width() / 2;
     let (far, height) = (width - 1, plane.pixels().height());
@@ -357,9 +303,8 @@ fn a_bands_glow_dies_away_across_the_cells_away_from_the_caret() {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 20, 80, 5);
     let caret = 4;
-    let plane = drawn(
-        Shade::composer(area, Some(CELL), Some(caret), true, &palette).expect("a band to shade"),
-    );
+    let plane =
+        drawn(Shade::composer(area, Some(CELL), Some(caret), &palette).expect("a band to shade"));
     let row = plane.pixels().height() / 2;
     let waited = u32::from(caret) * CELL.width() + CELL.width() / 2;
     let mut last = u8::MAX;
@@ -523,7 +468,7 @@ fn a_strip_drawn_in_cells_makes_no_seam_at_all() {
 fn the_composers_band_is_claimed_row_by_row_from_its_shade() {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 0, 40, 6);
-    let shade = Shade::composer(area, None, None, false, &palette).expect("a band to shade");
+    let shade = Shade::composer(area, None, None, &palette).expect("a band to shade");
     let mut buffer = Buffer::empty(area);
 
     assert!(
@@ -544,38 +489,10 @@ fn the_composers_band_is_claimed_row_by_row_from_its_shade() {
 }
 
 #[test]
-fn a_band_that_takes_the_keys_is_claimed_on_a_head_row_of_light() {
-    let palette = Palette::TRUECOLOR;
-    let area = Rect::new(0, 0, 40, 6);
-    let band = Shade::composer(area, None, None, true, &palette).expect("a band to shade");
-    let mut buffer = Buffer::empty(area);
-
-    assert_eq!(
-        band.row(0),
-        palette.edge(Edge::Lit),
-        "the head row of a band that takes the keys is the light it meets the frame on"
-    );
-    band.claim(&mut buffer, &palette);
-
-    for x in area.x..area.right() {
-        assert_eq!(
-            under(&buffer, x, area.y),
-            palette.edge(Edge::Lit),
-            "column {x} of the head row is not the light the band takes the keys in"
-        );
-        assert_eq!(
-            under(&buffer, x, area.y + 1),
-            band.row(1),
-            "column {x} of the row under the head is not the ground the draft is drawn on"
-        );
-    }
-}
-
-#[test]
 fn a_band_a_plane_stands_under_is_claimed_on_the_terminals_own_ground() {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 0, 40, 6);
-    let shade = Shade::composer(area, Some(CELL), None, true, &palette).expect("a band to shade");
+    let shade = Shade::composer(area, Some(CELL), None, &palette).expect("a band to shade");
     let mut buffer = Buffer::empty(area);
 
     assert!(
@@ -747,8 +664,8 @@ fn a_seam_claims_its_columns_under_the_words_already_drawn_there() {
 #[test]
 fn a_band_whose_shade_did_not_move_makes_no_image() {
     let area = Rect::new(2, 3, 40, 4);
-    let shade = Shade::composer(area, Some(CELL), None, false, &Palette::TRUECOLOR)
-        .expect("a band to shade");
+    let shade =
+        Shade::composer(area, Some(CELL), None, &Palette::TRUECOLOR).expect("a band to shade");
     let mut planes = held(&[shade]);
 
     assert_eq!(planes.made(), 1, "the first pass makes the band's image");
@@ -767,8 +684,7 @@ fn a_band_whose_shade_did_not_move_makes_no_image() {
 fn a_band_no_plane_stands_under_makes_no_image() {
     let area = Rect::new(0, 0, 40, 4);
     let transcript = Shade::transcript(area, &Palette::TRUECOLOR).expect("a band of rows");
-    let composer =
-        Shade::composer(area, None, None, false, &Palette::TRUECOLOR).expect("a band to shade");
+    let composer = Shade::composer(area, None, None, &Palette::TRUECOLOR).expect("a band to shade");
     let planes = held(&[transcript, composer]);
 
     assert_eq!(
@@ -787,7 +703,7 @@ fn a_band_no_plane_stands_under_makes_no_image() {
 fn a_composer_band_whose_caret_moved_makes_its_image_again() {
     let area = Rect::new(2, 3, 40, 4);
     let composer = |caret| {
-        Shade::composer(area, Some(CELL), Some(caret), false, &Palette::TRUECOLOR)
+        Shade::composer(area, Some(CELL), Some(caret), &Palette::TRUECOLOR)
             .expect("a band to shade")
     };
     let mut planes = held(&[composer(6)]);

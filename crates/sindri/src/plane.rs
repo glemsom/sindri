@@ -48,14 +48,13 @@ pub enum Shade {
         tone: Color,
         seam: Option<Seam>,
     },
-    /// The composer's band from its head row down to the rail's own tone under it, its head row lit
-    /// where it takes the keys.
+    /// The composer's band: the prompt's band on every row but its last, which closes into the
+    /// rail's tone under it.
     Composer {
         area: Rect,
         cell: Option<CellSize>,
-        head: Color,
-        foot: Color,
-        lit: Option<Color>,
+        prompt: Color,
+        rail: Color,
         caret: Option<u16>,
     },
 }
@@ -69,31 +68,26 @@ impl Shade {
         })
     }
 
-    /// The composer's band, with no plane under it unless the palette spells its three colours as
+    /// The composer's band, with no plane under it unless the palette spells both its tones as
     /// pixels: the glow under the caret's column is drawn in the image, so it is a fact of the
     /// shade.
     pub fn composer(
         area: Rect,
         cell: Option<CellSize>,
         caret: Option<u16>,
-        lit: bool,
         palette: &Palette,
     ) -> Option<Shade> {
         if !covers(area) {
             return None;
         }
-        let head = palette.band(Band::Composer);
-        let foot = palette.band(Band::Rail);
-        let lit = lit.then(|| palette.edge(Edge::Lit));
-        let spelled = channels(head).is_some()
-            && channels(foot).is_some()
-            && lit.is_none_or(|lit| channels(lit).is_some());
+        let prompt = palette.band(Band::Prompt);
+        let rail = palette.band(Band::Rail);
+        let spelled = channels(prompt).is_some() && channels(rail).is_some();
         Some(Shade::Composer {
             area,
             cell: cell.filter(|_| spelled),
-            head,
-            foot,
-            lit,
+            prompt,
+            rail,
             caret,
         })
     }
@@ -151,20 +145,16 @@ impl Shade {
     }
 
     /// The colour that row of the band sits on: the well, the rail's own tone on every row of it,
-    /// or the light a composer's head row takes the keys in.
+    /// or a composer's own two tones.
     pub fn row(&self, row: u16) -> Color {
         match self {
             Shade::Transcript { well, .. } => *well,
             Shade::Rail { tone, .. } => *tone,
             Shade::Composer {
-                area,
-                head,
-                foot,
-                lit,
-                ..
-            } => match (lit, row) {
-                (Some(lit), 0) => *lit,
-                _ => palette::blend(*head, *foot, row, area.height.saturating_sub(1)),
+                area, prompt, rail, ..
+            } => match row.saturating_add(1) >= area.height {
+                true => *rail,
+                false => *prompt,
             },
         }
     }

@@ -859,14 +859,26 @@ fn the_prompt_stands_on_the_prompt_band_and_no_other_row_stands_on_one() {
     }
 }
 
-/// The rows a band paints of `entries` at the tail, read from the screen's first row down.
+/// The rows the transcript band paints of `entries` at the tail, read from the screen's first row
+/// down to the composer's own band.
 fn band(entries: Vec<Entry>, cols: u16, rows: u16) -> Vec<String> {
     let mut view = View::of(
         Capabilities::default(),
         facts::Facts::default().asked(),
         Transcript::of(entries),
     );
-    frame::painted(&mut view, cols, rows).words()
+    above_the_composer(&mut view, cols, rows)
+}
+
+/// The rows of a frame above the composer's band: the transcript and nothing of the draft under it.
+fn above_the_composer(view: &mut View, cols: u16, rows: u16) -> Vec<String> {
+    let frame = frame::painted(view, cols, rows);
+    let composer = frame
+        .told()
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out")
+        .composer;
+    frame.words()[..usize::from(composer.y)].to_vec()
 }
 
 #[test]
@@ -967,7 +979,7 @@ fn settled_frame(entries: Vec<Entry>, stop: &Stop, cols: u16, rows: u16) -> Vec<
         Transcript::of(entries),
     );
     view.stopped(stop);
-    frame::painted(&mut view, cols, rows).words()
+    above_the_composer(&mut view, cols, rows)
 }
 
 #[test]

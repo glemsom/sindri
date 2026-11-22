@@ -41,5 +41,5 @@ stats at 120x40
 35 |                        │   records                                                            │                  3.1k  | dim:25 plain:70 dim:25
 36 |                        │   ────────────────────────────────────────────────────────────────   │                 51.3k  | dim:25 plain:3 dim:64 plain:3 dim:25
 37 |────────────────────────│   session                                                            │────────────────────────| dim:25 plain:3 dim:7 plain:60 dim:25
-38 | ›what should the run do│ ⋯ 2 rows kept back                                                   │                        | dim:25 plain:1 dim:18 plain:51 dim:25
+38 |┃›what should the run do│ ⋯ 2 rows kept back                                                   │                        | dim:25 plain:1 dim:18 plain:51 dim:25
 39 |  Enter send · / command╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27

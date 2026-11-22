@@ -6,11 +6,11 @@ use ratatui::layout::Rect;
 use crate::ink::Ink;
 use crate::palette::Palette;
 use crate::pen::{self, Clip};
-use crate::rows::{INDENT, SIGIL};
+use crate::rows::{SIGIL, SPINE};
 
-/// The gutter a row of the band opens with: `Lit` is the sigil of the row the caret waits in, `Open`
-/// the sigil of a row a prompt's words begin on, and `Blank` the indent under one. Two columns every
-/// row spends, so the draft's words and a queued prompt's begin where an answer's prose does.
+/// The gutter a row of the band opens with: the spine a prompt's words are quoted by and the sigil
+/// the row the draft opens on wears — the accent's while the band holds the keys, the dim ink's on
+/// a row the caret waits elsewhere in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Gutter {
     Lit,
@@ -27,20 +27,15 @@ pub fn row(
     runs: &[(&str, Ink)],
     palette: &Palette,
 ) {
-    let sigil = match gutter {
-        Gutter::Lit => Some(Ink::Accent),
-        Gutter::Open => Some(Ink::Dim),
-        Gutter::Blank => None,
+    let (sigil, ink) = match gutter {
+        Gutter::Lit => (SIGIL.trim_end(), Ink::Accent),
+        Gutter::Open => (SIGIL.trim_end(), Ink::Dim),
+        Gutter::Blank => (" ", Ink::Dim),
     };
     let mut spans: Vec<(&str, Ink)> = Vec::with_capacity(runs.len().saturating_add(2));
-    match sigil {
-        Some(ink) => {
-            // The blank column and then the sigil, which is where a prompt's own sigil stands.
-            spans.push((" ", Ink::Dim));
-            spans.push((SIGIL.trim_end(), ink));
-        }
-        None => spans.push((INDENT, Ink::Dim)),
-    }
+    // The prompt's own two columns, so the draft's words start where a sent prompt's do.
+    spans.push((SPINE, Ink::Dim));
+    spans.push((sigil, ink));
     spans.extend_from_slice(runs);
     pen::write(
         buffer,

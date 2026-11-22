@@ -13,7 +13,7 @@ use sindri::composer::{Composer, Key, Outcome, Prompt};
 use sindri::graphics::CellSize;
 use sindri::ink::Look;
 use sindri::ledger::Boot;
-use sindri::palette::{Edge, Palette};
+use sindri::palette::Palette;
 use sindri::pictures::PLACEHOLDER;
 use sindri_core::first_run::FirstRun;
 use sindri_core::policy::Enforcement;
@@ -341,16 +341,23 @@ fn railed(config: &Config) -> View {
 }
 
 fn painted(view: &mut View) -> ratatui::buffer::Buffer {
+    painted_and_told(view).0
+}
+
+/// The cells of the frame `view` paints, and what that pass told the terminal of them.
+fn painted_and_told(view: &mut View) -> (ratatui::buffer::Buffer, Painted) {
     let (cols, rows) = FRAME;
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(cols, rows))
         .expect("a headless screen of that size");
-    terminal
+    let mut told = Painted::none();
+    let frame = terminal
         .draw(|frame| {
-            view.paint(frame.area(), frame.buffer_mut());
+            told = view.paint(frame.area(), frame.buffer_mut());
         })
         .expect("the frame is painted")
         .buffer
-        .clone()
+        .clone();
+    (frame, told)
 }
 
 /// Whether this frame paints the face, read off the cells a placement covers.
@@ -491,17 +498,21 @@ impl Loop<'_> {
         self.view.capabilities().pictures().rasterises(source)
     }
 
-    /// The cells of the frame that stand on the lit edge: the row the composer's head is drawn as
-    /// while the band takes the keys.
+    /// The cells of the composer's head row the rule is drawn across in the accent edge: the row
+    /// the band wears while it takes the keys.
     fn lit(&mut self, palette: &Palette) -> Vec<(u16, u16)> {
-        let frame = painted(&mut self.view);
+        let (frame, told) = painted_and_told(&mut self.view);
+        let Some(head) = told.layout().map(|laid| laid.composer.y) else {
+            return Vec::new();
+        };
         let area = frame.area;
-        (area.y..area.bottom())
-            .flat_map(|y| (area.x..area.right()).map(move |x| (x, y)))
+        (area.x..area.right())
+            .map(|x| (x, head))
             .filter(|at| {
-                frame
-                    .cell(*at)
-                    .is_some_and(|cell| cell.bg == palette.edge(Edge::Lit))
+                frame.cell(*at).is_some_and(|cell| {
+                    cell.symbol() == "\u{2500}"
+                        && Look::of(cell, palette) == Some(palette.accent_edge())
+                })
             })
             .collect()
     }
@@ -840,8 +851,8 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     let lit = live.lit(&palette);
     assert!(
         !lit.is_empty(),
-        "the band that takes the keys is headed by a row of the lit edge while the reader is \
-         read: {lit:?}"
+        "the band that takes the keys is headed by a hairline of the accent edge while the \
+         reader is read: {lit:?}"
     );
 
     let ended = live
@@ -852,7 +863,8 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     let away = live.looks(&palette, &lit);
     assert!(
         away.iter().all(|look| *look == Some(palette.dim_edge())),
-        "every cell of that head recedes to the dim edge's rule while nobody is looking: {away:?}"
+        "every cell of that head recedes to the dim edge's rule while nobody is looking: \
+         {away:?}"
     );
     live.told(Told::Stopped {
         turn: 1,
@@ -869,6 +881,6 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     assert_eq!(
         live.lit(&palette),
         lit,
-        "and the light returns to the cells it left once the terminal says the reader is back"
+        "and the rule returns to the cells it left once the terminal says the reader is back"
     );
 }

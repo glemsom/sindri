@@ -215,24 +215,37 @@ fn the_prompt_band_is_spelled_in_every_palette_and_flat_where_a_palette_spells_n
 }
 
 #[test]
-fn every_band_is_an_elevation_the_composer_highest_and_the_well_lowest() {
+fn the_prompt_band_is_the_highest_rung_and_the_well_the_lowest() {
     for (spelling, palette) in SPELLED {
-        let composer = luminance(palette.band(Band::Composer));
         let rail = luminance(palette.band(Band::Rail));
         let prompt = luminance(palette.band(Band::Prompt));
         let well = luminance(palette.band(Band::Well));
 
         assert!(
-            composer > rail && rail > well,
-            "{spelling} draws the composer, the rail and the well at {composer}, {rail} and \
-                 {well}: three bands a frame paints, three elevations, and the well the darkest \
-                 ground of them"
+            well < rail && rail < prompt,
+            "{spelling} draws the rail and the prompt at {rail} and {prompt} over the well at \
+             {well}: the reader's own words stand one rung above the conversation they were asked \
+             in, and the rail one above the well beside it"
         );
-        assert!(
-            well < prompt && prompt < composer,
-            "{spelling} draws the prompt at {prompt}, outside the two ends {well} and {composer}: \
-             the reader's own words are one rung above the conversation they were asked in and \
-             under the draft that takes the keys"
+        for band in Band::ALL {
+            let ground = luminance(palette.band(band));
+            assert!(
+                ground <= prompt,
+                "{spelling} draws {band:?} at {ground}, over the prompt's own {prompt}: a frame \
+                 paints the ladder the prompt is the highest rung of, and keeps no band above it"
+            );
+        }
+    }
+}
+
+#[test]
+fn every_palette_spells_the_prompt_band_and_the_rails_tone_apart() {
+    for (spelling, palette) in SPELLED {
+        assert_ne!(
+            palette.band(Band::Prompt),
+            palette.band(Band::Rail),
+            "{spelling} spells the prompt's band and the rail's tone one colour, so the band a \
+             draft closes on is the band it rises on"
         );
     }
 }
@@ -477,12 +490,7 @@ fn spelled(color: Color) -> [u8; 3] {
 fn a_cell_is_read_back_by_its_foreground_and_never_its_background() {
     for palette in [Palette::SLOTS, Palette::ANSI, Palette::TRUECOLOR] {
         for ink in Ink::ALL {
-            for band in [
-                None,
-                Some(Band::Rail),
-                Some(Band::Composer),
-                Some(Band::Well),
-            ] {
+            for band in [None, Some(Band::Rail), Some(Band::Prompt), Some(Band::Well)] {
                 let mut cell = Cell::default();
                 cell.set_style(ink.style(&palette));
                 if let Some(band) = band {

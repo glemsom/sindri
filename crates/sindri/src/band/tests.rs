@@ -22,7 +22,7 @@ fn glyphs(buffer: &Buffer, y: u16) -> String {
 }
 
 #[test]
-fn a_row_of_one_run_draws_the_gutter_then_the_words_in_the_runs_ink() {
+fn a_row_of_one_run_draws_the_prompts_gutter_then_the_words_in_the_runs_ink() {
     let area = Rect::new(0, 0, 11, 1);
     let mut opened = Buffer::empty(area);
     let mut indented = Buffer::empty(area);
@@ -44,24 +44,26 @@ fn a_row_of_one_run_draws_the_gutter_then_the_words_in_the_runs_ink() {
 
     assert_eq!(
         glyphs(&opened, 0),
-        " \u{203a}the draft",
-        "the sigil stands one blank past the row's first column and the words follow it, so a \
-         draft's first glyph sits in the column an answer's prose starts at"
+        "\u{2503}\u{203a}the draft",
+        "the spine and the sigil stand in the row's first two columns and the words follow them, \
+         so a draft's first glyph sits in the column a sent prompt's words begin in"
     );
     assert_eq!(
         inks(&opened, 0, &PALETTE),
         [(Ink::Dim, 2), (Ink::Accent, 9)],
-        "the gutter is read in the dim ink and the words in the ink the run carries"
+        "the spine and the sigil of a row that opens no prompt are the dim ink, and the words \
+         are the ink the run carries"
     );
     assert_eq!(
         glyphs(&indented, 0),
-        "  the draft",
-        "a row that opens nothing keeps the gutter blank, so its words stand in the same column"
+        "\u{2503} the draft",
+        "a row that opens nothing keeps the sigil's column blank, so its words stand in the \
+         same column"
     );
     assert_eq!(
         inks(&indented, 0, &PALETTE),
         [(Ink::Dim, 2), (Ink::Accent, 9)],
-        "and the blank gutter is drawn in the dim ink, exactly as the sigil is"
+        "and a row that opens nothing draws its blank column in the dim ink, as the spine is"
     );
 }
 
@@ -84,7 +86,7 @@ fn a_row_of_several_runs_draws_each_in_the_ink_it_carries_in_order() {
 
     assert_eq!(
         glyphs(&buffer, 0),
-        " \u{203a}one two three",
+        "\u{2503}\u{203a}one two three",
         "the runs stand side by side in the order the row is handed them, with no column between them"
     );
     assert_eq!(
@@ -115,7 +117,7 @@ fn a_run_the_row_has_no_room_for_is_cut_at_the_edge_and_the_run_after_it_is_drop
 
     assert_eq!(
         glyphs(&buffer, 0),
-        " \u{203a}abcdefgh",
+        "\u{2503}\u{203a}abcdefgh",
         "the run is drawn up to the row's last column and the rest of it is dropped"
     );
     assert_eq!(
@@ -136,15 +138,19 @@ fn a_lit_gutter_draws_the_sigil_in_the_accent_and_the_other_two_in_the_dim_ink()
     for (gutter, glyphs_drawn, inks_drawn) in [
         (
             Gutter::Lit,
-            " \u{203a}a",
+            "\u{2503}\u{203a}a",
             &[(Ink::Dim, 1), (Ink::Accent, 1), (Ink::Plain, 1)][..],
         ),
         (
             Gutter::Open,
-            " \u{203a}a",
+            "\u{2503}\u{203a}a",
             &[(Ink::Dim, 2), (Ink::Plain, 1)][..],
         ),
-        (Gutter::Blank, "  a", &[(Ink::Dim, 2), (Ink::Plain, 1)][..]),
+        (
+            Gutter::Blank,
+            "\u{2503} a",
+            &[(Ink::Dim, 2), (Ink::Plain, 1)][..],
+        ),
     ] {
         let mut buffer = Buffer::empty(area);
         row(&mut buffer, area, gutter, &[("a", Ink::Plain)], &PALETTE);
