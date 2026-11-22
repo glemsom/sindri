@@ -40,6 +40,6 @@ edge-live at 120x40
 34 |                                                                                                                        | plain:120
 35 |                                                                                                                        | plain:120
 36 |                                                                                                                        | plain:120
-37 |━───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| accent+faint:120
+37 |━                                                                                                                       | accent:1 plain:119
 38 |┃›the band's edge says what the band is for                                                                             | dim:1 accent:1 plain:118
 39 |  Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                          | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:42

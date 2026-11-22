@@ -21,7 +21,7 @@ footer-queue at 40x24
 15 |                                        | plain:40
 16 |                                        | plain:40
 17 |                                        | plain:40
-18 |━───────────────────────────────────────| accent+faint:40
+18 |━                                       | accent:1 plain:39
 19 |┃›what should the run do?               | dim:25 plain:15
 20 |┃›run the test that failed and read it  | dim:38 plain:2
 21 |┃›then the fmt check                    | dim:20 plain:20

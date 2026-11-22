@@ -11,7 +11,7 @@ use clap::Parser;
 
 use sindri::composer::{Composer, Key, Outcome, Prompt};
 use sindri::graphics::CellSize;
-use sindri::ink::Look;
+use sindri::ink::{Ink, Look};
 use sindri::ledger::Boot;
 use sindri::palette::Palette;
 use sindri::pictures::PLACEHOLDER;
@@ -498,8 +498,8 @@ impl Loop<'_> {
         self.view.capabilities().pictures().rasterises(source)
     }
 
-    /// The cells of the composer's head row the rule is drawn across in the accent edge: the row
-    /// the band wears while it takes the keys.
+    /// The cells of the composer's head row the live run's pulse walks in the accent: the one ink
+    /// of the row that recedes with the reader.
     fn lit(&mut self, palette: &Palette) -> Vec<(u16, u16)> {
         let (frame, told) = painted_and_told(&mut self.view);
         let Some(head) = told.layout().map(|laid| laid.composer.y) else {
@@ -510,8 +510,8 @@ impl Loop<'_> {
             .map(|x| (x, head))
             .filter(|at| {
                 frame.cell(*at).is_some_and(|cell| {
-                    cell.symbol() == "\u{2500}"
-                        && Look::of(cell, palette) == Some(palette.accent_edge())
+                    cell.symbol() == "\u{2501}"
+                        && Look::of(cell, palette) == Some(Look::plain(Ink::Accent))
                 })
             })
             .collect()
@@ -842,7 +842,7 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default().running(),
         Transcript::none(),
     );
     view.paste("the draft the composer band is drawn from");
@@ -851,21 +851,31 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     let lit = live.lit(&palette);
     assert!(
         !lit.is_empty(),
-        "the band that takes the keys is headed by a hairline of the accent edge while the \
-         reader is read: {lit:?}"
+        "the band that takes the keys walks its pulse in the accent edge while the reader is \
+         read: {lit:?}"
+    );
+
+    live.answer(Event::Focus(false))
+        .expect("the report is answered");
+    let away = live.looks(&palette, &lit);
+    assert!(
+        away.iter().all(|look| *look == Some(palette.dim_edge())),
+        "every cell of the row that pulse walks recedes to the dim edge while nobody is \
+         looking: {away:?}"
+    );
+
+    live.answer(Event::Focus(true)).expect("the reader is back");
+    assert_eq!(
+        live.lit(&palette),
+        lit,
+        "and the accent edge returns to the cells it left once the terminal says the reader is \
+         back"
     );
 
     let ended = live
         .answer(Event::Focus(false))
         .expect("the report is answered");
-
     assert!(ended.is_none(), "a focus report never ends the launch");
-    let away = live.looks(&palette, &lit);
-    assert!(
-        away.iter().all(|look| *look == Some(palette.dim_edge())),
-        "every cell of that head recedes to the dim edge's rule while nobody is looking: \
-         {away:?}"
-    );
     live.told(Told::Stopped {
         turn: 1,
         stop: Stop::Final,
@@ -876,11 +886,5 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
     assert!(
         said.iter().any(|payload| payload.starts_with("9;sindri: ")),
         "a run that ends while the report says nobody is reading raises the notification: {said:?}"
-    );
-    live.answer(Event::Focus(true)).expect("the reader is back");
-    assert_eq!(
-        live.lit(&palette),
-        lit,
-        "and the rule returns to the cells it left once the terminal says the reader is back"
     );
 }

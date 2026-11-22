@@ -1828,7 +1828,7 @@ fn the_band_under_a_picture_centres_it_and_lays_the_facts_beneath_the_rows_it_ta
         RailBand {
             area,
             picture: Some(Rect {
-                x: 6,
+                x: 7,
                 y: 0,
                 width: 19,
                 height: 11,
@@ -1839,8 +1839,9 @@ fn the_band_under_a_picture_centres_it_and_lays_the_facts_beneath_the_rows_it_ta
                 ..area
             },
         },
-        "a nineteen-cell picture is centred in the rail's columns, one row under it is kept \
-             for the rule that closes the face, and the facts take every row under that"
+        "a nineteen-cell picture is centred in the rail's columns past the one the frame's seam \
+             stands in, one row under it is kept for the rule that closes the face, and the facts \
+             take every row under that"
     );
     assert_eq!(
         RailBand::of(area).picture,
@@ -1856,8 +1857,12 @@ fn a_picture_larger_than_the_band_is_cut_to_it_rather_than_laid_outside_the_rail
 
     assert_eq!(
         band.picture,
-        Some(area),
-        "a picture wider and taller than the band is drawn over the whole of it"
+        Some(Rect {
+            x: 1,
+            width: 31,
+            ..area
+        }),
+        "a picture wider and taller than the band is cut to the columns it has past the seam"
     );
     assert_eq!(
         band.facts.height, 0,

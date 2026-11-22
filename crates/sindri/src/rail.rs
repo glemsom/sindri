@@ -47,19 +47,22 @@ pub fn paint(
 }
 
 /// The rule that closes a face drawn over the rail's top rows, and nothing when the band holds no
-/// picture or no row under one.
+/// picture or no row under one. It opens past the column the frame's seam is drawn in, so that
+/// column runs unbroken down the rail.
 fn under_the_face(band: RailBand, buffer: &mut Buffer, palette: &Palette) {
     let Some(picture) = band.picture else {
         return;
     };
     let y = picture.y.saturating_add(picture.height);
     if y < band.area.bottom() {
+        let opened = band.area.x.saturating_add(1);
         pen::rule(
             buffer,
             Rect {
+                x: opened,
+                width: band.area.right().saturating_sub(opened),
                 y,
                 height: 1,
-                ..band.area
             },
             HAIRLINE,
             Ink::Dim,

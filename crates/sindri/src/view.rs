@@ -1277,13 +1277,14 @@ impl View {
             self.notice_rows(),
         );
         layout.rail = share.rail_band(area, layout.composer.y, &mut layout.transcript);
-        let mut seam = None;
         if let Some((shape, band)) = layout.rail {
             // A ledger carries the face wherever it is drawn, and a strip is one row of facts with
             // no band to carry one in: a terminal that places no picture, or a config that turned
             // it off, is handed no cells and reserves no row.
             let picture = match shape {
-                Rail::Ledger => face::over_rail(band.area.width, &self.face_surface()),
+                Rail::Ledger => {
+                    face::over_rail(band.area.width.saturating_sub(1), &self.face_surface())
+                }
                 Rail::Strip => None,
             };
             let band = match &picture {
@@ -1299,7 +1300,6 @@ impl View {
                 buffer,
                 &self.capabilities.palette(),
             ) {
-                seam = shade.seam();
                 painted.shaded(shade);
             }
             if let (Some(picture), Some(cells)) = (&picture, band.picture) {
@@ -1325,10 +1325,6 @@ impl View {
             );
         }
         self.notice_band(layout.notice, buffer, &drawn);
-        // The seam is drawn once, after the bands it parts and before the composer's band.
-        if let Some(seam) = seam {
-            seam.claim(buffer, &self.capabilities.palette());
-        }
         if let Some(shade) = self.composer_band(layout.composer, layout.queue, buffer) {
             painted.shaded(shade);
         }
@@ -1761,9 +1757,9 @@ impl View {
         }
     }
 
-    /// The band's head row: the one hairline drawn across it, in the accent while the band takes
-    /// the keys and in the dim edge while it does not, the draft's count hung on the row's far
-    /// edge, and the pulse a live run walks it with.
+    /// The band's head row: the frame's seam across it, the draft's count hung on its far edge, and
+    /// the pulse a live run walks it with. A palette that spells no edge rules the row in the dim ink
+    /// instead, and stops that rule short of the count it carries.
     fn composer_head(&self, band: Rect, buffer: &mut Buffer) {
         if band.height == 0 {
             return;
@@ -1792,7 +1788,9 @@ impl View {
             },
             ..row
         };
-        pen::rule(buffer, room, HAIRLINE, look, &palette);
+        if !palette.draws_edge() {
+            pen::rule(buffer, room, HAIRLINE, palette.dim_edge(), &palette);
+        }
         if self.facts.live() && room.width > 0 {
             let step = self.edge_step() % u64::from(room.width);
             let at = room
@@ -1835,12 +1833,10 @@ impl View {
         }
     }
 
-    /// The look the pulse and the rule of the composer's head row are drawn in: the accent at rest,
-    /// and the dim edge while the band takes no keys.
     fn composer_edge(&self) -> Look {
         let palette = self.capabilities.palette();
-        match self.band_takes_keys() {
-            true => palette.accent_edge(),
+        match self.band_takes_keys() && palette.draws_edge() {
+            true => Look::plain(Ink::Accent),
             false => palette.dim_edge(),
         }
     }

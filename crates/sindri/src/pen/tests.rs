@@ -3,7 +3,7 @@ use ratatui::layout::Rect;
 
 use super::*;
 use crate::ink::{Face, Ink, Look};
-use crate::palette::{Band, Edge, Palette};
+use crate::palette::{Band, Palette};
 
 const PALETTE: Palette = Palette::TRUECOLOR;
 
@@ -173,31 +173,29 @@ fn a_wash_claims_a_rows_ink_and_keeps_the_surface_and_the_glyphs_under_it() {
 }
 
 #[test]
-fn a_row_raised_on_an_edge_still_reads_back_as_the_inks_written_on_it() {
+fn a_row_raised_on_the_frames_edge_still_reads_back_as_the_inks_written_on_it() {
     for palette in [Palette::ANSI, Palette::TRUECOLOR] {
-        for edge in Edge::ALL {
-            let mut row = row_of(4);
-            let area = row.area;
-            write(
-                &mut row,
-                area,
-                &[("keys", Ink::Muted)],
-                Clip::Edge,
-                &palette,
-            );
-            claim(&mut row, area, Style::default().bg(palette.edge(edge)));
+        let mut row = row_of(4);
+        let area = row.area;
+        write(
+            &mut row,
+            area,
+            &[("keys", Ink::Muted)],
+            Clip::Edge,
+            &palette,
+        );
+        claim(&mut row, area, Style::default().bg(palette.edge_ink()));
 
-            assert_eq!(
-                crate::readback::inks(&row, 0, &palette),
-                [(Ink::Muted, 4)],
-                "an edge is the surface a row is raised on, so no fixture has to name it"
-            );
-            assert_eq!(
-                row.cell((0, 0)).expect("a cell of the row").bg,
-                palette.edge(edge),
-                "and the edge it was given is the surface the row sits on"
-            );
-        }
+        assert_eq!(
+            crate::readback::inks(&row, 0, &palette),
+            [(Ink::Muted, 4)],
+            "an edge is the surface a row is raised on, so no fixture has to name it"
+        );
+        assert_eq!(
+            row.cell((0, 0)).expect("a cell of the row").bg,
+            palette.edge_ink(),
+            "and the edge it was given is the surface the row sits on"
+        );
     }
 }
 

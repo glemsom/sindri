@@ -17,7 +17,7 @@ use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 const COLUMNS: u16 = FLOOR;
 use crate::palette::{Band, channels};
 use crate::pen;
-use crate::plane::{Plane, SEAM};
+use crate::plane::{Axis, Plane};
 use crate::readback::{column_of, inks, under};
 use crate::rows::{MARGIN, margins};
 
@@ -26,7 +26,7 @@ use crate::rows::{MARGIN, margins};
 const METERED: u16 = COLUMNS + MARGIN * 2;
 
 /// How far into the frame a seamed test stands its rail: the transcript's own columns are to its
-/// left, so the seam has room to reach back over them.
+/// left, so the frame holds a band beside the rail's own.
 const LEFT: u16 = 20;
 
 /// The columns `text` draws in, which is the pen's question and not a count of its glyphs.
@@ -196,9 +196,13 @@ fn a_ledger_stands_on_its_own_tone_on_every_row_it_claims() {
         for x in area.x..area.right() {
             assert_eq!(
                 under(&buffer, x, y),
-                PALETTE.band(Band::Rail),
+                match x == area.x {
+                    true => PALETTE.edge_ink(),
+                    false => PALETTE.band(Band::Rail),
+                },
                 "row {y}, column {x} of the ledger is not the rail's own tone: the band is one \
-                 surface from its first row to its last, and no row of it is the shadow"
+                 surface from its first row to its last, and the one column of it the frame \
+                 claims is its seam"
             );
         }
     }
@@ -216,10 +220,10 @@ fn the_foot_is_drawn_on_the_bands_last_row_where_no_shadow_falls() {
         .saturating_sub(margins())
         .saturating_sub(pen::cells("51.3k"));
     assert_eq!(
-        under(&buffer, area.x, floor),
+        under(&buffer, area.x + 1, floor),
         PALETTE.band(Band::Rail),
-        "the band's last row is the rail's own tone, and the foot stands on it rather than above \
-         it"
+        "the band's last row is the rail's own tone past its seam, and the foot stands on it \
+         rather than above it"
     );
     assert_eq!(
         glyphs(&buffer, floor).trim_end(),
@@ -275,9 +279,13 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
         for x in area.x..area.right() {
             assert_eq!(
                 under(&buffer, x, y),
-                PALETTE.band(Band::Rail),
-                "row {y}, column {x} of the band the picture is drawn over is not the rail's \
-                     own ground: the face would stand on the frame and not on the rail"
+                match x == area.x {
+                    true => PALETTE.edge_ink(),
+                    false => PALETTE.band(Band::Rail),
+                },
+                "row {y}, column {x} of the band the picture is drawn over is not the rail's own \
+                 ground: the face would stand on the frame and not on the rail, and the one \
+                 column beside the transcript stays the frame's seam"
             );
         }
         assert_eq!(
@@ -288,16 +296,21 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
         );
     }
     assert_eq!(
-        under(&buffer, area.x, 11),
+        under(&buffer, area.x + 1, 11),
         PALETTE.band(Band::Rail),
         "and the rule that closes the face is written over the rail's own ground and never in \
          place of it, so the band is one surface under the picture and under the rule"
     );
     assert_eq!(
+        under(&buffer, area.x, 11),
+        PALETTE.edge_ink(),
+        "and it opens one column in, so the seam's first column runs unbroken down the rail"
+    );
+    assert_eq!(
         glyphs(&buffer, 11).trim_end(),
-        pen::filled(COLUMNS, '─').trim_end(),
-        "the face is closed by the one rule the rail draws in its body, and the block under \
-             it is parted from it by no second line"
+        format!(" {}", pen::filled(COLUMNS - 1, '\u{2500}')).trim_end(),
+        "the face is closed by the one rule the rail draws in its body, past the seam's column, \
+             and the block under it is parted from it by no second line"
     );
     assert_eq!(
         glyphs(&buffer, 12).trim_end(),
@@ -307,7 +320,7 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
 }
 
 #[test]
-fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_beside_it() {
+fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_in_its_first_column() {
     let rail = stood(8);
     let mut buffer = Buffer::empty(framed(rail));
 
@@ -326,8 +339,7 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_beside_it
     assert_eq!(
         plane.area(),
         rail,
-        "the plane covers the rail's own rows and columns, and the columns the seam reaches back \
-         over are the transcript band's"
+        "the plane covers the rail's own rows and columns, and no column beside it"
     );
     assert_eq!(
         plane.pixels().dimensions(),
@@ -338,22 +350,15 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_beside_it
         "at the pixels of the cell it is drawn on"
     );
     assert_eq!(
-        shade
-            .seam()
-            .expect("a ledger beside a transcript band")
-            .area(),
-        Rect {
-            x: rail.x - SEAM,
-            width: SEAM,
-            ..rail
-        },
-        "and the seam the shade makes reaches the {SEAM} columns of the transcript band beside \
-         the rail, over the rail's own rows"
+        shade.seam().expect("a ledger beside a transcript band"),
+        (Axis::Down, Rect { width: 1, ..rail }),
+        "and the seam the shade draws is the one column of the rail's own band, down every row \
+         it claims"
     );
 }
 
 #[test]
-fn a_ledger_stood_at_the_frames_edge_keeps_its_band_and_reaches_the_one_column_beside_it() {
+fn a_ledger_stood_at_the_frames_edge_keeps_its_band_and_draws_its_seam_in_its_own_first_column() {
     let rail = Rect {
         x: 1,
         ..band(COLUMNS, 8)
@@ -377,17 +382,10 @@ fn a_ledger_stood_at_the_frames_edge_keeps_its_band_and_reaches_the_one_column_b
         "a rail's shade is its own band, whatever the frame has to the left of it"
     );
     assert_eq!(
-        shade
-            .seam()
-            .expect("a ledger beside a transcript band")
-            .area(),
-        Rect {
-            x: 0,
-            width: 1,
-            ..rail
-        },
-        "and its seam takes the one column the frame has left of a rail stood at its edge, and \
-         no column of a frame it does not reach"
+        shade.seam().expect("a ledger beside a transcript band"),
+        (Axis::Down, Rect { width: 1, ..rail }),
+        "and its seam is the rail's own first column, so no column of a frame the rail does not \
+         reach is claimed by it"
     );
 }
 
@@ -449,10 +447,14 @@ fn a_ledger_handed_a_cell_lights_no_column_and_shadows_no_row_of_its_band() {
         for x in rail.x..rail.right() {
             assert_eq!(
                 under(&buffer, x, y),
-                PALETTE.ground(None).bg.expect("the terminal's own ground"),
+                match x == rail.x {
+                    true => PALETTE.edge_ink(),
+                    false => PALETTE.ground(None).bg.expect("the terminal's own ground"),
+                },
                 "row {y}, column {x} of the band is not claimed as the terminal's own ground: a \
-                 lit column down the rail's first one or a shadow across its last is a line drawn \
-                 where the plane falls, and the shade is no line"
+                 lit column down the rail or a shadow across its last is a line drawn where the \
+                 plane falls, and the shade is no line \u{2014} the one column the frame claims \
+                 is its seam, in the one edge ink"
             );
         }
     }

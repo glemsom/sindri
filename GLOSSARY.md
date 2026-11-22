@@ -206,7 +206,7 @@ column the frame has, and the row that says the frame stands off the tail — dr
 the **Rail** leaves it, because a ledger takes the frame's own columns down its right-hand edge and
 a strip the band's last row. The **Transcript** is drawn in it with the row the reader stands at,
 and the **Splash screen** until a prompt has been asked for. Its rows are measured two columns
-short of the band, so no word of it runs into the rail's seam.
+short of the band, so no word of it runs into the column the frame's seam stands in.
 _Avoid_: Main window, main view, content area, viewport, scrollback, well
 
 **Rail**:
@@ -247,22 +247,29 @@ _Avoid_: Collapse, truncate, expand (that one is the other half), summary, previ
 A band's surface drawn as one image placed under its cells, so it shades in pixels rather than in
 whole rows: the image a frame holds against that band's **Shade**, and makes only when the shade
 moves. It is that shade sampled at the cell and read between one row and the next, and it covers the
-band's own columns — the seam beside a rail is the transcript band's, and is drawn in cells. A
-terminal that places no picture, or a band in a palette with no colour, is given none, and the band's
-own rows are claimed from its shade.
+band's own columns and no column of the band beside it. A terminal that places no picture, or a band
+in a palette with no colour, is given none, and the band's own rows are claimed from its shade.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer
 
 **Shade**:
-What a band sits on: the colour each of its rows is claimed in and the seams it makes with the band
-beside it — the transcript band on the well, the rail on its own tone on every row of it, the
-composer's band drawn in the band a prompt is read on, closing into the rail's tone on its last
-row. A
-seam is a fall of its own, in the columns it takes from the band beside the rail, and a frame draws
-it once, after the bands it parts. It holds every fact the band's cells and its
-**Plane** are drawn from and nothing else, the cell the plane is drawn at and the caret's column
-among them, and a frame holds each band's image against it, so a pass in which it stands makes no
-image. Where no picture is placed, that same shade is claimed cell by cell.
+What a band sits on: the colour each of its rows is claimed in and the cell of it the frame's
+**Seam** is drawn in — the transcript band on the well, the rail on its own tone on every row of it
+but its first column, the composer's band drawn in the band a prompt is read on and closing into the
+rail's tone on its last row, under a head row that is the seam's. It holds every fact the band's
+cells and its **Plane** are drawn from and nothing else, the cell the plane is drawn at and the
+caret's column among them, and a frame holds each band's image against it, so a pass in which it
+stands makes no image. Where no picture is placed, that same shade is claimed cell by cell.
 _Avoid_: Colour, tone, gradient, paint, style
+
+**Seam**:
+The one cell that parts a band from the band beside it, drawn in one edge ink at one weight, and
+never a fall or a run of columns: the **Rail**'s first column down every row it claims, and the row
+that heads the **Composer**'s band, across the frame. The two meet where they meet, and the rail's
+band runs to the composer's head row and dies in it. A seam is claimed once, in the cells of the
+band it parts, whatever the terminal can place, and the edge ink is quiet enough to be read on — the
+head row carries the draft's count — while standing clear of every ground it parts. A palette that
+spells no colour rules the seam in the dim ink instead, and a strip parts nothing and draws none.
+_Avoid_: Border, divider, crease, gutter, fall
 
 **Footprint**:
 The columns by rows a picture is fitted into under a ceiling: one scale on both axes, so the
@@ -321,7 +328,7 @@ _Avoid_: Geometry, arrangement, tiling, regions
 The last row of the **Composer**'s band: the hints of what a key does that this frame can honour,
 most valuable first, each giving up its tail as the row narrows, and a key the frame cannot answer
 not named at all. It spans the **Composer**'s columns, the frame's own from edge to edge, so no
-seam beside the ledger stops it a column short of the hints that width holds, and its hints open in
+seam beside the ledger is no column of the band, so no hint is given up to it, and its hints open in
 the **Margin**. An idle draft names
 sending, the commands, the files and the keys; a run in flight names cancelling and never sending;
 and a queue behind the draft is counted where the key that recalls one stands.

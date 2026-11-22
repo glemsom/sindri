@@ -85,16 +85,14 @@ fn a_terminal_naming_no_truecolor_is_given_the_same_design_in_ansi() {
             "{band:?} keeps the design's three steps and spells them in ANSI"
         );
     }
-    for edge in Edge::ALL {
-        assert!(
-            matches!(ansi.edge(edge), Color::Indexed(_)),
-            "{edge:?} is spelled in the colours a 256-colour terminal has"
-        );
-        assert!(
-            matches!(Palette::TRUECOLOR.edge(edge), Color::Rgb(..)),
-            "{edge:?} is the colour the design was drawn in"
-        );
-    }
+    assert!(
+        matches!(ansi.edge_ink(), Color::Indexed(_)),
+        "the edge is spelled in the colours a 256-colour terminal has"
+    );
+    assert!(
+        matches!(Palette::TRUECOLOR.edge_ink(), Color::Rgb(..)),
+        "and it is the colour the design was drawn in"
+    );
 }
 
 #[test]
@@ -147,51 +145,86 @@ fn every_palette_the_probe_hands_out_is_a_spelling_the_floor_and_the_ladder_are_
 #[test]
 fn a_palette_that_names_no_colour_draws_no_ground_of_its_own() {
     for (spelling, palette) in SPELLED {
-        assert!(
-            palette.draws_colour(),
-            "{spelling} spells a well of its own, so the bands of a frame drawn in it stand on a \
-             ground and not on the terminal's own"
-        );
         for band in Band::ALL {
             assert_ne!(
                 palette.band(band),
                 Color::Reset,
-                "{spelling} leaves {band:?} on the terminal's own ground"
+                "{spelling} leaves {band:?} on the terminal's own ground, and a palette that \
+                 spells a ground draws every band of a frame in it"
             );
         }
     }
-    assert!(
-        !Palette::SLOTS.draws_colour(),
-        "a terminal asked for no colour leaves every band on the ground it already has"
-    );
+    for band in Band::ALL {
+        assert_eq!(
+            Palette::SLOTS.band(band),
+            Color::Reset,
+            "a terminal asked for no colour leaves {band:?} on the ground it already has"
+        );
+    }
 }
 
 #[test]
-fn the_lit_edge_and_the_shadow_are_surfaces_no_ink_is_drawn_in() {
+fn the_frame_has_one_edge_ink_and_no_ink_and_no_band_is_drawn_in_it() {
     for (spelling, palette) in SPELLED {
-        let lit = palette.edge(Edge::Lit);
-        let shadow = palette.edge(Edge::Shadow);
+        let edge = palette.edge_ink();
 
-        assert_ne!(lit, shadow, "{spelling} draws one colour for both edges");
-        for ink in Ink::ALL {
-            for edge in Edge::ALL {
-                assert_ne!(
-                    palette.ink(ink).0,
-                    palette.edge(edge),
-                    "{spelling} draws {} in the colour of {edge:?}, and an edge is a surface \
-                         a row is drawn on rather than an ink it is drawn in",
-                    ink.name()
-                );
-            }
+        for ink in Ink::ALL
+            .into_iter()
+            .filter(|ink| channels(palette.colour(*ink)).is_some())
+        {
+            assert_ne!(
+                palette.colour(ink),
+                edge,
+                "{spelling} draws {} in the edge's own colour, and an edge is a surface a row \
+                 is drawn on rather than an ink it is drawn in",
+                ink.name()
+            );
         }
         for band in Band::ALL {
-            for edge in Edge::ALL {
-                assert_ne!(
-                    palette.band(band),
-                    palette.edge(edge),
-                    "{spelling} leaves {band:?} and {edge:?} no way to be told apart"
-                );
-            }
+            assert_ne!(
+                palette.band(band),
+                edge,
+                "{spelling} leaves {band:?} and the edge no way to be told apart"
+            );
+        }
+    }
+}
+
+#[test]
+fn no_boundary_of_the_frame_is_its_brightest_surface() {
+    for (spelling, palette) in SPELLED {
+        let edge = lightness(palette.edge_ink());
+
+        for ink in Ink::ALL
+            .into_iter()
+            .filter(|ink| channels(palette.colour(*ink)).is_some())
+        {
+            let drawn = lightness(palette.colour(ink));
+            assert!(
+                edge < drawn,
+                "{spelling} draws the edge at L* {edge} over {} at L* {drawn}: a boundary \
+                 brighter than the words beside it is the one thing a reader's eye lands on",
+                ink.name()
+            );
+        }
+    }
+}
+
+#[test]
+fn every_ink_keeps_its_legibility_floor_on_the_edge_ink() {
+    for (spelling, palette) in SPELLED {
+        for ink in Ink::ALL
+            .into_iter()
+            .filter(|ink| channels(palette.colour(*ink)).is_some())
+        {
+            let ratio = contrast(palette.colour(ink), palette.edge_ink());
+
+            assert!(
+                ratio >= LEGIBLE,
+                "{spelling} reads {} on the edge under {LEGIBLE}:1, and the composer's head row \
+                 carries words on that ground",
+                ink.name()
+            );
         }
     }
 }
@@ -267,38 +300,41 @@ fn the_rails_tone_stands_a_quiet_step_of_lightness_above_the_well_beside_it() {
     }
 }
 
+/// The step the ramp keeps between the edge and the grounds it parts, in the L* the ramp itself is
+/// laid out in: three is the least a reader can follow without a word beside it.
+const APART: f64 = 3.0;
+
 #[test]
-fn the_lit_edge_stands_above_every_band_and_the_shadow_below() {
+fn the_one_edge_stands_below_every_band_and_three_apart_from_the_grounds_it_parts() {
     for (spelling, palette) in SPELLED {
-        let lit = luminance(palette.edge(Edge::Lit));
-        let shadow = luminance(palette.edge(Edge::Shadow));
+        let edge = lightness(palette.edge_ink());
 
         for band in Band::ALL {
-            let ground = luminance(palette.band(band));
+            let ground = lightness(palette.band(band));
 
             assert!(
-                lit > ground,
-                "{spelling} lights {band:?} no brighter than its own ground, so nothing above \
-                     it can stand raised"
+                edge < ground,
+                "{spelling} draws the edge at L* {edge} over the {band:?} at L* {ground}: the \
+                 one edge ink is the rung every band of the frame stands above"
             );
             assert!(
-                shadow < ground,
-                "{spelling} shadows {band:?} no darker than its own ground, so nothing below \
-                     it can sit sunken"
+                ground - edge >= APART,
+                "{spelling} draws the edge at L* {edge} over the {band:?} at L* {ground}: a \
+                 boundary {} L* above the ground it parts is a boundary the eye cannot follow",
+                ground - edge
             );
         }
     }
 }
 
 #[test]
-fn a_terminal_told_no_colour_draws_no_edge_and_no_shadow() {
-    for edge in Edge::ALL {
-        assert_eq!(
-            Palette::SLOTS.edge(edge),
-            Color::Reset,
-            "{edge:?} draws no colour, so every frame an uncoloured terminal draws is flat"
-        );
-    }
+fn a_terminal_told_no_colour_draws_no_edge() {
+    assert_eq!(
+        Palette::SLOTS.edge_ink(),
+        Color::Reset,
+        "a reader who asked for no colour is given no edge of this design's: the one it keeps \
+         is its own bright or dark rule, and every frame drawn in it is flat"
+    );
 }
 
 #[test]

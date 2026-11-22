@@ -9,7 +9,7 @@ use crate::ink::{Face, Faces, Ink, Look};
 pub struct Palette {
     inks: Inks,
     bands: Bands,
-    ends: Ends,
+    edge: Color,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,14 +30,6 @@ struct Bands {
     well: Color,
 }
 
-/// The two ends a boundary is drawn at: the light a band meets the frame on and the shadow it is
-/// set down into, and no ink of its own.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Ends {
-    lit: Color,
-    shadow: Color,
-}
-
 impl Palette {
     /// The terminal's own six slots, no background and no edge: what a reader who asked for no
     /// colour gets, and every frame drawn in it is flat.
@@ -56,10 +48,7 @@ impl Palette {
             prompt: Color::Reset,
             well: Color::Reset,
         },
-        ends: Ends {
-            lit: Color::Reset,
-            shadow: Color::Reset,
-        },
+        edge: Color::Reset,
     };
 
     /// The design in the colours a terminal with no twenty-four-bit colour has.
@@ -78,10 +67,7 @@ impl Palette {
             prompt: Color::Indexed(236),
             well: Color::Indexed(234),
         },
-        ends: Ends {
-            lit: Color::Indexed(239),
-            shadow: Color::Indexed(232),
-        },
+        edge: Color::Indexed(232),
     };
 
     /// The design as it was drawn.
@@ -100,10 +86,7 @@ impl Palette {
             prompt: Color::Rgb(22, 31, 42),
             well: Color::Rgb(14, 21, 29),
         },
-        ends: Ends {
-            lit: Color::Rgb(36, 49, 63),
-            shadow: Color::Rgb(8, 13, 19),
-        },
+        edge: Color::Rgb(5, 8, 13),
     };
 
     /// The palette a terminal is drawn in, from the three facts that say what it can do.
@@ -160,24 +143,14 @@ impl Palette {
         Look::plain(Ink::Dim)
     }
 
-    /// Whether this palette has a lit edge to spend: the accent edge where it has, and the dim edge
-    /// where every edge it draws is the dim one.
     pub fn draws_edge(&self) -> bool {
-        self.edge(Edge::Lit) != Color::Reset
+        self.edge != Color::Reset
     }
 
-    /// Whether this palette draws a ground of its own under a band: a terminal that asked for no
-    /// colour leaves every band on the ground its cells already stand on.
-    pub fn draws_colour(&self) -> bool {
-        self.bands.well != Color::Reset
-    }
-
-    /// The colour an edge is drawn in: the lit end at its lightest, the shadow at its darkest.
-    pub fn edge(&self, edge: Edge) -> Color {
-        match edge {
-            Edge::Lit => self.ends.lit,
-            Edge::Shadow => self.ends.shadow,
-        }
+    /// The one ink the frame's seams are drawn in: a rung below every band, and the ground the
+    /// composer's head row carries its words on.
+    pub fn edge_ink(&self) -> Color {
+        self.edge
     }
 
     pub fn band(&self, band: Band) -> Color {
@@ -244,18 +217,6 @@ impl Band {
     pub const ALL: [Band; 3] = [Band::Rail, Band::Well, Band::Prompt];
 }
 
-/// A boundary's share of the light, painted under a row: never an ink, so a cell on an edge still
-/// reads back as the ink it is written in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Edge {
-    Lit,
-    Shadow,
-}
-
-impl Edge {
-    pub const ALL: [Edge; 2] = [Edge::Lit, Edge::Shadow];
-}
-
 /// The channels a colour is spelled in, and nothing for a colour the terminal draws in a slot of
 /// the reader's own: the sixteen slots and `Reset` have none this design can put in a pixel.
 pub fn channels(colour: Color) -> Option<[u8; 3]> {
@@ -272,26 +233,6 @@ pub fn channels(colour: Color) -> Option<[u8; 3]> {
         }
         Color::Indexed(at @ 232..=255) => Some([8 + 10 * (at - 232); 3]),
         _ => None,
-    }
-}
-
-/// The colour `at` of `span` from `head` to `foot`, in the spelling both ends share: two `Rgb` ends
-/// mix per channel and two `Indexed` ends mix their slots, which ascend with the grey they are, and
-/// ends with nothing between them are drawn as the head.
-pub(crate) fn blend(head: Color, foot: Color, at: u16, span: u16) -> Color {
-    let (at, span) = (u32::from(at.min(span)), u32::from(span));
-    let between = |head: u8, foot: u8| match span {
-        0 => head,
-        span => ((u32::from(head) * (span - at) + u32::from(foot) * at + span / 2) / span) as u8,
-    };
-    match (head, foot) {
-        (Color::Rgb(red, green, blue), Color::Rgb(foot_red, foot_green, foot_blue)) => Color::Rgb(
-            between(red, foot_red),
-            between(green, foot_green),
-            between(blue, foot_blue),
-        ),
-        (Color::Indexed(head), Color::Indexed(foot)) => Color::Indexed(between(head, foot)),
-        _ => head,
     }
 }
 
