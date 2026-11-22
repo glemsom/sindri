@@ -760,6 +760,72 @@ fn a_face_is_placed_over_the_footprint_it_was_measured_into_and_made_once_per_si
     );
 }
 
+/// The face measured into the block it is placed over, which needs no workspace and no file on
+/// disk: the picture a cache test moves from one cell to another.
+fn carried_face() -> (picture::Picture, Rect) {
+    let measured = face::measure(Ceiling::new(40, 12), &carried(true))
+        .expect("the face is measured with no workspace and no file on disk");
+    let block = Rect {
+        x: 0,
+        y: 0,
+        width: measured.cols(),
+        height: measured.rows(),
+    };
+    (measured, block)
+}
+
+#[test]
+fn a_cache_moved_to_another_cell_makes_the_picture_again_and_sends_it_again() {
+    let moved_to = CellSize::new(20, 40);
+    let (measured, block) = carried_face();
+    let mut pictures = Pictures::kitty(cell());
+    let mut first = Buffer::empty(Rect::new(0, 0, 60, 30));
+    pictures.place(&measured, cell(), block, &mut first);
+
+    let mut moved = pictures.celled(moved_to);
+    let mut again = Buffer::empty(Rect::new(0, 0, 60, 30));
+    moved.place(&measured, moved_to, block, &mut again);
+
+    assert_eq!(
+        moved.cell(),
+        Some(moved_to),
+        "the cache is measured at the cell the window moved to"
+    );
+    assert_eq!(
+        moved.rasterises("face.png"),
+        2,
+        "the picture is made into pixels at the new cell, over the raster already counted"
+    );
+    assert_eq!(
+        transmission_headers(&again),
+        1,
+        "and the terminal, holding the old raster, is sent the new one"
+    );
+}
+
+#[test]
+fn a_cache_moved_to_the_cell_it_already_is_makes_nothing_again_and_sends_nothing() {
+    let (measured, block) = carried_face();
+    let mut pictures = Pictures::kitty(cell());
+    let mut first = Buffer::empty(Rect::new(0, 0, 60, 30));
+    pictures.place(&measured, cell(), block, &mut first);
+
+    let mut kept = pictures.celled(cell());
+    let mut again = Buffer::empty(Rect::new(0, 0, 60, 30));
+    kept.place(&measured, cell(), block, &mut again);
+
+    assert_eq!(
+        transmission_headers(&again),
+        0,
+        "a cell that did not move writes the placeholders of what the terminal holds"
+    );
+    assert_eq!(
+        kept.rasterises("face.png"),
+        1,
+        "and makes no second raster of a picture already made at this cell"
+    );
+}
+
 #[test]
 fn a_picture_inside_the_workspace_is_placed_over_the_rows_it_takes() {
     let (_root, workspace) = workspace(400, 200);
@@ -2060,6 +2126,103 @@ fn a_pass_whose_caret_column_moved_makes_the_composers_band_again() {
         "a pass in which the caret's column moved makes the composer's band again, and no band \
          whose shading stood"
     );
+}
+
+#[test]
+fn a_window_whose_cell_changed_is_drawn_at_the_cell_it_now_reports() {
+    let (_root, workspace) = workspace(400, 200);
+    let mut view = frame(caps::at(cell()), &workspace, "![a purple field](shot.png)");
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let made = view.planes().made();
+
+    view.celled(Some(CellSize::new(20, 40)));
+    let crossed = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+
+    assert_eq!(
+        view.capabilities().cell(),
+        CellSize::new(20, 40),
+        "a frame drawn on another screen is drawn at the cell that screen has"
+    );
+    assert_eq!(
+        view.capabilities().pictures().rasterises("shot.png"),
+        2,
+        "the picture is made into pixels again at the new cell"
+    );
+    assert_eq!(
+        transmission_headers(crossed.cells()),
+        1,
+        "and the terminal, holding the old raster, is sent the new one"
+    );
+    assert!(
+        view.planes().made() > made,
+        "and the bands' images are made again at the new cell: {made} images before the pass"
+    );
+    let band = crossed.told().layout().expect("a laid out frame").composer;
+    assert_eq!(
+        composer_plane(&view).pixels().dimensions(),
+        (u32::from(band.width) * 20, u32::from(band.height) * 40),
+        "the composer's plane is drawn at the pixels of the cell the window now has"
+    );
+}
+
+#[test]
+fn a_window_whose_cell_stood_is_drawn_as_it_was_with_no_header_and_no_band_image() {
+    let (_root, workspace) = workspace(400, 200);
+    let mut view = frame(caps::at(cell()), &workspace, "![a purple field](shot.png)");
+    let before = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let made = view.planes().made();
+
+    view.celled(Some(cell()));
+    let kept = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+
+    assert_eq!(
+        view.capabilities().pictures().rasterises("shot.png"),
+        1,
+        "a cell that did not move makes no second raster"
+    );
+    assert_eq!(
+        transmission_headers(kept.cells()),
+        0,
+        "and sends the terminal no header it already holds"
+    );
+    assert_eq!(
+        view.planes().made(),
+        made,
+        "and makes no band image whose shading stood"
+    );
+    assert_eq!(
+        kept.told().shades(),
+        before.told().shades(),
+        "and hands the terminal the same shades as the pass before it"
+    );
+}
+
+#[test]
+fn a_terminal_that_reports_no_pixels_keeps_the_cell_it_was_given() {
+    let (_root, workspace) = workspace(400, 200);
+    let mut view = frame(caps::at(cell()), &workspace, "![a purple field](shot.png)");
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    let made = view.planes().made();
+
+    view.celled(None);
+    let again = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+
+    assert_eq!(
+        view.capabilities().cell(),
+        cell(),
+        "a terminal that reports no pixels is drawn at the cell it was given"
+    );
+    assert_eq!(
+        view.capabilities().pictures().rasterises("shot.png"),
+        1,
+        "and repaints as it did before"
+    );
+    assert_eq!(
+        transmission_headers(again.cells()),
+        0,
+        "and sends no header"
+    );
+    assert_eq!(view.planes().made(), made, "and makes no band image");
 }
 
 #[test]

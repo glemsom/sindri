@@ -1,5 +1,6 @@
-//! What the terminal a frame draws on can do, probed once before the first frame: its cell, its
-//! colours, its sizing, its pointer, its pictures and the face the config asks for over the rail.
+//! What the terminal a frame draws on can do — its colours, its sizing, its pointer, its pictures and
+//! the face the config asks for over the rail — probed once before the first frame, save the cell,
+//! which every pass keeps current from the kernel's own report of the window's pixels.
 
 use sindri_core::config::Environment;
 
@@ -182,6 +183,16 @@ impl Capabilities {
     pub fn reporting(self, reports: bool) -> Capabilities {
         Capabilities {
             pointer: reports,
+            ..self
+        }
+    }
+
+    /// The same value with the window's cell moved to `cell`, and the pictures measured at it: the
+    /// screen a window crossed to makes what it draws again.
+    pub fn celled(self, cell: CellSize) -> Capabilities {
+        Capabilities {
+            cell,
+            pictures: self.pictures.celled(cell),
             ..self
         }
     }

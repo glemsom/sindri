@@ -61,6 +61,18 @@ impl Pictures {
         })
     }
 
+    /// The same cache measured at `cell`: a cell that moved makes every placement again and sends
+    /// it again, though the work already counted stays counted.
+    pub fn celled(self, cell: CellSize) -> Pictures {
+        match self.draws() && self.cell() != Some(cell) {
+            true => Pictures {
+                rasterises: self.rasterises,
+                ..Pictures::kitty(cell)
+            },
+            false => self,
+        }
+    }
+
     /// Whether this terminal places pictures at all, which is what a block was laid out for.
     pub fn draws(&self) -> bool {
         self.picker.is_some()
