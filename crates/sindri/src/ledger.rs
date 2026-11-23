@@ -100,7 +100,7 @@ impl Ctx {
         Value::metered(text, fill)
     }
 
-    fn fill(&self) -> Option<Fill> {
+    pub(crate) fn fill(&self) -> Option<Fill> {
         let window = self.window?;
         let percent = share(self.size, window)?;
         Some(Fill {
@@ -123,6 +123,16 @@ pub(crate) struct Fill {
 }
 
 impl Fill {
+    pub(crate) fn percent(&self) -> u8 {
+        self.percent
+    }
+
+    /// Whether the run is near the ceiling it is drawn in the accent past: the one turn the meter's
+    /// own cells make, which the gauge under it makes too.
+    pub(crate) fn turned(&self) -> bool {
+        self.percent >= FULL
+    }
+
     fn cells(&self) -> usize {
         (usize::from(self.percent) * METER + 50) / 100
     }
@@ -397,7 +407,7 @@ pub(crate) fn pair(left: impl std::fmt::Display, right: impl std::fmt::Display) 
     format!("{left} / {right}")
 }
 
-fn share(part: u64, whole: u64) -> Option<u8> {
+pub(crate) fn share(part: u64, whole: u64) -> Option<u8> {
     if whole == 0 {
         return None;
     }
@@ -709,6 +719,7 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
                         Line::Fact(fact) => labelled(row, fact),
                         Line::Air => Row {
                             y: row.y,
+                            kind: None,
                             parts: Vec::new(),
                         },
                         Line::Went(went) => Row::run(row.x, row.y, more(went), Ink::Muted),
@@ -773,6 +784,7 @@ fn sheet_rows(facts: &Facts, area: Rect) -> Vec<Row> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Row {
     y: u16,
+    kind: Option<Kind>,
     parts: Vec<(u16, Part)>,
 }
 
@@ -786,12 +798,17 @@ impl Row {
     fn run(x: u16, y: u16, text: impl Into<String>, ink: Ink) -> Row {
         Row {
             y,
+            kind: None,
             parts: vec![(x, Part::Run(text.into(), ink))],
         }
     }
 
     pub(crate) fn y(&self) -> u16 {
         self.y
+    }
+
+    pub(crate) fn kind(&self) -> Option<Kind> {
+        self.kind
     }
 
     fn push(&mut self, x: u16, part: Part) -> u16 {
@@ -839,7 +856,11 @@ fn labelled(area: Rect, fact: &Fact) -> Row {
         Hang::Left => from,
     };
     parts.push((x, Part::Value(fact.value.clone())));
-    Row { y: area.y, parts }
+    Row {
+        y: area.y,
+        kind: Some(fact.kind),
+        parts,
+    }
 }
 
 fn hairline_row(area: Rect) -> Row {
@@ -849,6 +870,7 @@ fn hairline_row(area: Rect) -> Row {
 fn strip(kept: &Kept, area: Rect) -> Row {
     let mut row = Row {
         y: area.y,
+        kind: None,
         parts: Vec::new(),
     };
     let mut x = area.x;

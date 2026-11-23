@@ -263,13 +263,14 @@ joint and a hairline on the band's own edge, at one weight on both axes. The lig
 casts is a plane of its own over the band under the composer's **Seam**, and it is no light on a
 joint: it is placed again on the column the caret moved to and is made again for no keystroke. A
 plane covers the band's own columns and no column of the band beside it, and a frame holds one image
-under each band and one under that light, each by its own identity, placed at one depth that a cell
-carrying a background still wins over. A terminal that places no picture, or a band in a palette
+under each band, one under each **Instrument**, and one under that light, each by its own identity,
+placed at one depth that a cell carrying a background still wins over. A terminal that places no picture, or a band in a palette
 with no colour, is given none, and the band's own rows are claimed from its shade.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer, blend
 
 **Shade**:
-What a band sits on: the **Rung** each of its rows is claimed in and the cell of it the frame's
+What a band sits on — and, for an **Instrument**, the rows it is drawn under: the **Rung** each of
+its rows is claimed in and the cell of it the frame's
 **Seam** is drawn in — the transcript band on the well, the rail on its own tone on every row of it,
 the composer's band drawn in the band a prompt is read on and closing into the rail's tone on its
 last row; and the rail's first column and the composer's head row are the seam's, drawn in the
@@ -290,6 +291,19 @@ the cells of the band it parts, and the cell the frame claims for it is the edge
 plane stands — the count the head row carries is read over the pixels there. A palette that spells
 no colour rules the seam in the dim ink instead, and a strip parts nothing and draws none.
 _Avoid_: Border, divider, crease, gutter
+
+**Instrument**:
+A fact of the **Rail** drawn at the pixel under the row that states it, in a **Plane** of its own:
+the context window's fill as a gauge, the spend's two figures as bars on the one scale the foot
+holds, and the room the rail leaves at its foot as a quiet bezel. It shows a fact and never holds
+one — every number it draws is a cell over it, so the number still copies — and its pixels are the
+rail's **Rung** with light added, in the hue of the ink the fact is stated in and inside the most
+the palette proves, so no word of the rail is washed out where an instrument stands under it. The
+image it is drawn from is a ladder of the block's hundreds, so a share that moved is a placement the
+terminal already holds and sends no pixel; it stands inside the **Margin** and on no bigger than the
+block it is drawn in, and a strip, a terminal that places no picture and a palette that spells no
+colour are given the meters the frame draws without one.
+_Avoid_: Meter, gauge (that one is the window's), graph, chart, sparkline, widget
 
 **Footprint**:
 The columns by rows a picture is fitted into under a ceiling: one scale on both axes, so the

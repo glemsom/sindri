@@ -3,11 +3,13 @@ use ratatui::layout::Rect;
 
 use crate::graphics::CellSize;
 use crate::ink::Ink;
-use crate::ledger::{self, Facts, Rail, RailBand};
+use crate::instrument;
+use crate::ledger::{self, Facts, Kind, Rail, RailBand};
 use crate::palette::Palette;
 use crate::pen;
-use crate::plane::Shade;
+use crate::plane::{Bar, Shade};
 use crate::pulse::Pulse;
+use crate::rows::margined;
 
 const HAIRLINE: char = '─';
 
@@ -19,29 +21,78 @@ pub fn paint(
     terminal: (Option<CellSize>, Option<&mut crate::size::Sizes>),
     buffer: &mut Buffer,
     palette: &Palette,
-) -> Option<Shade> {
+) -> Vec<Shade> {
     let (pictures, sized) = terminal;
     let area = band.area;
     if area.width == 0 || area.height == 0 {
-        return None;
+        return Vec::new();
     }
-    let shade = Shade::rail(rail, band, pictures, palette);
-    if let Some(shade) = shade {
+    let mut shades = Vec::new();
+    if let Some(shade) = Shade::rail(rail, band, pictures, palette) {
         shade.claim(buffer, palette);
+        shades.push(shade);
     }
     if rail == Rail::Ledger {
         under_the_face(band, buffer, palette);
     }
-    ledger::draw(
-        &ledger::rows(facts, rail.into(), band.facts, marker),
-        band.facts,
-        buffer,
-        palette,
-    );
+    let rows = ledger::rows(facts, rail.into(), band.facts, marker);
+    ledger::draw(&rows, band.facts, buffer, palette);
+    shades.extend(instruments(facts, rail, band, pictures, &rows, palette));
     if let Some(sized) = sized {
         sized.append(sizes(facts, rail, band, marker, buffer, palette));
     }
-    shade
+    shades
+}
+
+fn instruments(
+    facts: &Facts,
+    rail: Rail,
+    band: RailBand,
+    cell: Option<CellSize>,
+    rows: &[ledger::Row],
+    palette: &Palette,
+) -> Vec<Shade> {
+    let Some(cell) = cell.filter(|_| rail == Rail::Ledger) else {
+        return Vec::new();
+    };
+    let columns = margined(band.facts);
+    let stated = |kind: Kind| {
+        rows.iter()
+            .find(|row| row.kind() == Some(kind))
+            .map(|row| Rect {
+                x: columns.x,
+                y: band.facts.y.saturating_add(row.y()),
+                width: columns.width,
+                height: 1,
+            })
+    };
+    let mut shades = Vec::new();
+    if let (Some(area), Some(gauge)) = (stated(Kind::Ctx), instrument::Gauge::of(facts)) {
+        shades.extend(Shade::gauge(area, Some(cell), gauge, palette));
+    }
+    let spend = instrument::Spend::of(&facts.spend);
+    for (kind, bar, share) in [
+        (Kind::Input, Bar::Input, spend.and_then(|spend| spend.input)),
+        (
+            Kind::Output,
+            Bar::Output,
+            spend.and_then(|spend| spend.output),
+        ),
+    ] {
+        if let (Some(area), Some(share)) = (stated(kind), share) {
+            shades.extend(Shade::bar(area, Some(cell), bar, share, palette));
+        }
+    }
+    let room = Rect::new(0, 0, columns.width, band.facts.height);
+    if let Some(area) = instrument::bezel(rows, room) {
+        let area = Rect {
+            x: columns.x,
+            y: band.facts.y.saturating_add(area.y),
+            ..area
+        };
+        shades.extend(Shade::bezel(area, Some(cell), palette));
+    }
+    shades
 }
 
 fn under_the_face(band: RailBand, buffer: &mut Buffer, palette: &Palette) {

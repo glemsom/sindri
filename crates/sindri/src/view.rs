@@ -1098,7 +1098,7 @@ impl View {
                 Some(picture) => band.with_picture(picture.cols(), picture.rows()),
                 None => band,
             };
-            if let Some(shade) = rail::paint(
+            for shade in rail::paint(
                 self.facts.rail(),
                 shape,
                 band,

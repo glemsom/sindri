@@ -286,14 +286,16 @@ impl<W: Write> Backend<W> {
     /// keeps a tall placement from scrolling, and `q=2` leaves no reply to read as a keystroke.
     fn upload(&mut self, plane: &Plane, at: Placement) -> io::Result<()> {
         let head = format!(
-            "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},w={}",
+            "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}",
             plane.id().image(),
             plane::PLACEMENT,
             plane::DEPTH,
             at.cols,
             at.rows,
             at.from,
-            at.width
+            at.down,
+            at.width,
+            at.height
         );
         let mut sent = Vec::new();
         write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
@@ -313,14 +315,16 @@ impl<W: Write> Backend<W> {
         write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
         write!(
             sent,
-            "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={},x={},w={}\x1b\\",
+            "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}\x1b\\",
             id.image(),
             plane::PLACEMENT,
             plane::DEPTH,
             at.cols,
             at.rows,
             at.from,
-            at.width
+            at.down,
+            at.width,
+            at.height
         )?;
         sent.extend_from_slice(b"\x1b8");
         holding(&mut self.screen, &mut self.writing).tell(&sent)

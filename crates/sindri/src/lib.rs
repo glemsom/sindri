@@ -11,6 +11,7 @@ pub mod facts;
 pub mod files;
 pub mod graphics;
 pub mod ink;
+pub mod instrument;
 pub mod kept;
 pub mod keys;
 pub mod ledger;

@@ -1118,6 +1118,19 @@ fn rail_shade() -> Shade {
     .expect("a band to shade")
 }
 
+fn gauge_shade(share: u8) -> Shade {
+    Shade::gauge(
+        Rect::new(40, 12, 8, 1),
+        Some(CellSize::NOMINAL),
+        sindri::instrument::Gauge {
+            share: sindri::instrument::Share::of(share),
+            turned: false,
+        },
+        &Palette::TRUECOLOR,
+    )
+    .expect("an instrument to shade")
+}
+
 fn transcript_shade() -> Shade {
     Shade::transcript(
         Rect::new(0, 0, 6, 4),
@@ -1768,7 +1781,7 @@ fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_ar
     );
     assert!(
         wire.contains(&format!(
-            "_Ga=T,f=100,i=333,p=1,q=2,z={},C=1,c=2,r=1,x=0,w=20",
+            "_Ga=T,f=100,i=333,p=1,q=2,z={},C=1,c=2,r=1,x=0,y=0,w=20,h=20",
             plane::DEPTH
         )),
         "at the area the band stands on, which never moved: {wire:?}"
@@ -1809,6 +1822,68 @@ fn a_rail_whose_light_moved_is_placed_again_by_its_own_identity() {
         wire.contains("_Ga=d,d=i,i=334")
             && wire.contains(&format!("_Ga=T,f=100,i=334,p=1,q=2,z={}", plane::DEPTH)),
         "both the delete and the new placement are under the rail's own identity: {wire:?}"
+    );
+}
+
+#[test]
+fn a_percentage_that_moved_places_the_gauge_again_and_sends_no_pixel_of_it() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let mut images = Planes::default();
+    for share in [40, 41, 42] {
+        let shades = [gauge_shade(share)];
+        images.hold(&shades);
+        backend.shades(&shades, &images).unwrap();
+    }
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        1,
+        "a gauge is transmitted once, and a share that moved a hundredth sends no pixel of it: \
+         {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=p").count(),
+        2,
+        "and every share after the first places the image the terminal holds again: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=d").count(),
+        0,
+        "nothing the frame still holds is given back for a share that moved: {wire:?}"
+    );
+    assert!(
+        wire.contains(&format!(
+            "_Ga=p,i={},p={},q=2,z={},C=1,c=8,r=1,x=0,y=41,w=80,h=1",
+            PlaneId::Gauge.image(),
+            plane::PLACEMENT,
+            plane::DEPTH
+        )),
+        "the gauge is placed again on the rung it moved to, one pixel of the ladder deep: {wire:?}"
+    );
+}
+
+#[test]
+fn a_gauge_the_rail_no_longer_states_is_given_back_by_its_own_image_id() {
+    let mut wire = Vec::new();
+    let mut backend = Backend::new(&mut wire, false);
+    let stated = [gauge_shade(40)];
+    backend.shades(&stated, &held(&stated)).unwrap();
+    backend.shades(&[], &Planes::default()).unwrap();
+    drop(backend);
+    let wire = String::from_utf8(wire).unwrap();
+
+    assert!(
+        wire.contains(&format!("_Ga=d,d=i,i={}", PlaneId::Gauge.image())),
+        "a gauge the rail no longer states is given back by its own image id, or the terminal is \
+         left holding an instrument that stands nowhere: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        1,
+        "and the gauge is made once and no image of another is made for it: {wire:?}"
     );
 }
 

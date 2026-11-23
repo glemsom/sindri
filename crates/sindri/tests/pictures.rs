@@ -2095,12 +2095,15 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
             .collect::<Vec<PlaneId>>(),
         vec![
             PlaneId::Rail,
+            PlaneId::Gauge,
+            PlaneId::Bezel,
             PlaneId::Transcript,
             PlaneId::Composer,
             PlaneId::Caret
         ],
-        "the frame hands back the rail's shading beside the transcript band's, the composer's and \
-         the light under the caret, each under its own identity"
+        "the frame hands back the rail's shading and the instruments it is handed under it, \
+         beside the transcript band's, the composer's and the light under the caret, each under \
+         its own identity"
     );
     let band = plane_of(&view, PlaneId::Rail);
     assert_eq!(
@@ -2153,6 +2156,49 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
              it is replaced by the placeholder glyph"
         );
     }
+}
+
+#[test]
+fn a_frames_rail_stands_its_gauge_on_the_row_the_ctx_fact_is_stated_on() {
+    let mut view = railed_words(true);
+    let frame = frame::painted(&mut view, 120, 40);
+    let rail = frame
+        .told()
+        .layout()
+        .expect("a laid out frame")
+        .rail
+        .expect("a rail")
+        .1;
+    let gauge = shade_of(&frame, PlaneId::Gauge);
+    let plane = plane_of(&view, PlaneId::Gauge);
+    let at = gauge.place().expect("the gauge to be placed");
+    let stated: Vec<u16> = (rail.area.y..rail.area.bottom())
+        .filter(|y| {
+            rail_row(frame.cells(), rail.area, *y)
+                .trim_start()
+                .starts_with("ctx")
+        })
+        .collect();
+
+    assert_eq!(
+        stated,
+        vec![at.top],
+        "the frame holds the gauge's plane over row {} where the ctx fact is stated on \
+         {stated:?}: an instrument stands on the row of the fact it states",
+        at.top
+    );
+    assert_eq!(
+        (at.from, at.down, at.height),
+        (0, 24, 1),
+        "the gauge is placed on the twenty-fourth hundredth of the first band, where 48.2k of a \
+         200k window is 24 hundredths of its block"
+    );
+    assert_eq!(
+        plane.pixels().dimensions(),
+        (2 * u32::from(gauge.area().width) * cell().width(), 101),
+        "a gauge's plane is two bands of the row's own pixels, one for every hundredth of the \
+         block, and one pixel deep where it is placed"
+    );
 }
 
 fn railed_words(face: bool) -> View {
@@ -2211,12 +2257,15 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
             .collect::<Vec<PlaneId>>(),
         vec![
             PlaneId::Rail,
+            PlaneId::Gauge,
+            PlaneId::Bezel,
             PlaneId::Transcript,
             PlaneId::Composer,
             PlaneId::Caret
         ],
         "a frame hands back a plane for each of the three bands it draws and the light under its \
-         caret, each under its own identity, in the order it paints them"
+         caret, with the rail's instruments where the rail paints them, each under its own \
+         identity, in the order it paints them"
     );
     for (id, area) in bands {
         let plane = plane_of(&view, id);
@@ -2371,8 +2420,9 @@ fn every_ink_a_frame_draws_keeps_its_floor_on_the_pixel_its_cell_stands_on() {
     let frame = frame::painted(&mut view, 120, 40);
     let palette = *frame.palette();
     let area = frame.area();
-    // Each plane is read through the cells it stands on and the columns of it shown there, so
-    // the light the caret casts answers for its own pixels and not for a band's.
+    // Each plane is read through the cells it stands on and the rect of itself it shows there, so
+    // the light the caret casts and the hundredth an instrument is cropped to answer for their own
+    // pixels and not for a band's.
     let planes: Vec<(Placement, &Plane)> = frame
         .told()
         .shades()
@@ -2396,11 +2446,13 @@ fn every_ink_a_frame_draws_keeps_its_floor_on_the_pixel_its_cell_stands_on() {
             }) else {
                 continue;
             };
-            let column = u32::from(x - at.left) + u32::from(at.skip);
+            let column = u32::from(x - at.left);
             let row = u32::from(y - at.top);
+            let across = u32::from(at.cols.max(1));
+            let down = u32::from(at.rows.max(1));
             let pixel = plane.pixels().get_pixel(
-                column * cell().width() + cell().width() / 2,
-                row * cell().height() + cell().height() / 2,
+                at.from + column * at.width / across + at.width / across / 2,
+                at.down + row * at.height / down + at.height / down / 2,
             );
             let under = [pixel[0], pixel[1], pixel[2]];
             let kept = ratio(colour, under);
