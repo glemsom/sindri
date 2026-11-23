@@ -140,11 +140,7 @@ fn sizes(
     for row in &rows {
         for (x, part) in row.parts() {
             if let Part::Value(value) = part {
-                if row
-                    .parts()
-                    .iter()
-                    .any(|(_, part)| matches!(part, Part::Run(label, _) if label.trim() == "input"))
-                {
+                if row.kind() == Some(Kind::Input) {
                     let words = value.text().trim();
                     let split = words
                         .find(|glyph: char| glyph.is_ascii_alphabetic())
@@ -153,22 +149,14 @@ fn sizes(
                     let run = Sized::new(0, 2, figure, Look::plain(value.ink()));
                     let unit_run =
                         Sized::new(0, 2, unit, Look::plain(value.ink())).fractional(1, 4, 1, 0);
-                    let left = band.facts.x + crate::rows::MARGIN + ledger::FIELD;
+                    let left = band.facts.x + crate::rows::MARGIN + x;
+                    let right = band.facts.right().saturating_sub(crate::rows::MARGIN);
                     let y = band.facts.y + row.y();
                     let width = run.width() + unit_run.width();
-                    let old = band.facts.x + crate::rows::MARGIN + x;
-                    if !figure.is_empty()
-                        && left + width <= old
-                        && y + 1 < band.facts.bottom()
-                        && (left..left + width).all(|x| {
-                            buffer
-                                .cell((x, y + 1))
-                                .is_some_and(|cell| cell.symbol().trim().is_empty())
-                        })
-                    {
+                    if !figure.is_empty() && left + width <= right && y + 1 < band.facts.bottom() {
                         pen::run(
                             buffer,
-                            old,
+                            left,
                             y,
                             &pen::blank(pen::cells(value.text())),
                             value.ink(),

@@ -7,14 +7,14 @@ stats at 120x40
 01 |                        │   run                                                                │onnet-4-5-20250929      | dim:25 plain:3 dim:3 plain:64 dim:25
 02 |                        │   wire      anthropic                                                │                        | dim:25 plain:3 dim:10 plain:57 dim:25
 03 |                        │   model     claude-sonnet-4-5-20250929                               │                        | dim:25 plain:3 dim:10 plain:57 dim:25
-04 |                        │   route     chat                                                     │              6 /  250  | dim:25 plain:3 dim:10 plain:57 dim:25
-05 |                        │   think     high                                                     │   █░░░░░ 48.2k / 200k  | dim:25 plain:3 dim:10 plain:57 dim:25
-06 |                        │   ────────────────────────────────────────────────────────────────   │                   88%  | dim:25 plain:3 dim:64 plain:3 dim:25
+04 |                        │   route     chat                                                     │ 250                    | dim:25 plain:3 dim:10 plain:57 dim:25
+05 |                        │   think     high                                                     │8.2k / 200k             | dim:25 plain:3 dim:10 plain:57 dim:25
+06 |                        │   ────────────────────────────────────────────────────────────────   │                        | dim:25 plain:3 dim:64 plain:3 dim:25
 07 |                        │   meters                                                             │                        | dim:25 plain:3 dim:6 plain:61 dim:25
 08 |                        │   turns                                                   6 /  250   │/.worktrees/46-rail     | dim:25 plain:3 dim:10 plain:57 dim:25
 09 |                        │   ctx                                          █░░░░░ 48.2k / 200k   │apability               | dim:25 plain:3 dim:10 plain:36 dim:5 plain:16 dim:25
 10 |                        │   cache                                                        88%   │                        | dim:25 plain:3 dim:10 plain:57 dim:25
-11 |                        │   ────────────────────────────────────────────────────────────────   │                     2  | dim:25 plain:3 dim:64 plain:3 dim:25
+11 |                        │   ────────────────────────────────────────────────────────────────   │                        | dim:25 plain:3 dim:64 plain:3 dim:25
 12 |                        │   spend                                                              │                        | dim:25 plain:3 dim:5 plain:62 dim:25
 13 |                        │   input                                                      48.2k   │                        | dim:25 plain:3 dim:10 plain:57 dim:25
 14 |                        │   output                                                      3.1k   │                        | dim:25 plain:3 dim:10 plain:57 dim:25
@@ -37,9 +37,9 @@ stats at 120x40
 31 |                        │   sandbox   bubblewrap                                               │                        | dim:25 plain:3 dim:10 plain:57 dim:25
 32 |                        │   ────────────────────────────────────────────────────────────────   │                        | dim:25 plain:3 dim:64 plain:3 dim:25
 33 |                        │   skills                                                             │                        | dim:25 plain:3 dim:6 plain:61 dim:25
-34 |                        │   bash                                                               │                 48.2k  | dim:25 plain:70 dim:25
-35 |                        │   records                                                            │                  3.1k  | dim:25 plain:70 dim:25
-36 |                        │   ────────────────────────────────────────────────────────────────   │                 51.3k  | dim:25 plain:3 dim:64 plain:3 dim:25
+34 |                        │   bash                                                               │                        | dim:25 plain:70 dim:25
+35 |                        │   records                                                            │                        | dim:25 plain:70 dim:25
+36 |                        │   ────────────────────────────────────────────────────────────────   │                        | dim:25 plain:3 dim:64 plain:3 dim:25
 37 |                        │   session                                                            │                        | dim:25 plain:3 dim:7 plain:60 dim:25
 38 |┃›what should the run do│ ⋯ 2 rows kept back                                                   │                        | dim:25 plain:1 dim:18 plain:51 dim:25
 39 |  Enter send · / command╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27

@@ -7,14 +7,14 @@ fold-answer at 120x40
 01 |  Every row of the run passes: the gutter holds one column for every          model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
 02 |  entry, and a row of a command's output is set behind it rather than         think     high                            | plain:78 dim:10 plain:32
 03 |  beside the answer.                                                                                                    | plain:120
-04 |✓ bash                                                                        turns                           6 /  250  | ok:1 plain:1 dim:4 plain:72 dim:10 plain:32
-05 |  cargo test -p sindri --test rows                                            ctx                  █░░░░░ 48.2k / 200k  | plain:78 dim:10 plain:12 dim:5 plain:15
-06 |✓ exit 0  1800 ms · 640 bytes                                                 cache                                88%  | ok:1 plain:1 dim:27 plain:49 dim:10 plain:32
+04 |✓ bash                                                                        turns         6 /  250                    | ok:1 plain:1 dim:4 plain:72 dim:10 plain:32
+05 |  cargo test -p sindri --test rows                                            ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
+06 |✓ exit 0  1800 ms · 640 bytes                                                 cache     88%                             | ok:1 plain:1 dim:27 plain:49 dim:10 plain:32
 07 |  test rows::a_row_of_output_1 ... ok                                                                                   | muted:37 plain:83
 08 |  test rows::a_row_of_output_2 ... ok                                         workspace …/sindri/.worktrees/46-rail     | muted:37 plain:41 dim:10 plain:32
 09 |  test rows::a_row_of_output_3 ... ok                                         branch    spec/1-capability               | muted:37 plain:41 dim:10 plain:32
 10 |⋯ 16 rows kept back                                                                                                     | dim:1 plain:1 dim:17 plain:101
-11 |  test rows::a_row_of_output_20 ... ok                                        skills                                 2  | muted:38 plain:40 dim:10 plain:32
+11 |  test rows::a_row_of_output_20 ... ok                                        skills    2                               | muted:38 plain:40 dim:10 plain:32
 12 |  Three rows of the fold are the whole of it: the head, the count and the                                               | plain:120
 13 |  last.                                                                       sandbox   bwrap                           | plain:78 dim:10 plain:32
 14 |  The run proves the fold and nothing else: every row of a command's                                                    | plain:120
@@ -37,9 +37,9 @@ fold-answer at 120x40
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
 33 |                                                                                                                        | plain:120
-34 |                                                                              input                              48.2k  | plain:78 dim:10 plain:32
-35 |                                                                              output                              3.1k  | plain:78 dim:10 plain:32
-36 |                                                                              total                              51.3k  | plain:78 dim:10 plain:32
+34 |                                                                              input     48.2k                           | plain:78 dim:10 plain:32
+35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
+36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
 38 |┃›what should the run do?                                                                                               | dim:25 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

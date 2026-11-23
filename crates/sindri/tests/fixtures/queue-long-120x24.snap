@@ -7,14 +7,14 @@ queue-long at 120x24
 01 |  code      │ behind a bar, highlighted                                       model     claude-sonnet-4-5-20250929      | plain:11 dim:3 plain:64 dim:10 plain:32
 02 |  table     │ columns joined by a bar                                         think     high                            | plain:11 dim:3 plain:64 dim:10 plain:32
 03 |                                                                                                                        | plain:120
-04 |┃›what does a row of the band say?                                            turns                           6 /  250  | dim:1 plain:77 dim:10 plain:32
-05 |⋯ 1 call · 31 ms                                                              ctx                  █░░░░░ 48.2k / 200k  | dim:1 plain:1 dim:14 plain:62 dim:10 plain:12 dim:5 plain:15
-06 |  A row is one line                                                           cache                                88%  | plain:2 plain+bold:17 plain:59 dim:10 plain:32
+04 |┃›what does a row of the band say?                                            turns         6 /  250                    | dim:1 plain:77 dim:10 plain:32
+05 |⋯ 1 call · 31 ms                                                              ctx       █░░░░░ 48.2k / 200k             | dim:1 plain:1 dim:14 plain:62 dim:10 plain:1 dim:5 plain:26
+06 |  A row is one line                                                           cache     88%                             | plain:2 plain+bold:17 plain:59 dim:10 plain:32
 07 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
 08 |                                                                              workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 09 |  A row says the exit code and not the command, because the verdict is a      branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |  fact the record holds and the command is a fact the row above it holds.                                               | plain:120
-11 |                                                                              skills                                 2  | plain:78 dim:10 plain:32
+11 |                                                                              skills    2                               | plain:78 dim:10 plain:32
 12 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
 13 |▏ fn main() {                                                                 sandbox   bwrap                           | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:69 dim:10 plain:32
 14 |▏    │let row = Row::of(spans);                                                                                         | dim:2 plain:3 dim:1 accent+bold:3 plain:111
