@@ -153,6 +153,8 @@ fn sizes(
                     let right = band.facts.right().saturating_sub(crate::rows::MARGIN);
                     let y = band.facts.y + row.y();
                     let width = run.width() + unit_run.width();
+                    // A picture is two cells deep, so the foot's first figure stands over the row
+                    // its next figure is stated on.
                     if !figure.is_empty() && left + width <= right && y + 1 < band.facts.bottom() {
                         pen::run(
                             buffer,

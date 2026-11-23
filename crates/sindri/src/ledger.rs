@@ -62,15 +62,6 @@ pub enum Shape {
     Screen,
 }
 
-impl Shape {
-    fn hang(self, fact: &Fact) -> Hang {
-        match self {
-            Shape::Screen => fact.hang,
-            Shape::Ledger | Shape::Strip => Hang::Left,
-        }
-    }
-}
-
 impl From<Rail> for Shape {
     fn from(rail: Rail) -> Shape {
         match rail {
@@ -725,7 +716,7 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
                         ..area
                     };
                     match line {
-                        Line::Fact(fact) => labelled(row, fact, Shape::Ledger),
+                        Line::Fact(fact) => labelled(row, fact, Hang::Left),
                         Line::Air => Row {
                             y: row.y,
                             kind: None,
@@ -743,7 +734,7 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
                         ..area
                     },
                     fact,
-                    Shape::Ledger,
+                    Hang::Left,
                 ));
             }
             rows
@@ -777,7 +768,7 @@ fn sheet_rows(facts: &Facts, area: Rect) -> Vec<Row> {
             rows.push(Row::run(at.x, y, block.label, Ink::Dim));
             y = y.saturating_add(1);
             for fact in &block.rows {
-                rows.push(labelled(Rect { y, ..at }, fact, Shape::Screen));
+                rows.push(labelled(Rect { y, ..at }, fact, fact.hang));
                 y = y.saturating_add(1);
             }
         }
@@ -853,14 +844,14 @@ impl Part {
     }
 }
 
-fn labelled(area: Rect, fact: &Fact, shape: Shape) -> Row {
+fn labelled(area: Rect, fact: &Fact, hang: Hang) -> Row {
     let mut parts = Vec::new();
     let mut from = area.x;
     if let Some(label) = fact.label {
         parts.push((area.x, Part::Run(pen::pad(label, FIELD), Ink::Dim)));
         from = area.x.saturating_add(FIELD);
     }
-    let x = match shape.hang(fact) {
+    let x = match hang {
         Hang::Right => pen::hanging(area, pen::columns(fact.value.columns()))
             .expect("a fact is fitted to the row it is laid in"),
         Hang::Left => from,

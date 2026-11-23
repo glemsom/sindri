@@ -1760,8 +1760,8 @@ fn a_window_is_drawn_as_a_meter_beside_the_size_it_is_a_share_of() {
     );
     let ahead = u16::try_from(METER + 1).expect("the meter and the space after it fit a row");
     assert_eq!(
-        column_of(&rows[0], '/'),
-        column_of(&rows[1], '/').map(|at| at.saturating_sub(ahead)),
+        column_of(&rows[0], '/').map(|at| at + ahead),
+        column_of(&rows[1], '/'),
         "the two halves of a pair line up: every slash in the block lands one column past its \
          value's halves, and the meter and the space it is followed by are no part of a pair"
     );
