@@ -2120,3 +2120,44 @@ fn assert_no_width_lays_a_name_in_part(name: &str) {
         );
     }
 }
+
+#[test]
+fn a_row_states_the_kind_of_the_fact_it_lays_and_the_air_between_blocks_states_none() {
+    let laid = rows(&frame(), Shape::Ledger, band(COLUMNS, 19), None);
+
+    assert_eq!(
+        laid.iter().map(Row::kind).take(5).collect::<Vec<_>>(),
+        [
+            Some(Kind::Wire),
+            Some(Kind::Model),
+            Some(Kind::Think),
+            None,
+            Some(Kind::Turns)
+        ],
+        "the rail's rows state the facts they lay, and the row of air that parts two blocks \
+         states nothing"
+    );
+}
+
+#[test]
+fn a_row_that_lays_no_one_fact_states_no_kind() {
+    assert_eq!(
+        hairline_row(band(COLUMNS, 1)).kind(),
+        None,
+        "the rule that heads a block states no fact of its own"
+    );
+    assert_eq!(
+        rows(&frame(), Shape::Strip, band(COLUMNS, 1), None)[0].kind(),
+        None,
+        "a strip is one row carrying every fact it holds, so it states no one of them"
+    );
+    let short = rows(&spent(), Shape::Ledger, band(COLUMNS, 6), None);
+    assert!(
+        short.last().is_some_and(|row| row.kind().is_none()
+            && row
+                .parts()
+                .iter()
+                .any(|(_, part)| matches!(part, Part::Run(text, _) if text.starts_with('+')))),
+        "the count of the facts a rail could not hold states no fact of its own"
+    );
+}

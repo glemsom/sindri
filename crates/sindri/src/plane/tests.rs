@@ -5,6 +5,7 @@ use ratatui::style::Color;
 use super::*;
 use crate::composer::{MAX_ROWS, MIN_ROWS};
 use crate::ink::Ink;
+use crate::instrument;
 use crate::ledger::RailBand;
 use crate::pen::Clip;
 use crate::readback::under;
@@ -254,9 +255,57 @@ fn lit_bands(palette: &Palette) -> Vec<(&'static str, Band, Shade)> {
 fn band_of(shade: &Shade) -> Band {
     match shade {
         Shade::Transcript { .. } => Band::Well,
-        Shade::Rail { .. } => Band::Rail,
+        Shade::Rail { .. } | Shade::Gauge { .. } | Shade::Bar { .. } | Shade::Bezel { .. } => {
+            Band::Rail
+        }
         Shade::Composer { .. } | Shade::Caret { .. } => Band::Prompt,
     }
+}
+
+fn gauge_ink(area: Rect, share: u8, turned: bool, palette: &Palette) -> Shade {
+    Shade::gauge(
+        area,
+        Some(CELL),
+        instrument::Gauge {
+            share: instrument::Share::of(share),
+            turned,
+        },
+        palette,
+    )
+    .expect("an instrument to shade")
+}
+
+fn bar_ink(area: Rect, bar: Bar, share: u8, palette: &Palette) -> Shade {
+    Shade::bar(area, Some(CELL), bar, instrument::Share::of(share), palette)
+        .expect("an instrument to shade")
+}
+
+fn instruments(
+    area: Rect,
+    cell: Option<CellSize>,
+    palette: &Palette,
+) -> Vec<(&'static str, Option<Shade>)> {
+    let share = instrument::Share::of(50);
+    vec![
+        (
+            "a gauge",
+            Shade::gauge(
+                area,
+                cell,
+                instrument::Gauge {
+                    share,
+                    turned: false,
+                },
+                palette,
+            ),
+        ),
+        ("a bar", Shade::bar(area, cell, Bar::Input, share, palette)),
+        ("a bezel", Shade::bezel(area, cell, palette)),
+    ]
+}
+
+fn bezelled(area: Rect, palette: &Palette) -> Shade {
+    Shade::bezel(area, Some(CELL), palette).expect("an instrument to shade")
 }
 
 fn caret_light(band: Rect, caret: u16, palette: &Palette) -> Shade {
@@ -1800,4 +1849,419 @@ fn the_carets_light_claims_no_cell_of_the_band_it_lights() {
             );
         }
     }
+}
+
+/// The light an instrument may spend on a pixel: the most the palette proves its rail's rung can
+/// take and still leave every ink it spells its floor.
+fn proved(palette: &Palette) -> u8 {
+    palette.lift(Band::Rail)
+}
+
+/// The light a pixel of an instrument carries over the rung it is drawn on.
+fn over(shade: &Shade, pixel: [u8; 4]) -> [i32; 3] {
+    let rung = spelled(shade.row(0));
+    std::array::from_fn(|channel| i32::from(pixel[channel]) - i32::from(rung[channel]))
+}
+
+#[test]
+fn a_gauges_fill_is_the_pixels_of_the_share_it_is_drawn_at_and_its_trace_the_pixel_that_ends_it() {
+    let area = Rect::new(4, 7, 8, 1);
+    let width = u32::from(area.width) * CELL.width();
+    for (spelling, palette) in SPELLED {
+        let proved = proved(&palette);
+        for percent in [0, 13, 50, 87, 100] {
+            let shade = gauge_ink(area, percent, false, &palette);
+            let plane = drawn(shade);
+            let at = shade.place().expect("the gauge's ladder to be placed");
+            let fill = instrument::Share::of(percent).pixels(width);
+            assert_eq!(
+                (at.from, at.width),
+                (0, width),
+                "{spelling} crops a gauge at {percent}% from anywhere but the first band of the \
+                 {width} pixels it is drawn over"
+            );
+            let fill_light = palette.peak(Band::Rail) / 4 * 3;
+            let mut traced = None;
+            for x in 0..width {
+                let pixel = plane.pixels().get_pixel(at.from + x, at.down).0;
+                if pixel[3] == 0 {
+                    assert!(
+                        x >= fill,
+                        "{spelling} leaves column {x} of a gauge at {percent}% to the band it \
+                         stands on, and no pixel of its {fill} of fill is drawn"
+                    );
+                    continue;
+                }
+                let light = over(&shade, pixel);
+                if light.iter().any(|channel| *channel < 0) {
+                    panic!(
+                        "{spelling} draws column {x} of a gauge at {percent}% darker than the rung \
+                         it stands on: {:?}",
+                        &pixel[..3]
+                    );
+                }
+                if light.iter().any(|channel| *channel > i32::from(proved)) {
+                    panic!(
+                        "{spelling} draws column {x} of a gauge at {percent}% at {light:?} \
+                         channels over its rung, and the most the palette proves the rung can \
+                         take is {proved}"
+                    );
+                }
+                if x + 1 == fill {
+                    traced = Some(light);
+                } else if x < fill {
+                    assert!(
+                        light
+                            .iter()
+                            .all(|channel| channel.abs_diff(i32::from(fill_light)) <= 1),
+                        "{spelling} draws column {x} of a gauge at {percent}% in {light:?} \
+                         channels of light, where every pixel of its fill spends the one \
+                         {fill_light} of the {proved} the rail proves, in the hue of the ink the \
+                         fact is stated in"
+                    );
+                }
+            }
+            match traced {
+                None => assert_eq!(fill, 0, "a gauge of no pixels is one no fill"),
+                Some(light) => {
+                    let peak = palette.peak(Band::Rail);
+                    let spent = light.iter().copied().max().expect("three channels");
+                    assert_eq!(
+                        spent,
+                        i32::from(peak),
+                        "{spelling} ends a gauge at {percent}% on a trace of {light:?} channels, \
+                         where the pixel that ends the fill spends all of the {peak} the rail's \
+                         light is proved at of the {proved} the palette proves"
+                    );
+                    assert!(
+                        peak <= proved,
+                        "{spelling} spends {peak} channels of light where the most the palette \
+                         proves the rail's rung can take is {proved}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_gauges_track_is_ticked_on_the_quarters_its_fill_has_not_reached() {
+    let area = Rect::new(0, 0, 8, 1);
+    let palette = Palette::TRUECOLOR;
+    let width = u32::from(area.width) * CELL.width();
+    let shade = gauge_ink(area, 50, false, &palette);
+    let plane = drawn(shade);
+    let fill = instrument::Share::of(50).pixels(width);
+    let quarters: Vec<u32> = (1..4)
+        .map(|quarter| quarter * (width / 4))
+        .filter(|quarter| *quarter >= fill)
+        .collect();
+    let ticks: Vec<u32> = (fill..width)
+        .filter(|x| plane.pixels().get_pixel(*x, 0).0[3] == 255)
+        .collect();
+    assert_eq!(
+        ticks, quarters,
+        "a gauge is ticked on every quarter of the {width}-pixel track its {fill} pixels of fill \
+         have not reached, and never through the fill"
+    );
+    let at = shade.place().expect("the gauge's ladder to be placed");
+    let fill_light = over(&shade, plane.pixels().get_pixel(0, at.down).0);
+    for x in quarters {
+        let tick = over(&shade, plane.pixels().get_pixel(x, 0).0);
+        assert!(
+            tick.iter().zip(fill_light).all(|(tick, fill)| tick < &fill),
+            "column {x} of the track is drawn at {tick:?} channels of light, and a tick is \
+             quieter than the {fill_light:?} of the fill it stands beside"
+        );
+    }
+}
+
+#[test]
+fn a_gauges_ladder_holds_every_hundredth_of_the_block_and_its_hundredth_rung_the_whole_width() {
+    let area = Rect::new(0, 0, 8, 1);
+    let palette = Palette::TRUECOLOR;
+    let width = u32::from(area.width) * CELL.width();
+    let shade = gauge_ink(area, 50, false, &palette);
+    let plane = drawn(shade);
+    assert_eq!(
+        plane.pixels().dimensions(),
+        (width * 2, 101),
+        "a gauge's ladder is two bands of the {width} pixels it is drawn over, and one rung per \
+         hundredth of the block"
+    );
+    for rung in 0..101u32 {
+        let fill = instrument::Share::of(u8::try_from(rung).expect("a rung")).pixels(width);
+        for x in 0..fill {
+            assert!(
+                plane.pixels().get_pixel(x, rung).0[3] == 255,
+                "rung {rung} of the ladder leaves column {x} of its {fill} pixels of fill to the \
+                 band, where its hundredth of the block is {fill}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_gauges_second_band_is_the_ink_the_frames_own_meter_turns_to() {
+    let area = Rect::new(2, 5, 8, 1);
+    let palette = Palette::TRUECOLOR;
+    let width = u32::from(area.width) * CELL.width();
+    let calm = gauge_ink(area, 60, false, &palette);
+    let turned = gauge_ink(area, 60, true, &palette);
+    let at = turned.place().expect("the gauge's ladder to be placed");
+    assert_eq!(
+        (calm.place().expect("a placement").from, at.from),
+        (0, width),
+        "a gauge whose run is near its ceiling is placed on the second band of its ladder, where \
+         one that is not is placed on the first"
+    );
+    assert_eq!(
+        at.down,
+        calm.place().expect("a placement").down,
+        "and the band it turns to is no rung of its own"
+    );
+    let calm_light = over(&calm, drawn(calm).pixels().get_pixel(20, at.down).0);
+    let turned_light = over(
+        &turned,
+        drawn(turned).pixels().get_pixel(at.from + 20, at.down).0,
+    );
+    let (low, high) = (
+        *calm_light.iter().min().expect("three channels"),
+        *calm_light.iter().max().expect("three channels"),
+    );
+    assert!(
+        high - low <= 1,
+        "the light a calm run's fill spends is the plain ink's own, which is grey: {calm_light:?}"
+    );
+    assert!(
+        turned_light[2] > turned_light[1] && turned_light[1] > turned_light[0],
+        "a run near its ceiling spends the accent's hue, which is blue before it is green and \
+         green before it is red, and this fill is {turned_light:?}"
+    );
+}
+
+#[test]
+fn a_bar_is_the_pixels_its_figure_takes_and_no_pixel_beside_them() {
+    let area = Rect::new(12, 30, 6, 1);
+    let width = u32::from(area.width) * CELL.width();
+    for (spelling, palette) in SPELLED {
+        let proved = proved(&palette);
+        for (bar, ink) in [(Bar::Input, Ink::Accent), (Bar::Output, Ink::Muted)] {
+            for percent in [0, 25, 50, 100] {
+                let shade = bar_ink(area, bar, percent, &palette);
+                let plane = drawn(shade);
+                let at = shade.place().expect("the bar's ladder to be placed");
+                let fill = instrument::Share::of(percent).pixels(width);
+                assert_eq!(
+                    (at.from, at.width, at.height),
+                    (0, width, 1),
+                    "{spelling} crops a {bar:?} bar from a band other than its own, or over \
+                     pixels other than the {width} it is drawn on"
+                );
+                assert_eq!(
+                    shade.id(),
+                    Some(PlaneId::Bar(bar)),
+                    "{spelling} holds the {bar:?} bar under an identity of its own"
+                );
+                for x in 0..width {
+                    let pixel = plane.pixels().get_pixel(x, at.down).0;
+                    if x >= fill {
+                        assert_eq!(
+                            pixel,
+                            [0, 0, 0, 0],
+                            "{spelling} draws column {x} of a {bar:?} bar at {percent}% outside \
+                             the {fill} pixels its figure takes"
+                        );
+                        continue;
+                    }
+                    let light = over(&shade, pixel);
+                    assert!(
+                        light.iter().all(|channel| *channel >= 0),
+                        "{spelling} draws column {x} of a {bar:?} bar at {percent}% darker than \
+                         the rung it stands on: {light:?}"
+                    );
+                    let (low, high) = (
+                        light.iter().copied().min().expect("three channels"),
+                        light.iter().copied().max().expect("three channels"),
+                    );
+                    match ink {
+                        Ink::Accent => assert!(
+                            light[2] >= light[1] && light[1] > light[0],
+                            "{spelling} draws the {bar:?} bar at {percent}% in {light:?} channels \
+                             of light, where the accent it is stated in is blue before it is green \
+                             and green before it is red"
+                        ),
+                        _ => assert!(
+                            high - low <= 2,
+                            "{spelling} draws the {bar:?} bar at {percent}% in {light:?} channels \
+                             of light, where the ink it is stated in is grey"
+                        ),
+                    }
+                    assert!(
+                        light.iter().all(|channel| *channel <= i32::from(proved)),
+                        "{spelling} draws column {x} of a {bar:?} bar at {percent}% at {light:?} \
+                         channels of light, where the most the palette proves the rung can take \
+                         is {proved}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_bezel_is_a_groove_inside_the_region_it_frames() {
+    let area = Rect::new(3, 9, 5, 3);
+    let palette = Palette::TRUECOLOR;
+    let (width, height) = (
+        u32::from(area.width) * CELL.width(),
+        u32::from(area.height) * CELL.height(),
+    );
+    let shade = bezelled(area, &palette);
+    let plane = drawn(shade);
+    let at = shade.place().expect("the bezel to be placed");
+    assert_eq!(
+        (at.left, at.top, at.from, at.down, at.width, at.height),
+        (area.x, area.y, 0, 0, width, height),
+        "a bezel is the region's own pixels, placed over the region it frames"
+    );
+    assert_eq!(plane.pixels().dimensions(), (width, height));
+
+    let tone = spelled(palette.band(Band::Rail));
+    let weight = palette.seam();
+    let shadow = tone.map(|channel| channel.saturating_sub(weight));
+    let lifted = tone.map(|channel| channel.saturating_add(weight));
+    let pixel = |x, y| plane.pixels().get_pixel(x, y).0;
+
+    for x in 0..width {
+        assert_eq!(
+            &pixel(x, 0)[..3],
+            &shadow,
+            "column {x} of the bezel's top edge is {:?} where the groove falls {weight} channels \
+             into shadow",
+            &pixel(x, 0)[..3]
+        );
+        if x > 0 {
+            assert_eq!(
+                &pixel(x, height - 1)[..3],
+                &lifted,
+                "column {x} of its bottom edge is {:?} where the groove lifts {weight} channels \
+                 out of the region",
+                &pixel(x, height - 1)[..3]
+            );
+        }
+    }
+    for y in 0..height {
+        assert_eq!(
+            &pixel(0, y)[..3],
+            &shadow,
+            "row {y} of the bezel's left edge is {:?}, and a groove is darkest where it opens",
+            &pixel(0, y)[..3]
+        );
+        if y > 0 {
+            assert_eq!(
+                &pixel(width - 1, y)[..3],
+                &lifted,
+                "row {y} of its right edge is {:?}, and a groove is lifted where it closes",
+                &pixel(width - 1, y)[..3]
+            );
+        }
+    }
+    for x in 1..width - 1 {
+        for y in 1..height - 1 {
+            assert_eq!(
+                pixel(x, y),
+                [0, 0, 0, 0],
+                "pixel {x}, {y} inside the bezel is drawn over the region's own pixels, and the \
+                 bezel is a groove around it"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_instrument_claims_no_cell_of_the_band_it_is_drawn_under() {
+    let palette = Palette::TRUECOLOR;
+    let area = Rect::new(20, 4, 24, 1);
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 60, 20));
+    let ground = Color::Rgb(0x0a, 0x0b, 0x0c);
+    pen::claim(&mut buffer, Rect::new(20, 4, 24, 6), palette.over(ground));
+    let claimed = buffer.clone();
+    let instruments = [
+        ("a gauge", gauge_ink(area, 40, false, &palette)),
+        ("a bar", bar_ink(area, Bar::Input, 40, &palette)),
+        ("a bezel", bezelled(Rect::new(20, 6, 24, 3), &palette)),
+    ];
+    for (what, shade) in instruments {
+        shade.claim(&mut buffer, &palette);
+        assert_eq!(
+            buffer, claimed,
+            "{what} claims a cell of the band it is drawn under, and the rail's own shade has \
+             claimed those cells: an instrument is the pixels it adds and no cell"
+        );
+    }
+}
+
+#[test]
+fn an_instrument_in_a_palette_that_spells_no_colour_is_no_shade_at_all() {
+    let area = Rect::new(0, 0, 8, 1);
+    for (what, shade) in instruments(area, Some(CELL), &Palette::TRUECOLOR) {
+        assert!(
+            shade.is_some(),
+            "{what} on a terminal that places pictures and in a palette that spells colour is an \
+             instrument the frame is given"
+        );
+    }
+    for (what, shade) in instruments(area, Some(CELL), &Palette::SLOTS) {
+        assert!(
+            shade.is_none(),
+            "{what} is drawn in inks a palette that spells no colour gives no channel to, so it \
+             is no instrument and the frame draws its own meters"
+        );
+    }
+    for (what, shade) in instruments(area, None, &Palette::TRUECOLOR) {
+        assert!(
+            shade.is_none(),
+            "{what} on a terminal that places no picture has no pixel to stand on, so it is no \
+             shade at all"
+        );
+    }
+    for (what, shade) in instruments(Rect::new(0, 0, 0, 1), Some(CELL), &Palette::TRUECOLOR) {
+        assert!(
+            shade.is_none(),
+            "{what} over no cell of the frame is no shade at all"
+        );
+    }
+}
+
+#[test]
+fn a_gauge_that_moved_one_hundredth_carries_the_same_image_and_a_placement_on_its_rung() {
+    let area = Rect::new(0, 0, 8, 1);
+    let palette = Palette::TRUECOLOR;
+    let first = gauge_ink(area, 40, false, &palette);
+    let moved = gauge_ink(area, 41, false, &palette);
+    assert_eq!(
+        first.image(),
+        moved.image(),
+        "a gauge that moved a hundredth carries the image the terminal already holds, so no \
+         pixel of it travels"
+    );
+    assert_eq!(
+        moved.place().expect("a placement").down,
+        41,
+        "and the placement it is put under picks the rung it moved to"
+    );
+    let mut planes = Planes::default();
+    for shade in [first, moved] {
+        planes.hold(&[shade]);
+    }
+    assert_eq!(
+        planes.made(),
+        1,
+        "a gauge that moved a hundredth makes no image, and the frame holds the one already made"
+    );
+    assert!(
+        planes.image(&moved).is_some(),
+        "and the image it holds answers for the gauge that moved"
+    );
 }
