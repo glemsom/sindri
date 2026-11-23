@@ -153,8 +153,11 @@ fn spent() -> Facts {
 
 fn unspent() -> Facts {
     Facts {
-        spend: Usage::default(),
-        ..windowed()
+        ctx: Some(Ctx {
+            size: 48_200,
+            window: Some(200_000),
+        }),
+        ..frame()
     }
 }
 
@@ -725,7 +728,7 @@ fn the_bezel_stands_in_the_room_the_rail_leaves_between_its_last_fact_and_its_fo
         &PALETTE,
     );
     let rows = ledger::rows(&facts, ledger::Shape::Ledger, rail, None);
-    let room = instrument::bezel(&rows, Rect::new(0, 0, rail.width - margins(), rail.height))
+    let room = instrument::bezel(&rows, rail.width - margins())
         .expect("the air the rail leaves between its last fact and its foot");
 
     assert_eq!(
