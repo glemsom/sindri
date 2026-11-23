@@ -6,7 +6,7 @@ use sindri::facts::Facts;
 use sindri::ink::Ink;
 use sindri::ledger;
 use sindri::pen;
-use sindri::pulse::{Pulse, STEP_MS, format_duration, pulse_glyph, step};
+use sindri::pulse::{self, Pulse, STEP_MS, Turning, format_duration, pulse_glyph, step};
 use sindri::view::{Transcript, View};
 use sindri_core::provider::Deltas;
 use sindri_core::redact::SecretSet;
@@ -378,5 +378,45 @@ fn a_frame_with_no_run_has_no_marker_on_it() {
             .words()
             .iter()
             .all(|row| !row.starts_with('⠹'))
+    );
+}
+
+#[test]
+fn the_loop_the_face_turns_is_the_one_the_run_s_state_asks_for() {
+    assert_eq!(
+        pulse::turning(None),
+        Some(Turning::IDLE),
+        "a launch with no run in flight leaves the face breathing at the slow gap"
+    );
+    assert_eq!(
+        Pulse::live(1_200).turning(),
+        Some(Turning::FLIGHT),
+        "a run in flight turns the face at the quickened gap"
+    );
+    assert_eq!(
+        Pulse::settled(
+            &Stop::Error(SecretSet::default().redact("the wire went away")),
+            900
+        )
+        .turning(),
+        Some(Turning::FLASH),
+        "and a run that failed flashes the face once"
+    );
+    assert_eq!(
+        Turning::FLASH.cycles(),
+        Some(2),
+        "the flash is two cycles of the breath and no more"
+    );
+    for stop in [Stop::Final, Stop::MaxTurns, Stop::Cancelled] {
+        assert_eq!(
+            Pulse::settled(&stop, 900).turning(),
+            None,
+            "a run that settled on {} leaves the face holding one frame",
+            stop.word()
+        );
+    }
+    assert!(
+        Turning::IDLE.gap_ms() > Turning::FLIGHT.gap_ms(),
+        "the idle breath is slower than the one a run in flight turns"
     );
 }

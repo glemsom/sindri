@@ -265,6 +265,49 @@ fn a_picture_loses_the_plate_it_was_made_on_and_keeps_the_light_it_carries() {
 }
 
 #[test]
+fn the_face_is_four_frames_of_one_picture_and_the_shape_of_it_never_moves() {
+    let root = face::measure(Ceiling::new(40, 12), &carried(true))
+        .expect("a terminal that places pictures is given the face")
+        .rasterise(cell())
+        .expect("the face travels in the binary, so it decodes");
+    let frames = face::frames(&root);
+
+    assert_eq!(
+        frames.len(),
+        4,
+        "the breath is the picture, its light turned down twice and back up: four frames"
+    );
+    assert!(
+        frames[0] == root,
+        "and the first of them is the picture as it is carried, which is the one every later \
+         frame is composed against"
+    );
+    for (at, frame) in frames.iter().enumerate().skip(1) {
+        assert_eq!(
+            frame.dimensions(),
+            root.dimensions(),
+            "frame {at} is the root's own size, so the shape never moves"
+        );
+        for (lit, dimmed) in root.pixels().zip(frame.pixels()) {
+            assert_eq!(
+                dimmed[3], lit[3],
+                "frame {at} keeps the alpha the root carries at every pixel"
+            );
+            assert!(
+                (0..3).all(|channel| dimmed[channel] <= lit[channel]),
+                "and no channel of it is brighter than the root's: {dimmed:?} against {lit:?}"
+            );
+        }
+        assert!(
+            root.pixels()
+                .zip(frame.pixels())
+                .any(|(lit, dimmed)| lit != dimmed),
+            "frame {at} is a different light from the root's, or the terminal has nothing to turn"
+        );
+    }
+}
+
+#[test]
 fn a_terminal_that_places_no_picture_is_given_no_cells_and_no_words_for_the_face() {
     assert!(
         face::measure(Ceiling::new(40, 12), &carried(false)).is_none(),
@@ -656,6 +699,25 @@ fn strip_band(cols: u16, rows: u16) -> Rect {
     }
 }
 
+/// The cells the frame asked the terminal to draw the face over, and none where it asked for none:
+/// the face carries no cell of its own, so the block it was given is the whole of it.
+fn face_area(framed: &frame::Frame) -> Option<Rect> {
+    framed.told().face().map(|face| face.area())
+}
+
+fn face_rows(framed: &frame::Frame) -> Vec<u16> {
+    face_area(framed)
+        .map(|area| (area.y..area.bottom()).collect())
+        .unwrap_or_default()
+}
+
+fn face_cols(framed: &frame::Frame, y: u16) -> Vec<u16> {
+    face_area(framed)
+        .filter(|area| (area.y..area.bottom()).contains(&y))
+        .map(|area| (area.x..area.right()).collect())
+        .unwrap_or_default()
+}
+
 fn transcript_band(framed: &frame::Frame) -> Rect {
     framed.told().layout().expect("a laid out frame").transcript
 }
@@ -687,61 +749,49 @@ fn transmission_headers(buffer: &Buffer) -> usize {
 }
 
 #[test]
-fn a_face_is_placed_over_the_footprint_it_was_measured_into_and_made_once_per_size() {
-    let measured = face::measure(Ceiling::new(40, 12), &carried(true))
-        .expect("the face is measured with no workspace and no file on disk");
-    let mut pictures = Pictures::kitty(cell());
-    let block = Rect {
-        x: 0,
-        y: 0,
-        width: measured.cols(),
-        height: measured.rows(),
-    };
-
-    let mut first = Buffer::empty(Rect::new(0, 0, 60, 30));
-    pictures.place(&measured, cell(), block, &mut first);
-    let mut again = Buffer::empty(Rect::new(0, 0, 60, 30));
-    pictures.place(&measured, cell(), block, &mut again);
+fn the_face_is_placed_over_the_footprint_the_rail_reserved_and_no_cell_carries_it() {
+    let mut view = railed(true, true);
+    let painted = frame::painted(&mut view, 120, 40);
+    let rail = rail_band(&painted);
+    let face = face::over_rail(rail.width - 1, &carried(true)).expect("the face a rail holds");
+    let area = face_area(&painted).expect("the face the rail holds is placed");
 
     assert_eq!(
-        pictured_rows(&first).len(),
-        usize::from(measured.rows()),
-        "the placement covers the rows of the footprint it was measured into, {} of them",
-        measured.rows()
+        (usize::from(area.width), usize::from(area.height)),
+        (usize::from(face.cols()), usize::from(face.rows())),
+        "the placement covers the footprint the face was measured into, {} by {}",
+        face.cols(),
+        face.rows()
     );
     assert_eq!(
-        transmission_headers(&first),
-        1,
-        "and the terminal is told about it once, from the first cell of the block"
-    );
-    assert_eq!(
-        transmission_headers(&again),
+        transmission_headers(painted.cells()),
         0,
-        "a repaint writes the placeholders of what the terminal already holds"
+        "and no cell of the frame carries a picture of it: the face speaks for itself"
     );
     assert_eq!(
-        pictures.rasterises("face.png"),
-        1,
-        "the face is made into pixels once for the size it was measured into"
+        view.capabilities().pictures().rasterises("face.png"),
+        0,
+        "so the cache of the frame's pictures never makes it into pixels at all"
     );
 }
 
-fn carried_face() -> (picture::Picture, Rect) {
-    let measured = face::measure(Ceiling::new(40, 12), &carried(true))
-        .expect("the face is measured with no workspace and no file on disk");
+fn a_picture_in_the_workspace() -> (tempfile::TempDir, picture::Picture, Rect) {
+    let (root, workspace) = workspace(400, 200);
+    let measured = picture::measure("shot.png", Ceiling::across(80), &surface(&workspace))
+        .expect("a picture the workspace holds");
     let block = Rect {
         x: 0,
         y: 0,
         width: measured.cols(),
         height: measured.rows(),
     };
-    (measured, block)
+    (root, measured, block)
 }
 
 #[test]
 fn a_cache_moved_to_another_cell_makes_the_picture_again_and_sends_it_again() {
     let moved_to = CellSize::new(20, 40);
-    let (measured, block) = carried_face();
+    let (_root, measured, block) = a_picture_in_the_workspace();
     let mut pictures = Pictures::kitty(cell());
     let mut first = Buffer::empty(Rect::new(0, 0, 60, 30));
     pictures.place(&measured, cell(), block, &mut first);
@@ -756,7 +806,7 @@ fn a_cache_moved_to_another_cell_makes_the_picture_again_and_sends_it_again() {
         "the cache is measured at the cell the window moved to"
     );
     assert_eq!(
-        moved.rasterises("face.png"),
+        moved.rasterises("shot.png"),
         2,
         "the picture is made into pixels at the new cell, over the raster already counted"
     );
@@ -769,7 +819,7 @@ fn a_cache_moved_to_another_cell_makes_the_picture_again_and_sends_it_again() {
 
 #[test]
 fn a_cache_moved_to_the_cell_it_already_is_makes_nothing_again_and_sends_nothing() {
-    let (measured, block) = carried_face();
+    let (_root, measured, block) = a_picture_in_the_workspace();
     let mut pictures = Pictures::kitty(cell());
     let mut first = Buffer::empty(Rect::new(0, 0, 60, 30));
     pictures.place(&measured, cell(), block, &mut first);
@@ -784,7 +834,7 @@ fn a_cache_moved_to_the_cell_it_already_is_makes_nothing_again_and_sends_nothing
         "a cell that did not move writes the placeholders of what the terminal holds"
     );
     assert_eq!(
-        kept.rasterises("face.png"),
+        kept.rasterises("shot.png"),
         1,
         "and makes no second raster of a picture already made at this cell"
     );
@@ -1199,14 +1249,14 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
         let face = face::over_rail(rail.width - 1, &carried(true)).expect("the face a rail holds");
 
         assert_eq!(
-            pictured_rows(painted.cells()),
+            face_rows(&painted),
             (rail.y..rail.y + face.rows()).collect::<Vec<u16>>(),
             "the face is drawn in the {cols}-column frame's top rows, {} of them, from the rail's first \
              row",
             face.rows()
         );
         for y in rail.y..rail.y + face.rows() {
-            let columns = pictured_cols(painted.cells(), y);
+            let columns = face_cols(&painted, y);
             assert_eq!(
                 (columns.first().copied(), columns.len()),
                 (
@@ -1223,14 +1273,16 @@ fn the_face_is_placed_over_the_top_rows_of_the_rail_above_the_first_block() {
                 rail_row(painted.cells(), rail, y)
             );
         }
-
-        for y in rail.y + face.rows()..rail.bottom() {
-            assert!(
-                pictured_cols(painted.cells(), y).is_empty(),
-                "row {y} of the rail stands under the face and holds a cell of it: {:?}",
-                pictured_cols(painted.cells(), y)
-            );
-        }
+        assert_eq!(
+            face_area(&painted),
+            Some(Rect {
+                x: rail.x + 1 + (rail.width - 1 - face.cols()) / 2,
+                y: rail.y,
+                width: face.cols(),
+                height: face.rows(),
+            }),
+            "and the whole block it stands on is one placement, no cell of the rail outside it"
+        );
 
         let rule = rail.y + face.rows();
         assert_eq!(
@@ -1275,7 +1327,7 @@ fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
                 .filter(|row| !row.is_empty())
                 .collect()
         };
-        let under = u16::try_from(pictured_rows(with.cells()).len()).expect("the band's rows") + 1;
+        let under = u16::try_from(face_rows(&with).len()).expect("the band's rows") + 1;
 
         assert_eq!(
             stated(with.cells(), rail.y + under),
@@ -1307,7 +1359,7 @@ fn below_a_hundred_columns_no_face_is_drawn_and_the_strip_is_the_row_it_was() {
         let without = frame::painted(&mut bare, cols, 24);
 
         assert!(
-            pictured_rows(with.cells()).is_empty(),
+            face_area(&with).is_none(),
             "a {cols}-column frame draws one row of facts and no face: it has no band to reserve"
         );
         same_cells_outside_ground(
@@ -1329,8 +1381,8 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
         let placeless = frame::painted(&mut placeless, cols, 40);
 
         assert!(
-            pictured_rows(off.cells()).is_empty(),
-            "a frame the config turned the face off for is given no cell of it"
+            face_area(&off).is_none(),
+            "a frame the config turned the face off for is given no placement of it"
         );
         assert_eq!(
             rail_row(off.cells(), rail, rail.y).trim_end(),
@@ -1349,8 +1401,13 @@ fn a_frame_the_face_is_turned_off_for_is_the_frame_a_terminal_that_places_no_pic
         let back_on = frame::painted(&mut back_on, cols, 40);
         let face = face::over_rail(rail.width - 1, &carried(true)).expect("a face the rail holds");
         assert_eq!(
-            pictured_rows(back_on.cells()).len(),
-            usize::from(face.rows()),
+            face_area(&back_on),
+            Some(Rect {
+                x: rail.x + 1 + (rail.width - 1 - face.cols()) / 2,
+                y: rail.y,
+                width: face.cols(),
+                height: face.rows(),
+            }),
             "a frame the setting is turned back on for draws the face again, over the rows it \
              reserved before"
         );
@@ -1367,7 +1424,7 @@ fn the_rail_beside_the_splash_screen_loses_no_fact_to_the_face_it_carries() {
     let face = face::over_rail(rail.width - 1, &carried(true)).expect("the face a rail holds");
 
     let pictured_in_rail = |y: u16| -> Vec<u16> {
-        pictured_cols(with.cells(), y)
+        face_cols(&with, y)
             .into_iter()
             .filter(|x| (rail.x..rail.right()).contains(x))
             .collect()
@@ -1466,16 +1523,13 @@ fn an_eighty_column_splash_screen_holds_no_face_and_neither_does_a_runs_frame() 
     let run = frame::painted(&mut live, 80, 24);
 
     assert!(
-        pictured_rows(splash.cells()).is_empty(),
-        "80 columns leave no rail beside the splash screen, and the frame carries no other face: \
-         {:?}",
-        pictured_rows(splash.cells())
+        face_area(&splash).is_none(),
+        "80 columns leave no rail beside the splash screen, and the frame asks for no other face"
     );
     assert!(
-        pictured_rows(run.cells()).is_empty(),
+        face_area(&run).is_none(),
         "and a conversation's 80-column frame is the strip it was drawn as, with no face on it \
-         either: {:?}",
-        pictured_rows(run.cells())
+         either"
     );
 }
 
@@ -1487,8 +1541,8 @@ fn a_terminal_that_places_no_picture_draws_the_facts_from_the_rails_first_row() 
         let rail = rail_band(&painted);
 
         assert!(
-            pictured_rows(painted.cells()).is_empty(),
-            "a terminal that places no picture is given no cell of the face"
+            face_area(&painted).is_none(),
+            "a terminal that places no picture is given no placement of the face"
         );
         assert_eq!(
             rail_row(painted.cells(), rail, rail.y).trim_end(),
@@ -1555,9 +1609,16 @@ fn the_placement_covers_the_band_the_ledger_reserved_for_it_and_no_cell_outside_
             .picture
             .expect("the cells the rail reserved for the face");
 
+        let placement = face_area(&painted).expect("the face the rail holds is placed");
+        assert_eq!(
+            placement, reserved,
+            "the {cols}-column frame's placement is the band the ledger reserved for the face, \
+             and no cell of the rail outside it"
+        );
         for y in rail.y..rail.bottom() {
             for x in rail.x..rail.right() {
-                let covered = pictured_cols(painted.cells(), y).contains(&x);
+                let covered = (placement.y..placement.bottom()).contains(&y)
+                    && (placement.x..placement.right()).contains(&x);
                 assert_eq!(
                     covered,
                     reserved.contains(Position::new(x, y)),

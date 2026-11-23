@@ -7,11 +7,13 @@ use rustix::termios::{LocalModes, Winsize};
 
 use sindri::capability::{Answers, Asked, Capabilities, Question};
 use sindri::composer::Key;
+use sindri::face::{self, Face, Motion};
 use sindri::facts::Facts;
 use sindri::ink::{Ink, Look};
 use sindri::link::{Link, Links};
 use sindri::palette::Palette;
 use sindri::pen::{self, Clip};
+use sindri::pulse::Turning;
 use sindri::size::{SCALE, Sized};
 use sindri::view::Transcript;
 
@@ -1123,6 +1125,373 @@ fn transcript_shade() -> Shade {
         &Palette::TRUECOLOR,
     )
     .expect("a band to shade")
+}
+
+/// The face the frame asks for, made the way the frame makes one: the picture the binary carries,
+/// measured into a footprint, over the cells of that footprint.
+fn a_face(motion: Motion) -> Face {
+    let cell = CellSize::NOMINAL;
+    let picture = sindri::face::measure(
+        sindri::graphics::Ceiling::new(40, 12),
+        &sindri::picture::Surface::of(None, cell, true, false),
+    )
+    .expect("the face travels in the binary");
+    let area = Rect::new(4, 2, picture.cols(), picture.rows());
+    Face::new(picture, area, cell, motion)
+}
+
+fn pixels(face: &Face) -> image::RgbaImage {
+    face.picture()
+        .rasterise(face.cell())
+        .expect("the face travels in the binary, so it decodes")
+}
+
+/// The rectangle an `a=f` head names, read as left, top, width and height.
+fn rectangle(head: &str) -> (u32, u32, u32, u32) {
+    let named = |key: &str| -> u32 {
+        let (_, tail) = head
+            .split_once(&format!("{key}="))
+            .unwrap_or_else(|| panic!("{head:?} names no {key}"));
+        tail.split(',')
+            .next()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_else(|| panic!("{head:?} names a {key} that is no number"))
+    };
+    (named("x"), named("y"), named("s"), named("v"))
+}
+
+fn differs(root: &image::RgbaImage, frame: &image::RgbaImage, x: u32, y: u32) -> bool {
+    root.get_pixel(x, y) != frame.get_pixel(x, y)
+}
+
+fn heads(drawn: &str, opening: &str) -> Vec<String> {
+    drawn
+        .match_indices("\x1b_G")
+        .filter_map(|(at, _)| {
+            let rest = &drawn[at + "\x1b_G".len()..];
+            let end = rest
+                .find(';')
+                .into_iter()
+                .chain(rest.find("\x1b\\"))
+                .min()?;
+            Some(rest[..end].to_owned())
+        })
+        .filter(|head| head.starts_with(opening))
+        .map(|head| match head.rsplit_once(",m=") {
+            Some((head, _)) => head.to_owned(),
+            None => head,
+        })
+        .collect()
+}
+
+#[test]
+fn the_face_is_a_picture_of_its_own_and_a_repaint_transmits_nothing_of_it() {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    let face = a_face(Motion::Turning(Some(Turning::FLIGHT)));
+    backend.face(Some(&face)).unwrap();
+    let first = wire.drawn();
+    let kept = face::frames(&pixels(&face));
+
+    assert_eq!(
+        first.matches("\x1b_Ga=T,f=100,i=337").count(),
+        1,
+        "the face's root frame is one image under an identity of its own: {first:?}"
+    );
+    assert_eq!(
+        heads(&first, "a=f,").len(),
+        kept.len() - 1,
+        "and every frame past the root is sent as frame data under it"
+    );
+    let sent = first.len();
+    backend.face(Some(&face)).unwrap();
+    drop(backend);
+    assert_eq!(
+        wire.drawn().len(),
+        sent,
+        "a repaint of the same face transmits no image data at all"
+    );
+}
+
+#[test]
+fn every_frame_past_the_root_is_composed_against_it_and_carries_only_the_pixels_that_differ() {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    let face = a_face(Motion::Turning(Some(Turning::FLIGHT)));
+    backend.face(Some(&face)).unwrap();
+    drop(backend);
+    let drawn = wire.drawn();
+    let root = pixels(&face);
+    let (width, height) = root.dimensions();
+    let sent = heads(&drawn, "a=f,");
+
+    assert_eq!(
+        sent.len(),
+        face::frames(&root).len() - 1,
+        "one frame's data travels for each frame past the root"
+    );
+    for (at, head) in sent.iter().enumerate() {
+        let frame = &face::frames(&root)[at + 1];
+        let (left, top, across, down) = rectangle(head);
+        let number = at + 2;
+        let inside =
+            |x: u32, y: u32| (left..left + across).contains(&x) && (top..top + down).contains(&y);
+
+        assert!(
+            head.contains("c=1") && head.contains("X=1"),
+            "frame {number} is composed against the root frame and replaces the rectangle it \
+             names: {head:?}"
+        );
+        assert!(
+            left + across <= width && top + down <= height,
+            "frame {number} stands inside the root's {width} by {height} pixels: {head:?}"
+        );
+        for y in 0..height {
+            for x in 0..width {
+                assert!(
+                    !differs(&root, frame, x, y) || inside(x, y),
+                    "frame {number} travels every pixel it differs from the root in, and ({x}, \
+                     {y}) differs outside the rectangle {head:?}"
+                );
+            }
+        }
+        let (right, bottom) = (left + across - 1, top + down - 1);
+        let touched = (0..across).any(|step| differs(&root, frame, left + step, top))
+            && (0..across).any(|step| differs(&root, frame, left + step, bottom))
+            && (0..down).any(|step| differs(&root, frame, left, top + step))
+            && (0..down).any(|step| differs(&root, frame, right, top + step));
+        assert!(
+            touched,
+            "and the rectangle is the tightest one there is: every side of it holds a pixel that \
+             differs from the root, so {head:?} carries nothing the root does not"
+        );
+    }
+}
+
+fn handed_face(motions: &[Motion]) -> String {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    for motion in motions {
+        let face = a_face(*motion);
+        backend.face(Some(&face)).unwrap();
+    }
+    drop(backend);
+    wire.drawn()
+}
+
+#[test]
+fn a_run_in_flight_quickens_the_loop_and_a_settled_run_stops_it() {
+    let drawn = handed_face(&[Motion::Turning(Some(Turning::FLIGHT))]);
+    let gaps = heads(&drawn, "a=a,i=337,r=").len();
+    assert!(gaps > 0, "a live run's face is left turning: {drawn:?}");
+    assert_eq!(
+        drawn
+            .matches(&format!("z={}", Turning::FLIGHT.gap_ms()))
+            .count(),
+        gaps,
+        "every frame of the loop is told the quickened gap: {drawn:?}"
+    );
+    assert_eq!(
+        heads(&drawn, "a=a,i=337,s="),
+        ["a=a,i=337,s=3,v=1,q=2"],
+        "and the terminal runs it for as long as the run does, and no number of cycles"
+    );
+
+    let settled = handed_face(&[
+        Motion::Turning(Some(Turning::FLIGHT)),
+        Motion::Turning(None),
+    ]);
+    let stopped = settled.match_indices("a=a,i=337,s=1,c=1").count();
+    assert_eq!(
+        stopped, 1,
+        "a run that settled stops the loop and holds the root frame: {settled:?}"
+    );
+    let stop = settled.find("a=a,i=337,s=1,c=1").expect("the stop");
+    assert!(
+        !settled[stop..].contains("z="),
+        "and the frame it holds is told no gap at all: {settled:?}"
+    );
+    assert_eq!(
+        settled.matches("\x1b_Ga=T").count(),
+        1,
+        "with nothing sent again: the frames are the terminal's"
+    );
+}
+
+#[test]
+fn an_error_flashes_twice_and_is_left_standing() {
+    let drawn = handed_face(&[Motion::Turning(Some(Turning::FLASH))]);
+
+    assert_eq!(
+        heads(&drawn, "a=a,i=337,s="),
+        ["a=a,i=337,s=3,v=2,q=2"],
+        "a failed run's face turns two cycles of the breath and then holds: {drawn:?}"
+    );
+    assert!(
+        drawn.contains(&format!("z={}", Turning::FLASH.gap_ms())),
+        "at the gap the flash is drawn in: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_terminal_that_keeps_no_frames_is_handed_the_still_face_and_no_animation_sequence() {
+    let drawn = handed_face(&[Motion::Still]);
+
+    assert!(
+        drawn.contains("\x1b_Ga=T,f=100,i=337"),
+        "the picture the binary carries is the face: {drawn:?}"
+    );
+    assert!(
+        !drawn.contains("\x1b_Ga=f,"),
+        "no frame is sent past it: {drawn:?}"
+    );
+    assert!(
+        !drawn.contains("\x1b_Ga=a"),
+        "and no animation sequence of any kind: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_face_that_moved_is_placed_again_and_transmits_no_image() {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    let face = a_face(Motion::Turning(Some(Turning::FLIGHT)));
+    backend.face(Some(&face)).unwrap();
+    let moved = Face::new(
+        face.picture().clone(),
+        Rect {
+            y: face.area().y + 3,
+            ..face.area()
+        },
+        face.cell(),
+        face.motion(),
+    );
+    let sent = wire.drawn().len();
+    backend.face(Some(&moved)).unwrap();
+    drop(backend);
+    let drawn = wire.drawn();
+
+    assert_eq!(
+        drawn[sent..].matches("\x1b_Ga=p,i=337").count(),
+        1,
+        "the image the terminal holds is placed again where the face stands now: {:?}",
+        &drawn[sent..]
+    );
+    assert_eq!(
+        drawn.matches("\x1b_Ga=T").count(),
+        1,
+        "and no pixel of it travels a second time: {drawn:?}"
+    );
+    assert!(
+        drawn[sent..].contains(&format!(
+            "\x1b[{};{}H",
+            moved.area().y + 1,
+            moved.area().x + 1
+        )),
+        "the placement stands in the cell the face moved to: {:?}",
+        &drawn[sent..]
+    );
+}
+
+#[test]
+fn a_screen_cleared_for_a_resize_leaves_no_placement_of_the_face_it_drew_before() {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    let face = a_face(Motion::Turning(Some(Turning::FLIGHT)));
+    backend.face(Some(&face)).unwrap();
+    let drawn = wire.drawn().len();
+    backend.clear().unwrap();
+    let resized = Face::new(
+        face.picture().clone(),
+        Rect::new(2, 1, face.area().width, face.area().height),
+        face.cell(),
+        face.motion(),
+    );
+    backend.face(Some(&resized)).unwrap();
+    drop(backend);
+    let whole = wire.drawn();
+    let swept = &whole[drawn..];
+
+    assert!(
+        swept.contains("\x1b_Ga=d,d=i,i=337"),
+        "a screen cleared for a resize takes the face's image away, and the placement with it: \
+         {swept:?}"
+    );
+    assert_eq!(
+        swept.matches("\x1b_Ga=T,f=100,i=337").count(),
+        1,
+        "and the frame that follows draws the face again: {swept:?}"
+    );
+    assert!(
+        swept.contains(&format!(
+            "\x1b[{};{}H",
+            resized.area().y + 1,
+            resized.area().x + 1
+        )),
+        "at the cells the resized rail gives it: {swept:?}"
+    );
+}
+
+#[test]
+fn a_face_the_frame_no_longer_asks_for_is_given_back() {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    backend
+        .face(Some(&a_face(Motion::Turning(Some(Turning::FLIGHT)))))
+        .unwrap();
+    backend.face(None).unwrap();
+    backend.face(None).unwrap();
+    drop(backend);
+    let drawn = wire.drawn();
+
+    assert!(
+        drawn.contains("\x1b_Ga=d,d=i,i=337"),
+        "a frame that asks for no face leaves the terminal with none of it: {drawn:?}"
+    );
+    assert_eq!(
+        drawn.matches("\x1b_Ga=d,d=i,i=337").count(),
+        1,
+        "and an image already given back is not given back twice: {drawn:?}"
+    );
+}
+
+#[test]
+fn the_end_of_a_launch_gives_the_face_back_with_every_other_image() {
+    let _one_screen = lock(&ONE_SCREEN);
+    let pty = Pty::open();
+    pty.resize(80, 24, 800, 480);
+    let terminal =
+        Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to draw on");
+    let screen = Screen::take(&terminal, false, false).expect("the screen is taken");
+
+    let caught = panic::catch_unwind(|| panic!("a launch that ends with the screen still taken"));
+    assert!(caught.is_err(), "the panic really was raised");
+    let drawn = pty.drawn();
+    drop(screen);
+
+    for id in PlaneId::ALL {
+        assert!(
+            drawn.contains(String::from_utf8_lossy(&plane::delete(id)).as_ref()),
+            "every plane's image is given back with the screen: {drawn:?}"
+        );
+    }
+    assert!(
+        drawn.contains(String::from_utf8_lossy(&face::delete()).as_ref()),
+        "and the face's image is given back with them: {drawn:?}"
+    );
+
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    backend
+        .face(Some(&a_face(Motion::Turning(Some(Turning::FLIGHT)))))
+        .unwrap();
+    backend.clear().unwrap();
+    drop(backend);
+    assert!(
+        wire.drawn().contains("\x1b_Ga=d,d=i,i=337"),
+        "a cleared screen holds no placement of the face either: {:?}",
+        wire.drawn()
+    );
 }
 
 #[test]

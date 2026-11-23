@@ -10,7 +10,6 @@ use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
 use sindri::ledger::Boot;
 use sindri::palette::Palette;
-use sindri::pictures::PLACEHOLDER;
 use sindri_core::first_run::FirstRun;
 use sindri_core::policy::Enforcement;
 use sindri_core::records::Entry;
@@ -344,15 +343,7 @@ fn painted_and_told(view: &mut View) -> (ratatui::buffer::Buffer, Painted) {
 }
 
 fn draws_the_face(view: &mut View) -> bool {
-    let frame = painted(view);
-    let area = frame.area;
-    (area.y..area.bottom()).any(|y| {
-        (area.x..area.right()).any(|x| {
-            frame
-                .cell((x, y))
-                .is_some_and(|cell| cell.symbol().contains(PLACEHOLDER))
-        })
-    })
+    painted_and_told(view).1.face().is_some()
 }
 
 #[test]
@@ -409,37 +400,6 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     );
 }
 
-#[test]
-fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again() {
-    let (_home, environment) = config_home("face = true\n");
-    let stage = Stage::open();
-    let config = stage.config(&environment);
-    let mut view = railed(&config);
-    view.open_settings(&config);
-    walk_to(&mut view, "face");
-    view.key(Key::Char(' '));
-    let mut live = stage.launch(view, config, &environment);
-
-    assert_eq!(
-        live.rasterises("face.png"),
-        0,
-        "no frame has drawn the face yet, so none was made into pixels"
-    );
-    assert!(live.draws_the_face(), "the launch's first frame draws it");
-
-    let ended = live
-        .answer(Event::Key(Key::Enter))
-        .expect("the write is made");
-
-    assert!(ended.is_none(), "a write is not the key that quits");
-    assert!(!live.draws_the_face(), "the face is turned off");
-    assert_eq!(
-        live.rasterises("face.png"),
-        1,
-        "and the rail's one face is made into pixels once: nothing was transmitted twice"
-    );
-}
-
 impl Loop<'_> {
     fn mode(&self) -> sindri::keys::Mode {
         self.view.mode()
@@ -467,10 +427,6 @@ impl Loop<'_> {
 
     fn draws_the_face(&mut self) -> bool {
         draws_the_face(&mut self.view)
-    }
-
-    fn rasterises(&self, source: &str) -> usize {
-        self.view.capabilities().pictures().rasterises(source)
     }
 
     fn lit(&mut self, palette: &Palette) -> Vec<(u16, u16)> {

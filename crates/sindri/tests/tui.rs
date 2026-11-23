@@ -88,6 +88,15 @@ const ASK_CELL: &[u8] = b"\x1b[16t";
 
 const ASK_KEYS: &[u8] = b"\x1b[>1u";
 
+/// The two features asked of a terminal that speaks the graphics protocol: whether it keeps a
+/// picture's frames and overwrites a rectangle of them, and whether it turns the loop.
+const ASK_FRAMES: &[u8] = b"\x1b_Ga=q,i=337,e=f,c=1,X=1\x1b\\";
+
+/// What such a terminal says back: every key it was asked about, which is the only answer the face
+/// animates on.
+const ANSWERS_FRAMES: &[u8] = b"\x1b_Gi=337,e=f,c=1,X=1;OK\x1b\\";
+const ANSWERS_TURNING: &[u8] = b"\x1b_Gi=337,e=a;OK\x1b\\";
+
 /// `CSI < u` pops that push, so the shell gets back the terminal it lent.
 const GIVE_BACK_KEYS: &[u8] = b"\x1b[<u";
 
@@ -386,6 +395,17 @@ struct Drawn {
 
 impl Drawn {
     fn watch(master: File) -> Drawn {
+        Drawn::watching(master, false)
+    }
+
+    /// A watcher that answers the questions a launch puts to its terminal, so a launch whose
+    /// terminal keeps the face's frames is drawn animating. Answering is opt-in: a test that wants
+    /// a terminal which says nothing keeps `watch`.
+    fn answering(master: File) -> Drawn {
+        Drawn::watching(master, true)
+    }
+
+    fn watching(master: File, answers: bool) -> Drawn {
         let reads = Arc::new(Mutex::new(Vec::new()));
         let landing = Arc::clone(&reads);
         thread::spawn(move || {
@@ -394,10 +414,13 @@ impl Drawn {
             loop {
                 match master.read(&mut buffer) {
                     Ok(0) | Err(_) => return,
-                    Ok(count) => landing
-                        .lock()
-                        .expect("the frame")
-                        .push(buffer[..count].to_vec()),
+                    Ok(count) => {
+                        let heard = &buffer[..count];
+                        if answers {
+                            said_back(&master, heard);
+                        }
+                        landing.lock().expect("the frame").push(heard.to_vec());
+                    }
                 }
             }
         });
@@ -452,6 +475,23 @@ impl Drawn {
     }
 }
 
+fn said_back(master: &File, asked: &[u8]) {
+    let mut said = Vec::new();
+    if contains(asked, ASK_CELL) {
+        said.extend_from_slice(b"\x1b[6;20;10t");
+    }
+    if contains(asked, ASK_FRAMES) {
+        said.extend_from_slice(ANSWERS_FRAMES);
+        said.extend_from_slice(ANSWERS_TURNING);
+    }
+    if said.is_empty() {
+        return;
+    }
+    let mut master = master;
+    let _ = master.write_all(&said);
+    let _ = master.flush();
+}
+
 struct Session {
     child: Child,
 }
@@ -480,15 +520,28 @@ impl Session {
     }
 
     fn named(ground: &Ground, wire: &Wire, term: &str) -> (Session, Pty, Drawn) {
+        Session::named_watching(ground, wire, term, false)
+    }
+
+    fn named_watching(
+        ground: &Ground,
+        wire: &Wire,
+        term: &str,
+        answers: bool,
+    ) -> (Session, Pty, Drawn) {
         let mut command = ground.command();
         command
             .arg("--yolo-unsafe")
             .env("SINDRI_BASE_URL", wire.base_url())
             .env("TERM", term);
-        Session::starting(command)
+        Session::spawning(command, answers)
     }
 
-    fn starting(mut command: Command) -> (Session, Pty, Drawn) {
+    fn starting(command: Command) -> (Session, Pty, Drawn) {
+        Session::spawning(command, false)
+    }
+
+    fn spawning(mut command: Command, answers: bool) -> (Session, Pty, Drawn) {
         let pty = Pty::open();
         // A child sharing this session would ask a controlling terminal for a size and paint a
         // frame the pty never heard of.
@@ -504,11 +557,14 @@ impl Session {
             .stderr(Stdio::from(pty.child_end()))
             .spawn()
             .expect("the binary should start");
-        let drawn = Drawn::watch(
-            pty.master
-                .try_clone()
-                .expect("a second handle on the master"),
-        );
+        let watching = pty
+            .master
+            .try_clone()
+            .expect("a second handle on the master");
+        let drawn = match answers {
+            true => Drawn::answering(watching),
+            false => Drawn::watch(watching),
+        };
         (Session { child }, pty, drawn)
     }
 
@@ -729,6 +785,60 @@ fn a_terminal_nobody_can_vouch_for_is_handed_no_pointer_at_all() {
         !contains(&bytes, TAKE_POINTER) && !contains(&bytes, GIVE_UP_POINTER),
         "a terminal nobody can vouch for is handed no pointer sequence, and given none back: {:?}",
         text(&bytes)
+    );
+}
+
+#[test]
+fn a_launch_blocked_on_the_wire_leaves_the_face_turning_and_a_settled_run_stops_it() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::named_watching(&ground, &wire, "xterm-kitty", true);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(ASK_FRAMES),
+        "the terminal is asked whether it keeps the face's frames and turns them: {:?}",
+        drawn.text()
+    );
+
+    assert!(
+        drawn.wait_for(b"_Ga=a,i=337,r=1,z=1000"),
+        "a launch with no run in flight leaves the face breathing at the slow gap: {:?}",
+        drawn.text()
+    );
+
+    ask(&mut pty, &drawn, &wire);
+    assert!(
+        drawn.wait_for(b"_Ga=a,i=337,r=1,z=250"),
+        "a run in flight leaves the face turning at the quickened gap: {:?}",
+        drawn.text()
+    );
+    let live = drawn.text();
+    assert_eq!(
+        live.matches("_Ga=T,f=100,i=337").count(),
+        1,
+        "and the face's picture is transmitted once, however many frames the run paints: {live:?}"
+    );
+
+    wire.release();
+    answered(&drawn);
+    assert!(
+        drawn.wait_for(b"_Ga=a,i=337,s=1,c=1"),
+        "a settled run stops the loop and holds the root frame: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+    let all = drawn.text();
+    assert_eq!(
+        all.matches("_Ga=T,f=100,i=337").count(),
+        1,
+        "and the whole launch sent the picture once: {all:?}"
     );
 }
 
