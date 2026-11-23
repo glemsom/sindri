@@ -112,10 +112,11 @@ impl Sized {
 
     pub fn spelling(&self) -> String {
         let mut spelling = String::with_capacity(self.words.len() * usize::from(self.scale));
-        for glyph in self.words.chars() {
-            spelling.push(glyph);
+        use unicode_segmentation::UnicodeSegmentation;
+        for glyph in self.words.graphemes(true) {
+            spelling.push_str(glyph);
             spelling.push_str(&pen::blank(
-                pen::cell(glyph).saturating_mul(self.scale.saturating_sub(1)),
+                pen::cells(glyph).saturating_mul(self.scale.saturating_sub(1)),
             ));
         }
         spelling

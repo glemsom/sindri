@@ -1308,3 +1308,71 @@ fn a_state_that_cannot_fit_keeps_its_words_and_the_strip_keeps_one_size() {
         }
     }
 }
+
+#[test]
+fn the_state_headline_sizes_only_the_word_and_keeps_its_stop_mark() {
+    let rail = ledger::Facts {
+        state: Some(sindri_core::run::State::Stopped(
+            sindri_core::run::Stop::Cancelled,
+        )),
+        ..Default::default()
+    };
+    let mut view = View::of(
+        caps::faced(false),
+        Facts::default().asked().railed(rail),
+        Transcript::none(),
+    );
+    let frame = frame::painted(&mut view, 200, 40);
+    let headline = frame
+        .told()
+        .sizes()
+        .laid()
+        .iter()
+        .find(|laid| laid.run().scale() == 2)
+        .expect("the state has room for a headline");
+    assert_eq!(headline.run().words(), "cancelled");
+    let (row, column) = frame.drawn_at("✗");
+    assert_eq!(row, headline.row());
+    assert!(column < headline.left());
+    assert!(frame.told().sizes().covers(row, column).is_none());
+}
+
+#[test]
+fn a_width_only_terminal_gets_the_unsized_rails_cells() {
+    use sindri::capability::{Asked, Question};
+    struct WidthOnly;
+    impl Asked for WidthOnly {
+        fn winsize(&self) -> Option<sindri::graphics::CellSize> {
+            Some(sindri::graphics::CellSize::NOMINAL)
+        }
+        fn ask(&self, question: Question) -> Option<Vec<u8>> {
+            match question {
+                Question::Sizing => Some(b"\x1b[1;1R\x1b[1;2R".to_vec()),
+                Question::Cell => None,
+            }
+        }
+    }
+    let terms = std::collections::BTreeMap::from([
+        ("TERM".into(), "xterm-kitty".into()),
+        ("COLORTERM".into(), "truecolor".into()),
+    ]);
+    let partial = Capabilities::probed(&terms, &WidthOnly, false).0;
+    let plain = caps::pictured().faced(false);
+    let rail = ledger::Facts {
+        state: Some(sindri_core::run::State::Running),
+        model: Some("界-model".into()),
+        ..Default::default()
+    };
+    let paint = |caps| {
+        let mut view = View::of(
+            caps,
+            Facts::default().asked().railed(rail.clone()),
+            Transcript::none(),
+        );
+        frame::painted(&mut view, 160, 40)
+    };
+    let partial = paint(partial);
+    let plain = paint(plain);
+    assert!(partial.told().sizes().laid().is_empty());
+    assert_eq!(partial.cells(), plain.cells());
+}

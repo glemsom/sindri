@@ -1526,7 +1526,7 @@ fn a_fractional_wide_run_names_its_cells_and_alignment() {
 fn a_sized_run_outside_its_band_is_dropped_whole_and_keeps_the_row() {
     let area = Rect::new(0, 0, 12, 3);
     let band = Rect::new(2, 1, 6, 2);
-    for (row, left) in [(1, 4), (0, 2), (1, 1)] {
+    for (row, left) in [(1, 4), (0, 2), (1, 1), (2, 2)] {
         let mut buffer = Buffer::empty(area);
         pen::run(&mut buffer, 2, 1, "words", Ink::Plain, &Palette::TRUECOLOR);
         let before = buffer.clone();
@@ -1539,5 +1539,34 @@ fn a_sized_run_outside_its_band_is_dropped_whole_and_keeps_the_row() {
         sizes.settle(band, &mut buffer, &Palette::TRUECOLOR);
         assert!(sizes.laid().is_empty(), "the entire run must fit");
         assert_eq!(buffer, before, "the row keeps its original words");
+        let drawn = spelled(buffer, sizes);
+        assert!(
+            !drawn.contains("\x1b]66;"),
+            "a dropped run emits no sizing: {drawn:?}"
+        );
+        assert!(
+            drawn.contains("words"),
+            "the original row is emitted: {drawn:?}"
+        );
     }
+}
+
+#[test]
+fn a_doubled_grapheme_run_keeps_its_words_and_the_adjacent_cell() {
+    let area = Rect::new(0, 0, 9, 2);
+    let mut buffer = Buffer::empty(area);
+    pen::run(&mut buffer, 8, 0, "!", Ink::Plain, &Palette::TRUECOLOR);
+    let mut sizes = Sizes::none();
+    sizes.lay(0, 0, &[Sized::new(0, 2, "👩‍💻界", Look::plain(Ink::Plain))]);
+    sizes.settle(area, &mut buffer, &Palette::TRUECOLOR);
+    assert_eq!(buffer[(8, 0)].symbol(), "!");
+    let words: String = (0..8).map(|x| buffer[(x, 0)].symbol()).collect();
+    assert!(
+        words.contains("界"),
+        "both graphemes remain in the reserved cells: {words:?}"
+    );
+    let drawn = spelled(buffer, sizes);
+    assert!(drawn.contains("\x1b]66;s=2:w=2;👩‍💻\x1b\\"), "{drawn:?}");
+    assert!(drawn.contains("\x1b]66;s=2:w=2;界\x1b\\"), "{drawn:?}");
+    assert!(drawn.contains('!'), "{drawn:?}");
 }

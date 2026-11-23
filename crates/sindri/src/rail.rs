@@ -135,8 +135,10 @@ fn sizes(
                     .is_some_and(|state| value.text().contains(state.word()))
                     && row.y() == 0
                 {
-                    let run = Sized::new(0, 2, value.text(), Look::plain(value.ink()));
-                    let left = band.facts.x + crate::rows::MARGIN + x;
+                    let word = facts.state.as_ref().unwrap().word();
+                    let prefix = value.text().strip_suffix(word).unwrap_or_default();
+                    let run = Sized::new(0, 2, word, Look::plain(value.ink()));
+                    let left = band.facts.x + crate::rows::MARGIN + x + pen::cells(prefix);
                     let y = band.facts.y + row.y();
                     let right = band.facts.right().saturating_sub(crate::rows::MARGIN);
                     if left.saturating_add(run.width()) <= right
