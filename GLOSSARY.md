@@ -420,8 +420,8 @@ from, and a press on no row of a card is no act — a pointer is never drawn int
 _Avoid_: Mouse, cursor (that one is the Caret), hover
 
 **Notch**:
-The wheel's turn, and how far it moves the **Transcript**: three rows, where a page key moves a band
-of them.
+The wheel's turn, and how far it moves the **Transcript**: a row a notch, and the half row it keeps
+over added to the notch that follows, where a page key moves a band of them.
 _Avoid_: Tick, detent, scroll unit
 
 **Caret**:

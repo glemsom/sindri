@@ -3123,7 +3123,7 @@ fn painted_and_told(view: &mut View, cols: u16, rows: u16) -> (Buffer, Painted) 
 }
 
 #[test]
-fn a_notch_of_the_wheel_moves_the_transcript_three_rows() {
+fn two_notches_of_the_wheel_move_the_transcript_three_rows() {
     let mut view = turns_taken(100);
     let (_, told) = painted_and_told(&mut view, 120, 40);
 
@@ -3134,14 +3134,32 @@ fn a_notch_of_the_wheel_moves_the_transcript_three_rows() {
     );
     assert_eq!(
         view.scroll(),
+        Scroll::Back(1),
+        "and it moves the transcript one row, the first of the three a pair moves"
+    );
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        view.pointer(&told, Pointer::Wheel(Notch::Up)),
+        Outcome::Edited,
+        "the next notch moves the half the one before it left over"
+    );
+    assert_eq!(
+        view.scroll(),
         Scroll::Back(3),
-        "and it moves it three rows, never the band the page keys move"
+        "so a pair of notches moves the three rows one notch moved alone"
     );
     let (_, told) = painted_and_told(&mut view, 120, 40);
     assert_eq!(
         view.pointer(&told, Pointer::Wheel(Notch::Down)),
         Outcome::Edited,
-        "one notch on brings it back"
+        "a notch down turns the frame back"
+    );
+    assert_eq!(view.scroll(), Scroll::Back(2), "by the row it moves first");
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        view.pointer(&told, Pointer::Wheel(Notch::Down)),
+        Outcome::Edited,
+        "and the notch on brings it back"
     );
     assert_eq!(
         view.scroll(),
@@ -3163,8 +3181,8 @@ fn a_notch_of_the_wheel_moves_the_transcript_and_never_the_draft() {
     );
     assert_eq!(
         view.scroll(),
-        Scroll::Back(3),
-        "and moves the transcript its three rows"
+        Scroll::Back(1),
+        "and moves the transcript the row the first notch of a pair moves"
     );
     assert_eq!(
         view.composer().text(),
@@ -3181,13 +3199,21 @@ fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
     assert_eq!(
         view.pointer(&told, Pointer::Wheel(Notch::Up)),
         Outcome::Edited,
-        "a transcript three rows taller than its band is a notch back"
+        "a transcript four rows taller than its band is a notch back"
     );
     assert_eq!(
         view.scroll(),
-        Scroll::Back(3),
-        "and the notch moves the three rows it moves, whole"
+        Scroll::Back(1),
+        "and the notch moves the row it moves first, whole"
     );
+
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(
+        view.pointer(&told, Pointer::Wheel(Notch::Up)),
+        Outcome::Edited,
+        "the notch on carries the half it kept back, so it moves two rows"
+    );
+    assert_eq!(view.scroll(), Scroll::Back(3), "three rows above the frame");
 
     let (_, told) = painted_and_told(&mut view, 120, 40);
     assert_eq!(
@@ -3220,7 +3246,7 @@ fn the_wheel_stops_at_the_first_row_and_at_the_tail() {
 }
 
 #[test]
-fn a_page_key_still_moves_a_whole_band_where_a_notch_moves_three_rows() {
+fn a_page_key_still_moves_a_whole_band_where_a_notch_moves_a_row_and_a_half() {
     let mut paged = turns_taken(100);
     painted(&mut paged, 120, 40);
 
@@ -3254,8 +3280,8 @@ fn a_page_key_still_moves_a_whole_band_where_a_notch_moves_three_rows() {
     );
     assert_eq!(
         notched.scroll(),
-        Scroll::Back(3),
-        "but three rows, not the band a page key moves"
+        Scroll::Back(1),
+        "but the row a notch moves first, not the band a page key moves"
     );
 }
 

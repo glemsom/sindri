@@ -314,6 +314,7 @@ pub struct View {
     rows: Rows,
     scroll: Scroll,
     landed: u32,
+    carried: u32,
     drawn: Drawn,
     planes: Planes,
     composer: Composer,
@@ -382,6 +383,7 @@ impl View {
             rows,
             scroll,
             landed: 0,
+            carried: 0,
             drawn: Drawn::none(),
             planes: Planes::default(),
             composer: Composer::new(),
@@ -993,11 +995,22 @@ impl View {
             Notch::Up => Key::PageUp,
             Notch::Down => Key::PageDown,
         };
-        match self.stack.act(key) {
-            Some(Act::Back) => self.travel(Page::Back, pointer::ROWS),
-            Some(Act::Forward) => self.travel(Page::Forward, pointer::ROWS),
-            _ => Outcome::Unchanged,
-        }
+        let way = match self.stack.act(key) {
+            Some(Act::Back) => Page::Back,
+            Some(Act::Forward) => Page::Forward,
+            _ => return Outcome::Unchanged,
+        };
+        let rows = self.halved();
+        self.travel(way, rows)
+    }
+
+    /// The whole rows this notch moves, out of `pointer::HALVES` and the half the notch before it
+    /// left over: the odd half is kept back, so a pair of notches moves three rows between them.
+    fn halved(&mut self) -> u32 {
+        self.carried += pointer::HALVES;
+        let rows = self.carried / 2;
+        self.carried %= 2;
+        rows
     }
 
     fn pressed(&mut self, painted: &Painted, at: Cell) -> Outcome {

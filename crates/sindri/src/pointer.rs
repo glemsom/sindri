@@ -14,7 +14,9 @@ pub enum Pointer {
     Press(Cell),
 }
 
-pub(crate) const ROWS: u32 = 3;
+/// How far one notch of the wheel turns the transcript, in halves of a row: a row and a half, kept
+/// as halves because the frame moves in whole rows and the odd half carries to the notch after it.
+pub(crate) const HALVES: u32 = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Notch {
