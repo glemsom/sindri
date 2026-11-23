@@ -1150,3 +1150,161 @@ fn a_cell_holding_two_glyphs_is_no_frame() {
 
     frame::holding(cells, palette).rows();
 }
+
+#[test]
+fn a_rich_rail_sets_its_labels_inside_their_existing_cells() {
+    let rail = ledger::Facts {
+        model: Some("a-model".into()),
+        ..Default::default()
+    };
+    let mut view = View::of(
+        caps::kitty(),
+        Facts::default().asked().railed(rail),
+        Transcript::none(),
+    );
+    let frame = frame::painted(&mut view, 160, 40);
+    assert!(
+        frame
+            .told()
+            .sizes()
+            .laid()
+            .iter()
+            .any(|laid| laid.run().words() == "model"),
+        "the rail label carries its sizing"
+    );
+}
+
+#[test]
+fn a_rich_rail_gives_the_state_two_rows_without_moving_the_model() {
+    let rail = ledger::Facts {
+        state: Some(sindri_core::run::State::Running),
+        model: Some("a-model".into()),
+        ..Default::default()
+    };
+    let mut rich = View::of(
+        caps::faced(false),
+        Facts::default().asked().railed(rail.clone()),
+        Transcript::none(),
+    );
+    let mut plain = View::of(
+        Capabilities::default(),
+        Facts::default().asked().railed(rail),
+        Transcript::none(),
+    );
+    let rich = frame::painted(&mut rich, 160, 40);
+    let plain = frame::painted(&mut plain, 160, 40);
+    assert!(
+        rich.told()
+            .sizes()
+            .laid()
+            .iter()
+            .any(|laid| laid.run().scale() == 2 && laid.run().words().contains("running"))
+    );
+    assert_eq!(rich.drawn_at("a-model"), plain.drawn_at("a-model"));
+}
+
+#[test]
+fn a_rich_rail_sets_the_spend_figure_and_its_unit_without_losing_facts() {
+    let rail = ledger::Facts {
+        spend: sindri_core::records::Usage {
+            input: Some(48_200),
+            output: Some(3_100),
+            total: Some(51_300),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut view = View::of(
+        caps::faced(false),
+        Facts::default().asked().railed(rail),
+        Transcript::none(),
+    );
+    let frame = frame::painted(&mut view, 160, 40);
+    let runs = frame.told().sizes().laid();
+    assert!(
+        runs.iter()
+            .any(|laid| laid.run().scale() == 2 && laid.run().words() == "48.2")
+    );
+    assert!(
+        runs.iter()
+            .any(|laid| laid.run().words() == "k" && laid.run().fraction() == Some((1, 4, 1, 0)))
+    );
+    frame.drawn_at("51.3k");
+    frame.drawn_at("3.1k");
+}
+
+#[test]
+fn rail_sizing_keeps_plain_prose_and_unsized_terminals_unchanged() {
+    let rail = ledger::Facts {
+        model: Some("界-model".into()),
+        state: Some(sindri_core::run::State::Running),
+        ..Default::default()
+    };
+    for (caps, sized) in [
+        (caps::faced(false), true),
+        (caps::pictured().faced(false), false),
+        (Capabilities::default(), false),
+    ] {
+        let mut view = View::of(
+            caps,
+            Facts::default().asked().railed(rail.clone()),
+            Transcript::of(answer("ordinary prose")),
+        );
+        let frame = frame::painted(&mut view, 160, 40);
+        let (row, column) = frame.drawn_at("ordinary prose");
+        assert!(frame.told().sizes().covers(row, column).is_none());
+        assert_eq!(!frame.told().sizes().laid().is_empty(), sized);
+        frame.drawn_at("-model");
+    }
+}
+
+#[test]
+fn a_sized_rail_and_splash_keep_deliberately_reserved_cells() {
+    let rail = ledger::Facts {
+        model: Some("a-model".into()),
+        state: Some(sindri_core::run::State::Running),
+        ..Default::default()
+    };
+    for (facts, name) in [
+        (Facts::default().asked(), "rail-sized-160x40"),
+        (Facts::default(), "splash-sized-160x40"),
+    ] {
+        let mut view = View::of(
+            caps::faced(false),
+            facts.railed(rail.clone()),
+            Transcript::none(),
+        );
+        let frame = frame::painted(&mut view, 160, 40);
+        frame.snapshot(name, name);
+    }
+}
+
+#[test]
+fn a_state_that_cannot_fit_keeps_its_words_and_the_strip_keeps_one_size() {
+    let rail = ledger::Facts {
+        state: Some(sindri_core::run::State::Stopped(
+            sindri_core::run::Stop::Cancelled,
+        )),
+        model: Some("a-model".into()),
+        ..Default::default()
+    };
+    for (width, height) in [(100, 40), (80, 24)] {
+        let mut view = View::of(
+            caps::faced(false),
+            Facts::default().asked().railed(rail.clone()),
+            Transcript::none(),
+        );
+        let frame = frame::painted(&mut view, width, height);
+        assert!(
+            !frame
+                .told()
+                .sizes()
+                .laid()
+                .iter()
+                .any(|laid| laid.run().scale() == 2)
+        );
+        if width == 80 {
+            assert!(frame.told().sizes().laid().is_empty());
+        }
+    }
+}

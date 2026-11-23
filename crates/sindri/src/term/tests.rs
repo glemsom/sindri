@@ -1502,3 +1502,42 @@ fn giving_the_screen_back_deletes_every_plane_before_the_shell_returns() {
         );
     }
 }
+
+#[test]
+fn a_fractional_wide_run_names_its_cells_and_alignment() {
+    let area = Rect::new(0, 0, 10, 1);
+    let run = Sized::new(0, 1, "界a", Look::plain(Ink::Dim)).fractional(3, 4, 2, 0);
+    let mut buffer = Buffer::empty(area);
+    let mut sizes = Sizes::none();
+    sizes.lay(0, 0, &[run]);
+    sizes.settle(area, &mut buffer, &Palette::TRUECOLOR);
+    let drawn = spelled(buffer, sizes);
+    assert!(
+        drawn.contains("\x1b]66;s=1:n=3:d=4:v=2:h=0:w=2;界\x1b\\"),
+        "{drawn:?}"
+    );
+    assert!(
+        drawn.contains("\x1b]66;s=1:n=3:d=4:v=2:h=0:w=1;a\x1b\\"),
+        "{drawn:?}"
+    );
+}
+
+#[test]
+fn a_sized_run_outside_its_band_is_dropped_whole_and_keeps_the_row() {
+    let area = Rect::new(0, 0, 12, 3);
+    let band = Rect::new(2, 1, 6, 2);
+    for (row, left) in [(1, 4), (0, 2), (1, 1)] {
+        let mut buffer = Buffer::empty(area);
+        pen::run(&mut buffer, 2, 1, "words", Ink::Plain, &Palette::TRUECOLOR);
+        let before = buffer.clone();
+        let mut sizes = Sizes::none();
+        sizes.lay(
+            row,
+            left,
+            &[Sized::new(0, 2, "wide", Look::plain(Ink::Plain))],
+        );
+        sizes.settle(band, &mut buffer, &Palette::TRUECOLOR);
+        assert!(sizes.laid().is_empty(), "the entire run must fit");
+        assert_eq!(buffer, before, "the row keeps its original words");
+    }
+}

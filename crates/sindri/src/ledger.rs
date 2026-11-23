@@ -349,6 +349,10 @@ impl Value {
         self
     }
 
+    pub(crate) fn ink(&self) -> Ink {
+        self.ink
+    }
+
     pub(crate) fn text(&self) -> &str {
         &self.text
     }

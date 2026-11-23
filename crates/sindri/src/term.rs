@@ -349,10 +349,12 @@ impl<W: Write> Backend<W> {
     ) -> io::Result<()> {
         let run = laid.run();
         let mut sequence = ink.clone();
-        sequence.set_symbol(&String::from_utf8_lossy(&osc::sized(
-            run.scale(),
-            run.words(),
-        )));
+        let bytes = if run.fraction().is_none() && run.words().is_ascii() {
+            osc::sized(run.scale(), run.words())
+        } else {
+            run.sequence()
+        };
+        sequence.set_symbol(&String::from_utf8_lossy(&bytes));
         let destination = match places {
             true => links.at(laid.row(), laid.left()).map(String::from),
             false => None,

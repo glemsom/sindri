@@ -39,7 +39,7 @@ fn paint(
         rail,
         RailBand::of(area),
         marker,
-        None,
+        (None, None),
         buffer,
         palette,
     );
@@ -161,7 +161,7 @@ fn a_ledger_stands_on_its_own_tone_on_every_row_it_claims() {
         Rail::Ledger,
         RailBand::of(area),
         None,
-        None,
+        (None, None),
         &mut buffer,
         &PALETTE,
     )
@@ -249,7 +249,7 @@ fn a_picture_over_the_rails_top_rows_is_drawn_on_the_rails_ground_and_no_fact_st
         Rail::Ledger,
         RailBand::of(area).with_picture(19, 11),
         None,
-        None,
+        (None, None),
         &mut buffer,
         &PALETTE,
     );
@@ -308,7 +308,7 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_in_its_fi
         Rail::Ledger,
         RailBand::of(rail),
         None,
-        Some(CellSize::NOMINAL),
+        (Some(CellSize::NOMINAL), None),
         &mut buffer,
         &PALETTE,
     )
@@ -349,7 +349,7 @@ fn a_ledger_stood_at_the_frames_edge_keeps_its_band_and_draws_its_seam_in_its_ow
         Rail::Ledger,
         RailBand::of(rail),
         None,
-        Some(CellSize::NOMINAL),
+        (Some(CellSize::NOMINAL), None),
         &mut buffer,
         &PALETTE,
     )
@@ -378,7 +378,7 @@ fn the_rails_plane_is_one_tone_in_every_pixel_it_covers() {
         Rail::Ledger,
         RailBand::of(rail),
         None,
-        Some(CellSize::NOMINAL),
+        (Some(CellSize::NOMINAL), None),
         &mut buffer,
         &PALETTE,
     )
@@ -416,7 +416,7 @@ fn a_ledger_handed_a_cell_lights_no_column_and_shadows_no_row_of_its_band() {
         Rail::Ledger,
         RailBand::of(rail),
         None,
-        Some(CellSize::NOMINAL),
+        (Some(CellSize::NOMINAL), None),
         &mut buffer,
         &PALETTE,
     )
@@ -449,7 +449,7 @@ fn a_strip_is_handed_a_plane_of_its_one_row_and_no_seam() {
         Rail::Strip,
         RailBand::of(rail),
         None,
-        Some(CellSize::NOMINAL),
+        (Some(CellSize::NOMINAL), None),
         &mut buffer,
         &PALETTE,
     )
@@ -496,7 +496,7 @@ fn a_rail_handed_a_cell_in_no_colour_draws_the_flat_band_it_drew_without_one() {
             shape,
             RailBand::of(area),
             None,
-            Some(CellSize::NOMINAL),
+            (Some(CellSize::NOMINAL), None),
             &mut pictured,
             &Palette::SLOTS,
         )
