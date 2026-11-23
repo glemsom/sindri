@@ -37,7 +37,7 @@ use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::plane::{Planes, Shade};
 use crate::pointer::{self, Notch, Pointer};
-use crate::pulse::{self, Pulse, Turning};
+use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
 use crate::rows::{Fence, INDENT, MARGIN, Measure, Row, Rows, Scroll, Sideways, margined};
@@ -494,10 +494,7 @@ impl View {
         if !self.capabilities.animates() {
             return face::Motion::Still;
         }
-        match self.facts.pulse().map(Pulse::turning) {
-            None => face::Motion::Turning(Some(Turning::IDLE)),
-            Some(turning) => face::Motion::Turning(turning),
-        }
+        face::Motion::Turning(pulse::turning(self.facts.pulse()))
     }
 
     fn face_surface(&self) -> Surface {

@@ -1146,24 +1146,22 @@ fn pixels(face: &Face) -> image::RgbaImage {
         .expect("the face travels in the binary, so it decodes")
 }
 
-/// The rectangle of pixels a frame past the root differs from it in: the only part of it that
-/// travels.
-fn differing(root: &image::RgbaImage, frame: &image::RgbaImage) -> (u32, u32, u32, u32) {
-    let (width, _) = root.dimensions();
-    let mut bounds = (u32::MAX, u32::MAX, 0, 0);
-    for (at, (lit, dimmed)) in root.pixels().zip(frame.pixels()).enumerate() {
-        if lit != dimmed {
-            let at = u32::try_from(at).expect("a pixel of the face");
-            let (x, y) = (at % width, at / width);
-            bounds = (
-                bounds.0.min(x),
-                bounds.1.min(y),
-                bounds.2.max(x + 1),
-                bounds.3.max(y + 1),
-            );
-        }
-    }
-    bounds
+/// The rectangle an `a=f` head names, read as left, top, width and height.
+fn rectangle(head: &str) -> (u32, u32, u32, u32) {
+    let named = |key: &str| -> u32 {
+        let (_, tail) = head
+            .split_once(&format!("{key}="))
+            .unwrap_or_else(|| panic!("{head:?} names no {key}"));
+        tail.split(',')
+            .next()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_else(|| panic!("{head:?} names a {key} that is no number"))
+    };
+    (named("x"), named("y"), named("s"), named("v"))
+}
+
+fn differs(root: &image::RgbaImage, frame: &image::RgbaImage, x: u32, y: u32) -> bool {
+    root.get_pixel(x, y) != frame.get_pixel(x, y)
 }
 
 fn heads(drawn: &str, opening: &str) -> Vec<String> {
@@ -1234,19 +1232,38 @@ fn every_frame_past_the_root_is_composed_against_it_and_carries_only_the_pixels_
     );
     for (at, head) in sent.iter().enumerate() {
         let frame = &face::frames(&root)[at + 1];
-        let (left, top, right, bottom) = differing(&root, frame);
-        let (width_of, height_of) = (right - left, bottom - top);
+        let (left, top, across, down) = rectangle(head);
+        let number = at + 2;
+        let inside =
+            |x: u32, y: u32| (left..left + across).contains(&x) && (top..top + down).contains(&y);
+
         assert!(
             head.contains("c=1") && head.contains("X=1"),
-            "frame {} is composed against the root frame and replaces the rectangle it names: \
-             {head:?}",
-            at + 2
+            "frame {number} is composed against the root frame and replaces the rectangle it \
+             names: {head:?}"
         );
-        assert_eq!(
-            head,
-            &format!("a=f,f=100,i=337,q=2,c=1,X=1,x={left},y={top},s={width_of},v={height_of}"),
-            "and the rectangle it names is the bounds of the pixels that differ from the root, \
-             no wider than the root's {width} and no taller than its {height}"
+        assert!(
+            left + across <= width && top + down <= height,
+            "frame {number} stands inside the root's {width} by {height} pixels: {head:?}"
+        );
+        for y in 0..height {
+            for x in 0..width {
+                assert!(
+                    !differs(&root, frame, x, y) || inside(x, y),
+                    "frame {number} travels every pixel it differs from the root in, and ({x}, \
+                     {y}) differs outside the rectangle {head:?}"
+                );
+            }
+        }
+        let (right, bottom) = (left + across - 1, top + down - 1);
+        let touched = (0..across).any(|step| differs(&root, frame, left + step, top))
+            && (0..across).any(|step| differs(&root, frame, left + step, bottom))
+            && (0..down).any(|step| differs(&root, frame, left, top + step))
+            && (0..down).any(|step| differs(&root, frame, right, top + step));
+        assert!(
+            touched,
+            "and the rectangle is the tightest one there is: every side of it holds a pixel that \
+             differs from the root, so {head:?} carries nothing the root does not"
         );
     }
 }
@@ -1373,6 +1390,45 @@ fn a_face_that_moved_is_placed_again_and_transmits_no_image() {
         )),
         "the placement stands in the cell the face moved to: {:?}",
         &drawn[sent..]
+    );
+}
+
+#[test]
+fn a_screen_cleared_for_a_resize_leaves_no_placement_of_the_face_it_drew_before() {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    let face = a_face(Motion::Turning(Some(Turning::FLIGHT)));
+    backend.face(Some(&face)).unwrap();
+    let drawn = wire.drawn().len();
+    backend.clear().unwrap();
+    let resized = Face::new(
+        face.picture().clone(),
+        Rect::new(2, 1, face.area().width, face.area().height),
+        face.cell(),
+        face.motion(),
+    );
+    backend.face(Some(&resized)).unwrap();
+    drop(backend);
+    let whole = wire.drawn();
+    let swept = &whole[drawn..];
+
+    assert!(
+        swept.contains("\x1b_Ga=d,d=i,i=337"),
+        "a screen cleared for a resize takes the face's image away, and the placement with it: \
+         {swept:?}"
+    );
+    assert_eq!(
+        swept.matches("\x1b_Ga=T,f=100,i=337").count(),
+        1,
+        "and the frame that follows draws the face again: {swept:?}"
+    );
+    assert!(
+        swept.contains(&format!(
+            "\x1b[{};{}H",
+            resized.area().y + 1,
+            resized.area().x + 1
+        )),
+        "at the cells the resized rail gives it: {swept:?}"
     );
 }
 

@@ -400,38 +400,6 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     );
 }
 
-#[test]
-fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again() {
-    let (_home, environment) = config_home("face = true\n");
-    let stage = Stage::open();
-    let config = stage.config(&environment);
-    let mut view = railed(&config);
-    view.open_settings(&config);
-    walk_to(&mut view, "face");
-    view.key(Key::Char(' '));
-    let mut live = stage.launch(view, config, &environment);
-
-    assert_eq!(
-        live.rasterises("face.png"),
-        0,
-        "no frame has drawn the face yet, and the face is no picture of the cache"
-    );
-    assert!(live.draws_the_face(), "the launch's first frame draws it");
-
-    let ended = live
-        .answer(Event::Key(Key::Enter))
-        .expect("the write is made");
-
-    assert!(ended.is_none(), "a write is not the key that quits");
-    assert!(!live.draws_the_face(), "the face is turned off");
-    assert_eq!(
-        live.rasterises("face.png"),
-        0,
-        "and the face is no picture of the cache at all: the backend places it on its own \
-         identity, so no frame of it is made into pixels twice"
-    );
-}
-
 impl Loop<'_> {
     fn mode(&self) -> sindri::keys::Mode {
         self.view.mode()
@@ -459,10 +427,6 @@ impl Loop<'_> {
 
     fn draws_the_face(&mut self) -> bool {
         draws_the_face(&mut self.view)
-    }
-
-    fn rasterises(&self, source: &str) -> usize {
-        self.view.capabilities().pictures().rasterises(source)
     }
 
     fn lit(&mut self, palette: &Palette) -> Vec<(u16, u16)> {

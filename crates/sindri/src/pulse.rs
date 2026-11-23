@@ -17,17 +17,17 @@ pub struct Turning {
 }
 
 impl Turning {
-    /// A launch with no run in flight: a slow breath, so the face is calm rather than frozen.
+    /// A launch with no run in flight: a slow breath.
     pub const IDLE: Turning = Turning {
         gap_ms: 1_000,
         cycles: None,
     };
-    /// A run in flight: the breath quickens, and a glance says work is being done.
+    /// A run in flight: the breath quickens.
     pub const FLIGHT: Turning = Turning {
         gap_ms: 250,
         cycles: None,
     };
-    /// A failed run: two quick cycles that catch the eye once and leave the face still.
+    /// A failed run: two quick cycles, and then the face is left still.
     pub const FLASH: Turning = Turning {
         gap_ms: 160,
         cycles: Some(2),
@@ -39,6 +39,16 @@ impl Turning {
 
     pub fn cycles(&self) -> Option<u16> {
         self.cycles
+    }
+}
+
+/// The loop the face is left turning in the run state a launch is in, and none where a run settled
+/// on a stop that is not an error: a launch with no run yet breathes slowly, a run in flight
+/// quickens it, and a failed run flashes twice.
+pub fn turning(pulse: Option<&Pulse>) -> Option<Turning> {
+    match pulse {
+        None => Some(Turning::IDLE),
+        Some(pulse) => pulse.turning(),
     }
 }
 

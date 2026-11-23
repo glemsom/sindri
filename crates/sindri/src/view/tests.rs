@@ -1774,7 +1774,7 @@ fn a_terminal_that_answers_no_query_for_animation_is_asked_for_the_still_face() 
 }
 
 #[test]
-fn the_pulse_s_glyph_still_marks_the_run_where_it_marks_it() {
+fn the_pulse_s_glyph_still_marks_the_run_on_the_rail_s_first_fact_row() {
     let mut view = View::of(
         animating(),
         Facts::default()
@@ -1813,7 +1813,7 @@ fn the_pulse_s_glyph_still_marks_the_run_where_it_marks_it() {
         })
         .collect();
     assert!(
-        row.contains(pulse::pulse_glyph(4_200)),
+        row.contains('\u{2839}'),
         "and the pulse's glyph still marks the state on the rail's first fact row, where it \
          marks it today: {row:?}"
     );

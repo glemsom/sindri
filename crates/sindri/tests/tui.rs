@@ -89,13 +89,13 @@ const ASK_CELL: &[u8] = b"\x1b[16t";
 const ASK_KEYS: &[u8] = b"\x1b[>1u";
 
 /// The two features asked of a terminal that speaks the graphics protocol: whether it keeps a
-/// picture's frames, and whether it turns them.
-const ASK_FRAMES: &[u8] = b"\x1b_Ga=q,i=337,e=f\x1b\\";
-const ASK_TURNING: &[u8] = b"\x1b_Ga=q,i=337,e=a\x1b\\";
+/// picture's frames and overwrites a rectangle of them, and whether it turns the loop.
+const ASK_FRAMES: &[u8] = b"\x1b_Ga=q,i=337,e=f,c=1,X=1\x1b\\";
 
-/// What such a terminal says back: both features kept, which is the only answer the face animates on.
-const ANSWERS_ANIMATION: &[u8] =
-    concat!("\x1b_Gi=337,e=f;OK\x1b\\", "\x1b_Gi=337,e=a;OK\x1b\\").as_bytes();
+/// What such a terminal says back: every key it was asked about, which is the only answer the face
+/// animates on.
+const ANSWERS_FRAMES: &[u8] = b"\x1b_Gi=337,e=f,c=1,X=1;OK\x1b\\";
+const ANSWERS_TURNING: &[u8] = b"\x1b_Gi=337,e=a;OK\x1b\\";
 
 /// `CSI < u` pops that push, so the shell gets back the terminal it lent.
 const GIVE_BACK_KEYS: &[u8] = b"\x1b[<u";
@@ -480,8 +480,9 @@ fn said_back(master: &File, asked: &[u8]) {
     if contains(asked, ASK_CELL) {
         said.extend_from_slice(b"\x1b[6;20;10t");
     }
-    if contains(asked, ASK_TURNING) {
-        said.extend_from_slice(ANSWERS_ANIMATION);
+    if contains(asked, ASK_FRAMES) {
+        said.extend_from_slice(ANSWERS_FRAMES);
+        said.extend_from_slice(ANSWERS_TURNING);
     }
     if said.is_empty() {
         return;
@@ -799,8 +800,14 @@ fn a_launch_blocked_on_the_wire_leaves_the_face_turning_and_a_settled_run_stops_
         drawn.text()
     );
     assert!(
-        drawn.wait_for(ASK_FRAMES) && drawn.wait_for(ASK_TURNING),
+        drawn.wait_for(ASK_FRAMES),
         "the terminal is asked whether it keeps the face's frames and turns them: {:?}",
+        drawn.text()
+    );
+
+    assert!(
+        drawn.wait_for(b"_Ga=a,i=337,r=1,z=1000"),
+        "a launch with no run in flight leaves the face breathing at the slow gap: {:?}",
         drawn.text()
     );
 

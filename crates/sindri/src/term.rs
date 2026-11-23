@@ -382,10 +382,31 @@ impl<W: Write> Backend<W> {
 /// What the terminal holds of the face: what it was made from, where it stands, how many frames of
 /// it the terminal keeps, and the motion it was last handed.
 struct Facing {
-    made: (String, u16, u16, CellSize),
+    made: Made,
     area: Rect,
     frames: usize,
     motion: Motion,
+}
+
+/// The picture a face was made from: its source, the cells it takes and the cell it is drawn at, so
+/// a picture of the same source at another size is another face.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Made {
+    source: String,
+    cols: u16,
+    rows: u16,
+    cell: CellSize,
+}
+
+impl Made {
+    fn of(picture: &Picture, cell: CellSize) -> Made {
+        Made {
+            source: picture.source().to_owned(),
+            cols: picture.cols(),
+            rows: picture.rows(),
+            cell,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -400,22 +421,16 @@ impl Animated {
         let Some(face) = face else {
             return Ok(self.take());
         };
-        let picture = face.picture();
-        let made = (
-            picture.source().to_owned(),
-            picture.cols(),
-            picture.rows(),
-            face.cell(),
-        );
-        let same = self
+        let made = Made::of(face.picture(), face.cell());
+        if self
             .holding
             .as_ref()
-            .is_some_and(|facing| facing.made == made);
-        if same {
+            .is_some_and(|facing| facing.made == made)
+        {
             return self.again(face);
         }
         let mut sent = self.take();
-        sent.extend(self.transmit(picture, face)?);
+        sent.extend(self.transmit(made, face)?);
         Ok(sent)
     }
 
@@ -448,8 +463,9 @@ impl Animated {
 
     /// The face's picture sent under its own identity, the frames past it composed against the
     /// root, and the loop the motion asks for read off the frames the terminal keeps.
-    fn transmit(&mut self, picture: &Picture, face: &face::Face) -> io::Result<Vec<u8>> {
-        let root = picture
+    fn transmit(&mut self, made: Made, face: &face::Face) -> io::Result<Vec<u8>> {
+        let root = face
+            .picture()
             .rasterise(face.cell())
             .ok_or_else(|| io::Error::other("the face's picture could not be made into pixels"))?;
         let frames = face::frames(&root);
@@ -483,12 +499,7 @@ impl Animated {
         }
         sent.extend(turning(face.motion(), kept)?);
         self.holding = Some(Facing {
-            made: (
-                picture.source().to_owned(),
-                picture.cols(),
-                picture.rows(),
-                face.cell(),
-            ),
+            made,
             area: at,
             frames: kept,
             motion: face.motion(),
@@ -496,7 +507,8 @@ impl Animated {
         Ok(sent)
     }
 
-    /// Gives the face's image back, leaving no placement of it behind.
+    /// The bytes that give back whatever image the terminal holds of the face, and none where it
+    /// holds none.
     fn take(&mut self) -> Vec<u8> {
         match self.holding.take() {
             Some(_) => face::delete(),
@@ -845,7 +857,7 @@ impl Asked for Terminal {
     }
 
     fn ask(&self, question: Question) -> Option<Vec<u8>> {
-        reply(self, question.asked())
+        reply(self, &question.asked())
     }
 }
 

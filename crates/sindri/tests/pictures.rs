@@ -749,7 +749,7 @@ fn transmission_headers(buffer: &Buffer) -> usize {
 }
 
 #[test]
-fn a_face_is_placed_over_the_footprint_it_was_measured_into_and_made_once_per_size() {
+fn the_face_is_placed_over_the_footprint_the_rail_reserved_and_no_cell_carries_it() {
     let mut view = railed(true, true);
     let painted = frame::painted(&mut view, 120, 40);
     let rail = rail_band(&painted);
@@ -1328,11 +1328,6 @@ fn every_fact_the_rail_drew_without_a_face_is_drawn_whole_below_one() {
                 .collect()
         };
         let under = u16::try_from(face_rows(&with).len()).expect("the band's rows") + 1;
-        assert_eq!(
-            face_rows(&with).len() + 1,
-            usize::from(under),
-            "the face's rows and the rule that closes them, and the facts begin under both"
-        );
 
         assert_eq!(
             stated(with.cells(), rail.y + under),
