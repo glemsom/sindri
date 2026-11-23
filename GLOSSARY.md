@@ -296,14 +296,15 @@ _Avoid_: Border, divider, crease, gutter
 **Instrument**:
 A fact of the **Rail** drawn at the pixel under the row that states it, in a **Plane** of its own:
 the context window's fill as a gauge, the spend's two figures as bars on the one scale the foot
-holds, and the room the rail leaves at its foot as a quiet bezel. It shows a fact and never holds
-one — every number it draws is a cell over it, so the number still copies — and its pixels are the
-rail's **Rung** with light added, in the hue of the ink the fact is stated in and inside the most
-the palette proves, so no word of the rail is washed out where an instrument stands under it. The
-image it is drawn from is a ladder of the block's hundreds, so a share that moved is a placement the
-terminal already holds and sends no pixel; it stands inside the **Margin** and on no bigger than the
-block it is drawn in, and a strip, a terminal that places no picture and a palette that spells no
-colour are given the meters the frame draws without one.
+holds, and, where the rail states a spend, the room it leaves between its last fact and its first
+foot row as a quiet bezel. It shows a fact and never holds one — every number it draws is a cell
+over it, so the number still copies — and its pixels are the rail's **Rung** with light added, in
+the hue of the ink the fact is stated in and inside the most the palette proves, so no word of the
+rail is washed out where an instrument stands under it. The image it is drawn from is a ladder of
+the block's hundreds, so a share that moved is a placement the terminal already holds and sends no
+pixel; it stands inside the **Margin** and on no bigger than the block it is drawn in, and a strip,
+a terminal that places no picture and a palette that spells no colour are given the meters the frame
+draws without one.
 _Avoid_: Meter, gauge (that one is the window's), graph, chart, sparkline, widget
 
 **Footprint**:

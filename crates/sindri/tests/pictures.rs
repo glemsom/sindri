@@ -2096,7 +2096,6 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
         vec![
             PlaneId::Rail,
             PlaneId::Gauge,
-            PlaneId::Bezel,
             PlaneId::Transcript,
             PlaneId::Composer,
             PlaneId::Caret
@@ -2258,7 +2257,6 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
         vec![
             PlaneId::Rail,
             PlaneId::Gauge,
-            PlaneId::Bezel,
             PlaneId::Transcript,
             PlaneId::Composer,
             PlaneId::Caret

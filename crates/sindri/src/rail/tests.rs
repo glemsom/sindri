@@ -151,6 +151,16 @@ fn spent() -> Facts {
     }
 }
 
+fn unspent() -> Facts {
+    Facts {
+        ctx: Some(Ctx {
+            size: 48_200,
+            window: Some(200_000),
+        }),
+        ..frame()
+    }
+}
+
 const CONTRACT: [(&str, &str); 12] = [
     ("wire", "anthropic"),
     ("model", CUT),
@@ -673,6 +683,33 @@ fn each_bar_stands_on_the_row_its_figure_is_stated_on() {
 }
 
 #[test]
+fn a_rail_that_states_no_spend_is_handed_its_gauge_and_no_bezel() {
+    let facts = unspent();
+    let rail = Rect {
+        x: LEFT,
+        ..band(40, 24)
+    };
+    let mut buffer = Buffer::empty(framed(rail));
+
+    let shades = super::paint(
+        &facts,
+        Rail::Ledger,
+        RailBand::of(rail),
+        None,
+        (Some(CellSize::NOMINAL), None),
+        &mut buffer,
+        &PALETTE,
+    );
+
+    assert_eq!(
+        ids(&shades),
+        vec![PlaneId::Rail, PlaneId::Gauge],
+        "a rail whose foot states no figure is handed its band's shade and the gauge and no \
+         bezel at all, the room under its last fact being plain air"
+    );
+}
+
+#[test]
 fn the_bezel_stands_in_the_room_the_rail_leaves_between_its_last_fact_and_its_foot() {
     let facts = spent();
     let rail = Rect {
@@ -691,7 +728,7 @@ fn the_bezel_stands_in_the_room_the_rail_leaves_between_its_last_fact_and_its_fo
         &PALETTE,
     );
     let rows = ledger::rows(&facts, ledger::Shape::Ledger, rail, None);
-    let room = instrument::bezel(&rows, Rect::new(0, 0, rail.width - margins(), rail.height))
+    let room = instrument::bezel(&rows, rail.width - margins())
         .expect("the air the rail leaves between its last fact and its foot");
 
     assert_eq!(

@@ -83,8 +83,7 @@ fn instruments(
             shades.extend(Shade::bar(area, Some(cell), bar, share, palette));
         }
     }
-    let room = Rect::new(0, 0, columns.width, band.facts.height);
-    if let Some(area) = instrument::bezel(rows, room) {
+    if let Some(area) = instrument::bezel(rows, columns.width) {
         let area = Rect {
             x: columns.x,
             y: band.facts.y.saturating_add(area.y),

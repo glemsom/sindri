@@ -217,8 +217,8 @@ fn band(width: u16, height: u16) -> Rect {
     }
 }
 
-fn room(height: u16) -> Rect {
-    band(FLOOR - margins(), height)
+fn width() -> u16 {
+    FLOOR - margins()
 }
 
 fn footed() -> Facts {
@@ -244,11 +244,11 @@ fn the_bezel_stands_between_the_last_fact_and_the_foot() {
     let laid = railways(&footed(), 6);
 
     assert_eq!(
-        bezel(&laid, room(6)),
+        bezel(&laid, width()),
         Some(Rect {
             x: 0,
             y: 2,
-            width: FLOOR - margins(),
+            width: width(),
             height: 1,
         }),
         "the row of air between the last fact and the input's own row is the rail's frame"
@@ -256,7 +256,7 @@ fn the_bezel_stands_between_the_last_fact_and_the_foot() {
 }
 
 #[test]
-fn the_bezel_of_a_rail_that_states_no_spend_runs_to_the_bands_foot() {
+fn a_rail_that_states_no_spend_is_handed_no_bezel() {
     let facts = Facts {
         wire: Some(String::from("anthropic")),
         model: Some(String::from("claude-sonnet-4-5")),
@@ -264,14 +264,10 @@ fn the_bezel_of_a_rail_that_states_no_spend_runs_to_the_bands_foot() {
     };
 
     assert_eq!(
-        bezel(&railways(&facts, 5), room(5)),
-        Some(Rect {
-            x: 0,
-            y: 2,
-            width: FLOOR - margins(),
-            height: 3,
-        }),
-        "a rail whose foot states no figure keeps its frame down to the band's own last row"
+        bezel(&railways(&facts, 5), width()),
+        None,
+        "a rail whose foot states no figure leaves plain air under its last fact and is handed \
+         no bezel"
     );
 }
 
@@ -298,7 +294,7 @@ fn the_bezel_stands_below_the_row_that_counts_the_facts_the_rail_kept_back() {
             )
         })
         .expect("the rail counts the fact it kept back");
-    let framed = bezel(&laid, room(5)).expect("the air the rail leaves above its foot");
+    let framed = bezel(&laid, width()).expect("the air the rail leaves above its foot");
 
     assert!(
         framed.y > counted.y(),
@@ -320,21 +316,20 @@ fn the_bezel_stands_below_the_row_that_counts_the_facts_the_rail_kept_back() {
 }
 
 #[test]
-fn the_bezel_stands_nowhere_in_a_rail_whose_rows_fill_its_band() {
+fn a_rail_that_states_no_fact_above_its_foot_is_handed_no_bezel() {
     let facts = Facts {
-        wire: Some(String::from("anthropic")),
-        model: Some(String::from("claude-sonnet-4-5")),
+        spend: Usage {
+            input: Some(48_200),
+            output: Some(3_100),
+            total: Some(51_300),
+            ..Usage::default()
+        },
         ..Facts::default()
     };
 
     assert_eq!(
-        bezel(&railways(&facts, 2), room(2)),
+        bezel(&railways(&facts, 4), width()),
         None,
-        "a rail that fills its band leaves no row under its last fact to frame"
-    );
-    assert_eq!(
-        bezel(&railways(&Facts::default(), 4), room(4)),
-        None,
-        "and a rail that states no fact at all has no row to begin a frame under"
+        "a rail whose foot is the only fact it states leaves no air under its last fact to frame"
     );
 }

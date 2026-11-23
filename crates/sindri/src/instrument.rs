@@ -69,24 +69,23 @@ fn share(figure: u64, whole: u64) -> Share {
 const FOOT: [Kind; 3] = [Kind::Input, Kind::Output, Kind::Total];
 
 /// The rows of a rail that state nothing: the air between the last row it writes and the foot it
-/// spends, in the coordinates `ledger::rows` returns, and none where the rail fills its band.
-pub(crate) fn bezel(rows: &[Row], area: Rect) -> Option<Rect> {
-    let foot = rows
+/// spends, in the coordinates `ledger::rows` returns, and none where the rail states no foot.
+pub(crate) fn bezel(rows: &[Row], width: u16) -> Option<Rect> {
+    let bottom = rows
         .iter()
         .filter(|row| row.kind().is_some_and(|kind| FOOT.contains(&kind)))
         .map(Row::y)
-        .min();
-    let bottom = foot.unwrap_or_else(|| area.bottom());
-    let stated = rows
+        .min()?;
+    let top = rows
         .iter()
         .filter(|row| row.y() < bottom && !row.parts().is_empty())
         .map(Row::y)
-        .max();
-    let top = stated?.saturating_add(1);
-    (top < bottom).then(|| Rect {
-        x: area.x,
+        .max()?
+        .saturating_add(1);
+    Some(Rect {
+        x: 0,
         y: top,
-        width: area.width,
+        width,
         height: bottom - top,
     })
 }
