@@ -151,6 +151,13 @@ fn spent() -> Facts {
     }
 }
 
+fn unspent() -> Facts {
+    Facts {
+        spend: Usage::default(),
+        ..windowed()
+    }
+}
+
 const CONTRACT: [(&str, &str); 12] = [
     ("wire", "anthropic"),
     ("model", CUT),
@@ -670,6 +677,33 @@ fn each_bar_stands_on_the_row_its_figure_is_stated_on() {
              inside the Margin on both edges"
         );
     }
+}
+
+#[test]
+fn a_rail_that_states_no_spend_is_handed_its_gauge_and_no_bezel() {
+    let facts = unspent();
+    let rail = Rect {
+        x: LEFT,
+        ..band(40, 24)
+    };
+    let mut buffer = Buffer::empty(framed(rail));
+
+    let shades = super::paint(
+        &facts,
+        Rail::Ledger,
+        RailBand::of(rail),
+        None,
+        (Some(CellSize::NOMINAL), None),
+        &mut buffer,
+        &PALETTE,
+    );
+
+    assert_eq!(
+        ids(&shades),
+        vec![PlaneId::Rail, PlaneId::Gauge],
+        "a rail whose foot states no figure is handed its band's shade and the gauge and no \
+         bezel at all, the room under its last fact being plain air"
+    );
 }
 
 #[test]
