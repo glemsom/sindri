@@ -10,7 +10,6 @@ use sindri::graphics::CellSize;
 use sindri::ink::{Ink, Look};
 use sindri::ledger::Boot;
 use sindri::palette::Palette;
-use sindri::pictures::PLACEHOLDER;
 use sindri_core::first_run::FirstRun;
 use sindri_core::policy::Enforcement;
 use sindri_core::records::Entry;
@@ -344,15 +343,7 @@ fn painted_and_told(view: &mut View) -> (ratatui::buffer::Buffer, Painted) {
 }
 
 fn draws_the_face(view: &mut View) -> bool {
-    let frame = painted(view);
-    let area = frame.area;
-    (area.y..area.bottom()).any(|y| {
-        (area.x..area.right()).any(|x| {
-            frame
-                .cell((x, y))
-                .is_some_and(|cell| cell.symbol().contains(PLACEHOLDER))
-        })
-    })
+    painted_and_told(view).1.face().is_some()
 }
 
 #[test]
@@ -423,7 +414,7 @@ fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again()
     assert_eq!(
         live.rasterises("face.png"),
         0,
-        "no frame has drawn the face yet, so none was made into pixels"
+        "no frame has drawn the face yet, and the face is no picture of the cache"
     );
     assert!(live.draws_the_face(), "the launch's first frame draws it");
 
@@ -435,8 +426,9 @@ fn a_settings_visit_that_turns_the_face_off_makes_no_picture_into_pixels_again()
     assert!(!live.draws_the_face(), "the face is turned off");
     assert_eq!(
         live.rasterises("face.png"),
-        1,
-        "and the rail's one face is made into pixels once: nothing was transmitted twice"
+        0,
+        "and the face is no picture of the cache at all: the backend places it on its own \
+         identity, so no frame of it is made into pixels twice"
     );
 }
 

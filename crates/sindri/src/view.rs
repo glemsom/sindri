@@ -37,7 +37,7 @@ use crate::picture::Surface;
 use crate::pictures::Pictures;
 use crate::plane::{Planes, Shade};
 use crate::pointer::{self, Notch, Pointer};
-use crate::pulse::{self, Pulse};
+use crate::pulse::{self, Pulse, Turning};
 use crate::queue::Queue;
 use crate::rail;
 use crate::rows::{Fence, INDENT, MARGIN, Measure, Row, Rows, Scroll, Sideways, margined};
@@ -213,6 +213,7 @@ pub struct Painted {
     layout: Option<Layout>,
     shades: Vec<Shade>,
     caret: Option<Position>,
+    face: Option<face::Face>,
 }
 
 impl Painted {
@@ -225,6 +226,7 @@ impl Painted {
             layout: None,
             shades: Vec::new(),
             caret: None,
+            face: None,
         }
     }
 
@@ -234,6 +236,10 @@ impl Painted {
 
     pub fn shades(&self) -> &[Shade] {
         &self.shades
+    }
+
+    pub fn face(&self) -> Option<&face::Face> {
+        self.face.as_ref()
     }
 
     fn shaded(&mut self, shade: Shade) {
@@ -482,6 +488,16 @@ impl View {
             self.capabilities.pictures().draws(),
             self.capabilities.sizes_text(),
         )
+    }
+
+    fn motion(&self) -> face::Motion {
+        if !self.capabilities.animates() {
+            return face::Motion::Still;
+        }
+        match self.facts.pulse().map(Pulse::turning) {
+            None => face::Motion::Turning(Some(Turning::IDLE)),
+            Some(turning) => face::Motion::Turning(turning),
+        }
     }
 
     fn face_surface(&self) -> Surface {
@@ -1099,11 +1115,13 @@ impl View {
             ) {
                 painted.shaded(shade);
             }
-            if let (Some(picture), Some(cells)) = (&picture, band.picture) {
-                let cell = self.capabilities.cell();
-                self.capabilities
-                    .pictures_mut()
-                    .place(picture, cell, cells, buffer);
+            if let (Some(picture), Some(cells)) = (picture, band.picture) {
+                painted.face = Some(face::Face::new(
+                    picture,
+                    cells,
+                    self.capabilities.cell(),
+                    self.motion(),
+                ));
             }
         }
         let drawn = self.transcript(layout.transcript, buffer, &mut painted);
@@ -1133,7 +1151,11 @@ impl View {
             painted.layout = Some(layout);
             return painted;
         };
-        painted = Painted::none();
+        let face = painted.face.take();
+        painted = Painted {
+            face,
+            ..Painted::none()
+        };
         self.highlight(layout.transcript, buffer, drawn.span());
         self.note(&mut painted, drawn);
         let rows = body.held();

@@ -1349,6 +1349,7 @@ fn a_width_only_terminal_gets_the_unsized_rails_cells() {
             match question {
                 Question::Sizing => Some(b"\x1b[1;1R\x1b[1;2R".to_vec()),
                 Question::Cell => None,
+                Question::Animation => None,
             }
         }
     }

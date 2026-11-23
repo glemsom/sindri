@@ -16,14 +16,15 @@ use super::*;
 use crate::composer::{AIR_ROWS, MAX_ROWS, MIN_ROWS, PLACEHOLDER};
 use crate::ledger::Boot;
 
-use crate::capability::caps::{inked, pictured, pointing, sized};
+use crate::capability::caps::{animating, inked, pictured, pointing, sized};
+use crate::face::Motion;
 use crate::graphics::CellSize;
 use crate::ink::{Face, Look};
 use crate::palette::channels;
 use crate::palette::{Band, Palette};
 use crate::pictures::PLACEHOLDER as PLACED;
 use crate::plane::Shade;
-use crate::pulse::STEP_MS;
+use crate::pulse::{STEP_MS, Turning};
 use crate::readback::under;
 use crate::rows::{SIGIL, THUMB};
 
@@ -1703,6 +1704,118 @@ fn the_seam_runs_unbroken_under_the_face_and_the_rule_that_closes_it_opens_past_
         format!(" {}", pen::filled(band.area.width - 1, HAIRLINE)),
         "the rule that closes the face opens one column in, so the seam's column runs unbroken \
          down the rail"
+    );
+}
+
+#[test]
+fn a_frame_asks_for_the_face_where_the_rail_holds_it() {
+    let mut view = View::of(
+        animating(),
+        Facts::default().asked().railed(rail()),
+        Transcript::none(),
+    );
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    let band = laid_out(&told)
+        .rail
+        .expect("a frame this wide holds a ledger")
+        .1;
+    let face = told
+        .face()
+        .expect("a terminal that keeps frames is asked for the face");
+    let cells = band
+        .with_picture(face.picture().cols(), face.picture().rows())
+        .picture
+        .expect("the cells the rail reserves for a picture of the face's size");
+
+    assert_eq!(
+        face.area(),
+        cells,
+        "the face is asked for over the cells the rail reserved for it: {cells:?}"
+    );
+    assert_eq!(
+        (face.area().y, face.area().bottom()),
+        (band.area.y, band.area.y + face.picture().rows()),
+        "which are the rail's own top rows, from its first one down"
+    );
+    assert_eq!(
+        face.picture().source(),
+        "face.png",
+        "and the picture it is asked for is the one the binary carries"
+    );
+    assert_eq!(
+        face.cell(),
+        view.capabilities().cell(),
+        "at the cell the frame draws on"
+    );
+    assert_eq!(
+        face.motion(),
+        Motion::Turning(Some(Turning::IDLE)),
+        "a launch with no run in flight breathes slowly rather than standing frozen"
+    );
+}
+
+#[test]
+fn a_terminal_that_answers_no_query_for_animation_is_asked_for_the_still_face() {
+    let mut view = View::of(
+        pictured(),
+        Facts::default().asked().railed(rail()),
+        Transcript::none(),
+    );
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    let face = told
+        .face()
+        .expect("the face is drawn where the rail holds one");
+
+    assert_eq!(
+        face.motion(),
+        Motion::Still,
+        "a terminal that answered no query for frames and animation is handed the picture alone"
+    );
+}
+
+#[test]
+fn the_pulse_s_glyph_still_marks_the_run_where_it_marks_it() {
+    let mut view = View::of(
+        animating(),
+        Facts::default()
+            .running()
+            .railed(ledger::Facts {
+                state: Some(RunState::Running),
+                ..rail()
+            })
+            .pulsed(Some(Pulse::live(4_200))),
+        Transcript::none(),
+    );
+    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let band = laid_out(&told)
+        .rail
+        .expect("a frame this wide holds a ledger")
+        .1;
+    let face = told
+        .face()
+        .expect("the face is drawn where the rail holds one");
+    let facts = band
+        .with_picture(face.picture().cols(), face.picture().rows())
+        .facts;
+
+    assert_eq!(
+        face.motion(),
+        Motion::Turning(Some(Turning::FLIGHT)),
+        "a run in flight turns the face at the quickened gap"
+    );
+    let row: String = (facts.x..facts.right())
+        .map(|x| {
+            buffer
+                .cell((x, facts.y))
+                .expect("a cell of the rail")
+                .symbol()
+                .to_owned()
+        })
+        .collect();
+    assert!(
+        row.contains(pulse::pulse_glyph(4_200)),
+        "and the pulse's glyph still marks the state on the rail's first fact row, where it \
+         marks it today: {row:?}"
     );
 }
 

@@ -8,6 +8,40 @@ pub const STEP_MS: u64 = 80;
 
 const GLYPHS: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+/// The loop the face is left turning: the gap between two of its frames, and how many times the
+/// terminal turns it before the face holds still.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Turning {
+    gap_ms: u32,
+    cycles: Option<u16>,
+}
+
+impl Turning {
+    /// A launch with no run in flight: a slow breath, so the face is calm rather than frozen.
+    pub const IDLE: Turning = Turning {
+        gap_ms: 1_000,
+        cycles: None,
+    };
+    /// A run in flight: the breath quickens, and a glance says work is being done.
+    pub const FLIGHT: Turning = Turning {
+        gap_ms: 250,
+        cycles: None,
+    };
+    /// A failed run: two quick cycles that catch the eye once and leave the face still.
+    pub const FLASH: Turning = Turning {
+        gap_ms: 160,
+        cycles: Some(2),
+    };
+
+    pub fn gap_ms(&self) -> u32 {
+        self.gap_ms
+    }
+
+    pub fn cycles(&self) -> Option<u16> {
+        self.cycles
+    }
+}
+
 pub fn step(elapsed_ms: u64) -> u64 {
     elapsed_ms / STEP_MS
 }
@@ -68,6 +102,19 @@ impl Pulse {
     pub(crate) fn stepping(&self) -> Option<char> {
         match self {
             Pulse::Live { .. } => Some(self.mark().0),
+            Pulse::Settled { .. } => None,
+        }
+    }
+
+    /// The loop the face runs while the run is in the state this pulse owns, and none where the run
+    /// settled on a stop that is not an error: the face is one frame then.
+    pub fn turning(&self) -> Option<Turning> {
+        match self {
+            Pulse::Live { .. } => Some(Turning::FLIGHT),
+            Pulse::Settled {
+                stop: Stop::Error(_),
+                ..
+            } => Some(Turning::FLASH),
             Pulse::Settled { .. } => None,
         }
     }

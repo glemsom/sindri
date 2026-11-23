@@ -8,14 +8,16 @@ use std::time::Duration;
 
 use ratatui::backend::{Backend as RatatuiBackend, ClearType, CrosstermBackend, WindowSize};
 use ratatui::buffer::Cell;
-use ratatui::layout::{Position, Size};
+use ratatui::layout::{Position, Rect, Size};
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use rustix::termios::{
     InputModes, OptionalActions, Termios, Winsize, tcgetattr, tcgetwinsize, tcsetattr,
 };
 use sindri::capability::{Asked, Question};
+use sindri::face::{self, Motion};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
+use sindri::picture::Picture;
 use sindri::plane::{self, Placement, Plane, PlaneId, Planes, Shade};
 use sindri::size::{Laid, Sizes};
 use sindri::view::{Painted, View};
@@ -204,6 +206,7 @@ pub(crate) struct Backend<W: Write> {
     sizes: Sizes,
     places: bool,
     shades: Vec<Standing>,
+    faced: Animated,
     framed: bool,
 }
 
@@ -223,6 +226,7 @@ impl<W: Write> Backend<W> {
             sizes: Sizes::none(),
             places,
             shades: Vec::new(),
+            faced: Animated::default(),
             framed: false,
         }
     }
@@ -281,37 +285,19 @@ impl<W: Write> Backend<W> {
     /// chunks the protocol allows, under its identity, its placement and the frame's depth. `C=1`
     /// keeps a tall placement from scrolling, and `q=2` leaves no reply to read as a keystroke.
     fn upload(&mut self, plane: &Plane, at: Placement) -> io::Result<()> {
-        let mut png = Vec::new();
-        image::DynamicImage::ImageRgba8(plane.pixels().clone())
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-            .map_err(io::Error::other)?;
-        let encoded = base64::engine::general_purpose::STANDARD.encode(png);
+        let head = format!(
+            "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},w={}",
+            plane.id().image(),
+            plane::PLACEMENT,
+            plane::DEPTH,
+            at.cols,
+            at.rows,
+            at.from,
+            at.width
+        );
         let mut sent = Vec::new();
         write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
-        for (index, chunk) in encoded.as_bytes().chunks(4096).enumerate() {
-            let more = if (index + 1) * 4096 < encoded.len() {
-                1
-            } else {
-                0
-            };
-            if index == 0 {
-                write!(
-                    sent,
-                    "\x1b_Ga=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},w={},m={more};",
-                    plane.id().image(),
-                    plane::PLACEMENT,
-                    plane::DEPTH,
-                    at.cols,
-                    at.rows,
-                    at.from,
-                    at.width
-                )?;
-            } else {
-                write!(sent, "\x1b_Gm={more};")?;
-            }
-            sent.extend_from_slice(chunk);
-            sent.extend_from_slice(b"\x1b\\");
-        }
+        transmit(&mut sent, &head, &encoded(plane.pixels())?)?;
         sent.extend_from_slice(b"\x1b8");
         holding(&mut self.screen, &mut self.writing).tell(&sent)
     }
@@ -337,6 +323,14 @@ impl<W: Write> Backend<W> {
             at.width
         )?;
         sent.extend_from_slice(b"\x1b8");
+        holding(&mut self.screen, &mut self.writing).tell(&sent)
+    }
+
+    fn face(&mut self, face: Option<&face::Face>) -> io::Result<()> {
+        let sent = self.faced.hand(face)?;
+        if sent.is_empty() {
+            return Ok(());
+        }
         holding(&mut self.screen, &mut self.writing).tell(&sent)
     }
 
@@ -383,6 +377,207 @@ impl<W: Write> Backend<W> {
         }
         Ok(())
     }
+}
+
+/// What the terminal holds of the face: what it was made from, where it stands, how many frames of
+/// it the terminal keeps, and the motion it was last handed.
+struct Facing {
+    made: (String, u16, u16, CellSize),
+    area: Rect,
+    frames: usize,
+    motion: Motion,
+}
+
+#[derive(Default)]
+struct Animated {
+    holding: Option<Facing>,
+}
+
+impl Animated {
+    /// The bytes the terminal needs to hold the face this frame asks for, and none at all where it
+    /// already holds it where the frame stands.
+    fn hand(&mut self, face: Option<&face::Face>) -> io::Result<Vec<u8>> {
+        let Some(face) = face else {
+            return Ok(self.take());
+        };
+        let picture = face.picture();
+        let made = (
+            picture.source().to_owned(),
+            picture.cols(),
+            picture.rows(),
+            face.cell(),
+        );
+        let same = self
+            .holding
+            .as_ref()
+            .is_some_and(|facing| facing.made == made);
+        if same {
+            return self.again(face);
+        }
+        let mut sent = self.take();
+        sent.extend(self.transmit(picture, face)?);
+        Ok(sent)
+    }
+
+    fn again(&mut self, face: &face::Face) -> io::Result<Vec<u8>> {
+        let Some(facing) = self.holding.as_mut() else {
+            return Ok(Vec::new());
+        };
+        let mut sent = Vec::new();
+        if facing.area != face.area() {
+            facing.area = face.area();
+            let at = face.area();
+            write!(sent, "\x1b7\x1b[{};{}H", at.y + 1, at.x + 1)?;
+            write!(
+                sent,
+                "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={}\x1b\\",
+                face::ID,
+                plane::PLACEMENT,
+                plane::DEPTH,
+                at.width,
+                at.height
+            )?;
+            sent.extend_from_slice(b"\x1b8");
+        }
+        if facing.motion != face.motion() {
+            facing.motion = face.motion();
+            sent.extend(turning(face.motion(), facing.frames)?);
+        }
+        Ok(sent)
+    }
+
+    /// The face's picture sent under its own identity, the frames past it composed against the
+    /// root, and the loop the motion asks for read off the frames the terminal keeps.
+    fn transmit(&mut self, picture: &Picture, face: &face::Face) -> io::Result<Vec<u8>> {
+        let root = picture
+            .rasterise(face.cell())
+            .ok_or_else(|| io::Error::other("the face's picture could not be made into pixels"))?;
+        let frames = face::frames(&root);
+        let at = face.area();
+        let mut sent = Vec::new();
+        write!(sent, "\x1b7\x1b[{};{}H", at.y + 1, at.x + 1)?;
+        let head = format!(
+            "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={}",
+            face::ID,
+            plane::PLACEMENT,
+            plane::DEPTH,
+            at.width,
+            at.height
+        );
+        transmit(&mut sent, &head, &encoded(&root)?)?;
+        sent.extend_from_slice(b"\x1b8");
+        let mut kept = 1;
+        if matches!(face.motion(), Motion::Turning(_)) {
+            for frame in &frames[1..] {
+                let Some((left, top, width, height)) = differing(&root, frame) else {
+                    continue;
+                };
+                let head = format!(
+                    "a=f,f=100,i={},q=2,c=1,X=1,x={left},y={top},s={width},v={height}",
+                    face::ID
+                );
+                let shown = image::imageops::crop_imm(frame, left, top, width, height).to_image();
+                transmit(&mut sent, &head, &encoded(&shown)?)?;
+                kept += 1;
+            }
+        }
+        sent.extend(turning(face.motion(), kept)?);
+        self.holding = Some(Facing {
+            made: (
+                picture.source().to_owned(),
+                picture.cols(),
+                picture.rows(),
+                face.cell(),
+            ),
+            area: at,
+            frames: kept,
+            motion: face.motion(),
+        });
+        Ok(sent)
+    }
+
+    /// Gives the face's image back, leaving no placement of it behind.
+    fn take(&mut self) -> Vec<u8> {
+        match self.holding.take() {
+            Some(_) => face::delete(),
+            None => Vec::new(),
+        }
+    }
+}
+
+/// The loop the terminal turns the face in, or the one that stops it on the frame it was given,
+/// over the frames the terminal is holding.
+fn turning(motion: Motion, frames: usize) -> io::Result<Vec<u8>> {
+    let mut sent = Vec::new();
+    match motion {
+        Motion::Still => {}
+        Motion::Turning(None) => {
+            write!(sent, "\x1b_Ga=a,i={},s=1,c=1,q=2\x1b\\", face::ID)?;
+        }
+        Motion::Turning(Some(turning)) => {
+            for frame in 1..=frames {
+                write!(
+                    sent,
+                    "\x1b_Ga=a,i={},r={frame},z={},q=2\x1b\\",
+                    face::ID,
+                    turning.gap_ms()
+                )?;
+            }
+            let cycles = turning.cycles().unwrap_or(1);
+            write!(sent, "\x1b_Ga=a,i={},s=3,v={cycles},q=2\x1b\\", face::ID)?;
+        }
+    }
+    Ok(sent)
+}
+
+/// The rectangle of pixels a frame differs from the root in, and none where it differs in nothing.
+fn differing(root: &image::RgbaImage, frame: &image::RgbaImage) -> Option<(u32, u32, u32, u32)> {
+    let width = root.width();
+    let mut bounds: Option<(u32, u32, u32, u32)> = None;
+    for (at, (lit, dimmed)) in root.pixels().zip(frame.pixels()).enumerate() {
+        if lit == dimmed {
+            continue;
+        }
+        let at = u32::try_from(at).ok()?;
+        let (x, y) = (at % width, at / width);
+        bounds = Some(match bounds {
+            None => (x, y, x + 1, y + 1),
+            Some(bounds) => (
+                bounds.0.min(x),
+                bounds.1.min(y),
+                bounds.2.max(x + 1),
+                bounds.3.max(y + 1),
+            ),
+        });
+    }
+    bounds.map(|(left, top, right, bottom)| (left, top, right - left, bottom - top))
+}
+
+fn encoded(pixels: &image::RgbaImage) -> io::Result<String> {
+    let mut png = Vec::new();
+    image::DynamicImage::ImageRgba8(pixels.clone())
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .map_err(io::Error::other)?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(png))
+}
+
+/// One image, in the chunks the protocol allows: the first chunk carries the head, and each chunk
+/// after it says only whether another follows.
+fn transmit(sent: &mut Vec<u8>, head: &str, encoded: &str) -> io::Result<()> {
+    for (index, chunk) in encoded.as_bytes().chunks(4096).enumerate() {
+        let more = if (index + 1) * 4096 < encoded.len() {
+            1
+        } else {
+            0
+        };
+        match index {
+            0 => write!(sent, "\x1b_G{head},m={more};")?,
+            _ => write!(sent, "\x1b_Gm={more};")?,
+        }
+        sent.extend_from_slice(chunk);
+        sent.extend_from_slice(b"\x1b\\");
+    }
+    Ok(())
 }
 
 impl<W: Write> RatatuiBackend for Backend<W> {
@@ -454,6 +649,10 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     }
 
     fn clear(&mut self) -> io::Result<()> {
+        let giving = self.faced.take();
+        if !giving.is_empty() {
+            holding(&mut self.screen, &mut self.writing).tell(&giving)?;
+        }
         for standing in std::mem::take(&mut self.shades) {
             if let Some(id) = standing.shade.id() {
                 holding(&mut self.screen, &mut self.writing).tell(&plane::delete(id))?;
@@ -517,6 +716,7 @@ pub(crate) fn paint<W: Write>(canvas: &mut CanvasOver<W>, view: &mut View) -> io
     canvas
         .backend_mut()
         .shades(painted.shades(), view.planes())?;
+    canvas.backend_mut().face(painted.face())?;
     let caret = painted.caret();
     canvas.draw(|frame| {
         if let Some(caret) = caret {
@@ -548,6 +748,7 @@ impl Restore {
         for id in PlaneId::ALL {
             giving.extend(plane::delete(id));
         }
+        giving.extend(face::delete());
         giving.extend_from_slice(GIVE_BACK_SCREEN);
         if self.window {
             giving.extend_from_slice(GIVE_UP_FOCUS);

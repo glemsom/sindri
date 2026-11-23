@@ -19,6 +19,7 @@ struct Scripted {
     size: Option<CellSize>,
     cell: Option<&'static [u8]>,
     sizing: Option<&'static [u8]>,
+    animation: Option<&'static [u8]>,
     asked: RefCell<Vec<Question>>,
 }
 
@@ -38,6 +39,7 @@ impl Asked for Scripted {
         match question {
             Question::Cell => self.cell,
             Question::Sizing => self.sizing,
+            Question::Animation => self.animation,
         }
         .map(<[u8]>::to_vec)
     }
@@ -269,8 +271,9 @@ fn a_terminal_that_names_large_text_is_asked_and_the_answer_read() {
     );
     assert_eq!(
         scripted.asked(),
-        [Question::Cell, Question::Sizing],
-        "the cell first, then the sizing, and no third question"
+        [Question::Cell, Question::Sizing, Question::Animation],
+        "the cell first, then the sizing, and the face's animation last of all: a terminal that \
+         speaks Kitty is asked whether it keeps frames and turns them"
     );
 }
 
@@ -328,5 +331,74 @@ fn the_cell_is_read_off_the_bytes_the_terminal_sent_and_the_keys_beside_it_kept(
         typed,
         b"\x1b[6;18;9".to_vec(),
         "and every byte of it is a key"
+    );
+}
+
+#[test]
+fn the_frames_and_animation_are_asked_for_under_the_face_s_own_identity() {
+    let asked = String::from_utf8_lossy(Question::Animation.asked()).into_owned();
+    let identity = format!("i={}", crate::face::ID);
+
+    assert!(
+        asked.contains("e=f") && asked.contains("e=a"),
+        "the two features asked for are the frames a picture is kept in and the animation of \
+         them: {asked:?}"
+    );
+    assert_eq!(
+        asked.matches(&identity).count(),
+        2,
+        "and both are asked under the face's own identity, {identity}: {asked:?}"
+    );
+}
+
+#[test]
+fn a_terminal_that_answers_both_features_animates_and_one_that_answers_neither_does_not() {
+    let both = concat!("a\x1b_Gi=337,e=f;OK\x1b\\", "\x1b_Gi=337,e=a;OK\x1b\\b");
+    let (animates, typed) = animation_reply(both.as_bytes());
+    assert!(
+        animates,
+        "a terminal that keeps frames and animates them is handed the loop"
+    );
+    assert_eq!(
+        typed,
+        b"ab".to_vec(),
+        "and the keys that arrived beside the answer are the launch's"
+    );
+
+    let neither = b"\x1b_Gi=337;ENOTSUPPORTED\x1b\\";
+    assert!(
+        !animation_reply(neither).0,
+        "and one that answers no such feature is handed the still face"
+    );
+    assert!(
+        !animation_reply(b"").0,
+        "a terminal that says nothing is handed the still face too"
+    );
+
+    let only_frames = concat!(
+        "\x1b_Gi=337,e=f;OK\x1b\\",
+        "\x1b_Gi=337,e=a;ENOTSUPPORTED\x1b\\"
+    );
+    assert!(
+        !animation_reply(only_frames.as_bytes()).0,
+        "frames without animation are no loop: both features are needed"
+    );
+
+    let animating = Answers::silent()
+        .animating()
+        .ask(Question::Animation)
+        .expect("a terminal that animates answers the question");
+    assert!(
+        animation_reply(&animating).0,
+        "and a scripted terminal that animates answers both features"
+    );
+    assert!(
+        !animation_reply(
+            &Answers::silent()
+                .ask(Question::Animation)
+                .expect("a terminal that does not animate still says so")
+        )
+        .0,
+        "while one that does not says it keeps none of them"
     );
 }

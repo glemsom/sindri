@@ -16,10 +16,16 @@ const ASK_CELL: &[u8] = b"\x1b[16t";
 /// The screen is erased after the answer, because the block is no cell of any frame.
 const ASK_SIZING: &[u8] = b"\x1b[H\x1b[6n\x1b]66;s=2; \x1b\\\x1b[6n\x1b[2J";
 
+/// The two features asked for under the face's own identity: `e=f` keeps a picture's frames and
+/// `e=a` turns them, and a terminal that answers either with anything but `OK` keeps neither.
+const ASK_ANIMATION: &[u8] =
+    concat!("\x1b_Ga=q,i=337,e=f\x1b\\", "\x1b_Ga=q,i=337,e=a\x1b\\").as_bytes();
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Question {
     Cell,
     Sizing,
+    Animation,
 }
 
 impl Question {
@@ -27,6 +33,7 @@ impl Question {
         match self {
             Question::Cell => ASK_CELL,
             Question::Sizing => ASK_SIZING,
+            Question::Animation => ASK_ANIMATION,
         }
     }
 }
@@ -40,6 +47,7 @@ pub trait Asked {
 pub struct Answers {
     cell: Option<CellSize>,
     sized: bool,
+    animation: bool,
 }
 
 impl Answers {
@@ -60,6 +68,13 @@ impl Answers {
             ..self
         }
     }
+
+    pub fn animating(self) -> Answers {
+        Answers {
+            animation: true,
+            ..self
+        }
+    }
 }
 
 impl Asked for Answers {
@@ -74,6 +89,12 @@ impl Asked for Answers {
                 true => b"\x1b[1;1R\x1b[1;3R".to_vec(),
                 false => b"\x1b[1;1R\x1b[1;1R".to_vec(),
             }),
+            Question::Animation => Some(match self.animation {
+                true => concat!("\x1b_Gi=337,e=f;OK\x1b\\", "\x1b_Gi=337,e=a;OK\x1b\\")
+                    .as_bytes()
+                    .to_vec(),
+                false => b"\x1b_Gi=337;ENOTSUPPORTED\x1b\\".to_vec(),
+            }),
         }
     }
 }
@@ -85,6 +106,7 @@ pub struct Capabilities {
     sizing: bool,
     pointer: bool,
     pictures: Pictures,
+    animation: bool,
     face: bool,
 }
 
@@ -96,6 +118,7 @@ impl Default for Capabilities {
             sizing: false,
             pointer: false,
             pictures: Pictures::none(),
+            animation: false,
             face: true,
         }
     }
@@ -140,6 +163,15 @@ impl Capabilities {
                 }
                 None => false,
             };
+        let animation = pictures.draws()
+            && match asked.ask(Question::Animation) {
+                Some(bytes) => {
+                    let (animates, keys) = animation_reply(&bytes);
+                    typed.extend(keys);
+                    animates
+                }
+                None => false,
+            };
         let pointer = pointer::speaks(term.as_deref(), program.as_deref(), vte.as_deref());
         (
             Capabilities {
@@ -148,6 +180,7 @@ impl Capabilities {
                 sizing,
                 pointer,
                 pictures,
+                animation,
                 face,
             },
             typed,
@@ -200,6 +233,10 @@ impl Capabilities {
         &mut self.pictures
     }
 
+    pub fn animates(&self) -> bool {
+        self.animation
+    }
+
     pub fn draws_face(&self) -> bool {
         self.face
     }
@@ -234,6 +271,45 @@ fn cell_at(bytes: &[u8]) -> Option<(usize, CellSize)> {
         end + OPENING.len() + 1,
         CellSize::new(width.parse().ok()?, height.parse().ok()?),
     ))
+}
+
+/// The answer the terminal's two feature reports carry, and the keys that arrived beside them: the
+/// face animates only where both the frames and their animation were answered `OK`.
+fn animation_reply(bytes: &[u8]) -> (bool, Vec<u8>) {
+    let (mut frames, mut animates) = (false, false);
+    let mut typed = Vec::with_capacity(bytes.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        match feature_at(&bytes[at..]) {
+            Some((length, feature, kept)) => {
+                match (feature, kept) {
+                    (b'f', true) => frames = true,
+                    (b'a', true) => animates = true,
+                    _ => {}
+                }
+                at += length;
+            }
+            None => {
+                typed.push(bytes[at]);
+                at += 1;
+            }
+        }
+    }
+    (frames && animates, typed)
+}
+
+fn feature_at(bytes: &[u8]) -> Option<(usize, u8, bool)> {
+    const OPENING: &[u8] = b"\x1b_G";
+    let params = bytes.strip_prefix(OPENING)?;
+    let end = params.windows(2).position(|pair| pair == b"\x1b\\")?;
+    let (head, payload) = std::str::from_utf8(&params[..end]).ok()?.split_once(';')?;
+    let feature = head
+        .split(',')
+        .find_map(|key| key.strip_prefix("e="))?
+        .as_bytes()
+        .first()
+        .copied()?;
+    Some((end + OPENING.len() + 2, feature, payload == "OK"))
 }
 
 /// The answer the terminal's two cursor reports carry, and the keys that arrived beside them: the
@@ -284,6 +360,13 @@ pub(crate) mod caps {
         probed(
             &[("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")],
             Answers::silent(),
+        )
+    }
+
+    pub(crate) fn animating() -> Capabilities {
+        probed(
+            &[("TERM", "xterm-kitty"), ("COLORTERM", "truecolor")],
+            Answers::silent().animating(),
         )
     }
 
