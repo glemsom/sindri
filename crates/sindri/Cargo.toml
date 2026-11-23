@@ -34,6 +34,7 @@ serde_json = "1.0"
 sindri-core = { path = "../sindri-core" }
 # A glyph can be two cells wide, so a row's columns are measured and never counted.
 unicode-width = "0.2"
+unicode-segmentation = "1.12"
 syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 
 [dev-dependencies]

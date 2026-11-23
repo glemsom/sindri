@@ -1073,6 +1073,7 @@ impl View {
             self.notice_rows(),
         );
         layout.rail = share.rail_band(area, layout.composer.y, &mut layout.transcript);
+        let mut rail_sizes = Sizes::none();
         if let Some((shape, band)) = layout.rail {
             let picture = match shape {
                 Rail::Ledger => {
@@ -1089,7 +1090,10 @@ impl View {
                 shape,
                 band,
                 self.facts.pulse(),
-                self.capabilities.pictures().cell(),
+                (
+                    self.capabilities.pictures().cell(),
+                    self.capabilities.sizes_text().then_some(&mut rail_sizes),
+                ),
                 buffer,
                 &self.capabilities.palette(),
             ) {
@@ -1120,6 +1124,7 @@ impl View {
             painted
                 .sizes
                 .settle(layout.transcript, buffer, &self.capabilities.palette());
+            painted.sizes.append(rail_sizes);
             self.highlight(layout.transcript, buffer, drawn.span());
             self.note(&mut painted, drawn);
             painted.caret = self

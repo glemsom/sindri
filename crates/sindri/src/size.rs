@@ -17,20 +17,44 @@ pub struct Sized {
     left: u16,
     width: u16,
     scale: u16,
+    fraction: Option<(u8, u8, u8, u8)>,
     words: String,
     look: Look,
 }
 
 impl Sized {
     pub fn new(left: u16, scale: u16, words: impl Into<String>, look: Look) -> Sized {
-        let words = words.into();
+        assert!((1..=7).contains(&scale));
+        let words = words
+            .into()
+            .chars()
+            .filter(|glyph| !glyph.is_control())
+            .collect::<String>();
         Sized {
             left,
             width: pen::cells(&words).saturating_mul(scale),
             scale,
+            fraction: None,
             words,
             look,
         }
+    }
+
+    pub fn fractional(
+        mut self,
+        numerator: u8,
+        denominator: u8,
+        vertical: u8,
+        horizontal: u8,
+    ) -> Sized {
+        assert!(numerator > 0 && numerator < denominator && denominator <= 15);
+        assert!(vertical <= 2 && horizontal <= 2);
+        self.fraction = Some((numerator, denominator, vertical, horizontal));
+        self
+    }
+
+    pub fn fraction(&self) -> Option<(u8, u8, u8, u8)> {
+        self.fraction
     }
 
     pub fn covers(&self, at: u16) -> bool {
@@ -56,12 +80,43 @@ impl Sized {
         &self.words
     }
 
+    pub fn sequence(&self) -> Vec<u8> {
+        use unicode_segmentation::UnicodeSegmentation;
+        if self.fraction.is_none() && self.words.is_ascii() {
+            return format!(
+                "\x1b]66;s={};{}\x1b\\",
+                self.scale,
+                self.words
+                    .chars()
+                    .filter(|glyph| !glyph.is_control())
+                    .collect::<String>()
+            )
+            .into_bytes();
+        }
+        let mut metadata = format!("s={}", self.scale);
+        if let Some((n, d, v, h)) = self.fraction {
+            metadata.push_str(&format!(":n={n}:d={d}:v={v}:h={h}"));
+        }
+        let mut bytes = Vec::new();
+        for glyph in self.words.graphemes(true) {
+            let width = pen::cells(glyph);
+            if width == 0 {
+                continue;
+            }
+            bytes.extend_from_slice(format!("\x1b]66;{metadata}:w={width};").as_bytes());
+            bytes.extend(glyph.bytes().filter(|byte| *byte >= 32 && *byte != 127));
+            bytes.extend_from_slice(b"\x1b\\");
+        }
+        bytes
+    }
+
     pub fn spelling(&self) -> String {
         let mut spelling = String::with_capacity(self.words.len() * usize::from(self.scale));
-        for glyph in self.words.chars() {
-            spelling.push(glyph);
+        use unicode_segmentation::UnicodeSegmentation;
+        for glyph in self.words.graphemes(true) {
+            spelling.push_str(glyph);
             spelling.push_str(&pen::blank(
-                pen::cell(glyph).saturating_mul(self.scale.saturating_sub(1)),
+                pen::cells(glyph).saturating_mul(self.scale.saturating_sub(1)),
             ));
         }
         spelling
@@ -116,7 +171,10 @@ impl Sizes {
 
     pub fn settle(&mut self, band: Rect, buffer: &mut Buffer, palette: &Palette) {
         self.laid.retain(|laid| {
-            let fits = laid.row.saturating_add(laid.run.scale).saturating_sub(1) < band.bottom();
+            let fits = laid.row >= band.y
+                && laid.left >= band.x
+                && u32::from(laid.row) + u32::from(laid.run.scale) <= u32::from(band.bottom())
+                && u32::from(laid.left) + u32::from(laid.run.width) <= u32::from(band.right());
             if fits {
                 pen::write(
                     buffer,
@@ -137,6 +195,10 @@ impl Sizes {
 
     pub fn covers(&self, row: u16, column: u16) -> Option<&Laid> {
         self.laid.iter().find(|laid| laid.covers(row, column))
+    }
+
+    pub fn append(&mut self, other: Sizes) {
+        self.laid.extend(other.laid);
     }
 
     pub fn laid(&self) -> &[Laid] {
