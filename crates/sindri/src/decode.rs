@@ -37,6 +37,10 @@ const MOTION: u32 = 32;
 /// `ESC [ 2 0 1 ~`: the sequence that ends a bracketed paste, so all before it is one paste.
 const PASTE_END: &[u8] = b"\x1b[201~";
 
+/// `ESC _ … ESC \`: an Application Program Command, which is how a terminal answers the graphics
+/// protocol's queries — words it says, never keys the reader pressed.
+const APC_END: &[u8] = b"\x1b\\";
+
 /// The bytes a key arrives as, kept until the sequence they start is complete: a terminal is
 /// free to send one key in as many reads as it likes.
 pub struct Decoder {
@@ -132,11 +136,24 @@ impl Decoder {
                     None => Step::Taken,
                 }
             }
+            Some(b'_') => self.apc(),
             Some(_) => {
                 self.take(1);
                 Step::Taken
             }
         }
+    }
+
+    fn apc(&mut self) -> Step {
+        let Some(end) = self
+            .pending
+            .windows(APC_END.len())
+            .position(|window| window == APC_END)
+        else {
+            return Step::Waiting;
+        };
+        self.take(end + APC_END.len());
+        Step::Taken
     }
 
     fn control(&mut self) -> Step {

@@ -97,6 +97,10 @@ const ASK_FRAMES: &[u8] = b"\x1b_Ga=q,i=337,e=f,c=1,X=1\x1b\\";
 const ANSWERS_FRAMES: &[u8] = b"\x1b_Gi=337,e=f,c=1,X=1;OK\x1b\\";
 const ANSWERS_TURNING: &[u8] = b"\x1b_Gi=337,e=a;OK\x1b\\";
 
+/// What a terminal that keeps no feature query says back, once per feature asked: it reads the
+/// query as an image to load, and no image came with it, so there is no size to load one at.
+const ANSWERS_REFUSED: &[u8] = b"\x1b_Gi=337;EINVAL: dimensions required\x1b\\";
+
 /// `CSI < u` pops that push, so the shell gets back the terminal it lent.
 const GIVE_BACK_KEYS: &[u8] = b"\x1b[<u";
 
@@ -393,19 +397,36 @@ struct Drawn {
     reads: Arc<Mutex<Vec<Vec<u8>>>>,
 }
 
+/// The voice a watched terminal answers its launch in.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Voice {
+    /// Says nothing to anything.
+    Silent,
+    /// Keeps the face's frames and turns them.
+    Kitty,
+    /// Speaks the graphics protocol but keeps no feature query.
+    Refusing,
+}
+
 impl Drawn {
     fn watch(master: File) -> Drawn {
-        Drawn::watching(master, false)
+        Drawn::watching(master, Voice::Silent)
     }
 
     /// A watcher that answers the questions a launch puts to its terminal, so a launch whose
     /// terminal keeps the face's frames is drawn animating. Answering is opt-in: a test that wants
     /// a terminal which says nothing keeps `watch`.
     fn answering(master: File) -> Drawn {
-        Drawn::watching(master, true)
+        Drawn::watching(master, Voice::Kitty)
     }
 
-    fn watching(master: File, answers: bool) -> Drawn {
+    /// A watcher whose terminal speaks the graphics protocol and keeps no feature query, the way
+    /// every terminal older than the query does.
+    fn refusing(master: File) -> Drawn {
+        Drawn::watching(master, Voice::Refusing)
+    }
+
+    fn watching(master: File, voice: Voice) -> Drawn {
         let reads = Arc::new(Mutex::new(Vec::new()));
         let landing = Arc::clone(&reads);
         thread::spawn(move || {
@@ -416,9 +437,7 @@ impl Drawn {
                     Ok(0) | Err(_) => return,
                     Ok(count) => {
                         let heard = &buffer[..count];
-                        if answers {
-                            said_back(&master, heard);
-                        }
+                        said_back(&master, heard, voice);
                         landing.lock().expect("the frame").push(heard.to_vec());
                     }
                 }
@@ -475,14 +494,24 @@ impl Drawn {
     }
 }
 
-fn said_back(master: &File, asked: &[u8]) {
+fn said_back(master: &File, asked: &[u8], voice: Voice) {
     let mut said = Vec::new();
     if contains(asked, ASK_CELL) {
         said.extend_from_slice(b"\x1b[6;20;10t");
     }
     if contains(asked, ASK_FRAMES) {
-        said.extend_from_slice(ANSWERS_FRAMES);
-        said.extend_from_slice(ANSWERS_TURNING);
+        match voice {
+            // One answer per feature, under the face's own identity.
+            Voice::Kitty => {
+                said.extend_from_slice(ANSWERS_FRAMES);
+                said.extend_from_slice(ANSWERS_TURNING);
+            }
+            Voice::Refusing => {
+                said.extend_from_slice(ANSWERS_REFUSED);
+                said.extend_from_slice(ANSWERS_REFUSED);
+            }
+            Voice::Silent => {}
+        }
     }
     if said.is_empty() {
         return;
@@ -520,28 +549,28 @@ impl Session {
     }
 
     fn named(ground: &Ground, wire: &Wire, term: &str) -> (Session, Pty, Drawn) {
-        Session::named_watching(ground, wire, term, false)
+        Session::named_watching(ground, wire, term, Voice::Silent)
     }
 
     fn named_watching(
         ground: &Ground,
         wire: &Wire,
         term: &str,
-        answers: bool,
+        voice: Voice,
     ) -> (Session, Pty, Drawn) {
         let mut command = ground.command();
         command
             .arg("--yolo-unsafe")
             .env("SINDRI_BASE_URL", wire.base_url())
             .env("TERM", term);
-        Session::spawning(command, answers)
+        Session::spawning(command, voice)
     }
 
     fn starting(command: Command) -> (Session, Pty, Drawn) {
-        Session::spawning(command, false)
+        Session::spawning(command, Voice::Silent)
     }
 
-    fn spawning(mut command: Command, answers: bool) -> (Session, Pty, Drawn) {
+    fn spawning(mut command: Command, voice: Voice) -> (Session, Pty, Drawn) {
         let pty = Pty::open();
         // A child sharing this session would ask a controlling terminal for a size and paint a
         // frame the pty never heard of.
@@ -561,9 +590,10 @@ impl Session {
             .master
             .try_clone()
             .expect("a second handle on the master");
-        let drawn = match answers {
-            true => Drawn::answering(watching),
-            false => Drawn::watch(watching),
+        let drawn = match voice {
+            Voice::Silent => Drawn::watch(watching),
+            Voice::Kitty => Drawn::answering(watching),
+            Voice::Refusing => Drawn::refusing(watching),
         };
         (Session { child }, pty, drawn)
     }
@@ -792,7 +822,8 @@ fn a_terminal_nobody_can_vouch_for_is_handed_no_pointer_at_all() {
 fn a_launch_blocked_on_the_wire_leaves_the_face_turning_and_a_settled_run_stops_it() {
     let ground = Ground::new();
     let wire = Wire::holding();
-    let (session, mut pty, drawn) = Session::named_watching(&ground, &wire, "xterm-kitty", true);
+    let (session, mut pty, drawn) =
+        Session::named_watching(&ground, &wire, "xterm-kitty", Voice::Kitty);
 
     assert!(
         drawn.wait_for(FIRST_KEY),
@@ -839,6 +870,49 @@ fn a_launch_blocked_on_the_wire_leaves_the_face_turning_and_a_settled_run_stops_
         all.matches("_Ga=T,f=100,i=337").count(),
         1,
         "and the whole launch sent the picture once: {all:?}"
+    );
+}
+
+#[test]
+fn a_terminal_that_keeps_no_feature_query_leaves_none_of_its_words_in_the_draft() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) =
+        Session::named_watching(&ground, &wire, "xterm-ghostty", Voice::Refusing);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_for(ASK_FRAMES),
+        "the terminal is asked whether it keeps the face's frames: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"zz");
+    assert!(
+        drawn.wait_until(|frame| showing(frame, "zz")),
+        "the keys typed after the answer are drawn in the draft: {:?}",
+        drawn.text()
+    );
+    let drawn_words = text(&drawn.settled());
+    let rows = picture(&drawn_words);
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{rows:?}");
+
+    assert!(
+        !rows.values().any(|row| row.contains("EINVAL")),
+        "what a terminal answers a question with is the terminal's, and none of it is drawn as \
+         the reader's words: {rows:?}"
+    );
+    assert_eq!(
+        placed(&drawn_words).map(|(_, column)| column),
+        Some(GUTTER + 2),
+        "the draft is the two keys and no word of the answer before them, so the caret stands \
+         two columns past the gutter: {rows:?}"
     );
 }
 

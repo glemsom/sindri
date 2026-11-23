@@ -40,6 +40,16 @@ fn a_bare_escape_is_the_key_that_closes_a_screen() {
 }
 
 #[test]
+fn a_terminals_answer_to_a_graphics_query_is_no_key() {
+    assert_eq!(
+        events(&[b"\x1b_Gi=337;EINVAL: dimens", b"ions required\x1b\\", b"a",]),
+        vec![key(Key::Char('a'))],
+        "an answer split across two reads is one sequence, no glyph of it is typed, and the key \
+         pressed after it still arrives"
+    );
+}
+
+#[test]
 fn a_glyph_typed_is_one_key() {
     assert_eq!(event(b"a"), key(Key::Char('a')));
 }
