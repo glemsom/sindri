@@ -9,14 +9,14 @@ rail at 120x40
 03 |✓ exit 0  23 ms · 412 bytes                                                   model     claude-sonnet-4-5-20250929      | ok:1 plain:1 dim:25 plain:51 dim:10 plain:32
 04 |  src/rows.rs: the glyph a turn opens with                                    think     high                            | muted:42 plain:36 dim:10 plain:32
 05 |  src/rows.rs: a word longer than a row is broken                                                                       | muted:49 plain:71
-06 |  Rendering lives in the front end and not in the core, because an entry      turns                           6 /  250  | plain:78 dim:10 plain:32
-07 |  is a fact and never a rendering: the TUI and any reader draw one run        ctx                  █░░░░░ 48.2k / 200k  | plain:78 dim:10 plain:12 dim:5 plain:15
-08 |  from one value, and the core may not name a terminal at all.                cache                                88%  | plain:78 dim:10 plain:32
+06 |  Rendering lives in the front end and not in the core, because an entry      turns         6 /  250                    | plain:78 dim:10 plain:32
+07 |  is a fact and never a rendering: the TUI and any reader draw one run        ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
+08 |  from one value, and the core may not name a terminal at all.                cache     88%                             | plain:78 dim:10 plain:32
 09 |⠹ 4.2s                                                                                                                  | accent:1 plain:1 dim:4 plain:114
 10 |                                                                              workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 11 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 12 |                                                                                                                        | plain:120
-13 |                                                                              skills                                 2  | plain:78 dim:10 plain:32
+13 |                                                                              skills    2                               | plain:78 dim:10 plain:32
 14 |                                                                                                                        | plain:120
 15 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
 16 |                                                                                                                        | plain:120
@@ -37,9 +37,9 @@ rail at 120x40
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
 33 |                                                                                                                        | plain:120
-34 |                                                                              input                              48.2k  | plain:78 dim:10 plain:32
-35 |                                                                              output                              3.1k  | plain:78 dim:10 plain:32
-36 |                                                                              total                              51.3k  | plain:78 dim:10 plain:32
+34 |                                                                              input     48.2k                           | plain:78 dim:10 plain:32
+35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
+36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                    ━                                                                   | plain:52 accent:1 plain:67
 38 |┃›what should the run do?                                                                                               | dim:25 plain:95
 39 |  Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                          | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:42

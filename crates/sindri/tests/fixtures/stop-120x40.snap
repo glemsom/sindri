@@ -9,14 +9,14 @@ stop at 120x40
 03 |│ the mark it wears moves, and a step that changes nothing costs nothing.     model     claude-sonnet-4-5-20250929      | dim:2 muted:71 plain:5 dim:10 plain:32
 04 |✗ error 1.2s A run that stopped for a reason says the reason, and it says     think     high                            | err:1 plain:1 muted:10 plain:66 dim:10 plain:32
 05 |  it twice: once in the marker beside the answer it ended on, and once in                                               | plain:120
-06 |  the entry the record keeps where the run ended. A failure carries one       turns                           6 /  250  | plain:78 dim:10 plain:32
-07 |  line of the run's own words about it, and a final answer and a              ctx                  █░░░░░ 48.2k / 200k  | plain:78 dim:10 plain:12 dim:5 plain:15
-08 |  cancellation carry no line they do not have.                                cache                                88%  | plain:78 dim:10 plain:32
+06 |  the entry the record keeps where the run ended. A failure carries one       turns         6 /  250                    | plain:78 dim:10 plain:32
+07 |  line of the run's own words about it, and a final answer and a              ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
+08 |  cancellation carry no line they do not have.                                cache     88%                             | plain:78 dim:10 plain:32
 09 |✗ error                                                                                                                 | err:1 plain:1 dim:5 plain:113
 10 |  the wire refused the request: 401 unauthorized                              workspace …/sindri/.worktrees/46-rail     | muted:48 plain:30 dim:10 plain:32
 11 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 12 |                                                                                                                        | plain:120
-13 |                                                                              skills                                 2  | plain:78 dim:10 plain:32
+13 |                                                                              skills    2                               | plain:78 dim:10 plain:32
 14 |                                                                                                                        | plain:120
 15 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
 16 |                                                                                                                        | plain:120
@@ -37,9 +37,9 @@ stop at 120x40
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
 33 |                                                                                                                        | plain:120
-34 |                                                                              input                              48.2k  | plain:78 dim:10 plain:32
-35 |                                                                              output                              3.1k  | plain:78 dim:10 plain:32
-36 |                                                                              total                              51.3k  | plain:78 dim:10 plain:32
+34 |                                                                              input     48.2k                           | plain:78 dim:10 plain:32
+35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
+36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
 38 |┃›what should the run do?                                                                                               | dim:25 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

@@ -17,6 +17,8 @@ const ROOM: usize = (FLOOR - FIELD) as usize;
 
 const COLUMNS: u16 = FLOOR;
 
+const SCREEN: u16 = 81;
+
 #[test]
 fn the_facts_a_launch_holds_before_a_run_are_what_a_prompt_is_pointed_at() {
     let facts = Facts::boot(boot());
@@ -1426,14 +1428,14 @@ fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_air_between_two() 
             stated(&[(0, "model     "), (10, CUT)]),
             stated(&[(0, "think     "), (10, "high")]),
             stated(&[]),
-            stated(&[(0, "turns     "), (21, "3 / 250")]),
-            stated(&[(0, "ctx       "), (23, "48.2k")]),
-            stated(&[(0, "cache     "), (25, "88%")]),
+            stated(&[(0, "turns     "), (10, "3 / 250")]),
+            stated(&[(0, "ctx       "), (10, "48.2k")]),
+            stated(&[(0, "cache     "), (10, "88%")]),
             stated(&[]),
             stated(&[(0, "workspace "), (10, "…/46-rail")]),
             stated(&[(0, "branch    "), (10, "spec/1-capability")]),
             stated(&[]),
-            stated(&[(0, "skills    "), (27, "2")]),
+            stated(&[(0, "skills    "), (10, "2")]),
             stated(&[]),
             stated(&[(0, "sandbox   "), (10, "bwrap")]),
             stated(&[]),
@@ -1467,9 +1469,9 @@ fn the_ledgers_foot_says_what_the_run_spent_on_the_frames_last_rows() {
     assert_eq!(
         &rows[rows.len() - 3..],
         [
-            (21, stated(&[(0, "input     "), (23, "48.2k")])),
-            (22, stated(&[(0, "output    "), (24, "3.1k")])),
-            (23, stated(&[(0, "total     "), (23, "51.3k")])),
+            (21, stated(&[(0, "input     "), (10, "48.2k")])),
+            (22, stated(&[(0, "output    "), (10, "3.1k")])),
+            (23, stated(&[(0, "total     "), (10, "51.3k")])),
         ],
         "the spend stands on the band's last three rows, read from the top down, with the total \
              on the frame's own floor"
@@ -1487,7 +1489,7 @@ fn the_foot_is_parted_from_the_blocks_above_it_by_one_row_of_air() {
     );
     assert_eq!(
         rows[17],
-        (18, stated(&[(0, "input     "), (23, "48.2k")])),
+        (18, stated(&[(0, "input     "), (10, "48.2k")])),
         "and the foot takes the band's last three rows from row 18, so the row above it is the \
              air that parts the two"
     );
@@ -1504,7 +1506,7 @@ fn a_band_with_no_room_for_the_foot_keeps_the_total_and_counts_the_two_it_gave_u
     );
     assert_eq!(
         rows[18],
-        (19, stated(&[(0, "total     "), (23, "51.3k")])),
+        (19, stated(&[(0, "total     "), (10, "51.3k")])),
         "and keeps the total on its floor, because that is the fact a reader glances at"
     );
 }
@@ -1515,7 +1517,7 @@ fn a_full_rail_keeps_the_foot_on_the_band_it_just_fits() {
 
     assert_eq!(
         rows.last(),
-        Some(&(23, stated(&[(0, "total     "), (23, "51.3k")]))),
+        Some(&(23, stated(&[(0, "total     "), (10, "51.3k")]))),
         "every fact a frame can hold and a spend beside them leave the total on the floor, so the \
          foot costs the blocks above it no row they held"
     );
@@ -1558,7 +1560,7 @@ fn a_band_too_short_gives_facts_up_in_the_sacrifice_order_and_the_last_row_count
             stated(&[(0, "model     "), (10, CUT)]),
             stated(&[(0, "think     "), (10, "high")]),
             stated(&[]),
-            stated(&[(0, "turns     "), (21, "3 / 250")]),
+            stated(&[(0, "turns     "), (10, "3 / 250")]),
             stated(&[]),
             stated(&[(0, "sandbox   "), (10, "bwrap")]),
             stated(&[(0, "+7 more")]),
@@ -1569,45 +1571,105 @@ fn a_band_too_short_gives_facts_up_in_the_sacrifice_order_and_the_last_row_count
 }
 
 #[test]
-fn a_numbers_digits_line_up_on_the_last_column_and_a_words_read_on_from_its_label() {
-    let rows = laid(&frame(), Shape::Ledger, band(COLUMNS, 17), None);
-    let value = |label: &str| -> (u16, String) {
+fn every_fact_of_a_ledger_opens_its_value_on_the_field_and_a_sheet_hangs_its_figures() {
+    let facts_of = |rows: &[Vec<(u16, String)>]| -> Vec<(String, u16, String)> {
         rows.iter()
-            .find_map(|parts| match parts.as_slice() {
-                [(0, field), (at, glyphs)] if field.trim_end() == label => {
-                    Some((*at, glyphs.clone()))
+            .filter_map(|parts| match parts.as_slice() {
+                [(0, label), (at, glyphs)] if !label.trim().is_empty() => {
+                    Some((label.trim().to_owned(), *at, glyphs.clone()))
                 }
                 _ => None,
             })
-            .unwrap_or_else(|| panic!("the {label} row of the ledger"))
+            .collect()
     };
 
-    for label in ["turns", "ctx", "cache", "skills"] {
-        let (at, glyphs) = value(label);
+    let rail = facts_of(&laid(&frame(), Shape::Ledger, band(COLUMNS, 17), None));
+    assert_eq!(
+        rail.iter()
+            .map(|(label, _, _)| label.as_str())
+            .collect::<Vec<&str>>(),
+        [
+            "wire",
+            "model",
+            "think",
+            "turns",
+            "ctx",
+            "cache",
+            "workspace",
+            "branch",
+            "skills",
+            "sandbox",
+            "session",
+            "temp",
+        ],
+        "the rail states every fact the run holds on a row of its own, under its label"
+    );
+    let spend = laid(&spent(), Shape::Ledger, band(COLUMNS, 24), None);
+    let foot = facts_of(&spend[spend.len() - 3..]);
+    assert_eq!(
+        foot.iter()
+            .map(|(label, _, _)| label.as_str())
+            .collect::<Vec<&str>>(),
+        ["input", "output", "total"],
+        "the rows at the foot of the ledger state what the run spent, under the same labels"
+    );
+
+    let stated = facts_of(&laid(&run(), Shape::Ledger, band(COLUMNS, 17), None));
+    assert!(
+        stated.iter().any(|(label, _, _)| label == "state"),
+        "the rail's first row states what the run is doing, whose value opens on the field too"
+    );
+
+    for (label, at, glyphs) in rail.iter().chain(&foot).chain(&stated) {
         assert_eq!(
-            usize::from(at) + usize::from(pen::cells(&glyphs)),
-            usize::from(COLUMNS - margins()),
-            "{label}'s {glyphs:?} does not end on the column the frame's margin leaves: a \
-                 number hangs against that edge so its digits line up with every other \
-                 number's"
+            *at, FIELD,
+            "{label}'s {glyphs:?} opens in {at}: a ledger opens every value, the spend's own \
+             included, on the field its label is set in, so its facts read as one list under a \
+             single left rule"
+        );
+        assert!(
+            usize::from(*at) + usize::from(pen::cells(glyphs)) <= usize::from(COLUMNS - margins()),
+            "{label}'s {glyphs:?} reaches past the column the frame's margin leaves: no value \
+             of the rail hangs on that edge any more"
         );
     }
+    let model = rail
+        .iter()
+        .find(|(label, _, _)| label == "model")
+        .expect("the model's row of the rail");
+    assert_eq!(
+        usize::from(model.1) + usize::from(pen::cells(&model.2)),
+        usize::from(COLUMNS - margins()),
+        "the model's {:?} is cut to the field and fills it to the margin: a value too long for \
+         the field gives way at its tail where it always gave way",
+        model.2
+    );
 
-    for label in [
-        "wire",
-        "model",
-        "think",
-        "workspace",
-        "branch",
-        "sandbox",
-        "session",
-        "temp",
-    ] {
-        let (at, _) = value(label);
+    let sheet_rows: Vec<Vec<(u16, String)>> = placed(&spent(), Shape::Screen, band(SCREEN, 40))
+        .into_iter()
+        .map(|(_, parts)| parts)
+        .collect();
+    let sheet = facts_of(&sheet_rows);
+    for label in ["turns", "ctx", "cache", "input", "output", "total"] {
+        let (_, at, glyphs) = sheet
+            .iter()
+            .find(|(fact, _, _)| fact == label)
+            .unwrap_or_else(|| panic!("the {label} row of the sheet"));
         assert_eq!(
-            at, FIELD,
-            "{label}'s value starts in {at}: a word hangs from its label, so the two read \
-                 as one phrase with no run of blanks between them"
+            usize::from(*at) + usize::from(pen::cells(glyphs)),
+            usize::from(SCREEN - margins()),
+            "{label}'s {glyphs:?} does not end on its column's last column: a sheet lays its \
+             facts in several columns, so a figure hangs on that edge and its digits line up \
+             with the column beside it"
+        );
+    }
+    for (label, at, _) in sheet.iter().filter(|(fact, _, _)| {
+        !["turns", "ctx", "cache", "input", "output", "total"].contains(&fact.as_str())
+    }) {
+        assert_eq!(
+            *at, FIELD,
+            "{label}'s value starts in {at}: a word of the sheet opens on the field its label \
+             is set in, as every value of the ledger does"
         );
     }
 }

@@ -7,14 +7,14 @@ card at 120x40
 01 |  for what it shows and no more.                                              model     claude-sonnet-4-5-20250929      | dim:120
 02 |                        ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
 03 |┃›what does the check co│ keys                                                                 │                        | dim:25 plain:1 dim:4 plain:65 dim:25
-04 |⋯ 1 call · 118 ms       │ Esc                  close this screen                               │              6 /  250  | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-05 |  What that buys is the │ ?                    close this screen                               │   █░░░░░ 48.2k / 200k  | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-06 |  a window is a row offs│ composer                                                             │                   88%  | dim:25 plain:1 dim:8 plain:61 dim:25
+04 |⋯ 1 call · 118 ms       │ Esc                  close this screen                               │ 250                    | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+05 |  What that buys is the │ ?                    close this screen                               │8.2k / 200k             | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+06 |  a window is a row offs│ composer                                                             │                        | dim:25 plain:1 dim:8 plain:61 dim:25
 07 |  entries between the ta│ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
 08 |  on the way. Each is la│ @                    the files of the workspace, while it starts a   │/.worktrees/46-rail     | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
 09 |  scrolled through costs│                      word                                            │apability               | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
 10 |  none.                 │ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
-11 |                        │ Esc                  close the commands card, and the draft as it    │                     2  | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+11 |                        │ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
 12 |┃›what is the transcript│                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
 13 |⋯ 1 call · 9 ms         │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
 14 |  The transcript's unit │ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
@@ -37,9 +37,9 @@ card at 120x40
 31 |                        │ Ctrl-Y               copy the mark, or the last answer               │                        | dim:25 plain:1 plain+bold:21 muted:33 plain:15 dim:25
 32 |▏ rust                  │ Ctrl-O               open or fold the newest work or prompt          │                        | dim:25 plain:1 plain+bold:21 muted:38 plain:10 dim:25
 33 |▏ fn main() {           │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
-34 |▏    │let row = Row::of(│ Ctrl-C               cancel the run, or clear the draft              │                 48.2k  | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
-35 |▏    │row.paint(area, bu│ Ctrl-Q               quit                                            │                  3.1k  | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
-36 |▏ }                     ╰──────────────────────────────────────────────────────────────── Esc ─╯                 51.3k  | dim:90 plain+bold:3 dim:27
+34 |▏    │let row = Row::of(│ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+35 |▏    │row.paint(area, bu│ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+36 |▏ }                     ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 37 |                                                                                                                        | dim:120
 38 |┃›what should the run do?                                                                                               | dim:120
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | dim:120

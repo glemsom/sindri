@@ -91,14 +91,15 @@ const CUT: &str = "claude-sonnet-4-5…";
 const BRANCH: &str = "spec/1-capability";
 
 fn ctx_line(width: u16, value: &str) -> String {
-    let at = width
+    let room = width
         .saturating_sub(margins())
+        .saturating_sub(FIELD)
         .saturating_sub(pen::cells(value));
     format!(
-        "{}{}{}{value}{}",
+        "{}{}{value}{}{}",
         pen::blank(MARGIN),
         pen::pad("ctx", FIELD),
-        pen::blank(at.saturating_sub(FIELD)),
+        pen::blank(room),
         pen::blank(MARGIN)
     )
 }
@@ -211,9 +212,6 @@ fn the_foot_is_drawn_on_the_bands_last_row_where_no_shadow_falls() {
     paint(&spent(), Rail::Ledger, area, None, &mut buffer, &PALETTE);
 
     let floor = area.bottom() - 1;
-    let at = COLUMNS
-        .saturating_sub(margins())
-        .saturating_sub(pen::cells("51.3k"));
     assert_eq!(
         under(&buffer, area.x + 1, floor),
         PALETTE.band(Band::Rail),
@@ -222,13 +220,9 @@ fn the_foot_is_drawn_on_the_bands_last_row_where_no_shadow_falls() {
     );
     assert_eq!(
         glyphs(&buffer, floor).trim_end(),
-        format!(
-            "{}{}{}",
-            pen::blank(MARGIN),
-            pen::pad("total", FIELD),
-            pen::blank(at.saturating_sub(FIELD))
-        ) + "51.3k",
-        "the total is the last row of the foot, so it stands on the band's own last row"
+        format!("{}{}51.3k", pen::blank(MARGIN), pen::pad("total", FIELD)),
+        "the total is the last row of the foot, so it stands on the band's own last row, with \
+         its figure opening on the field its label is set in"
     );
 }
 
@@ -1094,8 +1088,8 @@ fn a_frame_handed_no_size_draws_no_ctx_row_and_counts_nothing_for_it() {
             "  model     claude-sonnet-4-5…  ",
             "  think     high                ",
             "                                ",
-            "  turns                3 / 250  ",
-            "  cache                    88%  ",
+            "  turns     3 / 250             ",
+            "  cache     88%                 ",
             "                                ",
         ],
         "a frame before the first reply has no size, so it draws no ctx row and the \
@@ -1176,14 +1170,14 @@ fn the_ledger_reads_its_blocks_in_the_contracts_order_with_air_between_two() {
             "  model     claude-sonnet-4-5…  ",
             "  think     high                ",
             "                                ",
-            "  turns                3 / 250  ",
-            "  ctx                    48.2k  ",
-            "  cache                    88%  ",
+            "  turns     3 / 250             ",
+            "  ctx       48.2k               ",
+            "  cache     88%                 ",
             "                                ",
             "  workspace …/46-rail           ",
             "  branch    spec/1-capability   ",
             "                                ",
-            "  skills                     2  ",
+            "  skills    2                   ",
             "                                ",
             "  sandbox   bwrap               ",
             "                                ",
@@ -1382,7 +1376,7 @@ fn a_band_too_short_for_every_block_gives_facts_up_in_the_sacrifice_order() {
             "  model     claude-sonnet-4-5…  ",
             "  think     high                ",
             "                                ",
-            "  turns                3 / 250  ",
+            "  turns     3 / 250             ",
             "                                ",
             "  sandbox   bwrap               ",
             "  +7 more                       ",
@@ -1440,7 +1434,7 @@ fn a_strip_carries_the_share_of_a_named_window_and_gives_up_the_size_beside_it()
 
     assert_eq!(
         glyphs(&ledger, 0),
-        "  ctx          █░░░░░ 48.2k / 200k  ",
+        "  ctx       █░░░░░ 48.2k / 200k     ",
         "the ledger's ctx row says the size against the window it is a share of, and draws \
              that share as a meter beside them"
     );
@@ -1672,7 +1666,7 @@ fn a_strip_row_is_the_four_facts_of_its_list_beside_each_other_with_one_gap() {
 }
 
 #[test]
-fn a_ledger_row_sets_its_label_dim_and_its_value_plain_on_one_hanging_edge() {
+fn a_ledger_row_sets_its_label_dim_and_its_value_plain_on_the_field() {
     let facts = Facts {
         model: Some(String::from("claude-sonnet")),
         think: Some(String::from("high")),
@@ -1697,8 +1691,8 @@ fn a_ledger_row_sets_its_label_dim_and_its_value_plain_on_one_hanging_edge() {
     assert_eq!(
         glyphs(&buffer, 1),
         "  think     high                ",
-        "and a value of another width ends in that same column: one hanging edge, and \
-             no run of leaders out to it"
+        "and a value of another width opens in that same column: one field for every label, \
+             and no run of blanks or leaders out to the frame's edge"
     );
     assert_eq!(
         inks(&buffer, 0, &PALETTE),
@@ -1757,16 +1751,18 @@ fn a_window_is_drawn_as_a_meter_beside_the_size_it_is_a_share_of() {
     assert_eq!(
         rows,
         [
-            "  turns                   3 /  250  ",
-            "  ctx          █░░░░░ 48.2k / 200k  ",
-            "  cache                        88%  ",
+            "  turns         3 /  250            ",
+            "  ctx       █░░░░░ 48.2k / 200k     ",
+            "  cache     88%                     ",
         ],
         "a quarter of the window is one cell of the meter and the size is the number beside \
              it, and the hit rate is no meter at all"
     );
+    let ahead = u16::try_from(METER + 1).expect("the meter and the space after it fit a row");
     assert_eq!(
-        column_of(&rows[0], '/'),
+        column_of(&rows[0], '/').map(|at| at + ahead),
         column_of(&rows[1], '/'),
-        "the two halves of a pair line up: every slash in the block lands in one column"
+        "the two halves of a pair line up: every slash in the block lands one column past its \
+         value's halves, and the meter and the space it is followed by are no part of a pair"
     );
 }

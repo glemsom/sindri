@@ -7,14 +7,14 @@ streaming at 120x40
 01 |  scrolled through costs one layout per entry and scrolling it again costs    model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
 02 |  none.                                                                       think     high                            | plain:78 dim:10 plain:32
 03 |                                                                                                                        | plain:120
-04 |┃›what is the transcript's unit?                                              turns                           6 /  250  | dim:1 plain:77 dim:10 plain:32
-05 |⋯ 1 call · 9 ms                                                               ctx                  █░░░░░ 48.2k / 200k  | dim:1 plain:1 dim:13 plain:63 dim:10 plain:12 dim:5 plain:15
-06 |  The transcript's unit is the entry. An entry never carries a formatted      cache                                88%  | plain:78 dim:10 plain:32
+04 |┃›what is the transcript's unit?                                              turns         6 /  250                    | dim:1 plain:77 dim:10 plain:32
+05 |⋯ 1 call · 9 ms                                                               ctx       █░░░░░ 48.2k / 200k             | dim:1 plain:1 dim:13 plain:63 dim:10 plain:1 dim:5 plain:26
+06 |  The transcript's unit is the entry. An entry never carries a formatted      cache     88%                             | plain:78 dim:10 plain:32
 07 |  line, so the same run is drawn the same way by the TUI, by a reader of                                                | plain:120
 08 |  the transcript and by whatever front end comes next.                        workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
-11 |  ──────────┼───────────────────────────                                      skills                                 2  | plain:2 dim:38 plain:38 dim:10 plain:32
+11 |  ──────────┼───────────────────────────                                      skills    2                               | plain:2 dim:38 plain:38 dim:10 plain:32
 12 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
 13 |  code      │ behind a bar, highlighted                                       sandbox   bwrap                           | plain:11 dim:3 plain:64 dim:10 plain:32
 14 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
@@ -37,9 +37,9 @@ streaming at 120x40
 31 |  It survives: the rule is one boolean over the lines, and #52 keeps it.                                                | plain:120
 32 |                                                                                                                        | plain:120
 33 |▏ rust                                                                                                                  | dim:2 accent+faint:4 plain:114
-34 |▏ fn main() {                                                                 input                              48.2k  | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:69 dim:10 plain:32
-35 |▏    │let fence = Fence::open();                                              output                              3.1k  | dim:2 plain:3 dim:1 accent+bold:3 plain:69 dim:10 plain:32
-36 |▏    │let  tail = fence.words();                                              total                              51.3k  | dim:2 plain:3 dim:1 accent+bold:3 plain:15 plain+bold:5 plain:49 dim:10 plain:32
+34 |▏ fn main() {                                                                 input     48.2k                           | dim:2 accent+bold:2 plain:1 plain+bold:4 plain:69 dim:10 plain:32
+35 |▏    │let fence = Fence::open();                                              output    3.1k                            | dim:2 plain:3 dim:1 accent+bold:3 plain:69 dim:10 plain:32
+36 |▏    │let  tail = fence.words();                                              total     51.3k                           | dim:2 plain:3 dim:1 accent+bold:3 plain:15 plain+bold:5 plain:49 dim:10 plain:32
 37 |━                                                                                                                       | accent:1 plain:119
 38 |┃›what should the run do?                                                                                               | dim:25 plain:95
 39 |  Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                          | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:42

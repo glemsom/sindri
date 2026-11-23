@@ -7,14 +7,14 @@ face-off at 120x40
 01 |✓ bash                                                                        model     claude-sonnet-4-5-20250929      | ok:1 plain:1 dim:4 plain:72 dim:10 plain:32
 02 |  rg -n 'fence' src                                                           think     high                            | plain:78 dim:10 plain:32
 03 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
-04 |  src/rows.rs: the glyph a turn opens with                                    turns                           6 /  250  | muted:42 plain:36 dim:10 plain:32
-05 |  src/rows.rs: a word longer than a row is broken                             ctx                  █░░░░░ 48.2k / 200k  | muted:49 plain:29 dim:10 plain:12 dim:5 plain:15
-06 |  Rendering lives in the front end and not in the core, because an entry      cache                                88%  | plain:78 dim:10 plain:32
+04 |  src/rows.rs: the glyph a turn opens with                                    turns         6 /  250                    | muted:42 plain:36 dim:10 plain:32
+05 |  src/rows.rs: a word longer than a row is broken                             ctx       █░░░░░ 48.2k / 200k             | muted:49 plain:29 dim:10 plain:1 dim:5 plain:26
+06 |  Rendering lives in the front end and not in the core, because an entry      cache     88%                             | plain:78 dim:10 plain:32
 07 |  is a fact and never a rendering: the TUI and any reader draw one run                                                  | plain:120
 08 |  from one value, and the core may not name a terminal at all.                workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |                                                                                                                        | plain:120
-11 |                                                                              skills                                 2  | plain:78 dim:10 plain:32
+11 |                                                                              skills    2                               | plain:78 dim:10 plain:32
 12 |                                                                                                                        | plain:120
 13 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
 14 |                                                                                                                        | plain:120
@@ -37,9 +37,9 @@ face-off at 120x40
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
 33 |                                                                                                                        | plain:120
-34 |                                                                              input                              48.2k  | plain:78 dim:10 plain:32
-35 |                                                                              output                              3.1k  | plain:78 dim:10 plain:32
-36 |                                                                              total                              51.3k  | plain:78 dim:10 plain:32
+34 |                                                                              input     48.2k                           | plain:78 dim:10 plain:32
+35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
+36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
 38 |┃›what should the run do?                                                                                               | dim:25 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

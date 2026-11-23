@@ -223,14 +223,15 @@ the columns it leaves and the **Composer**'s band runs under it whole; and one r
 of the **Transcript band**, the **Composer**'s band under that, where it does not. Its blocks are
 read from the top down, with the run's spend on the rows at its foot, and those rows air on a rail
 that knows no spend. Its words open in the **Margin** on both edges: no block name and no label
-stands on the rail's first column, and no value hangs on the frame's last one.
+stands on the rail's first column, and every value opens on the field its label is set in, so none
+hangs on the frame's last one.
 _Avoid_: Sidebar, side panel, gutter, fact bar
 
 **Margin**:
 The two columns every **Band** opens its words in and keeps at its right edge, whatever the band
 holds: the **Transcript**'s prose past the gutter a row wears, the **Composer**'s head count, its
 hints and the row that says the frame stands off the tail, and the **Rail**'s sections, its fields
-and the values that hang in it. A gutter's glyph stands in the column before it and is no word of
+and the values set in them. A gutter's glyph stands in the column before it and is no word of
 the band, and the air a band keeps on its right is what stops a word on the frame's own edge.
 _Avoid_: Seat, padding, indent (that one is the gutter a row opens with)
 
