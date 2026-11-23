@@ -28,7 +28,6 @@ pub const PLACEMENT: u32 = 1;
 /// background only below `INT32_MIN / 2`, and a seam's edge ink is one such cell.
 pub const DEPTH: i64 = i32::MIN as i64 / 2 - 1;
 
-/// The two figures of the foot a bar stands under.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bar {
     Input,
@@ -101,8 +100,7 @@ pub enum Shade {
     Gauge {
         area: Rect,
         cell: CellSize,
-        share: u8,
-        turned: bool,
+        gauge: instrument::Gauge,
         tone: Color,
         calm: Color,
         accent: Color,
@@ -113,7 +111,7 @@ pub enum Shade {
         area: Rect,
         cell: CellSize,
         bar: Bar,
-        share: u8,
+        share: instrument::Share,
         tone: Color,
         ink: Color,
         peak: u8,
@@ -196,10 +194,7 @@ impl Shade {
         gauge: instrument::Gauge,
         palette: &Palette,
     ) -> Option<Shade> {
-        if !covers(area) {
-            return None;
-        }
-        let cell = cell?;
+        let cell = cell.filter(|_| covers(area))?;
         let tone = palette.band(Band::Rail);
         let calm = palette.colour(Ink::Plain);
         let accent = palette.colour(Ink::Accent);
@@ -213,8 +208,7 @@ impl Shade {
         Some(Shade::Gauge {
             area,
             cell,
-            share: gauge.share.rungs(),
-            turned: gauge.turned,
+            gauge,
             tone,
             calm,
             accent,
@@ -224,10 +218,7 @@ impl Shade {
     }
 
     pub fn bezel(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Shade> {
-        if !covers(area) {
-            return None;
-        }
-        let cell = cell?;
+        let cell = cell.filter(|_| covers(area))?;
         let tone = palette.band(Band::Rail);
         channels(tone)?;
         // The groove is light taken from the rung and given back to it, and the most a plane under
@@ -248,15 +239,9 @@ impl Shade {
         share: instrument::Share,
         palette: &Palette,
     ) -> Option<Shade> {
-        if !covers(area) {
-            return None;
-        }
-        let cell = cell?;
+        let cell = cell.filter(|_| covers(area))?;
         let tone = palette.band(Band::Rail);
-        let ink = palette.colour(match bar {
-            Bar::Input => Ink::Accent,
-            Bar::Output => Ink::Muted,
-        });
+        let ink = palette.colour(Ink::Plain);
         if [tone, ink].iter().any(|colour| channels(*colour).is_none()) {
             return None;
         }
@@ -264,7 +249,7 @@ impl Shade {
             area,
             cell,
             bar,
-            share: share.rungs(),
+            share,
             tone,
             ink,
             peak: palette.peak(Band::Rail),
@@ -425,7 +410,7 @@ impl Shade {
                 cell,
                 tone: channels(*tone)?,
                 calm: channels(*calm)?,
-                turned: channels(*accent)?,
+                accent: channels(*accent)?,
                 tick: channels(*tick)?,
                 peak: *peak,
             },
@@ -489,25 +474,20 @@ impl Shade {
             Shade::Bar { area, share, .. } => {
                 let width = u32::from(area.width) * cell.width();
                 Placement {
-                    down: u32::from(*share),
+                    down: u32::from(share.hundredth()),
                     width,
                     height: 1,
                     ..whole(*area)
                 }
             }
-            Shade::Gauge {
-                area,
-                share,
-                turned,
-                ..
-            } => {
+            Shade::Gauge { area, gauge, .. } => {
                 let width = u32::from(area.width) * cell.width();
                 Placement {
-                    from: match turned {
+                    from: match gauge.turned {
                         true => width,
                         false => 0,
                     },
-                    down: u32::from(*share),
+                    down: u32::from(gauge.share.hundredth()),
                     width,
                     height: 1,
                     ..whole(*area)
@@ -675,20 +655,20 @@ pub enum Image {
         rail: [u8; 3],
         seam: Option<Seam>,
     },
-    /// The ladder a gauge's share is carried by: one rung per hundredth of a block `cols` cells
-    /// wide, the ink a meter is filled with beside the ink it turns to — which band a rung is
-    /// cropped from is the placement's, so a gauge that turned sends no pixel.
+    /// The image a gauge's share is carried by: the row's pixels at every hundredth of a block
+    /// `cols` cells wide, the ink a meter is filled with beside the ink it turns to — which band is
+    /// shown is the placement's, so a gauge that turned sends no pixel.
     Gauge {
         cols: u16,
         cell: CellSize,
         tone: [u8; 3],
         calm: [u8; 3],
-        turned: [u8; 3],
+        accent: [u8; 3],
         tick: [u8; 3],
         peak: u8,
     },
-    /// The ladder a figure's share is carried by: one rung per hundredth of a block `cols` cells
-    /// wide.
+    /// The image a figure's share is carried by: the row's pixels at every hundredth of a block
+    /// `cols` cells wide.
     Bar {
         cols: u16,
         cell: CellSize,
@@ -854,10 +834,10 @@ impl Image {
                 cell,
                 tone,
                 calm,
-                turned,
+                accent,
                 tick,
                 peak,
-            } => return gauge(cols, cell, tone, [calm, turned], tick, peak),
+            } => return gauge_pixels(cols, cell, tone, [calm, accent], tick, peak),
             Image::Bar {
                 cols,
                 cell,
@@ -865,13 +845,13 @@ impl Image {
                 ink,
                 peak,
                 ..
-            } => return track(cols, cell, tone, ink, peak),
+            } => return bar_pixels(cols, cell, tone, ink, peak),
             Image::Bezel {
                 area,
                 cell,
                 tone,
                 weight,
-            } => return groove(area, cell, tone, weight),
+            } => return bezel_pixels(area, cell, tone, weight),
             _ => {}
         }
         let cell = self.cell();
@@ -893,16 +873,19 @@ impl Image {
     }
 }
 
-/// The rungs an instrument's ladder is drawn at: one per hundredth of the block's width, one
-/// pixel deep, which the terminal stretches down the row the rung is placed on.
-const RUNGS: u32 = 101;
+/// The depths an instrument's image is drawn at: one for every hundredth of the block's width, one
+/// pixel deep, which the terminal stretches down the row the image is placed on.
+const HUNDREDTHS: u32 = 101;
 
 /// A pixel an instrument leaves to the band it is drawn over.
 const NOTHING: [u8; 4] = [0, 0, 0, 0];
 
-/// Two bands of `cols` pixels' width, each rung filled as deep as its hundredth, traced by its last
-/// pixel and ticked on the track where the fill has not reached.
-fn gauge(
+/// The hundredth of the block an image drawn at `depth` stands for.
+fn hundredth(depth: u32) -> instrument::Share {
+    instrument::Share::of(u8::try_from(depth).unwrap_or(100))
+}
+
+fn gauge_pixels(
     cols: u16,
     cell: CellSize,
     tone: [u8; 3],
@@ -912,12 +895,12 @@ fn gauge(
 ) -> image::RgbaImage {
     let width = u32::from(cols) * cell.width();
     let quarter = (width / 4).max(1);
-    image::RgbaImage::from_fn(width * 2, RUNGS, |x, rung| {
+    image::RgbaImage::from_fn(width * 2, HUNDREDTHS, |x, depth| {
         let (ink, x) = match x < width {
             true => (bands[0], x),
             false => (bands[1], x - width),
         };
-        let fill = rung_share(rung).pixels(width);
+        let fill = hundredth(depth).pixels(width);
         image::Rgba(match x < fill {
             true => lit(tone, ink, spend_of_edge(peak, x, fill)),
             false if x > 0 && x % quarter == 0 => lit(tone, tick, peak / 3),
@@ -926,12 +909,16 @@ fn gauge(
     })
 }
 
-/// A track of `cols` pixels in the ink a figure takes: each rung filled as deep as its hundredth,
-/// and nothing beside it.
-fn track(cols: u16, cell: CellSize, tone: [u8; 3], ink: [u8; 3], peak: u8) -> image::RgbaImage {
+fn bar_pixels(
+    cols: u16,
+    cell: CellSize,
+    tone: [u8; 3],
+    ink: [u8; 3],
+    peak: u8,
+) -> image::RgbaImage {
     let width = u32::from(cols) * cell.width();
-    image::RgbaImage::from_fn(width, RUNGS, |x, rung| {
-        let fill = rung_share(rung).pixels(width);
+    image::RgbaImage::from_fn(width, HUNDREDTHS, |x, depth| {
+        let fill = hundredth(depth).pixels(width);
         image::Rgba(match x < fill {
             true => lit(tone, ink, peak),
             false => NOTHING,
@@ -939,7 +926,7 @@ fn track(cols: u16, cell: CellSize, tone: [u8; 3], ink: [u8; 3], peak: u8) -> im
     })
 }
 
-fn groove(area: Rect, cell: CellSize, tone: [u8; 3], weight: u8) -> image::RgbaImage {
+fn bezel_pixels(area: Rect, cell: CellSize, tone: [u8; 3], weight: u8) -> image::RgbaImage {
     let (width, height) = (
         u32::from(area.width) * cell.width(),
         u32::from(area.height) * cell.height(),
@@ -955,13 +942,8 @@ fn groove(area: Rect, cell: CellSize, tone: [u8; 3], weight: u8) -> image::RgbaI
     })
 }
 
-/// The hundredth of the block a rung of a ladder stands for.
-fn rung_share(rung: u32) -> instrument::Share {
-    instrument::Share::of(u8::try_from(rung).unwrap_or(100))
-}
-
 /// The light a gauge's fill spends at the pixel `x` of a fill `fill` pixels deep: three quarters of
-/// the most the rail proves, and all of it on the trace that ends the fill.
+/// the rail's peak, and all of it on the trace that ends the fill.
 fn spend_of_edge(peak: u8, x: u32, fill: u32) -> u8 {
     match x + 1 == fill {
         true => peak,
@@ -969,9 +951,9 @@ fn spend_of_edge(peak: u8, x: u32, fill: u32) -> u8 {
     }
 }
 
-/// The rail's `tone` with `spend` channels of light added in the hue of the `ink` the fact is
-/// stated in: a pixel of an instrument is the rung it stands on and never an ink over it, so every
-/// word the rail states keeps its floor where the instrument is drawn under it.
+/// The rail's `tone` with `spend` channels of light added in the hue of the `ink` the fact is stated
+/// in, and never the ink itself: the palette proves the most a rung takes under every ink it spells,
+/// so the words over an instrument keep their floor.
 fn lit(tone: [u8; 3], ink: [u8; 3], spend: u8) -> [u8; 4] {
     let hue = u16::from(ink.into_iter().max().unwrap_or(1).max(1));
     let lit: [u8; 3] = std::array::from_fn(|channel| {
@@ -1131,7 +1113,6 @@ pub struct Placement {
     pub from: u32,
     /// The pixels of the image shown, which are the ones the columns it stands over hold.
     pub width: u32,
-    /// The pixel row of the image shown first, and the pixels shown from it down.
     pub down: u32,
     pub height: u32,
 }

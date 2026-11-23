@@ -1851,13 +1851,10 @@ fn the_carets_light_claims_no_cell_of_the_band_it_lights() {
     }
 }
 
-/// The light an instrument may spend on a pixel: the most the palette proves its rail's rung can
-/// take and still leave every ink it spells its floor.
 fn proved(palette: &Palette) -> u8 {
     palette.lift(Band::Rail)
 }
 
-/// The light a pixel of an instrument carries over the rung it is drawn on.
 fn over(shade: &Shade, pixel: [u8; 4]) -> [i32; 3] {
     let rung = spelled(shade.row(0));
     std::array::from_fn(|channel| i32::from(pixel[channel]) - i32::from(rung[channel]))
@@ -2046,7 +2043,7 @@ fn a_bar_is_the_pixels_its_figure_takes_and_no_pixel_beside_them() {
     let width = u32::from(area.width) * CELL.width();
     for (spelling, palette) in SPELLED {
         let proved = proved(&palette);
-        for (bar, ink) in [(Bar::Input, Ink::Accent), (Bar::Output, Ink::Muted)] {
+        for bar in [Bar::Input, Bar::Output] {
             for percent in [0, 25, 50, 100] {
                 let shade = bar_ink(area, bar, percent, &palette);
                 let plane = drawn(shade);
@@ -2084,19 +2081,11 @@ fn a_bar_is_the_pixels_its_figure_takes_and_no_pixel_beside_them() {
                         light.iter().copied().min().expect("three channels"),
                         light.iter().copied().max().expect("three channels"),
                     );
-                    match ink {
-                        Ink::Accent => assert!(
-                            light[2] >= light[1] && light[1] > light[0],
-                            "{spelling} draws the {bar:?} bar at {percent}% in {light:?} channels \
-                             of light, where the accent it is stated in is blue before it is green \
-                             and green before it is red"
-                        ),
-                        _ => assert!(
-                            high - low <= 2,
-                            "{spelling} draws the {bar:?} bar at {percent}% in {light:?} channels \
-                             of light, where the ink it is stated in is grey"
-                        ),
-                    }
+                    assert!(
+                        high - low <= 2,
+                        "{spelling} draws the {bar:?} bar at {percent}% in {light:?} channels of \
+                         light, where the ink the foot states its figures in is grey"
+                    );
                     assert!(
                         light.iter().all(|channel| *channel <= i32::from(proved)),
                         "{spelling} draws column {x} of a {bar:?} bar at {percent}% at {light:?} \

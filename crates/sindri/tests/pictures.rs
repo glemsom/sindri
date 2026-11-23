@@ -2171,7 +2171,7 @@ fn a_frames_rail_stands_its_gauge_on_the_row_the_ctx_fact_is_stated_on() {
         .1;
     let gauge = shade_of(&frame, PlaneId::Gauge);
     let plane = plane_of(&view, PlaneId::Gauge);
-    let at = gauge.place().expect("the gauge's ladder to be placed");
+    let at = gauge.place().expect("the gauge to be placed");
     let stated: Vec<u16> = (rail.area.y..rail.area.bottom())
         .filter(|y| {
             rail_row(frame.cells(), rail.area, *y)
@@ -2190,14 +2190,14 @@ fn a_frames_rail_stands_its_gauge_on_the_row_the_ctx_fact_is_stated_on() {
     assert_eq!(
         (at.from, at.down, at.height),
         (0, 24, 1),
-        "the gauge is placed on the twenty-fourth rung of the first band, where 48.2k of a 200k \
-         window is 24 hundredths of its block"
+        "the gauge is placed on the twenty-fourth hundredth of the first band, where 48.2k of a \
+         200k window is 24 hundredths of its block"
     );
     assert_eq!(
         plane.pixels().dimensions(),
         (2 * u32::from(gauge.area().width) * cell().width(), 101),
-        "a gauge's plane is its ladder: two bands of the row's own pixels, one rung per \
-         hundredth of the block, and one pixel deep where it is placed"
+        "a gauge's plane is two bands of the row's own pixels, one for every hundredth of the \
+         block, and one pixel deep where it is placed"
     );
 }
 
@@ -2421,7 +2421,7 @@ fn every_ink_a_frame_draws_keeps_its_floor_on_the_pixel_its_cell_stands_on() {
     let palette = *frame.palette();
     let area = frame.area();
     // Each plane is read through the cells it stands on and the rect of itself it shows there, so
-    // the light the caret casts and the rungs an instrument is cropped to answer for their own
+    // the light the caret casts and the hundredth an instrument is cropped to answer for their own
     // pixels and not for a band's.
     let planes: Vec<(Placement, &Plane)> = frame
         .told()

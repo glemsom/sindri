@@ -127,8 +127,10 @@ impl Fill {
         self.percent
     }
 
-    pub(crate) fn ink(&self) -> Ink {
-        self.ink
+    /// Whether the run is near the ceiling it is drawn in the accent past: the one turn the meter's
+    /// own cells make, which the gauge under it makes too.
+    pub(crate) fn turned(&self) -> bool {
+        self.percent >= FULL
     }
 
     fn cells(&self) -> usize {
@@ -405,7 +407,7 @@ pub(crate) fn pair(left: impl std::fmt::Display, right: impl std::fmt::Display) 
     format!("{left} / {right}")
 }
 
-fn share(part: u64, whole: u64) -> Option<u8> {
+pub(crate) fn share(part: u64, whole: u64) -> Option<u8> {
     if whole == 0 {
         return None;
     }

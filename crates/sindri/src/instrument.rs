@@ -1,11 +1,10 @@
 use ratatui::layout::Rect;
 use sindri_core::records::Usage;
 
-use crate::ink::Ink;
 use crate::ledger::{self, Kind, Row};
 
-/// The hundredth of a block's width a shape covers: the rung of the ladder an instrument is drawn
-/// as, so a share that moved is a placement of an image the terminal already holds.
+/// The hundredth of a block's width a shape covers: one of the hundred an instrument's image is
+/// drawn at, so a share that moved is a placement of an image the terminal already holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Share(u8);
 
@@ -18,7 +17,7 @@ impl Share {
         (u32::from(self.0) * width + 50) / 100
     }
 
-    pub fn rungs(self) -> u8 {
+    pub fn hundredth(self) -> u8 {
         self.0
     }
 }
@@ -36,7 +35,7 @@ impl Gauge {
         let fill = facts.ctx?.fill()?;
         Some(Gauge {
             share: Share::of(fill.percent()),
-            turned: fill.ink() == Ink::Accent,
+            turned: fill.turned(),
         })
     }
 }
@@ -51,37 +50,39 @@ pub(crate) struct Spend {
 
 impl Spend {
     pub(crate) fn of(usage: &Usage) -> Option<Spend> {
-        let larger = usage.input.into_iter().chain(usage.output).max()?;
+        let whole = usage.total.or_else(|| match (usage.input, usage.output) {
+            (Some(input), Some(output)) => Some(input.saturating_add(output)),
+            (Some(one), None) | (None, Some(one)) => Some(one),
+            (None, None) => None,
+        })?;
         Some(Spend {
-            input: usage.input.map(|figure| share_of(figure, larger)),
-            output: usage.output.map(|figure| share_of(figure, larger)),
+            input: usage.input.map(|figure| share(figure, whole)),
+            output: usage.output.map(|figure| share(figure, whole)),
         })
     }
 }
 
-fn share_of(figure: u64, larger: u64) -> Share {
-    let percent = (u128::from(figure) * 100 + u128::from(larger) / 2) / u128::from(larger.max(1));
-    Share::of(u8::try_from(percent).unwrap_or(100))
+fn share(figure: u64, whole: u64) -> Share {
+    Share::of(ledger::share(figure, whole).unwrap_or(0))
 }
 
 const FOOT: [Kind; 3] = [Kind::Input, Kind::Output, Kind::Total];
 
-/// The rows of a rail that state nothing: the air between the last fact it speaks and the foot it
+/// The rows of a rail that state nothing: the air between the last row it writes and the foot it
 /// spends, in the coordinates `ledger::rows` returns, and none where the rail fills its band.
 pub(crate) fn bezel(rows: &[Row], area: Rect) -> Option<Rect> {
-    let mut stated: Option<u16> = None;
-    let mut foot: Option<u16> = None;
-    for row in rows {
-        match row.kind() {
-            Some(kind) if FOOT.contains(&kind) => {
-                foot = Some(foot.map_or(row.y(), |at: u16| at.min(row.y())));
-            }
-            Some(_) => stated = Some(stated.map_or(row.y(), |at: u16| at.max(row.y()))),
-            None => {}
-        }
-    }
-    let top = stated?.saturating_add(1);
+    let foot = rows
+        .iter()
+        .filter(|row| row.kind().is_some_and(|kind| FOOT.contains(&kind)))
+        .map(Row::y)
+        .min();
     let bottom = foot.unwrap_or_else(|| area.bottom());
+    let stated = rows
+        .iter()
+        .filter(|row| row.y() < bottom && !row.parts().is_empty())
+        .map(Row::y)
+        .max();
+    let top = stated?.saturating_add(1);
     (top < bottom).then(|| Rect {
         x: area.x,
         y: top,

@@ -30,18 +30,22 @@ fn a_share_is_the_pixels_of_the_blocks_width_it_names() {
 }
 
 #[test]
-fn a_share_names_the_rung_the_ladder_is_cut_at() {
+fn a_share_names_the_hundredth_of_the_block_it_stands_for() {
     assert_eq!(
-        Share::of(48).rungs(),
+        Share::of(48).hundredth(),
         48,
-        "the ladder is cut a rung to the hundredth, so 48% stands on rung 48"
+        "a share names the hundredth of the block it covers, so 48% is the forty-eighth of them"
     );
     assert_eq!(
-        Share::of(0).rungs(),
+        Share::of(0).hundredth(),
         0,
-        "no share of a block stands on the ladder's first rung"
+        "no share of a block covers any hundredth of it"
     );
-    assert_eq!(Share::of(255).rungs(), 100, "and none stands past its last");
+    assert_eq!(
+        Share::of(255).hundredth(),
+        100,
+        "and no share of it names a hundredth past the hundredth"
+    );
 }
 
 fn measured(size: u64, window: u64) -> Facts {
@@ -117,18 +121,29 @@ fn spent(input: Option<u64>, output: Option<u64>) -> Usage {
 }
 
 #[test]
-fn the_two_figures_of_a_spend_are_drawn_on_one_scale() {
-    let spend = Spend::of(&spent(Some(48_200), Some(3_100))).expect("a spend of two figures");
+fn the_two_figures_of_a_spend_are_drawn_against_the_total_the_foot_states() {
+    let usage = Usage {
+        total: Some(51_300),
+        ..spent(Some(48_200), Some(3_100))
+    };
+    let spend = Spend::of(&usage).expect("a spend of two figures");
 
     assert_eq!(
         spend.input.map(|share| share.pixels(120)),
-        Some(120),
-        "the larger of the two figures is the whole of the block"
+        Some(113),
+        "the input's 48.2k of a run that spent 51.3k is 94 hundredths of the block, and 113 of \
+         its 120 pixels"
     );
     assert_eq!(
         spend.output.map(|share| share.pixels(120)),
         Some(7),
-        "and the other is drawn against that same block: its 6% is 7 pixels"
+        "and the output's 3.1k is the 6 hundredths beside it, which is 7 pixels of the same block"
+    );
+    assert_eq!(
+        [spend.input, spend.output].map(|share| share.map_or(0, |share| share.pixels(120))),
+        [113, 7],
+        "the two bars are the whole of the block between them, so the shape the foot draws is the \
+         run's own split of what it spent"
     );
 }
 
@@ -258,6 +273,50 @@ fn the_bezel_of_a_rail_that_states_no_spend_runs_to_the_bands_foot() {
         }),
         "a rail whose foot states no figure keeps its frame down to the band's own last row"
     );
+}
+
+#[test]
+fn the_bezel_stands_below_the_row_that_counts_the_facts_the_rail_kept_back() {
+    let facts = Facts {
+        branch: Some(String::from(
+            "spec/a-branch-name-that-no-column-of-this-rail-can-hold",
+        )),
+        spend: Usage {
+            input: Some(48_200),
+            output: Some(3_100),
+            total: Some(51_300),
+            ..Usage::default()
+        },
+        ..Facts::default()
+    };
+    let laid = railways(&facts, 5);
+    let counted = laid
+        .iter()
+        .find(|row| {
+            row.parts().iter().any(
+                |(_, part)| matches!(part, ledger::Part::Run(words, _) if words.starts_with('+')),
+            )
+        })
+        .expect("the rail counts the fact it kept back");
+    let framed = bezel(&laid, room(5)).expect("the air the rail leaves above its foot");
+
+    assert!(
+        framed.y > counted.y(),
+        "the bezel opens on row {} and the rail counts the facts it kept back on row {}: a frame \
+         stands in air and never over a word",
+        framed.y,
+        counted.y()
+    );
+    for row in laid
+        .iter()
+        .filter(|row| row.y() >= framed.y && row.y() < framed.bottom())
+    {
+        assert!(
+            row.parts().is_empty(),
+            "row {} of the bezel states a word, and a frame stands in air",
+            row.y()
+        );
+    }
 }
 
 #[test]
