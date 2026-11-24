@@ -1,4 +1,3 @@
-use base64::Engine;
 use std::fs::File;
 use std::io::{self, IsTerminal, Read, Write};
 use std::os::fd::{AsFd, BorrowedFd};
@@ -18,7 +17,7 @@ use sindri::face::{self, Motion};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
 use sindri::picture::Picture;
-use sindri::plane::{self, Held, Placement, Plane, PlaneId, Planes, Shade, Told};
+use sindri::plane::{self, Held, Planes, Shade};
 use sindri::size::{Laid, Sizes};
 use sindri::view::{Painted, View};
 
@@ -240,15 +239,11 @@ impl<W: Write> Backend<W> {
     }
 
     fn shades(&mut self, shades: &[Shade], images: &Planes) -> io::Result<()> {
-        for told in self.held.pass(shades, images) {
-            let sent = match told {
-                Told::Upload { plane, at } => upload(plane, at)?,
-                Told::Place { id, at } => place(id, at)?,
-                Told::Forget(id) => plane::delete(id),
-            };
-            holding(&mut self.screen, &mut self.writing).tell(&sent)?;
+        let sent = self.held.pass(shades, images);
+        if sent.is_empty() {
+            return Ok(());
         }
-        Ok(())
+        holding(&mut self.screen, &mut self.writing).tell(&sent)
     }
 
     fn face(&mut self, face: Option<&face::Face>) -> io::Result<()> {
@@ -352,38 +347,29 @@ impl Animated {
             .as_ref()
             .is_some_and(|facing| facing.made == made)
         {
-            return self.again(face);
+            return Ok(self.again(face));
         }
         let mut sent = self.take();
         sent.extend(self.transmit(made, face)?);
         Ok(sent)
     }
 
-    fn again(&mut self, face: &face::Face) -> io::Result<Vec<u8>> {
+    /// The face the terminal already holds put where the frame stands now, and the loop its motion
+    /// asks for where the motion changed.
+    fn again(&mut self, face: &face::Face) -> Vec<u8> {
         let Some(facing) = self.holding.as_mut() else {
-            return Ok(Vec::new());
+            return Vec::new();
         };
         let mut sent = Vec::new();
         if facing.area != face.area() {
             facing.area = face.area();
-            let at = face.area();
-            write!(sent, "\x1b7\x1b[{};{}H", at.y + 1, at.x + 1)?;
-            write!(
-                sent,
-                "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={}\x1b\\",
-                PlaneId::Face.image(),
-                plane::PLACEMENT,
-                plane::DEPTH,
-                at.width,
-                at.height
-            )?;
-            sent.extend_from_slice(b"\x1b8");
+            sent.extend(plane::face_placed(face.area()));
         }
         if facing.motion != face.motion() {
             facing.motion = face.motion();
-            sent.extend(turning(face.motion(), facing.frames)?);
+            sent.extend(plane::face_turned(face.motion(), facing.frames));
         }
-        Ok(sent)
+        sent
     }
 
     /// The face's picture sent under its own identity, the frames past it composed against the
@@ -395,34 +381,12 @@ impl Animated {
             .ok_or_else(|| io::Error::other("the face's picture could not be made into pixels"))?;
         let frames = face::frames(&root);
         let at = face.area();
-        let mut sent = Vec::new();
-        write!(sent, "\x1b7\x1b[{};{}H", at.y + 1, at.x + 1)?;
-        let head = format!(
-            "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={}",
-            PlaneId::Face.image(),
-            plane::PLACEMENT,
-            plane::DEPTH,
-            at.width,
-            at.height
-        );
-        transmit(&mut sent, &head, &encoded(&root)?)?;
-        sent.extend_from_slice(b"\x1b8");
-        let mut kept = 1;
-        if matches!(face.motion(), Motion::Turning(_)) {
-            for frame in &frames[1..] {
-                let Some((left, top, width, height)) = differing(&root, frame) else {
-                    continue;
-                };
-                let head = format!(
-                    "a=f,f=100,i={},q=2,c=1,X=1,x={left},y={top},s={width},v={height}",
-                    PlaneId::Face.image()
-                );
-                let shown = image::imageops::crop_imm(frame, left, top, width, height).to_image();
-                transmit(&mut sent, &head, &encoded(&shown)?)?;
-                kept += 1;
-            }
-        }
-        sent.extend(turning(face.motion(), kept)?);
+        let wanted = match face.motion() {
+            Motion::Still => 1,
+            Motion::Turning(_) => frames.len(),
+        };
+        let (mut sent, kept) = plane::face_sent(at, &root, &frames[..wanted]);
+        sent.extend(plane::face_turned(face.motion(), kept));
         self.holding = Some(Facing {
             made,
             area: at,
@@ -436,138 +400,10 @@ impl Animated {
     /// holds none.
     fn take(&mut self) -> Vec<u8> {
         match self.holding.take() {
-            Some(_) => plane::delete(PlaneId::Face),
+            Some(_) => plane::face_back(),
             None => Vec::new(),
         }
     }
-}
-
-/// The loop the terminal turns the face in, or the one that stops it on the frame it was given,
-/// over the frames the terminal is holding.
-fn turning(motion: Motion, frames: usize) -> io::Result<Vec<u8>> {
-    let mut sent = Vec::new();
-    match motion {
-        Motion::Still => {}
-        Motion::Turning(None) => {
-            write!(
-                sent,
-                "\x1b_Ga=a,i={},s=1,c=1,q=2\x1b\\",
-                PlaneId::Face.image()
-            )?;
-        }
-        Motion::Turning(Some(turning)) => {
-            for frame in 1..=frames {
-                write!(
-                    sent,
-                    "\x1b_Ga=a,i={},r={frame},z={},q=2\x1b\\",
-                    PlaneId::Face.image(),
-                    turning.gap_ms()
-                )?;
-            }
-            let cycles = turning.cycles().unwrap_or(1);
-            write!(
-                sent,
-                "\x1b_Ga=a,i={},s=3,v={cycles},q=2\x1b\\",
-                PlaneId::Face.image()
-            )?;
-        }
-    }
-    Ok(sent)
-}
-
-/// The rectangle of pixels a frame differs from the root in, and none where it differs in nothing.
-fn differing(root: &image::RgbaImage, frame: &image::RgbaImage) -> Option<(u32, u32, u32, u32)> {
-    let width = root.width();
-    let mut bounds: Option<(u32, u32, u32, u32)> = None;
-    for (at, (lit, dimmed)) in root.pixels().zip(frame.pixels()).enumerate() {
-        if lit == dimmed {
-            continue;
-        }
-        let at = u32::try_from(at).ok()?;
-        let (x, y) = (at % width, at / width);
-        bounds = Some(match bounds {
-            None => (x, y, x + 1, y + 1),
-            Some(bounds) => (
-                bounds.0.min(x),
-                bounds.1.min(y),
-                bounds.2.max(x + 1),
-                bounds.3.max(y + 1),
-            ),
-        });
-    }
-    bounds.map(|(left, top, right, bottom)| (left, top, right - left, bottom - top))
-}
-
-/// One plane sent as the picture a terminal keeps under a band: its pixels as a PNG, in the
-/// chunks the protocol allows, under its identity, its placement and the frame's depth. `C=1`
-/// keeps a tall placement from scrolling, and `q=2` leaves no reply to read as a keystroke.
-fn upload(plane: &Plane, at: Placement) -> io::Result<Vec<u8>> {
-    let head = format!(
-        "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}",
-        plane.id().image(),
-        plane::PLACEMENT,
-        plane::DEPTH,
-        at.cols,
-        at.rows,
-        at.from,
-        at.down,
-        at.width,
-        at.height
-    );
-    let mut sent = Vec::new();
-    write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
-    transmit(&mut sent, &head, &encoded(plane.pixels())?)?;
-    sent.extend_from_slice(b"\x1b8");
-    Ok(sent)
-}
-
-/// The image the terminal already holds, put on the cells it stands on now: no byte of it is
-/// sent again, and the placement it is put under is the one it was held by.
-fn place(id: PlaneId, at: Placement) -> io::Result<Vec<u8>> {
-    let mut sent = Vec::new();
-    write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
-    write!(
-        sent,
-        "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}\x1b\\",
-        id.image(),
-        plane::PLACEMENT,
-        plane::DEPTH,
-        at.cols,
-        at.rows,
-        at.from,
-        at.down,
-        at.width,
-        at.height
-    )?;
-    sent.extend_from_slice(b"\x1b8");
-    Ok(sent)
-}
-
-fn encoded(pixels: &image::RgbaImage) -> io::Result<String> {
-    let mut png = Vec::new();
-    image::DynamicImage::ImageRgba8(pixels.clone())
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .map_err(io::Error::other)?;
-    Ok(base64::engine::general_purpose::STANDARD.encode(png))
-}
-
-/// One image, in the chunks the protocol allows: the first chunk carries the head, and each chunk
-/// after it says only whether another follows.
-fn transmit(sent: &mut Vec<u8>, head: &str, encoded: &str) -> io::Result<()> {
-    for (index, chunk) in encoded.as_bytes().chunks(4096).enumerate() {
-        let more = if (index + 1) * 4096 < encoded.len() {
-            1
-        } else {
-            0
-        };
-        match index {
-            0 => write!(sent, "\x1b_G{head},m={more};")?,
-            _ => write!(sent, "\x1b_Gm={more};")?,
-        }
-        sent.extend_from_slice(chunk);
-        sent.extend_from_slice(b"\x1b\\");
-    }
-    Ok(())
 }
 
 impl<W: Write> RatatuiBackend for Backend<W> {
@@ -639,12 +475,10 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     }
 
     fn clear(&mut self) -> io::Result<()> {
-        let giving = self.faced.take();
+        let mut giving = self.faced.take();
+        giving.extend(self.held.forget());
         if !giving.is_empty() {
             holding(&mut self.screen, &mut self.writing).tell(&giving)?;
-        }
-        for id in self.held.forget() {
-            holding(&mut self.screen, &mut self.writing).tell(&plane::delete(id))?;
         }
         painting(&mut self.screen, &mut self.writing).clear()
     }

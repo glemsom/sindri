@@ -4,10 +4,12 @@ use ratatui::style::Color;
 
 use super::*;
 use crate::composer::{MAX_ROWS, MIN_ROWS};
+use crate::face::Motion;
 use crate::ink::Ink;
 use crate::instrument;
 use crate::ledger::RailBand;
 use crate::pen::Clip;
+use crate::pulse::Turning;
 use crate::readback::under;
 use crate::rows::MARGIN;
 
@@ -1760,26 +1762,31 @@ fn the_carets_light_is_placed_on_the_carets_own_cell_and_cut_to_the_bands_column
 
     let middle = place(24);
     assert_eq!(
-        (middle.left, middle.cols, middle.skip),
+        (middle.cells().x, middle.cells().width, middle.shows().x),
         (12, LIGHT_COLS, 0),
         "a caret with room either side of it is the whole of the light, and it starts where its \
          own fall does"
     );
     assert_eq!(
-        middle.left + LIGHT_COLS / 2,
+        middle.cells().x + LIGHT_COLS / 2,
         24,
         "and it is placed so that its own centre falls on the caret's cell"
     );
 
     let left = place(4);
     assert_eq!(
-        (left.left, left.cols, left.skip),
-        (4, LIGHT_COLS - 12, 12),
+        (left.cells().x, left.cells().width),
+        (4, LIGHT_COLS - 12),
         "a caret at the band's first column keeps the light's own centre on it and shows only the \
          columns of it the band has room for"
     );
     assert_eq!(
-        (left.top, left.rows),
+        left.shows().x,
+        12 * CELL.width(),
+        "and the light it shows begins the twelve columns the band has no room for in"
+    );
+    assert_eq!(
+        (left.cells().y, left.cells().height),
         (21, 3),
         "the light stands on the band's own rows under the row its seam heads, and the seam's own \
          row is no band for it to light"
@@ -1787,19 +1794,14 @@ fn the_carets_light_is_placed_on_the_carets_own_cell_and_cut_to_the_bands_column
 
     let right = place(43);
     assert_eq!(
-        (right.left, right.cols, right.skip),
+        (right.cells().x, right.cells().width, right.shows().x),
         (31, LIGHT_COLS - 12, 0),
         "a caret at the band's last column loses the far columns of the light and no cell of it"
     );
     for placement in [middle, left, right] {
         assert_eq!(
-            u32::from(placement.skip) * CELL.width(),
-            placement.from,
-            "the columns shown of the light are the ones its placement names, in pixels of it"
-        );
-        assert_eq!(
-            u32::from(placement.cols) * CELL.width(),
-            placement.width,
+            placement.shows().width,
+            u32::from(placement.cells().width) * CELL.width(),
             "and the columns it stands over are as many pixels of it"
         );
     }
@@ -2294,6 +2296,11 @@ fn giving_every_identity_back_names_each_picture_the_frame_can_hold_exactly_once
     );
 }
 
+/// The bytes as the sequence a terminal reads them as: every byte of the format is ASCII.
+fn written(bytes: &[u8]) -> String {
+    String::from_utf8(bytes.to_vec()).expect("a sequence is printable")
+}
+
 #[test]
 fn a_pass_whose_every_picture_stood_where_it_stood_answers_nothing_at_all() {
     let palette = Palette::TRUECOLOR;
@@ -2302,19 +2309,19 @@ fn a_pass_whose_every_picture_stood_where_it_stood_answers_nothing_at_all() {
     let planes = held(&[band]);
     let mut record = Held::default();
 
-    assert_eq!(
-        record.pass(&[band], &planes).len(),
-        1,
-        "the first pass tells the terminal of the one picture it has never held"
+    assert!(
+        !record.pass(&[band], &planes).is_empty(),
+        "the first pass answers the bytes that put the one picture the terminal holds nowhere"
     );
 
-    let told = record.pass(&[band], &planes);
+    let sent = record.pass(&[band], &planes);
 
     assert!(
-        told.is_empty(),
-        "a pass whose every picture stood where it stood tells the terminal nothing, and answered \
-         {} things: {told:?}",
-        told.len()
+        sent.is_empty(),
+        "a pass whose every picture stood where it stood answers no byte at all, and answered {}: \
+         {:?}",
+        sent.len(),
+        written(&sent)
     );
 }
 
@@ -2334,29 +2341,28 @@ fn a_pass_whose_caret_moved_answers_a_placement_and_no_upload() {
 
     let moved = frame(7);
     let planes = held(&moved);
-    let told = record.pass(&moved, &planes);
+    let sent = record.pass(&moved, &planes);
 
     assert_eq!(
-        told.len(),
-        1,
-        "a pass whose caret moved tells the terminal one thing and no more: {told:?}"
+        sent,
+        place(
+            PlaneId::Caret,
+            moved[1].place().expect("a light with cells to stand on")
+        ),
+        "the light is put on the cells the caret stands on now, under the identity it was held by"
     );
-    match told[0] {
-        Told::Place { id, at } => {
-            assert_eq!(
-                id,
-                PlaneId::Caret,
-                "the picture put again is the caret's light"
-            );
-            assert_eq!(
-                at,
-                moved[1].place().expect("a light with cells to stand on"),
-                "and it is put on the cells the caret's light stands on now"
-            );
-        }
-        Told::Upload { .. } => panic!("no pixel of the light moved, so no pixel travels: {told:?}"),
-        Told::Forget(id) => panic!("nothing of the frame is gone, and {id:?} is deleted"),
-    }
+    let spelled = written(&sent);
+
+    assert!(
+        spelled.contains(&format!("i={}", PlaneId::Caret.image()))
+            && spelled.contains(&format!("p={PLACEMENT}"))
+            && spelled.contains(&format!("z={DEPTH}")),
+        "and it is put under the identity and the depth the light is held by: {spelled:?}"
+    );
+    assert!(
+        !spelled.contains("\x1b_Ga=T"),
+        "no pixel of the light moved, so no pixel travels: {spelled:?}"
+    );
 }
 
 #[test]
@@ -2371,45 +2377,34 @@ fn a_pass_whose_band_is_gone_answers_one_delete_and_the_identity_stands_again_la
     record.pass(&both, &planes);
 
     let alone = held(&[composer]);
-    let told = record.pass(&[composer], &alone);
+    let sent = record.pass(&[composer], &alone);
 
     assert_eq!(
-        told.len(),
-        1,
-        "a pass whose light is gone tells the terminal one thing and no more: {told:?}"
+        sent,
+        delete(PlaneId::Caret),
+        "the light the band no longer stands is given back, and nothing else is answered"
     );
-    match told[0] {
-        Told::Forget(id) => assert_eq!(id, PlaneId::Caret, "the picture deleted is the light's"),
-        Told::Upload { plane, .. } => panic!(
-            "the band still stood where it stood, and {} is sent again: {told:?}",
-            plane.id().image()
-        ),
-        Told::Place { id, .. } => panic!("{id:?} is put again on cells it never left"),
-    }
-
-    let told = record.pass(&both, &planes);
-
     assert_eq!(
-        told.len(),
+        written(&sent)
+            .matches(&format!("_Ga=d,d=i,i={}", PlaneId::Caret.image()))
+            .count(),
         1,
-        "a pass that brings the light back tells the terminal one thing: {told:?}"
+        "and it is given back once: {:?}",
+        written(&sent)
     );
-    match told[0] {
-        Told::Upload { plane, at } => {
-            assert_eq!(
-                plane.id(),
-                PlaneId::Caret,
-                "the terminals holds no light, so its pixels travel again"
-            );
-            assert_eq!(
-                at,
-                both[1].place().expect("a light with cells to stand on"),
-                "and they are put on the cells the light stands on"
-            );
-        }
-        Told::Place { id, .. } => panic!("{id:?} is not held, so it is sent and not put again"),
-        Told::Forget(id) => panic!("{id:?} is not held, so nothing of it is deleted"),
-    }
+
+    let sent = record.pass(&both, &planes);
+
+    assert!(
+        written(&sent).contains(&format!("_Ga=T,f=100,i={}", PlaneId::Caret.image())),
+        "the terminal holds no light, so its pixels travel again: {:?}",
+        written(&sent)
+    );
+    assert!(
+        !written(&sent).contains("_Ga=d"),
+        "and nothing of it is given back a second time: {:?}",
+        written(&sent)
+    );
 }
 
 #[test]
@@ -2425,26 +2420,20 @@ fn a_pass_that_added_moved_and_removed_a_picture_answers_the_delete_first_then_t
 
     let after = [caret_light(band, 7, &palette), gauge];
     let planes = held(&after);
-    let told = record.pass(&after, &planes);
+    let sent = record.pass(&after, &planes);
 
-    let answers: Vec<(u32, &str)> = told
-        .iter()
-        .map(|told| match told {
-            Told::Upload { plane, .. } => (plane.id().image(), "upload"),
-            Told::Place { id, .. } => (id.image(), "place"),
-            Told::Forget(id) => (id.image(), "forget"),
-        })
-        .collect();
+    let at = |shade: &Shade| shade.place().expect("cells to stand on");
+    let mut wanted = delete(PlaneId::Composer);
+    wanted.extend(place(PlaneId::Caret, at(&after[0])));
+    wanted.extend(upload(
+        planes.image(&after[1]).expect("the gauge's plane"),
+        at(&after[1]),
+    ));
 
     assert_eq!(
-        answers,
-        vec![
-            (PlaneId::Composer.image(), "forget"),
-            (PlaneId::Caret.image(), "place"),
-            (PlaneId::Gauge.image(), "upload"),
-        ],
+        sent, wanted,
         "the band the frame left is deleted before anything is put on the screen, and the \
-         pictures it kept are told in the frame's own order: {told:?}"
+         pictures it kept are answered in the frame's own order"
     );
 }
 
@@ -2461,19 +2450,638 @@ fn forget_names_each_held_identity_once_and_the_face_is_not_among_them() {
     let mut record = Held::default();
     record.pass(&shades, &planes);
 
-    let named = record.forget();
+    let sent = record.forget();
 
+    let wanted: Vec<u8> = [PlaneId::Composer, PlaneId::Caret, PlaneId::Gauge]
+        .into_iter()
+        .flat_map(delete)
+        .collect();
     assert_eq!(
-        named,
-        vec![PlaneId::Composer, PlaneId::Caret, PlaneId::Gauge],
+        sent, wanted,
         "every picture the terminal held is given back once, in the order it was held"
     );
     assert!(
-        !named.contains(&PlaneId::Face),
-        "the face stands under no shade, so no plane of the frame answers for it: {named:?}"
+        !written(&sent).contains(&written(&delete(PlaneId::Face))),
+        "the face stands under no shade, so no plane of the frame answers for it: {:?}",
+        written(&sent)
     );
     assert!(
         record.forget().is_empty(),
         "and nothing is held once the pictures are given back"
+    );
+}
+
+fn composer_shade(area: Rect) -> Shade {
+    Shade::composer(area, Some(CELL), &Palette::TRUECOLOR).expect("a band to shade")
+}
+
+fn rail_shade() -> Shade {
+    Shade::rail(
+        Rail::Ledger,
+        RailBand::of(Rect::new(6, 3, 3, 4)),
+        Some(CELL),
+        &Palette::TRUECOLOR,
+    )
+    .expect("a band to shade")
+}
+
+fn transcript_shade() -> Shade {
+    Shade::transcript(Rect::new(0, 0, 6, 4), Some(CELL), &Palette::TRUECOLOR)
+        .expect("a band to shade")
+}
+
+#[test]
+fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
+    let shades = [
+        rail_shade(),
+        transcript_shade(),
+        composer_shade(Rect::new(2, 3, 2, 1)),
+    ];
+    let planes = held(&shades);
+    let mut record = Held::default();
+    let mut wire = record.pass(&shades, &planes);
+    let placed = wire.len();
+    wire.extend(record.pass(&shades, &planes));
+    assert_eq!(
+        placed,
+        wire.len(),
+        "a pass that changes no band answers no byte at all"
+    );
+    let rest = &shades[1..];
+    wire.extend(record.pass(rest, &held(rest)));
+    let wire = written(&wire);
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        3,
+        "three planes, and each placed once: {wire:?}"
+    );
+    for id in [333, 334, 335] {
+        assert!(
+            wire.contains(&format!("_Ga=T,f=100,i={id},p=1,q=2,z={DEPTH}")),
+            "each band's image is its own, and each is uploaded under its own identity and the \
+             frame's one placement: {wire:?}"
+        );
+    }
+    let deleted = wire.matches("_Ga=d").count();
+    assert_eq!(
+        deleted, 1,
+        "the plane that left is deleted and the two that stand are not: {wire:?}"
+    );
+    assert!(
+        wire.contains("_Ga=d,d=i,i=334"),
+        "and it is deleted by the identity it was placed under, leaving the transcript band's \
+         and the composer's standing: {wire:?}"
+    );
+}
+
+#[test]
+fn a_resized_plane_takes_the_old_one_away_and_places_the_new_one_after_it() {
+    let mut record = Held::default();
+    let mut wire = Vec::new();
+    for shade in [
+        composer_shade(Rect::new(2, 3, 2, 1)),
+        composer_shade(Rect::new(1, 5, 3, 2)),
+    ] {
+        wire.extend(record.pass(&[shade], &held(&[shade])));
+    }
+    let wire = written(&wire);
+    assert_eq!(wire.matches("_Ga=T").count(), 2);
+    assert_eq!(wire.matches("_Ga=d").count(), 1);
+    let taken = wire.find("_Ga=d").unwrap();
+    let placed = wire.match_indices("_Ga=T").nth(1).unwrap().0;
+    assert!(
+        taken < placed,
+        "the image a resize made stale is taken away before the one that stands in its place is \
+         written: {wire:?}"
+    );
+    assert!(wire.contains("\x1b[6;2H"));
+}
+
+#[test]
+fn every_plane_is_placed_under_the_depth_a_cells_own_background_cannot_cover() {
+    let band = Rect::new(2, 3, 30, 4);
+    let shades = [
+        rail_shade(),
+        transcript_shade(),
+        composer_shade(band),
+        caret_light(band, 8, &Palette::TRUECOLOR),
+    ];
+    let mut record = Held::default();
+    let wire = written(&record.pass(&shades, &held(&shades)));
+
+    let depth: i64 = wire
+        .split_once("z=")
+        .and_then(|(_, rest)| rest.split(',').next())
+        .and_then(|value| value.parse().ok())
+        .expect("a depth on the ground the frame places");
+    assert!(
+        depth < -1_073_741_824,
+        "a plane is placed below the depth at which a terminal draws an image under a cell that \
+         carries a background, and the seam's edge ink is one such cell: {depth}"
+    );
+    for id in [333, 334, 335, 336] {
+        assert!(
+            wire.contains(&format!("i={id},p=1,q=2,z={DEPTH},C=1")),
+            "the plane under {id} is placed at a depth a cell's background covers: {wire:?}"
+        );
+    }
+    assert!(
+        !wire.contains("z=-1,"),
+        "no plane stands at the depth the seam's ink was painted over at: {wire:?}"
+    );
+}
+
+#[test]
+fn no_plane_the_frame_places_expects_a_reply_from_the_terminal() {
+    let band = Rect::new(2, 3, 30, 4);
+    let mut record = Held::default();
+    let mut wire = Vec::new();
+    for caret in [8, 9] {
+        let shades = [
+            composer_shade(band),
+            caret_light(band, caret, &Palette::TRUECOLOR),
+        ];
+        wire.extend(record.pass(&shades, &held(&shades)));
+    }
+    let wire = written(&wire);
+
+    for command in wire.split("\u{1b}_G").skip(1) {
+        let head = command.split(';').next().unwrap_or_default();
+        if head.starts_with("a=d") {
+            assert!(
+                head.contains("q=2"),
+                "an image given back asks the terminal a question, and an answer to it is read \
+                 as the reader's next keystroke: {head:?}"
+            );
+            continue;
+        }
+        if !head.starts_with("a=T") && !head.starts_with("a=p") {
+            continue;
+        }
+        assert!(
+            head.contains("q=2") && head.contains("C=1"),
+            "a placement asks the terminal a question, and an answer to it is read as the \
+             reader's next keystroke: {head:?}"
+        );
+    }
+    assert!(
+        wire.contains("_Ga=p"),
+        "and a placement is what the frame makes of a caret that moved: {wire:?}"
+    );
+}
+
+#[test]
+fn the_carets_light_is_given_back_when_the_band_under_it_loses_its_caret() {
+    let band = Rect::new(2, 3, 30, 4);
+    let mut record = Held::default();
+    let lit = [
+        composer_shade(band),
+        caret_light(band, 8, &Palette::TRUECOLOR),
+    ];
+    let mut wire = record.pass(&lit, &held(&lit));
+    let bare = [composer_shade(band)];
+    wire.extend(record.pass(&bare, &held(&bare)));
+    let wire = written(&wire);
+
+    assert!(
+        wire.contains(&format!("_Ga=d,d=i,i={}", PlaneId::Caret.image())),
+        "the light is given back when the band under it carries no caret, or the terminal is left \
+         holding a light that stands nowhere: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        2,
+        "and neither the band nor the light is made again for it: {wire:?}"
+    );
+}
+
+#[test]
+fn a_frame_whose_caret_moved_transmits_no_image_and_places_the_light_again() {
+    let band = Rect::new(2, 3, 30, 4);
+    let mut record = Held::default();
+    let mut wire = Vec::new();
+    for caret in [6, 7, 8] {
+        let shades = [
+            composer_shade(band),
+            caret_light(band, caret, &Palette::TRUECOLOR),
+        ];
+        wire.extend(record.pass(&shades, &held(&shades)));
+    }
+    let wire = written(&wire);
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        2,
+        "the band and the light are transmitted once each, and a caret that moved twelve pixels \
+         sends no pixel of either: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=p").count(),
+        2,
+        "and every caret after the first puts the image the terminal holds on the cells it stands \
+         on now: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=d").count(),
+        0,
+        "nothing the frame still holds is taken away for a light that moved: {wire:?}"
+    );
+    assert!(
+        wire.contains(&format!(
+            "_Ga=p,i={},p={PLACEMENT},q=2,z={DEPTH},C=1",
+            PlaneId::Caret.image()
+        )),
+        "the light is placed again under the identity and the placement it was held by, and the \
+         command is quiet: {wire:?}"
+    );
+}
+
+#[test]
+fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_area() {
+    let area = Rect::new(2, 3, 2, 1);
+    let first = composer_shade(area);
+    let finer = Shade::composer(area, Some(CellSize::new(20, 40)), &Palette::TRUECOLOR)
+        .expect("a band to shade");
+    let greys =
+        Shade::composer(area, Some(CellSize::NOMINAL), &Palette::ANSI).expect("a band to shade");
+    assert_eq!(
+        (finer.area(), greys.area()),
+        (first.area(), first.area()),
+        "the band's area stands where it did, and only the cell and the palette moved"
+    );
+    let mut record = Held::default();
+    let mut wire = Vec::new();
+    for shade in [first, finer, greys] {
+        wire.extend(record.pass(&[shade], &held(&[shade])));
+    }
+    let wire = written(&wire);
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        3,
+        "a band drawn on another cell or in another palette is placed again: {wire:?}"
+    );
+    assert!(
+        wire.contains(&format!(
+            "_Ga=T,f=100,i=333,p=1,q=2,z={DEPTH},C=1,c=2,r=1,x=0,y=0,w=20,h=20"
+        )),
+        "at the area the band stands on, which never moved: {wire:?}"
+    );
+}
+
+#[test]
+fn a_rail_whose_light_moved_is_placed_again_by_its_own_identity() {
+    let area = Rect::new(6, 3, 3, 6);
+    let rail = |face: u16| faced(Rail::Ledger, area, face, Some(CELL), &Palette::TRUECOLOR);
+    let mut record = Held::default();
+    let mut wire = Vec::new();
+    for shade in [rail(2), rail(3)] {
+        wire.extend(record.pass(&[shade], &held(&[shade])));
+    }
+    let wire = written(&wire);
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        2,
+        "the light falls on the rows the face stands on, so a rail whose face moved is placed \
+         once more: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=d").count(),
+        1,
+        "and the image it stood on is taken away and not left under it: {wire:?}"
+    );
+    assert!(
+        wire.contains("_Ga=d,d=i,i=334")
+            && wire.contains(&format!("_Ga=T,f=100,i=334,p=1,q=2,z={DEPTH}")),
+        "both the delete and the new placement are under the rail's own identity: {wire:?}"
+    );
+}
+
+#[test]
+fn a_percentage_that_moved_places_the_gauge_again_and_sends_no_pixel_of_it() {
+    let mut record = Held::default();
+    let mut wire = Vec::new();
+    for share in [40, 41, 42] {
+        let shades = [gauge_ink(
+            Rect::new(40, 12, 8, 1),
+            share,
+            false,
+            &Palette::TRUECOLOR,
+        )];
+        wire.extend(record.pass(&shades, &held(&shades)));
+    }
+    let wire = written(&wire);
+
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        1,
+        "a gauge is transmitted once, and a share that moved a hundredth sends no pixel of it: \
+         {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=p").count(),
+        2,
+        "and every share after the first places the image the terminal holds again: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=d").count(),
+        0,
+        "nothing the frame still holds is given back for a share that moved: {wire:?}"
+    );
+    assert!(
+        wire.contains(&format!(
+            "_Ga=p,i={},p={PLACEMENT},q=2,z={DEPTH},C=1,c=8,r=1,x=0,y=41,w=80,h=1",
+            PlaneId::Gauge.image()
+        )),
+        "the gauge is placed again on the rung it moved to, one pixel of the ladder deep: {wire:?}"
+    );
+}
+
+#[test]
+fn a_gauge_the_rail_no_longer_states_is_given_back_by_its_own_image_id() {
+    let mut record = Held::default();
+    let stated = [gauge_ink(
+        Rect::new(40, 12, 8, 1),
+        40,
+        false,
+        &Palette::TRUECOLOR,
+    )];
+    let mut wire = record.pass(&stated, &held(&stated));
+    wire.extend(record.pass(&[], &Planes::default()));
+    let wire = written(&wire);
+
+    assert!(
+        wire.contains(&format!("_Ga=d,d=i,i={}", PlaneId::Gauge.image())),
+        "a gauge the rail no longer states is given back by its own image id, or the terminal is \
+         left holding an instrument that stands nowhere: {wire:?}"
+    );
+    assert_eq!(
+        wire.matches("_Ga=T").count(),
+        1,
+        "and the gauge is made once and no image of another is made for it: {wire:?}"
+    );
+}
+
+/// The face the frame asks for: the cells it stands on, its picture in pixels, and the frames past
+/// it.
+fn a_face() -> (Rect, image::RgbaImage, Vec<image::RgbaImage>) {
+    let picture = crate::face::measure(
+        crate::graphics::Ceiling::new(40, 12),
+        &crate::picture::Surface::of(None, CELL, true, false),
+    )
+    .expect("the face travels in the binary");
+    let at = Rect::new(4, 2, picture.cols(), picture.rows());
+    let root = picture
+        .rasterise(CELL)
+        .expect("the face travels in the binary, so it decodes");
+    let frames = crate::face::frames(&root);
+    (at, root, frames)
+}
+
+/// The face's bytes as the terminal is handed them: the picture, the frames the motion keeps, and
+/// the loop over them.
+fn handed(motion: Motion) -> String {
+    let (at, root, frames) = a_face();
+    let wanted = match motion {
+        Motion::Still => 1,
+        Motion::Turning(_) => frames.len(),
+    };
+    let (mut sent, kept) = face_sent(at, &root, &frames[..wanted]);
+    sent.extend(face_turned(motion, kept));
+    written(&sent)
+}
+
+fn heads(drawn: &str, opening: &str) -> Vec<String> {
+    drawn
+        .match_indices("\x1b_G")
+        .filter_map(|(at, _)| {
+            let rest = &drawn[at + "\x1b_G".len()..];
+            let end = rest
+                .find(';')
+                .into_iter()
+                .chain(rest.find("\x1b\\"))
+                .min()?;
+            Some(rest[..end].to_owned())
+        })
+        .filter(|head| head.starts_with(opening))
+        .map(|head| match head.rsplit_once(",m=") {
+            Some((head, _)) => head.to_owned(),
+            None => head,
+        })
+        .collect()
+}
+
+/// The rectangle an `a=f` head names, read as left, top, width and height.
+fn rectangle(head: &str) -> (u32, u32, u32, u32) {
+    let named = |key: &str| -> u32 {
+        let (_, tail) = head
+            .split_once(&format!("{key}="))
+            .unwrap_or_else(|| panic!("{head:?} names no {key}"));
+        tail.split(',')
+            .next()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_else(|| panic!("{head:?} names a {key} that is no number"))
+    };
+    (named("x"), named("y"), named("s"), named("v"))
+}
+
+fn differs(root: &image::RgbaImage, frame: &image::RgbaImage, x: u32, y: u32) -> bool {
+    root.get_pixel(x, y) != frame.get_pixel(x, y)
+}
+
+#[test]
+fn every_frame_past_the_root_is_composed_against_it_and_carries_only_the_pixels_that_differ() {
+    let (at, root, frames) = a_face();
+    let (sent, kept) = face_sent(at, &root, &frames);
+    let drawn = written(&sent);
+    let (width, height) = root.dimensions();
+    let travelling = heads(&drawn, "a=f,");
+
+    assert_eq!(
+        kept,
+        frames.len(),
+        "the terminal is left keeping the root and every frame past it: {drawn:?}"
+    );
+    assert_eq!(
+        drawn
+            .matches(&format!("_Ga=T,f=100,i={}", PlaneId::Face.image()))
+            .count(),
+        1,
+        "the root frame is one image under the face's own identity: {drawn:?}"
+    );
+    assert_eq!(
+        travelling.len(),
+        frames.len() - 1,
+        "one frame's data travels for each frame past the root"
+    );
+    for (number, head) in travelling.iter().enumerate() {
+        let frame = &frames[number + 1];
+        let (left, top, across, down) = rectangle(head);
+        let number = number + 2;
+        let inside =
+            |x: u32, y: u32| (left..left + across).contains(&x) && (top..top + down).contains(&y);
+
+        assert!(
+            head.contains("c=1") && head.contains("X=1"),
+            "frame {number} is composed against the root frame and replaces the rectangle it \
+             names: {head:?}"
+        );
+        assert!(
+            left + across <= width && top + down <= height,
+            "frame {number} stands inside the root's {width} by {height} pixels: {head:?}"
+        );
+        for y in 0..height {
+            for x in 0..width {
+                assert!(
+                    !differs(&root, frame, x, y) || inside(x, y),
+                    "frame {number} travels every pixel it differs from the root in, and ({x}, \
+                     {y}) differs outside the rectangle {head:?}"
+                );
+            }
+        }
+        let (right, bottom) = (left + across - 1, top + down - 1);
+        let touched = (0..across).any(|step| differs(&root, frame, left + step, top))
+            && (0..across).any(|step| differs(&root, frame, left + step, bottom))
+            && (0..down).any(|step| differs(&root, frame, left, top + step))
+            && (0..down).any(|step| differs(&root, frame, right, top + step));
+        assert!(
+            touched,
+            "and the rectangle is the tightest one there is: every side of it holds a pixel that \
+             differs from the root, so {head:?} carries nothing the root does not"
+        );
+    }
+}
+
+#[test]
+fn a_run_in_flight_quickens_the_loop_and_a_settled_run_stops_it() {
+    let identity = PlaneId::Face.image();
+    let drawn = handed(Motion::Turning(Some(Turning::FLIGHT)));
+    let gaps = heads(&drawn, &format!("a=a,i={identity},r=")).len();
+    assert!(gaps > 0, "a live run's face is left turning: {drawn:?}");
+    assert_eq!(
+        drawn
+            .matches(&format!("z={}", Turning::FLIGHT.gap_ms()))
+            .count(),
+        gaps,
+        "every frame of the loop is told the quickened gap: {drawn:?}"
+    );
+    assert_eq!(
+        heads(&drawn, &format!("a=a,i={identity},s=")),
+        [format!("a=a,i={identity},s=3,v=1,q=2")],
+        "and the terminal runs it for as long as the run does, and no number of cycles"
+    );
+
+    let settled = handed(Motion::Turning(None));
+    let stop = format!("a=a,i={identity},s=1,c=1");
+    assert_eq!(
+        settled.matches(&stop).count(),
+        1,
+        "a run that settled stops the loop and holds the root frame: {settled:?}"
+    );
+    let at = settled.find(&stop).expect("the stop");
+    assert!(
+        !settled[at..].contains("z="),
+        "and the frame it holds is told no gap at all: {settled:?}"
+    );
+    assert_eq!(
+        settled.matches("_Ga=T").count(),
+        1,
+        "with nothing sent again: the frames are the terminal's"
+    );
+}
+
+#[test]
+fn an_error_flashes_twice_and_is_left_standing() {
+    let identity = PlaneId::Face.image();
+    let drawn = handed(Motion::Turning(Some(Turning::FLASH)));
+
+    assert_eq!(
+        heads(&drawn, &format!("a=a,i={identity},s=")),
+        [format!("a=a,i={identity},s=3,v=2,q=2")],
+        "a failed run's face turns two cycles of the breath and then holds: {drawn:?}"
+    );
+    assert!(
+        drawn.contains(&format!("z={}", Turning::FLASH.gap_ms())),
+        "at the gap the flash is drawn in: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_terminal_that_keeps_no_frames_is_handed_the_still_face_and_no_animation_sequence() {
+    let (at, root, frames) = a_face();
+    let (sent, kept) = face_sent(at, &root, &frames[..1]);
+    assert_eq!(kept, 1, "a terminal handed the root alone keeps one frame");
+    let drawn = written(&[sent, face_turned(Motion::Still, kept)].concat());
+
+    assert!(
+        drawn.contains(&format!("_Ga=T,f=100,i={}", PlaneId::Face.image())),
+        "the picture the binary carries is the face: {drawn:?}"
+    );
+    assert!(
+        !drawn.contains("_Ga=f,"),
+        "no frame is sent past it: {drawn:?}"
+    );
+    assert!(
+        !drawn.contains("_Ga=a"),
+        "and no animation sequence of any kind: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_face_placed_again_stands_in_the_cells_it_moved_to_and_travels_no_pixel() {
+    let at = Rect::new(2, 6, 12, 6);
+    let drawn = written(&face_placed(at));
+
+    assert!(
+        drawn.starts_with(&format!("\x1b7\x1b[{};{}H", at.y + 1, at.x + 1)),
+        "the placement stands in the cells the face moved to: {drawn:?}"
+    );
+    assert_eq!(
+        heads(&drawn, "a=p,"),
+        [format!(
+            "a=p,i={},p={PLACEMENT},q=2,z={DEPTH},C=1,c={},r={}",
+            PlaneId::Face.image(),
+            at.width,
+            at.height
+        )],
+        "the image the terminal holds is put under the identity it is held by: {drawn:?}"
+    );
+    assert!(
+        !drawn.contains("_Ga=T") && !drawn.contains("_Ga=f,"),
+        "no pixel of it travels again: {drawn:?}"
+    );
+    assert!(
+        drawn.ends_with("\x1b8"),
+        "and the cursor is put back: {drawn:?}"
+    );
+}
+
+#[test]
+fn the_face_is_given_back_under_the_identity_it_is_held_by() {
+    let given = written(&face_back());
+
+    assert_eq!(
+        given, "\u{1b}_Ga=d,d=i,i=337,q=2\u{1b}\\",
+        "the face is given back under the identity it is held by, and no other picture with it"
+    );
+}
+
+#[test]
+fn the_frames_and_animation_are_asked_for_under_the_face_s_own_identity() {
+    let asked = written(&frames_asked());
+    let identity = format!("i={}", PlaneId::Face.image());
+
+    assert!(
+        asked.contains("e=f") && asked.contains("e=a"),
+        "the two features asked for are the frames a picture is kept in and the animation of \
+         them: {asked:?}"
+    );
+    assert!(
+        asked.contains("e=f,c=1,X=1"),
+        "and the frames are asked for with the canvas and the overwrite mode the face's frames \
+         are sent in: {asked:?}"
+    );
+    assert_eq!(
+        asked.matches(&identity).count(),
+        2,
+        "and both are asked under the face's own identity, {identity}: {asked:?}"
     );
 }

@@ -1,7 +1,9 @@
+use base64::Engine;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 
+use crate::face::Motion;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::instrument;
@@ -22,11 +24,11 @@ const LIGHT_REACH: u16 = 12;
 
 /// The placement identity every image is put under. An image whose light moved is put under the
 /// identity it stood by before, so the terminal replaces it and no pixel of it travels.
-pub const PLACEMENT: u32 = 1;
+const PLACEMENT: u32 = 1;
 
 /// The depth every plane is placed at. Kitty draws an image under a cell that carries a
 /// background only below `INT32_MIN / 2`, and a seam's edge ink is one such cell.
-pub const DEPTH: i64 = i32::MIN as i64 / 2 - 1;
+const DEPTH: i64 = i32::MIN as i64 / 2 - 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bar {
@@ -47,7 +49,7 @@ pub enum PlaneId {
 }
 
 impl PlaneId {
-    pub const ALL: [PlaneId; 9] = [
+    const ALL: [PlaneId; 9] = [
         PlaneId::Composer,
         PlaneId::Rail,
         PlaneId::Transcript,
@@ -61,7 +63,7 @@ impl PlaneId {
 
     /// The identity the image is held under and layered by: two images at the frame's one depth
     /// stand by identity, so the caret's light is read over the band it lights.
-    pub fn image(self) -> u32 {
+    fn image(self) -> u32 {
         match self {
             PlaneId::Composer => 333,
             PlaneId::Rail => 334,
@@ -463,7 +465,6 @@ impl Shade {
             top: area.y,
             cols: area.width,
             rows: area.height,
-            skip: 0,
             from: 0,
             width: u32::from(area.width) * cell.width(),
             down: 0,
@@ -501,14 +502,13 @@ impl Shade {
                 let first = i64::from(band.x).max(wanted);
                 let last = i64::from(band.right()).min(wanted + i64::from(LIGHT_COLS));
                 let shown = u16::try_from(last - first).ok()?;
-                let skip = u16::try_from(first - wanted).ok()?;
+                let skip = u32::try_from(first - wanted).ok()?;
                 Placement {
                     left: u16::try_from(first).ok()?,
                     top: band.y,
                     cols: shown,
                     rows: band.height,
-                    skip,
-                    from: u32::from(skip) * cell.width(),
+                    from: skip * cell.width(),
                     width: u32::from(shown) * cell.width(),
                     down: 0,
                     height: u32::from(band.height) * cell.height(),
@@ -1104,20 +1104,48 @@ fn dithered(light: f64, (x, y): (u32, u32)) -> i32 {
 }
 
 /// Where an image stands and which rect of it is shown there: the cells it is placed on, and the
-/// source rect — `skip`/`from`/`width` along that axis and `down`/`height` down the other.
+/// pixels of the image those cells show.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Placement {
-    pub left: u16,
-    pub top: u16,
-    pub cols: u16,
-    pub rows: u16,
-    /// The columns of the image skipped at its left edge, and the pixel those columns begin at.
-    pub skip: u16,
-    pub from: u32,
-    /// The pixels of the image shown, which are the ones the columns it stands over hold.
-    pub width: u32,
-    pub down: u32,
-    pub height: u32,
+    left: u16,
+    top: u16,
+    cols: u16,
+    rows: u16,
+    from: u32,
+    width: u32,
+    down: u32,
+    height: u32,
+}
+
+impl Placement {
+    pub fn cells(&self) -> Rect {
+        Rect::new(self.left, self.top, self.cols, self.rows)
+    }
+
+    pub fn shows(&self) -> image::math::Rect {
+        image::math::Rect {
+            x: self.from,
+            y: self.down,
+            width: self.width,
+            height: self.height,
+        }
+    }
+
+    /// The picture's own pixel at the middle of the image cell the frame's cell lands on: the two
+    /// spaces are counted apart, so nothing outside asks which of them a number is in.
+    pub fn pixel(&self, x: u16, y: u16) -> Option<(u32, u32)> {
+        if !self.cells().contains((x, y).into()) {
+            return None;
+        }
+        let column = u32::from(x - self.left);
+        let row = u32::from(y - self.top);
+        let across = u32::from(self.cols.max(1));
+        let down = u32::from(self.rows.max(1));
+        Some((
+            self.from + column * self.width / across + self.width / across / 2,
+            self.down + row * self.height / down + self.height / down / 2,
+        ))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1202,30 +1230,19 @@ struct Standing {
     at: Placement,
 }
 
-/// What one pass tells the terminal, in the order it must be applied.
-#[derive(Clone, Copy, Debug)]
-pub enum Told<'a> {
-    Upload {
-        plane: &'a Plane,
-        at: Placement,
-    },
-    /// A picture the terminal holds, on cells it did not stand on.
-    Place {
-        id: PlaneId,
-        at: Placement,
-    },
-    /// A picture the terminal holds and the frame no longer stands.
-    Forget(PlaneId),
-}
-
 impl Held {
-    pub fn pass<'a>(&mut self, shades: &[Shade], planes: &'a Planes) -> Vec<Told<'a>> {
+    /// The bytes that bring the terminal up to date for one pass, in the order it must apply
+    /// them: a delete for every picture it holds and the frame no longer stands, then a
+    /// transmission or a bare placement for each shade in the frame's order.
+    pub fn pass(&mut self, shades: &[Shade], planes: &Planes) -> Vec<u8> {
         let before = std::mem::take(&mut self.standing);
-        let mut told: Vec<Told<'a>> = before
+        let mut sent = Vec::new();
+        for held in before
             .iter()
             .filter(|held| shades.iter().all(|shade| shade.image() != Some(held.image)))
-            .map(|held| Told::Forget(held.image.id()))
-            .collect();
+        {
+            sent.extend(delete(held.image.id()));
+        }
         let mut standing = Vec::with_capacity(shades.len());
         for shade in shades {
             let (Some(image), Some(at), Some(plane)) =
@@ -1234,21 +1251,21 @@ impl Held {
                 continue;
             };
             match before.iter().find(|held| held.image == image) {
-                None => told.push(Told::Upload { plane, at }),
-                Some(held) if held.at != at => told.push(Told::Place { id: image.id(), at }),
+                None => sent.extend(upload(plane, at)),
+                Some(held) if held.at != at => sent.extend(place(image.id(), at)),
                 Some(_) => {}
             }
             standing.push(Standing { image, at });
         }
         self.standing = standing;
-        told
+        sent
     }
 
-    /// Every picture the terminal holds, named for giving back, and none held after.
-    pub fn forget(&mut self) -> Vec<PlaneId> {
+    /// The bytes that give back every picture the terminal holds, and none held after.
+    pub fn forget(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.standing)
             .into_iter()
-            .map(|held| held.image.id())
+            .flat_map(|held| delete(held.image.id()))
             .collect()
     }
 }
@@ -1265,13 +1282,197 @@ fn seam_of(shape: Rail, palette: &Palette) -> Option<Seam> {
     }
 }
 
-pub fn delete(id: PlaneId) -> Vec<u8> {
+/// One plane transmitted as the picture a terminal keeps under a band: its pixels as a PNG, in
+/// the chunks the protocol allows, under its identity, its placement and the frame's depth. `C=1`
+/// keeps a tall placement from scrolling, and `q=2` leaves no reply to read as a keystroke.
+fn upload(plane: &Plane, at: Placement) -> Vec<u8> {
+    let head = format!(
+        "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}",
+        plane.id().image(),
+        PLACEMENT,
+        DEPTH,
+        at.cols,
+        at.rows,
+        at.from,
+        at.down,
+        at.width,
+        at.height
+    );
+    let mut sent = format!("\x1b7\x1b[{};{}H", at.top + 1, at.left + 1).into_bytes();
+    transmit(&mut sent, &head, &encoded(plane.pixels()));
+    sent.extend_from_slice(b"\x1b8");
+    sent
+}
+
+/// The image the terminal already holds, put on the cells it stands on now: no byte of it is
+/// sent again, and the placement it is put under is the one it was held by.
+fn place(id: PlaneId, at: Placement) -> Vec<u8> {
+    let head = format!(
+        "a=p,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}",
+        id.image(),
+        PLACEMENT,
+        DEPTH,
+        at.cols,
+        at.rows,
+        at.from,
+        at.down,
+        at.width,
+        at.height
+    );
+    let mut sent = format!("\x1b7\x1b[{};{}H", at.top + 1, at.left + 1).into_bytes();
+    sent.extend_from_slice(format!("\x1b_G{head}\x1b\\").as_bytes());
+    sent.extend_from_slice(b"\x1b8");
+    sent
+}
+
+/// The pixels as a PNG in base64: the encoder writes into a buffer in memory, and a picture a
+/// shade draws is inside the format's bounds, so no step here can fail.
+fn encoded(pixels: &image::RgbaImage) -> String {
+    let mut png = Vec::new();
+    image::DynamicImage::ImageRgba8(pixels.clone())
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("a picture in memory encodes as a PNG");
+    base64::engine::general_purpose::STANDARD.encode(png)
+}
+
+/// One image, in the chunks the protocol allows: the first chunk carries the head, and each chunk
+/// after it says only whether another follows.
+fn transmit(sent: &mut Vec<u8>, head: &str, encoded: &str) {
+    for (index, chunk) in encoded.as_bytes().chunks(4096).enumerate() {
+        let more = usize::from((index + 1) * 4096 < encoded.len());
+        match index {
+            0 => sent.extend_from_slice(format!("\x1b_G{head},m={more};").as_bytes()),
+            _ => sent.extend_from_slice(format!("\x1b_Gm={more};").as_bytes()),
+        }
+        sent.extend_from_slice(chunk);
+        sent.extend_from_slice(b"\x1b\\");
+    }
+}
+
+fn delete(id: PlaneId) -> Vec<u8> {
     format!("\x1b_Ga=d,d=i,i={},q=2\x1b\\", id.image()).into_bytes()
 }
 
 /// The bytes that give every picture the frame can hold back, each identity named once.
 pub fn give_back() -> Vec<u8> {
     PlaneId::ALL.into_iter().flat_map(delete).collect()
+}
+
+/// The face's picture sent at `at`, each frame past the root composed against it in the overwrite
+/// mode and cropped to the pixels that differ, and how many frames the terminal is left keeping.
+pub fn face_sent(
+    at: Rect,
+    root: &image::RgbaImage,
+    frames: &[image::RgbaImage],
+) -> (Vec<u8>, usize) {
+    let head = format!(
+        "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={}",
+        PlaneId::Face.image(),
+        PLACEMENT,
+        DEPTH,
+        at.width,
+        at.height
+    );
+    let mut sent = format!("\x1b7\x1b[{};{}H", at.y + 1, at.x + 1).into_bytes();
+    transmit(&mut sent, &head, &encoded(root));
+    sent.extend_from_slice(b"\x1b8");
+    let mut kept = 1;
+    for frame in frames.iter().skip(1) {
+        let Some((left, top, width, height)) = differing(root, frame) else {
+            continue;
+        };
+        let head = format!(
+            "a=f,f=100,i={},q=2,c=1,X=1,x={left},y={top},s={width},v={height}",
+            PlaneId::Face.image()
+        );
+        let shown = image::imageops::crop_imm(frame, left, top, width, height).to_image();
+        transmit(&mut sent, &head, &encoded(&shown));
+        kept += 1;
+    }
+    (sent, kept)
+}
+
+/// The bare placement of a face the terminal already holds: no pixel of it travels, and the cells
+/// it stands on now are the ones it is put on.
+pub fn face_placed(at: Rect) -> Vec<u8> {
+    let head = format!(
+        "a=p,i={},p={},q=2,z={},C=1,c={},r={}",
+        PlaneId::Face.image(),
+        PLACEMENT,
+        DEPTH,
+        at.width,
+        at.height
+    );
+    let mut sent = format!("\x1b7\x1b[{};{}H", at.y + 1, at.x + 1).into_bytes();
+    sent.extend_from_slice(format!("\x1b_G{head}\x1b\\").as_bytes());
+    sent.extend_from_slice(b"\x1b8");
+    sent
+}
+
+/// The loop the motion asks for over the frames the terminal keeps, or the frame it holds where
+/// the motion has stopped.
+pub fn face_turned(motion: Motion, frames: usize) -> Vec<u8> {
+    let mut sent = Vec::new();
+    match motion {
+        Motion::Still => {}
+        Motion::Turning(None) => {
+            let stopped = format!("a=a,i={},s=1,c=1,q=2", PlaneId::Face.image());
+            sent.extend_from_slice(format!("\x1b_G{stopped}\x1b\\").as_bytes());
+        }
+        Motion::Turning(Some(turning)) => {
+            for frame in 1..=frames {
+                let looped = format!(
+                    "a=a,i={},r={frame},z={},q=2",
+                    PlaneId::Face.image(),
+                    turning.gap_ms()
+                );
+                sent.extend_from_slice(format!("\x1b_G{looped}\x1b\\").as_bytes());
+            }
+            let cycles = turning.cycles().unwrap_or(1);
+            let spent = format!("a=a,i={},s=3,v={cycles},q=2", PlaneId::Face.image());
+            sent.extend_from_slice(format!("\x1b_G{spent}\x1b\\").as_bytes());
+        }
+    }
+    sent
+}
+
+/// The bytes that give back the face's picture and the cells it stands on.
+pub fn face_back() -> Vec<u8> {
+    delete(PlaneId::Face)
+}
+
+/// The two features a terminal is asked about a picture's frames and their turning: frames composed
+/// onto a previous one in the overwrite mode, and the loop that turns them.
+pub fn frames_asked() -> Vec<u8> {
+    let mut asked = Vec::new();
+    for feature in ["e=f,c=1,X=1", "e=a"] {
+        let query = format!("a=q,i={},{feature}", PlaneId::Face.image());
+        asked.extend_from_slice(format!("\x1b_G{query}\x1b\\").as_bytes());
+    }
+    asked
+}
+
+/// The rectangle of pixels a frame differs from the root in, and none where it differs in nothing.
+fn differing(root: &image::RgbaImage, frame: &image::RgbaImage) -> Option<(u32, u32, u32, u32)> {
+    let width = root.width();
+    let mut bounds: Option<(u32, u32, u32, u32)> = None;
+    for (at, (lit, dimmed)) in root.pixels().zip(frame.pixels()).enumerate() {
+        if lit == dimmed {
+            continue;
+        }
+        let at = u32::try_from(at).ok()?;
+        let (x, y) = (at % width, at / width);
+        bounds = Some(match bounds {
+            None => (x, y, x + 1, y + 1),
+            Some(bounds) => (
+                bounds.0.min(x),
+                bounds.1.min(y),
+                bounds.2.max(x + 1),
+                bounds.3.max(y + 1),
+            ),
+        });
+    }
+    bounds.map(|(left, top, right, bottom)| (left, top, right - left, bottom - top))
 }
 
 /// Whether a row of a band is the one the band closes on, drawn in the tone of the band it meets.

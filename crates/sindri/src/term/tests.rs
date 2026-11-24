@@ -1118,19 +1118,6 @@ fn rail_shade() -> Shade {
     .expect("a band to shade")
 }
 
-fn gauge_shade(share: u8) -> Shade {
-    Shade::gauge(
-        Rect::new(40, 12, 8, 1),
-        Some(CellSize::NOMINAL),
-        sindri::instrument::Gauge {
-            share: sindri::instrument::Share::of(share),
-            turned: false,
-        },
-        &Palette::TRUECOLOR,
-    )
-    .expect("an instrument to shade")
-}
-
 fn transcript_shade() -> Shade {
     Shade::transcript(
         Rect::new(0, 0, 6, 4),
@@ -1159,44 +1146,6 @@ fn pixels(face: &Face) -> image::RgbaImage {
         .expect("the face travels in the binary, so it decodes")
 }
 
-/// The rectangle an `a=f` head names, read as left, top, width and height.
-fn rectangle(head: &str) -> (u32, u32, u32, u32) {
-    let named = |key: &str| -> u32 {
-        let (_, tail) = head
-            .split_once(&format!("{key}="))
-            .unwrap_or_else(|| panic!("{head:?} names no {key}"));
-        tail.split(',')
-            .next()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or_else(|| panic!("{head:?} names a {key} that is no number"))
-    };
-    (named("x"), named("y"), named("s"), named("v"))
-}
-
-fn differs(root: &image::RgbaImage, frame: &image::RgbaImage, x: u32, y: u32) -> bool {
-    root.get_pixel(x, y) != frame.get_pixel(x, y)
-}
-
-fn heads(drawn: &str, opening: &str) -> Vec<String> {
-    drawn
-        .match_indices("\x1b_G")
-        .filter_map(|(at, _)| {
-            let rest = &drawn[at + "\x1b_G".len()..];
-            let end = rest
-                .find(';')
-                .into_iter()
-                .chain(rest.find("\x1b\\"))
-                .min()?;
-            Some(rest[..end].to_owned())
-        })
-        .filter(|head| head.starts_with(opening))
-        .map(|head| match head.rsplit_once(",m=") {
-            Some((head, _)) => head.to_owned(),
-            None => head,
-        })
-        .collect()
-}
-
 #[test]
 fn the_face_is_a_picture_of_its_own_and_a_repaint_transmits_nothing_of_it() {
     let wire = Wire::default();
@@ -1207,14 +1156,14 @@ fn the_face_is_a_picture_of_its_own_and_a_repaint_transmits_nothing_of_it() {
     let kept = face::frames(&pixels(&face));
 
     assert_eq!(
-        first.matches("\x1b_Ga=T,f=100,i=337").count(),
+        first.matches("_Ga=T").count(),
         1,
-        "the face's root frame is one image under an identity of its own: {first:?}"
+        "the face's root frame is one image written once: {first:?}"
     );
     assert_eq!(
-        heads(&first, "a=f,").len(),
+        first.matches("_Ga=f").count(),
         kept.len() - 1,
-        "and every frame past the root is sent as frame data under it"
+        "and every frame past the root is sent as frame data under it: {first:?}"
     );
     let sent = first.len();
     backend.face(Some(&face)).unwrap();
@@ -1223,144 +1172,6 @@ fn the_face_is_a_picture_of_its_own_and_a_repaint_transmits_nothing_of_it() {
         wire.drawn().len(),
         sent,
         "a repaint of the same face transmits no image data at all"
-    );
-}
-
-#[test]
-fn every_frame_past_the_root_is_composed_against_it_and_carries_only_the_pixels_that_differ() {
-    let wire = Wire::default();
-    let mut backend = Backend::new(wire.clone(), true);
-    let face = a_face(Motion::Turning(Some(Turning::FLIGHT)));
-    backend.face(Some(&face)).unwrap();
-    drop(backend);
-    let drawn = wire.drawn();
-    let root = pixels(&face);
-    let (width, height) = root.dimensions();
-    let sent = heads(&drawn, "a=f,");
-
-    assert_eq!(
-        sent.len(),
-        face::frames(&root).len() - 1,
-        "one frame's data travels for each frame past the root"
-    );
-    for (at, head) in sent.iter().enumerate() {
-        let frame = &face::frames(&root)[at + 1];
-        let (left, top, across, down) = rectangle(head);
-        let number = at + 2;
-        let inside =
-            |x: u32, y: u32| (left..left + across).contains(&x) && (top..top + down).contains(&y);
-
-        assert!(
-            head.contains("c=1") && head.contains("X=1"),
-            "frame {number} is composed against the root frame and replaces the rectangle it \
-             names: {head:?}"
-        );
-        assert!(
-            left + across <= width && top + down <= height,
-            "frame {number} stands inside the root's {width} by {height} pixels: {head:?}"
-        );
-        for y in 0..height {
-            for x in 0..width {
-                assert!(
-                    !differs(&root, frame, x, y) || inside(x, y),
-                    "frame {number} travels every pixel it differs from the root in, and ({x}, \
-                     {y}) differs outside the rectangle {head:?}"
-                );
-            }
-        }
-        let (right, bottom) = (left + across - 1, top + down - 1);
-        let touched = (0..across).any(|step| differs(&root, frame, left + step, top))
-            && (0..across).any(|step| differs(&root, frame, left + step, bottom))
-            && (0..down).any(|step| differs(&root, frame, left, top + step))
-            && (0..down).any(|step| differs(&root, frame, right, top + step));
-        assert!(
-            touched,
-            "and the rectangle is the tightest one there is: every side of it holds a pixel that \
-             differs from the root, so {head:?} carries nothing the root does not"
-        );
-    }
-}
-
-fn handed_face(motions: &[Motion]) -> String {
-    let wire = Wire::default();
-    let mut backend = Backend::new(wire.clone(), true);
-    for motion in motions {
-        let face = a_face(*motion);
-        backend.face(Some(&face)).unwrap();
-    }
-    drop(backend);
-    wire.drawn()
-}
-
-#[test]
-fn a_run_in_flight_quickens_the_loop_and_a_settled_run_stops_it() {
-    let drawn = handed_face(&[Motion::Turning(Some(Turning::FLIGHT))]);
-    let gaps = heads(&drawn, "a=a,i=337,r=").len();
-    assert!(gaps > 0, "a live run's face is left turning: {drawn:?}");
-    assert_eq!(
-        drawn
-            .matches(&format!("z={}", Turning::FLIGHT.gap_ms()))
-            .count(),
-        gaps,
-        "every frame of the loop is told the quickened gap: {drawn:?}"
-    );
-    assert_eq!(
-        heads(&drawn, "a=a,i=337,s="),
-        ["a=a,i=337,s=3,v=1,q=2"],
-        "and the terminal runs it for as long as the run does, and no number of cycles"
-    );
-
-    let settled = handed_face(&[
-        Motion::Turning(Some(Turning::FLIGHT)),
-        Motion::Turning(None),
-    ]);
-    let stopped = settled.match_indices("a=a,i=337,s=1,c=1").count();
-    assert_eq!(
-        stopped, 1,
-        "a run that settled stops the loop and holds the root frame: {settled:?}"
-    );
-    let stop = settled.find("a=a,i=337,s=1,c=1").expect("the stop");
-    assert!(
-        !settled[stop..].contains("z="),
-        "and the frame it holds is told no gap at all: {settled:?}"
-    );
-    assert_eq!(
-        settled.matches("\x1b_Ga=T").count(),
-        1,
-        "with nothing sent again: the frames are the terminal's"
-    );
-}
-
-#[test]
-fn an_error_flashes_twice_and_is_left_standing() {
-    let drawn = handed_face(&[Motion::Turning(Some(Turning::FLASH))]);
-
-    assert_eq!(
-        heads(&drawn, "a=a,i=337,s="),
-        ["a=a,i=337,s=3,v=2,q=2"],
-        "a failed run's face turns two cycles of the breath and then holds: {drawn:?}"
-    );
-    assert!(
-        drawn.contains(&format!("z={}", Turning::FLASH.gap_ms())),
-        "at the gap the flash is drawn in: {drawn:?}"
-    );
-}
-
-#[test]
-fn a_terminal_that_keeps_no_frames_is_handed_the_still_face_and_no_animation_sequence() {
-    let drawn = handed_face(&[Motion::Still]);
-
-    assert!(
-        drawn.contains("\x1b_Ga=T,f=100,i=337"),
-        "the picture the binary carries is the face: {drawn:?}"
-    );
-    assert!(
-        !drawn.contains("\x1b_Ga=f,"),
-        "no frame is sent past it: {drawn:?}"
-    );
-    assert!(
-        !drawn.contains("\x1b_Ga=a"),
-        "and no animation sequence of any kind: {drawn:?}"
     );
 }
 
@@ -1385,23 +1196,48 @@ fn a_face_that_moved_is_placed_again_and_transmits_no_image() {
     let drawn = wire.drawn();
 
     assert_eq!(
-        drawn[sent..].matches("\x1b_Ga=p,i=337").count(),
+        drawn[sent..].matches("_Ga=p").count(),
         1,
         "the image the terminal holds is placed again where the face stands now: {:?}",
         &drawn[sent..]
     );
     assert_eq!(
-        drawn.matches("\x1b_Ga=T").count(),
+        drawn.matches("_Ga=T").count(),
         1,
         "and no pixel of it travels a second time: {drawn:?}"
     );
     assert!(
         drawn[sent..].contains(&format!(
-            "\x1b[{};{}H",
+            "\u{1b}[{};{}H",
             moved.area().y + 1,
             moved.area().x + 1
         )),
         "the placement stands in the cell the face moved to: {:?}",
+        &drawn[sent..]
+    );
+}
+
+#[test]
+fn a_motion_that_changed_is_told_the_loop_and_sends_no_image_again() {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    backend
+        .face(Some(&a_face(Motion::Turning(Some(Turning::FLIGHT)))))
+        .unwrap();
+    let sent = wire.drawn().len();
+    backend.face(Some(&a_face(Motion::Turning(None)))).unwrap();
+    drop(backend);
+    let drawn = wire.drawn();
+
+    assert_eq!(
+        drawn.matches("_Ga=T").count(),
+        1,
+        "a face whose motion changed is the picture the terminal already holds: {drawn:?}"
+    );
+    assert_eq!(
+        drawn[sent..].matches("_Ga=").count(),
+        1,
+        "and the frame that changed nothing but the motion is told one thing: {:?}",
         &drawn[sent..]
     );
 }
@@ -1425,19 +1261,21 @@ fn a_screen_cleared_for_a_resize_leaves_no_placement_of_the_face_it_drew_before(
     let whole = wire.drawn();
     let swept = &whole[drawn..];
 
+    let gone = swept.find("_Ga=d").expect("the delete");
+    let again = swept.find("_Ga=T").expect("the frame that follows");
     assert!(
-        swept.contains("\x1b_Ga=d,d=i,i=337"),
-        "a screen cleared for a resize takes the face's image away, and the placement with it: \
-         {swept:?}"
+        gone < again,
+        "a screen cleared for a resize takes the face's image away, and the placement with it, \
+         before the frame that follows draws the face again: {swept:?}"
     );
     assert_eq!(
-        swept.matches("\x1b_Ga=T,f=100,i=337").count(),
+        swept.matches("_Ga=T").count(),
         1,
-        "and the frame that follows draws the face again: {swept:?}"
+        "and the frame that follows draws it once: {swept:?}"
     );
     assert!(
         swept.contains(&format!(
-            "\x1b[{};{}H",
+            "\u{1b}[{};{}H",
             resized.area().y + 1,
             resized.area().x + 1
         )),
@@ -1458,11 +1296,11 @@ fn a_face_the_frame_no_longer_asks_for_is_given_back() {
     let drawn = wire.drawn();
 
     assert!(
-        drawn.contains("\x1b_Ga=d,d=i,i=337"),
+        drawn.contains("_Ga=d"),
         "a frame that asks for no face leaves the terminal with none of it: {drawn:?}"
     );
     assert_eq!(
-        drawn.matches("\x1b_Ga=d,d=i,i=337").count(),
+        drawn.matches("_Ga=d").count(),
         1,
         "and an image already given back is not given back twice: {drawn:?}"
     );
@@ -1482,20 +1320,12 @@ fn the_end_of_a_launch_gives_the_face_back_with_every_other_image() {
     let drawn = pty.drawn();
     drop(screen);
 
-    for id in PlaneId::ALL {
-        let spelled = String::from_utf8_lossy(&plane::delete(id)).into_owned();
-        assert_eq!(
-            drawn.matches(spelled.as_str()).count(),
-            1,
-            "{id:?}'s image is given back exactly once with the screen, so a reader's shell is \
-             handed no picture still standing in its scrollback: {drawn:?}"
-        );
-    }
-    assert_eq!(
-        drawn.matches("_Ga=d").count(),
-        PlaneId::ALL.len(),
-        "and a launch that ends gives back every picture the frame can hold, the face among \
-         them, and no other: {drawn:?}"
+    let given = String::from_utf8(plane::give_back()).expect("the sequences are printable");
+    assert!(
+        drawn.contains(&given),
+        "a launch that ends gives back every picture the frame can hold, the face among them, \
+         each exactly once and in one run, so a reader's shell is handed no picture still \
+         standing in its scrollback: {drawn:?}"
     );
 
     let wire = Wire::default();
@@ -1506,178 +1336,9 @@ fn the_end_of_a_launch_gives_the_face_back_with_every_other_image() {
     backend.clear().unwrap();
     drop(backend);
     assert!(
-        wire.drawn().contains("\x1b_Ga=d,d=i,i=337"),
+        wire.drawn().contains("_Ga=d"),
         "a cleared screen holds no placement of the face either: {:?}",
         wire.drawn()
-    );
-}
-
-#[test]
-fn a_plane_is_sent_once_and_the_plane_that_leaves_is_deleted_by_its_own_id() {
-    let wire = Wire::default();
-    let mut backend = Backend::new(wire.clone(), false);
-    let shades = [
-        rail_shade(),
-        transcript_shade(),
-        composer_shade(Rect::new(2, 3, 2, 1)),
-    ];
-    let images = held(&shades);
-    backend.shades(&shades, &images).unwrap();
-    let placed = wire.drawn().len();
-    backend.shades(&shades, &images).unwrap();
-    assert_eq!(
-        placed,
-        wire.drawn().len(),
-        "a paint that changes no band writes no bytes at all"
-    );
-    let rest = &shades[1..];
-    backend.shades(rest, &held(rest)).unwrap();
-    drop(backend);
-    let wire = wire.drawn();
-    assert_eq!(
-        wire.matches("_Ga=T").count(),
-        3,
-        "three planes, and each placed once: {wire:?}"
-    );
-    for id in [333, 334, 335] {
-        assert!(
-            wire.contains(&format!("_Ga=T,f=100,i={id},p=1,q=2,z={}", plane::DEPTH)),
-            "a plane is uploaded under no identity and no placement of its own, and each band's \
-             image is its own: {wire:?}"
-        );
-    }
-    let deleted = wire.matches("_Ga=d").count();
-    assert_eq!(
-        deleted, 1,
-        "the plane that left is deleted and the two that stand are not: {wire:?}"
-    );
-    assert!(
-        wire.contains("_Ga=d,d=i,i=334"),
-        "and it is deleted by the identity it was placed under, leaving the transcript band's \
-         and the composer's standing: {wire:?}"
-    );
-}
-
-#[test]
-fn a_resized_plane_takes_the_old_one_away_and_places_the_new_one_after_it() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let first = composer_shade(Rect::new(2, 3, 2, 1));
-    let resized = composer_shade(Rect::new(1, 5, 3, 2));
-    for shade in [first, resized] {
-        backend.shades(&[shade], &held(&[shade])).unwrap();
-    }
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-    assert_eq!(wire.matches("_Ga=T").count(), 2);
-    assert_eq!(wire.matches("_Ga=d").count(), 1);
-    let taken = wire.find("_Ga=d").unwrap();
-    let placed = wire.match_indices("_Ga=T").nth(1).unwrap().0;
-    assert!(
-        taken < placed,
-        "the image a resize made stale is taken away before the one that stands in its place is \
-         written: {wire:?}"
-    );
-    assert!(wire.contains("\x1b[6;2H"));
-}
-
-#[test]
-fn every_plane_is_placed_under_the_depth_a_cells_own_background_cannot_cover() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let band = Rect::new(2, 3, 30, 4);
-    let shades = [
-        rail_shade(),
-        transcript_shade(),
-        composer_shade(band),
-        light_shade(band, 8),
-    ];
-    backend.shades(&shades, &held(&shades)).unwrap();
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-
-    let depth: i64 = wire
-        .split_once("z=")
-        .and_then(|(_, rest)| rest.split(',').next())
-        .and_then(|value| value.parse().ok())
-        .expect("a depth on the ground the frame places");
-    assert!(
-        depth < -1_073_741_824,
-        "a plane is placed below the depth at which a terminal draws an image under a cell that \
-         carries a background, and the seam's edge ink is one such cell: {depth}"
-    );
-    for id in [333, 334, 335, 336] {
-        assert!(
-            wire.contains(&format!("i={id},p=1,q=2,z={},C=1", plane::DEPTH)),
-            "the plane under {id} is placed at a depth a cell's background covers: {wire:?}"
-        );
-    }
-    assert!(
-        !wire.contains("z=-1,"),
-        "no plane stands at the depth the seam's ink was painted over at: {wire:?}"
-    );
-}
-
-#[test]
-fn no_plane_the_frame_places_expects_a_reply_from_the_terminal() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let band = Rect::new(2, 3, 30, 4);
-    let mut images = Planes::default();
-    for caret in [8, 9] {
-        let shades = [composer_shade(band), light_shade(band, caret)];
-        images.hold(&shades);
-        backend.shades(&shades, &images).unwrap();
-    }
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-
-    for command in wire.split("\u{1b}_G").skip(1) {
-        let head = command.split(';').next().unwrap_or_default();
-        if head.starts_with("a=d") {
-            assert!(
-                head.contains("q=2"),
-                "an image given back asks the terminal a question, and an answer to it is read \
-                 as the reader's next keystroke: {head:?}"
-            );
-            continue;
-        }
-        if !head.starts_with("a=T") && !head.starts_with("a=p") {
-            continue;
-        }
-        assert!(
-            head.contains("q=2") && head.contains("C=1"),
-            "a placement asks the terminal a question, and an answer to it is read as the \
-             reader's next keystroke: {head:?}"
-        );
-    }
-    assert!(
-        wire.contains("_Ga=p"),
-        "and a placement is what the frame makes of a caret that moved: {wire:?}"
-    );
-}
-
-#[test]
-fn the_carets_light_is_given_back_when_the_band_under_it_loses_its_caret() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let band = Rect::new(2, 3, 30, 4);
-    let lit = [composer_shade(band), light_shade(band, 8)];
-    backend.shades(&lit, &held(&lit)).unwrap();
-    let bare = [composer_shade(band)];
-    backend.shades(&bare, &held(&bare)).unwrap();
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-
-    assert!(
-        wire.contains(&format!("_Ga=d,d=i,i={}", PlaneId::Caret.image())),
-        "the light is given back when the band under it carries no caret, or the terminal is left \
-         holding a light that stands nowhere: {wire:?}"
-    );
-    assert_eq!(
-        wire.matches("_Ga=T").count(),
-        2,
-        "and neither the band nor the light is made again for it: {wire:?}"
     );
 }
 
@@ -1718,181 +1379,6 @@ fn a_frame_is_written_inside_one_synchronised_output_bracket() {
 }
 
 #[test]
-fn a_frame_whose_caret_moved_transmits_no_image_and_places_the_light_again() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let band = Rect::new(2, 3, 30, 4);
-    let mut images = Planes::default();
-    for caret in [6, 7, 8] {
-        let shades = [composer_shade(band), light_shade(band, caret)];
-        images.hold(&shades);
-        backend.shades(&shades, &images).unwrap();
-    }
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-    assert_eq!(
-        wire.matches("_Ga=T").count(),
-        2,
-        "the band and the light are transmitted once each, and a caret that moved twelve pixels \
-         sends no pixel of either: {wire:?}"
-    );
-    assert_eq!(
-        wire.matches("_Ga=p").count(),
-        2,
-        "and every caret after the first puts the image the terminal holds on the cells it stands \
-         on now: {wire:?}"
-    );
-    assert_eq!(
-        wire.matches("_Ga=d").count(),
-        0,
-        "nothing the frame still holds is taken away for a light that moved: {wire:?}"
-    );
-    assert!(
-        wire.contains(&format!(
-            "_Ga=p,i={},p={},q=2,z={},C=1",
-            PlaneId::Caret.image(),
-            plane::PLACEMENT,
-            plane::DEPTH
-        )),
-        "the light is placed again under the identity and the placement it was held by, and the \
-         command is quiet: {wire:?}"
-    );
-}
-
-#[test]
-fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_area() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let area = Rect::new(2, 3, 2, 1);
-    let first = composer_shade(area);
-    let finer = Shade::composer(area, Some(CellSize::new(20, 40)), &Palette::TRUECOLOR)
-        .expect("a band to shade");
-    let greys =
-        Shade::composer(area, Some(CellSize::NOMINAL), &Palette::ANSI).expect("a band to shade");
-    assert_eq!(
-        (finer.area(), greys.area()),
-        (first.area(), first.area()),
-        "the band's area stands where it did, and only the cell and the palette moved"
-    );
-    for shade in [first, finer, greys] {
-        backend.shades(&[shade], &held(&[shade])).unwrap();
-    }
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-    assert_eq!(
-        wire.matches("_Ga=T").count(),
-        3,
-        "a band drawn on another cell or in another palette is placed again: {wire:?}"
-    );
-    assert!(
-        wire.contains(&format!(
-            "_Ga=T,f=100,i=333,p=1,q=2,z={},C=1,c=2,r=1,x=0,y=0,w=20,h=20",
-            plane::DEPTH
-        )),
-        "at the area the band stands on, which never moved: {wire:?}"
-    );
-}
-
-#[test]
-fn a_rail_whose_light_moved_is_placed_again_by_its_own_identity() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let area = Rect::new(6, 3, 3, 6);
-    let rail = |face: u16| {
-        Shade::rail(
-            sindri::ledger::Rail::Ledger,
-            sindri::ledger::RailBand::of(area).with_picture(3, face),
-            Some(CellSize::NOMINAL),
-            &Palette::TRUECOLOR,
-        )
-        .expect("a band to shade")
-    };
-    for shade in [rail(2), rail(3)] {
-        backend.shades(&[shade], &held(&[shade])).unwrap();
-    }
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-    assert_eq!(
-        wire.matches("_Ga=T").count(),
-        2,
-        "the light falls on the rows the face stands on, so a rail whose face moved is placed \
-         once more: {wire:?}"
-    );
-    assert_eq!(
-        wire.matches("_Ga=d").count(),
-        1,
-        "and the image it stood on is taken away rather than left under it: {wire:?}"
-    );
-    assert!(
-        wire.contains("_Ga=d,d=i,i=334")
-            && wire.contains(&format!("_Ga=T,f=100,i=334,p=1,q=2,z={}", plane::DEPTH)),
-        "both the delete and the new placement are under the rail's own identity: {wire:?}"
-    );
-}
-
-#[test]
-fn a_percentage_that_moved_places_the_gauge_again_and_sends_no_pixel_of_it() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let mut images = Planes::default();
-    for share in [40, 41, 42] {
-        let shades = [gauge_shade(share)];
-        images.hold(&shades);
-        backend.shades(&shades, &images).unwrap();
-    }
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-
-    assert_eq!(
-        wire.matches("_Ga=T").count(),
-        1,
-        "a gauge is transmitted once, and a share that moved a hundredth sends no pixel of it: \
-         {wire:?}"
-    );
-    assert_eq!(
-        wire.matches("_Ga=p").count(),
-        2,
-        "and every share after the first places the image the terminal holds again: {wire:?}"
-    );
-    assert_eq!(
-        wire.matches("_Ga=d").count(),
-        0,
-        "nothing the frame still holds is given back for a share that moved: {wire:?}"
-    );
-    assert!(
-        wire.contains(&format!(
-            "_Ga=p,i={},p={},q=2,z={},C=1,c=8,r=1,x=0,y=41,w=80,h=1",
-            PlaneId::Gauge.image(),
-            plane::PLACEMENT,
-            plane::DEPTH
-        )),
-        "the gauge is placed again on the rung it moved to, one pixel of the ladder deep: {wire:?}"
-    );
-}
-
-#[test]
-fn a_gauge_the_rail_no_longer_states_is_given_back_by_its_own_image_id() {
-    let mut wire = Vec::new();
-    let mut backend = Backend::new(&mut wire, false);
-    let stated = [gauge_shade(40)];
-    backend.shades(&stated, &held(&stated)).unwrap();
-    backend.shades(&[], &Planes::default()).unwrap();
-    drop(backend);
-    let wire = String::from_utf8(wire).unwrap();
-
-    assert!(
-        wire.contains(&format!("_Ga=d,d=i,i={}", PlaneId::Gauge.image())),
-        "a gauge the rail no longer states is given back by its own image id, or the terminal is \
-         left holding an instrument that stands nowhere: {wire:?}"
-    );
-    assert_eq!(
-        wire.matches("_Ga=T").count(),
-        1,
-        "and the gauge is made once and no image of another is made for it: {wire:?}"
-    );
-}
-
-#[test]
 fn a_whole_frame_clear_drops_every_plane_before_it_clears_the_screen() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
@@ -1918,16 +1404,15 @@ fn a_whole_frame_clear_drops_every_plane_before_it_clears_the_screen() {
         4,
         "a frame that clears drops every plane it placed: {wire:?}"
     );
+    assert!(
+        wire.match_indices("_Ga=d")
+            .all(|(at, _)| wire[at..].starts_with("_Ga=d,d=i,")),
+        "and each is dropped by an identity of its own: {wire:?}"
+    );
     let dropped = wire.rfind("_Ga=d").unwrap();
-    for id in [333, 334, 335, 336] {
-        assert!(
-            wire.contains(&format!("_Ga=d,d=i,i={id}")),
-            "the plane under {id} is not dropped by its own identity: {wire:?}"
-        );
-    }
     assert!(
         dropped < wire.match_indices("_Ga=T").nth(4).unwrap().0,
-        "and the frame after it places them again"
+        "the four planes are dropped before the frame after it places them again: {wire:?}"
     );
 }
 
@@ -1940,16 +1425,14 @@ fn giving_the_screen_back_deletes_every_plane_before_the_shell_returns() {
     drop(screen);
     let drawn = pty.drawn();
     let screen_back = drawn.find("\x1b[?1049l").expect("the screen is given back");
-    for id in [333, 334, 335, 336] {
-        let deleted = drawn
-            .find(&format!("_Ga=d,d=i,i={id}"))
-            .unwrap_or_else(|| panic!("the plane under {id} is deleted: {drawn:?}"));
-        assert!(
-            deleted < screen_back,
-            "a plane the launch placed is deleted before the alternate screen is given back: \
-             {drawn:?}"
-        );
-    }
+    let deleted = drawn
+        .rfind("_Ga=d")
+        .expect("the pictures the launch held are given back");
+    assert!(
+        deleted < screen_back,
+        "every picture the launch held is deleted before the alternate screen is given back: \
+         {drawn:?}"
+    );
 }
 
 #[test]

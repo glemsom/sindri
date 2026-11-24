@@ -2179,15 +2179,17 @@ fn a_frames_rail_stands_its_gauge_on_the_row_the_ctx_fact_is_stated_on() {
         })
         .collect();
 
+    let cells = at.cells();
+    let shows = at.shows();
     assert_eq!(
         stated,
-        vec![at.top],
+        vec![cells.y],
         "the frame holds the gauge's plane over row {} where the ctx fact is stated on \
          {stated:?}: an instrument stands on the row of the fact it states",
-        at.top
+        cells.y
     );
     assert_eq!(
-        (at.from, at.down, at.height),
+        (shows.x, shows.y, shows.height),
         (0, 24, 1),
         "the gauge is placed on the twenty-fourth hundredth of the first band, where 48.2k of a \
          200k window is 24 hundredths of its block"
@@ -2439,22 +2441,19 @@ fn every_ink_a_frame_draws_keeps_its_floor_on_the_pixel_its_cell_stands_on() {
             let Some(colour) = colour else {
                 continue;
             };
-            let Some((at, plane)) = planes.iter().rev().find(|(at, _)| {
-                (at.left..at.left + at.cols).contains(&x) && (at.top..at.top + at.rows).contains(&y)
-            }) else {
+            let Some((at, plane)) = planes
+                .iter()
+                .rev()
+                .find(|(at, _)| at.cells().contains((x, y).into()))
+            else {
                 continue;
             };
-            let column = u32::from(x - at.left);
-            let row = u32::from(y - at.top);
-            let across = u32::from(at.cols.max(1));
-            let down = u32::from(at.rows.max(1));
-            let pixel = plane.pixels().get_pixel(
-                at.from + column * at.width / across + at.width / across / 2,
-                at.down + row * at.height / down + at.height / down / 2,
-            );
+            let (pixel_x, pixel_y) = at.pixel(x, y).expect("the cell the placement stands on");
+            let row = y - at.cells().y;
+            let pixel = plane.pixels().get_pixel(pixel_x, pixel_y);
             let under = [pixel[0], pixel[1], pixel[2]];
             let kept = ratio(colour, under);
-            let rung = channels(shade_of(&frame, plane.id()).row(row as u16))
+            let rung = channels(shade_of(&frame, plane.id()).row(row))
                 .expect("the band's own row in pixels");
             read += 1;
             lit += usize::from(under != rung);
