@@ -1190,6 +1190,69 @@ impl Planes {
     }
 }
 
+/// The pictures the terminal holds and the cells each of them stands on.
+#[derive(Clone, Debug, Default)]
+pub struct Held {
+    standing: Vec<Standing>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Standing {
+    image: Image,
+    at: Placement,
+}
+
+/// What one pass tells the terminal, in the order it must be applied.
+#[derive(Clone, Copy, Debug)]
+pub enum Told<'a> {
+    Upload {
+        plane: &'a Plane,
+        at: Placement,
+    },
+    /// A picture the terminal holds, on cells it did not stand on.
+    Place {
+        id: PlaneId,
+        at: Placement,
+    },
+    /// A picture the terminal holds and the frame no longer stands.
+    Forget(PlaneId),
+}
+
+impl Held {
+    pub fn pass<'a>(&mut self, shades: &[Shade], planes: &'a Planes) -> Vec<Told<'a>> {
+        let before = std::mem::take(&mut self.standing);
+        let mut told: Vec<Told<'a>> = before
+            .iter()
+            .filter(|held| shades.iter().all(|shade| shade.image() != Some(held.image)))
+            .map(|held| Told::Forget(held.image.id()))
+            .collect();
+        let mut standing = Vec::with_capacity(shades.len());
+        for shade in shades {
+            let (Some(image), Some(at), Some(plane)) =
+                (shade.image(), shade.place(), planes.image(shade))
+            else {
+                continue;
+            };
+            match before.iter().find(|held| held.image == image) {
+                None => told.push(Told::Upload { plane, at }),
+                Some(held) if held.at != at => told.push(Told::Place { id: image.id(), at }),
+                Some(_) => {}
+            }
+            standing.push(Standing { image, at });
+        }
+        self.standing = standing;
+        told
+    }
+
+    /// Every picture the terminal holds, named for giving back, and none held after.
+    pub fn forget(&mut self) -> Vec<PlaneId> {
+        std::mem::take(&mut self.standing)
+            .into_iter()
+            .map(|held| held.image.id())
+            .collect()
+    }
+}
+
 /// The joint a rail of this shape is parted by: a ledger takes the frame's own column and is parted
 /// down it, and a strip lies under the band and parts nothing.
 fn seam_of(shape: Rail, palette: &Palette) -> Option<Seam> {

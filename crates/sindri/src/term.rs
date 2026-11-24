@@ -18,7 +18,7 @@ use sindri::face::{self, Motion};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
 use sindri::picture::Picture;
-use sindri::plane::{self, Placement, Plane, PlaneId, Planes, Shade};
+use sindri::plane::{self, Held, Placement, Plane, PlaneId, Planes, Shade, Told};
 use sindri::size::{Laid, Sizes};
 use sindri::view::{Painted, View};
 
@@ -133,12 +133,12 @@ struct Writing {
     given_up: bool,
 }
 
-struct Held<'a, W: Write> {
+struct Holding<'a, W: Write> {
     screen: &'a mut W,
     writing: &'a mut Writing,
 }
 
-impl<W: Write> Held<'_, W> {
+impl<W: Write> Holding<'_, W> {
     fn spill(&mut self) -> io::Result<()> {
         let held = std::mem::take(&mut self.writing.bytes);
         if held.is_empty() {
@@ -168,7 +168,7 @@ impl<W: Write> Held<'_, W> {
     }
 }
 
-impl<W: Write> Write for Held<'_, W> {
+impl<W: Write> Write for Holding<'_, W> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         if self.writing.bytes.len() + bytes.len() > FRAME_HELD {
             self.give_up_the_caret()?;
@@ -188,14 +188,14 @@ impl<W: Write> Write for Held<'_, W> {
     }
 }
 
-fn holding<'a, W: Write>(screen: &'a mut W, writing: &'a mut Writing) -> Held<'a, W> {
-    Held { screen, writing }
+fn holding<'a, W: Write>(screen: &'a mut W, writing: &'a mut Writing) -> Holding<'a, W> {
+    Holding { screen, writing }
 }
 
 fn painting<'a, W: Write>(
     screen: &'a mut W,
     writing: &'a mut Writing,
-) -> CrosstermBackend<Held<'a, W>> {
+) -> CrosstermBackend<Holding<'a, W>> {
     CrosstermBackend::new(holding(screen, writing))
 }
 
@@ -205,16 +205,9 @@ pub(crate) struct Backend<W: Write> {
     links: Links,
     sizes: Sizes,
     places: bool,
-    shades: Vec<Standing>,
+    held: Held,
     faced: Animated,
     framed: bool,
-}
-
-/// An image the terminal holds and the cells of the frame it was last put on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Standing {
-    shade: Shade,
-    at: Placement,
 }
 
 impl<W: Write> Backend<W> {
@@ -225,7 +218,7 @@ impl<W: Write> Backend<W> {
             links: Links::none(),
             sizes: Sizes::none(),
             places,
-            shades: Vec::new(),
+            held: Held::default(),
             faced: Animated::default(),
             framed: false,
         }
@@ -247,87 +240,15 @@ impl<W: Write> Backend<W> {
     }
 
     fn shades(&mut self, shades: &[Shade], images: &Planes) -> io::Result<()> {
-        let standing: Vec<Standing> = shades
-            .iter()
-            .filter_map(|shade| shade.place().map(|at| Standing { shade: *shade, at }))
-            .collect();
-        if self.shades == standing {
-            return Ok(());
+        for told in self.held.pass(shades, images) {
+            let sent = match told {
+                Told::Upload { plane, at } => upload(plane, at)?,
+                Told::Place { id, at } => place(id, at)?,
+                Told::Forget(id) => plane::delete(id),
+            };
+            holding(&mut self.screen, &mut self.writing).tell(&sent)?;
         }
-        let before = std::mem::take(&mut self.shades);
-        for held in &before {
-            let gone = standing
-                .iter()
-                .all(|next| next.shade.image() != held.shade.image());
-            if gone && let Some(id) = held.shade.id() {
-                holding(&mut self.screen, &mut self.writing).tell(&plane::delete(id))?;
-            }
-        }
-        for next in &standing {
-            match before
-                .iter()
-                .find(|held| held.shade.image() == next.shade.image())
-            {
-                None => {
-                    if let Some(plane) = images.image(&next.shade) {
-                        self.upload(plane, next.at)?;
-                    }
-                }
-                Some(held) if held.at != next.at => self.replace(next)?,
-                Some(_) => {}
-            }
-        }
-        self.shades = standing;
         Ok(())
-    }
-
-    /// One plane sent as the picture a terminal keeps under a band: its pixels as a PNG, in the
-    /// chunks the protocol allows, under its identity, its placement and the frame's depth. `C=1`
-    /// keeps a tall placement from scrolling, and `q=2` leaves no reply to read as a keystroke.
-    fn upload(&mut self, plane: &Plane, at: Placement) -> io::Result<()> {
-        let head = format!(
-            "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}",
-            plane.id().image(),
-            plane::PLACEMENT,
-            plane::DEPTH,
-            at.cols,
-            at.rows,
-            at.from,
-            at.down,
-            at.width,
-            at.height
-        );
-        let mut sent = Vec::new();
-        write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
-        transmit(&mut sent, &head, &encoded(plane.pixels())?)?;
-        sent.extend_from_slice(b"\x1b8");
-        holding(&mut self.screen, &mut self.writing).tell(&sent)
-    }
-
-    /// The image the terminal already holds, put on the cells it stands on now: no byte of it is
-    /// sent again, and the placement it is put under is the one it was held by.
-    fn replace(&mut self, standing: &Standing) -> io::Result<()> {
-        let Some(id) = standing.shade.id() else {
-            return Ok(());
-        };
-        let at = standing.at;
-        let mut sent = Vec::new();
-        write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
-        write!(
-            sent,
-            "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}\x1b\\",
-            id.image(),
-            plane::PLACEMENT,
-            plane::DEPTH,
-            at.cols,
-            at.rows,
-            at.from,
-            at.down,
-            at.width,
-            at.height
-        )?;
-        sent.extend_from_slice(b"\x1b8");
-        holding(&mut self.screen, &mut self.writing).tell(&sent)
     }
 
     fn face(&mut self, face: Option<&face::Face>) -> io::Result<()> {
@@ -577,6 +498,51 @@ fn differing(root: &image::RgbaImage, frame: &image::RgbaImage) -> Option<(u32, 
     bounds.map(|(left, top, right, bottom)| (left, top, right - left, bottom - top))
 }
 
+/// One plane sent as the picture a terminal keeps under a band: its pixels as a PNG, in the
+/// chunks the protocol allows, under its identity, its placement and the frame's depth. `C=1`
+/// keeps a tall placement from scrolling, and `q=2` leaves no reply to read as a keystroke.
+fn upload(plane: &Plane, at: Placement) -> io::Result<Vec<u8>> {
+    let head = format!(
+        "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}",
+        plane.id().image(),
+        plane::PLACEMENT,
+        plane::DEPTH,
+        at.cols,
+        at.rows,
+        at.from,
+        at.down,
+        at.width,
+        at.height
+    );
+    let mut sent = Vec::new();
+    write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
+    transmit(&mut sent, &head, &encoded(plane.pixels())?)?;
+    sent.extend_from_slice(b"\x1b8");
+    Ok(sent)
+}
+
+/// The image the terminal already holds, put on the cells it stands on now: no byte of it is
+/// sent again, and the placement it is put under is the one it was held by.
+fn place(id: PlaneId, at: Placement) -> io::Result<Vec<u8>> {
+    let mut sent = Vec::new();
+    write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
+    write!(
+        sent,
+        "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}\x1b\\",
+        id.image(),
+        plane::PLACEMENT,
+        plane::DEPTH,
+        at.cols,
+        at.rows,
+        at.from,
+        at.down,
+        at.width,
+        at.height
+    )?;
+    sent.extend_from_slice(b"\x1b8");
+    Ok(sent)
+}
+
 fn encoded(pixels: &image::RgbaImage) -> io::Result<String> {
     let mut png = Vec::new();
     image::DynamicImage::ImageRgba8(pixels.clone())
@@ -677,10 +643,8 @@ impl<W: Write> RatatuiBackend for Backend<W> {
         if !giving.is_empty() {
             holding(&mut self.screen, &mut self.writing).tell(&giving)?;
         }
-        for standing in std::mem::take(&mut self.shades) {
-            if let Some(id) = standing.shade.id() {
-                holding(&mut self.screen, &mut self.writing).tell(&plane::delete(id))?;
-            }
+        for id in self.held.forget() {
+            holding(&mut self.screen, &mut self.writing).tell(&plane::delete(id))?;
         }
         painting(&mut self.screen, &mut self.writing).clear()
     }
