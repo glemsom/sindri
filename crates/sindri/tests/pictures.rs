@@ -2089,9 +2089,9 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
     assert_eq!(
         frame
             .told()
-            .shades()
+            .placements()
             .iter()
-            .filter_map(Shade::id)
+            .map(|placement| placement.shade().id())
             .collect::<Vec<PlaneId>>(),
         vec![
             PlaneId::Rail,
@@ -2168,9 +2168,8 @@ fn a_frames_rail_stands_its_gauge_on_the_row_the_ctx_fact_is_stated_on() {
         .rail
         .expect("a rail")
         .1;
-    let gauge = shade_of(&frame, PlaneId::Gauge);
+    let at = placement_of(&frame, PlaneId::Gauge);
     let plane = plane_of(&view, PlaneId::Gauge);
-    let at = gauge.place().expect("the gauge to be placed");
     let stated: Vec<u16> = (rail.area.y..rail.area.bottom())
         .filter(|y| {
             rail_row(frame.cells(), rail.area, *y)
@@ -2180,7 +2179,7 @@ fn a_frames_rail_stands_its_gauge_on_the_row_the_ctx_fact_is_stated_on() {
         .collect();
 
     let cells = at.cells();
-    let shows = at.shows();
+    let shows = at.shows().expect("the gauge to be placed");
     assert_eq!(
         stated,
         vec![cells.y],
@@ -2196,7 +2195,7 @@ fn a_frames_rail_stands_its_gauge_on_the_row_the_ctx_fact_is_stated_on() {
     );
     assert_eq!(
         plane.pixels().dimensions(),
-        (2 * u32::from(gauge.area().width) * cell().width(), 101),
+        (2 * u32::from(at.cells().width) * cell().width(), 101),
         "a gauge's plane is two bands of the row's own pixels, one for every hundredth of the \
          block, and one pixel deep where it is placed"
     );
@@ -2234,10 +2233,7 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
     let palette = *frame.palette();
     let laid = frame.told().layout().expect("a laid out frame");
     let rail = laid.rail.expect("a rail on a frame that knows a fact").1;
-    let Shade::Rail {
-        face: Some(face), ..
-    } = shade_of(&frame, PlaneId::Rail)
-    else {
+    let Some(face) = shade_of(&frame, PlaneId::Rail).face() else {
         panic!(
             "the rail's shade carries no face, and the rows Sindri's face stands on are the rows \
              the frame's light falls on"
@@ -2252,9 +2248,9 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
     assert_eq!(
         frame
             .told()
-            .shades()
+            .placements()
             .iter()
-            .filter_map(Shade::id)
+            .map(|placement| placement.shade().id())
             .collect::<Vec<PlaneId>>(),
         vec![
             PlaneId::Rail,
@@ -2425,9 +2421,9 @@ fn every_ink_a_frame_draws_keeps_its_floor_on_the_pixel_its_cell_stands_on() {
     // pixels and not for a band's.
     let planes: Vec<(Placement, &Plane)> = frame
         .told()
-        .shades()
+        .placements()
         .iter()
-        .filter_map(|shade| Some((shade.place()?, plane_of(&view, shade.id()?))))
+        .map(|placement| (*placement, plane_of(&view, placement.shade().id())))
         .collect();
     let mut read = 0;
     let mut lit = 0;
@@ -2493,19 +2489,19 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_transcript() {
     assert!(
         frame
             .told()
-            .shades()
+            .placements()
             .iter()
-            .all(|shade| shade.id() != Some(PlaneId::Transcript)),
+            .all(|placement| placement.shade().id() != PlaneId::Transcript),
         "a palette that draws no colour is handed no shading over the transcript band: its own \
          rows are the flat band it already had"
     );
     let band = transcript_band(&frame);
-    let shade = Shade::transcript(band, None, &palette).expect("a band to shade");
+    let shade = Placement::transcript(band, None, &palette).expect("a band to shade");
     for row in 0..band.height {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
             frame.cells()[(x, y)].bg,
-            shade.row(row),
+            shade.shade().row(row),
             "row {row} of the transcript band stands on a ground of its own, and a palette that \
              spells no colour is handed no plane to stand on"
         );
@@ -2530,9 +2526,9 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_rail() {
     assert!(
         frame
             .told()
-            .shades()
+            .placements()
             .iter()
-            .all(|shade| shade.id() != Some(PlaneId::Rail)),
+            .all(|placement| placement.shade().id() != PlaneId::Rail),
         "a palette that draws no colour is handed no shading over the rail: its band is the flat \
          band it already had"
     );
@@ -2552,19 +2548,19 @@ fn a_palette_that_draws_no_colour_is_handed_no_plane_over_the_composer() {
     assert!(
         frame
             .told()
-            .shades()
+            .placements()
             .iter()
-            .all(|shade| shade.id() != Some(PlaneId::Composer)),
+            .all(|placement| placement.shade().id() != PlaneId::Composer),
         "a palette that draws no colour is handed no shading over the composer: the band drawn in \
          its place is the flat one the frame already had"
     );
     let band = frame.told().layout().expect("a laid out frame").composer;
-    let shade = Shade::composer(band, None, &palette).expect("a band to shade");
+    let shade = Placement::composer(band, None, &palette).expect("a band to shade");
     for row in 0..band.height {
         let (x, y) = (band.x + band.width / 2, band.y + row);
         assert_eq!(
             frame.cells()[(x, y)].bg,
-            shade.row(row),
+            shade.shade().row(row),
             "row {row} of the band stands on the flat ground the reader's own slots are, and on \
              no ground a plane was claimed over"
         );
@@ -2579,20 +2575,20 @@ fn a_terminal_that_places_no_picture_keeps_the_bands_own_rows_and_hands_back_no_
     let plain_frame = frame::painted(&mut plain, 80, 24);
     let picture_frame = frame::painted(&mut pictured, 80, 24);
     assert!(
-        plain_frame.told().shades().is_empty(),
+        plain_frame.told().placements().is_empty(),
         "a terminal that places no picture is handed no shading at all: {:?}",
-        plain_frame.told().shades()
+        plain_frame.told().placements()
     );
     let band = plain_frame.told().layout().unwrap().composer;
     assert_eq!(band, picture_frame.told().layout().unwrap().composer);
     let palette = plain_frame.palette();
-    let shade = Shade::composer(band, None, palette).expect("a band to shade");
+    let shade = Placement::composer(band, None, palette).expect("a band to shade");
     for row in 0..band.height {
         let x = band.x + band.width / 2;
         let y = band.y + row;
         let ground = match row {
             0 => palette.edge_ink(),
-            _ => shade.row(row),
+            _ => shade.shade().row(row),
         };
         assert_eq!(
             plain_frame.cells()[(x, y)].bg,
@@ -2638,11 +2634,11 @@ fn a_pass_that_shades_the_same_bands_makes_no_band_image() {
         "a pass that shades the same bands makes no band image"
     );
     assert_eq!(
-        first.told().shades(),
-        again.told().shades(),
+        first.told().placements(),
+        again.told().placements(),
         "and the two passes hand the terminal the same bands: {:?} against {:?}",
-        first.told().shades(),
-        again.told().shades()
+        first.told().placements(),
+        again.told().placements()
     );
 }
 
@@ -2654,8 +2650,8 @@ fn a_pass_whose_caret_column_moved_makes_no_image_and_moves_the_lamp() {
     let first = frame::painted(&mut view, 80, 24);
     let made = view.planes().made();
     let band = first.told().layout().expect("a laid out frame").composer;
-    let stood = shade_of(&first, PlaneId::Caret)
-        .place()
+    let stood = placement_of(&first, PlaneId::Caret)
+        .shows()
         .expect("the lamp stands on the cell the caret waits in");
     view.paste(" more");
     let again = frame::painted(&mut view, 80, 24);
@@ -2671,8 +2667,8 @@ fn a_pass_whose_caret_column_moved_makes_no_image_and_moves_the_lamp() {
          carries is placed again where it stands, and the bands under it never changed"
     );
     assert_ne!(
-        shade_of(&again, PlaneId::Caret)
-            .place()
+        placement_of(&again, PlaneId::Caret)
+            .shows()
             .expect("the lamp stands on the cell the caret waits in"),
         stood,
         "and the lamp the frame hands back stands on the column the caret moved to"
@@ -2742,8 +2738,8 @@ fn a_window_whose_cell_stood_is_drawn_as_it_was_with_no_header_and_no_band_image
         "and makes no band image whose shading stood"
     );
     assert_eq!(
-        kept.told().shades(),
-        before.told().shades(),
+        kept.told().placements(),
+        before.told().placements(),
         "and hands the terminal the same shades as the pass before it"
     );
 }
@@ -2788,12 +2784,12 @@ fn a_pass_drawn_at_a_new_size_makes_the_bands_images_again() {
         "a pass drawn at a new size makes the bands' images again: {made} images before it"
     );
     assert_ne!(
-        small.told().shades(),
-        large.told().shades(),
+        small.told().placements(),
+        large.told().placements(),
         "and the bands it hands the terminal are not the bands of the frame before it: {:?} \
          against {:?}",
-        small.told().shades(),
-        large.told().shades()
+        small.told().placements(),
+        large.told().placements()
     );
 }
 
@@ -2850,13 +2846,17 @@ fn light_centre(plane: &Plane) -> u32 {
     (plane.pixels().width() / 2 / cell) * cell + cell / 2
 }
 
-fn shade_of(drawn: &frame::Frame, id: PlaneId) -> Shade {
+fn placement_of(drawn: &frame::Frame, id: PlaneId) -> Placement {
     *drawn
         .told()
-        .shades()
+        .placements()
         .iter()
-        .find(|shade| shade.id() == Some(id))
-        .unwrap_or_else(|| panic!("the frame handed no shade under {id:?}"))
+        .find(|placement| placement.shade().id() == id)
+        .unwrap_or_else(|| panic!("the frame handed no placement under {id:?}"))
+}
+
+fn shade_of(drawn: &frame::Frame, id: PlaneId) -> Shade {
+    *placement_of(drawn, id).shade()
 }
 
 fn middle_of(plane: &Plane, row: u16) -> [u8; 3] {

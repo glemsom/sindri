@@ -12,7 +12,7 @@ use crate::ledger::{Ctx, FIELD, FLOOR, FULL_CELL, GAP, METER, Rail, tokens};
 const COLUMNS: u16 = FLOOR;
 use crate::palette::{Band, channels};
 use crate::pen;
-use crate::plane::{Axis, Bar, Plane, PlaneId};
+use crate::plane::{Axis, Bar, Placement, Plane, PlaneId};
 use crate::readback::{column_of, inks, under};
 use crate::rows::{MARGIN, margins};
 
@@ -45,8 +45,11 @@ fn paint(
     );
 }
 
-fn ids(shades: &[Shade]) -> Vec<PlaneId> {
-    shades.iter().filter_map(Shade::id).collect()
+fn ids(placements: &[Placement]) -> Vec<PlaneId> {
+    placements
+        .iter()
+        .map(|placement| placement.shade().id())
+        .collect()
 }
 
 fn band(width: u16, height: u16) -> Rect {
@@ -181,7 +184,7 @@ fn a_ledger_stands_on_its_own_tone_on_every_row_it_claims() {
     let area = band(COLUMNS, 8);
     let mut buffer = Buffer::empty(area);
 
-    let shade = super::paint(
+    let placement = super::paint(
         &frame(),
         Rail::Ledger,
         RailBand::of(area),
@@ -195,7 +198,7 @@ fn a_ledger_stands_on_its_own_tone_on_every_row_it_claims() {
     .expect("a band to shade");
 
     assert!(
-        !shade.places(),
+        !placement.places(),
         "a terminal that places no picture is handed no plane under the rail"
     );
     for y in area.y..area.bottom() {
@@ -323,7 +326,7 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_in_its_fi
     let rail = stood(8);
     let mut buffer = Buffer::empty(framed(rail));
 
-    let shade = super::paint(
+    let placement = super::paint(
         &frame(),
         Rail::Ledger,
         RailBand::of(rail),
@@ -335,7 +338,7 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_in_its_fi
     .into_iter()
     .next()
     .expect("a palette that spells its colours is handed the band's shading");
-    let plane = Plane::draw(shade).expect("a band a plane is drawn under");
+    let plane = Plane::draw(*placement.shade()).expect("a band a plane is drawn under");
 
     assert_eq!(
         plane.area(),
@@ -351,7 +354,7 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_in_its_fi
         "at the pixels of the cell it is drawn on"
     );
     assert_eq!(
-        shade.seam().expect("a ledger beside a transcript band"),
+        placement.seam().expect("a ledger beside a transcript band"),
         (Axis::Down, Rect { width: 1, ..rail }),
         "and the seam the shade draws is the one column of the rail's own band, down every row \
          it claims"
@@ -366,7 +369,7 @@ fn a_ledger_stood_at_the_frames_edge_keeps_its_band_and_draws_its_seam_in_its_ow
     };
     let mut buffer = Buffer::empty(framed(rail));
 
-    let shade = super::paint(
+    let placement = super::paint(
         &frame(),
         Rail::Ledger,
         RailBand::of(rail),
@@ -380,12 +383,12 @@ fn a_ledger_stood_at_the_frames_edge_keeps_its_band_and_draws_its_seam_in_its_ow
     .expect("a palette that spells its colours is handed the band's shading");
 
     assert_eq!(
-        shade.area(),
+        placement.cells(),
         rail,
         "a rail's shade is its own band, whatever the frame has to the left of it"
     );
     assert_eq!(
-        shade.seam().expect("a ledger beside a transcript band"),
+        placement.seam().expect("a ledger beside a transcript band"),
         (Axis::Down, Rect { width: 1, ..rail }),
         "and its seam is the rail's own first column, so no column of a frame the rail does not \
          reach is claimed by it"
@@ -397,7 +400,7 @@ fn the_rails_plane_is_one_tone_in_every_pixel_it_covers() {
     let rail = stood(8);
     let mut buffer = Buffer::empty(framed(rail));
 
-    let shade = super::paint(
+    let placement = super::paint(
         &frame(),
         Rail::Ledger,
         RailBand::of(rail),
@@ -409,7 +412,7 @@ fn the_rails_plane_is_one_tone_in_every_pixel_it_covers() {
     .into_iter()
     .next()
     .expect("a palette that spells its colours is handed the band's shading");
-    let plane = Plane::draw(shade).expect("a band a plane is drawn under");
+    let plane = Plane::draw(*placement.shade()).expect("a band a plane is drawn under");
 
     let pixels = plane.pixels();
     let (width, height) = pixels.dimensions();
@@ -472,7 +475,7 @@ fn a_strip_is_handed_a_plane_of_its_one_row_and_no_seam() {
     };
     let mut buffer = Buffer::empty(framed(rail));
 
-    let shade = super::paint(
+    let placement = super::paint(
         &frame(),
         Rail::Strip,
         RailBand::of(rail),
@@ -486,16 +489,16 @@ fn a_strip_is_handed_a_plane_of_its_one_row_and_no_seam() {
     .expect("a palette that spells its colours is handed the band's shading");
 
     assert_eq!(
-        shade.area(),
+        placement.cells(),
         rail,
         "a strip is one row of the rail's own columns, and its plane takes no column of the \
          transcript's"
     );
     assert!(
-        shade.seam().is_none(),
+        placement.seam().is_none(),
         "a strip lies under the transcript band and parts nothing, so it makes no seam"
     );
-    let plane = Plane::draw(shade).expect("a band a plane is drawn under");
+    let plane = Plane::draw(*placement.shade()).expect("a band a plane is drawn under");
     let (width, height) = plane.pixels().dimensions();
     let tone = channels(PALETTE.band(Band::Rail)).expect("a band in pixels");
     assert_eq!(
@@ -521,7 +524,7 @@ fn a_rail_handed_a_cell_in_no_colour_draws_the_flat_band_it_drew_without_one() {
         let mut pictured = Buffer::empty(area);
         let mut placeless = Buffer::empty(area);
 
-        let shade = super::paint(
+        let placement = super::paint(
             &frame(),
             shape,
             RailBand::of(area),
@@ -536,7 +539,7 @@ fn a_rail_handed_a_cell_in_no_colour_draws_the_flat_band_it_drew_without_one() {
         paint(&frame(), shape, area, None, &mut placeless, &Palette::SLOTS);
 
         assert!(
-            !shade.places(),
+            !placement.places(),
             "a palette that draws no colour is handed no plane under the {shape:?}, so the band's \
              own rows are the whole of its shading"
         );
@@ -602,7 +605,7 @@ fn a_gauge_stands_on_the_row_the_window_is_stated_on() {
     };
     let mut buffer = Buffer::empty(framed(rail));
 
-    let shades = super::paint(
+    let placements = super::paint(
         &facts,
         Rail::Ledger,
         RailBand::of(rail),
@@ -618,13 +621,13 @@ fn a_gauge_stands_on_the_row_the_window_is_stated_on() {
         .expect("the row the ctx fact is stated on");
 
     assert_eq!(
-        ids(&shades)[1],
+        ids(&placements)[1],
         PlaneId::Gauge,
         "a rail whose terminal places pictures is handed its band's shade and then the gauge the \
          window's own fill draws"
     );
     assert_eq!(
-        shades[1].area(),
+        placements[1].cells(),
         Rect {
             x: rail.x + MARGIN,
             y: rail.y + ctx.y(),
@@ -645,7 +648,7 @@ fn each_bar_stands_on_the_row_its_figure_is_stated_on() {
     };
     let mut buffer = Buffer::empty(framed(rail));
 
-    let shades = super::paint(
+    let placements = super::paint(
         &facts,
         Rail::Ledger,
         RailBand::of(rail),
@@ -663,13 +666,13 @@ fn each_bar_stands_on_the_row_its_figure_is_stated_on() {
     };
 
     assert_eq!(
-        ids(&shades)[1..3].to_vec(),
+        ids(&placements)[1..3].to_vec(),
         vec![PlaneId::Bar(Bar::Input), PlaneId::Bar(Bar::Output)],
         "the foot's two figures are drawn as a bar each, the input's before the output's"
     );
-    for (shade, kind) in shades[1..3].iter().zip([Kind::Input, Kind::Output]) {
+    for (placement, kind) in placements[1..3].iter().zip([Kind::Input, Kind::Output]) {
         assert_eq!(
-            shade.area(),
+            placement.cells(),
             Rect {
                 x: rail.x + MARGIN,
                 y: rail.y + stated(kind),
@@ -691,7 +694,7 @@ fn a_rail_that_states_no_spend_is_handed_its_gauge_and_no_bezel() {
     };
     let mut buffer = Buffer::empty(framed(rail));
 
-    let shades = super::paint(
+    let placements = super::paint(
         &facts,
         Rail::Ledger,
         RailBand::of(rail),
@@ -702,7 +705,7 @@ fn a_rail_that_states_no_spend_is_handed_its_gauge_and_no_bezel() {
     );
 
     assert_eq!(
-        ids(&shades),
+        ids(&placements),
         vec![PlaneId::Rail, PlaneId::Gauge],
         "a rail whose foot states no figure is handed its band's shade and the gauge and no \
          bezel at all, the room under its last fact being plain air"
@@ -718,7 +721,7 @@ fn the_bezel_stands_in_the_room_the_rail_leaves_between_its_last_fact_and_its_fo
     };
     let mut buffer = Buffer::empty(framed(rail));
 
-    let shades = super::paint(
+    let placements = super::paint(
         &facts,
         Rail::Ledger,
         RailBand::of(rail),
@@ -732,12 +735,12 @@ fn the_bezel_stands_in_the_room_the_rail_leaves_between_its_last_fact_and_its_fo
         .expect("the air the rail leaves between its last fact and its foot");
 
     assert_eq!(
-        ids(&shades).last(),
-        Some(&PlaneId::Bezel),
+        ids(&placements).last().copied(),
+        Some(PlaneId::Bezel),
         "the rail's last instrument is the bezel that frames the air it leaves"
     );
     assert_eq!(
-        shades.last().expect("an instrument").area(),
+        placements.last().expect("an instrument").cells(),
         Rect {
             x: rail.x + MARGIN,
             y: rail.y + room.start,
@@ -762,7 +765,7 @@ fn the_rails_instruments_are_the_gauge_the_two_bars_and_the_bezel() {
     let (facts, band) = installed();
     let mut buffer = Buffer::empty(framed(band.area));
 
-    let shades = super::paint(
+    let placements = super::paint(
         &facts,
         Rail::Ledger,
         band,
@@ -773,7 +776,7 @@ fn the_rails_instruments_are_the_gauge_the_two_bars_and_the_bezel() {
     );
 
     assert_eq!(
-        ids(&shades),
+        ids(&placements),
         vec![
             PlaneId::Rail,
             PlaneId::Gauge,
@@ -792,7 +795,7 @@ fn an_instrument_moves_no_word_of_the_row_it_stands_on() {
     let mut pictured = Buffer::empty(framed(band.area));
     let mut plain = Buffer::empty(framed(band.area));
 
-    let shades = super::paint(
+    let placements = super::paint(
         &facts,
         Rail::Ledger,
         band,
@@ -811,16 +814,16 @@ fn an_instrument_moves_no_word_of_the_row_it_stands_on() {
         &PALETTE,
     );
 
-    assert_eq!(ids(&shades).len(), 5, "a rail of four instruments");
-    for shade in &shades[1..] {
-        let area = shade.area();
+    assert_eq!(ids(&placements).len(), 5, "a rail of four instruments");
+    for placement in &placements[1..] {
+        let area = placement.cells();
         for y in area.y..area.bottom() {
             assert_eq!(
                 glyphs(&pictured, y),
                 glyphs(&plain, y),
                 "row {y} of the {:?} states words the row drew before the instrument stood on it: \
                  an instrument is drawn under the cells of a row and never in place of one",
-                shade.id()
+                placement.shade().id()
             );
         }
     }
@@ -831,7 +834,7 @@ fn every_instrument_keeps_the_rails_margin_and_stands_inside_the_block_it_is_dra
     let (facts, band) = installed();
     let mut buffer = Buffer::empty(framed(band.area));
 
-    let shades = super::paint(
+    let placements = super::paint(
         &facts,
         Rail::Ledger,
         band,
@@ -841,22 +844,22 @@ fn every_instrument_keeps_the_rails_margin_and_stands_inside_the_block_it_is_dra
         &PALETTE,
     );
 
-    assert_eq!(ids(&shades).len(), 5, "a rail of four instruments");
-    for shade in &shades[1..] {
-        let area = shade.area();
+    assert_eq!(ids(&placements).len(), 5, "a rail of four instruments");
+    for placement in &placements[1..] {
+        let area = placement.cells();
         assert_eq!(
             (area.x, area.right()),
             (band.facts.x + MARGIN, band.facts.right() - MARGIN),
             "the {:?} at columns {}..{} does not open and close in the Margin the rail keeps on \
              both edges",
-            shade.id(),
+            placement.shade().id(),
             area.x,
             area.right()
         );
         assert!(
             area.y >= band.facts.y && area.bottom() <= band.facts.bottom(),
             "the {:?} at rows {}..{} stands outside the block the rail laid for it, {}..{}",
-            shade.id(),
+            placement.shade().id(),
             area.y,
             area.bottom(),
             band.facts.y,
@@ -865,7 +868,7 @@ fn every_instrument_keeps_the_rails_margin_and_stands_inside_the_block_it_is_dra
         assert!(
             area.width <= band.facts.width && area.height <= band.facts.height,
             "the {:?} is bigger than the block it stands in",
-            shade.id()
+            placement.shade().id()
         );
     }
 }
@@ -875,7 +878,7 @@ fn the_bezel_stands_on_no_row_that_states_a_word_and_clears_the_margin_on_both_e
     let (facts, band) = installed();
     let mut buffer = Buffer::empty(framed(band.area));
 
-    let shades = super::paint(
+    let placements = super::paint(
         &facts,
         Rail::Ledger,
         band,
@@ -884,11 +887,11 @@ fn the_bezel_stands_on_no_row_that_states_a_word_and_clears_the_margin_on_both_e
         &mut buffer,
         &PALETTE,
     );
-    let area = shades
+    let area = placements
         .iter()
-        .find(|shade| shade.id() == Some(PlaneId::Bezel))
+        .find(|placement| placement.shade().id() == PlaneId::Bezel)
         .expect("a rail that leaves air between its last fact and its foot")
-        .area();
+        .cells();
 
     assert!(area.height > 0, "a bezel of no row frames nothing");
     for y in area.y..area.bottom() {
@@ -910,7 +913,7 @@ fn a_rail_whose_terminal_places_no_picture_is_handed_the_bands_shade_and_no_inst
     let area = band(COLUMNS, 8);
     let mut buffer = Buffer::empty(area);
 
-    let shades = super::paint(
+    let placements = super::paint(
         &spent(),
         Rail::Ledger,
         RailBand::of(area),
@@ -921,7 +924,7 @@ fn a_rail_whose_terminal_places_no_picture_is_handed_the_bands_shade_and_no_inst
     );
 
     assert_eq!(
-        ids(&shades),
+        ids(&placements),
         vec![PlaneId::Rail],
         "a terminal that places no picture is handed the band's shading and no instrument: the \
          blocks keep the meters and the cells they drew without one"
@@ -936,7 +939,7 @@ fn a_strip_is_handed_the_bands_shade_and_no_instrument() {
     };
     let mut buffer = Buffer::empty(framed(rail));
 
-    let shades = super::paint(
+    let placements = super::paint(
         &spent(),
         Rail::Strip,
         RailBand::of(rail),
@@ -947,7 +950,7 @@ fn a_strip_is_handed_the_bands_shade_and_no_instrument() {
     );
 
     assert_eq!(
-        ids(&shades),
+        ids(&placements),
         vec![PlaneId::Rail],
         "a strip is one row of the rail's own columns and states its facts as words, so it is \
          handed the band's shading and keeps the meters it drew"

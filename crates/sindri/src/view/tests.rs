@@ -23,7 +23,7 @@ use crate::ink::{Face, Look};
 use crate::palette::channels;
 use crate::palette::{Band, Palette};
 use crate::pictures::PLACEHOLDER as PLACED;
-use crate::plane::Shade;
+use crate::plane::Placement;
 use crate::pulse::{STEP_MS, Turning};
 use crate::readback::under;
 use crate::rows::{SIGIL, THUMB};
@@ -131,8 +131,9 @@ fn glyph_at(buffer: &Buffer, x: u16, y: u16) -> char {
 }
 
 fn shade_row(palette: &Palette, row: u16, rows: u16) -> Color {
-    Shade::composer(Rect::new(0, 0, 1, rows), None, palette)
+    Placement::composer(Rect::new(0, 0, 1, rows), None, palette)
         .expect("a band of rows")
+        .shade()
         .row(row)
 }
 

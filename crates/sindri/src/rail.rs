@@ -9,7 +9,7 @@ use crate::instrument;
 use crate::ledger::{self, Facts, Kind, Rail, RailBand};
 use crate::palette::Palette;
 use crate::pen;
-use crate::plane::{Bar, Shade};
+use crate::plane::{Bar, Placement};
 use crate::pulse::Pulse;
 use crate::rows::margined;
 
@@ -23,27 +23,27 @@ pub fn paint(
     terminal: (Option<CellSize>, Option<&mut crate::size::Sizes>),
     buffer: &mut Buffer,
     palette: &Palette,
-) -> Vec<Shade> {
+) -> Vec<Placement> {
     let (pictures, sized) = terminal;
     let area = band.area;
     if area.width == 0 || area.height == 0 {
         return Vec::new();
     }
-    let mut shades = Vec::new();
-    if let Some(shade) = Shade::rail(rail, band, pictures, palette) {
-        shade.claim(buffer, palette);
-        shades.push(shade);
+    let mut placements = Vec::new();
+    if let Some(placement) = Placement::rail(rail, band, pictures, palette) {
+        placement.claim(buffer, palette);
+        placements.push(placement);
     }
     if rail == Rail::Ledger {
         under_the_face(band, buffer, palette);
     }
     let rows = ledger::rows(facts, rail.into(), band.facts, marker);
     ledger::draw(&rows, band.facts, buffer, palette);
-    shades.extend(instruments(facts, rail, band, pictures, &rows, palette));
+    placements.extend(instruments(facts, rail, band, pictures, &rows, palette));
     if let Some(sized) = sized {
         sized.append(sizes(facts, rail, band, marker, buffer, palette));
     }
-    shades
+    placements
 }
 
 fn instruments(
@@ -53,7 +53,7 @@ fn instruments(
     cell: Option<CellSize>,
     rows: &[ledger::Row],
     palette: &Palette,
-) -> Vec<Shade> {
+) -> Vec<Placement> {
     let Some(cell) = cell.filter(|_| rail == Rail::Ledger) else {
         return Vec::new();
     };
@@ -69,9 +69,9 @@ fn instruments(
             .find(|row| row.kind() == Some(kind))
             .map(|row| cells(row.y()..row.y().saturating_add(1)))
     };
-    let mut shades = Vec::new();
+    let mut placements = Vec::new();
     if let (Some(area), Some(gauge)) = (stated(Kind::Ctx), instrument::Gauge::of(facts)) {
-        shades.extend(Shade::gauge(area, Some(cell), gauge, palette));
+        placements.extend(Placement::gauge(area, Some(cell), gauge, palette));
     }
     let spend = instrument::Spend::of(&facts.spend);
     for (kind, bar, share) in [
@@ -83,13 +83,13 @@ fn instruments(
         ),
     ] {
         if let (Some(area), Some(share)) = (stated(kind), share) {
-            shades.extend(Shade::bar(area, Some(cell), bar, share, palette));
+            placements.extend(Placement::bar(area, Some(cell), bar, share, palette));
         }
     }
     if let Some(room) = instrument::bezel(rows) {
-        shades.extend(Shade::bezel(cells(room), Some(cell), palette));
+        placements.extend(Placement::bezel(cells(room), Some(cell), palette));
     }
-    shades
+    placements
 }
 
 fn under_the_face(band: RailBand, buffer: &mut Buffer, palette: &Palette) {

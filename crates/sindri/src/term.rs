@@ -17,7 +17,7 @@ use sindri::face::{self, Motion};
 use sindri::graphics::CellSize;
 use sindri::link::Links;
 use sindri::picture::Picture;
-use sindri::plane::{self, Held, Planes, Shade};
+use sindri::plane::{self, Held, Placement, Planes};
 use sindri::size::{Laid, Sizes};
 use sindri::view::{Painted, View};
 
@@ -238,8 +238,8 @@ impl<W: Write> Backend<W> {
         holding(&mut self.screen, &mut self.writing).write_all(OPEN_FRAME)
     }
 
-    fn shades(&mut self, shades: &[Shade], images: &Planes) -> io::Result<()> {
-        let sent = self.held.pass(shades, images);
+    fn placements(&mut self, placements: &[Placement], images: &Planes) -> io::Result<()> {
+        let sent = self.held.pass(placements, images);
         if sent.is_empty() {
             return Ok(());
         }
@@ -537,7 +537,7 @@ pub(crate) fn paint<W: Write>(canvas: &mut CanvasOver<W>, view: &mut View) -> io
     canvas.backend_mut().sizes(painted.sizes());
     canvas
         .backend_mut()
-        .shades(painted.shades(), view.planes())?;
+        .placements(painted.placements(), view.planes())?;
     canvas.backend_mut().face(painted.face())?;
     let caret = painted.caret();
     canvas.draw(|frame| {

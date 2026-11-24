@@ -285,13 +285,21 @@ its rows is claimed in and the cell of it the frame's
 **Seam** is drawn in — the transcript band on the well, the rail on its own tone on every row of it,
 the composer's band drawn in the band a prompt is read on and closing into the rail's tone on its
 last row; and the rail's first column and the composer's head row are the seam's, drawn in the
-plane's pixels. It holds every fact the band's cells and its **Plane** are drawn from and nothing
-else: the cell the plane is drawn at, the light its band carries — the peak it spends of the proved
-lift and the rect that light is a lamp around — and a frame holds each band's image against it, so a
-pass in which it stands makes no image. The **Caret**'s light is a shade of its own, and the column
-it is placed on is no part of any image. Where no picture is placed, that same shade is claimed cell
-by cell.
+plane's pixels. It holds every fact its **Plane** is drawn from and nothing else: the cell the plane
+is drawn at, the light its band carries — the peak it spends of the proved lift and the rect that
+light is a lamp around — and a frame holds each band's image against it, so a pass in which it
+stands makes no image. A shade holds no placement: the cells it stands on are a **Placement**'s and
+no fact of the shade, so one shade answers for a band that moved. The **Caret**'s light is a shade of
+its own, and the column it is placed on is no part of any image.
 _Avoid_: Colour, tone, gradient, paint, style
+
+**Placement**:
+A **Shade** and the cells it stands on: the unit a terminal is told about in one push. It answers the
+cells it claims and the **Seam**'s own cell, and a placement that moved is one whose shade is
+unchanged and whose cells are not. Where no picture is placed no placement is handed, and the band's
+own rows are claimed from its shade.
+_Avoid_: Position, spot, coordinates, rect
+
 **Seam**:
 The one cell of the frame's pixels that parts two bands, on the axis that parts them,
 drawn as a fall into the shadow at the joint that ends in a hairline lifted off the band it stands
