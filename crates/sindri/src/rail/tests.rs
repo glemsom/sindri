@@ -1943,3 +1943,26 @@ fn the_states_word_is_set_big_past_the_mark_in_front_of_it() {
     assert_eq!(headline.row(), 0);
     assert_eq!(headline.left(), MARGIN + FIELD + 2);
 }
+
+#[test]
+fn a_foot_figure_that_states_no_unit_is_set_big_with_nothing_beside_it() {
+    let facts = Facts {
+        spend: Usage {
+            input: Some(900),
+            ..spent().spend
+        },
+        ..spent()
+    };
+    let laid = sizing(&facts, band(COLUMNS, 21), None);
+
+    let figure = run(&laid, "900");
+    assert_eq!(
+        figure.run().scale(),
+        2,
+        "a spend under a thousand is still the foot's figure, so it is still set big"
+    );
+    assert!(
+        laid.laid().iter().all(|one| one.run().words() != "k"),
+        "a figure with no unit states none, so nothing stands past the cells it is drawn at"
+    );
+}
