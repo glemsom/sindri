@@ -2254,3 +2254,42 @@ fn a_gauge_that_moved_one_hundredth_carries_the_same_image_and_a_placement_on_it
         "and the image it holds answers for the gauge that moved"
     );
 }
+
+#[test]
+fn every_picture_the_frame_holds_is_held_under_an_identity_of_its_own() {
+    for (at, id) in PlaneId::ALL.iter().enumerate() {
+        for other in &PlaneId::ALL[at + 1..] {
+            assert_ne!(
+                id.image(),
+                other.image(),
+                "{id:?} and {other:?} are one picture to the terminal, and the picture one of \
+                 them stands in is replaced by the other"
+            );
+        }
+    }
+    assert!(
+        PlaneId::ALL.contains(&PlaneId::Face),
+        "the face is a picture the frame holds, so the identities given back name it with the \
+         others"
+    );
+}
+
+#[test]
+fn giving_every_identity_back_names_each_picture_the_frame_can_hold_exactly_once() {
+    let giving = String::from_utf8(give_back()).expect("the sequences are printable");
+
+    for id in PlaneId::ALL {
+        let spelled = String::from_utf8(delete(id)).expect("a sequence is printable");
+        assert_eq!(
+            giving.matches(&spelled).count(),
+            1,
+            "{id:?} is given back exactly once, so a picture it stands in is neither left in a \
+             reader's scrollback nor given back twice: {giving:?}"
+        );
+    }
+    assert_eq!(
+        giving.matches("_Ga=d").count(),
+        PlaneId::ALL.len(),
+        "and the identities given back are the ones the frame can hold, and no other: {giving:?}"
+    );
+}

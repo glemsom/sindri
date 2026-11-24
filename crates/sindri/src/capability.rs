@@ -1,10 +1,10 @@
 use sindri_core::config::Environment;
 
-use crate::face;
 use crate::graphics::CellSize;
 use crate::palette::Palette;
 use crate::picture;
 use crate::pictures::Pictures;
+use crate::plane::PlaneId;
 use crate::pointer;
 use crate::size;
 
@@ -40,7 +40,9 @@ impl Question {
 fn animation_asked() -> Vec<u8> {
     let mut asked = Vec::new();
     for feature in ["e=f,c=1,X=1", "e=a"] {
-        asked.extend_from_slice(format!("\x1b_Ga=q,i={},{feature}\x1b\\", face::ID).as_bytes());
+        asked.extend_from_slice(
+            format!("\x1b_Ga=q,i={},{feature}\x1b\\", PlaneId::Face.image()).as_bytes(),
+        );
     }
     asked
 }
@@ -86,7 +88,7 @@ impl Answers {
 
 /// One feature an answer reports, under the face's own identity, as the terminal echoes it back.
 fn answer(keys: &str) -> Vec<u8> {
-    format!("\x1b_Gi={},{keys};OK\x1b\\", face::ID).into_bytes()
+    format!("\x1b_Gi={},{keys};OK\x1b\\", PlaneId::Face.image()).into_bytes()
 }
 
 impl Asked for Answers {
@@ -103,7 +105,9 @@ impl Asked for Answers {
             }),
             Question::Animation => Some(match self.animation {
                 true => [answer("e=f,c=1,X=1"), answer("e=a")].concat(),
-                false => format!("\x1b_Gi={};ENOTSUPPORTED\x1b\\", face::ID).into_bytes(),
+                false => {
+                    format!("\x1b_Gi={};ENOTSUPPORTED\x1b\\", PlaneId::Face.image()).into_bytes()
+                }
             }),
         }
     }

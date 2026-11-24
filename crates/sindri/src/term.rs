@@ -450,7 +450,7 @@ impl Animated {
             write!(
                 sent,
                 "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={}\x1b\\",
-                face::ID,
+                PlaneId::Face.image(),
                 plane::PLACEMENT,
                 plane::DEPTH,
                 at.width,
@@ -478,7 +478,7 @@ impl Animated {
         write!(sent, "\x1b7\x1b[{};{}H", at.y + 1, at.x + 1)?;
         let head = format!(
             "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={}",
-            face::ID,
+            PlaneId::Face.image(),
             plane::PLACEMENT,
             plane::DEPTH,
             at.width,
@@ -494,7 +494,7 @@ impl Animated {
                 };
                 let head = format!(
                     "a=f,f=100,i={},q=2,c=1,X=1,x={left},y={top},s={width},v={height}",
-                    face::ID
+                    PlaneId::Face.image()
                 );
                 let shown = image::imageops::crop_imm(frame, left, top, width, height).to_image();
                 transmit(&mut sent, &head, &encoded(&shown)?)?;
@@ -515,7 +515,7 @@ impl Animated {
     /// holds none.
     fn take(&mut self) -> Vec<u8> {
         match self.holding.take() {
-            Some(_) => face::delete(),
+            Some(_) => plane::delete(PlaneId::Face),
             None => Vec::new(),
         }
     }
@@ -528,19 +528,27 @@ fn turning(motion: Motion, frames: usize) -> io::Result<Vec<u8>> {
     match motion {
         Motion::Still => {}
         Motion::Turning(None) => {
-            write!(sent, "\x1b_Ga=a,i={},s=1,c=1,q=2\x1b\\", face::ID)?;
+            write!(
+                sent,
+                "\x1b_Ga=a,i={},s=1,c=1,q=2\x1b\\",
+                PlaneId::Face.image()
+            )?;
         }
         Motion::Turning(Some(turning)) => {
             for frame in 1..=frames {
                 write!(
                     sent,
                     "\x1b_Ga=a,i={},r={frame},z={},q=2\x1b\\",
-                    face::ID,
+                    PlaneId::Face.image(),
                     turning.gap_ms()
                 )?;
             }
             let cycles = turning.cycles().unwrap_or(1);
-            write!(sent, "\x1b_Ga=a,i={},s=3,v={cycles},q=2\x1b\\", face::ID)?;
+            write!(
+                sent,
+                "\x1b_Ga=a,i={},s=3,v={cycles},q=2\x1b\\",
+                PlaneId::Face.image()
+            )?;
         }
     }
     Ok(sent)
@@ -761,10 +769,7 @@ impl Restore {
     /// is drawn on a screen about to be somebody else's, and then raw mode and the signals return.
     fn put_back(self) {
         let mut giving = CLOSE_FRAME.to_vec();
-        for id in PlaneId::ALL {
-            giving.extend(plane::delete(id));
-        }
-        giving.extend(face::delete());
+        giving.extend(plane::give_back());
         giving.extend_from_slice(GIVE_BACK_SCREEN);
         if self.window {
             giving.extend_from_slice(GIVE_UP_FOCUS);

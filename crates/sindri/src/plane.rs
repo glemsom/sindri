@@ -40,17 +40,19 @@ pub enum PlaneId {
     Rail,
     Transcript,
     Caret,
+    Face,
     Gauge,
     Bar(Bar),
     Bezel,
 }
 
 impl PlaneId {
-    pub const ALL: [PlaneId; 8] = [
+    pub const ALL: [PlaneId; 9] = [
         PlaneId::Composer,
         PlaneId::Rail,
         PlaneId::Transcript,
         PlaneId::Caret,
+        PlaneId::Face,
         PlaneId::Gauge,
         PlaneId::Bar(Bar::Input),
         PlaneId::Bar(Bar::Output),
@@ -65,6 +67,7 @@ impl PlaneId {
             PlaneId::Rail => 334,
             PlaneId::Transcript => 335,
             PlaneId::Caret => 336,
+            PlaneId::Face => 337,
             PlaneId::Gauge => 338,
             PlaneId::Bar(Bar::Input) => 339,
             PlaneId::Bar(Bar::Output) => 340,
@@ -1201,6 +1204,11 @@ fn seam_of(shape: Rail, palette: &Palette) -> Option<Seam> {
 
 pub fn delete(id: PlaneId) -> Vec<u8> {
     format!("\x1b_Ga=d,d=i,i={},q=2\x1b\\", id.image()).into_bytes()
+}
+
+/// The bytes that give every picture the frame can hold back, each identity named once.
+pub fn give_back() -> Vec<u8> {
+    PlaneId::ALL.into_iter().flat_map(delete).collect()
 }
 
 /// Whether a row of a band is the one the band closes on, drawn in the tone of the band it meets.

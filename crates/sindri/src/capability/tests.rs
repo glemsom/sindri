@@ -336,13 +336,16 @@ fn the_cell_is_read_off_the_bytes_the_terminal_sent_and_the_keys_beside_it_kept(
 
 /// One answer a terminal that supports `keys` gives to a feature query, under the face's identity.
 fn reply(keys: &str) -> String {
-    format!("\x1b_Gi={},{keys};OK\x1b\\", crate::face::ID)
+    format!(
+        "\x1b_Gi={},{keys};OK\x1b\\",
+        crate::plane::PlaneId::Face.image()
+    )
 }
 
 #[test]
 fn the_frames_and_animation_are_asked_for_under_the_face_s_own_identity() {
     let asked = String::from_utf8_lossy(&Question::Animation.asked()).into_owned();
-    let identity = format!("i={}", crate::face::ID);
+    let identity = format!("i={}", crate::plane::PlaneId::Face.image());
 
     assert!(
         asked.contains("e=f") && asked.contains("e=a"),
@@ -387,7 +390,7 @@ fn a_terminal_that_answers_both_features_animates_and_one_that_answers_neither_d
     let only_frames = format!(
         "{}\x1b_Gi={},e=a;ENOTSUPPORTED\x1b\\",
         reply("e=f,c=1,X=1"),
-        crate::face::ID
+        crate::plane::PlaneId::Face.image()
     );
     assert!(
         !animation_reply(only_frames.as_bytes()).0,

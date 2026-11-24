@@ -1483,14 +1483,19 @@ fn the_end_of_a_launch_gives_the_face_back_with_every_other_image() {
     drop(screen);
 
     for id in PlaneId::ALL {
-        assert!(
-            drawn.contains(String::from_utf8_lossy(&plane::delete(id)).as_ref()),
-            "every plane's image is given back with the screen: {drawn:?}"
+        let spelled = String::from_utf8_lossy(&plane::delete(id)).into_owned();
+        assert_eq!(
+            drawn.matches(spelled.as_str()).count(),
+            1,
+            "{id:?}'s image is given back exactly once with the screen, so a reader's shell is \
+             handed no picture still standing in its scrollback: {drawn:?}"
         );
     }
-    assert!(
-        drawn.contains(String::from_utf8_lossy(&face::delete()).as_ref()),
-        "and the face's image is given back with them: {drawn:?}"
+    assert_eq!(
+        drawn.matches("_Ga=d").count(),
+        PlaneId::ALL.len(),
+        "and a launch that ends gives back every picture the frame can hold, the face among \
+         them, and no other: {drawn:?}"
     );
 
     let wire = Wire::default();
