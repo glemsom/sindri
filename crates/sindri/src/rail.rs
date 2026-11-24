@@ -40,7 +40,9 @@ pub fn paint(
     let rows = ledger::rows(facts, rail.into(), band.facts, marker);
     ledger::draw(&rows, band.facts, buffer, palette);
     placements.extend(instruments(facts, rail, band, pictures, &rows, palette));
-    if let Some(sized) = sized.filter(|_| rail == Rail::Ledger) {
+    if rail == Rail::Ledger
+        && let Some(sized) = sized
+    {
         sized.append(sizes(&rows, band, buffer, palette));
     }
     placements
@@ -147,7 +149,10 @@ fn sizes(
                     let width = run.width() + unit_run.width();
                     // A picture is two cells deep, so the foot's first figure stands over the row
                     // its next figure is stated on.
-                    if !figure.is_empty() && from + width <= right && y + 1 < band.facts.bottom() {
+                    if !figure.is_empty()
+                        && from.saturating_add(width) <= right
+                        && y + 1 < band.facts.bottom()
+                    {
                         pen::run(
                             buffer,
                             from,
@@ -164,12 +169,10 @@ fn sizes(
                 }
                 if row.kind() == Some(Kind::State) {
                     let text = value.text();
-                    let word = text.rsplit(' ').next().unwrap_or_default();
-                    let opened = pen::cells(&text[..text.len() - word.len()]);
-                    let run = Sized::new(0, 2, word, Look::plain(value.ink()));
-                    let from = left + x + opened;
-                    if !word.is_empty()
-                        && from.saturating_add(run.width()) <= right
+                    let after = text.find(' ').map_or(0, |space| space + 1);
+                    let run = Sized::new(0, 2, &text[after..], Look::plain(value.ink()));
+                    let from = left + x + pen::cells(&text[..after]);
+                    if from.saturating_add(run.width()) <= right
                         && y + 1 < band.facts.bottom()
                         && (from..from + run.width()).all(|column| {
                             buffer
