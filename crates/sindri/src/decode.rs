@@ -138,6 +138,8 @@ impl Decoder {
                     None => Step::Taken,
                 }
             }
+            // An `ESC` with no case here loses its `ESC`, and the bytes after it are typed as the
+            // reader's own: every sequence a terminal can answer a query with is handled above.
             Some(_) => {
                 self.take(1);
                 Step::Taken
