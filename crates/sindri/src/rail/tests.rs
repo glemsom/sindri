@@ -15,6 +15,7 @@ use crate::pen;
 use crate::plane::{Axis, Bar, Placement, Plane, PlaneId};
 use crate::readback::{column_of, inks, under};
 use crate::rows::{MARGIN, margins};
+use crate::size::{Laid, Sizes};
 
 const METERED: u16 = COLUMNS + MARGIN * 2;
 
@@ -1805,4 +1806,47 @@ fn a_window_is_drawn_as_a_meter_beside_the_size_it_is_a_share_of() {
         "the two halves of a pair line up: every slash in the block lands one column past its \
          value's halves, and the meter and the space it is followed by are no part of a pair"
     );
+}
+
+fn sizing(facts: &Facts, area: Rect, marker: Option<&Pulse>) -> Sizes {
+    let rail_band = RailBand::of(area);
+    let rows = ledger::rows(facts, Rail::Ledger.into(), rail_band.facts, marker);
+    let mut buffer = Buffer::empty(area);
+    ledger::draw(&rows, rail_band.facts, &mut buffer, &PALETTE);
+    sizes(&rows, rail_band, &mut buffer, &PALETTE)
+}
+
+fn run<'a>(laid: &'a Sizes, words: &str) -> &'a Laid {
+    laid.laid()
+        .iter()
+        .find(|laid| laid.run().words() == words)
+        .unwrap_or_else(|| panic!("no {words:?} run is laid"))
+}
+
+#[test]
+fn a_facts_label_is_set_three_quarters_of_a_cell_wide() {
+    let laid = sizing(&spent(), band(COLUMNS, 21), None);
+    assert_eq!(run(&laid, "input").run().fraction(), Some((3, 4, 2, 0)));
+}
+
+#[test]
+fn the_foot_figure_is_set_big_with_its_unit_beside_it() {
+    let laid = sizing(&spent(), band(COLUMNS, 21), None);
+    let figure = run(&laid, "48.2");
+    assert_eq!(figure.run().scale(), 2);
+    assert_eq!(run(&laid, "k").left(), figure.left() + figure.run().width());
+}
+
+#[test]
+fn the_states_word_is_set_big_past_the_mark_in_front_of_it() {
+    let facts = Facts {
+        state: Some(sindri_core::run::State::Running),
+        ..Facts::default()
+    };
+    let live = Pulse::live(0);
+    let laid = sizing(&facts, band(COLUMNS, 8), Some(&live));
+    let headline = run(&laid, "running");
+    assert_eq!(headline.run().scale(), 2);
+    assert_eq!(headline.row(), 0);
+    assert_eq!(headline.left(), MARGIN + FIELD + 2);
 }
