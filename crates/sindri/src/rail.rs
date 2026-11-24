@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
@@ -56,15 +58,16 @@ fn instruments(
         return Vec::new();
     };
     let columns = margined(band.facts);
+    let cells = |at: Range<u16>| Rect {
+        x: columns.x,
+        y: band.facts.y.saturating_add(at.start),
+        width: columns.width,
+        height: at.end - at.start,
+    };
     let stated = |kind: Kind| {
         rows.iter()
             .find(|row| row.kind() == Some(kind))
-            .map(|row| Rect {
-                x: columns.x,
-                y: band.facts.y.saturating_add(row.y()),
-                width: columns.width,
-                height: 1,
-            })
+            .map(|row| cells(row.y()..row.y().saturating_add(1)))
     };
     let mut shades = Vec::new();
     if let (Some(area), Some(gauge)) = (stated(Kind::Ctx), instrument::Gauge::of(facts)) {
@@ -84,13 +87,7 @@ fn instruments(
         }
     }
     if let Some(room) = instrument::bezel(rows) {
-        let area = Rect {
-            x: columns.x,
-            y: band.facts.y.saturating_add(room.start),
-            width: columns.width,
-            height: room.len() as u16,
-        };
-        shades.extend(Shade::bezel(area, Some(cell), palette));
+        shades.extend(Shade::bezel(cells(room), Some(cell), palette));
     }
     shades
 }

@@ -247,6 +247,18 @@ fn the_bezel_stands_between_the_last_fact_and_the_foot() {
 }
 
 #[test]
+fn the_bezel_covers_every_quiet_row_and_no_row_the_foot_states() {
+    let laid = railways(&footed(), 8);
+
+    assert_eq!(
+        bezel(&laid),
+        Some(2..5),
+        "a rail of eight rows states its two facts on rows 0 and 1 and spends its three on rows \
+         5, 6 and 7, so the room between them is rows 2, 3 and 4 whole"
+    );
+}
+
+#[test]
 fn a_rail_that_states_no_spend_is_handed_no_bezel() {
     let facts = Facts {
         wire: Some(String::from("anthropic")),
@@ -285,18 +297,18 @@ fn the_bezel_stands_below_the_row_that_counts_the_facts_the_rail_kept_back() {
             )
         })
         .expect("the rail counts the fact it kept back");
-    let framed = bezel(&laid).expect("the air the rail leaves above its foot");
+    let room = bezel(&laid).expect("the air the rail leaves above its foot");
 
     assert!(
-        framed.start > counted.y(),
+        room.start > counted.y(),
         "the bezel opens on row {} and the rail counts the facts it kept back on row {}: a frame \
          stands in air and never over a word",
-        framed.start,
+        room.start,
         counted.y()
     );
     for row in laid
         .iter()
-        .filter(|row| row.y() >= framed.start && row.y() < framed.end)
+        .filter(|row| row.y() >= room.start && row.y() < room.end)
     {
         assert!(
             row.parts().is_empty(),

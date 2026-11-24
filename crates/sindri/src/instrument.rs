@@ -69,8 +69,8 @@ fn share(figure: u64, whole: u64) -> Share {
 
 const FOOT: [Kind; 3] = [Kind::Input, Kind::Output, Kind::Total];
 
-/// The rows of a rail that state nothing: the air between the last row above its foot that states
-/// a part and the first row that states a foot, and none where the rail states no foot.
+/// The rows a rail leaves quiet above its foot: none where the rail states no foot and none where
+/// it states no fact above it.
 pub(crate) fn bezel(rows: &[Row]) -> Option<Range<u16>> {
     let bottom = rows
         .iter()
