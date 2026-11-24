@@ -1830,6 +1830,99 @@ fn a_facts_label_is_set_three_quarters_of_a_cell_wide() {
 }
 
 #[test]
+fn a_dim_run_a_row_does_not_state_is_drawn_plain() {
+    let rail = RailBand::of(band(COLUMNS, 1));
+    let rows = ledger::rows(&frame(), Rail::Strip.into(), rail.facts, None);
+    let mut buffer = Buffer::empty(rail.facts);
+    ledger::draw(&rows, rail.facts, &mut buffer, &PALETTE);
+
+    assert!(
+        rows.iter()
+            .flat_map(|row| row.parts())
+            .any(|(_, part)| matches!(part, Part::Run(_, Ink::Dim))),
+        "the strip sets its labels and its gaps in the dim ink"
+    );
+    assert!(
+        rows.iter().all(|row| row.big().is_empty())
+            && sizes(&rows, rail, &mut buffer, &PALETTE).laid().is_empty(),
+        "a run is offered to the terminal only where a row states it as a span: a run written dim \
+         that is no span is drawn plain"
+    );
+}
+
+#[test]
+fn a_facts_label_is_set_big_on_the_column_its_field_opens() {
+    let laid = sizing(&spent(), band(COLUMNS, 21), None);
+
+    let label = run(&laid, "input");
+    assert_eq!(
+        label.left(),
+        MARGIN,
+        "a label is set big on the first column of the field its row opens with"
+    );
+    assert_eq!(label.run().scale(), 1);
+    assert_eq!(label.run().fraction(), Some((3, 4, 2, 0)));
+}
+
+#[test]
+fn a_span_whose_run_crosses_the_bands_right_margin_is_laid_nowhere() {
+    let facts = Facts {
+        state: Some(sindri_core::run::State::Running),
+        ..Facts::default()
+    };
+
+    let wide = sizing(&facts, band(28, 2), None);
+    let headline = run(&wide, "running");
+    assert_eq!(
+        headline.left(),
+        MARGIN + FIELD,
+        "the state's word opens on the field its label is set in"
+    );
+    assert!(
+        headline.left() + headline.run().width() <= 28 - MARGIN,
+        "the run ends on the band's last column but one"
+    );
+
+    let narrow = sizing(&facts, band(27, 2), None);
+    assert!(
+        narrow
+            .laid()
+            .iter()
+            .all(|laid| laid.run().words() != "running"),
+        "a run that reaches past the band's right margin is laid nowhere, though the band's \
+         own edge would have kept it: {:?}",
+        narrow.laid().iter().map(Laid::run).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        run(&narrow, "state").row(),
+        0,
+        "the row is laid all the same, so it is the run the margin gave up and never the row"
+    );
+}
+
+#[test]
+fn a_two_row_span_on_the_bands_last_row_is_laid_nowhere() {
+    let facts = Facts {
+        state: Some(sindri_core::run::State::Running),
+        ..Facts::default()
+    };
+
+    let laid = sizing(&facts, band(28, 1), None);
+    assert!(
+        laid.laid()
+            .iter()
+            .all(|laid| laid.run().words() != "running"),
+        "a two-row run stands only where the row under it stands inside the band: {:?}",
+        laid.laid().iter().map(Laid::run).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        run(&laid, "state").row(),
+        0,
+        "and the row it would have stood on is still laid"
+    );
+}
+
+#[test]
 fn the_foot_figure_is_set_big_with_its_unit_beside_it() {
     let laid = sizing(&spent(), band(COLUMNS, 21), None);
     let figure = run(&laid, "48.2");

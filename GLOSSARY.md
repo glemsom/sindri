@@ -325,6 +325,14 @@ a terminal that places no picture and a palette that spells no colour are given 
 draws without one.
 _Avoid_: Meter, gauge (that one is the window's), graph, chart, sparkline, widget
 
+**Span**:
+The big text a ledger-shaped **Rail** draws: the column it opens on in the row's own columns, the
+glyphs it says, the ink it is inked in, and which of the rail's four it is — a fact's label, the
+**State**'s word, a figure, the unit a figure is stated in. One recipe per kind turns a span into
+the run a terminal sizes, so a change to a scale or a fraction is one edit, and nothing in **size**
+knows the rail.
+_Avoid_: Sized text, big text, scale, heading
+
 **Footprint**:
 The columns by rows a picture is fitted into under a ceiling: one scale on both axes, so the
 picture's shape is kept — shrunk until it fits and never grown. A picture in an answer gives way on

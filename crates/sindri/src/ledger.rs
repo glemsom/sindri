@@ -336,6 +336,7 @@ pub(crate) struct Value {
     text: String,
     fill: Option<Fill>,
     ink: Ink,
+    big: Vec<Span>,
 }
 
 impl Value {
@@ -344,6 +345,7 @@ impl Value {
             text: text.into(),
             fill: None,
             ink: Ink::Plain,
+            big: Vec::new(),
         }
     }
 
@@ -371,9 +373,14 @@ impl Value {
         self.fill
     }
 
+    pub(crate) fn big(&self) -> &[Span] {
+        &self.big
+    }
+
     pub(crate) fn respelled(&self, text: String) -> Value {
         Value {
             text,
+            big: Vec::new(),
             ..self.clone()
         }
     }
@@ -716,11 +723,12 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
                         ..area
                     };
                     match line {
-                        Line::Fact(fact) => labelled(row, fact, Hang::Left),
+                        Line::Fact(fact) => ledger_row(row, fact),
                         Line::Air => Row {
                             y: row.y,
                             kind: None,
                             parts: Vec::new(),
+                            big: Vec::new(),
                         },
                         Line::Went(went) => Row::run(row.x, row.y, more(went), Ink::Muted),
                     }
@@ -728,13 +736,12 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
                 .collect();
             for (at, fact) in foot.iter().enumerate() {
                 let back = u16::try_from(foot.len() - at).unwrap_or(u16::MAX);
-                rows.push(labelled(
+                rows.push(ledger_row(
                     Rect {
                         y: area.bottom().saturating_sub(back),
                         ..area
                     },
                     fact,
-                    Hang::Left,
                 ));
             }
             rows
@@ -787,6 +794,23 @@ pub(crate) struct Row {
     y: u16,
     kind: Option<Kind>,
     parts: Vec<(u16, Part)>,
+    big: Vec<Span>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Big {
+    Label,
+    State,
+    Figure,
+    Unit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Span {
+    pub(crate) at: u16,
+    pub(crate) words: String,
+    pub(crate) ink: Ink,
+    pub(crate) big: Big,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -801,6 +825,7 @@ impl Row {
             y,
             kind: None,
             parts: vec![(x, Part::Run(text.into(), ink))],
+            big: Vec::new(),
         }
     }
 
@@ -820,6 +845,10 @@ impl Row {
 
     pub(crate) fn parts(&self) -> &[(u16, Part)] {
         &self.parts
+    }
+
+    pub(crate) fn big(&self) -> &[Span] {
+        &self.big
     }
 }
 
@@ -861,7 +890,27 @@ fn labelled(area: Rect, fact: &Fact, hang: Hang) -> Row {
         y: area.y,
         kind: Some(fact.kind),
         parts,
+        big: Vec::new(),
     }
+}
+
+fn ledger_row(area: Rect, fact: &Fact) -> Row {
+    let mut row = labelled(area, fact, Hang::Left);
+    if let Some(label) = fact.label {
+        row.big.push(Span {
+            at: area.x,
+            words: label.to_owned(),
+            ink: Ink::Dim,
+            big: Big::Label,
+        });
+    }
+    if let Some((opens, Part::Value(_))) = row.parts.last() {
+        row.big.extend(fact.value.big().iter().map(|span| Span {
+            at: opens.saturating_add(span.at),
+            ..span.clone()
+        }));
+    }
+    row
 }
 
 fn hairline_row(area: Rect) -> Row {
@@ -873,6 +922,7 @@ fn strip(kept: &Kept, area: Rect) -> Row {
         y: area.y,
         kind: None,
         parts: Vec::new(),
+        big: Vec::new(),
     };
     let mut x = area.x;
     for fact in &kept.facts {

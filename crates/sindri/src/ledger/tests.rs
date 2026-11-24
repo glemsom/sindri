@@ -2202,6 +2202,136 @@ fn a_row_states_the_kind_of_the_fact_it_lays_and_the_air_between_blocks_states_n
 }
 
 #[test]
+fn a_row_states_the_label_it_sets_big() {
+    let laid = rows(&frame(), Shape::Ledger, band(COLUMNS, 19), None);
+    let model = laid
+        .iter()
+        .find(|row| row.kind() == Some(Kind::Model))
+        .expect("the rail lays the model under its label");
+
+    assert_eq!(
+        model.big(),
+        [Span {
+            at: 0,
+            words: String::from("model"),
+            ink: Ink::Dim,
+            big: Big::Label,
+        }],
+        "the model's row states its label as a span: it opens on the rail's first column, says \
+         the label, is inked dim and is a label"
+    );
+    for row in &laid {
+        for (at, part) in row.parts() {
+            let Part::Run(text, Ink::Dim) = part else {
+                continue;
+            };
+            assert!(
+                row.big().contains(&Span {
+                    at: *at,
+                    words: text.trim_end().to_owned(),
+                    ink: Ink::Dim,
+                    big: Big::Label,
+                }),
+                "every label a ledger row sets dim is a span that row states: {row:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_fact_with_no_label_states_no_span_of_its_own() {
+    let row = ledger_row(band(COLUMNS, 1), &Fact::bare(Kind::Skills, "bash"));
+
+    assert_eq!(
+        row.parts().len(),
+        1,
+        "a bare fact opens on the row with no field before it"
+    );
+    assert!(
+        row.big().is_empty(),
+        "a fact with no label states no span: there is no label to set big"
+    );
+}
+
+#[test]
+fn a_strip_and_a_screen_state_no_span() {
+    for (shape, area) in [
+        (Shape::Strip, band(COLUMNS, 1)),
+        (Shape::Screen, band(SCREEN, 40)),
+    ] {
+        let laid = rows(&spent(), shape, area, None);
+        assert!(
+            laid.iter().any(|row| !row.parts().is_empty()),
+            "a {shape:?} lays the facts it holds"
+        );
+        assert!(
+            laid.iter().all(|row| row.big().is_empty()),
+            "a {shape:?} states no span: only a ledger-shaped rail sets its text big"
+        );
+    }
+}
+
+#[test]
+fn a_value_states_where_its_own_big_text_stands() {
+    let mut stated = Value::new("48.2k");
+    stated.big.push(Span {
+        at: 3,
+        words: String::from("2k"),
+        ink: Ink::Accent,
+        big: Big::Figure,
+    });
+
+    let row = ledger_row(band(COLUMNS, 1), &Fact::valued(Kind::Input, stated));
+    let opens = row
+        .parts()
+        .iter()
+        .find_map(|(at, part)| matches!(part, Part::Value(_)).then_some(*at))
+        .expect("the row lays the fact's value");
+
+    assert_eq!(
+        opens, FIELD,
+        "a ledger opens the value on the field its label is set in"
+    );
+    assert_eq!(
+        row.big(),
+        [
+            Span {
+                at: 0,
+                words: String::from("input"),
+                ink: Ink::Dim,
+                big: Big::Label,
+            },
+            Span {
+                at: opens + 3,
+                words: String::from("2k"),
+                ink: Ink::Accent,
+                big: Big::Figure,
+            },
+        ],
+        "a value's own span stands where the value opens, shifted by the column the span names, \
+         and keeps the ink and kind it was stated in"
+    );
+}
+
+#[test]
+fn a_re_spelled_value_states_no_big_text() {
+    let mut value = Value::new("48.2k");
+    value.big.push(Span {
+        at: 0,
+        words: String::from("48.2"),
+        ink: Ink::Plain,
+        big: Big::Figure,
+    });
+
+    assert_eq!(
+        value.respelled(String::from("1.2…")).big(),
+        [],
+        "a value re-spelled to fit its room has no figure to be big over: the columns it stated \
+         are the words it no longer says"
+    );
+}
+
+#[test]
 fn a_row_that_lays_no_one_fact_states_no_kind() {
     assert_eq!(
         hairline_row(band(COLUMNS, 1)).kind(),
