@@ -40,8 +40,8 @@ pub fn paint(
     let rows = ledger::rows(facts, rail.into(), band.facts, marker);
     ledger::draw(&rows, band.facts, buffer, palette);
     placements.extend(instruments(facts, rail, band, pictures, &rows, palette));
-    if let Some(sized) = sized {
-        sized.append(sizes(facts, rail, band, marker, buffer, palette));
+    if let Some(sized) = sized.filter(|_| rail == Rail::Ledger) {
+        sized.append(sizes(&rows, band, buffer, palette));
     }
     placements
 }
@@ -118,10 +118,8 @@ fn under_the_face(band: RailBand, buffer: &mut Buffer, palette: &Palette) {
 mod tests;
 
 fn sizes(
-    facts: &Facts,
-    rail: Rail,
+    rows: &[ledger::Row],
     band: RailBand,
-    marker: Option<&Pulse>,
     buffer: &mut Buffer,
     palette: &Palette,
 ) -> crate::size::Sizes {
@@ -130,11 +128,10 @@ fn sizes(
     use crate::size::{Sized, Sizes};
 
     let mut sizes = Sizes::none();
-    if rail != Rail::Ledger {
-        return sizes;
-    }
-    let rows = ledger::rows(facts, rail.into(), band.facts, marker);
-    for row in &rows {
+    let left = band.facts.x + crate::rows::MARGIN;
+    let right = band.facts.right().saturating_sub(crate::rows::MARGIN);
+    for row in rows {
+        let y = band.facts.y + row.y();
         for (x, part) in row.parts() {
             if let Part::Value(value) = part {
                 if row.kind() == Some(Kind::Input) {
@@ -146,48 +143,41 @@ fn sizes(
                     let run = Sized::new(0, 2, figure, Look::plain(value.ink()));
                     let unit_run =
                         Sized::new(0, 2, unit, Look::plain(value.ink())).fractional(1, 4, 1, 0);
-                    let left = band.facts.x + crate::rows::MARGIN + x;
-                    let right = band.facts.right().saturating_sub(crate::rows::MARGIN);
-                    let y = band.facts.y + row.y();
+                    let from = left + x;
                     let width = run.width() + unit_run.width();
                     // A picture is two cells deep, so the foot's first figure stands over the row
                     // its next figure is stated on.
-                    if !figure.is_empty() && left + width <= right && y + 1 < band.facts.bottom() {
+                    if !figure.is_empty() && from + width <= right && y + 1 < band.facts.bottom() {
                         pen::run(
                             buffer,
-                            left,
+                            from,
                             y,
                             &pen::blank(pen::cells(value.text())),
                             value.ink(),
                             palette,
                         );
-                        sizes.lay(y, left, std::slice::from_ref(&run));
+                        sizes.lay(y, from, std::slice::from_ref(&run));
                         if !unit.is_empty() {
-                            sizes.lay(y, left + run.width(), &[unit_run]);
+                            sizes.lay(y, from + run.width(), &[unit_run]);
                         }
                     }
                 }
-                if facts
-                    .state
-                    .as_ref()
-                    .is_some_and(|state| value.text().contains(state.word()))
-                    && row.y() == 0
-                {
-                    let word = facts.state.as_ref().unwrap().word();
-                    let prefix = value.text().strip_suffix(word).unwrap_or_default();
+                if row.kind() == Some(Kind::State) {
+                    let text = value.text();
+                    let word = text.rsplit(' ').next().unwrap_or_default();
+                    let opened = pen::cells(&text[..text.len() - word.len()]);
                     let run = Sized::new(0, 2, word, Look::plain(value.ink()));
-                    let left = band.facts.x + crate::rows::MARGIN + x + pen::cells(prefix);
-                    let y = band.facts.y + row.y();
-                    let right = band.facts.right().saturating_sub(crate::rows::MARGIN);
-                    if left.saturating_add(run.width()) <= right
+                    let from = left + x + opened;
+                    if !word.is_empty()
+                        && from.saturating_add(run.width()) <= right
                         && y + 1 < band.facts.bottom()
-                        && (left..left + run.width()).all(|x| {
+                        && (from..from + run.width()).all(|column| {
                             buffer
-                                .cell((x, y + 1))
+                                .cell((column, y + 1))
                                 .is_some_and(|cell| cell.symbol().trim().is_empty())
                         })
                     {
-                        sizes.lay(y, left, &[run]);
+                        sizes.lay(y, from, &[run]);
                     }
                 }
             }
@@ -197,11 +187,7 @@ fn sizes(
                     continue;
                 }
                 let run = Sized::new(0, 1, words, Look::plain(Ink::Dim)).fractional(3, 4, 2, 0);
-                sizes.lay(
-                    band.facts.y + row.y(),
-                    band.facts.x + crate::rows::MARGIN + x,
-                    &[run],
-                );
+                sizes.lay(y, left + x, &[run]);
             }
         }
     }
