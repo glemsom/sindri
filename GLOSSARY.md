@@ -274,8 +274,9 @@ The pictures a terminal is keeping and the cells each of them stands on, recorde
 module, which answers what one pass of a frame adds, moves and gives back and every byte the
 terminal is written for them: a picture is sent once under an identity of its own, put on the cells
 it stands on now with no pixel of it travelling, and given back by that identity when the frame no
-longer holds it. The terminal itself holds only the file descriptors, the bracket a frame is opened
-and closed in, and the order the writes of a frame stand in.
+longer holds it. The terminal keeps no record of them — the bytes are written where the frame is
+written — and holds only the file descriptors, the bracket a frame is opened and closed in, the order
+its writes stand in, and the face's own animation, which is the frame's to ask for.
 _Avoid_: State, cache, registry, scrollback
 
 **Shade**:

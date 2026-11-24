@@ -1118,24 +1118,21 @@ pub struct Placement {
 }
 
 impl Placement {
-    /// The cells the image stands on.
     pub fn cells(&self) -> Rect {
         Rect::new(self.left, self.top, self.cols, self.rows)
     }
 
-    /// The rect of the picture's pixels shown on those cells.
-    pub fn shows(&self) -> Rect {
-        let edge = |pixels: u32| u16::try_from(pixels).unwrap_or(u16::MAX);
-        Rect::new(
-            edge(self.from),
-            edge(self.down),
-            edge(self.width),
-            edge(self.height),
-        )
+    pub fn shows(&self) -> image::math::Rect {
+        image::math::Rect {
+            x: self.from,
+            y: self.down,
+            width: self.width,
+            height: self.height,
+        }
     }
 
-    /// The pixel at the middle of the image cell the frame's cell stands on, and none where the
-    /// placement stands on no such cell.
+    /// The picture's own pixel at the middle of the image cell the frame's cell lands on: the two
+    /// spaces are counted apart, so nothing outside asks which of them a number is in.
     pub fn pixel(&self, x: u16, y: u16) -> Option<(u32, u32)> {
         if !self.cells().contains((x, y).into()) {
             return None;
@@ -1439,7 +1436,7 @@ pub fn face_turned(motion: Motion, frames: usize) -> Vec<u8> {
     sent
 }
 
-/// The bytes that give the face back, and the placement with it.
+/// The bytes that give back the face's picture and the cells it stands on.
 pub fn face_back() -> Vec<u8> {
     delete(PlaneId::Face)
 }

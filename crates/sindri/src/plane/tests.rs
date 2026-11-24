@@ -1781,7 +1781,7 @@ fn the_carets_light_is_placed_on_the_carets_own_cell_and_cut_to_the_bands_column
          columns of it the band has room for"
     );
     assert_eq!(
-        u32::from(left.shows().x),
+        left.shows().x,
         12 * CELL.width(),
         "and the light it shows begins the twelve columns the band has no room for in"
     );
@@ -1800,7 +1800,7 @@ fn the_carets_light_is_placed_on_the_carets_own_cell_and_cut_to_the_bands_column
     );
     for placement in [middle, left, right] {
         assert_eq!(
-            u32::from(placement.shows().width),
+            placement.shows().width,
             u32::from(placement.cells().width) * CELL.width(),
             "and the columns it stands over are as many pixels of it"
         );
@@ -2296,7 +2296,7 @@ fn giving_every_identity_back_names_each_picture_the_frame_can_hold_exactly_once
     );
 }
 
-/// The answer read as the sequence the terminal reads it as.
+/// The bytes as the sequence a terminal reads them as: every byte of the format is ASCII.
 fn written(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("a sequence is printable")
 }
@@ -2840,11 +2840,11 @@ fn a_face() -> (Rect, image::RgbaImage, Vec<image::RgbaImage>) {
 /// the loop over them.
 fn handed(motion: Motion) -> String {
     let (at, root, frames) = a_face();
-    let kept = match motion {
+    let wanted = match motion {
         Motion::Still => 1,
         Motion::Turning(_) => frames.len(),
     };
-    let (mut sent, kept) = face_sent(at, &root, &frames[..kept]);
+    let (mut sent, kept) = face_sent(at, &root, &frames[..wanted]);
     sent.extend(face_turned(motion, kept));
     written(&sent)
 }
@@ -3051,6 +3051,16 @@ fn a_face_placed_again_stands_in_the_cells_it_moved_to_and_travels_no_pixel() {
     assert!(
         drawn.ends_with("\x1b8"),
         "and the cursor is put back: {drawn:?}"
+    );
+}
+
+#[test]
+fn the_face_is_given_back_under_the_identity_it_is_held_by() {
+    let given = written(&face_back());
+
+    assert_eq!(
+        given, "\u{1b}_Ga=d,d=i,i=337,q=2\u{1b}\\",
+        "the face is given back under the identity it is held by, and no other picture with it"
     );
 }
 

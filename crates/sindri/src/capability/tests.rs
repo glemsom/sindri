@@ -334,10 +334,9 @@ fn the_cell_is_read_off_the_bytes_the_terminal_sent_and_the_keys_beside_it_kept(
     );
 }
 
-/// One feature answer a terminal gives, built the way the fake terminal builds it.
+/// One feature answer a terminal gives, in the keys it names and the word it says of them.
 fn reply(keys: &str, said: &str) -> String {
-    let asked = format!("\x1b_Ga=q,{keys}\x1b\\");
-    String::from_utf8(answered(asked.as_bytes(), said)).expect("an answer is printable")
+    format!("\x1b_G{keys};{said}\x1b\\")
 }
 
 #[test]

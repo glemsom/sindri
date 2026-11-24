@@ -1206,6 +1206,40 @@ fn a_face_that_moved_is_placed_again_and_transmits_no_image() {
         1,
         "and no pixel of it travels a second time: {drawn:?}"
     );
+    assert!(
+        drawn[sent..].contains(&format!(
+            "\u{1b}[{};{}H",
+            moved.area().y + 1,
+            moved.area().x + 1
+        )),
+        "the placement stands in the cell the face moved to: {:?}",
+        &drawn[sent..]
+    );
+}
+
+#[test]
+fn a_motion_that_changed_is_told_the_loop_and_sends_no_image_again() {
+    let wire = Wire::default();
+    let mut backend = Backend::new(wire.clone(), true);
+    backend
+        .face(Some(&a_face(Motion::Turning(Some(Turning::FLIGHT)))))
+        .unwrap();
+    let sent = wire.drawn().len();
+    backend.face(Some(&a_face(Motion::Turning(None)))).unwrap();
+    drop(backend);
+    let drawn = wire.drawn();
+
+    assert_eq!(
+        drawn.matches("_Ga=T").count(),
+        1,
+        "a face whose motion changed is the picture the terminal already holds: {drawn:?}"
+    );
+    assert_eq!(
+        drawn[sent..].matches("_Ga=").count(),
+        1,
+        "and the frame that changed nothing but the motion is told one thing: {:?}",
+        &drawn[sent..]
+    );
 }
 
 #[test]
@@ -1238,6 +1272,14 @@ fn a_screen_cleared_for_a_resize_leaves_no_placement_of_the_face_it_drew_before(
         swept.matches("_Ga=T").count(),
         1,
         "and the frame that follows draws it once: {swept:?}"
+    );
+    assert!(
+        swept.contains(&format!(
+            "\u{1b}[{};{}H",
+            resized.area().y + 1,
+            resized.area().x + 1
+        )),
+        "at the cells the resized rail gives it: {swept:?}"
     );
 }
 
@@ -1279,12 +1321,11 @@ fn the_end_of_a_launch_gives_the_face_back_with_every_other_image() {
     drop(screen);
 
     let given = String::from_utf8(plane::give_back()).expect("the sequences are printable");
-    assert_eq!(
-        drawn.matches("_Ga=d").count(),
-        given.matches("_Ga=d").count(),
+    assert!(
+        drawn.contains(&given),
         "a launch that ends gives back every picture the frame can hold, the face among them, \
-         each exactly once, so a reader's shell is handed no picture still standing in its \
-         scrollback: {drawn:?}"
+         each exactly once and in one run, so a reader's shell is handed no picture still \
+         standing in its scrollback: {drawn:?}"
     );
 
     let wire = Wire::default();
