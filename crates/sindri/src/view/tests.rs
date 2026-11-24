@@ -23,7 +23,7 @@ use crate::ink::{Face, Look};
 use crate::palette::channels;
 use crate::palette::{Band, Palette};
 use crate::pictures::PLACEHOLDER as PLACED;
-use crate::plane::Shade;
+use crate::plane::Placement;
 use crate::pulse::{STEP_MS, Turning};
 use crate::readback::under;
 use crate::rows::{SIGIL, THUMB};
@@ -131,8 +131,9 @@ fn glyph_at(buffer: &Buffer, x: u16, y: u16) -> char {
 }
 
 fn shade_row(palette: &Palette, row: u16, rows: u16) -> Color {
-    Shade::composer(Rect::new(0, 0, 1, rows), None, palette)
+    Placement::composer(Rect::new(0, 0, 1, rows), None, palette)
         .expect("a band of rows")
+        .shade()
         .row(row)
 }
 
@@ -1424,11 +1425,11 @@ fn a_frame_that_places_pictures_and_one_that_does_not_agree_on_the_shade_of_ever
     let bands = [("the rail", rail), ("the composer's band", laid.composer)];
 
     for (band, area) in bands {
-        let Some(plane) = pictured
-            .planes()
-            .held()
+        let Some(plane) = standing
+            .placements()
             .iter()
-            .find(|plane| plane.area() == area)
+            .find(|placement| placement.cells() == area)
+            .and_then(|placement| pictured.planes().image(placement.shade()))
         else {
             panic!("the frame holds no plane over {band}");
         };

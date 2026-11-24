@@ -35,7 +35,7 @@ use crate::pen::{self, Clip};
 use crate::picker::Picker;
 use crate::picture::Surface;
 use crate::pictures::Pictures;
-use crate::plane::{Planes, Shade};
+use crate::plane::{Placement, Planes};
 use crate::pointer::{self, Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
@@ -211,7 +211,7 @@ pub struct Painted {
     presses: Vec<Press>,
     drawn: Drawn,
     layout: Option<Layout>,
-    shades: Vec<Shade>,
+    placements: Vec<Placement>,
     caret: Option<Position>,
     face: Option<face::Face>,
 }
@@ -224,7 +224,7 @@ impl Painted {
             presses: Vec::new(),
             drawn: Drawn::none(),
             layout: None,
-            shades: Vec::new(),
+            placements: Vec::new(),
             caret: None,
             face: None,
         }
@@ -234,17 +234,17 @@ impl Painted {
         self.caret
     }
 
-    pub fn shades(&self) -> &[Shade] {
-        &self.shades
+    pub fn placements(&self) -> &[Placement] {
+        &self.placements
     }
 
     pub fn face(&self) -> Option<&face::Face> {
         self.face.as_ref()
     }
 
-    fn shaded(&mut self, shade: Shade) {
-        if shade.places() {
-            self.shades.push(shade);
+    fn shaded(&mut self, placement: Placement) {
+        if placement.places() {
+            self.placements.push(placement);
         }
     }
 
@@ -1068,7 +1068,7 @@ impl View {
 
     pub fn paint(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
         let painted = self.draw(area, buffer);
-        self.planes.hold(painted.shades());
+        self.planes.hold(painted.placements());
         painted
     }
 
@@ -1098,7 +1098,7 @@ impl View {
                 Some(picture) => band.with_picture(picture.cols(), picture.rows()),
                 None => band,
             };
-            for shade in rail::paint(
+            for placement in rail::paint(
                 self.facts.rail(),
                 shape,
                 band,
@@ -1110,7 +1110,7 @@ impl View {
                 buffer,
                 &self.capabilities.palette(),
             ) {
-                painted.shaded(shade);
+                painted.shaded(placement);
             }
             if let (Some(picture), Some(cells)) = (picture, band.picture) {
                 painted.face = Some(face::Face::new(
@@ -1217,10 +1217,11 @@ impl View {
 
     fn transcript(&mut self, area: Rect, buffer: &mut Buffer, painted: &mut Painted) -> Drawn {
         let palette = self.capabilities.palette();
-        if let Some(shade) = Shade::transcript(area, self.capabilities.pictures().cell(), &palette)
+        if let Some(placement) =
+            Placement::transcript(area, self.capabilities.pictures().cell(), &palette)
         {
-            shade.claim(buffer, &palette);
-            painted.shaded(shade);
+            placement.claim(buffer, &palette);
+            painted.shaded(placement);
         }
         let cols = area.width.saturating_sub(MARGIN);
         let reflowed = self.rows.measure(Measure::new(
@@ -1410,11 +1411,11 @@ impl View {
     fn composer_band(&self, band: Rect, queue: Rect, buffer: &mut Buffer, painted: &mut Painted) {
         let palette = self.capabilities.palette();
         let cell = self.capabilities.pictures().cell();
-        if let Some(shade) = Shade::composer(band, cell, &palette) {
-            shade.claim(buffer, &palette);
-            painted.shaded(shade);
+        if let Some(placement) = Placement::composer(band, cell, &palette) {
+            placement.claim(buffer, &palette);
+            painted.shaded(placement);
             if let Some(caret) = self.caret(band, queue, None).map(|(x, _)| x)
-                && let Some(light) = Shade::caret(band, cell, caret, &palette)
+                && let Some(light) = Placement::caret(band, cell, caret, &palette)
             {
                 painted.shaded(light);
             }

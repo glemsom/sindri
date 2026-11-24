@@ -1084,14 +1084,15 @@ fn the_words_a_launch_says_between_two_frames_keep_the_order_they_were_said_in()
     );
 }
 
-fn held(shades: &[Shade]) -> Planes {
+fn held(placements: &[Placement]) -> Planes {
     let mut images = Planes::default();
-    images.hold(shades);
+    images.hold(placements);
     images
 }
 
-fn composer_shade(area: Rect) -> Shade {
-    Shade::composer(area, Some(CellSize::NOMINAL), &Palette::TRUECOLOR).expect("a band to shade")
+fn composer_placement(area: Rect) -> Placement {
+    Placement::composer(area, Some(CellSize::NOMINAL), &Palette::TRUECOLOR)
+        .expect("a band to shade")
 }
 
 fn pictured() -> Capabilities {
@@ -1103,13 +1104,13 @@ fn pictured() -> Capabilities {
     Capabilities::probed(&environment, &Answers::at(CellSize::NOMINAL), false).0
 }
 
-fn light_shade(band: Rect, caret: u16) -> Shade {
-    Shade::caret(band, Some(CellSize::NOMINAL), caret, &Palette::TRUECOLOR)
+fn light_placement(band: Rect, caret: u16) -> Placement {
+    Placement::caret(band, Some(CellSize::NOMINAL), caret, &Palette::TRUECOLOR)
         .expect("the light the caret casts")
 }
 
-fn rail_shade() -> Shade {
-    Shade::rail(
+fn rail_placement() -> Placement {
+    Placement::rail(
         sindri::ledger::Rail::Ledger,
         sindri::ledger::RailBand::of(Rect::new(6, 3, 3, 4)),
         Some(CellSize::NOMINAL),
@@ -1118,8 +1119,8 @@ fn rail_shade() -> Shade {
     .expect("a band to shade")
 }
 
-fn transcript_shade() -> Shade {
-    Shade::transcript(
+fn transcript_placement() -> Placement {
+    Placement::transcript(
         Rect::new(0, 0, 6, 4),
         Some(CellSize::NOMINAL),
         &Palette::TRUECOLOR,
@@ -1382,16 +1383,16 @@ fn a_frame_is_written_inside_one_synchronised_output_bracket() {
 fn a_whole_frame_clear_drops_every_plane_before_it_clears_the_screen() {
     let mut wire = Vec::new();
     let mut backend = Backend::new(&mut wire, false);
-    let shades = [
-        rail_shade(),
-        transcript_shade(),
-        composer_shade(Rect::new(2, 3, 2, 1)),
-        light_shade(Rect::new(2, 3, 2, 2), 2),
+    let placements = [
+        rail_placement(),
+        transcript_placement(),
+        composer_placement(Rect::new(2, 3, 2, 1)),
+        light_placement(Rect::new(2, 3, 2, 2), 2),
     ];
-    let images = held(&shades);
-    backend.shades(&shades, &images).unwrap();
+    let images = held(&placements);
+    backend.placements(&placements, &images).unwrap();
     RatatuiBackend::clear(&mut backend).unwrap();
-    backend.shades(&shades, &images).unwrap();
+    backend.placements(&placements, &images).unwrap();
     drop(backend);
     let wire = String::from_utf8(wire).unwrap();
     assert_eq!(

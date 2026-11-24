@@ -78,513 +78,284 @@ impl PlaneId {
     }
 }
 
+/// What a band sits on: the facts its plane is drawn from and no word about where it stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Shade {
+pub struct Shade {
+    kind: Kind,
+}
+
+/// The cells a plane's image spans: a band's size is a fact its pixels are drawn from, where the
+/// cells it stands on are the placement's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Size {
+    cols: u16,
+    rows: u16,
+}
+
+impl Size {
+    fn of(area: Rect) -> Size {
+        Size {
+            cols: area.width,
+            rows: area.height,
+        }
+    }
+
+    fn pixels(self, cell: CellSize) -> (u32, u32) {
+        (
+            u32::from(self.cols) * cell.width(),
+            u32::from(self.rows) * cell.height(),
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Kind {
     Transcript {
-        area: Rect,
+        size: Size,
         cell: Option<CellSize>,
         well: Color,
         peak: u8,
     },
     Rail {
-        area: Rect,
+        size: Size,
         cell: Option<CellSize>,
         tone: Color,
-        shape: Rail,
         face: Option<Rect>,
         peak: u8,
         seam: Option<Seam>,
     },
     Composer {
-        area: Rect,
+        size: Size,
         cell: Option<CellSize>,
         prompt: Color,
         rail: Color,
         seam: Option<Seam>,
     },
+    /// The row a gauge's share is carried by: the pixels at every hundredth of a block `size.cols`
+    /// cells wide, the ink the fact is stated in beside the ink it turns to as the share moved —
+    /// which band is shown is the placement's, so a gauge that turned sends no pixel.
     Gauge {
-        area: Rect,
+        size: Size,
         cell: CellSize,
-        gauge: instrument::Gauge,
         tone: Color,
         calm: Color,
         accent: Color,
         tick: Color,
         peak: u8,
     },
+    /// The row a figure's share is carried by: the pixels at every hundredth of a block `size.cols`
+    /// cells wide.
     Bar {
-        area: Rect,
+        size: Size,
         cell: CellSize,
         bar: Bar,
-        share: instrument::Share,
         tone: Color,
         ink: Color,
         peak: u8,
     },
+    /// The bezel's own pixels, its top and left edges taken `weight` channels into shadow and its
+    /// bottom and right edges lifted by them.
     Bezel {
-        area: Rect,
+        size: Size,
         cell: CellSize,
         tone: Color,
         weight: u8,
     },
-    /// The light the caret casts, drawn as an image of its own: the one plane whose placement
-    /// moves while the pixels it stands from do not.
+    /// The light the caret casts, drawn as an image of its own: the one plane whose placement moves
+    /// while the pixels it stands from do not.
     Caret {
-        band: Rect,
-        cell: Option<CellSize>,
+        size: Size,
+        cell: CellSize,
         prompt: Color,
         rail: Color,
         peak: u8,
-        caret: u16,
     },
 }
 
 impl Shade {
-    pub fn transcript(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Shade> {
-        if !covers(area) {
-            return None;
+    pub fn id(&self) -> PlaneId {
+        match self.kind {
+            Kind::Transcript { .. } => PlaneId::Transcript,
+            Kind::Rail { .. } => PlaneId::Rail,
+            Kind::Composer { .. } => PlaneId::Composer,
+            Kind::Caret { .. } => PlaneId::Caret,
+            Kind::Gauge { .. } => PlaneId::Gauge,
+            Kind::Bar { bar, .. } => PlaneId::Bar(bar),
+            Kind::Bezel { .. } => PlaneId::Bezel,
         }
-        let well = palette.band(Band::Well);
-        Some(Shade::Transcript {
-            area,
-            cell: cell.filter(|_| channels(well).is_some()),
-            well,
-            peak: palette.peak(Band::Well),
-        })
-    }
-
-    pub fn composer(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Shade> {
-        if !covers(area) {
-            return None;
-        }
-        let prompt = palette.band(Band::Prompt);
-        let rail = palette.band(Band::Rail);
-        let spelled = channels(prompt).is_some() && channels(rail).is_some();
-        Some(Shade::Composer {
-            area,
-            cell: cell.filter(|_| spelled),
-            prompt,
-            rail,
-            seam: Some(Seam::across(palette)),
-        })
-    }
-
-    pub fn rail(
-        shape: Rail,
-        band: RailBand,
-        cell: Option<CellSize>,
-        palette: &Palette,
-    ) -> Option<Shade> {
-        if !covers(band.area) {
-            return None;
-        }
-        let tone = palette.band(Band::Rail);
-        let cell = cell.filter(|_| channels(tone).is_some());
-        Some(Shade::Rail {
-            area: band.area,
-            cell,
-            tone,
-            shape,
-            face: band.picture,
-            peak: palette.peak(Band::Rail),
-            seam: seam_of(shape, palette),
-        })
-    }
-
-    /// An instrument stands over the cells of a fact's row and claims none of them: its pixels
-    /// are the only surface it adds, and the row's own shade has claimed the rest.
-    pub fn gauge(
-        area: Rect,
-        cell: Option<CellSize>,
-        gauge: instrument::Gauge,
-        palette: &Palette,
-    ) -> Option<Shade> {
-        let cell = cell.filter(|_| covers(area))?;
-        let tone = palette.band(Band::Rail);
-        let calm = palette.colour(Ink::Plain);
-        let accent = palette.colour(Ink::Accent);
-        let tick = palette.colour(Ink::Dim);
-        if [tone, calm, accent, tick]
-            .iter()
-            .any(|colour| channels(*colour).is_none())
-        {
-            return None;
-        }
-        Some(Shade::Gauge {
-            area,
-            cell,
-            gauge,
-            tone,
-            calm,
-            accent,
-            tick,
-            peak: palette.peak(Band::Rail),
-        })
-    }
-
-    pub fn bezel(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Shade> {
-        let cell = cell.filter(|_| covers(area))?;
-        let tone = palette.band(Band::Rail);
-        channels(tone)?;
-        // The groove is light taken from the rung and given back to it, and the most a plane under
-        // a word may take is the most the palette proves: the seam's own weight where it fits.
-        let weight = palette.seam().min(palette.peak(Band::Rail));
-        Some(Shade::Bezel {
-            area,
-            cell,
-            tone,
-            weight,
-        })
-    }
-
-    pub fn bar(
-        area: Rect,
-        cell: Option<CellSize>,
-        bar: Bar,
-        share: instrument::Share,
-        palette: &Palette,
-    ) -> Option<Shade> {
-        let cell = cell.filter(|_| covers(area))?;
-        let tone = palette.band(Band::Rail);
-        let ink = palette.colour(Ink::Plain);
-        if [tone, ink].iter().any(|colour| channels(*colour).is_none()) {
-            return None;
-        }
-        Some(Shade::Bar {
-            area,
-            cell,
-            bar,
-            share,
-            tone,
-            ink,
-            peak: palette.peak(Band::Rail),
-        })
-    }
-
-    pub fn caret(
-        band: Rect,
-        cell: Option<CellSize>,
-        caret: u16,
-        palette: &Palette,
-    ) -> Option<Shade> {
-        // The row a band is headed by is a seam, and the light the caret casts falls on the band
-        // under it.
-        let band = Rect {
-            y: band.y.saturating_add(1),
-            height: band.height.saturating_sub(1),
-            ..band
-        };
-        if !covers(band) || caret < band.x || caret >= band.right() {
-            return None;
-        }
-        let prompt = palette.band(Band::Prompt);
-        let rail = palette.band(Band::Rail);
-        let spelled = channels(prompt).is_some() && channels(rail).is_some();
-        Some(Shade::Caret {
-            band,
-            cell: cell.filter(|_| spelled),
-            prompt,
-            rail,
-            peak: palette.peak(Band::Prompt),
-            caret,
-        })
-    }
-
-    /// The one cell of the band the seam is drawn in, on the axis that parts it from the band
-    /// beside, and nothing where this band parts nothing.
-    pub fn seam(&self) -> Option<(Axis, Rect)> {
-        let seam = match self {
-            Shade::Transcript { .. }
-            | Shade::Caret { .. }
-            | Shade::Gauge { .. }
-            | Shade::Bar { .. }
-            | Shade::Bezel { .. } => return None,
-            Shade::Rail { seam, .. } | Shade::Composer { seam, .. } => (*seam)?,
-        };
-        let area = self.area();
-        Some((
-            seam.axis,
-            match seam.axis {
-                Axis::Down => Rect { width: 1, ..area },
-                Axis::Across => Rect { height: 1, ..area },
-            },
-        ))
-    }
-
-    pub fn id(&self) -> Option<PlaneId> {
-        match self {
-            Shade::Transcript { .. } => Some(PlaneId::Transcript),
-            Shade::Rail { .. } => Some(PlaneId::Rail),
-            Shade::Composer { .. } => Some(PlaneId::Composer),
-            Shade::Caret { .. } => Some(PlaneId::Caret),
-            Shade::Gauge { .. } => Some(PlaneId::Gauge),
-            Shade::Bar { bar, .. } => Some(PlaneId::Bar(*bar)),
-            Shade::Bezel { .. } => Some(PlaneId::Bezel),
-        }
-    }
-
-    pub fn area(&self) -> Rect {
-        match self {
-            Shade::Transcript { area, .. }
-            | Shade::Rail { area, .. }
-            | Shade::Composer { area, .. }
-            | Shade::Gauge { area, .. }
-            | Shade::Bar { area, .. }
-            | Shade::Bezel { area, .. } => *area,
-            Shade::Caret { band, .. } => *band,
-        }
-    }
-
-    pub fn places(&self) -> bool {
-        self.cell().is_some()
     }
 
     pub fn row(&self, row: u16) -> Color {
-        match self {
-            Shade::Transcript { well, .. } => *well,
-            Shade::Rail { tone, .. }
-            | Shade::Gauge { tone, .. }
-            | Shade::Bar { tone, .. }
-            | Shade::Bezel { tone, .. } => *tone,
-            Shade::Composer {
-                area, prompt, rail, ..
-            } => match closes(row, area.height) {
-                true => *rail,
-                false => *prompt,
+        match self.kind {
+            Kind::Transcript { well, .. } => well,
+            Kind::Rail { tone, .. }
+            | Kind::Gauge { tone, .. }
+            | Kind::Bar { tone, .. }
+            | Kind::Bezel { tone, .. } => tone,
+            Kind::Composer {
+                size, prompt, rail, ..
+            } => match closes(row, size.rows) {
+                true => rail,
+                false => prompt,
             },
-            Shade::Caret {
-                band, prompt, rail, ..
-            } => match closes(row, band.height) {
-                true => *rail,
-                false => *prompt,
+            Kind::Caret {
+                size, prompt, rail, ..
+            } => match closes(row, size.rows) {
+                true => rail,
+                false => prompt,
             },
         }
     }
 
-    /// The image this shade is transmitted as: the pixels, with everything that only places them
-    /// left out, so a light that moved is a placement and no transmission.
-    pub fn image(&self) -> Option<Image> {
-        let cell = self.cell()?;
-        Some(match self {
-            Shade::Transcript {
-                area, well, peak, ..
-            } => Image::Transcript {
-                area: *area,
-                cell,
-                well: channels(*well)?,
-                peak: *peak,
-            },
-            Shade::Rail {
-                area,
-                tone,
-                face,
+    /// A band a palette spells no colour for is drawn in cells alone, so its shade has no cell and
+    /// no plane stands under it.
+    fn places(&self) -> bool {
+        self.cell().is_some()
+    }
+
+    fn size(&self) -> Size {
+        match self.kind {
+            Kind::Transcript { size, .. }
+            | Kind::Rail { size, .. }
+            | Kind::Composer { size, .. }
+            | Kind::Gauge { size, .. }
+            | Kind::Bar { size, .. }
+            | Kind::Bezel { size, .. }
+            | Kind::Caret { size, .. } => size,
+        }
+    }
+
+    /// The joint the plane is drawn parted on, and nothing where this shade parts nothing.
+    fn seam(&self) -> Option<Seam> {
+        match self.kind {
+            Kind::Rail { seam, .. } | Kind::Composer { seam, .. } => seam,
+            Kind::Transcript { .. }
+            | Kind::Caret { .. }
+            | Kind::Gauge { .. }
+            | Kind::Bar { .. }
+            | Kind::Bezel { .. } => None,
+        }
+    }
+
+    fn cell(&self) -> Option<CellSize> {
+        match self.kind {
+            Kind::Transcript { cell, .. }
+            | Kind::Rail { cell, .. }
+            | Kind::Composer { cell, .. } => cell,
+            Kind::Caret { cell, .. }
+            | Kind::Gauge { cell, .. }
+            | Kind::Bar { cell, .. }
+            | Kind::Bezel { cell, .. } => Some(cell),
+        }
+    }
+
+    fn rung(&self, row: u16) -> [u8; 3] {
+        channels(self.row(row)).unwrap_or([0; 3])
+    }
+
+    /// The light this shade's pixels stand in, at the plane's own pixel origin.
+    fn light(&self) -> Light {
+        let Some(cell) = self.cell() else {
+            return Light::NONE;
+        };
+        let (across, down) = (f64::from(cell.width()), f64::from(cell.height()));
+        let light = match self.kind {
+            Kind::Transcript { peak, .. } => Light::lamp(
                 peak,
-                seam,
+                At { x: 0.0, y: 0.0 },
+                At {
+                    x: f64::INFINITY,
+                    y: CROWN_ROWS * down,
+                },
+            ),
+            Kind::Rail {
+                size,
+                face: Some(face),
+                peak,
                 ..
-            } => Image::Rail {
-                area: *area,
-                cell,
-                tone: channels(*tone)?,
-                face: *face,
-                peak: *peak,
-                seam: *seam,
-            },
-            Shade::Composer {
-                area,
-                prompt,
-                rail,
-                seam,
-                ..
-            } => Image::Composer {
-                area: *area,
-                cell,
-                prompt: channels(*prompt)?,
-                rail: channels(*rail)?,
-                seam: *seam,
-            },
-            Shade::Gauge {
-                area,
+            } => {
+                let centre = At {
+                    x: (f64::from(face.x) + f64::from(face.width) / 2.0) * across,
+                    y: (f64::from(face.y) + f64::from(face.height) / 2.0) * down,
+                };
+                // The light is spent a margin out on each axis: at the rail's own margin
+                // across, and a margin past the rows the face stands on.
+                let width = f64::from(size.cols) * across;
+                let reach = At {
+                    x: (centre.x.min(width - centre.x) - f64::from(MARGIN) * across).max(1.0),
+                    y: (f64::from(face.height) / 2.0 + f64::from(MARGIN)) * down,
+                };
+                Light::lamp(peak, centre, reach)
+            }
+            Kind::Rail { .. } | Kind::Composer { .. } => Light::NONE,
+            Kind::Gauge { .. } | Kind::Bar { .. } | Kind::Bezel { .. } => Light::NONE,
+            Kind::Caret { size, peak, .. } => Light::lamp(
+                peak,
+                At {
+                    x: (f64::from(LIGHT_COLS / 2) + 0.5) * across,
+                    y: 0.0,
+                },
+                At {
+                    x: f64::from(LIGHT_REACH) * across,
+                    y: f64::from(size.rows.saturating_sub(1).max(1)) * down,
+                },
+            ),
+        };
+        match self.seam() {
+            Some(seam) => light.parted(seam, cell),
+            None => light,
+        }
+    }
+
+    /// The pixels this shade is drawn as, and none where the band is drawn in cells alone.
+    fn pixels(&self) -> Option<image::RgbaImage> {
+        let cell = self.cell()?;
+        let size = self.size();
+        match self.kind {
+            Kind::Gauge {
                 tone,
                 calm,
                 accent,
                 tick,
                 peak,
                 ..
-            } => Image::Gauge {
-                cols: area.width,
-                cell,
-                tone: channels(*tone)?,
-                calm: channels(*calm)?,
-                accent: channels(*accent)?,
-                tick: channels(*tick)?,
-                peak: *peak,
-            },
-            Shade::Bar {
-                area,
-                bar,
-                tone,
-                ink,
-                peak,
-                ..
-            } => Image::Bar {
-                cols: area.width,
-                cell,
-                bar: *bar,
-                tone: channels(*tone)?,
-                ink: channels(*ink)?,
-                peak: *peak,
-            },
-            Shade::Bezel {
-                area, tone, weight, ..
-            } => Image::Bezel {
-                area: *area,
-                cell,
-                tone: channels(*tone)?,
-                weight: *weight,
-            },
-            Shade::Caret {
-                band,
-                prompt,
-                rail,
-                peak,
-                ..
-            } => Image::Caret {
-                rows: band.height,
-                cell,
-                prompt: channels(*prompt)?,
-                rail: channels(*rail)?,
-                peak: *peak,
-            },
-        })
-    }
-
-    pub fn place(&self) -> Option<Placement> {
-        let cell = self.cell()?;
-        let whole = |area: Rect| Placement {
-            left: area.x,
-            top: area.y,
-            cols: area.width,
-            rows: area.height,
-            from: 0,
-            width: u32::from(area.width) * cell.width(),
-            down: 0,
-            height: u32::from(area.height) * cell.height(),
-        };
-        Some(match self {
-            Shade::Transcript { area, .. }
-            | Shade::Rail { area, .. }
-            | Shade::Composer { area, .. }
-            | Shade::Bezel { area, .. } => whole(*area),
-            Shade::Bar { area, share, .. } => {
-                let width = u32::from(area.width) * cell.width();
-                Placement {
-                    down: u32::from(share.hundredth()),
-                    width,
-                    height: 1,
-                    ..whole(*area)
-                }
+            } => {
+                return Some(gauge_pixels(
+                    size.cols,
+                    cell,
+                    channels(tone)?,
+                    [channels(calm)?, channels(accent)?],
+                    channels(tick)?,
+                    peak,
+                ));
             }
-            Shade::Gauge { area, gauge, .. } => {
-                let width = u32::from(area.width) * cell.width();
-                Placement {
-                    from: match gauge.turned {
-                        true => width,
-                        false => 0,
-                    },
-                    down: u32::from(gauge.share.hundredth()),
-                    width,
-                    height: 1,
-                    ..whole(*area)
-                }
+            Kind::Bar {
+                tone, ink, peak, ..
+            } => {
+                return Some(bar_pixels(
+                    size.cols,
+                    cell,
+                    channels(tone)?,
+                    channels(ink)?,
+                    peak,
+                ));
             }
-            Shade::Caret { band, caret, .. } => {
-                let wanted = i64::from(*caret) - i64::from(LIGHT_COLS / 2);
-                let first = i64::from(band.x).max(wanted);
-                let last = i64::from(band.right()).min(wanted + i64::from(LIGHT_COLS));
-                let shown = u16::try_from(last - first).ok()?;
-                let skip = u32::try_from(first - wanted).ok()?;
-                Placement {
-                    left: u16::try_from(first).ok()?,
-                    top: band.y,
-                    cols: shown,
-                    rows: band.height,
-                    from: skip * cell.width(),
-                    width: u32::from(shown) * cell.width(),
-                    down: 0,
-                    height: u32::from(band.height) * cell.height(),
-                }
+            Kind::Bezel { tone, weight, .. } => {
+                return Some(bezel_pixels(size, cell, channels(tone)?, weight));
             }
-        })
-    }
-
-    pub fn claim(&self, buffer: &mut Buffer, palette: &Palette) {
-        if matches!(
-            self,
-            Shade::Caret { .. } | Shade::Gauge { .. } | Shade::Bar { .. } | Shade::Bezel { .. }
-        ) {
-            return;
+            _ => {}
         }
-        let area = self.area();
-        if self.places() {
-            pen::claim(buffer, area, palette.ground(None));
-            return;
-        }
-        let seam = self.seam();
-        for row in 0..area.height {
-            let y = area.y.saturating_add(row);
-            let ground = palette.over(self.row(row));
-            let line = Rect {
-                y,
-                height: 1,
-                ..area
-            };
-            let Some((axis, taken)) = seam
-                .filter(|(_, seam)| seam.y <= y && y < seam.bottom())
-                .map(|(axis, seam)| {
-                    (
-                        axis,
-                        Rect {
-                            x: seam.x,
-                            width: seam.width,
-                            ..line
-                        },
-                    )
-                })
-            else {
-                pen::claim(buffer, line, ground);
-                continue;
-            };
-            pen::claim(
-                buffer,
-                Rect {
-                    width: taken.x.saturating_sub(line.x),
-                    ..line
-                },
-                ground,
-            );
-            pen::claim(
-                buffer,
-                Rect {
-                    x: taken.right(),
-                    width: line.right().saturating_sub(taken.right()),
-                    ..line
-                },
-                ground,
-            );
-            seam_cell(buffer, taken, axis, palette);
-        }
-    }
-
-    fn cell(&self) -> Option<CellSize> {
-        match self {
-            Shade::Transcript { cell, .. }
-            | Shade::Rail { cell, .. }
-            | Shade::Composer { cell, .. }
-            | Shade::Caret { cell, .. } => *cell,
-            Shade::Gauge { cell, .. } | Shade::Bar { cell, .. } | Shade::Bezel { cell, .. } => {
-                Some(*cell)
-            }
-        }
+        let (width, height) = size.pixels(cell);
+        let down = cell.height();
+        let light = self.light();
+        Some(image::RgbaImage::from_fn(width, height, |x, y| {
+            let row = u16::try_from(y / down).unwrap_or(u16::MAX).min(size.rows);
+            let lit = dithered(light.at(f64::from(x), f64::from(y)), (x, y));
+            let [red, green, blue] = self
+                .rung(row)
+                .map(|at| (i32::from(at) + lit).clamp(0, 255) as u8);
+            image::Rgba([red, green, blue, 255])
+        }))
     }
 }
 
@@ -631,248 +402,6 @@ impl Seam {
                 y: reach,
             },
         }
-    }
-}
-
-/// What a shade is transmitted as: the pixels, and no word about where they stand.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Image {
-    Transcript {
-        area: Rect,
-        cell: CellSize,
-        well: [u8; 3],
-        peak: u8,
-    },
-    Rail {
-        area: Rect,
-        cell: CellSize,
-        tone: [u8; 3],
-        face: Option<Rect>,
-        peak: u8,
-        seam: Option<Seam>,
-    },
-    Composer {
-        area: Rect,
-        cell: CellSize,
-        prompt: [u8; 3],
-        rail: [u8; 3],
-        seam: Option<Seam>,
-    },
-    /// The image a gauge's share is carried by: the row's pixels at every hundredth of a block
-    /// `cols` cells wide, the ink a meter is filled with beside the ink it turns to — which band is
-    /// shown is the placement's, so a gauge that turned sends no pixel.
-    Gauge {
-        cols: u16,
-        cell: CellSize,
-        tone: [u8; 3],
-        calm: [u8; 3],
-        accent: [u8; 3],
-        tick: [u8; 3],
-        peak: u8,
-    },
-    /// The image a figure's share is carried by: the row's pixels at every hundredth of a block
-    /// `cols` cells wide.
-    Bar {
-        cols: u16,
-        cell: CellSize,
-        bar: Bar,
-        tone: [u8; 3],
-        ink: [u8; 3],
-        peak: u8,
-    },
-    /// The region's own pixels, its top and left edges taken `weight` channels into shadow and
-    /// its bottom and right edges lifted by them.
-    Bezel {
-        area: Rect,
-        cell: CellSize,
-        tone: [u8; 3],
-        weight: u8,
-    },
-    Caret {
-        rows: u16,
-        cell: CellSize,
-        prompt: [u8; 3],
-        rail: [u8; 3],
-        peak: u8,
-    },
-}
-
-impl Image {
-    pub fn id(self) -> PlaneId {
-        match self {
-            Image::Transcript { .. } => PlaneId::Transcript,
-            Image::Rail { .. } => PlaneId::Rail,
-            Image::Composer { .. } => PlaneId::Composer,
-            Image::Caret { .. } => PlaneId::Caret,
-            Image::Gauge { .. } => PlaneId::Gauge,
-            Image::Bar { bar, .. } => PlaneId::Bar(bar),
-            Image::Bezel { .. } => PlaneId::Bezel,
-        }
-    }
-
-    fn cell(self) -> CellSize {
-        match self {
-            Image::Transcript { cell, .. }
-            | Image::Rail { cell, .. }
-            | Image::Composer { cell, .. }
-            | Image::Caret { cell, .. }
-            | Image::Gauge { cell, .. }
-            | Image::Bar { cell, .. }
-            | Image::Bezel { cell, .. } => cell,
-        }
-    }
-
-    /// The cells the image covers at its own corner, which is where a band's plane stands.
-    pub fn area(self) -> Rect {
-        match self {
-            Image::Transcript { area, .. }
-            | Image::Rail { area, .. }
-            | Image::Composer { area, .. } => area,
-            Image::Caret { rows, .. } => Rect::new(0, 0, LIGHT_COLS, rows),
-            Image::Gauge { cols, .. } | Image::Bar { cols, .. } => Rect::new(0, 0, cols, 1),
-            Image::Bezel { area, .. } => area,
-        }
-    }
-
-    fn seam(self) -> Option<Seam> {
-        match self {
-            Image::Rail { seam, .. } | Image::Composer { seam, .. } => seam,
-            Image::Transcript { .. }
-            | Image::Caret { .. }
-            | Image::Gauge { .. }
-            | Image::Bar { .. }
-            | Image::Bezel { .. } => None,
-        }
-    }
-
-    fn rows(self) -> u16 {
-        match self {
-            Image::Transcript { area, .. }
-            | Image::Rail { area, .. }
-            | Image::Composer { area, .. } => area.height,
-            Image::Caret { rows, .. } => rows,
-            Image::Gauge { .. } | Image::Bar { .. } => 1,
-            Image::Bezel { area, .. } => area.height,
-        }
-    }
-
-    fn rung(self, row: u16) -> [u8; 3] {
-        match self {
-            Image::Transcript { well, .. } => well,
-            Image::Rail { tone, .. } => tone,
-            Image::Composer {
-                area, prompt, rail, ..
-            } => match closes(row, area.height) {
-                true => rail,
-                false => prompt,
-            },
-            Image::Caret {
-                rows, prompt, rail, ..
-            } => match closes(row, rows) {
-                true => rail,
-                false => prompt,
-            },
-            Image::Gauge { .. } | Image::Bar { .. } | Image::Bezel { .. } => [0; 3],
-        }
-    }
-
-    /// The light this image's pixels stand in, at the image's own pixel origin.
-    fn light(self) -> Light {
-        let cell = self.cell();
-        let (across, down) = (f64::from(cell.width()), f64::from(cell.height()));
-        let light = match self {
-            Image::Transcript { peak, .. } => Light::lamp(
-                peak,
-                At { x: 0.0, y: 0.0 },
-                At {
-                    x: f64::INFINITY,
-                    y: CROWN_ROWS * down,
-                },
-            ),
-            Image::Rail {
-                area,
-                face: Some(face),
-                peak,
-                ..
-            } => {
-                let centre = At {
-                    x: (f64::from(face.x.saturating_sub(area.x)) + f64::from(face.width) / 2.0)
-                        * across,
-                    y: (f64::from(face.y.saturating_sub(area.y)) + f64::from(face.height) / 2.0)
-                        * down,
-                };
-                // The light is spent a margin out on each axis: at the rail's own margin
-                // across, and a margin past the rows the face stands on.
-                let width = f64::from(area.width) * across;
-                let reach = At {
-                    x: (centre.x.min(width - centre.x) - f64::from(MARGIN) * across).max(1.0),
-                    y: (f64::from(face.height) / 2.0 + f64::from(MARGIN)) * down,
-                };
-                Light::lamp(peak, centre, reach)
-            }
-            Image::Rail { .. } | Image::Composer { .. } => Light::NONE,
-            Image::Gauge { .. } | Image::Bar { .. } | Image::Bezel { .. } => Light::NONE,
-            Image::Caret { rows, peak, .. } => Light::lamp(
-                peak,
-                At {
-                    x: (f64::from(LIGHT_COLS / 2) + 0.5) * across,
-                    y: 0.0,
-                },
-                At {
-                    x: f64::from(LIGHT_REACH) * across,
-                    y: f64::from(rows.saturating_sub(1).max(1)) * down,
-                },
-            ),
-        };
-        match self.seam() {
-            Some(seam) => light.parted(seam, cell),
-            None => light,
-        }
-    }
-
-    fn pixels(self) -> image::RgbaImage {
-        match self {
-            Image::Gauge {
-                cols,
-                cell,
-                tone,
-                calm,
-                accent,
-                tick,
-                peak,
-            } => return gauge_pixels(cols, cell, tone, [calm, accent], tick, peak),
-            Image::Bar {
-                cols,
-                cell,
-                tone,
-                ink,
-                peak,
-                ..
-            } => return bar_pixels(cols, cell, tone, ink, peak),
-            Image::Bezel {
-                area,
-                cell,
-                tone,
-                weight,
-            } => return bezel_pixels(area, cell, tone, weight),
-            _ => {}
-        }
-        let cell = self.cell();
-        let area = self.area();
-        let (width, height) = (
-            u32::from(area.width) * cell.width(),
-            u32::from(area.height) * cell.height(),
-        );
-        let down = cell.height();
-        let light = self.light();
-        image::RgbaImage::from_fn(width, height, |x, y| {
-            let row = u16::try_from(y / down).unwrap_or(u16::MAX).min(self.rows());
-            let lit = dithered(light.at(f64::from(x), f64::from(y)), (x, y));
-            let [red, green, blue] = self
-                .rung(row)
-                .map(|at| (i32::from(at) + lit).clamp(0, 255) as u8);
-            image::Rgba([red, green, blue, 255])
-        })
     }
 }
 
@@ -929,11 +458,8 @@ fn bar_pixels(
     })
 }
 
-fn bezel_pixels(area: Rect, cell: CellSize, tone: [u8; 3], weight: u8) -> image::RgbaImage {
-    let (width, height) = (
-        u32::from(area.width) * cell.width(),
-        u32::from(area.height) * cell.height(),
-    );
+fn bezel_pixels(size: Size, cell: CellSize, tone: [u8; 3], weight: u8) -> image::RgbaImage {
+    let (width, height) = size.pixels(cell);
     image::RgbaImage::from_fn(width, height, |x, y| {
         image::Rgba(
             match (y == 0 || x == 0, y + 1 == height || x + 1 == width) {
@@ -1103,74 +629,389 @@ fn dithered(light: f64, (x, y): (u32, u32)) -> i32 {
     }
 }
 
-/// Where an image stands and which rect of it is shown there: the cells it is placed on, and the
-/// pixels of the image those cells show.
+/// A shade and the cells it stands on: the unit a terminal is told about in one push.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Placement {
-    left: u16,
-    top: u16,
-    cols: u16,
-    rows: u16,
-    from: u32,
-    width: u32,
-    down: u32,
-    height: u32,
+    shade: Shade,
+    cells: Rect,
+    shows: Option<image::math::Rect>,
 }
 
 impl Placement {
-    pub fn cells(&self) -> Rect {
-        Rect::new(self.left, self.top, self.cols, self.rows)
+    /// The transcript band: the well its prose is read on, lit at its head.
+    pub fn transcript(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Placement> {
+        if !covers(area) {
+            return None;
+        }
+        let well = palette.band(Band::Well);
+        Some(Placement::whole(
+            area,
+            Shade {
+                kind: Kind::Transcript {
+                    size: Size::of(area),
+                    cell: cell.filter(|_| channels(well).is_some()),
+                    well,
+                    peak: palette.peak(Band::Well),
+                },
+            },
+        ))
     }
 
-    pub fn shows(&self) -> image::math::Rect {
-        image::math::Rect {
-            x: self.from,
-            y: self.down,
-            width: self.width,
-            height: self.height,
+    /// The composer's band: the draft's rows on the prompt's tone, closed on the rail's own.
+    pub fn composer(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Placement> {
+        if !covers(area) {
+            return None;
         }
+        let prompt = palette.band(Band::Prompt);
+        let rail = palette.band(Band::Rail);
+        let spelled = channels(prompt).is_some() && channels(rail).is_some();
+        Some(Placement::whole(
+            area,
+            Shade {
+                kind: Kind::Composer {
+                    size: Size::of(area),
+                    cell: cell.filter(|_| spelled),
+                    prompt,
+                    rail,
+                    seam: Some(Seam::across(palette)),
+                },
+            },
+        ))
+    }
+
+    pub fn rail(
+        shape: Rail,
+        band: RailBand,
+        cell: Option<CellSize>,
+        palette: &Palette,
+    ) -> Option<Placement> {
+        if !covers(band.area) {
+            return None;
+        }
+        let tone = palette.band(Band::Rail);
+        let face = band.picture.map(|picture| Rect {
+            x: picture.x.saturating_sub(band.area.x),
+            y: picture.y.saturating_sub(band.area.y),
+            ..picture
+        });
+        Some(Placement::whole(
+            band.area,
+            Shade {
+                kind: Kind::Rail {
+                    size: Size::of(band.area),
+                    cell: cell.filter(|_| channels(tone).is_some()),
+                    tone,
+                    face,
+                    peak: palette.peak(Band::Rail),
+                    seam: seam_of(shape, palette),
+                },
+            },
+        ))
+    }
+
+    /// An instrument stands over the cells of a fact's row and claims none of them: its pixels
+    /// are the only surface it adds, and the row's own shade has claimed the rest.
+    pub fn gauge(
+        area: Rect,
+        cell: Option<CellSize>,
+        gauge: instrument::Gauge,
+        palette: &Palette,
+    ) -> Option<Placement> {
+        let cell = cell.filter(|_| covers(area))?;
+        let tone = palette.band(Band::Rail);
+        let calm = palette.colour(Ink::Plain);
+        let accent = palette.colour(Ink::Accent);
+        let tick = palette.colour(Ink::Dim);
+        if [tone, calm, accent, tick]
+            .iter()
+            .any(|colour| channels(*colour).is_none())
+        {
+            return None;
+        }
+        let width = u32::from(area.width) * cell.width();
+        Some(Placement {
+            shade: Shade {
+                kind: Kind::Gauge {
+                    size: Size {
+                        cols: area.width,
+                        rows: 1,
+                    },
+                    cell,
+                    tone,
+                    calm,
+                    accent,
+                    tick,
+                    peak: palette.peak(Band::Rail),
+                },
+            },
+            cells: area,
+            shows: Some(image::math::Rect {
+                x: match gauge.turned {
+                    true => width,
+                    false => 0,
+                },
+                y: u32::from(gauge.share.hundredth()),
+                width,
+                height: 1,
+            }),
+        })
+    }
+
+    pub fn bar(
+        area: Rect,
+        cell: Option<CellSize>,
+        bar: Bar,
+        share: instrument::Share,
+        palette: &Palette,
+    ) -> Option<Placement> {
+        let cell = cell.filter(|_| covers(area))?;
+        let tone = palette.band(Band::Rail);
+        let ink = palette.colour(Ink::Plain);
+        if [tone, ink].iter().any(|colour| channels(*colour).is_none()) {
+            return None;
+        }
+        Some(Placement {
+            shade: Shade {
+                kind: Kind::Bar {
+                    size: Size {
+                        cols: area.width,
+                        rows: 1,
+                    },
+                    cell,
+                    bar,
+                    tone,
+                    ink,
+                    peak: palette.peak(Band::Rail),
+                },
+            },
+            cells: area,
+            shows: Some(image::math::Rect {
+                x: 0,
+                y: u32::from(share.hundredth()),
+                width: u32::from(area.width) * cell.width(),
+                height: 1,
+            }),
+        })
+    }
+
+    pub fn bezel(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Placement> {
+        let cell = cell.filter(|_| covers(area))?;
+        let tone = palette.band(Band::Rail);
+        channels(tone)?;
+        // The groove is light taken from the rung and given back to it, and the most a plane under
+        // a word may take is the most the palette proves: the seam's own weight where it fits.
+        let weight = palette.seam().min(palette.peak(Band::Rail));
+        Some(Placement::whole(
+            area,
+            Shade {
+                kind: Kind::Bezel {
+                    size: Size::of(area),
+                    cell,
+                    tone,
+                    weight,
+                },
+            },
+        ))
+    }
+
+    /// The light the caret casts, on the cells of the band it lights that it falls over.
+    pub fn caret(
+        band: Rect,
+        cell: Option<CellSize>,
+        caret: u16,
+        palette: &Palette,
+    ) -> Option<Placement> {
+        let cell = cell?;
+        // The row a band is headed by is a seam, and the light the caret casts falls on the band
+        // under it.
+        let band = Rect {
+            y: band.y.saturating_add(1),
+            height: band.height.saturating_sub(1),
+            ..band
+        };
+        if !covers(band) || caret < band.x || caret >= band.right() {
+            return None;
+        }
+        let prompt = palette.band(Band::Prompt);
+        let rail = palette.band(Band::Rail);
+        if [prompt, rail]
+            .iter()
+            .any(|colour| channels(*colour).is_none())
+        {
+            return None;
+        }
+        let wanted = i64::from(caret) - i64::from(LIGHT_COLS / 2);
+        let first = i64::from(band.x).max(wanted);
+        let last = i64::from(band.right()).min(wanted + i64::from(LIGHT_COLS));
+        let shown = u16::try_from(last - first).ok()?;
+        let skip = u32::try_from(first - wanted).ok()?;
+        Some(Placement {
+            shade: Shade {
+                kind: Kind::Caret {
+                    size: Size {
+                        cols: LIGHT_COLS,
+                        rows: band.height,
+                    },
+                    cell,
+                    prompt,
+                    rail,
+                    peak: palette.peak(Band::Prompt),
+                },
+            },
+            cells: Rect::new(u16::try_from(first).ok()?, band.y, shown, band.height),
+            shows: Some(image::math::Rect {
+                x: skip * cell.width(),
+                y: 0,
+                width: u32::from(shown) * cell.width(),
+                height: u32::from(band.height) * cell.height(),
+            }),
+        })
+    }
+
+    /// The whole of a shade's picture, on the cells of the band it is drawn for.
+    fn whole(cells: Rect, shade: Shade) -> Placement {
+        Placement {
+            shade,
+            cells,
+            shows: shade.cell().map(|cell| {
+                let (width, height) = shade.size().pixels(cell);
+                image::math::Rect {
+                    x: 0,
+                    y: 0,
+                    width,
+                    height,
+                }
+            }),
+        }
+    }
+
+    pub fn shade(&self) -> &Shade {
+        &self.shade
+    }
+
+    pub fn cells(&self) -> Rect {
+        self.cells
+    }
+
+    /// The seam's own cell, within the cells the placement claims.
+    pub fn seam(&self) -> Option<(Axis, Rect)> {
+        let axis = self.shade.seam()?.axis;
+        Some((
+            axis,
+            match axis {
+                Axis::Down => Rect {
+                    width: 1,
+                    ..self.cells
+                },
+                Axis::Across => Rect {
+                    height: 1,
+                    ..self.cells
+                },
+            },
+        ))
+    }
+
+    pub fn claim(&self, buffer: &mut Buffer, palette: &Palette) {
+        if matches!(
+            self.shade.kind,
+            Kind::Caret { .. } | Kind::Gauge { .. } | Kind::Bar { .. } | Kind::Bezel { .. }
+        ) {
+            return;
+        }
+        let area = self.cells;
+        if self.places() {
+            pen::claim(buffer, area, palette.ground(None));
+            return;
+        }
+        let seam = self.seam();
+        for row in 0..area.height {
+            let y = area.y.saturating_add(row);
+            let ground = palette.over(self.shade.row(row));
+            let line = Rect {
+                y,
+                height: 1,
+                ..area
+            };
+            let Some((axis, taken)) = seam
+                .filter(|(_, seam)| seam.y <= y && y < seam.bottom())
+                .map(|(axis, seam)| {
+                    (
+                        axis,
+                        Rect {
+                            x: seam.x,
+                            width: seam.width,
+                            ..line
+                        },
+                    )
+                })
+            else {
+                pen::claim(buffer, line, ground);
+                continue;
+            };
+            pen::claim(
+                buffer,
+                Rect {
+                    width: taken.x.saturating_sub(line.x),
+                    ..line
+                },
+                ground,
+            );
+            pen::claim(
+                buffer,
+                Rect {
+                    x: taken.right(),
+                    width: line.right().saturating_sub(taken.right()),
+                    ..line
+                },
+                ground,
+            );
+            seam_cell(buffer, taken, axis, palette);
+        }
+    }
+
+    /// The rect of the shade's picture these cells show, and none where no picture is placed.
+    pub fn shows(&self) -> Option<image::math::Rect> {
+        self.shows
     }
 
     /// The picture's own pixel at the middle of the image cell the frame's cell lands on: the two
     /// spaces are counted apart, so nothing outside asks which of them a number is in.
     pub fn pixel(&self, x: u16, y: u16) -> Option<(u32, u32)> {
-        if !self.cells().contains((x, y).into()) {
+        let shows = self.shows?;
+        if !self.cells.contains((x, y).into()) {
             return None;
         }
-        let column = u32::from(x - self.left);
-        let row = u32::from(y - self.top);
-        let across = u32::from(self.cols.max(1));
-        let down = u32::from(self.rows.max(1));
+        let column = u32::from(x - self.cells.x);
+        let row = u32::from(y - self.cells.y);
+        let across = u32::from(self.cells.width.max(1));
+        let down = u32::from(self.cells.height.max(1));
         Some((
-            self.from + column * self.width / across + self.width / across / 2,
-            self.down + row * self.height / down + self.height / down / 2,
+            shows.x + column * shows.width / across + shows.width / across / 2,
+            shows.y + row * shows.height / down + shows.height / down / 2,
         ))
+    }
+
+    pub fn places(&self) -> bool {
+        self.shade.places()
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Plane {
-    image: Image,
-    id: PlaneId,
+    shade: Shade,
     pixels: image::RgbaImage,
 }
 
 impl Plane {
     pub(crate) fn draw(shade: Shade) -> Option<Plane> {
-        let image = shade.image()?;
         Some(Plane {
-            image,
-            id: image.id(),
-            pixels: image.pixels(),
+            pixels: shade.pixels()?,
+            shade,
         })
     }
 
     pub fn id(&self) -> PlaneId {
-        self.id
-    }
-
-    pub fn area(&self) -> Rect {
-        self.image.area()
+        self.shade.id()
     }
 
     pub fn pixels(&self) -> &image::RgbaImage {
@@ -1185,16 +1026,23 @@ pub struct Planes {
 }
 
 impl Planes {
-    pub fn hold(&mut self, shades: &[Shade]) {
-        let mut held = Vec::with_capacity(shades.len());
-        for shade in shades {
-            let Some(image) = shade.image() else {
+    pub fn hold(&mut self, placements: &[Placement]) {
+        let mut held = Vec::with_capacity(placements.len());
+        for placement in placements.iter().filter(|placement| placement.places()) {
+            if held
+                .iter()
+                .any(|plane: &Plane| plane.shade == placement.shade)
+            {
                 continue;
-            };
-            match self.held.iter().position(|plane| plane.image == image) {
+            }
+            match self
+                .held
+                .iter()
+                .position(|plane| plane.shade == placement.shade)
+            {
                 Some(at) => held.push(self.held.remove(at)),
                 None => {
-                    if let Some(plane) = Plane::draw(*shade) {
+                    if let Some(plane) = Plane::draw(placement.shade) {
                         held.push(plane);
                         self.made += 1;
                     }
@@ -1205,8 +1053,7 @@ impl Planes {
     }
 
     pub fn image(&self, shade: &Shade) -> Option<&Plane> {
-        let image = shade.image()?;
-        self.held.iter().find(|plane| plane.image == image)
+        self.held.iter().find(|plane| plane.shade == *shade)
     }
 
     pub fn held(&self) -> &[Plane] {
@@ -1218,46 +1065,44 @@ impl Planes {
     }
 }
 
-/// The pictures the terminal holds and the cells each of them stands on.
 #[derive(Clone, Debug, Default)]
 pub struct Held {
-    standing: Vec<Standing>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Standing {
-    image: Image,
-    at: Placement,
+    standing: Vec<Placement>,
 }
 
 impl Held {
     /// The bytes that bring the terminal up to date for one pass, in the order it must apply
     /// them: a delete for every picture it holds and the frame no longer stands, then a
-    /// transmission or a bare placement for each shade in the frame's order.
-    pub fn pass(&mut self, shades: &[Shade], planes: &Planes) -> Vec<u8> {
+    /// transmission or a bare placement for each placement in the frame's order.
+    pub fn pass(&mut self, placements: &[Placement], planes: &Planes) -> Vec<u8> {
+        let placing: Vec<Placement> = placements
+            .iter()
+            .copied()
+            .filter(|at| at.places())
+            .collect();
         let before = std::mem::take(&mut self.standing);
         let mut sent = Vec::new();
         for held in before
             .iter()
-            .filter(|held| shades.iter().all(|shade| shade.image() != Some(held.image)))
+            .filter(|held| placing.iter().all(|at| at.shade != held.shade))
         {
-            sent.extend(delete(held.image.id()));
+            sent.extend(delete(held.shade.id()));
         }
-        let mut standing = Vec::with_capacity(shades.len());
-        for shade in shades {
-            let (Some(image), Some(at), Some(plane)) =
-                (shade.image(), shade.place(), planes.image(shade))
-            else {
+        let mut stands = Vec::with_capacity(placing.len());
+        for at in placing {
+            let (Some(shows), Some(plane)) = (at.shows(), planes.image(&at.shade)) else {
                 continue;
             };
-            match before.iter().find(|held| held.image == image) {
-                None => sent.extend(upload(plane, at)),
-                Some(held) if held.at != at => sent.extend(place(image.id(), at)),
+            match before.iter().find(|held| held.shade == at.shade) {
+                None => sent.extend(upload(plane, at, shows)),
+                Some(held) if held.cells != at.cells || held.shows != Some(shows) => {
+                    sent.extend(place(at.shade.id(), at, shows));
+                }
                 Some(_) => {}
             }
-            standing.push(Standing { image, at });
+            stands.push(at);
         }
-        self.standing = standing;
+        self.standing = stands;
         sent
     }
 
@@ -1265,7 +1110,7 @@ impl Held {
     pub fn forget(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.standing)
             .into_iter()
-            .flat_map(|held| delete(held.image.id()))
+            .flat_map(|held| delete(held.shade.id()))
             .collect()
     }
 }
@@ -1285,20 +1130,21 @@ fn seam_of(shape: Rail, palette: &Palette) -> Option<Seam> {
 /// One plane transmitted as the picture a terminal keeps under a band: its pixels as a PNG, in
 /// the chunks the protocol allows, under its identity, its placement and the frame's depth. `C=1`
 /// keeps a tall placement from scrolling, and `q=2` leaves no reply to read as a keystroke.
-fn upload(plane: &Plane, at: Placement) -> Vec<u8> {
+fn upload(plane: &Plane, at: Placement, shows: image::math::Rect) -> Vec<u8> {
+    let cells = at.cells();
     let head = format!(
         "a=T,f=100,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}",
         plane.id().image(),
         PLACEMENT,
         DEPTH,
-        at.cols,
-        at.rows,
-        at.from,
-        at.down,
-        at.width,
-        at.height
+        cells.width,
+        cells.height,
+        shows.x,
+        shows.y,
+        shows.width,
+        shows.height
     );
-    let mut sent = format!("\x1b7\x1b[{};{}H", at.top + 1, at.left + 1).into_bytes();
+    let mut sent = format!("\x1b7\x1b[{};{}H", cells.y + 1, cells.x + 1).into_bytes();
     transmit(&mut sent, &head, &encoded(plane.pixels()));
     sent.extend_from_slice(b"\x1b8");
     sent
@@ -1306,20 +1152,21 @@ fn upload(plane: &Plane, at: Placement) -> Vec<u8> {
 
 /// The image the terminal already holds, put on the cells it stands on now: no byte of it is
 /// sent again, and the placement it is put under is the one it was held by.
-fn place(id: PlaneId, at: Placement) -> Vec<u8> {
+fn place(id: PlaneId, at: Placement, shows: image::math::Rect) -> Vec<u8> {
+    let cells = at.cells();
     let head = format!(
         "a=p,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}",
         id.image(),
         PLACEMENT,
         DEPTH,
-        at.cols,
-        at.rows,
-        at.from,
-        at.down,
-        at.width,
-        at.height
+        cells.width,
+        cells.height,
+        shows.x,
+        shows.y,
+        shows.width,
+        shows.height
     );
-    let mut sent = format!("\x1b7\x1b[{};{}H", at.top + 1, at.left + 1).into_bytes();
+    let mut sent = format!("\x1b7\x1b[{};{}H", cells.y + 1, cells.x + 1).into_bytes();
     sent.extend_from_slice(format!("\x1b_G{head}\x1b\\").as_bytes());
     sent.extend_from_slice(b"\x1b8");
     sent
