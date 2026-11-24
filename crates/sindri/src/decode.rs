@@ -37,6 +37,11 @@ const MOTION: u32 = 32;
 /// `ESC [ 2 0 1 ~`: the sequence that ends a bracketed paste, so all before it is one paste.
 const PASTE_END: &[u8] = b"\x1b[201~";
 
+/// The string terminator, `ESC \`. Ghostty reads the picture query's `a=q` as an image to load,
+/// finds no size in it, and answers `EINVAL: dimensions required` on the APC string once per
+/// feature asked: words the terminal says, and no keys of the reader's.
+const ANSWER_END: &[u8] = b"\x1b\\";
+
 /// The bytes a key arrives as, kept until the sequence they start is complete: a terminal is
 /// free to send one key in as many reads as it likes.
 pub struct Decoder {
@@ -120,6 +125,7 @@ impl Decoder {
         match self.pending.get(1) {
             None => Step::Waiting,
             Some(b'[') => self.control(),
+            Some(b'_') => self.answer(),
             Some(b'O') => {
                 // The older single-shift arrows: `ESC O A` is the up arrow under a terminal that
                 // does not speak the protocol.
@@ -137,6 +143,20 @@ impl Decoder {
                 Step::Taken
             }
         }
+    }
+
+    /// The APC string a terminal answers with: everything up to the terminator is the terminal's
+    /// own, and a string still on its way is waited for, so no word of it is typed.
+    fn answer(&mut self) -> Step {
+        let Some(end) = self
+            .pending
+            .windows(ANSWER_END.len())
+            .position(|window| window == ANSWER_END)
+        else {
+            return Step::Waiting;
+        };
+        self.take(end + ANSWER_END.len());
+        Step::Taken
     }
 
     fn control(&mut self) -> Step {
