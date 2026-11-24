@@ -243,7 +243,7 @@ impl<W: Write> Backend<W> {
         for told in self.held.pass(shades, images) {
             let sent = match told {
                 Told::Upload { plane, at } => upload(plane, at)?,
-                Told::Place { id, at } => place(id, at),
+                Told::Place { id, at } => place(id, at)?,
                 Told::Forget(id) => plane::delete(id),
             };
             holding(&mut self.screen, &mut self.writing).tell(&sent)?;
@@ -523,11 +523,12 @@ fn upload(plane: &Plane, at: Placement) -> io::Result<Vec<u8>> {
 
 /// The image the terminal already holds, put on the cells it stands on now: no byte of it is
 /// sent again, and the placement it is put under is the one it was held by.
-fn place(id: PlaneId, at: Placement) -> Vec<u8> {
-    format!(
-        "\x1b7\x1b[{};{}H\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}\x1b\\\x1b8",
-        at.top + 1,
-        at.left + 1,
+fn place(id: PlaneId, at: Placement) -> io::Result<Vec<u8>> {
+    let mut sent = Vec::new();
+    write!(sent, "\x1b7\x1b[{};{}H", at.top + 1, at.left + 1)?;
+    write!(
+        sent,
+        "\x1b_Ga=p,i={},p={},q=2,z={},C=1,c={},r={},x={},y={},w={},h={}\x1b\\",
         id.image(),
         plane::PLACEMENT,
         plane::DEPTH,
@@ -537,8 +538,9 @@ fn place(id: PlaneId, at: Placement) -> Vec<u8> {
         at.down,
         at.width,
         at.height
-    )
-    .into_bytes()
+    )?;
+    sent.extend_from_slice(b"\x1b8");
+    Ok(sent)
 }
 
 fn encoded(pixels: &image::RgbaImage) -> io::Result<String> {

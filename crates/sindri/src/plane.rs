@@ -1190,13 +1190,12 @@ impl Planes {
     }
 }
 
-/// What the terminal holds: the picture under every identity and the cells it stands on.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// The pictures the terminal holds and the cells each of them stands on.
+#[derive(Clone, Debug, Default)]
 pub struct Held {
     standing: Vec<Standing>,
 }
 
-/// The picture the terminal holds and the cells it stands on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Standing {
     image: Image,
@@ -1206,49 +1205,40 @@ struct Standing {
 /// What one pass tells the terminal, in the order it must be applied.
 #[derive(Clone, Copy, Debug)]
 pub enum Told<'a> {
-    /// A picture the terminal has never held, with its pixels.
-    Upload { plane: &'a Plane, at: Placement },
+    Upload {
+        plane: &'a Plane,
+        at: Placement,
+    },
     /// A picture the terminal holds, on cells it did not stand on.
-    Place { id: PlaneId, at: Placement },
+    Place {
+        id: PlaneId,
+        at: Placement,
+    },
     /// A picture the terminal holds and the frame no longer stands.
     Forget(PlaneId),
 }
 
 impl Held {
-    /// What one pass tells the terminal, given the record it holds and the planes the frame made.
     pub fn pass<'a>(&mut self, shades: &[Shade], planes: &'a Planes) -> Vec<Told<'a>> {
-        let standing: Vec<Standing> = shades
-            .iter()
-            .filter_map(|shade| {
-                Some(Standing {
-                    image: shade.image()?,
-                    at: shade.place()?,
-                })
-            })
-            .collect();
         let before = std::mem::take(&mut self.standing);
-        let mut told = Vec::new();
-        for held in &before {
-            if standing.iter().all(|next| next.image != held.image) {
-                told.push(Told::Forget(held.image.id()));
-            }
-        }
+        let mut told: Vec<Told<'a>> = before
+            .iter()
+            .filter(|held| shades.iter().all(|shade| shade.image() != Some(held.image)))
+            .map(|held| Told::Forget(held.image.id()))
+            .collect();
+        let mut standing = Vec::with_capacity(shades.len());
         for shade in shades {
-            let Some(at) = shade.place() else {
-                continue;
-            };
-            let Some(image) = shade.image() else {
+            let (Some(image), Some(at), Some(plane)) =
+                (shade.image(), shade.place(), planes.image(shade))
+            else {
                 continue;
             };
             match before.iter().find(|held| held.image == image) {
-                None => {
-                    if let Some(plane) = planes.image(shade) {
-                        told.push(Told::Upload { plane, at });
-                    }
-                }
+                None => told.push(Told::Upload { plane, at }),
                 Some(held) if held.at != at => told.push(Told::Place { id: image.id(), at }),
                 Some(_) => {}
             }
+            standing.push(Standing { image, at });
         }
         self.standing = standing;
         told
