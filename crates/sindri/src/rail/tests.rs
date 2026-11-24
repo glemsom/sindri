@@ -1962,7 +1962,7 @@ fn a_foot_figure_that_states_no_unit_is_set_big_with_nothing_beside_it() {
         "a spend under a thousand is still the foot's figure, so it is still set big"
     );
     assert!(
-        laid.laid().iter().all(|laid| laid.run().words() != "k"),
+        laid.laid().iter().all(|one| one.run().words() != "k"),
         "a figure with no unit states none, so nothing stands past the cells it is drawn at"
     );
 }

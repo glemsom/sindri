@@ -2361,7 +2361,7 @@ fn the_token_speller_states_its_text_its_figure_its_unit_and_where_the_unit_open
         (12_000, "12k", "12", "k", 4),
         (1_200_000, "1.2M", "1.2", "M", 6),
     ] {
-        let stated = spelt(count);
+        let stated = spelling(count);
         assert_eq!(
             (
                 stated.text.as_str(),
@@ -2378,7 +2378,7 @@ fn the_token_speller_states_its_text_its_figure_its_unit_and_where_the_unit_open
 
 #[test]
 fn a_figure_under_a_thousand_spells_digits_and_states_no_unit() {
-    let stated = spelt(500);
+    let stated = spelling(500);
 
     assert_eq!(
         (
@@ -2396,23 +2396,26 @@ fn the_plain_string_speller_says_the_whole_text_of_that_one_spelling() {
     for count in [500, 1_000, 48_200, 999_999, 1_200_000] {
         assert_eq!(
             tokens(count),
-            spelt(count).text,
+            spelling(count).text,
             "a {count} stated as a plain string says the words the one speller spells, so no two \
              spellers can come to differ"
         );
     }
 }
 
-#[test]
-fn a_ledger_row_states_the_foots_spend_figure_and_the_unit_that_stands_beside_it() {
-    let laid = rows(&spent(), Shape::Ledger, band(COLUMNS, 21), None);
-    let input = laid
-        .iter()
+fn spent_figure(laid: &[Row]) -> &Row {
+    laid.iter()
         .find(|row| row.kind() == Some(Kind::Input))
-        .expect("the ledger lays the spend's input in its foot");
+        .expect("the ledger lays the spend's input in its foot")
+}
+
+#[test]
+fn a_ledger_row_states_the_spend_figure_and_the_unit_that_stands_beside_it() {
+    let laid = rows(&spent(), Shape::Ledger, band(COLUMNS, 21), None);
+    let figure = spent_figure(&laid);
 
     assert_eq!(
-        input.big(),
+        figure.big(),
         [
             Span {
                 at: 0,
@@ -2448,13 +2451,10 @@ fn a_foot_figure_with_no_unit_states_the_one_span_it_is_drawn_at() {
         ..spent()
     };
     let laid = rows(&facts, Shape::Ledger, band(COLUMNS, 21), None);
-    let input = laid
-        .iter()
-        .find(|row| row.kind() == Some(Kind::Input))
-        .expect("the ledger lays the spend's input in its foot");
+    let figure = spent_figure(&laid);
 
     assert_eq!(
-        input.big(),
+        figure.big(),
         [
             Span {
                 at: 0,

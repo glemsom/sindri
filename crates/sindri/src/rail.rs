@@ -194,7 +194,7 @@ fn untouched(buffer: &Buffer, from: u16, y: u16, width: u16) -> bool {
     })
 }
 
-// A State's word is still read back off the words of the value it is drawn over.
+// A State's word is read back off the words of the value it is drawn over.
 fn searched(row: &ledger::Row) -> Vec<ledger::Span> {
     use crate::ledger::Span;
 

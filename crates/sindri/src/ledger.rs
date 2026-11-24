@@ -431,21 +431,22 @@ pub(crate) fn hit_rate(percent: u8) -> String {
 }
 
 pub(crate) fn tokens(count: u64) -> String {
-    spelt(count).text
+    spelling(count).text
 }
 
-pub(crate) struct Spelt {
+pub(crate) struct Spelling {
     pub(crate) text: String,
     pub(crate) figure: String,
     pub(crate) unit: String,
     pub(crate) at: u16,
 }
 
-impl Spelt {
-    fn of(figure: String, unit: &str) -> Spelt {
-        // The rail draws a foot figure big, so the unit stands past the cells it is drawn on.
+impl Spelling {
+    fn of(figure: String, unit: &str) -> Spelling {
+        // `at` counts the row's drawn columns, so the unit opens past the cells the figure is
+        // drawn on.
         let at = pen::cells(&figure).saturating_mul(crate::size::SCALE);
-        Spelt {
+        Spelling {
             text: format!("{figure}{unit}"),
             figure,
             unit: unit.to_owned(),
@@ -475,9 +476,9 @@ impl Spelt {
     }
 }
 
-pub(crate) fn spelt(count: u64) -> Spelt {
+pub(crate) fn spelling(count: u64) -> Spelling {
     if count < 1_000 {
-        return Spelt::of(count.to_string(), "");
+        return Spelling::of(count.to_string(), "");
     }
     let tenths = count.saturating_add(50) / 100;
     if tenths < 10_000 {
@@ -486,7 +487,7 @@ pub(crate) fn spelt(count: u64) -> Spelt {
     scaled(count.saturating_add(5_000) / 10_000, 2, "M")
 }
 
-fn scaled(parts: u64, places: u32, unit: &str) -> Spelt {
+fn scaled(parts: u64, places: u32, unit: &str) -> Spelling {
     let divisor = 10u64.pow(places);
     let whole = parts / divisor;
     let fraction = parts % divisor;
@@ -497,7 +498,7 @@ fn scaled(parts: u64, places: u32, unit: &str) -> Spelt {
             format!("{whole}.{}", decimals.trim_end_matches('0'))
         }
     };
-    Spelt::of(figure, unit)
+    Spelling::of(figure, unit)
 }
 
 pub(crate) fn more(count: usize) -> String {
@@ -1170,9 +1171,11 @@ fn known(facts: &Facts, shape: Shape, marker: Option<&Pulse>) -> Vec<Fact> {
             Shape::Strip => false,
         };
         if let Some(count) = count.filter(|_| spelled) {
-            // A ledger's foot figure is the one figure set big; every other count is words.
+            // The foot's spend figure is the only figure the rail sets big.
             stated.push(match kind {
-                Kind::Input if shape == Shape::Ledger => Fact::valued(kind, spelt(count).value()),
+                Kind::Input if shape == Shape::Ledger => {
+                    Fact::valued(kind, spelling(count).value())
+                }
                 _ => Fact::new(kind, tokens(count)),
             });
         }
