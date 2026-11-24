@@ -6,7 +6,7 @@ use ratatui::layout::Rect;
 use crate::graphics::CellSize;
 use crate::ink::Ink;
 use crate::instrument;
-use crate::ledger::{self, Facts, Kind, Rail, RailBand};
+use crate::ledger::{self, Big, Facts, Kind, Part, Rail, RailBand};
 use crate::palette::Palette;
 use crate::pen;
 use crate::plane::{Bar, Placement};
@@ -125,75 +125,126 @@ fn sizes(
     buffer: &mut Buffer,
     palette: &Palette,
 ) -> crate::size::Sizes {
-    use crate::ink::Look;
-    use crate::ledger::Part;
-    use crate::size::{Sized, Sizes};
+    use crate::size::Sizes;
 
     let mut sizes = Sizes::none();
     let left = band.facts.x + crate::rows::MARGIN;
     let right = band.facts.right().saturating_sub(crate::rows::MARGIN);
     for row in rows {
         let y = band.facts.y + row.y();
-        for (x, part) in row.parts() {
-            if let Part::Value(value) = part {
-                if row.kind() == Some(Kind::Input) {
-                    let words = value.text().trim();
-                    let split = words
-                        .find(|glyph: char| glyph.is_ascii_alphabetic())
-                        .unwrap_or(words.len());
-                    let (figure, unit) = words.split_at(split);
-                    let run = Sized::new(0, 2, figure, Look::plain(value.ink()));
-                    let unit_run =
-                        Sized::new(0, 2, unit, Look::plain(value.ink())).fractional(1, 4, 1, 0);
-                    let from = left + x;
-                    let width = run.width() + unit_run.width();
-                    // A picture is two cells deep, so the foot's first figure stands over the row
-                    // its next figure is stated on.
-                    if !figure.is_empty()
-                        && from.saturating_add(width) <= right
-                        && y + 1 < band.facts.bottom()
-                    {
-                        pen::run(
-                            buffer,
-                            from,
-                            y,
-                            &pen::blank(pen::cells(value.text())),
-                            value.ink(),
-                            palette,
-                        );
-                        sizes.lay(y, from, std::slice::from_ref(&run));
-                        if !unit.is_empty() {
-                            sizes.lay(y, from + run.width(), &[unit_run]);
-                        }
-                    }
-                }
-                if row.kind() == Some(Kind::State) {
-                    let text = value.text();
-                    let after = text.find(' ').map_or(0, |space| space + 1);
-                    let run = Sized::new(0, 2, &text[after..], Look::plain(value.ink()));
-                    let from = left + x + pen::cells(&text[..after]);
-                    if from.saturating_add(run.width()) <= right
-                        && y + 1 < band.facts.bottom()
-                        && (from..from + run.width()).all(|column| {
-                            buffer
-                                .cell((column, y + 1))
-                                .is_some_and(|cell| cell.symbol().trim().is_empty())
-                        })
-                    {
-                        sizes.lay(y, from, &[run]);
-                    }
-                }
+        for span in row.big().iter().cloned().chain(searched(row)) {
+            if span.words.is_empty() {
+                continue;
             }
-            if let Part::Run(words, Ink::Dim) = part {
-                let words = words.trim_end();
-                if words.is_empty() {
-                    continue;
-                }
-                let run = Sized::new(0, 1, words, Look::plain(Ink::Dim)).fractional(3, 4, 2, 0);
-                sizes.lay(y, left + x, &[run]);
+            let run = run_of(&span);
+            let from = left.saturating_add(span.at);
+            if from.saturating_add(run.width()) > right {
+                continue;
             }
+            if run.scale() > 1 && y + 1 >= band.facts.bottom() {
+                continue;
+            }
+            if span.big == Big::State && !untouched(buffer, from, y + 1, run.width()) {
+                continue;
+            }
+            if matches!(span.big, Big::Figure | Big::Unit) {
+                plain(row, buffer, palette, left, y);
+            }
+            sizes.lay(y, from, &[run]);
         }
     }
     sizes.settle(band.facts, buffer, palette);
     sizes
+}
+
+fn run_of(span: &ledger::Span) -> crate::size::Sized {
+    use crate::ink::Look;
+    use crate::size::Sized;
+
+    let look = Look::plain(span.ink);
+    match span.big {
+        Big::Label => Sized::new(0, 1, &span.words, look).fractional(3, 4, 2, 0),
+        Big::State | Big::Figure => Sized::new(0, 2, &span.words, look),
+        Big::Unit => Sized::new(0, 2, &span.words, look).fractional(1, 4, 1, 0),
+    }
+}
+
+// A bigger figure stands over the plain text of its value, so the whole of that text goes: a
+// picture under a sized word shows through the glyph it covers.
+fn plain(row: &ledger::Row, buffer: &mut Buffer, palette: &Palette, left: u16, y: u16) {
+    for (x, part) in row.parts() {
+        if let Part::Value(value) = part {
+            pen::run(
+                buffer,
+                left.saturating_add(*x),
+                y,
+                &pen::blank(pen::cells(value.text())),
+                value.ink(),
+                palette,
+            );
+        }
+    }
+}
+
+fn untouched(buffer: &Buffer, from: u16, y: u16, width: u16) -> bool {
+    (from..from.saturating_add(width)).all(|column| {
+        buffer
+            .cell((column, y))
+            .is_some_and(|cell| cell.symbol().trim().is_empty())
+    })
+}
+
+// The spans here are read back off the value's text, the way the rail recovered them before a
+// value stated its own; they stand only until a value says where its big text sits.
+fn searched(row: &ledger::Row) -> Vec<ledger::Span> {
+    use crate::ledger::Span;
+
+    let Some((at, Part::Value(value))) = row
+        .parts()
+        .iter()
+        .find(|(_, part)| matches!(part, Part::Value(_)))
+    else {
+        return Vec::new();
+    };
+    let at = *at;
+    let text = value.text();
+    match row.kind() {
+        Some(Kind::Input) => {
+            let words = text.trim();
+            let split = words
+                .find(|glyph: char| glyph.is_ascii_alphabetic())
+                .unwrap_or(words.len());
+            let (figure, unit) = words.split_at(split);
+            if figure.is_empty() {
+                return Vec::new();
+            }
+            let figure = Span {
+                at,
+                words: figure.to_owned(),
+                ink: value.ink(),
+                big: Big::Figure,
+            };
+            let past = at.saturating_add(run_of(&figure).width());
+            let mut spans = vec![figure];
+            if !unit.is_empty() {
+                spans.push(Span {
+                    at: past,
+                    words: unit.to_owned(),
+                    ink: value.ink(),
+                    big: Big::Unit,
+                });
+            }
+            spans
+        }
+        Some(Kind::State) => {
+            let after = text.find(' ').map_or(0, |space| space + 1);
+            vec![Span {
+                at: at.saturating_add(pen::cells(&text[..after])),
+                words: text[after..].to_owned(),
+                ink: value.ink(),
+                big: Big::State,
+            }]
+        }
+        _ => Vec::new(),
+    }
 }

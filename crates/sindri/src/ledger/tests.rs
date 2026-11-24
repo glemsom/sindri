@@ -2202,6 +2202,153 @@ fn a_row_states_the_kind_of_the_fact_it_lays_and_the_air_between_blocks_states_n
 }
 
 #[test]
+fn a_row_states_the_label_it_sets_big() {
+    let laid = rows(&frame(), Shape::Ledger, band(COLUMNS, 17), None);
+
+    let stated: Vec<(u16, String, Ink, Big)> = laid
+        .iter()
+        .flat_map(|row| row.big())
+        .map(|span| (span.at, span.words.clone(), span.ink, span.big))
+        .collect();
+    let dim: Vec<(u16, String, Ink, Big)> = laid
+        .iter()
+        .flat_map(|row| row.parts())
+        .filter_map(|(at, part)| match part {
+            Part::Run(text, ink) if *ink == Ink::Dim => {
+                Some((*at, text.trim_end().to_owned(), *ink, Big::Label))
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert!(!stated.is_empty(), "the rail states the labels it sets big");
+    assert_eq!(
+        stated, dim,
+        "a row states one span for the dim label it is set under, opening on the field's first \
+         column and saying the label the run says"
+    );
+}
+
+#[test]
+fn a_fact_with_no_label_states_no_span_of_its_own() {
+    let row = railed(band(COLUMNS, 1), &Fact::bare(Kind::Skills, "bash"));
+
+    assert_eq!(
+        row.parts().len(),
+        1,
+        "a bare fact opens on the row with no field before it"
+    );
+    assert!(
+        row.big().is_empty(),
+        "a fact with no label states no span: there is no label to set big"
+    );
+}
+
+#[test]
+fn a_strip_and_a_screen_sheet_state_no_span() {
+    for (shape, area) in [
+        (Shape::Strip, band(COLUMNS, 1)),
+        (Shape::Screen, band(SCREEN, 40)),
+    ] {
+        let laid = rows(&spent(), shape, area, None);
+        assert!(
+            laid.iter().any(|row| !row.parts().is_empty()),
+            "a {shape:?} lays the facts it holds"
+        );
+        assert!(
+            laid.iter().all(|row| row.big().is_empty()),
+            "a {shape:?} states no span: only a ledger-shaped rail sets its text big"
+        );
+    }
+}
+
+#[test]
+fn a_value_states_where_its_own_big_text_stands() {
+    let mut stated = Value::new("48.2k");
+    stated.big.push(Span {
+        at: 3,
+        words: String::from("2k"),
+        ink: Ink::Accent,
+        big: Big::Figure,
+    });
+
+    let row = railed(band(COLUMNS, 1), &Fact::valued(Kind::Input, stated));
+    let opens = row
+        .parts()
+        .iter()
+        .find_map(|(at, part)| matches!(part, Part::Value(_)).then_some(*at))
+        .expect("the row lays the fact's value");
+
+    assert_eq!(
+        opens, FIELD,
+        "a ledger opens the value on the field its label is set in"
+    );
+    assert_eq!(
+        row.big(),
+        [
+            Span {
+                at: 0,
+                words: String::from("input"),
+                ink: Ink::Dim,
+                big: Big::Label,
+            },
+            Span {
+                at: opens + 3,
+                words: String::from("2k"),
+                ink: Ink::Accent,
+                big: Big::Figure,
+            },
+        ],
+        "a value's own span stands where the value opens, shifted by the column the span names, \
+         and keeps the ink and kind it was stated in"
+    );
+}
+
+#[test]
+fn a_value_that_is_re_spelled_or_re_padded_states_no_big_text() {
+    let figure = || Span {
+        at: 0,
+        words: String::from("48.2"),
+        ink: Ink::Plain,
+        big: Big::Figure,
+    };
+    let valued = || {
+        let mut value = Value::new("48.2 / 200k");
+        value.big.push(figure());
+        value
+    };
+    let wider = || Halves::of(["100.25 / 200k"].into_iter());
+
+    assert_eq!(
+        valued().respelled(String::from("48.2")).big(),
+        [],
+        "a value re-spelled says words the columns it stated no longer hold"
+    );
+
+    let mut pair = valued();
+    pair.align(wider());
+    assert_eq!(
+        pair.text(),
+        "  48.2 / 200k",
+        "the pair is padded to its halves"
+    );
+    assert_eq!(
+        pair.big(),
+        [],
+        "a value re-padded states no big text: the columns a span names are the text's"
+    );
+
+    let mut single = Value::new("48.2");
+    single.big.push(figure());
+    single.align(wider());
+    assert_eq!(
+        single.big(),
+        [figure()],
+        "a value that is no pair is never re-padded, so the columns it stated still stand"
+    );
+}
+
+#[test]
 fn a_row_that_lays_no_one_fact_states_no_kind() {
     assert_eq!(
         hairline_row(band(COLUMNS, 1)).kind(),
