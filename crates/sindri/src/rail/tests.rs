@@ -1966,3 +1966,35 @@ fn a_foot_figure_that_states_no_unit_is_set_big_with_nothing_beside_it() {
         "a figure with no unit states none, so nothing stands past the cells it is drawn at"
     );
 }
+
+#[test]
+fn a_states_word_is_laid_nowhere_over_a_row_already_written() {
+    let facts = Facts {
+        state: Some(sindri_core::run::State::Running),
+        ..Facts::default()
+    };
+    let rail = RailBand::of(band(COLUMNS, 8));
+    let rows = ledger::rows(&facts, Rail::Ledger.into(), rail.facts, None);
+    let mut buffer = Buffer::empty(rail.facts);
+    ledger::draw(&rows, rail.facts, &mut buffer, &PALETTE);
+
+    let first = sizes(&rows, rail, &mut buffer, &PALETTE);
+    let headline = run(&first, "running");
+    let (left, under_row) = (headline.left(), headline.row() + 1);
+    assert!(
+        headline.row() + 1 < rail.facts.height,
+        "the word stands over a row inside the band"
+    );
+
+    pen::glyph(&mut buffer, left, under_row, 'x', Ink::Plain, &PALETTE);
+
+    let second = sizes(&rows, rail, &mut buffer, &PALETTE);
+    assert!(
+        second
+            .laid()
+            .iter()
+            .all(|laid| laid.run().words() != "running"),
+        "a State's word is laid only over a row left untouched: {:?}",
+        second.laid().iter().map(Laid::run).collect::<Vec<_>>()
+    );
+}

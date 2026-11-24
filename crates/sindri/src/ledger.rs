@@ -361,6 +361,18 @@ impl Value {
         self
     }
 
+    pub(crate) fn tailed(mut self, word: &str, big: Big) -> Value {
+        if let Some(front) = self.text.strip_suffix(word) {
+            self.big.push(Span {
+                at: pen::cells(front),
+                words: word.to_owned(),
+                ink: self.ink,
+                big,
+            });
+        }
+        self
+    }
+
     pub(crate) fn ink(&self) -> Ink {
         self.ink
     }
@@ -1269,14 +1281,16 @@ fn known(facts: &Facts, shape: Shape, marker: Option<&Pulse>) -> Vec<Fact> {
 
 fn state_value(state: &State, marker: Option<&Pulse>) -> Value {
     let Some(stop) = state.stop() else {
-        let word = match marker.and_then(Pulse::stepping) {
-            Some(glyph) => format!("{glyph} {}", state.word()),
-            None => state.word().to_owned(),
+        let value = match marker.and_then(Pulse::stepping) {
+            Some(glyph) => Value::new(format!("{glyph} {}", state.word())),
+            None => Value::new(state.word().to_owned()),
         };
-        return Value::new(word).inked(Ink::Accent);
+        return value.inked(Ink::Accent).tailed(state.word(), Big::State);
     };
     let (glyph, ink) = stop_mark(stop);
-    Value::new(format!("{glyph} {}", state.word())).inked(ink)
+    Value::new(format!("{glyph} {}", state.word()))
+        .inked(ink)
+        .tailed(state.word(), Big::State)
 }
 
 fn ledger_lines(kept: &[Fact], went: usize) -> Vec<Line<'_>> {

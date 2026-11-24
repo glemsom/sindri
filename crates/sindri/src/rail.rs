@@ -132,7 +132,7 @@ fn sizes(
     let right = band.facts.right().saturating_sub(crate::rows::MARGIN);
     for row in rows {
         let y = band.facts.y + row.y();
-        for span in row.big().iter().cloned().chain(searched(row)) {
+        for span in row.big().iter().cloned() {
             if span.words.is_empty() {
                 continue;
             }
@@ -192,31 +192,4 @@ fn untouched(buffer: &Buffer, from: u16, y: u16, width: u16) -> bool {
             .cell((column, y))
             .is_some_and(|cell| cell.symbol().trim().is_empty())
     })
-}
-
-// A State's word is read back off the words of the value it is drawn over.
-fn searched(row: &ledger::Row) -> Vec<ledger::Span> {
-    use crate::ledger::Span;
-
-    let Some((at, Part::Value(value))) = row
-        .parts()
-        .iter()
-        .find(|(_, part)| matches!(part, Part::Value(_)))
-    else {
-        return Vec::new();
-    };
-    let at = *at;
-    let text = value.text();
-    match row.kind() {
-        Some(Kind::State) => {
-            let after = text.find(' ').map_or(0, |space| space + 1);
-            vec![Span {
-                at: at.saturating_add(pen::cells(&text[..after])),
-                words: text[after..].to_owned(),
-                ink: value.ink(),
-                big: Big::State,
-            }]
-        }
-        _ => Vec::new(),
-    }
 }
