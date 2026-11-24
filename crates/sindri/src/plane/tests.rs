@@ -2293,3 +2293,187 @@ fn giving_every_identity_back_names_each_picture_the_frame_can_hold_exactly_once
         "and the identities given back are the ones the frame can hold, and no other: {giving:?}"
     );
 }
+
+#[test]
+fn a_pass_whose_every_picture_stood_where_it_stood_answers_nothing_at_all() {
+    let palette = Palette::TRUECOLOR;
+    let band =
+        Shade::composer(Rect::new(2, 3, 40, 4), Some(CELL), &palette).expect("a band to shade");
+    let planes = held(&[band]);
+    let mut record = Held::default();
+
+    assert_eq!(
+        record.pass(&[band], &planes).len(),
+        1,
+        "the first pass tells the terminal of the one picture it has never held"
+    );
+
+    let told = record.pass(&[band], &planes);
+
+    assert!(
+        told.is_empty(),
+        "a pass whose every picture stood where it stood tells the terminal nothing, and answered \
+         {} things: {told:?}",
+        told.len()
+    );
+}
+
+#[test]
+fn a_pass_whose_caret_moved_answers_a_placement_and_no_upload() {
+    let band = Rect::new(2, 3, 40, 4);
+    let palette = Palette::TRUECOLOR;
+    let frame = |caret| {
+        [
+            Shade::composer(band, Some(CELL), &palette).expect("a band to shade"),
+            caret_light(band, caret, &palette),
+        ]
+    };
+    let mut record = Held::default();
+    let stood = frame(6);
+    record.pass(&stood, &held(&stood));
+
+    let moved = frame(7);
+    let planes = held(&moved);
+    let told = record.pass(&moved, &planes);
+
+    assert_eq!(
+        told.len(),
+        1,
+        "a pass whose caret moved tells the terminal one thing and no more: {told:?}"
+    );
+    match told[0] {
+        Told::Place { id, at } => {
+            assert_eq!(
+                id,
+                PlaneId::Caret,
+                "the picture put again is the caret's light"
+            );
+            assert_eq!(
+                at,
+                moved[1].place().expect("a light with cells to stand on"),
+                "and it is put on the cells the caret's light stands on now"
+            );
+        }
+        Told::Upload { .. } => panic!("no pixel of the light moved, so no pixel travels: {told:?}"),
+        Told::Forget(id) => panic!("nothing of the frame is gone, and {id:?} is deleted"),
+    }
+}
+
+#[test]
+fn a_pass_whose_band_is_gone_answers_one_delete_and_the_identity_stands_again_later() {
+    let band = Rect::new(2, 3, 40, 4);
+    let palette = Palette::TRUECOLOR;
+    let composer = Shade::composer(band, Some(CELL), &palette).expect("a band to shade");
+    let light = caret_light(band, 6, &palette);
+    let both = [composer, light];
+    let mut record = Held::default();
+    let planes = held(&both);
+    record.pass(&both, &planes);
+
+    let alone = held(&[composer]);
+    let told = record.pass(&[composer], &alone);
+
+    assert_eq!(
+        told.len(),
+        1,
+        "a pass whose light is gone tells the terminal one thing and no more: {told:?}"
+    );
+    match told[0] {
+        Told::Forget(id) => assert_eq!(id, PlaneId::Caret, "the picture deleted is the light's"),
+        Told::Upload { plane, .. } => panic!(
+            "the band still stood where it stood, and {} is sent again: {told:?}",
+            plane.id().image()
+        ),
+        Told::Place { id, .. } => panic!("{id:?} is put again on cells it never left"),
+    }
+
+    let told = record.pass(&both, &planes);
+
+    assert_eq!(
+        told.len(),
+        1,
+        "a pass that brings the light back tells the terminal one thing: {told:?}"
+    );
+    match told[0] {
+        Told::Upload { plane, at } => {
+            assert_eq!(
+                plane.id(),
+                PlaneId::Caret,
+                "the terminals holds no light, so its pixels travel again"
+            );
+            assert_eq!(
+                at,
+                both[1].place().expect("a light with cells to stand on"),
+                "and they are put on the cells the light stands on"
+            );
+        }
+        Told::Place { id, .. } => panic!("{id:?} is not held, so it is sent and not put again"),
+        Told::Forget(id) => panic!("{id:?} is not held, so nothing of it is deleted"),
+    }
+}
+
+#[test]
+fn a_pass_that_added_moved_and_removed_a_picture_answers_the_delete_first_then_the_frame_order() {
+    let band = Rect::new(2, 3, 40, 4);
+    let palette = Palette::TRUECOLOR;
+    let composer = Shade::composer(band, Some(CELL), &palette).expect("a band to shade");
+    let gauge = gauge_ink(Rect::new(0, 20, 8, 1), 40, false, &palette);
+    let before = [composer, caret_light(band, 6, &palette)];
+    let mut record = Held::default();
+    let planes = held(&before);
+    record.pass(&before, &planes);
+
+    let after = [caret_light(band, 7, &palette), gauge];
+    let planes = held(&after);
+    let told = record.pass(&after, &planes);
+
+    let answers: Vec<(u32, &str)> = told
+        .iter()
+        .map(|told| match told {
+            Told::Upload { plane, .. } => (plane.id().image(), "upload"),
+            Told::Place { id, .. } => (id.image(), "place"),
+            Told::Forget(id) => (id.image(), "forget"),
+        })
+        .collect();
+
+    assert_eq!(
+        answers,
+        vec![
+            (PlaneId::Composer.image(), "forget"),
+            (PlaneId::Caret.image(), "place"),
+            (PlaneId::Gauge.image(), "upload"),
+        ],
+        "the band the frame left is deleted before anything is put on the screen, and the \
+         pictures it kept are told in the frame's own order: {told:?}"
+    );
+}
+
+#[test]
+fn forget_names_each_held_identity_once_and_the_face_is_not_among_them() {
+    let band = Rect::new(2, 3, 40, 4);
+    let palette = Palette::TRUECOLOR;
+    let shades = [
+        Shade::composer(band, Some(CELL), &palette).expect("a band to shade"),
+        caret_light(band, 6, &palette),
+        gauge_ink(Rect::new(0, 20, 8, 1), 40, false, &palette),
+    ];
+    let planes = held(&shades);
+    let mut record = Held::default();
+    record.pass(&shades, &planes);
+
+    let named = record.forget();
+
+    assert_eq!(
+        named,
+        vec![PlaneId::Composer, PlaneId::Caret, PlaneId::Gauge],
+        "every picture the terminal held is given back once, in the order it was held"
+    );
+    assert!(
+        !named.contains(&PlaneId::Face),
+        "the face stands under no shade, so no plane of the frame answers for it: {named:?}"
+    );
+    assert!(
+        record.forget().is_empty(),
+        "and nothing is held once the pictures are given back"
+    );
+}
