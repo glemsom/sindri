@@ -194,8 +194,8 @@ fn untouched(buffer: &Buffer, from: u16, y: u16, width: u16) -> bool {
     })
 }
 
-// The spans here are read back off the value's text, the way the rail recovered them before a
-// value stated its own; they stand only until a value says where its big text sits.
+// No value states its big text yet, so the figure, the unit and the State's word are still read
+// back off the words of the value they are drawn over.
 fn searched(row: &ledger::Row) -> Vec<ledger::Span> {
     use crate::ledger::Span;
 

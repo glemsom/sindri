@@ -1830,6 +1830,27 @@ fn a_facts_label_is_set_three_quarters_of_a_cell_wide() {
 }
 
 #[test]
+fn a_dim_run_a_row_does_not_state_is_drawn_plain() {
+    let rail = RailBand::of(band(COLUMNS, 1));
+    let rows = ledger::rows(&frame(), Rail::Strip.into(), rail.facts, None);
+    let mut buffer = Buffer::empty(rail.facts);
+    ledger::draw(&rows, rail.facts, &mut buffer, &PALETTE);
+
+    assert!(
+        rows.iter()
+            .flat_map(|row| row.parts())
+            .any(|(_, part)| matches!(part, Part::Run(_, Ink::Dim))),
+        "the strip sets its labels and its gaps in the dim ink"
+    );
+    assert!(
+        rows.iter().all(|row| row.big().is_empty())
+            && sizes(&rows, rail, &mut buffer, &PALETTE).laid().is_empty(),
+        "a run is offered to the terminal only where a row states it as a span: a run written dim \
+         that is no span is drawn plain"
+    );
+}
+
+#[test]
 fn a_facts_label_is_set_big_on_the_column_its_field_opens() {
     let laid = sizing(&spent(), band(COLUMNS, 21), None);
 

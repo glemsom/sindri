@@ -386,11 +386,7 @@ impl Value {
     }
 
     pub(crate) fn align(&mut self, halves: Halves) {
-        let padded = padded(&self.text, halves);
-        if padded != self.text {
-            self.big.clear();
-        }
-        self.text = padded;
+        self.text = padded(&self.text, halves);
     }
 
     pub(crate) fn columns(&self) -> usize {
@@ -727,7 +723,7 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
                         ..area
                     };
                     match line {
-                        Line::Fact(fact) => railed(row, fact),
+                        Line::Fact(fact) => ledger_row(row, fact),
                         Line::Air => Row {
                             y: row.y,
                             kind: None,
@@ -740,7 +736,7 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
                 .collect();
             for (at, fact) in foot.iter().enumerate() {
                 let back = u16::try_from(foot.len() - at).unwrap_or(u16::MAX);
-                rows.push(railed(
+                rows.push(ledger_row(
                     Rect {
                         y: area.bottom().saturating_sub(back),
                         ..area
@@ -898,7 +894,7 @@ fn labelled(area: Rect, fact: &Fact, hang: Hang) -> Row {
     }
 }
 
-fn railed(area: Rect, fact: &Fact) -> Row {
+fn ledger_row(area: Rect, fact: &Fact) -> Row {
     let mut row = labelled(area, fact, Hang::Left);
     if let Some(label) = fact.label {
         row.big.push(Span {
