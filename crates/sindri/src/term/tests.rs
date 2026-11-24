@@ -118,6 +118,41 @@ fn a_terminal_that_says_nothing_answers_nothing_to_the_sizing_question() {
     );
 }
 
+#[test]
+fn the_two_answers_to_the_picture_questions_arrive_whole() {
+    let _one_screen = lock(&ONE_SCREEN);
+    let pty = Pty::open();
+    pty.resize(80, 24, 0, 0);
+    let terminal = Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to ask");
+    let _screen = Screen::take(&terminal, false, false).expect("the screen is taken");
+    // Ghostty answers a launch's two feature queries with an error each, and both answers are
+    // longer than one read: half an answer is a half nobody can use.
+    let answer: &[u8] = b"\x1b_Gi=337;EINVAL: dimensions required\x1b\\";
+    let said = [answer, answer].concat();
+    std::io::Write::write_all(&mut &pty.master, &said).expect("the terminal answers");
+
+    assert_eq!(
+        terminal.ask(Question::Animation),
+        Some(said),
+        "both answers are the answer, however many reads they take"
+    );
+}
+
+#[test]
+fn a_request_nobody_answers_is_no_bytes() {
+    let _one_screen = lock(&ONE_SCREEN);
+    let pty = Pty::open();
+    pty.resize(80, 24, 0, 0);
+    let terminal = Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).expect("a terminal to ask");
+    let _screen = Screen::take(&terminal, false, false).expect("the screen is taken");
+
+    assert_eq!(
+        terminal.ask(Question::Animation),
+        None,
+        "a terminal that says nothing says nothing, and the wait ends it"
+    );
+}
+
 fn composed(width: u16, height: u16, rows: &[(u16, &str)]) -> Buffer {
     let area = Rect::new(0, 0, width, height);
     let mut buffer = Buffer::empty(area);

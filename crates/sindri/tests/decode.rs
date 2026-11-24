@@ -319,6 +319,36 @@ fn a_shifted_sideways_arrow_arrives_as_the_key_that_walks_a_fence() {
 }
 
 #[test]
+fn the_answer_to_a_picture_query_is_the_terminals_and_never_a_key() {
+    assert_eq!(
+        events(&[b"\x1b_Gi=337;EINVAL: dimensions required\x1b\\"]),
+        vec![],
+        "a terminal answers a picture query on the APC string, and the words of an \
+         answer are not glyphs the reader typed"
+    );
+}
+
+#[test]
+fn an_answer_read_in_pieces_is_swallowed_until_it_ends() {
+    assert_eq!(
+        events(&[b"\x1b_Gi=33", b"7;OK\x1b", b"\\"]),
+        vec![],
+        "an answer split across three reads carries no key until the string that \
+         ends it lands, and none after"
+    );
+}
+
+#[test]
+fn a_key_after_an_answer_is_read_again() {
+    assert_eq!(
+        events(&[b"\x1b_Gi=337;OK\x1b\\a"]),
+        vec![key(Key::Char('a'))],
+        "the answer ends where the terminal says it does, and the next byte is the \
+         reader's own"
+    );
+}
+
+#[test]
 fn a_key_after_a_paste_is_read_again() {
     assert_eq!(
         events(&[b"\x1b[200~a\x1b[201~", b"\r"]),

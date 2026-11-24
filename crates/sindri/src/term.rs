@@ -619,21 +619,45 @@ pub(crate) fn tell(out: &File, sequence: &[u8]) -> io::Result<()> {
 
 pub(crate) const REPLY_WAIT: Duration = Duration::from_millis(120);
 
-/// Writes `ask` and reads whatever the terminal says back within the wait, or nothing at all when
-/// it does not answer. The bytes are the terminal's, and a key typed while it thought is among them.
+/// The silence that ends an answer. Ghostty answers a launch's two picture questions with two
+/// 38-byte replies, more than one read holds, so an answer is read on until the terminal falls
+/// quiet.
+const REPLY_GAP: Duration = Duration::from_millis(5);
+
+/// The most an answer can be, so a terminal that never falls quiet cannot hold the launch.
+const REPLY_MOST: usize = 64 * 1024;
+
+/// Writes `ask` and reads whatever the terminal says back: the whole of it, however many reads it
+/// arrives in, until it falls quiet after `REPLY_GAP` or says nothing at all within `REPLY_WAIT`.
+/// The bytes are the terminal's, and a key typed while it thought is among them.
 pub(crate) fn reply(terminal: &Terminal, ask: &[u8]) -> Option<Vec<u8>> {
     if tell(&terminal.screen, ask).is_err() {
         return None;
     }
-    let wait = Timespec::try_from(REPLY_WAIT).ok()?;
+    let mut said = Vec::new();
+    let mut wait = REPLY_WAIT;
+    while said.len() < REPLY_MOST {
+        let Some(more) = heard(terminal, wait) else {
+            break;
+        };
+        said.extend_from_slice(&more);
+        wait = REPLY_GAP;
+    }
+    (!said.is_empty()).then_some(said)
+}
+
+/// What the terminal has said within `wait`, or nothing when it says nothing in it and nothing
+/// more when it has hung up.
+fn heard(terminal: &Terminal, wait: Duration) -> Option<Vec<u8>> {
+    let wait = Timespec::try_from(wait).ok()?;
     let mut fds = [PollFd::new(&terminal.keys, PollFlags::IN)];
     match poll(&mut fds, Some(&wait)) {
         Ok(_) if fds[0].revents().contains(PollFlags::IN) => {}
         _ => return None,
     }
-    let mut read = [0u8; 64];
+    let mut read = [0u8; 4096];
     let count = Read::read(&mut &terminal.keys, &mut read).ok()?;
-    Some(read[..count].to_vec())
+    (count > 0).then(|| read[..count].to_vec())
 }
 
 /// A lock held for the length of one statement: a panic hook that blocked on a poisoned lock
