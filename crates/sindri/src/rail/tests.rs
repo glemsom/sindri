@@ -728,7 +728,7 @@ fn the_bezel_stands_in_the_room_the_rail_leaves_between_its_last_fact_and_its_fo
         &PALETTE,
     );
     let rows = ledger::rows(&facts, ledger::Shape::Ledger, rail, None);
-    let room = instrument::bezel(&rows, rail.width - margins())
+    let room = instrument::bezel(&rows)
         .expect("the air the rail leaves between its last fact and its foot");
 
     assert_eq!(
@@ -740,12 +740,12 @@ fn the_bezel_stands_in_the_room_the_rail_leaves_between_its_last_fact_and_its_fo
         shades.last().expect("an instrument").area(),
         Rect {
             x: rail.x + MARGIN,
-            y: rail.y + room.y,
-            width: room.width,
-            height: room.height,
+            y: rail.y + room.start,
+            width: rail.width - margins(),
+            height: room.len() as u16,
         },
-        "the bezel stands in the room the rows name, in the rail's columns inside the Margin on \
-         both edges"
+        "the bezel stands on the rows the rail numbers them by, in the rail's own columns inside \
+         the Margin on both edges"
     );
 }
 

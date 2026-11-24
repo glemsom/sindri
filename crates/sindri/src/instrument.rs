@@ -1,4 +1,5 @@
-use ratatui::layout::Rect;
+use std::ops::Range;
+
 use sindri_core::records::Usage;
 
 use crate::ledger::{self, Kind, Row};
@@ -68,9 +69,9 @@ fn share(figure: u64, whole: u64) -> Share {
 
 const FOOT: [Kind; 3] = [Kind::Input, Kind::Output, Kind::Total];
 
-/// The rows of a rail that state nothing: the air between the last row it writes and the foot it
-/// spends, in the coordinates `ledger::rows` returns, and none where the rail states no foot.
-pub(crate) fn bezel(rows: &[Row], width: u16) -> Option<Rect> {
+/// The rows of a rail that state nothing: the air between the last row above its foot that states
+/// a part and the first row that states a foot, and none where the rail states no foot.
+pub(crate) fn bezel(rows: &[Row]) -> Option<Range<u16>> {
     let bottom = rows
         .iter()
         .filter(|row| row.kind().is_some_and(|kind| FOOT.contains(&kind)))
@@ -82,12 +83,7 @@ pub(crate) fn bezel(rows: &[Row], width: u16) -> Option<Rect> {
         .map(Row::y)
         .max()?
         .saturating_add(1);
-    Some(Rect {
-        x: 0,
-        y: top,
-        width,
-        height: bottom - top,
-    })
+    Some(top..bottom)
 }
 
 #[cfg(test)]

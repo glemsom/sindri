@@ -3,7 +3,6 @@ use sindri_core::records::Usage;
 
 use super::*;
 use crate::ledger::{self, Ctx, FLOOR, Facts, Shape};
-use crate::rows::margins;
 
 #[test]
 fn a_share_is_the_pixels_of_the_blocks_width_it_names() {
@@ -217,10 +216,6 @@ fn band(width: u16, height: u16) -> Rect {
     }
 }
 
-fn width() -> u16 {
-    FLOOR - margins()
-}
-
 fn footed() -> Facts {
     Facts {
         wire: Some(String::from("anthropic")),
@@ -244,14 +239,10 @@ fn the_bezel_stands_between_the_last_fact_and_the_foot() {
     let laid = railways(&footed(), 6);
 
     assert_eq!(
-        bezel(&laid, width()),
-        Some(Rect {
-            x: 0,
-            y: 2,
-            width: width(),
-            height: 1,
-        }),
-        "the row of air between the last fact and the input's own row is the rail's frame"
+        bezel(&laid),
+        Some(2..3),
+        "the row of air between the last fact and the input's own row is row 2 of the rows the \
+         rail is laid in, and no column of it is the bezel's to name"
     );
 }
 
@@ -264,7 +255,7 @@ fn a_rail_that_states_no_spend_is_handed_no_bezel() {
     };
 
     assert_eq!(
-        bezel(&railways(&facts, 5), width()),
+        bezel(&railways(&facts, 5)),
         None,
         "a rail whose foot states no figure leaves plain air under its last fact and is handed \
          no bezel"
@@ -294,18 +285,18 @@ fn the_bezel_stands_below_the_row_that_counts_the_facts_the_rail_kept_back() {
             )
         })
         .expect("the rail counts the fact it kept back");
-    let framed = bezel(&laid, width()).expect("the air the rail leaves above its foot");
+    let framed = bezel(&laid).expect("the air the rail leaves above its foot");
 
     assert!(
-        framed.y > counted.y(),
+        framed.start > counted.y(),
         "the bezel opens on row {} and the rail counts the facts it kept back on row {}: a frame \
          stands in air and never over a word",
-        framed.y,
+        framed.start,
         counted.y()
     );
     for row in laid
         .iter()
-        .filter(|row| row.y() >= framed.y && row.y() < framed.bottom())
+        .filter(|row| row.y() >= framed.start && row.y() < framed.end)
     {
         assert!(
             row.parts().is_empty(),
@@ -328,7 +319,7 @@ fn a_rail_that_states_no_fact_above_its_foot_is_handed_no_bezel() {
     };
 
     assert_eq!(
-        bezel(&railways(&facts, 4), width()),
+        bezel(&railways(&facts, 4)),
         None,
         "a rail whose foot is the only fact it states leaves no air under its last fact to frame"
     );

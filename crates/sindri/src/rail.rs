@@ -83,11 +83,12 @@ fn instruments(
             shades.extend(Shade::bar(area, Some(cell), bar, share, palette));
         }
     }
-    if let Some(area) = instrument::bezel(rows, columns.width) {
+    if let Some(room) = instrument::bezel(rows) {
         let area = Rect {
             x: columns.x,
-            y: band.facts.y.saturating_add(area.y),
-            ..area
+            y: band.facts.y.saturating_add(room.start),
+            width: columns.width,
+            height: room.len() as u16,
         };
         shades.extend(Shade::bezel(area, Some(cell), palette));
     }
