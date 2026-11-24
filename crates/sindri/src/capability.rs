@@ -4,7 +4,7 @@ use crate::graphics::CellSize;
 use crate::palette::Palette;
 use crate::picture;
 use crate::pictures::Pictures;
-use crate::plane::PlaneId;
+use crate::plane;
 use crate::pointer;
 use crate::size;
 
@@ -29,22 +29,9 @@ impl Question {
         match self {
             Question::Cell => ASK_CELL.to_vec(),
             Question::Sizing => ASK_SIZING.to_vec(),
-            Question::Animation => animation_asked(),
+            Question::Animation => plane::frames_asked(),
         }
     }
-}
-
-/// The two features an animation of the face needs, asked for under the face's own identity: frames
-/// composed onto a previous one in the overwrite mode, and the loop that turns them. A terminal
-/// answers with the keys it supports, so a reply missing any of these is no animation.
-fn animation_asked() -> Vec<u8> {
-    let mut asked = Vec::new();
-    for feature in ["e=f,c=1,X=1", "e=a"] {
-        asked.extend_from_slice(
-            format!("\x1b_Ga=q,i={},{feature}\x1b\\", PlaneId::Face.image()).as_bytes(),
-        );
-    }
-    asked
 }
 
 pub trait Asked {
@@ -86,9 +73,18 @@ impl Answers {
     }
 }
 
-/// One feature an answer reports, under the face's own identity, as the terminal echoes it back.
-fn answer(keys: &str) -> Vec<u8> {
-    format!("\x1b_Gi={},{keys};OK\x1b\\", PlaneId::Face.image()).into_bytes()
+/// The answers a terminal gives the feature queries it was asked: the parameters of each query
+/// echoed back, under the identity the query named, with the payload the terminal says of them.
+fn answered(asked: &[u8], said: &str) -> Vec<u8> {
+    let asked = String::from_utf8_lossy(asked);
+    let mut answered = String::new();
+    for query in asked.split("\x1b\\").filter(|query| !query.is_empty()) {
+        let params = query
+            .strip_prefix("\x1b_Ga=q,")
+            .expect("a feature query names no feature");
+        answered.push_str(&format!("\x1b_G{params};{said}\x1b\\"));
+    }
+    answered.into_bytes()
 }
 
 impl Asked for Answers {
@@ -103,12 +99,13 @@ impl Asked for Answers {
                 true => b"\x1b[1;1R\x1b[1;3R".to_vec(),
                 false => b"\x1b[1;1R\x1b[1;1R".to_vec(),
             }),
-            Question::Animation => Some(match self.animation {
-                true => [answer("e=f,c=1,X=1"), answer("e=a")].concat(),
-                false => {
-                    format!("\x1b_Gi={};ENOTSUPPORTED\x1b\\", PlaneId::Face.image()).into_bytes()
-                }
-            }),
+            Question::Animation => Some(answered(
+                &question.asked(),
+                match self.animation {
+                    true => "OK",
+                    false => "ENOTSUPPORTED",
+                },
+            )),
         }
     }
 }

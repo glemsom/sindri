@@ -334,39 +334,15 @@ fn the_cell_is_read_off_the_bytes_the_terminal_sent_and_the_keys_beside_it_kept(
     );
 }
 
-/// One answer a terminal that supports `keys` gives to a feature query, under the face's identity.
-fn reply(keys: &str) -> String {
-    format!(
-        "\x1b_Gi={},{keys};OK\x1b\\",
-        crate::plane::PlaneId::Face.image()
-    )
-}
-
-#[test]
-fn the_frames_and_animation_are_asked_for_under_the_face_s_own_identity() {
-    let asked = String::from_utf8_lossy(&Question::Animation.asked()).into_owned();
-    let identity = format!("i={}", crate::plane::PlaneId::Face.image());
-
-    assert!(
-        asked.contains("e=f") && asked.contains("e=a"),
-        "the two features asked for are the frames a picture is kept in and the animation of \
-         them: {asked:?}"
-    );
-    assert!(
-        asked.contains("e=f,c=1,X=1"),
-        "and the frames are asked for with the canvas and the overwrite mode the face's frames \
-         are sent in: {asked:?}"
-    );
-    assert_eq!(
-        asked.matches(&identity).count(),
-        2,
-        "and both are asked under the face's own identity, {identity}: {asked:?}"
-    );
+/// One feature answer a terminal gives, built the way the fake terminal builds it.
+fn reply(keys: &str, said: &str) -> String {
+    let asked = format!("\x1b_Ga=q,{keys}\x1b\\");
+    String::from_utf8(answered(asked.as_bytes(), said)).expect("an answer is printable")
 }
 
 #[test]
 fn a_terminal_that_answers_both_features_animates_and_one_that_answers_neither_does_not() {
-    let both = format!("a{}{}b", reply("e=f,c=1,X=1"), reply("e=a"));
+    let both = format!("a{}{}b", reply("e=f,c=1,X=1", "OK"), reply("e=a", "OK"));
     let (animates, typed) = animation_reply(both.as_bytes());
     assert!(
         animates,
@@ -379,7 +355,7 @@ fn a_terminal_that_answers_both_features_animates_and_one_that_answers_neither_d
     );
 
     assert!(
-        !animation_reply(b"\x1b_Gi=337;ENOTSUPPORTED\x1b\\").0,
+        !animation_reply(reply("e=f,c=1,X=1", "ENOTSUPPORTED").as_bytes()).0,
         "a terminal that answers no such feature is handed the still face"
     );
     assert!(
@@ -388,15 +364,15 @@ fn a_terminal_that_answers_both_features_animates_and_one_that_answers_neither_d
     );
 
     let only_frames = format!(
-        "{}\x1b_Gi={},e=a;ENOTSUPPORTED\x1b\\",
-        reply("e=f,c=1,X=1"),
-        crate::plane::PlaneId::Face.image()
+        "{}{}",
+        reply("e=f,c=1,X=1", "OK"),
+        reply("e=a", "ENOTSUPPORTED")
     );
     assert!(
         !animation_reply(only_frames.as_bytes()).0,
         "frames without animation are no loop: both features are needed"
     );
-    let no_overwrite = format!("{}{}", reply("e=f,c=1"), reply("e=a"));
+    let no_overwrite = format!("{}{}", reply("e=f,c=1", "OK"), reply("e=a", "OK"));
     assert!(
         !animation_reply(no_overwrite.as_bytes()).0,
         "and frames the terminal will not overwrite a rectangle of are no frames the face can \
