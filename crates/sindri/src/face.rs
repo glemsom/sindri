@@ -21,9 +21,6 @@ pub fn measure(ceiling: Ceiling, surface: &Surface) -> Option<Picture> {
     picture::carried(SOURCE, FACE_PNG, ceiling, surface).ok()
 }
 
-/// The identity the face's picture is held under, above every plane's.
-pub const ID: u32 = 337;
-
 /// The light each frame past the root is drawn in, in the order the terminal turns them.
 const BREATH: [f32; 3] = [0.8, 0.6, 0.8];
 
@@ -41,11 +38,6 @@ pub fn frames(root: &image::RgbaImage) -> Vec<image::RgbaImage> {
         frames.push(frame);
     }
     frames
-}
-
-/// The bytes that give the face's image back, leaving no placement of it behind.
-pub fn delete() -> Vec<u8> {
-    format!("\x1b_Ga=d,d=i,i={ID},q=2\x1b\\").into_bytes()
 }
 
 /// What the frame asks of the terminal's animation of the face.
