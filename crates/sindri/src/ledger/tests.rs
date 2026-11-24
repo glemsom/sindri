@@ -627,6 +627,54 @@ fn the_rail_s_first_row_says_the_run_is_running_and_steps_with_the_marker() {
     );
 }
 
+fn label_span(at: u16, words: &str) -> Span {
+    Span {
+        at,
+        words: words.to_owned(),
+        ink: Ink::Dim,
+        big: Big::Label,
+    }
+}
+
+fn word_span(at: u16, words: &str, ink: Ink) -> Span {
+    Span {
+        at,
+        words: words.to_owned(),
+        ink,
+        big: Big::State,
+    }
+}
+
+#[test]
+fn a_live_run_states_its_word_where_it_opens_past_the_marker_glyph() {
+    let area = band(COLUMNS, 19);
+    let big = |marker: Option<&Pulse>| {
+        rows(&live(), Shape::Ledger, area, marker)
+            .into_iter()
+            .next()
+            .expect("the rail's first row")
+            .big()
+            .to_vec()
+    };
+
+    assert_eq!(
+        big(Some(&Pulse::live(0))),
+        [
+            label_span(0, "state"),
+            word_span(FIELD + 2, "running", Ink::Accent)
+        ],
+        "the word opens past the glyph and the space the row draws in front of it"
+    );
+    assert_eq!(
+        big(None),
+        [
+            label_span(0, "state"),
+            word_span(FIELD, "running", Ink::Accent)
+        ],
+        "and a row handed no marker draws nothing in front of its word to open past"
+    );
+}
+
 #[test]
 fn a_stopped_run_s_row_is_the_stop_s_own_word_under_the_mark_that_stop_earns() {
     for (stop, glyph, ink) in [
@@ -658,6 +706,14 @@ fn a_stopped_run_s_row_is_the_stop_s_own_word_under_the_mark_that_stop_earns() {
             ),
             Some(ink),
             "and the mark is read in the ink that stop earns"
+        );
+        assert_eq!(
+            rows(&facts, Shape::Ledger, area, None)[0].big(),
+            [
+                label_span(0, "state"),
+                word_span(FIELD + 2, stop.word(), ink)
+            ],
+            "and the row states that word big, opening past the mark and the space in front of it"
         );
     }
 }
@@ -2311,6 +2367,41 @@ fn a_value_states_where_its_own_big_text_stands() {
         "a value's own span stands where the value opens, shifted by the column the span names, \
          and keeps the ink and kind it was stated in"
     );
+}
+
+#[test]
+fn a_value_states_the_word_it_ends_in_and_none_it_merely_holds() {
+    assert_eq!(
+        Value::new("running late").stating("running").big(),
+        [],
+        "a value that only holds a word states no span, so a big glyph never lands over the \
+         label beside it"
+    );
+    assert_eq!(
+        Value::new("late running").stating("running").big(),
+        [word_span(5, "running", Ink::Plain)],
+        "a value that ends in a word states it past the cells drawn in front of it, and those \
+         cells stay drawn"
+    );
+}
+
+#[test]
+fn a_value_states_its_word_in_the_ink_it_wears_whichever_comes_first() {
+    for value in [
+        Value::new("late running")
+            .inked(Ink::Err)
+            .stating("running"),
+        Value::new("late running")
+            .stating("running")
+            .inked(Ink::Err),
+    ] {
+        assert_eq!(
+            value.big(),
+            [word_span(5, "running", Ink::Err)],
+            "a span is drawn in the ink of the value it sits in, whether that ink was said \
+             before the word or after it"
+        );
+    }
 }
 
 #[test]

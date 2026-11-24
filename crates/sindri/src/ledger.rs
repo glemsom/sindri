@@ -358,6 +358,23 @@ impl Value {
 
     pub(crate) fn inked(mut self, ink: Ink) -> Value {
         self.ink = ink;
+        for span in &mut self.big {
+            span.ink = ink;
+        }
+        self
+    }
+
+    // A value states the word it ends in, opening past the cells drawn in front of it: a word it
+    // merely holds states nothing, so no big glyph lands over the label beside it.
+    pub(crate) fn stating(mut self, word: &str) -> Value {
+        if let Some(front) = self.text.strip_suffix(word) {
+            self.big.push(Span {
+                at: pen::cells(front),
+                words: word.to_owned(),
+                ink: self.ink,
+                big: Big::State,
+            });
+        }
         self
     }
 
@@ -1268,15 +1285,17 @@ fn known(facts: &Facts, shape: Shape, marker: Option<&Pulse>) -> Vec<Fact> {
 }
 
 fn state_value(state: &State, marker: Option<&Pulse>) -> Value {
-    let Some(stop) = state.stop() else {
-        let word = match marker.and_then(Pulse::stepping) {
-            Some(glyph) => format!("{glyph} {}", state.word()),
-            None => state.word().to_owned(),
-        };
-        return Value::new(word).inked(Ink::Accent);
+    let (mark, ink) = match state.stop() {
+        Some(stop) => {
+            let (glyph, ink) = stop_mark(stop);
+            (Some(glyph), ink)
+        }
+        None => (marker.and_then(Pulse::stepping), Ink::Accent),
     };
-    let (glyph, ink) = stop_mark(stop);
-    Value::new(format!("{glyph} {}", state.word())).inked(ink)
+    let ahead = mark.map_or_else(String::new, |glyph| format!("{glyph} "));
+    Value::new(format!("{ahead}{}", state.word()))
+        .inked(ink)
+        .stating(state.word())
 }
 
 fn ledger_lines(kept: &[Fact], went: usize) -> Vec<Line<'_>> {
