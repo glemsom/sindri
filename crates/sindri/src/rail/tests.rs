@@ -341,9 +341,9 @@ fn a_ledger_handed_a_cell_is_handed_a_shade_of_its_own_band_and_a_seam_in_its_fi
     let plane = Plane::draw(*placement.shade()).expect("a band a plane is drawn under");
 
     assert_eq!(
-        plane.area(),
+        placement.cells(),
         rail,
-        "the plane covers the rail's own rows and columns, and no column beside it"
+        "the placement covers the rail's own rows and columns, and no column beside it"
     );
     assert_eq!(
         plane.pixels().dimensions(),

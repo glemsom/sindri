@@ -323,6 +323,11 @@ fn caret_light(band: Rect, caret: u16, palette: &Palette) -> Placement {
     Placement::caret(band, Some(CELL), caret, palette).expect("the light the caret casts")
 }
 
+fn shown(at: Placement) -> image::math::Rect {
+    at.shows()
+        .expect("a placement that stands on a picture of its own")
+}
+
 /// Where the light is centred, in the pixels of the image it is drawn as.
 fn light_centre() -> u32 {
     u32::from(LIGHT_COLS / 2) * CELL.width() + CELL.width() / 2
@@ -540,18 +545,13 @@ fn a_bands_plane_is_its_shade_drawn_at_the_pixels_of_the_cell_it_covers() {
             let plane = drawn(placement);
             let peak = palette.peak(band_of(&placement));
             assert_eq!(
-                plane.area(),
-                placement.shade().area(),
-                "{spelling} draws {band}'s plane over a rect of its own, and a plane covers the \
-                 band whose shade it is drawn from"
-            );
-            assert_eq!(
                 plane.pixels().dimensions(),
                 (
                     u32::from(placement.cells().width) * CELL.width(),
                     u32::from(placement.cells().height) * CELL.height()
                 ),
-                "{spelling} draws {band}'s plane at other than the pixels of the cell it is drawn on"
+                "{spelling} draws {band}'s plane at other than the pixels of the cells the band \
+                 stands on, and a plane covers the band whose shade it is drawn from"
             );
             for row in 0..placement.cells().height {
                 let rung = spelled(placement.shade().row(row));
@@ -613,8 +613,8 @@ fn a_rails_light_is_a_lamp_centred_on_the_face_and_gone_by_its_margins() {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(6, 2, 32, 12);
     let placement = faced(Rail::Ledger, area, 3, Some(CELL), &palette);
-    let Some(face) = placement.shade().face() else {
-        panic!("a rail a face stands on carries the rect its light is centred on");
+    let Some(face) = RailBand::of(area).with_picture(area.width, 3).picture else {
+        panic!("a rail a face stands on reserves the cells its light is centred on");
     };
     let plane = drawn(placement);
     let peak = palette.peak(Band::Rail);
@@ -800,19 +800,14 @@ fn the_carets_light_peaks_on_the_row_under_the_seam_and_is_spent_by_its_foot() {
         let carried = |x: u32, y: u32| light_over(&placement, &plane, x, y);
 
         assert_eq!(
-            placement.shade().area(),
-            Rect::new(0, 0, LIGHT_COLS, area.height - 1),
-            "{spelling} draws the caret's light over the row a band is headed by, and that row is \
-             the seam the band is parted from"
-        );
-        assert_eq!(
             (width, height),
             (
                 u32::from(LIGHT_COLS) * CELL.width(),
                 u32::from(area.height - 1) * down
             ),
-            "{spelling} draws the caret's light at other than the cells it spans over the band's \
-             own rows under its seam"
+            "{spelling} draws the caret's light at other than the pixels of the {LIGHT_COLS} \
+             cells it spans over the band's own rows under its seam, and the row a band is \
+             headed by is the seam the band is parted from"
         );
         assert_eq!(
             carried(centre, 0),
@@ -1055,16 +1050,13 @@ fn a_transcripts_light_crowns_its_head_and_falls_to_the_well_by_its_third_row() 
         let lit = |x: u32, y: u32| light_over(&placement, &plane, x, y);
 
         assert_eq!(
-            plane.area(),
-            area,
-            "{spelling} draws the transcript's plane over a rect of its own, and a plane covers \
-             the band whose shade it is drawn from"
-        );
-        assert_eq!(
-            height,
-            u32::from(area.height) * down,
-            "{spelling} draws the transcript's plane at other than the pixels of the cell it is \
-             drawn on"
+            (width, height),
+            (
+                u32::from(area.width) * CELL.width(),
+                u32::from(area.height) * down
+            ),
+            "{spelling} draws the transcript's plane at other than the pixels of the cells the \
+             band stands on, and a plane covers the band whose shade it is drawn from"
         );
         for x in 0..width {
             assert_eq!(
@@ -2356,7 +2348,7 @@ fn a_pass_whose_caret_moved_answers_a_placement_and_no_upload() {
 
     assert_eq!(
         sent,
-        place(PlaneId::Caret, moved[1]),
+        place(PlaneId::Caret, moved[1], shown(moved[1])),
         "the light is put on the cells the caret stands on now, under the identity it was held by"
     );
     let spelled = written(&sent);
@@ -2431,10 +2423,11 @@ fn a_pass_that_added_moved_and_removed_a_picture_answers_the_delete_first_then_t
     let sent = record.pass(&after, &planes);
 
     let mut wanted = delete(PlaneId::Composer);
-    wanted.extend(place(PlaneId::Caret, after[0]));
+    wanted.extend(place(PlaneId::Caret, after[0], shown(after[0])));
     wanted.extend(upload(
         planes.image(after[1].shade()).expect("the gauge's plane"),
         after[1],
+        shown(after[1]),
     ));
 
     assert_eq!(
@@ -2711,9 +2704,10 @@ fn a_band_on_another_cell_or_in_another_palette_is_placed_again_over_the_same_ar
     let greys = Placement::composer(area, Some(CellSize::NOMINAL), &Palette::ANSI)
         .expect("a band to shade");
     assert_eq!(
-        (finer.shade().area(), greys.shade().area()),
-        (first.shade().area(), first.shade().area()),
-        "the band's area stands where it did, and only the cell and the palette moved"
+        (finer.cells(), greys.cells()),
+        (first.cells(), first.cells()),
+        "the cells the band stands on stand where they did, and only the cell and the palette \
+         moved"
     );
     let mut record = Held::default();
     let mut wire = Vec::new();
@@ -3094,42 +3088,52 @@ fn the_frames_and_animation_are_asked_for_under_the_face_s_own_identity() {
 }
 
 #[test]
-fn a_band_drawn_lighter_over_the_same_cells_makes_its_image_again() {
-    let area = Rect::new(2, 3, 40, 4);
-    let pale = Placement::transcript(area, Some(CELL), &Palette::ANSI).expect("a band to shade");
-    let bright =
-        Placement::transcript(area, Some(CELL), &Palette::TRUECOLOR).expect("a band to shade");
-    assert_ne!(
-        pale.shade(),
-        bright.shade(),
-        "the two bands are drawn from different facts"
-    );
+fn a_band_that_only_moved_makes_no_image_and_is_placed_again_where_it_stands() {
+    let palette = Palette::TRUECOLOR;
+    let band = |area| Placement::transcript(area, Some(CELL), &palette).expect("a band to shade");
+    let (here, there) = (band(Rect::new(0, 0, 40, 4)), band(Rect::new(10, 8, 40, 4)));
     assert_eq!(
-        pale.cells(),
-        bright.cells(),
-        "over the cells their band stands on, which never moved"
+        here.shade(),
+        there.shade(),
+        "the two bands are drawn from the same facts"
+    );
+    assert_ne!(
+        here.cells(),
+        there.cells(),
+        "and the band stands on other cells"
     );
 
     let mut planes = Planes::default();
-    let mut record = Held::default();
-    planes.hold(&[pale]);
-    let made = planes.made();
-    let first = written(&record.pass(&[pale], &planes));
-    assert!(
-        first.contains(&format!("_Ga=T,f=100,i={}", PlaneId::Transcript.image())),
-        "the band the terminal holds no picture of is transmitted: {first:?}"
+    planes.hold(&[here, there]);
+    assert_eq!(
+        (planes.held().len(), planes.made()),
+        (1, 1),
+        "a band that only moved is the one shade, and one image is made of it"
     );
 
-    planes.hold(&[bright]);
-    assert_eq!(
-        planes.made(),
-        made + 1,
-        "a band drawn lighter over the same cells is drawn as an image of its own"
-    );
-    let again = written(&record.pass(&[bright], &planes));
+    let mut record = Held::default();
+    let first = written(&record.pass(&[here], &planes));
     assert!(
-        again.contains(&format!("_Ga=T,f=100,i={}", PlaneId::Transcript.image())),
-        "and its pixels travel under the transcript band's own identity: {again:?}"
+        first.contains(&format!("_Ga=T,f=100,i={}", PlaneId::Transcript.image())),
+        "the terminal holds no picture of the band yet, so it is transmitted: {first:?}"
+    );
+
+    let again = written(&record.pass(&[there], &planes));
+    assert!(
+        again.contains(&format!(
+            "_Ga=p,i={},p={PLACEMENT},q=2,z={DEPTH},C=1",
+            PlaneId::Transcript.image()
+        )),
+        "a band that only moved is placed again on the cells it stands on now: {again:?}"
+    );
+    assert!(
+        !again.contains("_Ga=T"),
+        "and no pixel of a shade that differs in its cells and in no drawing fact is sent \
+         again: {again:?}"
+    );
+    assert!(
+        !again.contains("_Ga=d"),
+        "and the image the band stood on is not taken back: {again:?}"
     );
 }
 
@@ -3170,7 +3174,7 @@ fn a_light_that_moved_over_its_band_makes_no_image_and_sends_no_byte_again() {
     let sent = record.pass(&[moved], &planes);
     assert_eq!(
         sent,
-        place(PlaneId::Caret, moved),
+        place(PlaneId::Caret, moved, shown(moved)),
         "the light is put on the cells the caret stands on now, under the identity it was held by"
     );
     assert!(

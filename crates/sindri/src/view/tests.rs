@@ -1425,11 +1425,11 @@ fn a_frame_that_places_pictures_and_one_that_does_not_agree_on_the_shade_of_ever
     let bands = [("the rail", rail), ("the composer's band", laid.composer)];
 
     for (band, area) in bands {
-        let Some(plane) = pictured
-            .planes()
-            .held()
+        let Some(plane) = standing
+            .placements()
             .iter()
-            .find(|plane| plane.area() == area)
+            .find(|placement| placement.cells() == area)
+            .and_then(|placement| pictured.planes().image(placement.shade()))
         else {
             panic!("the frame holds no plane over {band}");
         };
