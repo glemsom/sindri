@@ -378,9 +378,13 @@ impl Value {
     }
 
     pub(crate) fn respelled(&self, text: String) -> Value {
+        let big = match text == self.text {
+            true => self.big.clone(),
+            false => Vec::new(),
+        };
         Value {
             text,
-            big: Vec::new(),
+            big,
             ..self.clone()
         }
     }
@@ -427,8 +431,53 @@ pub(crate) fn hit_rate(percent: u8) -> String {
 }
 
 pub(crate) fn tokens(count: u64) -> String {
+    spelt(count).text
+}
+
+pub(crate) struct Spelt {
+    pub(crate) text: String,
+    pub(crate) figure: String,
+    pub(crate) unit: String,
+    pub(crate) at: u16,
+}
+
+impl Spelt {
+    fn of(figure: String, unit: &str) -> Spelt {
+        // The rail draws a foot figure big, so the unit stands past the cells it is drawn on.
+        let at = pen::cells(&figure).saturating_mul(crate::size::SCALE);
+        Spelt {
+            text: format!("{figure}{unit}"),
+            figure,
+            unit: unit.to_owned(),
+            at,
+        }
+    }
+
+    pub(crate) fn value(self) -> Value {
+        let mut big = vec![Span {
+            at: 0,
+            words: self.figure,
+            ink: Ink::Plain,
+            big: Big::Figure,
+        }];
+        if !self.unit.is_empty() {
+            big.push(Span {
+                at: self.at,
+                words: self.unit,
+                ink: Ink::Plain,
+                big: Big::Unit,
+            });
+        }
+        Value {
+            big,
+            ..Value::new(self.text)
+        }
+    }
+}
+
+pub(crate) fn spelt(count: u64) -> Spelt {
     if count < 1_000 {
-        return count.to_string();
+        return Spelt::of(count.to_string(), "");
     }
     let tenths = count.saturating_add(50) / 100;
     if tenths < 10_000 {
@@ -437,15 +486,18 @@ pub(crate) fn tokens(count: u64) -> String {
     scaled(count.saturating_add(5_000) / 10_000, 2, "M")
 }
 
-fn scaled(parts: u64, places: u32, unit: &str) -> String {
+fn scaled(parts: u64, places: u32, unit: &str) -> Spelt {
     let divisor = 10u64.pow(places);
     let whole = parts / divisor;
     let fraction = parts % divisor;
-    if fraction == 0 {
-        return format!("{whole}{unit}");
-    }
-    let decimals = format!("{fraction:0width$}", width = places as usize);
-    format!("{whole}.{}{unit}", decimals.trim_end_matches('0'))
+    let figure = match fraction {
+        0 => whole.to_string(),
+        fraction => {
+            let decimals = format!("{fraction:0width$}", width = places as usize);
+            format!("{whole}.{}", decimals.trim_end_matches('0'))
+        }
+    };
+    Spelt::of(figure, unit)
 }
 
 pub(crate) fn more(count: usize) -> String {
@@ -1118,7 +1170,11 @@ fn known(facts: &Facts, shape: Shape, marker: Option<&Pulse>) -> Vec<Fact> {
             Shape::Strip => false,
         };
         if let Some(count) = count.filter(|_| spelled) {
-            stated.push(Fact::new(kind, tokens(count)));
+            // A ledger's foot figure is the one figure set big; every other count is words.
+            stated.push(match kind {
+                Kind::Input if shape == Shape::Ledger => Fact::valued(kind, spelt(count).value()),
+                _ => Fact::new(kind, tokens(count)),
+            });
         }
     }
     if let Some(workspace) = &facts.workspace {

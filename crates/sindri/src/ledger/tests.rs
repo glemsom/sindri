@@ -2353,3 +2353,141 @@ fn a_row_that_lays_no_one_fact_states_no_kind() {
         "the count of the facts a rail could not hold states no fact of its own"
     );
 }
+
+#[test]
+fn the_token_speller_states_its_text_its_figure_its_unit_and_where_the_unit_opens() {
+    for (count, text, figure, unit, at) in [
+        (48_200, "48.2k", "48.2", "k", 8),
+        (12_000, "12k", "12", "k", 4),
+        (1_200_000, "1.2M", "1.2", "M", 6),
+    ] {
+        let stated = spelt(count);
+        assert_eq!(
+            (
+                stated.text.as_str(),
+                stated.figure.as_str(),
+                stated.unit.as_str(),
+                stated.at
+            ),
+            (text, figure, unit, at),
+            "{count} is spelled {text:?}: the figure {figure:?} it opens with, the unit {unit:?} \
+             that follows it, and the column past the figure's drawn cells the unit opens on"
+        );
+    }
+}
+
+#[test]
+fn a_figure_under_a_thousand_spells_digits_and_states_no_unit() {
+    let stated = spelt(500);
+
+    assert_eq!(
+        (
+            stated.text.as_str(),
+            stated.figure.as_str(),
+            stated.unit.as_str()
+        ),
+        ("500", "500", ""),
+        "a count under a thousand is spelled out in digits, so it has no unit standing beside it"
+    );
+}
+
+#[test]
+fn the_plain_string_speller_says_the_whole_text_of_that_one_spelling() {
+    for count in [500, 1_000, 48_200, 999_999, 1_200_000] {
+        assert_eq!(
+            tokens(count),
+            spelt(count).text,
+            "a {count} stated as a plain string says the words the one speller spells, so no two \
+             spellers can come to differ"
+        );
+    }
+}
+
+#[test]
+fn a_ledger_row_states_the_foots_spend_figure_and_the_unit_that_stands_beside_it() {
+    let laid = rows(&spent(), Shape::Ledger, band(COLUMNS, 21), None);
+    let input = laid
+        .iter()
+        .find(|row| row.kind() == Some(Kind::Input))
+        .expect("the ledger lays the spend's input in its foot");
+
+    assert_eq!(
+        input.big(),
+        [
+            Span {
+                at: 0,
+                words: String::from("input"),
+                ink: Ink::Dim,
+                big: Big::Label,
+            },
+            Span {
+                at: FIELD,
+                words: String::from("48.2"),
+                ink: Ink::Plain,
+                big: Big::Figure,
+            },
+            Span {
+                at: FIELD + 8,
+                words: String::from("k"),
+                ink: Ink::Plain,
+                big: Big::Unit,
+            },
+        ],
+        "the foot's spend figure is the one figure the rail sets big, so its row states it where \
+         the value opens and states its unit just past the width the figure is drawn at"
+    );
+}
+
+#[test]
+fn a_foot_figure_with_no_unit_states_the_one_span_it_is_drawn_at() {
+    let facts = Facts {
+        spend: Usage {
+            input: Some(500),
+            ..spent().spend
+        },
+        ..spent()
+    };
+    let laid = rows(&facts, Shape::Ledger, band(COLUMNS, 21), None);
+    let input = laid
+        .iter()
+        .find(|row| row.kind() == Some(Kind::Input))
+        .expect("the ledger lays the spend's input in its foot");
+
+    assert_eq!(
+        input.big(),
+        [
+            Span {
+                at: 0,
+                words: String::from("input"),
+                ink: Ink::Dim,
+                big: Big::Label,
+            },
+            Span {
+                at: FIELD,
+                words: String::from("500"),
+                ink: Ink::Plain,
+                big: Big::Figure,
+            },
+        ],
+        "a figure under a thousand spells digits and states no unit, so its row states the figure \
+         and nothing that stands beside it"
+    );
+}
+
+#[test]
+fn a_value_re_spelled_to_the_words_it_already_says_keeps_its_big_text() {
+    let mut value = Value::new("48.2k");
+    value.big.push(Span {
+        at: 0,
+        words: String::from("48.2"),
+        ink: Ink::Plain,
+        big: Big::Figure,
+    });
+
+    assert_eq!(
+        value.respelled(String::from("48.2k")).big(),
+        value.big(),
+        "a value re-spelled to the words it already says keeps the figure it is drawn at: the \
+         columns it states are the words it goes on saying"
+    );
+}

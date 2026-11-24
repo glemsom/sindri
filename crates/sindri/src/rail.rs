@@ -164,8 +164,8 @@ fn run_of(span: &ledger::Span) -> crate::size::Sized {
     let look = Look::plain(span.ink);
     match span.big {
         Big::Label => Sized::new(0, 1, &span.words, look).fractional(3, 4, 2, 0),
-        Big::State | Big::Figure => Sized::new(0, 2, &span.words, look),
-        Big::Unit => Sized::new(0, 2, &span.words, look).fractional(1, 4, 1, 0),
+        Big::State | Big::Figure => Sized::new(0, crate::size::SCALE, &span.words, look),
+        Big::Unit => Sized::new(0, crate::size::SCALE, &span.words, look).fractional(1, 4, 1, 0),
     }
 }
 
@@ -194,8 +194,7 @@ fn untouched(buffer: &Buffer, from: u16, y: u16, width: u16) -> bool {
     })
 }
 
-// No value states its big text yet, so the figure, the unit and the State's word are still read
-// back off the words of the value they are drawn over.
+// A State's word is still read back off the words of the value it is drawn over.
 fn searched(row: &ledger::Row) -> Vec<ledger::Span> {
     use crate::ledger::Span;
 
@@ -209,33 +208,6 @@ fn searched(row: &ledger::Row) -> Vec<ledger::Span> {
     let at = *at;
     let text = value.text();
     match row.kind() {
-        Some(Kind::Input) => {
-            let words = text.trim();
-            let split = words
-                .find(|glyph: char| glyph.is_ascii_alphabetic())
-                .unwrap_or(words.len());
-            let (figure, unit) = words.split_at(split);
-            if figure.is_empty() {
-                return Vec::new();
-            }
-            let figure = Span {
-                at,
-                words: figure.to_owned(),
-                ink: value.ink(),
-                big: Big::Figure,
-            };
-            let past = at.saturating_add(run_of(&figure).width());
-            let mut spans = vec![figure];
-            if !unit.is_empty() {
-                spans.push(Span {
-                    at: past,
-                    words: unit.to_owned(),
-                    ink: value.ink(),
-                    big: Big::Unit,
-                });
-            }
-            spans
-        }
         Some(Kind::State) => {
             let after = text.find(' ').map_or(0, |space| space + 1);
             vec![Span {
