@@ -17,13 +17,13 @@ rail at 108x40
 11 |                                                                      branch    spec/1-capability           | plain:70 dim:10 plain:28
 12 |                                                                                                            | plain:108
 13 |                                                                      skills    2                           | plain:70 dim:10 plain:28
-14 |                                                                                                            | plain:108
-15 |                                                                      sandbox   bwrap                       | plain:70 dim:10 plain:28
+14 |                                                                      ◆ bash                                | plain:70 accent:1 plain:37
+15 |                                                                      ◆ records                             | plain:70 accent:1 plain:37
 16 |                                                                                                            | plain:108
-17 |                                                                      session   9f2c7a41                    | plain:70 dim:10 plain:28
-18 |                                                                      temp      …/sessions/9f2c7a41/tmp     | plain:70 dim:10 plain:28
-19 |                                                                                                            | plain:108
-20 |                                                                                                            | plain:108
+17 |                                                                      sandbox   bwrap                       | plain:70 dim:10 plain:28
+18 |                                                                                                            | plain:108
+19 |                                                                      session   9f2c7a41                    | plain:70 dim:10 plain:28
+20 |                                                                      temp      …/sessions/9f2c7a41/tmp     | plain:70 dim:10 plain:28
 21 |                                                                                                            | plain:108
 22 |                                                                                                            | plain:108
 23 |                                                                                                            | plain:108

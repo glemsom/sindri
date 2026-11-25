@@ -15,13 +15,13 @@ fold-answer at 120x40
 09 |  test rows::a_row_of_output_3 ... ok                                         branch    spec/1-capability               | muted:37 plain:41 dim:10 plain:32
 10 |⋯ 16 rows kept back                                                                                                     | dim:1 plain:1 dim:17 plain:101
 11 |  test rows::a_row_of_output_20 ... ok                                        skills    2                               | muted:38 plain:40 dim:10 plain:32
-12 |  Three rows of the fold are the whole of it: the head, the count and the                                               | plain:120
-13 |  last.                                                                       sandbox   bwrap                           | plain:78 dim:10 plain:32
+12 |  Three rows of the fold are the whole of it: the head, the count and the     ◆ bash                                    | plain:78 accent:1 plain:41
+13 |  last.                                                                       ◆ records                                 | plain:78 accent:1 plain:41
 14 |  The run proves the fold and nothing else: every row of a command's                                                    | plain:120
-15 |  output is drawn in the quieter ink behind the gutter the call opened,       session   9f2c7a41                        | plain:78 dim:10 plain:32
-16 |  and the rows a reader usually needs are the head of it, the row counting    temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
-17 |  the rows kept back and the last row the command wrote.                                                                | plain:120
-18 |                                                                                                                        | plain:120
+15 |  output is drawn in the quieter ink behind the gutter the call opened,       sandbox   bwrap                           | plain:78 dim:10 plain:32
+16 |  and the rows a reader usually needs are the head of it, the row counting                                              | plain:120
+17 |  the rows kept back and the last row the command wrote.                      session   9f2c7a41                        | plain:78 dim:10 plain:32
+18 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
 19 |  An answer is the answer, so it is drawn whole in the ink it wears today,                                              | plain:120
 20 |  and a reader reads it beside a folded result without losing one to the                                                | plain:120
 21 |  other.                                                                                                                | plain:120

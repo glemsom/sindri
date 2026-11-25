@@ -17,13 +17,13 @@ pulse-live at 120x40
 11 |⠹ 4.2s A braille marker at the head of the newest answer carries the run's    branch    spec/1-capability               | accent:1 plain:1 dim:4 plain:72 dim:10 plain:32
 12 |  elapsed time, one step every 80 ms, and settles on the verdict it                                                     | plain:120
 13 |  stopped with — the duration it stopped at, kept and never recomputed.       skills    2                               | plain:78 dim:10 plain:32
-14 |                                                                                                                        | plain:120
-15 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
+14 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
+15 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
 16 |                                                                                                                        | plain:120
-17 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
-18 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
-19 |                                                                                                                        | plain:120
-20 |                                                                                                                        | plain:120
+17 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
+18 |                                                                                                                        | plain:120
+19 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
+20 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
 21 |                                                                                                                        | plain:120
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120

@@ -17,13 +17,13 @@ rail at 160x40
 11 |                                                                                                                      branch    spec/1-capability               | plain:118 dim:10 plain:32
 12 |                                                                                                                                                                | plain:160
 13 |                                                                                                                      skills    2                               | plain:118 dim:10 plain:32
-14 |                                                                                                                                                                | plain:160
-15 |                                                                                                                      sandbox   bwrap                           | plain:118 dim:10 plain:32
+14 |                                                                                                                      ◆ bash                                    | plain:118 accent:1 plain:41
+15 |                                                                                                                      ◆ records                                 | plain:118 accent:1 plain:41
 16 |                                                                                                                                                                | plain:160
-17 |                                                                                                                      session   9f2c7a41                        | plain:118 dim:10 plain:32
-18 |                                                                                                                      temp      …/sindri/sessions/9f2c7a41/tmp  | plain:118 dim:10 plain:32
-19 |                                                                                                                                                                | plain:160
-20 |                                                                                                                                                                | plain:160
+17 |                                                                                                                      sandbox   bwrap                           | plain:118 dim:10 plain:32
+18 |                                                                                                                                                                | plain:160
+19 |                                                                                                                      session   9f2c7a41                        | plain:118 dim:10 plain:32
+20 |                                                                                                                      temp      …/sindri/sessions/9f2c7a41/tmp  | plain:118 dim:10 plain:32
 21 |                                                                                                                                                                | plain:160
 22 |                                                                                                                                                                | plain:160
 23 |                                                                                                                                                                | plain:160

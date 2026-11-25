@@ -804,6 +804,27 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
                     }
                 })
                 .collect();
+            if let Some(header) = rows.iter().position(|row| row.kind == Some(Kind::Skills)) {
+                let used = rows
+                    .len()
+                    .saturating_add(foot.len())
+                    .saturating_add(usize::from(!foot.is_empty()));
+                let room = usize::from(area.height).saturating_sub(used);
+                let names = facts.loaded.names();
+                let details = skill_rows(&names, area, room);
+                let added = u16::try_from(details.len()).unwrap_or(u16::MAX);
+                let y = rows[header].y.saturating_add(1);
+                for row in &mut rows[header + 1..] {
+                    row.y = row.y.saturating_add(added);
+                }
+                rows.splice(
+                    header + 1..header + 1,
+                    details.into_iter().enumerate().map(|(at, mut row)| {
+                        row.y = y.saturating_add(u16::try_from(at).unwrap_or(u16::MAX));
+                        row
+                    }),
+                );
+            }
             for (at, fact) in foot.iter().enumerate() {
                 let back = u16::try_from(foot.len() - at).unwrap_or(u16::MAX);
                 rows.push(ledger_row(
@@ -818,6 +839,38 @@ fn rail_rows(facts: &Facts, rail: Rail, area: Rect, marker: Option<&Pulse>) -> V
         }
         Rail::Strip => vec![strip(&kept, area)],
     }
+}
+
+fn skill_rows(names: &[String], area: Rect, room: usize) -> Vec<Row> {
+    if room == 0 || names.is_empty() || area.width < 4 {
+        return Vec::new();
+    }
+    let shown = if names.len() <= room {
+        names.len()
+    } else {
+        room.saturating_sub(1)
+    };
+    let mut rows = Vec::new();
+    for name in names.iter().take(shown) {
+        let mut row = Row::run(area.x, 0, "◆", Ink::Accent);
+        row.push(
+            area.x.saturating_add(2),
+            Part::Run(head(name, usize::from(area.width - 2)), Ink::Plain),
+        );
+        rows.push(row);
+    }
+    if shown < names.len() {
+        rows.push(Row::run(
+            area.x.saturating_add(2),
+            0,
+            head(
+                &format!("+{} more", names.len() - shown),
+                usize::from(area.width - 2),
+            ),
+            Ink::Muted,
+        ));
+    }
+    rows
 }
 
 fn foot_facts(kept: &[Fact]) -> Vec<&Fact> {

@@ -15,13 +15,13 @@ calls at 120x40
 09 |  warning: unused import: `std::fmt`                                          branch    spec/1-capability               | muted:36 plain:42 dim:10 plain:32
 10 |  --> src/rows.rs:12:5                                                                                                  | muted:22 plain:98
 11 |  An unused import, and nowhere else to put it.                               skills    2                               | plain:78 dim:10 plain:32
-12 |✗ bash                                                                                                                  | err:1 plain:1 dim:4 plain:114
-13 |  cargo test --workspace                                                      sandbox   bwrap                           | plain:78 dim:10 plain:32
+12 |✗ bash                                                                        ◆ bash                                    | err:1 plain:1 dim:4 plain:72 accent:1 plain:41
+13 |  cargo test --workspace                                                      ◆ records                                 | plain:78 accent:1 plain:41
 14 |✗ timed out  120000 ms · 0 bytes                                                                                        | err:1 plain:1 dim:30 plain:88
-15 |  The call ran past its minute and was killed.                                session   9f2c7a41                        | plain:78 dim:10 plain:32
-16 |✗ bash                                                                        temp      …/sindri/sessions/9f2c7a41/tmp  | err:1 plain:1 dim:4 plain:72 dim:10 plain:32
-17 |  make check STAGES=frames                                                                                              | plain:120
-18 |✗ cancelled  3400 ms · 0 bytes                                                                                          | err:1 plain:1 dim:28 plain:90
+15 |  The call ran past its minute and was killed.                                sandbox   bwrap                           | plain:78 dim:10 plain:32
+16 |✗ bash                                                                                                                  | err:1 plain:1 dim:4 plain:114
+17 |  make check STAGES=frames                                                    session   9f2c7a41                        | plain:78 dim:10 plain:32
+18 |✗ cancelled  3400 ms · 0 bytes                                                temp      …/sindri/sessions/9f2c7a41/tmp  | err:1 plain:1 dim:28 plain:48 dim:10 plain:32
 19 |  What a verdict says                                                                                                   | plain:2 plain+bold:19 plain:99
 20 |  ───────────────────                                                                                                   | plain:2 accent+faint:19 plain:99
 21 |                                                                                                                        | plain:120

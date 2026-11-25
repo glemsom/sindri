@@ -19,9 +19,9 @@ card at 120x40
 13 |⋯ 1 call · 9 ms         │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
 14 |  The transcript's unit │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
 15 |  line, so the same run │ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
-16 |  the transcript and by │ Ctrl-X               drop the newest queued prompt                   │/sessions/9f2c7a41/tmp  | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
+16 |  the transcript and by │ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
 17 |                        │ ↓                    the line below                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
-18 |  construct │ where it s│ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
+18 |  construct │ where it s│ PgUp                 the transcript a band back                      │/sessions/9f2c7a41/tmp  | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 19 |  ──────────┼───────────│ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 20 |  heading   │ in the ans│ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
 21 |  code      │ behind a b│ Ctrl-D               the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25

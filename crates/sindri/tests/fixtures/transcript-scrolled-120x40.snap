@@ -15,13 +15,13 @@ transcript-scrolled at 120x40
 09 |█ a window is a row offset from the tail, so resolving one walks the          branch    spec/1-capability               | dim:1 plain:77 dim:10 plain:32
 10 |█ entries between the tail and the window and lays out every one of them                                                | dim:1 plain:119
 11 |█ on the way. Each is laid out once and kept, so the whole history            skills    2                               | dim:1 plain:77 dim:10 plain:32
-12 |█ scrolled through costs one layout per entry and scrolling it again costs                                              | dim:1 plain:119
-13 |█ none.                                                                       sandbox   bwrap                           | dim:1 plain:77 dim:10 plain:32
+12 |█ scrolled through costs one layout per entry and scrolling it again costs    ◆ bash                                    | dim:1 plain:77 accent:1 plain:41
+13 |█ none.                                                                       ◆ records                                 | dim:1 plain:77 accent:1 plain:41
 14 |█                                                                                                                       | dim:1 plain:119
-15 |█›what is the transcript's unit?                                              session   9f2c7a41                        | dim:1 plain:77 dim:10 plain:32
-16 |█ 1 call · 9 ms                                                               temp      …/sindri/sessions/9f2c7a41/tmp  | dim:1 plain:1 dim:13 plain:63 dim:10 plain:32
-17 |█ The transcript's unit is the entry. An entry never carries a formatted                                                | dim:1 plain:119
-18 |█ line, so the same run is drawn the same way by the TUI, by a reader of                                                | dim:1 plain:119
+15 |█›what is the transcript's unit?                                              sandbox   bwrap                           | dim:1 plain:77 dim:10 plain:32
+16 |█ 1 call · 9 ms                                                                                                         | dim:1 plain:1 dim:13 plain:105
+17 |█ The transcript's unit is the entry. An entry never carries a formatted      session   9f2c7a41                        | dim:1 plain:77 dim:10 plain:32
+18 |█ line, so the same run is drawn the same way by the TUI, by a reader of      temp      …/sindri/sessions/9f2c7a41/tmp  | dim:1 plain:77 dim:10 plain:32
 19 |█ the transcript and by whatever front end comes next.                                                                  | dim:1 plain:119
 20 |█                                                                                                                       | dim:1 plain:119
 21 |█ construct │ where it stands                                                                                           | dim:1 plain:1 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91

@@ -1137,8 +1137,8 @@ fn a_frame_handed_no_size_draws_no_ctx_row_and_counts_nothing_for_it() {
              block closes up under the turns"
     );
     assert!(
-        !rows.iter().any(|row| row.contains("more")),
-        "and the rail gave nothing up, so it counts nothing: no row may say so"
+        rows.iter().any(|row| row.trim() == "+2 more"),
+        "the unused row counts loaded skill names, not a missing context size"
     );
 
     let band = band(COLUMNS, 8);

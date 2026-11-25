@@ -2582,3 +2582,37 @@ fn a_value_re_spelled_to_the_words_it_already_says_keeps_its_big_text() {
          columns it states are the words it goes on saying"
     );
 }
+
+#[test]
+fn loaded_skill_names_keep_load_order_and_warm_marks() {
+    let names = vec!["code-review".to_owned(), "diagnosing-bugs".to_owned()];
+    let rows = skill_rows(&names, band(32, 10), 4);
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].parts[0].1, Part::Run("◆".to_owned(), Ink::Accent));
+    assert_eq!(rows[0].parts[1].1, Part::Run(names[0].clone(), Ink::Plain));
+    assert_eq!(rows[1].parts[1].1, Part::Run(names[1].clone(), Ink::Plain));
+}
+
+#[test]
+fn loaded_skills_count_names_kept_back_when_rows_run_out() {
+    let names = vec!["one".to_owned(), "two".to_owned(), "three".to_owned()];
+    let rows = skill_rows(&names, band(32, 10), 2);
+    assert_eq!(rows.len(), 2);
+    assert_eq!(
+        rows[1].parts[0].1,
+        Part::Run("+2 more".to_owned(), Ink::Muted)
+    );
+    assert!(skill_rows(&names, band(32, 10), 0).is_empty());
+}
+
+#[test]
+fn loaded_skill_names_fit_the_rail_without_scope_labels() {
+    let rows = skill_rows(&["a-very-long-skill-name".to_owned()], band(12, 10), 1);
+    assert!(
+        rows[0]
+            .parts
+            .iter()
+            .all(|(x, part)| x + part.columns() <= 12)
+    );
+    assert_eq!(rows[0].parts.len(), 2);
+}

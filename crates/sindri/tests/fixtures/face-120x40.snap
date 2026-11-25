@@ -27,13 +27,13 @@ face at 120x40
 21 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 22 |                                                                                                                        | plain:120
 23 |                                                                              skills    2                               | plain:78 dim:10 plain:32
-24 |                                                                                                                        | plain:120
-25 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
+24 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
+25 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
 26 |                                                                                                                        | plain:120
-27 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
-28 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
-29 |                                                                                                                        | plain:120
-30 |                                                                                                                        | plain:120
+27 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
+28 |                                                                                                                        | plain:120
+29 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
+30 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
 33 |                                                                                                                        | plain:120

@@ -15,13 +15,13 @@ streaming at 120x40
 09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
 11 |  ──────────┼───────────────────────────                                      skills    2                               | plain:2 dim:38 plain:38 dim:10 plain:32
-12 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
-13 |  code      │ behind a bar, highlighted                                       sandbox   bwrap                           | plain:11 dim:3 plain:64 dim:10 plain:32
+12 |  heading   │ in the answer's own gutter                                      ◆ bash                                    | plain:11 dim:3 plain:64 accent:1 plain:41
+13 |  code      │ behind a bar, highlighted                                       ◆ records                                 | plain:11 dim:3 plain:64 accent:1 plain:41
 14 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
-15 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
-16 |┃›what does a row of the band say?                                            temp      …/sindri/sessions/9f2c7a41/tmp  | dim:1 plain:77 dim:10 plain:32
-17 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
-18 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
+15 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
+16 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+17 |⋯ 1 call · 31 ms                                                              session   9f2c7a41                        | dim:1 plain:1 dim:14 plain:62 dim:10 plain:32
+18 |  A row is one line                                                           temp      …/sindri/sessions/9f2c7a41/tmp  | plain:2 plain+bold:17 plain:59 dim:10 plain:32
 19 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
 20 |                                                                                                                        | plain:120
 21 |  A row says the exit code and not the command, because the verdict is a                                                | plain:120

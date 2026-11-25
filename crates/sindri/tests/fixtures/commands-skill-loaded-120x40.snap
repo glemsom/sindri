@@ -1,10 +1,11 @@
 ---
 source: crates/sindri/tests/frame/mod.rs
+assertion_line: 210
 expression: self.text(name)
 ---
 commands-skill-loaded at 120x40
 00 |                                                                              skills    1                               | dim:120
-01 |                                                                                                                        | dim:120
+01 |                                                                              ◆ deploy                                  | dim:120
 02 |                                                                                                                        | dim:120
 03 |                                                                                                                        | dim:120
 04 |                                                                                                                        | dim:120
