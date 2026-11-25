@@ -5,15 +5,15 @@ expression: self.text(name)
 prompt-fold at 120x40
 00 |┃›why does the retry test fail?                                               wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
 01 |⋯ 1 call · 97 ms                                                              model     claude-sonnet-4-5-20250929      | dim:1 plain:1 dim:14 plain:62 dim:10 plain:32
-02 |  The retry test fails on the line the patch moved, and the output under      think     high                            | plain:78 dim:10 plain:32
-03 |  it says which.                                                                                                        | plain:120
-04 |                                                                              turns         6 /  250                    | plain:78 dim:10 plain:32
-05 |┃›the retry test fails on the line the patch moved, and only there            ctx       █░░░░░ 48.2k / 200k             | dim:1 plain:77 dim:10 plain:1 dim:5 plain:26
-06 |┃ say which line the patch moved, and which row of the output disagrees       cache     88%                             | dim:1 plain:77 dim:10 plain:32
-07 |┃ the report names the file it read and the line it stopped on                                                          | dim:1 plain:119
-08 |┃ give me the test name and the assertion it failed on                        workspace …/sindri/.worktrees/46-rail     | dim:1 plain:77 dim:10 plain:32
-09 |⋯ 4 rows kept back                                                            branch    spec/1-capability               | dim:1 plain:1 dim:16 plain:60 dim:10 plain:32
-10 |                                                                                                                        | plain:120
+02 |                                                                              think     high                            | plain:78 dim:10 plain:32
+03 |  The retry test fails on the line the patch moved, and the output under                                                | plain:120
+04 |  it says which.                                                              turns         6 /  250                    | plain:78 dim:10 plain:32
+05 |                                                                              ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
+06 |┃›the retry test fails on the line the patch moved, and only there            cache     88%                             | dim:1 plain:77 dim:10 plain:32
+07 |┃ say which line the patch moved, and which row of the output disagrees                                                 | dim:1 plain:119
+08 |┃ the report names the file it read and the line it stopped on                workspace …/sindri/.worktrees/46-rail     | dim:1 plain:77 dim:10 plain:32
+09 |┃ give me the test name and the assertion it failed on                        branch    spec/1-capability               | dim:1 plain:77 dim:10 plain:32
+10 |⋯ 4 rows kept back                                                                                                      | dim:1 plain:1 dim:16 plain:102
 11 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
 12 |                                                                                                                        | plain:120
 13 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32

@@ -4,16 +4,16 @@ expression: self.text(name)
 ---
 rail at 80x24
 00 |┃›where does rendering live?                                                    | dim:1 plain:79
-01 |✓ bash success 23 ms                                                            | ok:1 plain:13 dim:6 plain:60
-02 |  rg -n 'fence' src                                                             | plain:80
-03 |  src/rows.rs: the glyph a turn opens with                                      | muted:42 plain:38
-04 |  src/rows.rs: a word longer than a row is broken                               | muted:49 plain:31
-05 |  exit 0 · 412 bytes                                                            | dim:20 plain:60
-06 |  Rendering lives in the front end and not in the core, because an entry is a   | plain:80
-07 |  fact and never a rendering: the TUI and any reader draw one run from one      | plain:80
-08 |  value, and the core may not name a terminal at all.                           | plain:80
-09 |⠹ 4.2s                                                                          | accent:1 plain:1 dim:4 plain:74
-10 |                                                                                | plain:80
+01 |  │ ✓ bash success 23 ms                              │                         | dim:4 ok:1 plain:13 dim:6 plain:30 dim:1 plain:25
+02 |  │   rg -n 'fence' src                               │                         | dim:4 plain:50 dim:1 plain:25
+03 |  │   src/rows.rs: the glyph a turn opens with        │                         | dim:4 muted:42 plain:8 dim:1 plain:25
+04 |  │   src/rows.rs: a word longer than a row is broken │                         | dim:4 muted:49 plain:1 dim:1 plain:25
+05 |  │   exit 0 · 412 bytes                              │                         | dim:24 plain:30 dim:1 plain:25
+06 |                                                                                | plain:80
+07 |  Rendering lives in the front end and not in the core, because an entry is a   | plain:80
+08 |  fact and never a rendering: the TUI and any reader draw one run from one      | plain:80
+09 |  value, and the core may not name a terminal at all.                           | plain:80
+10 |⠹ 4.2s                                                                          | accent:1 plain:1 dim:4 plain:74
 11 |                                                                                | plain:80
 12 |                                                                                | plain:80
 13 |                                                                                | plain:80

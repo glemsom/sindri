@@ -7,9 +7,9 @@ prompt-flat at 120x40
 01 |┃ quotes the line the test fails on rather than the line the patch moved, because a reader reads the failure and never  | dim:1 plain:119
 02 |┃ the diff.                                                                                                             | dim:1 plain:119
 03 |⋯ 1 call · 23 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
-04 |  The third line of the patch: the retry the test waits on never lands, because the budget it counts is the turn's      | plain:120
-05 |  rather than the call's.                                                                                               | plain:120
-06 |                                                                                                                        | plain:120
+04 |                                                                                                                        | plain:120
+05 |  The third line of the patch: the retry the test waits on never lands, because the budget it counts is the turn's      | plain:120
+06 |  rather than the call's.                                                                                               | plain:120
 07 |                                                                                                                        | plain:120
 08 |                                                                                                                        | plain:120
 09 |                                                                                                                        | plain:120

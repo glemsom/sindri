@@ -3,12 +3,12 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 queue-long at 120x24
-00 |  heading   │ in the answer's own gutter                                      wire      anthropic                       | plain:11 dim:3 plain:64 dim:10 plain:32
-01 |  code      │ behind a bar, highlighted                                       model     claude-sonnet-4-5-20250929      | plain:11 dim:3 plain:64 dim:10 plain:32
-02 |  table     │ columns joined by a bar                                         think     high                            | plain:11 dim:3 plain:64 dim:10 plain:32
-03 |                                                                                                                        | plain:120
-04 |┃›what does a row of the band say?                                            turns         6 /  250                    | dim:1 plain:77 dim:10 plain:32
-05 |⋯ 1 call · 31 ms                                                              ctx       █░░░░░ 48.2k / 200k             | dim:1 plain:1 dim:14 plain:62 dim:10 plain:1 dim:5 plain:26
+00 |  code      │ behind a bar, highlighted                                       wire      anthropic                       | plain:11 dim:3 plain:64 dim:10 plain:32
+01 |  table     │ columns joined by a bar                                         model     claude-sonnet-4-5-20250929      | plain:11 dim:3 plain:64 dim:10 plain:32
+02 |                                                                              think     high                            | plain:78 dim:10 plain:32
+03 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+04 |⋯ 1 call · 31 ms                                                              turns         6 /  250                    | dim:1 plain:1 dim:14 plain:62 dim:10 plain:32
+05 |                                                                              ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
 06 |  A row is one line                                                           cache     88%                             | plain:2 plain+bold:17 plain:59 dim:10 plain:32
 07 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
 08 |                                                                              workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32

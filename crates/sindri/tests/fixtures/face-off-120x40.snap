@@ -4,15 +4,15 @@ expression: self.text(name)
 ---
 face-off at 120x40
 00 |┃›where does rendering live?                                                  wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
-01 |✓ bash success 23 ms                                                          model     claude-sonnet-4-5-20250929      | ok:1 plain:13 dim:6 plain:58 dim:10 plain:32
-02 |  rg -n 'fence' src                                                           think     high                            | plain:78 dim:10 plain:32
-03 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
-04 |  src/rows.rs: a word longer than a row is broken                             turns         6 /  250                    | muted:49 plain:29 dim:10 plain:32
-05 |  exit 0 · 412 bytes                                                          ctx       █░░░░░ 48.2k / 200k             | dim:20 plain:58 dim:10 plain:1 dim:5 plain:26
-06 |  Rendering lives in the front end and not in the core, because an entry      cache     88%                             | plain:78 dim:10 plain:32
-07 |  is a fact and never a rendering: the TUI and any reader draw one run                                                  | plain:120
-08 |  from one value, and the core may not name a terminal at all.                workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
-09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
+01 |  │ ✓ bash success 23 ms                              │                       model     claude-sonnet-4-5-20250929      | dim:4 ok:1 plain:13 dim:6 plain:30 dim:1 plain:23 dim:10 plain:32
+02 |  │   rg -n 'fence' src                               │                       think     high                            | dim:4 plain:50 dim:1 plain:23 dim:10 plain:32
+03 |  │   src/rows.rs: the glyph a turn opens with        │                                                                 | dim:4 muted:42 plain:8 dim:1 plain:65
+04 |  │   src/rows.rs: a word longer than a row is broken │                       turns         6 /  250                    | dim:4 muted:49 plain:1 dim:1 plain:23 dim:10 plain:32
+05 |  │   exit 0 · 412 bytes                              │                       ctx       █░░░░░ 48.2k / 200k             | dim:24 plain:30 dim:1 plain:23 dim:10 plain:1 dim:5 plain:26
+06 |                                                                              cache     88%                             | plain:78 dim:10 plain:32
+07 |  Rendering lives in the front end and not in the core, because an entry                                                | plain:120
+08 |  is a fact and never a rendering: the TUI and any reader draw one run        workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
+09 |  from one value, and the core may not name a terminal at all.                branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |                                                                                                                        | plain:120
 11 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
 12 |                                                                                                                        | plain:120
