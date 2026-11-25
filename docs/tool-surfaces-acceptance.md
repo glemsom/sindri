@@ -72,6 +72,5 @@ text-only/no-colour aesthetics, native terminal selection/copy and a supported
 multiplexer path remains unavailable and outstanding. Automated cells, programmatic
 copy, protocol bytes and decoded images are not terminal aesthetic verification.
 
-Changes remain uncommitted: Git metadata and the checked-out integration worktree
-are outside this session's writable boundary. No integration merge was attempted.
-Manual visual acceptance is not claimed complete.
+The coordinating agent committed and merged all ticket and review-fix work onto
+`integration/593-tool-surfaces`. Manual visual acceptance is not claimed complete.
