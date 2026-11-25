@@ -1,4 +1,5 @@
 mod caps;
+#[allow(dead_code)]
 mod fixture;
 mod frame;
 
