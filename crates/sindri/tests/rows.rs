@@ -681,7 +681,7 @@ fn the_readers_own_words_open_the_exchange_and_no_row_names_them() {
 }
 
 #[test]
-fn a_row_handed_a_band_is_claimed_in_its_ground_across_the_whole_band_before_its_words() {
+fn a_prompt_row_claims_its_inset_ground_and_leaves_the_right_margin_on_the_well() {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 0, 40, 1);
     let well = Row::of([(String::from("a word of the conversation"), Ink::Muted)]);
@@ -715,7 +715,12 @@ fn a_row_handed_a_band_is_claimed_in_its_ground_across_the_whole_band_before_its
         for x in area.x..area.right() {
             let cell = buffer.cell((x, 0)).expect("a cell of the band");
             assert_eq!(
-                cell.bg, ground,
+                cell.bg,
+                if x >= area.right() - sindri::rows::MARGIN {
+                    palette.band(Band::Well)
+                } else {
+                    ground
+                },
                 "column {x} of {row:?} is drawn on {:?}: a row handed a band claims the whole \
                  width of it before its words, and a row handed none is drawn exactly as it was, \
                  over the ground it found",

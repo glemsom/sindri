@@ -1455,7 +1455,14 @@ fn submitted_prompt_surfaces_preserve_literal_rows_and_ownership_across_capabili
             for y in band.y..band.bottom() {
                 if frame.cell(band.x, y).symbol() == "┃" {
                     for x in band.x..band.right() - 2 {
-                        assert_eq!(frame.cell(x, y).bg, palette.band(Band::Prompt));
+                        assert_eq!(
+                            frame.cell(x, y).bg,
+                            if pictured {
+                                ratatui::style::Color::Reset
+                            } else {
+                                palette.band(Band::Prompt)
+                            }
+                        );
                     }
                     for x in band.right() - 2..band.right() {
                         assert_eq!(
@@ -1595,4 +1602,205 @@ fn submitted_prompt_fold_counts_follow_width_and_closing_keeps_the_inset_surface
             Palette::TRUECOLOR.band(Band::Prompt)
         );
     }
+}
+
+#[test]
+fn illuminated_prompts_keep_native_words_and_independent_unmasked_surfaces() {
+    let entries = || {
+        Transcript::of(vec![
+            Entry::Prompt {
+                text: SecretSet::default().redact("first 界 prompt"),
+            },
+            Entry::Prompt {
+                text: SecretSet::default().redact("second prompt"),
+            },
+        ])
+    };
+    let mut lit = View::of(caps::pictured(), railed(), entries());
+    let mut flat = View::of(caps::inked(Palette::TRUECOLOR), railed(), entries());
+    let lit_frame = frame::painted(&mut lit, 80, 24);
+    let flat_frame = frame::painted(&mut flat, 80, 24);
+    assert_eq!(lit_frame.words(), flat_frame.words());
+    let mut held = sindri::plane::Held::default();
+    let wire = String::from_utf8(held.pass(lit_frame.told().placements(), lit.planes())).unwrap();
+    assert_eq!(
+        wire.matches("a=T").count(),
+        lit_frame.told().placements().len()
+    );
+    for words in ["first 界 prompt", "second prompt"] {
+        let (y, x) = lit_frame.drawn_at(if words.starts_with("first") {
+            "first"
+        } else {
+            words
+        });
+        assert_eq!(lit_frame.cell(x, y).bg, ratatui::style::Color::Reset);
+    }
+    assert!(
+        held.pass(lit_frame.told().placements(), lit.planes())
+            .is_empty()
+    );
+}
+
+#[test]
+fn illuminated_prompts_scroll_by_placement_then_release_and_return_without_ghosts() {
+    let mut entries = vec![Entry::Prompt {
+        text: SecretSet::default().redact("landmark prompt"),
+    }];
+    for n in 0..60 {
+        entries.push(Entry::Prompt {
+            text: SecretSet::default().redact(format!("later prompt {n}")),
+        });
+    }
+    let mut view = View::of(caps::pictured(), railed(), Transcript::of(entries));
+    let mut held = sindri::plane::Held::default();
+    frame::painted(&mut view, 80, 24);
+    while view.key(Key::PageUp) == Outcome::Edited {
+        frame::painted(&mut view, 80, 24);
+    }
+    let top = frame::painted(&mut view, 80, 24);
+    assert!(
+        top.words()
+            .iter()
+            .any(|row| row.contains("landmark prompt"))
+    );
+    held.pass(top.told().placements(), view.planes());
+    view.key(Key::PageDown);
+    let away = frame::painted(&mut view, 80, 24);
+    let wire = String::from_utf8(held.pass(away.told().placements(), view.planes())).unwrap();
+    assert!(
+        wire.contains("a=d,d=I"),
+        "offscreen Prompt resources are released: {wire}"
+    );
+    view.key(Key::PageUp);
+    let back = frame::painted(&mut view, 80, 24);
+    let wire = String::from_utf8(held.pass(back.told().placements(), view.planes())).unwrap();
+    assert!(wire.contains("a=T"));
+    assert!(
+        String::from_utf8(held.forget())
+            .unwrap()
+            .contains("a=d,d=I")
+    );
+    assert!(held.forget().is_empty());
+}
+
+#[test]
+fn illuminated_prompt_clipping_moves_the_original_pixels_and_preserves_end_corners() {
+    let words = (0..18)
+        .map(|n| format!("literal row {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut entries = vec![Entry::Prompt {
+        text: SecretSet::default().redact(words),
+    }];
+    for n in 0..12 {
+        entries.push(Entry::Prompt {
+            text: SecretSet::default().redact(format!("tail {n}")),
+        });
+    }
+    let mut view = View::of(caps::pictured(), railed(), Transcript::of(entries));
+    let mut held = sindri::plane::Held::default();
+    frame::painted(&mut view, 80, 24);
+    while view.key(Key::PageUp) == Outcome::Edited {
+        frame::painted(&mut view, 80, 24);
+    }
+    let top = frame::painted(&mut view, 80, 24);
+    let band = top.told().layout().unwrap().transcript;
+    let (y, x) = top.drawn_at("literal row 0");
+    view.pointer(top.told(), Pointer::Press(Cell::new(y, x)));
+    let opened = frame::painted(&mut view, 80, 24);
+    let surfaces: Vec<_> = opened
+        .told()
+        .placements()
+        .iter()
+        .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
+        .collect();
+    assert!(!surfaces.is_empty());
+    for p in &surfaces {
+        assert_eq!(p.cells().intersection(band), p.cells());
+    }
+    held.pass(opened.told().placements(), view.planes());
+    view.pointer(opened.told(), Pointer::Wheel(sindri::pointer::Notch::Down));
+    let moved = frame::painted(&mut view, 80, 24);
+    let wire = String::from_utf8(held.pass(moved.told().placements(), view.planes())).unwrap();
+    assert!(
+        wire.contains("a=p"),
+        "scrolling a still-visible surface reuses its pixels"
+    );
+    let prompt = moved
+        .told()
+        .placements()
+        .iter()
+        .find(|p| {
+            matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_))
+                && p.shows().is_some_and(|crop| crop.y > 0)
+        })
+        .unwrap();
+    assert!(prompt.shows().unwrap().y > 0);
+    let plane = view.planes().image(prompt.shade()).unwrap();
+    assert_ne!(
+        plane.pixels().get_pixel(0, 0),
+        plane.pixels().get_pixel(4, 4)
+    );
+    for pixel in plane.pixels().pixels() {
+        let color = ratatui::style::Color::Rgb(pixel[0], pixel[1], pixel[2]);
+        let luminance = |color| {
+            let c = sindri::palette::channels(color).unwrap().map(|v| {
+                let v = f64::from(v) / 255.0;
+                if v <= 0.04045 {
+                    v / 12.92
+                } else {
+                    ((v + 0.055) / 1.055).powf(2.4)
+                }
+            });
+            c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722
+        };
+        let ink = luminance(opened.palette().ink(Ink::Plain).0);
+        let surface = luminance(color);
+        assert!((ink.max(surface) + 0.05) / (ink.min(surface) + 0.05) >= 4.5);
+    }
+}
+
+#[test]
+fn illuminated_prompts_fall_back_without_colour_and_draft_edits_send_no_surface_payload() {
+    for caps in [
+        caps::inked(Palette::TRUECOLOR),
+        caps::inked(Palette::ANSI),
+        caps::uncoloured(),
+    ] {
+        let mut view = View::of(
+            caps,
+            railed(),
+            Transcript::of([Entry::Prompt {
+                text: SecretSet::default().redact("fallback prompt"),
+            }]),
+        );
+        let frame = frame::painted(&mut view, 80, 24);
+        assert!(
+            !frame
+                .told()
+                .placements()
+                .iter()
+                .any(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
+        );
+        assert!(
+            frame
+                .words()
+                .iter()
+                .any(|row| row.contains("fallback prompt"))
+        );
+    }
+    let mut view = View::of(
+        caps::pictured(),
+        railed(),
+        Transcript::of([Entry::Prompt {
+            text: SecretSet::default().redact("static prompt"),
+        }]),
+    );
+    let mut held = sindri::plane::Held::default();
+    let first = frame::painted(&mut view, 80, 24);
+    held.pass(first.told().placements(), view.planes());
+    view.key(Key::Char('a'));
+    let edited = frame::painted(&mut view, 80, 24);
+    let wire = String::from_utf8(held.pass(edited.told().placements(), view.planes())).unwrap();
+    assert!(!wire.contains("a=T"));
 }

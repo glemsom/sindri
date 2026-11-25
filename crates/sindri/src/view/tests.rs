@@ -1552,7 +1552,11 @@ fn the_prompt_in_the_transcript_keeps_the_band_it_is_read_on_beside_the_seam() {
         for x in laid.transcript.x..rail.x.saturating_sub(MARGIN) {
             assert_eq!(
                 under(&buffer, x, asked),
-                palette.band(Band::Prompt),
+                if draws {
+                    Color::Reset
+                } else {
+                    palette.band(Band::Prompt)
+                },
                 "column {x} of the prompt's row in the frame that places {} a picture is not the \
                  band the reader's own words are read on: no column beside the rail is claimed \
                  in the seam's ink",

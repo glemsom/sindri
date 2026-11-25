@@ -1382,6 +1382,35 @@ impl View {
             let rows = self.rows.rows(piece.entry);
             let first = usize::from(piece.skip);
             let shown = &rows[first..first + usize::from(piece.rows)];
+            let surface_start = rows
+                .iter()
+                .position(|row| row.stands_on() == Some(crate::palette::Band::Prompt));
+            let surface_end = rows
+                .iter()
+                .rposition(|row| row.stands_on() == Some(crate::palette::Band::Prompt));
+            let decoration = surface_start.zip(surface_end).and_then(|(start, end)| {
+                let from = first.max(start);
+                let to = (first + shown.len()).min(end + 1);
+                if from >= to {
+                    return None;
+                }
+                Placement::prompt(
+                    u32::try_from(piece.entry).ok()?,
+                    Rect::new(
+                        area.x,
+                        y + u16::try_from(from - first).ok()?,
+                        area.width.saturating_sub(MARGIN),
+                        u16::try_from(to - from).ok()?,
+                    ),
+                    u16::try_from(end + 1 - start).ok()?,
+                    u16::try_from(from - start).ok()?,
+                    self.capabilities.pictures().cell(),
+                    &palette,
+                )
+            });
+            if let Some(placement) = decoration {
+                painted.shaded(placement);
+            }
             for (offset, row) in shown.iter().enumerate() {
                 row.paint(
                     Rect {
@@ -1394,6 +1423,13 @@ impl View {
                     &mut painted.links,
                     &mut painted.sizes,
                 );
+                if let Some(placement) = decoration
+                    && placement.cells().contains((area.x, y).into())
+                {
+                    for x in placement.cells().x..placement.cells().right() {
+                        buffer[(x, y)].set_bg(ratatui::style::Color::Reset);
+                    }
+                }
                 if let Some(thumb) = &thumb {
                     thumb.paint(area, y, buffer, &self.capabilities.palette());
                 }

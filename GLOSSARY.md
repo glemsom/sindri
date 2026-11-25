@@ -263,7 +263,10 @@ of it visible between two pixels. A band's joint is a light that goes the other 
 joint and a hairline on the band's own edge, at one weight on both axes. The light the **Caret**
 casts is a plane of its own over the band under the composer's **Seam**, and it is no light on a
 joint: it is placed again on the column the caret moved to and is made again for no keystroke. A
-plane covers the band's own columns and no column of the band beside it, and a frame holds one image
+submitted **Prompt** holds a bounded plane inside its occupied footprint, with corners at its
+actual ends, a warm rim, upper-edge light and shallow shadow. This decoration uses the prompt
+rung's proved lift, adds no rows, and leaves words and Fold counts in native cells. A band plane
+covers the band's own columns and no column of the band beside it, and a frame holds one image
 under each band, one under each **Instrument**, and one under that light, each by its own identity,
 placed at one depth that a cell carrying a background still wins over. A terminal that places no picture, or a band in a palette
 with no colour, is given none, and the band's own rows are claimed from its shade.
@@ -274,7 +277,9 @@ The pictures a terminal is keeping and the cells each of them stands on, recorde
 module, which answers what one pass of a frame adds, moves and gives back and every byte the
 terminal is written for them: a picture is sent once under an identity of its own, put on the cells
 it stands on now with no pixel of it travelling, and given back by that identity when the frame no
-longer holds it. The terminal keeps no record of them — the bytes are written where the frame is
+longer holds it. Each visible Prompt has its own identity, apart from band and answer pictures;
+leaving view releases its placement and image data, so retained resources follow the visible band.
+The terminal keeps no record of them — the bytes are written where the frame is
 written — and holds only the file descriptors, the bracket a frame is opened and closed in, the order
 its writes stand in, and the face's own animation, which is the frame's to ask for.
 _Avoid_: State, cache, registry, scrollback
@@ -285,7 +290,8 @@ its rows is claimed in and the cell of it the frame's
 **Seam** is drawn in — the transcript band on the well, the rail on its own tone on every row of it,
 the composer's band drawn in the band a prompt is read on and closing into the rail's tone on its
 last row; and the rail's first column and the composer's head row are the seam's, drawn in the
-plane's pixels. It holds every fact its **Plane** is drawn from and nothing else: the cell the plane
+plane's pixels. It holds every fact its **Plane** is drawn from and nothing else: for a bounded Prompt, its complete footprint and owning identity as well as
+its rung, rim and light, with the visible crop belonging only to Placement; the cell the plane
 is drawn at, the light its band carries — the peak it spends of the proved lift and the rect that
 light is a lamp around — and a frame holds each band's image against it, so a pass in which it
 stands makes no image. A shade holds no placement: the cells it stands on are a **Placement**'s and

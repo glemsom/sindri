@@ -88,9 +88,23 @@ impl Pictures {
                     return;
                 };
                 *self.rasterises.entry(source).or_default() += 1;
-                let placed = Rc::new(RefCell::new(
-                    picker.new_resize_protocol(image::DynamicImage::ImageRgba8(pixels)),
-                ));
+                static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1024);
+                let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                assert!(id < 0x8000_0000, "picture identities exhausted");
+                let image = image::DynamicImage::ImageRgba8(pixels);
+                let mut kind = picker
+                    .new_resize_protocol(image.clone())
+                    .protocol_type_owned();
+                if let ratatui_image::protocol::StatefulProtocolType::Kitty(kitty) = &mut kind {
+                    kitty.unique_id = id;
+                }
+                let source = ratatui_image::protocol::ImageSource::new(
+                    image,
+                    picker.font_size(),
+                    image::Rgba([0, 0, 0, 0]),
+                );
+                let protocol = StatefulProtocol::new(source, picker.font_size(), kind);
+                let placed = Rc::new(RefCell::new(protocol));
                 self.held.insert(key, placed.clone());
                 placed
             }

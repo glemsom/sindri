@@ -46,6 +46,7 @@ pub enum PlaneId {
     Gauge,
     Bar(Bar),
     Bezel,
+    Prompt(u32),
 }
 
 impl PlaneId {
@@ -74,6 +75,7 @@ impl PlaneId {
             PlaneId::Bar(Bar::Input) => 339,
             PlaneId::Bar(Bar::Output) => 340,
             PlaneId::Bezel => 341,
+            PlaneId::Prompt(id) => 0x8000_0000 | id,
         }
     }
 }
@@ -110,6 +112,16 @@ impl Size {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
+    Prompt {
+        id: u32,
+        size: Size,
+        cell: CellSize,
+        tone: Color,
+        well: Color,
+        accent: Color,
+        peak: u8,
+        weight: u8,
+    },
     Transcript {
         size: Size,
         cell: Option<CellSize>,
@@ -175,6 +187,7 @@ enum Kind {
 impl Shade {
     pub fn id(&self) -> PlaneId {
         match self.kind {
+            Kind::Prompt { id, .. } => PlaneId::Prompt(id),
             Kind::Transcript { .. } => PlaneId::Transcript,
             Kind::Rail { .. } => PlaneId::Rail,
             Kind::Composer { .. } => PlaneId::Composer,
@@ -187,6 +200,7 @@ impl Shade {
 
     pub fn row(&self, row: u16) -> Color {
         match self.kind {
+            Kind::Prompt { tone, .. } => tone,
             Kind::Transcript { well, .. } => well,
             Kind::Rail { tone, .. }
             | Kind::Gauge { tone, .. }
@@ -215,7 +229,8 @@ impl Shade {
 
     fn size(&self) -> Size {
         match self.kind {
-            Kind::Transcript { size, .. }
+            Kind::Prompt { size, .. }
+            | Kind::Transcript { size, .. }
             | Kind::Rail { size, .. }
             | Kind::Composer { size, .. }
             | Kind::Gauge { size, .. }
@@ -229,7 +244,8 @@ impl Shade {
     fn seam(&self) -> Option<Seam> {
         match self.kind {
             Kind::Rail { seam, .. } | Kind::Composer { seam, .. } => seam,
-            Kind::Transcript { .. }
+            Kind::Prompt { .. }
+            | Kind::Transcript { .. }
             | Kind::Caret { .. }
             | Kind::Gauge { .. }
             | Kind::Bar { .. }
@@ -242,7 +258,8 @@ impl Shade {
             Kind::Transcript { cell, .. }
             | Kind::Rail { cell, .. }
             | Kind::Composer { cell, .. } => cell,
-            Kind::Caret { cell, .. }
+            Kind::Prompt { cell, .. }
+            | Kind::Caret { cell, .. }
             | Kind::Gauge { cell, .. }
             | Kind::Bar { cell, .. }
             | Kind::Bezel { cell, .. } => Some(cell),
@@ -287,7 +304,7 @@ impl Shade {
                 };
                 Light::lamp(peak, centre, reach)
             }
-            Kind::Rail { .. } | Kind::Composer { .. } => Light::NONE,
+            Kind::Prompt { .. } | Kind::Rail { .. } | Kind::Composer { .. } => Light::NONE,
             Kind::Gauge { .. } | Kind::Bar { .. } | Kind::Bezel { .. } => Light::NONE,
             Kind::Caret { size, peak, .. } => Light::lamp(
                 peak,
@@ -312,6 +329,40 @@ impl Shade {
         let cell = self.cell()?;
         let size = self.size();
         match self.kind {
+            Kind::Prompt {
+                tone,
+                well,
+                accent,
+                peak,
+                weight,
+                ..
+            } => {
+                let (width, height) = size.pixels(cell);
+                let radius = (cell.height() / 4).max(1) as f64;
+                let tone = channels(tone)?;
+                let well = channels(well)?;
+                let accent = channels(accent)?;
+                return Some(image::RgbaImage::from_fn(width, height, |x, y| {
+                    let dx = f64::from(x.min(width - 1 - x));
+                    let dy = f64::from(y.min(height - 1 - y));
+                    let corner =
+                        ((radius - dx).max(0.0).powi(2) + (radius - dy).max(0.0).powi(2)).sqrt();
+                    if corner > radius {
+                        return image::Rgba(opaque(well));
+                    }
+                    let edge = dx.min(dy);
+                    if edge < 1.0 || corner > radius - 1.0 {
+                        return image::Rgba(lit(tone, accent, peak));
+                    }
+                    let light =
+                        f64::from(peak) * (-f64::from(y) / f64::from(cell.height().max(1))).exp();
+                    let shadow = f64::from(weight) * (-(f64::from(height - 1 - y)) / 2.0).exp();
+                    let spend = dithered(light - shadow, (x, y));
+                    image::Rgba(opaque(
+                        tone.map(|at| (i32::from(at) + spend).clamp(0, 255) as u8),
+                    ))
+                }));
+            }
             Kind::Gauge {
                 tone,
                 calm,
@@ -638,6 +689,46 @@ pub struct Placement {
 }
 
 impl Placement {
+    pub(crate) fn prompt(
+        id: u32,
+        cells: Rect,
+        rows: u16,
+        skip: u16,
+        cell: Option<CellSize>,
+        palette: &Palette,
+    ) -> Option<Placement> {
+        let cell = cell?;
+        let tone = palette.band(Band::Prompt);
+        channels(tone)?;
+        if !covers(cells) || rows == 0 || id >= 0x8000_0000 {
+            return None;
+        }
+        Some(Placement {
+            shade: Shade {
+                kind: Kind::Prompt {
+                    id,
+                    size: Size {
+                        cols: cells.width,
+                        rows,
+                    },
+                    cell,
+                    tone,
+                    well: palette.band(Band::Well),
+                    accent: palette.ink(Ink::Accent).0,
+                    peak: palette.peak(Band::Prompt),
+                    weight: palette.seam() / 3,
+                },
+            },
+            cells,
+            shows: Some(image::math::Rect {
+                x: 0,
+                y: u32::from(skip) * cell.height(),
+                width: u32::from(cells.width) * cell.width(),
+                height: u32::from(cells.height) * cell.height(),
+            }),
+        })
+    }
+
     /// The transcript band: the well its prose is read on, lit at its head.
     pub fn transcript(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Placement> {
         if !covers(area) {
@@ -1197,12 +1288,19 @@ fn transmit(sent: &mut Vec<u8>, head: &str, encoded: &str) {
 }
 
 fn delete(id: PlaneId) -> Vec<u8> {
-    format!("\x1b_Ga=d,d=i,i={},q=2\x1b\\", id.image()).into_bytes()
+    let mode = if matches!(id, PlaneId::Prompt(_)) {
+        'I'
+    } else {
+        'i'
+    };
+    format!("\x1b_Ga=d,d={mode},i={},q=2\x1b\\", id.image()).into_bytes()
 }
 
 /// The bytes that give every picture the frame can hold back, each identity named once.
 pub fn give_back() -> Vec<u8> {
-    PlaneId::ALL.into_iter().flat_map(delete).collect()
+    let mut bytes: Vec<u8> = PlaneId::ALL.into_iter().flat_map(delete).collect();
+    bytes.extend_from_slice(b"\x1b_Ga=d,d=A,q=2\x1b\\");
+    bytes
 }
 
 /// The face's picture sent at `at`, each frame past the root composed against it in the overwrite

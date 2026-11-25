@@ -266,7 +266,7 @@ fn band_of(placement: &Placement) -> Band {
     match placement.shade().id() {
         PlaneId::Transcript => Band::Well,
         PlaneId::Rail | PlaneId::Gauge | PlaneId::Bar(_) | PlaneId::Bezel => Band::Rail,
-        PlaneId::Composer | PlaneId::Caret | PlaneId::Face => Band::Prompt,
+        PlaneId::Prompt(_) | PlaneId::Composer | PlaneId::Caret | PlaneId::Face => Band::Prompt,
     }
 }
 
@@ -2294,7 +2294,7 @@ fn giving_every_identity_back_names_each_picture_the_frame_can_hold_exactly_once
     }
     assert_eq!(
         giving.matches("_Ga=d").count(),
-        PlaneId::ALL.len(),
+        PlaneId::ALL.len() + 1,
         "and the identities given back are the ones the frame can hold, and no other: {giving:?}"
     );
 }

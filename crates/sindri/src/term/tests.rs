@@ -1523,3 +1523,37 @@ fn a_doubled_grapheme_run_keeps_its_words_and_the_adjacent_cell() {
     assert!(drawn.contains("\x1b]66;s=2:w=2;界\x1b\\"), "{drawn:?}");
     assert!(drawn.contains('!'), "{drawn:?}");
 }
+
+#[test]
+fn illuminated_prompts_are_written_under_native_text_in_the_frame_bracket_and_released_on_clear() {
+    let writes = Writes::default();
+    let mut canvas = canvas_over(&writes, painted_at());
+    let mut view = View::of(
+        pictured(),
+        Facts::default().asked(),
+        Transcript::of([
+            Entry::Prompt {
+                text: SecretSet::default().redact("native prompt"),
+            },
+            Entry::Prompt {
+                text: SecretSet::default().redact("another prompt"),
+            },
+        ]),
+    );
+    paint(&mut canvas, &mut view).unwrap();
+    let first = carried(&writes.kept()).concat();
+    let close = std::str::from_utf8(CLOSE_FRAME).unwrap();
+    let inside = &first[..first.find(close).unwrap()];
+    assert!(inside.contains("native prompt"));
+    assert!(inside.contains("a=T"));
+    let uploads = first.matches("a=T").count();
+    paint(&mut canvas, &mut view).unwrap();
+    assert_eq!(
+        carried(&writes.kept()).concat().matches("a=T").count(),
+        uploads
+    );
+    RatatuiBackend::clear(canvas.backend_mut()).unwrap();
+    drop(canvas);
+    let wire = carried(&writes.kept()).concat();
+    assert_eq!(wire.matches("a=d,d=I").count(), 2);
+}
