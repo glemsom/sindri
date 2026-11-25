@@ -14,14 +14,14 @@ prompt-fold at 120x40
 08 |┃ give me the test name and the assertion it failed on                        workspace …/sindri/.worktrees/46-rail     | dim:1 plain:77 dim:10 plain:32
 09 |⋯ 4 rows kept back                                                            branch    spec/1-capability               | dim:1 plain:1 dim:16 plain:60 dim:10 plain:32
 10 |                                                                                                                        | plain:120
-11 |                                                                              skills    2                               | plain:78 dim:10 plain:32
-12 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
-13 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
-14 |                                                                                                                        | plain:120
-15 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
-16 |                                                                                                                        | plain:120
-17 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
-18 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+11 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
+12 |                                                                                                                        | plain:120
+13 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
+14 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+15 |                                                                                                                        | plain:120
+16 |                                                                              skills    2                               | plain:78 dim:10 plain:32
+17 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
+18 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
 19 |                                                                                                                        | plain:120
 20 |                                                                                                                        | plain:120
 21 |                                                                                                                        | plain:120

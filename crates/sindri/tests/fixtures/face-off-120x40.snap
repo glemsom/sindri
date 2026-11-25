@@ -4,24 +4,24 @@ expression: self.text(name)
 ---
 face-off at 120x40
 00 |┃›where does rendering live?                                                  wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
-01 |✓ bash                                                                        model     claude-sonnet-4-5-20250929      | ok:1 plain:1 dim:4 plain:72 dim:10 plain:32
+01 |✓ bash success 23 ms                                                          model     claude-sonnet-4-5-20250929      | ok:1 plain:13 dim:6 plain:58 dim:10 plain:32
 02 |  rg -n 'fence' src                                                           think     high                            | plain:78 dim:10 plain:32
-03 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
-04 |  src/rows.rs: the glyph a turn opens with                                    turns         6 /  250                    | muted:42 plain:36 dim:10 plain:32
-05 |  src/rows.rs: a word longer than a row is broken                             ctx       █░░░░░ 48.2k / 200k             | muted:49 plain:29 dim:10 plain:1 dim:5 plain:26
+03 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
+04 |  src/rows.rs: a word longer than a row is broken                             turns         6 /  250                    | muted:49 plain:29 dim:10 plain:32
+05 |  exit 0 · 412 bytes                                                          ctx       █░░░░░ 48.2k / 200k             | dim:20 plain:58 dim:10 plain:1 dim:5 plain:26
 06 |  Rendering lives in the front end and not in the core, because an entry      cache     88%                             | plain:78 dim:10 plain:32
 07 |  is a fact and never a rendering: the TUI and any reader draw one run                                                  | plain:120
 08 |  from one value, and the core may not name a terminal at all.                workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |                                                                                                                        | plain:120
-11 |                                                                              skills    2                               | plain:78 dim:10 plain:32
-12 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
-13 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
-14 |                                                                                                                        | plain:120
-15 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
-16 |                                                                                                                        | plain:120
-17 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
-18 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+11 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
+12 |                                                                                                                        | plain:120
+13 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
+14 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+15 |                                                                                                                        | plain:120
+16 |                                                                              skills    2                               | plain:78 dim:10 plain:32
+17 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
+18 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
 19 |                                                                                                                        | plain:120
 20 |                                                                                                                        | plain:120
 21 |                                                                                                                        | plain:120

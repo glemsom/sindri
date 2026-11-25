@@ -690,22 +690,21 @@ fn opening(
     exit: Option<Exit>,
 ) -> Vec<Row> {
     let words = spell::of(name, arguments);
-    let (marker, ink) = match exit {
-        Some(exit) => (mark(exit).to_string(), ink_of(exit)),
-        None => (PENDING.to_string(), Ink::Dim),
-    };
-    let mut rows = vec![marked(
-        &marker,
-        ink,
-        vec![(String::from(name), Ink::Dim)],
-        cols,
-    )];
-    rows.extend(body(
+    let mut rows = tool_head(name, exit, None, cols);
+    let gutter = pen::cells(margin(INDENT, cols).0);
+    let mut invocation = body(
         &words,
         cols,
         way(name, arguments, &words, ground),
         Ink::Plain,
-    ));
+    );
+    for row in &mut invocation {
+        *row = row.clone().fenced(usize::MAX, gutter).sourced("");
+    }
+    if let Some(row) = invocation.first_mut() {
+        *row = row.clone().sourced(words);
+    }
+    rows.extend(invocation);
     rows
 }
 
@@ -727,28 +726,58 @@ fn result_rows(
     elapsed_ms: u64,
     cols: u16,
 ) -> Vec<Row> {
-    let mut rows = vec![settled(name, exit, bytes, elapsed_ms, cols)];
-    rows.extend(body(text, cols, None, Ink::Muted));
+    let mut rows = name.map_or_else(Vec::new, |name| {
+        tool_head(name, exit, Some(elapsed_ms), cols)
+    });
+    let gutter = margin(INDENT, cols).0;
+    rows.extend(text.split('\n').filter(|_| !text.is_empty()).map(|line| {
+        Row::of([
+            (String::from(gutter), Ink::Muted),
+            (String::from(line), Ink::Muted),
+        ])
+        .fenced(usize::MAX - 1, pen::cells(gutter))
+        .sourced(line)
+    }));
+    let detail = match exit {
+        Some(exit) => format!("{} · {bytes} bytes", exit.word()),
+        None => format!("{bytes} bytes"),
+    };
+    rows.extend(body(&detail, cols, None, Ink::Dim));
     rows
 }
 
-fn settled(name: Option<&str>, exit: Option<Exit>, bytes: u64, elapsed_ms: u64, cols: u16) -> Row {
-    let numbers = match name {
-        Some(name) => format!("{name}  {elapsed_ms} ms · {bytes} bytes"),
-        None => format!("{elapsed_ms} ms · {bytes} bytes"),
+fn tool_head(name: &str, exit: Option<Exit>, elapsed_ms: Option<u64>, cols: u16) -> Vec<Row> {
+    let (marker, ink, outcome) = match (exit, elapsed_ms) {
+        (Some(exit), _) if exit.is_ok() => (CHECK, Ink::Ok, String::from("success")),
+        (Some(exit), _) => (CROSS, Ink::Err, format!("failure {}", exit.word())),
+        (None, Some(_)) => (CHECK, Ink::Dim, String::from("completed")),
+        (None, None) => (PENDING, Ink::Dim, String::from("running")),
     };
-    match exit {
-        Some(exit) => marked(
-            &mark(exit).to_string(),
-            ink_of(exit),
-            vec![(format!("{}  {numbers}", exit.word()), Ink::Dim)],
-            cols,
-        ),
-        None => {
-            let (gutter, room) = margin(INDENT, cols);
-            fitted(vec![(numbers, Ink::Dim)], room).guttered(gutter, Ink::Plain)
-        }
-    }
+    let words = format!("{name} {outcome}");
+    let duration = elapsed_ms
+        .map(|ms| format!(" {}", took(ms)))
+        .filter(|duration| {
+            pen::cells(&words)
+                .saturating_add(pen::cells(duration))
+                .saturating_add(2)
+                <= cols
+        });
+    let room = margin(INDENT, cols).1;
+    wrap(&words, room)
+        .into_iter()
+        .enumerate()
+        .map(|(at, line)| {
+            if at == 0 {
+                let mut spans = vec![(line, Ink::Plain)];
+                if let Some(duration) = &duration {
+                    spans.push((duration.clone(), Ink::Dim));
+                }
+                marked(&marker.to_string(), ink, spans, cols)
+            } else {
+                words_past(margin(INDENT, cols).0, Ink::Plain, Ink::Plain, line, cols)
+            }
+        })
+        .collect()
 }
 
 fn answered(
@@ -778,13 +807,16 @@ fn answered(
         rows.extend(under);
         return (rows, kept);
     };
-    let mut rows = opening(
+    let invocation = opening(
         &name.to_string(),
         &arguments.to_string(),
         cols,
         ground,
         *exit,
     );
+    let mut rows = tool_head(&name.to_string(), *exit, Some(*elapsed_ms), cols);
+    let live_head = tool_head(&name.to_string(), *exit, None, cols).len();
+    rows.extend(invocation.into_iter().skip(live_head));
     let (under, kept) = folded(
         result_rows(None, *exit, &text.to_string(), *bytes, *elapsed_ms, cols),
         cols,
@@ -799,14 +831,6 @@ pub(crate) fn stop_mark(stop: &Stop) -> (char, Ink) {
         Stop::Final => (CHECK, Ink::Ok),
         Stop::MaxTurns | Stop::Budget(_) | Stop::Cancelled | Stop::Error(_) => (CROSS, Ink::Err),
     }
-}
-
-fn mark(exit: Exit) -> char {
-    if exit.is_ok() { CHECK } else { CROSS }
-}
-
-fn ink_of(exit: Exit) -> Ink {
-    if exit.is_ok() { Ink::Ok } else { Ink::Err }
 }
 
 fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
@@ -1679,7 +1703,10 @@ impl Rows {
         let lines: Vec<&str> = rows
             .iter()
             .filter(|row| row.line_of(fence))
-            .map(|row| row.source().unwrap_or_default())
+            .filter_map(|row| {
+                row.source()
+                    .filter(|source| fence != usize::MAX || !source.is_empty())
+            })
             .collect();
         (!lines.is_empty()).then(|| lines.join("\n"))
     }

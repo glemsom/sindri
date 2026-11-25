@@ -4,11 +4,11 @@ expression: self.text(name)
 ---
 rail at 160x40
 00 |┃›where does rendering live?                                                                                          state     ⠹ running                       | dim:1 plain:117 dim:10 accent:9 plain:23
-01 |✓ bash                                                                                                                                                          | ok:1 plain:1 dim:4 plain:154
+01 |✓ bash success 23 ms                                                                                                                                            | ok:1 plain:13 dim:6 plain:140
 02 |  rg -n 'fence' src                                                                                                   wire      anthropic                       | plain:118 dim:10 plain:32
-03 |✓ exit 0  23 ms · 412 bytes                                                                                           model     claude-sonnet-4-5-20250929      | ok:1 plain:1 dim:25 plain:91 dim:10 plain:32
-04 |  src/rows.rs: the glyph a turn opens with                                                                            think     high                            | muted:42 plain:76 dim:10 plain:32
-05 |  src/rows.rs: a word longer than a row is broken                                                                                                               | muted:49 plain:111
+03 |  src/rows.rs: the glyph a turn opens with                                                                            model     claude-sonnet-4-5-20250929      | muted:42 plain:76 dim:10 plain:32
+04 |  src/rows.rs: a word longer than a row is broken                                                                     think     high                            | muted:49 plain:69 dim:10 plain:32
+05 |  exit 0 · 412 bytes                                                                                                                                            | dim:20 plain:140
 06 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a rendering: the TUI     turns         6 /  250                    | plain:118 dim:10 plain:32
 07 |  and any reader draw one run from one value, and the core may not name a terminal at all.                            ctx       █░░░░░ 48.2k / 200k             | plain:118 dim:10 plain:1 dim:5 plain:26
 08 |⠹ 4.2s                                                                                                                cache     88%                             | accent:1 plain:1 dim:4 plain:112 dim:10 plain:32
@@ -16,14 +16,14 @@ rail at 160x40
 10 |                                                                                                                      workspace …/sindri/.worktrees/46-rail     | plain:118 dim:10 plain:32
 11 |                                                                                                                      branch    spec/1-capability               | plain:118 dim:10 plain:32
 12 |                                                                                                                                                                | plain:160
-13 |                                                                                                                      skills    2                               | plain:118 dim:10 plain:32
-14 |                                                                                                                      ◆ bash                                    | plain:118 accent:1 plain:41
-15 |                                                                                                                      ◆ records                                 | plain:118 accent:1 plain:41
-16 |                                                                                                                                                                | plain:160
-17 |                                                                                                                      sandbox   bwrap                           | plain:118 dim:10 plain:32
-18 |                                                                                                                                                                | plain:160
-19 |                                                                                                                      session   9f2c7a41                        | plain:118 dim:10 plain:32
-20 |                                                                                                                      temp      …/sindri/sessions/9f2c7a41/tmp  | plain:118 dim:10 plain:32
+13 |                                                                                                                      sandbox   bwrap                           | plain:118 dim:10 plain:32
+14 |                                                                                                                                                                | plain:160
+15 |                                                                                                                      session   9f2c7a41                        | plain:118 dim:10 plain:32
+16 |                                                                                                                      temp      …/sindri/sessions/9f2c7a41/tmp  | plain:118 dim:10 plain:32
+17 |                                                                                                                                                                | plain:160
+18 |                                                                                                                      skills    2                               | plain:118 dim:10 plain:32
+19 |                                                                                                                      ◆ bash                                    | plain:118 accent:1 plain:41
+20 |                                                                                                                      ◆ records                                 | plain:118 accent:1 plain:41
 21 |                                                                                                                                                                | plain:160
 22 |                                                                                                                                                                | plain:160
 23 |                                                                                                                                                                | plain:160

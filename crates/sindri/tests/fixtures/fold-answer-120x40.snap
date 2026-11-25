@@ -7,21 +7,21 @@ fold-answer at 120x40
 01 |  Every row of the run passes: the gutter holds one column for every          model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
 02 |  entry, and a row of a command's output is set behind it rather than         think     high                            | plain:78 dim:10 plain:32
 03 |  beside the answer.                                                                                                    | plain:120
-04 |✓ bash                                                                        turns         6 /  250                    | ok:1 plain:1 dim:4 plain:72 dim:10 plain:32
+04 |✓ bash success 1.8 s                                                          turns         6 /  250                    | ok:1 plain:13 dim:6 plain:58 dim:10 plain:32
 05 |  cargo test -p sindri --test rows                                            ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
-06 |✓ exit 0  1800 ms · 640 bytes                                                 cache     88%                             | ok:1 plain:1 dim:27 plain:49 dim:10 plain:32
-07 |  test rows::a_row_of_output_1 ... ok                                                                                   | muted:37 plain:83
-08 |  test rows::a_row_of_output_2 ... ok                                         workspace …/sindri/.worktrees/46-rail     | muted:37 plain:41 dim:10 plain:32
-09 |  test rows::a_row_of_output_3 ... ok                                         branch    spec/1-capability               | muted:37 plain:41 dim:10 plain:32
+06 |  test rows::a_row_of_output_1 ... ok                                         cache     88%                             | muted:37 plain:41 dim:10 plain:32
+07 |  test rows::a_row_of_output_2 ... ok                                                                                   | muted:37 plain:83
+08 |  test rows::a_row_of_output_3 ... ok                                         workspace …/sindri/.worktrees/46-rail     | muted:37 plain:41 dim:10 plain:32
+09 |  test rows::a_row_of_output_4 ... ok                                         branch    spec/1-capability               | muted:37 plain:41 dim:10 plain:32
 10 |⋯ 16 rows kept back                                                                                                     | dim:1 plain:1 dim:17 plain:101
-11 |  test rows::a_row_of_output_20 ... ok                                        skills    2                               | muted:38 plain:40 dim:10 plain:32
-12 |  Three rows of the fold are the whole of it: the head, the count and the     ◆ bash                                    | plain:78 accent:1 plain:41
-13 |  last.                                                                       ◆ records                                 | plain:78 accent:1 plain:41
-14 |  The run proves the fold and nothing else: every row of a command's                                                    | plain:120
-15 |  output is drawn in the quieter ink behind the gutter the call opened,       sandbox   bwrap                           | plain:78 dim:10 plain:32
-16 |  and the rows a reader usually needs are the head of it, the row counting                                              | plain:120
-17 |  the rows kept back and the last row the command wrote.                      session   9f2c7a41                        | plain:78 dim:10 plain:32
-18 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+11 |  exit 0 · 640 bytes                                                          sandbox   bwrap                           | dim:20 plain:58 dim:10 plain:32
+12 |  Three rows of the fold are the whole of it: the head, the count and the                                               | plain:120
+13 |  last.                                                                       session   9f2c7a41                        | plain:78 dim:10 plain:32
+14 |  The run proves the fold and nothing else: every row of a command's          temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+15 |  output is drawn in the quieter ink behind the gutter the call opened,                                                 | plain:120
+16 |  and the rows a reader usually needs are the head of it, the row counting    skills    2                               | plain:78 dim:10 plain:32
+17 |  the rows kept back and the last row the command wrote.                      ◆ bash                                    | plain:78 accent:1 plain:41
+18 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
 19 |  An answer is the answer, so it is drawn whole in the ink it wears today,                                              | plain:120
 20 |  and a reader reads it beside a folded result without losing one to the                                                | plain:120
 21 |  other.                                                                                                                | plain:120

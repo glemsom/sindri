@@ -3,22 +3,22 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 tools at 120x40
-00 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+00 |✓ bash success 23 ms                                                                                                    | ok:1 plain:13 dim:6 plain:100
 01 |  rg -n 'the gutter' crates/sindri/src                                                                                  | plain:120
-02 |✓ exit 0  23 ms · 412 bytes                                                                                             | ok:1 plain:1 dim:25 plain:93
-03 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
-04 |✓ open                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+02 |  src/rows.rs: the glyph a turn opens with                                                                              | muted:42 plain:78
+03 |  exit 0 · 412 bytes                                                                                                    | dim:20 plain:100
+04 |✓ open success 4 ms                                                                                                     | ok:1 plain:13 dim:5 plain:101
 05 |  GLOSSARY.md                                                                                                           | plain:2 plain~dim:11 plain:107
-06 |✓ exit 0  4 ms · 0 bytes                                                                                                | ok:1 plain:1 dim:22 plain:96
-07 |✓ skill                                                                                                                 | ok:1 plain:1 dim:5 plain:113
+06 |  exit 0 · 0 bytes                                                                                                      | dim:18 plain:102
+07 |✓ skill success 2 ms                                                                                                    | ok:1 plain:14 dim:5 plain:100
 08 |  rust-review                                                                                                           | plain:120
-09 |✓ exit 0  2 ms · 33 bytes                                                                                               | ok:1 plain:1 dim:23 plain:95
-10 |  the rust-review skill is loaded                                                                                       | muted:33 plain:87
-11 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+09 |  the rust-review skill is loaded                                                                                       | muted:33 plain:87
+10 |  exit 0 · 33 bytes                                                                                                     | dim:19 plain:101
+11 |… bash running                                                                                                          | dim:1 plain:119
 12 |  cargo test --workspace                                                                                                | plain:120
-13 |… open                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+13 |… open running                                                                                                          | dim:1 plain:119
 14 |  docs/agents/domain.md                                                                                                 | plain:2 plain~dim:21 plain:97
-15 |… skill                                                                                                                 | dim:1 plain:1 dim:5 plain:113
+15 |… skill running                                                                                                         | dim:1 plain:119
 16 |  code-review                                                                                                           | plain:120
 17 |                                                                                                                        | plain:120
 18 |                                                                                                                        | plain:120

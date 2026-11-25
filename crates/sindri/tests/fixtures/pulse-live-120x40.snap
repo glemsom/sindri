@@ -4,11 +4,11 @@ expression: self.text(name)
 ---
 pulse-live at 120x40
 00 |┃›where does rendering live?                                                  state     ⠹ running                       | dim:1 plain:77 dim:10 accent:9 plain:23
-01 |✓ bash                                                                                                                  | ok:1 plain:1 dim:4 plain:114
+01 |✓ bash success 23 ms                                                                                                    | ok:1 plain:13 dim:6 plain:100
 02 |  rg -n 'fence' src                                                           wire      anthropic                       | plain:78 dim:10 plain:32
-03 |✓ exit 0  23 ms · 412 bytes                                                   model     claude-sonnet-4-5-20250929      | ok:1 plain:1 dim:25 plain:51 dim:10 plain:32
-04 |  src/rows.rs: the glyph a turn opens with                                    think     high                            | muted:42 plain:36 dim:10 plain:32
-05 |  src/rows.rs: a word longer than a row is broken                                                                       | muted:49 plain:71
+03 |  src/rows.rs: the glyph a turn opens with                                    model     claude-sonnet-4-5-20250929      | muted:42 plain:36 dim:10 plain:32
+04 |  src/rows.rs: a word longer than a row is broken                             think     high                            | muted:49 plain:29 dim:10 plain:32
+05 |  exit 0 · 412 bytes                                                                                                    | dim:20 plain:100
 06 |  Rendering lives in the front end and not in the core, because an entry      turns         6 /  250                    | plain:78 dim:10 plain:32
 07 |  is a fact and never a rendering: the TUI and any reader draw one run        ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
 08 |  from one value, and the core may not name a terminal at all.                cache     88%                             | plain:78 dim:10 plain:32
@@ -16,14 +16,14 @@ pulse-live at 120x40
 10 |│ the mark it wears moves, and a step that changes nothing costs nothing.     workspace …/sindri/.worktrees/46-rail     | dim:2 muted:71 plain:5 dim:10 plain:32
 11 |⠹ 4.2s A braille marker at the head of the newest answer carries the run's    branch    spec/1-capability               | accent:1 plain:1 dim:4 plain:72 dim:10 plain:32
 12 |  elapsed time, one step every 80 ms, and settles on the verdict it                                                     | plain:120
-13 |  stopped with — the duration it stopped at, kept and never recomputed.       skills    2                               | plain:78 dim:10 plain:32
-14 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
-15 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
-16 |                                                                                                                        | plain:120
-17 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
-18 |                                                                                                                        | plain:120
-19 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
-20 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+13 |  stopped with — the duration it stopped at, kept and never recomputed.       sandbox   bwrap                           | plain:78 dim:10 plain:32
+14 |                                                                                                                        | plain:120
+15 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
+16 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+17 |                                                                                                                        | plain:120
+18 |                                                                              skills    2                               | plain:78 dim:10 plain:32
+19 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
+20 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
 21 |                                                                                                                        | plain:120
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120
