@@ -914,3 +914,57 @@ fn tab_is_inert_without_a_drawn_commands_card() {
         assert_eq!(view.composer().text(), draft);
     }
 }
+
+#[test]
+fn escape_keeps_a_card_with_trailing_words_closed() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/mod  ");
+    assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+    view.key(Key::Escape);
+    assert!(!card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+    assert_eq!(view.key(Key::Tab), Outcome::Unchanged);
+    assert_eq!(view.composer().text(), "/mod  ");
+}
+
+#[test]
+fn tab_keeps_the_card_when_the_draft_has_later_lines() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/mod\nwords");
+    for _ in 0..6 {
+        view.key(Key::Left);
+    }
+    assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+    assert_eq!(view.key(Key::Tab), Outcome::Edited);
+    assert_eq!(view.composer().text(), "/model\nwords");
+    assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+}
+
+#[test]
+fn tab_completes_the_row_the_reader_marked() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/");
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    view.key(Key::Down);
+    assert_eq!(view.key(Key::Tab), Outcome::Edited);
+    assert_eq!(view.composer().text(), "/model");
+    assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+}
+
+#[test]
+fn tab_keeps_the_card_when_the_preserved_words_wrap() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    let tail = " words".repeat(30);
+    view.paste(&format!("/mod{tail}"));
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    for _ in 0..tail.len() {
+        view.key(Key::Left);
+    }
+    assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+    assert_eq!(view.key(Key::Tab), Outcome::Edited);
+    assert_eq!(view.composer().text(), format!("/model{tail}"));
+    assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+}

@@ -4270,7 +4270,14 @@ fn a_terminal_tab_byte_completes_the_marked_command_without_sending() {
     assert!(drawn.wait_until(|frame| placed(frame).is_some_and(|(_, at)| at == GUTTER + 4)));
     pty.type_bytes(&[0x09]);
     assert!(
-        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, at)| at == GUTTER + 6)),
+        drawn.wait_until(|frame| {
+            placed(frame).is_some_and(|(row, at)| {
+                at == GUTTER + 6
+                    && picture(frame)
+                        .get(&row)
+                        .is_some_and(|words| words.contains("/model"))
+            })
+        }),
         "{:?}",
         drawn.text()
     );

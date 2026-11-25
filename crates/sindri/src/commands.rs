@@ -13,6 +13,8 @@ const NEW: &str = "/new";
 
 const SKILL: &str = "/skill";
 
+const SKILL_SPELLING: &str = "/skill:";
+
 const MODEL: &str = "/model";
 
 const SETTINGS: &str = "/settings";
@@ -47,7 +49,7 @@ pub const TABLE: [Row; 7] = [
         says: Cow::Borrowed("start the conversation again, and forget the last one"),
     },
     Row {
-        name: Cow::Borrowed("/skill:"),
+        name: Cow::Borrowed(SKILL_SPELLING),
         says: Cow::Borrowed("load a skill by name"),
     },
     Row {
@@ -106,7 +108,7 @@ impl Card {
             .map(|mut row| {
                 if row
                     .name
-                    .strip_prefix("/skill:")
+                    .strip_prefix(SKILL_SPELLING)
                     .is_some_and(|name| self.loaded.contains(name))
                 {
                     row.says = Cow::Owned(format!("loaded · {}", row.says));
@@ -123,7 +125,7 @@ impl Card {
         let mut rows = leaves(
             self.skills
                 .iter()
-                .map(|row| (row.name.strip_prefix("/skill:").unwrap(), row.clone())),
+                .map(|row| (row.name.strip_prefix(SKILL_SPELLING).unwrap(), row.clone())),
             query,
         );
         if !query.is_empty() && rows.is_empty() {
@@ -131,7 +133,7 @@ impl Card {
         }
         let command = TABLE
             .iter()
-            .find(|row| row.name == "/skill:")
+            .find(|row| row.name == SKILL_SPELLING)
             .unwrap()
             .clone();
         if query.is_empty() {
@@ -307,6 +309,6 @@ pub fn skill_tail(draft: &str) -> Option<&str> {
     if first == SKILL {
         Some("")
     } else {
-        first.strip_prefix("/skill:")
+        first.strip_prefix(SKILL_SPELLING)
     }
 }

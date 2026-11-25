@@ -324,7 +324,7 @@ impl Cards {
 
     fn dismiss(&mut self, draft: &str) {
         self.card = None;
-        self.dismissed = Some(draft.trim().to_owned());
+        self.dismissed = Some(draft.to_owned());
     }
 }
 
@@ -697,6 +697,10 @@ impl View {
             return Outcome::Unchanged;
         };
         self.composer.rewrite(&line);
+        let end = line.find(char::is_whitespace).unwrap_or(line.len());
+        while self.composer.cursor() > end {
+            self.composer.key(Key::Left);
+        }
         Outcome::Edited
     }
 
