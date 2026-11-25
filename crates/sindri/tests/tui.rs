@@ -4260,7 +4260,8 @@ fn an_opener_that_fails_is_drawn_under_its_call_with_its_own_exit_and_words() {
     assert!(
         drawn.wait_until(|drawn| {
             let rows = frame::read(drawn, COLS, ROWS).rows();
-            rows.iter().any(|row| row.contains("\u{2717} exit 3"))
+            rows.iter()
+                .any(|row| row.contains("\u{2717} open failure exit 3"))
                 && rows.iter().any(|row| row.contains("no handler for .html"))
         }),
         "the band draws the call settled under a cross with the opener's own exit and its own words: \
@@ -4303,7 +4304,8 @@ fn a_refused_open_call_is_drawn_under_its_call_and_the_run_answers_on() {
     assert!(
         drawn.wait_until(|drawn| {
             let rows = frame::read(drawn, COLS, ROWS).rows();
-            rows.iter().any(|row| row.contains("\u{2717} exit 1"))
+            rows.iter()
+                .any(|row| row.contains("\u{2717} open failure exit 1"))
                 && rows
                     .iter()
                     .any(|row| row.contains("refused:") && row.contains("handbook"))
@@ -4318,11 +4320,11 @@ fn a_refused_open_call_is_drawn_under_its_call_and_the_run_answers_on() {
     let at = |needle: &str| rows.iter().position(|row| row.contains(needle));
     let (call, settled, refused) = (
         at("open").expect("the call is drawn"),
-        at("\u{2717} exit 1").expect("its verdict is drawn"),
+        at("\u{2717} open failure exit 1").expect("its verdict is drawn"),
         at("refused:").expect("the refusal is drawn"),
     );
     assert!(
-        call < settled && settled < refused,
+        call == settled && settled < refused,
         "the refusal is drawn under the call it belongs to: {rows:?}"
     );
     assert!(

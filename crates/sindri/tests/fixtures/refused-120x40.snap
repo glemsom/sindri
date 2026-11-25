@@ -14,14 +14,14 @@ refused at 120x40
 08 |  none.                                                                       workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |┃›what is the transcript's unit?                                                                                        | dim:1 plain:119
-11 |⋯ 1 call · 9 ms                                                               skills    2                               | dim:1 plain:1 dim:13 plain:63 dim:10 plain:32
-12 |  The transcript's unit is the entry. An entry never carries a formatted      ◆ bash                                    | plain:78 accent:1 plain:41
-13 |  line, so the same run is drawn the same way by the TUI, by a reader of      ◆ records                                 | plain:78 accent:1 plain:41
-14 |  the transcript and by whatever front end comes next.                                                                  | plain:120
-15 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
-16 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
-17 |  ──────────┼───────────────────────────                                      session   9f2c7a41                        | plain:2 dim:38 plain:38 dim:10 plain:32
-18 |  heading   │ in the answer's own gutter                                      temp      …/sindri/sessions/9f2c7a41/tmp  | plain:11 dim:3 plain:64 dim:10 plain:32
+11 |⋯ 1 call · 9 ms                                                               sandbox   bwrap                           | dim:1 plain:1 dim:13 plain:63 dim:10 plain:32
+12 |  The transcript's unit is the entry. An entry never carries a formatted                                                | plain:120
+13 |  line, so the same run is drawn the same way by the TUI, by a reader of      session   9f2c7a41                        | plain:78 dim:10 plain:32
+14 |  the transcript and by whatever front end comes next.                        temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+15 |                                                                                                                        | plain:120
+16 |  construct │ where it stands                                                 skills    2                               | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:49 dim:10 plain:32
+17 |  ──────────┼───────────────────────────                                      ◆ bash                                    | plain:2 dim:38 plain:38 accent:1 plain:41
+18 |  heading   │ in the answer's own gutter                                      ◆ records                                 | plain:11 dim:3 plain:64 accent:1 plain:41
 19 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 20 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 21 |                                                                                                                        | plain:120

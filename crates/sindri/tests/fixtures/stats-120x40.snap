@@ -17,11 +17,11 @@ stats at 120x40
 11 |                        │   ────────────────────────────────────────────────────────────────   │                        | dim:25 plain:3 dim:64 plain:3 dim:25
 12 |                        │   spend                                                              │                        | dim:25 plain:3 dim:5 plain:62 dim:25
 13 |                        │   input                                                      48.2k   │                        | dim:25 plain:3 dim:10 plain:57 dim:25
-14 |                        │   output                                                      3.1k   │                        | dim:25 plain:3 dim:10 plain:57 dim:25
+14 |                        │   output                                                      3.1k   │/sessions/9f2c7a41/tmp  | dim:25 plain:3 dim:10 plain:57 dim:25
 15 |                        │   total                                                      51.3k   │                        | dim:25 plain:3 dim:10 plain:57 dim:25
 16 |                        │   cached                                                       12k   │                        | dim:25 plain:3 dim:10 plain:57 dim:25
 17 |                        │   reasoning                                                    900   │                        | dim:25 plain:3 dim:10 plain:57 dim:25
-18 |                        │   ────────────────────────────────────────────────────────────────   │/sessions/9f2c7a41/tmp  | dim:25 plain:3 dim:64 plain:3 dim:25
+18 |                        │   ────────────────────────────────────────────────────────────────   │                        | dim:25 plain:3 dim:64 plain:3 dim:25
 19 |                        │   place                                                              │                        | dim:25 plain:3 dim:5 plain:62 dim:25
 20 |                        │   workspace /home/glemsom/Documents/git/sindri/.worktrees/46-rail    │                        | dim:25 plain:3 dim:10 plain:57 dim:25
 21 |                        │   branch    spec/1-capability                                        │                        | dim:25 plain:3 dim:10 plain:57 dim:25

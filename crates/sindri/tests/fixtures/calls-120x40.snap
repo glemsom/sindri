@@ -4,24 +4,24 @@ expression: self.text(name)
 ---
 calls at 120x40
 00 |┃›which calls settle well?                                                    wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
-01 |✓ bash                                                                        model     claude-sonnet-4-5-20250929      | ok:1 plain:1 dim:4 plain:72 dim:10 plain:32
+01 |✓ bash success 18 ms                                                          model     claude-sonnet-4-5-20250929      | ok:1 plain:13 dim:6 plain:58 dim:10 plain:32
 02 |  rg -n 'verdict' src                                                         think     high                            | plain:78 dim:10 plain:32
-03 |✓ exit 0  18 ms · 64 bytes                                                                                              | ok:1 plain:1 dim:24 plain:94
-04 |  src/rows.rs: the check or the cross in `ok`/`err`                           turns         6 /  250                    | muted:51 plain:27 dim:10 plain:32
+03 |  src/rows.rs: the check or the cross in `ok`/`err`                                                                     | muted:51 plain:69
+04 |  exit 0 · 64 bytes                                                           turns         6 /  250                    | dim:19 plain:59 dim:10 plain:32
 05 |  The row is drawn from the verdict the record holds.                         ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
-06 |✗ bash                                                                        cache     88%                             | err:1 plain:1 dim:4 plain:72 dim:10 plain:32
+06 |✗ bash failure exit 1 211 ms                                                  cache     88%                             | err:1 plain:20 dim:7 plain:50 dim:10 plain:32
 07 |  cargo clippy --all-targets                                                                                            | plain:120
-08 |✗ exit 1  211 ms · 96 bytes                                                   workspace …/sindri/.worktrees/46-rail     | err:1 plain:1 dim:25 plain:51 dim:10 plain:32
-09 |  warning: unused import: `std::fmt`                                          branch    spec/1-capability               | muted:36 plain:42 dim:10 plain:32
-10 |  --> src/rows.rs:12:5                                                                                                  | muted:22 plain:98
-11 |  An unused import, and nowhere else to put it.                               skills    2                               | plain:78 dim:10 plain:32
-12 |✗ bash                                                                        ◆ bash                                    | err:1 plain:1 dim:4 plain:72 accent:1 plain:41
-13 |  cargo test --workspace                                                      ◆ records                                 | plain:78 accent:1 plain:41
-14 |✗ timed out  120000 ms · 0 bytes                                                                                        | err:1 plain:1 dim:30 plain:88
-15 |  The call ran past its minute and was killed.                                sandbox   bwrap                           | plain:78 dim:10 plain:32
-16 |✗ bash                                                                                                                  | err:1 plain:1 dim:4 plain:114
-17 |  make check STAGES=frames                                                    session   9f2c7a41                        | plain:78 dim:10 plain:32
-18 |✗ cancelled  3400 ms · 0 bytes                                                temp      …/sindri/sessions/9f2c7a41/tmp  | err:1 plain:1 dim:28 plain:48 dim:10 plain:32
+08 |  warning: unused import: `std::fmt`                                          workspace …/sindri/.worktrees/46-rail     | muted:36 plain:42 dim:10 plain:32
+09 |    --> src/rows.rs:12:5                                                      branch    spec/1-capability               | muted:24 plain:54 dim:10 plain:32
+10 |  exit 1 · 96 bytes                                                                                                     | dim:19 plain:101
+11 |  An unused import, and nowhere else to put it.                               sandbox   bwrap                           | plain:78 dim:10 plain:32
+12 |✗ bash failure timed out 2m 00s                                                                                         | err:1 plain:23 dim:7 plain:89
+13 |  cargo test --workspace                                                      session   9f2c7a41                        | plain:78 dim:10 plain:32
+14 |  timed out · 0 bytes                                                         temp      …/sindri/sessions/9f2c7a41/tmp  | dim:21 plain:57 dim:10 plain:32
+15 |  The call ran past its minute and was killed.                                                                          | plain:120
+16 |✗ bash failure cancelled 3.4 s                                                skills    2                               | err:1 plain:23 dim:6 plain:48 dim:10 plain:32
+17 |  make check STAGES=frames                                                    ◆ bash                                    | plain:78 accent:1 plain:41
+18 |  cancelled · 0 bytes                                                         ◆ records                                 | dim:21 plain:57 accent:1 plain:41
 19 |  What a verdict says                                                                                                   | plain:2 plain+bold:19 plain:99
 20 |  ───────────────────                                                                                                   | plain:2 accent+faint:19 plain:99
 21 |                                                                                                                        | plain:120
@@ -30,7 +30,7 @@ calls at 120x40
 24 |  result that will never come.                                                                                          | plain:120
 25 |                                                                                                                        | plain:120
 26 |┃›and the one that is still out?                                                                                        | dim:1 plain:119
-27 |… bash                                                                                                                  | dim:1 plain:1 dim:4 plain:114
+27 |… bash running                                                                                                          | dim:1 plain:119
 28 |  make check STAGES=test                                                                                                | plain:120
 29 |                                                                                                                        | plain:120
 30 |                                                                                                                        | plain:120

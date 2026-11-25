@@ -4,11 +4,11 @@ expression: self.text(name)
 ---
 rail at 108x40
 00 |┃›where does rendering live?                                          state     ⠹ running                   | dim:1 plain:69 dim:10 accent:9 plain:19
-01 |✓ bash                                                                                                      | ok:1 plain:1 dim:4 plain:102
+01 |✓ bash success 23 ms                                                                                        | ok:1 plain:13 dim:6 plain:88
 02 |  rg -n 'fence' src                                                   wire      anthropic                   | plain:70 dim:10 plain:28
-03 |✓ exit 0  23 ms · 412 bytes                                           model     claude-sonnet-4-5-20250929  | ok:1 plain:1 dim:25 plain:43 dim:10 plain:28
-04 |  src/rows.rs: the glyph a turn opens with                            think     high                        | muted:42 plain:28 dim:10 plain:28
-05 |  src/rows.rs: a word longer than a row is broken                                                           | muted:49 plain:59
+03 |  src/rows.rs: the glyph a turn opens with                            model     claude-sonnet-4-5-20250929  | muted:42 plain:28 dim:10 plain:28
+04 |  src/rows.rs: a word longer than a row is broken                     think     high                        | muted:49 plain:21 dim:10 plain:28
+05 |  exit 0 · 412 bytes                                                                                        | dim:20 plain:88
 06 |  Rendering lives in the front end and not in the core, because an    turns         6 /  250                | plain:70 dim:10 plain:28
 07 |  entry is a fact and never a rendering: the TUI and any reader       ctx       █░░░░░ 48.2k / 200k         | plain:70 dim:10 plain:1 dim:5 plain:22
 08 |  draw one run from one value, and the core may not name a            cache     88%                         | plain:70 dim:10 plain:28
@@ -16,14 +16,14 @@ rail at 108x40
 10 |⠹ 4.2s                                                                workspace …/.worktrees/46-rail        | accent:1 plain:1 dim:4 plain:64 dim:10 plain:28
 11 |                                                                      branch    spec/1-capability           | plain:70 dim:10 plain:28
 12 |                                                                                                            | plain:108
-13 |                                                                      skills    2                           | plain:70 dim:10 plain:28
-14 |                                                                      ◆ bash                                | plain:70 accent:1 plain:37
-15 |                                                                      ◆ records                             | plain:70 accent:1 plain:37
-16 |                                                                                                            | plain:108
-17 |                                                                      sandbox   bwrap                       | plain:70 dim:10 plain:28
-18 |                                                                                                            | plain:108
-19 |                                                                      session   9f2c7a41                    | plain:70 dim:10 plain:28
-20 |                                                                      temp      …/sessions/9f2c7a41/tmp     | plain:70 dim:10 plain:28
+13 |                                                                      sandbox   bwrap                       | plain:70 dim:10 plain:28
+14 |                                                                                                            | plain:108
+15 |                                                                      session   9f2c7a41                    | plain:70 dim:10 plain:28
+16 |                                                                      temp      …/sessions/9f2c7a41/tmp     | plain:70 dim:10 plain:28
+17 |                                                                                                            | plain:108
+18 |                                                                      skills    2                           | plain:70 dim:10 plain:28
+19 |                                                                      ◆ bash                                | plain:70 accent:1 plain:37
+20 |                                                                      ◆ records                             | plain:70 accent:1 plain:37
 21 |                                                                                                            | plain:108
 22 |                                                                                                            | plain:108
 23 |                                                                                                            | plain:108

@@ -16,14 +16,14 @@ pulse-settled at 120x40
 10 |                                                                              workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 11 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 12 |                                                                                                                        | plain:120
-13 |                                                                              skills    2                               | plain:78 dim:10 plain:32
-14 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
-15 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
-16 |                                                                                                                        | plain:120
-17 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
-18 |                                                                                                                        | plain:120
-19 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
-20 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+13 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
+14 |                                                                                                                        | plain:120
+15 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
+16 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+17 |                                                                                                                        | plain:120
+18 |                                                                              skills    2                               | plain:78 dim:10 plain:32
+19 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
+20 |                                                                              ◆ records                                 | plain:78 accent:1 plain:41
 21 |                                                                                                                        | plain:120
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120

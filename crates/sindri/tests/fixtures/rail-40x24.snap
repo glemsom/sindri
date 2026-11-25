@@ -4,20 +4,20 @@ expression: self.text(name)
 ---
 rail at 40x24
 00 |┃›where does rendering live?            | dim:1 plain:39
-01 |✓ bash                                  | ok:1 plain:1 dim:4 plain:34
+01 |✓ bash success 23 ms                    | ok:1 plain:13 dim:6 plain:20
 02 |  rg -n 'fence' src                     | plain:40
-03 |✓ exit 0  23 ms · 412 bytes             | ok:1 plain:1 dim:25 plain:13
-04 |  src/rows.rs: the glyph a turn opens   | muted:37 plain:3
-05 |  with                                  | muted:6 plain:34
-06 |  src/rows.rs: a word longer than a     | muted:35 plain:5
-07 |  row is broken                         | muted:15 plain:25
-08 |  Rendering lives in the front end and  | plain:40
-09 |  not in the core, because an entry is  | plain:40
-10 |  a fact and never a rendering: the     | plain:40
-11 |  TUI and any reader draw one run from  | plain:40
-12 |  one value, and the core may not name  | plain:40
-13 |  a terminal at all.                    | plain:40
-14 |⠹ 4.2s                                  | accent:1 plain:1 dim:4 plain:34
+03 |  src/rows.rs: the glyph a turn opens w…| muted:39 dim:1
+04 |  src/rows.rs: a word longer than a row…| muted:39 dim:1
+05 |  exit 0 · 412 bytes                    | dim:20 plain:20
+06 |  Rendering lives in the front end and  | plain:40
+07 |  not in the core, because an entry is  | plain:40
+08 |  a fact and never a rendering: the     | plain:40
+09 |  TUI and any reader draw one run from  | plain:40
+10 |  one value, and the core may not name  | plain:40
+11 |  a terminal at all.                    | plain:40
+12 |⠹ 4.2s                                  | accent:1 plain:1 dim:4 plain:34
+13 |                                        | plain:40
+14 |                                        | plain:40
 15 |                                        | plain:40
 16 |                                        | plain:40
 17 |                                        | plain:40
