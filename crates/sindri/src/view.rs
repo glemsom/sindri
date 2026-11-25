@@ -1404,6 +1404,7 @@ impl View {
                     ),
                     u16::try_from(end + 1 - start).ok()?,
                     u16::try_from(from - start).ok()?,
+                    area.height,
                     self.capabilities.pictures().cell(),
                     &palette,
                 )

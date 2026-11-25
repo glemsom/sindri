@@ -69,3 +69,40 @@ path. Automated cells/pixels/protocol assertions are not claims that those manua
 Under #592's explicit requirement to record unavailable coverage, the issue is closable with
 these limitations disclosed, if the owner accepts environment-unavailable manual coverage.
 No ticket was closed, pushed or merged by this verification.
+
+## P1 bounded-raster correction
+
+Independent review found the earlier resource-count evidence insufficient: an opened
+Prompt still rasterized its full height before placement clipping. The new 60,000-row
+regression first failed on a 3,552,059,200-byte allocation attempt. The test executable
+ran with a 1,500,000-KiB virtual-memory limit (no unrestricted multi-GB red run).
+The initial exact-name invocation selected zero tests; the corrected invocation selected
+one and aborted at allocation, before any image upload.
+
+Prompt images now cover a quantized window of at most three Transcript-band heights,
+limited by the remaining actual Prompt rows. Full-footprint coordinates determine corners,
+rim, light, shadow and dithering; window edges do not become surface ends. Crop coordinates
+are relative to this bounded image. Motion inside a window is placement-only; crossing a
+window boundary replaces the bounded image under the existing owning identity, releasing
+old data before uploading replacement. Small complete surfaces retain their prior reuse.
+Height resize can change a large surface's window; unchanged redraw sends no bytes.
+
+For Prompt width W, band height B and cell pixels cw×ch, one raster is bounded by
+4×W×cw×3×B×ch bytes, and visits at most W×cw×3×B×ch pixels. At 120 columns,
+40 band rows and 10×20 pixels this is at most 11,520,000 RGBA bytes, not 5.76 GB.
+PNG encoding currently clones RGBA and holds encoded/base64/protocol buffers as well:
+these remain proportional to the bounded raster, not to full Prompt height. This is
+not a measured peak-RSS claim or a bound on transcript text/reflow work.
+
+The regression uses existing frame and terminal-output seams, no cache counters or new
+API. Sixty scroll/page/resize passes span 120×40, 80×24, 40×24 and 120×48. It checks
+placement containment and frame image bounds, assembles emitted Kitty payload chunks,
+decodes their PNGs and checks transmitted dimensions and payload bounds. Every unchanged
+redraw emits zero bytes. Existing actual-end corner, clipping, placement-reuse, identity,
+transition and all-ink contrast regressions remain passing.
+
+`cargo check --workspace` and formatting checks passed. All 56 painted tests passed.
+The first complete package run reached 1,680 passed, two ignored and one unrelated
+version failure: the stale binary reported clean `0249a951` while git reported dirty.
+A clean post-commit run is recorded below. Manual availability limitations above remain;
+no visual terminal, multiplexer or peak-memory measurement was performed.

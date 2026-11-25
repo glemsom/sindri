@@ -291,7 +291,8 @@ its rows is claimed in and the cell of it the frame's
 the composer's band drawn in the band a prompt is read on and closing into the rail's tone on its
 last row; and the rail's first column and the composer's head row are the seam's, drawn in the
 plane's pixels. It holds every fact its **Plane** is drawn from and nothing else: for a bounded Prompt, its complete footprint and owning identity as well as
-its rung, rim and light, with the visible crop belonging only to Placement; the cell the plane
+its rung, rim and light, and a bounded portion of that footprint, with the visible crop
+inside that portion belonging only to Placement; the cell the plane
 is drawn at, the light its band carries — the peak it spends of the proved lift and the rect that
 light is a lamp around — and a frame holds each band's image against it, so a pass in which it
 stands makes no image. A shade holds no placement: the cells it stands on are a **Placement**'s and

@@ -115,6 +115,8 @@ enum Kind {
     Prompt {
         id: u32,
         size: Size,
+        full_rows: u16,
+        first_row: u16,
         cell: CellSize,
         tone: Color,
         well: Color,
@@ -330,6 +332,8 @@ impl Shade {
         let size = self.size();
         match self.kind {
             Kind::Prompt {
+                full_rows,
+                first_row,
                 tone,
                 well,
                 accent,
@@ -338,13 +342,16 @@ impl Shade {
                 ..
             } => {
                 let (width, height) = size.pixels(cell);
+                let full_height = u32::from(full_rows) * cell.height();
+                let first_pixel = u32::from(first_row) * cell.height();
                 let radius = (cell.height() / 4).max(1) as f64;
                 let tone = channels(tone)?;
                 let well = channels(well)?;
                 let accent = channels(accent)?;
                 return Some(image::RgbaImage::from_fn(width, height, |x, y| {
+                    let y = y + first_pixel;
                     let dx = f64::from(x.min(width - 1 - x));
-                    let dy = f64::from(y.min(height - 1 - y));
+                    let dy = f64::from(y.min(full_height - 1 - y));
                     let corner =
                         ((radius - dx).max(0.0).powi(2) + (radius - dy).max(0.0).powi(2)).sqrt();
                     if corner > radius {
@@ -356,7 +363,8 @@ impl Shade {
                     }
                     let light =
                         f64::from(peak) * (-f64::from(y) / f64::from(cell.height().max(1))).exp();
-                    let shadow = f64::from(weight) * (-(f64::from(height - 1 - y)) / 2.0).exp();
+                    let shadow =
+                        f64::from(weight) * (-(f64::from(full_height - 1 - y)) / 2.0).exp();
                     let spend = dithered(light - shadow, (x, y));
                     image::Rgba(opaque(
                         tone.map(|at| (i32::from(at) + spend).clamp(0, 255) as u8),
@@ -694,6 +702,7 @@ impl Placement {
         cells: Rect,
         rows: u16,
         skip: u16,
+        band_rows: u16,
         cell: Option<CellSize>,
         palette: &Palette,
     ) -> Option<Placement> {
@@ -703,14 +712,19 @@ impl Placement {
         if !covers(cells) || rows == 0 || id >= 0x8000_0000 {
             return None;
         }
+        let reach = band_rows.max(cells.height).max(1);
+        let first_row = (skip / reach).saturating_sub(1) * reach;
+        let raster_rows = rows.saturating_sub(first_row).min(reach.saturating_mul(3));
         Some(Placement {
             shade: Shade {
                 kind: Kind::Prompt {
                     id,
                     size: Size {
                         cols: cells.width,
-                        rows,
+                        rows: raster_rows,
                     },
+                    full_rows: rows,
+                    first_row,
                     cell,
                     tone,
                     well: palette.band(Band::Well),
@@ -722,7 +736,7 @@ impl Placement {
             cells,
             shows: Some(image::math::Rect {
                 x: 0,
-                y: u32::from(skip) * cell.height(),
+                y: u32::from(skip - first_row) * cell.height(),
                 width: u32::from(cells.width) * cell.width(),
                 height: u32::from(cells.height) * cell.height(),
             }),

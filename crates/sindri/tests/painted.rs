@@ -2254,3 +2254,82 @@ fn every_ink_keeps_its_floor_on_visible_prompt_answer_and_rail_pixels() {
         }
     }
 }
+
+#[test]
+fn huge_opened_prompt_uploads_are_bounded_by_the_visible_band_through_scroll_and_resize() {
+    let words = (0..60_000)
+        .map(|n| format!("row {n}\n"))
+        .collect::<String>();
+    let mut view = View::of(
+        caps::pictured(),
+        railed(),
+        Transcript::of([Entry::Prompt {
+            text: SecretSet::default().redact(words),
+        }]),
+    );
+    let folded = frame::painted(&mut view, 120, 40);
+    let (y, x) = folded.drawn_at("rows kept back");
+    assert_eq!(
+        view.pointer(folded.told(), Pointer::Press(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    let mut held = sindri::plane::Held::default();
+    for (cols, rows) in [(120, 40), (120, 40), (80, 24), (40, 24), (120, 48)] {
+        for pass in 0..12 {
+            let frame = frame::painted(&mut view, cols, rows);
+            let band = frame.told().layout().unwrap().transcript;
+            for placement in frame
+                .told()
+                .placements()
+                .iter()
+                .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
+            {
+                assert_eq!(placement.cells().intersection(band), placement.cells());
+                let image = view.planes().image(placement.shade()).unwrap().pixels();
+                assert!(image.width() <= u32::from(band.width) * 10);
+                assert!(
+                    image.height() <= u32::from(band.height) * 20 * 3,
+                    "Prompt image height {} exceeds visible-band bound",
+                    image.height()
+                );
+            }
+            let wire = held.pass(frame.told().placements(), view.planes());
+            assert!(wire.len() <= usize::from(cols) * usize::from(rows) * 10 * 20 * 16 + 100_000);
+            use base64::Engine;
+            let text = std::str::from_utf8(&wire).unwrap();
+            let mut payload = String::new();
+            let mut uploads = 0;
+            for op in text.split("\x1b_G").skip(1) {
+                let command = op.split("\x1b\\").next().unwrap();
+                let Some((head, chunk)) = command.split_once(';') else {
+                    continue;
+                };
+                payload.push_str(chunk);
+                if head.split(',').any(|field| field == "m=0") {
+                    let png = base64::engine::general_purpose::STANDARD
+                        .decode(&payload)
+                        .unwrap();
+                    let image = image::load_from_memory(&png).unwrap();
+                    assert!(image.width() <= u32::from(cols) * 10);
+                    assert!(image.height() <= u32::from(rows) * 20 * 3);
+                    assert!(png.len() <= usize::from(cols) * usize::from(rows) * 10 * 20 * 13);
+                    payload.clear();
+                    uploads += 1;
+                }
+            }
+            assert!(payload.is_empty());
+            if pass == 0 {
+                assert!(uploads > 0 || !wire.is_empty());
+            }
+            assert!(
+                held.pass(frame.told().placements(), view.planes())
+                    .is_empty()
+            );
+            if pass % 3 == 0 {
+                view.key(Key::PageUp);
+            } else {
+                view.pointer(frame.told(), Pointer::Wheel(sindri::pointer::Notch::Up));
+            }
+        }
+    }
+}
