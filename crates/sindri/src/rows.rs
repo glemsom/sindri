@@ -1573,7 +1573,8 @@ impl Rows {
                         _ => None,
                     });
                     let compact = held.fold == Fold::Closed && kept.is_none() && result.is_some_and(|entry| {
-                        matches!(entry, Entry::Result { exit: Some(exit), .. } if exit.is_ok())
+                        matches!(entry, Entry::Result { exit: Some(exit), text, .. }
+                            if exit.is_ok() && (text.to_string().is_empty() || text.to_string().split('\n').count() <= FOLD_HEAD))
                     });
                     let width = rows
                         .iter()
@@ -1824,7 +1825,7 @@ impl Rows {
         if self.held[at].rows.is_none() {
             self.rows(at);
         }
-        if self.held[at].kept.is_none() {
+        if self.held[at].kept.is_none() && result_of(&self.held[at]).is_none() {
             return false;
         }
         self.held[at].fold = to;

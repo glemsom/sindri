@@ -1,4 +1,5 @@
 mod caps;
+mod fixture;
 mod frame;
 
 use frame::Frame;
@@ -2833,5 +2834,126 @@ fn tool_planes_release_on_palette_capability_reset_and_cleanup_without_changing_
         String::from_utf8(held.pass(empty.told().placements(), view.planes()))
             .unwrap()
             .contains("a=d,d=I")
+    );
+}
+
+fn tool_has_shadow(view: &mut View, cols: u16, rows: u16) -> bool {
+    let shown = frame::painted(view, cols, rows);
+    let placement = shown
+        .told()
+        .placements()
+        .iter()
+        .find(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
+        .unwrap();
+    let pixels = view.planes().image(placement.shade()).unwrap().pixels();
+    let tone = sindri::palette::channels(view.capabilities().palette().band(Band::Rail)).unwrap();
+    let pixel = pixels.get_pixel(pixels.width() / 2, pixels.height() - 2);
+    pixel.0[..3].iter().zip(tone).any(|(at, tone)| *at < tone)
+}
+
+#[test]
+fn compact_success_stops_at_the_four_result_row_head_allowance_even_without_a_fold() {
+    for (text, shadow) in [
+        ("", false),
+        ("one", false),
+        ("one\ntwo\nthree\nfour", false),
+        ("one\ntwo\nthree\nfour\nfive", true),
+        ("one\ntwo\nthree\nfour\nfive\nsix", true),
+    ] {
+        let mut view = View::of(
+            caps::pictured(),
+            railed(),
+            Transcript::of(disclosed_result(sindri_core::run::Exit::Code(0), text)),
+        );
+        assert_eq!(tool_has_shadow(&mut view, 120, 40), shadow, "{text:?}");
+    }
+}
+
+#[test]
+fn reader_opened_short_success_replaces_compact_pixels_and_keeps_source_after_resize() {
+    let text = "literal 界\n\n  aligned output";
+    let mut view = View::of(
+        caps::pictured(),
+        railed(),
+        Transcript::of(disclosed_result(sindri_core::run::Exit::Code(0), text)),
+    );
+    assert!(!tool_has_shadow(&mut view, 120, 40));
+    let closed = frame::painted(&mut view, 120, 40);
+    let mut held = sindri::plane::Held::default();
+    held.pass(closed.told().placements(), view.planes());
+    let (y, x) = closed.drawn_at("literal");
+    view.drag(Cell::new(y, x), Cell::new(y, x + 8));
+    frame::painted(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Copy), Outcome::Copy(text.to_owned()));
+    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    assert!(tool_has_shadow(&mut view, 120, 40));
+    let opened = frame::painted(&mut view, 120, 40);
+    let wire = String::from_utf8(held.pass(opened.told().placements(), view.planes())).unwrap();
+    assert!(wire.contains("a=d,d=I"));
+    assert!(wire.contains("a=T"));
+    assert!(
+        held.pass(opened.told().placements(), view.planes())
+            .is_empty()
+    );
+    for (cols, rows) in [(80, 24), (40, 24), (120, 40)] {
+        assert!(tool_has_shadow(&mut view, cols, rows));
+    }
+    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    assert!(!tool_has_shadow(&mut view, 120, 40));
+    let closed = frame::painted(&mut view, 120, 40);
+    let wire = String::from_utf8(held.pass(closed.told().placements(), view.planes())).unwrap();
+    assert!(wire.contains("a=d,d=I"));
+    assert!(wire.contains("a=T"));
+    assert!(
+        held.pass(closed.told().placements(), view.planes())
+            .is_empty()
+    );
+    assert!(
+        String::from_utf8(held.forget())
+            .unwrap()
+            .contains("a=d,d=I")
+    );
+    assert!(held.forget().is_empty());
+}
+
+#[test]
+fn short_failures_and_results_without_success_facts_keep_full_shadows() {
+    for exit in [Some(sindri_core::run::Exit::Code(7)), None] {
+        let mut entries = disclosed_result(sindri_core::run::Exit::Code(0), "diagnostic");
+        if let Entry::Result { exit: recorded, .. } = &mut entries[1] {
+            *recorded = exit;
+        }
+        let mut view = View::of(caps::pictured(), railed(), Transcript::of(entries));
+        assert!(tool_has_shadow(&mut view, 120, 40));
+    }
+}
+
+#[test]
+fn live_work_settles_to_compact_in_place_and_releases_replaced_graphics() {
+    let entries = disclosed_result(sindri_core::run::Exit::Code(0), "done");
+    let document = fixture::document();
+    let facts = railed()
+        .recorded(&document)
+        .transcribed(vec![entries[0].clone()]);
+    let mut view = View::of(caps::pictured(), facts.clone(), Transcript::none());
+    view.handed(facts.clone());
+    let live = frame::painted(&mut view, 120, 40);
+    let head = live.drawn_at("bash");
+    let invocation = live.drawn_at("make check");
+    let mut held = sindri::plane::Held::default();
+    held.pass(live.told().placements(), view.planes());
+    view.handed(facts.transcribed(entries));
+    let settled = frame::painted(&mut view, 120, 40);
+    assert_eq!(settled.drawn_at("bash"), head);
+    assert_eq!(settled.drawn_at("make check"), invocation);
+    settled.drawn_at("done");
+    assert!(view.scroll().is_tail());
+    assert!(!tool_has_shadow(&mut view, 120, 40));
+    let wire = String::from_utf8(held.pass(settled.told().placements(), view.planes())).unwrap();
+    assert!(wire.contains("a=d,d=I"));
+    assert!(wire.contains("a=T"));
+    assert!(
+        held.pass(settled.told().placements(), view.planes())
+            .is_empty()
     );
 }

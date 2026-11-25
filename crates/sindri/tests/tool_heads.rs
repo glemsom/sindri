@@ -220,3 +220,43 @@ fn opening_result_work_preserves_source_and_fold_choice_after_resize() {
         }
     }
 }
+
+#[test]
+fn compact_short_success_keeps_all_evidence_and_reader_controls_in_every_capability_and_size() {
+    use sindri::composer::{Key, Outcome};
+    use sindri::mark::Cell;
+    for capabilities in [
+        caps::pictured(),
+        caps::greys(),
+        caps::uncoloured(),
+        caps::inked(Palette::TRUECOLOR),
+        caps::inked(Palette::ANSI),
+        caps::inked(Palette::SLOTS),
+    ] {
+        for (width, height) in [(120, 40), (80, 24), (40, 24), (12, 24)] {
+            let mut view = View::of(
+                capabilities.clone(),
+                Facts::default().asked().running(),
+                Transcript::of(vec![call(), result(Some(Exit::Code(0)), "界\n\n  x")]),
+            );
+            let shown = frame::painted(&mut view, width, height);
+            let words = (0..height)
+                .map(|y| shown.row(y).trim().to_owned())
+                .collect::<String>();
+            assert!(words.contains("bash"));
+            assert!(words.contains("success"));
+            if width > 12 {
+                assert!(words.contains("987 bytes"));
+            }
+            assert!(!words.contains("kept back"));
+            let row = (0..height).find(|y| shown.row(*y).contains("界")).unwrap();
+            view.drag(Cell::new(row, 0), Cell::new(row, width - 1));
+            frame::painted(&mut view, width, height);
+            assert_eq!(view.key(Key::Copy), Outcome::Copy("界\n\n  x".to_owned()));
+            assert_eq!(view.key(Key::Fold), Outcome::Edited);
+            let open = frame::painted(&mut view, 80, 24);
+            assert!(!(0..24).any(|y| open.row(y).contains("kept back")));
+            assert_eq!(view.key(Key::Fold), Outcome::Edited);
+        }
+    }
+}
