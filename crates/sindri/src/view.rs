@@ -280,18 +280,22 @@ struct Cards {
 }
 
 impl Cards {
-    fn follow(&mut self, draft: &str, facts: &Facts) -> Option<&mut commands::Card> {
+    fn prepare(&mut self, draft: &str, facts: &Facts) -> Option<&mut commands::Card> {
+        if commands::skill_tail(draft).is_some() && self.catalog.is_none() {
+            self.catalog = facts
+                .workspace()
+                .map(|workspace| Catalog::discover(workspace, facts.home()));
+            self.card = None;
+        }
+        self.follow(draft)
+    }
+
+    fn follow(&mut self, draft: &str) -> Option<&mut commands::Card> {
         let words = match draft.starts_with('/') {
             true => draft.trim(),
             false => "",
         };
-        if commands::skill_tail(words).is_some() {
-            if self.catalog.is_none() {
-                self.catalog = facts
-                    .workspace()
-                    .map(|workspace| Catalog::discover(workspace, facts.home()));
-            }
-        } else {
+        if commands::skill_tail(words).is_none() {
             self.catalog = None;
         }
         if self.card.as_ref().map(commands::Card::words) != Some(words) {
@@ -306,9 +310,8 @@ impl Cards {
         self.card.as_mut()
     }
 
-    fn walk(&mut self, draft: &str, facts: &Facts, way: Move) -> bool {
-        self.follow(draft, facts)
-            .is_some_and(|card| card.walked(way))
+    fn walk(&mut self, draft: &str, way: Move) -> bool {
+        self.follow(draft).is_some_and(|card| card.walked(way))
     }
 
     fn dismiss(&mut self, draft: &str) {
@@ -472,7 +475,7 @@ impl View {
     }
 
     pub fn card(&mut self) -> Option<&commands::Card> {
-        let card = self.cards.follow(self.composer.text(), &self.facts)?;
+        let card = self.cards.prepare(self.composer.text(), &self.facts)?;
         Some(card)
     }
 
@@ -559,7 +562,7 @@ impl View {
         let Some(act) = self.stack.act(key) else {
             return Outcome::Unchanged;
         };
-        match act {
+        let outcome = match act {
             Act::Draft => self.draft(key),
             Act::Up => self.up(),
             Act::Copy => self.copy(),
@@ -585,7 +588,9 @@ impl View {
             Act::Tail => self.tail(key),
             Act::Before => self.prompt(key, Move::Previous),
             Act::After => self.prompt(key, Move::Next),
-        }
+        };
+        self.cards.follow(self.composer.text());
+        outcome
     }
 
     pub fn drag(&mut self, anchor: Cell, head: Cell) {
@@ -673,30 +678,20 @@ impl View {
     }
 
     fn draft(&mut self, key: Key) -> Outcome {
-        if key == Key::Down
-            && self
-                .cards
-                .walk(self.composer.text(), &self.facts, Move::Next)
-        {
+        if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
             return Outcome::Edited;
         }
-        let outcome = match self.composer.key(key) {
+        match self.composer.key(key) {
             Outcome::Send(prompt) => self.sent(prompt),
             outcome => outcome,
-        };
-        self.cards.follow(self.composer.text(), &self.facts);
-        outcome
+        }
     }
 
     fn sent(&mut self, prompt: Prompt) -> Outcome {
         if let Some(command) = commands::read(prompt.text()) {
             return self.answer(command);
         }
-        let Some(line) = self
-            .cards
-            .follow(prompt.text(), &self.facts)
-            .map(|card| card.spelling())
-        else {
+        let Some(line) = self.cards.follow(prompt.text()).map(|card| card.spelling()) else {
             return Outcome::Send(prompt);
         };
         match commands::read(&line) {
@@ -792,7 +787,7 @@ impl View {
 
     fn kept_list(&mut self) -> Option<&mut dyn Kept> {
         match self.stack.top().body() {
-            None => Some(self.cards.follow(self.composer.text(), &self.facts)?),
+            None => Some(self.cards.follow(self.composer.text())?),
             Some(Body::Files) => Some(&mut self.picker),
             Some(Body::Models) => Some(&mut self.models),
             Some(Body::Settings) => Some(&mut self.settings),
@@ -848,12 +843,7 @@ impl View {
     }
 
     fn close(&mut self) -> Outcome {
-        if self.stack.modal().is_none()
-            && self
-                .cards
-                .follow(self.composer.text(), &self.facts)
-                .is_some()
-        {
+        if self.stack.modal().is_none() && self.cards.follow(self.composer.text()).is_some() {
             self.cards.dismiss(self.composer.text());
             return Outcome::Edited;
         }
@@ -938,10 +928,7 @@ impl View {
     }
 
     fn up(&mut self) -> Outcome {
-        if self
-            .cards
-            .walk(self.composer.text(), &self.facts, Move::Previous)
-        {
+        if self.cards.walk(self.composer.text(), Move::Previous) {
             return Outcome::Edited;
         }
         if !self.composer.on_first_line() {
@@ -968,7 +955,7 @@ impl View {
             return;
         }
         self.composer.paste(text);
-        self.cards.follow(self.composer.text(), &self.facts);
+        self.cards.follow(self.composer.text());
     }
 
     pub fn handed(&mut self, facts: Facts) {
@@ -1223,7 +1210,10 @@ impl View {
             let width = card::body_width(area);
             return Some((name, leaves, self.body(screen, width)?));
         }
-        let body = self.cards.follow(self.composer.text(), &self.facts)?.body();
+        let body = self
+            .cards
+            .prepare(self.composer.text(), &self.facts)?
+            .body();
         let leaves = Mode::Composer.leaves()?;
         Some((COMMANDS_CARD, leaves, ScreenBody::Rows(body)))
     }

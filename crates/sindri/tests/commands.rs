@@ -667,12 +667,6 @@ fn skill_naming_displays_descriptions_and_refreshes_after_leaving() {
         view.key(Key::Backspace);
     }
     view.paste("/mod");
-    assert!(
-        !frame::painted(&mut view, SCREEN.0, SCREEN.1)
-            .rows()
-            .iter()
-            .any(|row| row.contains("freshly written"))
-    );
     for _ in 0..view.composer().text().len() {
         view.key(Key::Backspace);
     }
@@ -691,4 +685,26 @@ fn the_skill_command_row_hands_the_reader_its_colon() {
     let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
     let card = commands::Card::with_catalog("/skill", &catalog).unwrap();
     assert_eq!(card.spelling(), "/skill:");
+}
+
+#[test]
+fn skill_rows_include_skills_written_before_the_card_is_prepared() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/skill:deploy");
+    let directory = root.path().join(".agents/skills/deploy-new");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(
+        directory.join("SKILL.md"),
+        "---\nname: deploy-new\ndescription: freshly written\n---\nBody.\n",
+    )
+    .unwrap();
+
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    assert!(
+        drawn
+            .rows()
+            .iter()
+            .any(|row| row.contains("/skill:deploy-new"))
+    );
 }
