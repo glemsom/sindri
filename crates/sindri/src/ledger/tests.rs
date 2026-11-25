@@ -1491,12 +1491,12 @@ fn the_ledger_lays_its_blocks_in_the_order_they_are_read_with_air_between_two() 
             stated(&[(0, "workspace "), (10, "…/46-rail")]),
             stated(&[(0, "branch    "), (10, "spec/1-capability")]),
             stated(&[]),
-            stated(&[(0, "skills    "), (10, "2")]),
-            stated(&[]),
             stated(&[(0, "sandbox   "), (10, "bwrap")]),
             stated(&[]),
             stated(&[(0, "session   "), (10, "9f2c7a41")]),
             stated(&[(0, "temp      "), (10, "…/9f2c7a41/tmp")]),
+            stated(&[]),
+            stated(&[(0, "skills    "), (10, "2")]),
         ],
         "six blocks, an empty row between two of them, and nothing given up at this height"
     );
@@ -1540,7 +1540,7 @@ fn the_foot_is_parted_from_the_blocks_above_it_by_one_row_of_air() {
 
     assert_eq!(
         rows[16],
-        (16, stated(&[(0, "temp      "), (10, "…/9f2c7a41/tmp")])),
+        (16, stated(&[(0, "skills    "), (10, "2")])),
         "the blocks above the foot end on row 16, as they do on a rail that knows no spend"
     );
     assert_eq!(
@@ -1585,7 +1585,7 @@ fn a_ledger_that_knows_no_spend_gives_the_rows_at_its_foot_back_to_air() {
 
     assert_eq!(
         rows.last(),
-        Some(&stated(&[(0, "temp      "), (10, "…/9f2c7a41/tmp")])),
+        Some(&stated(&[(0, "◆"), (2, "records")])),
         "a rail that knows no spend draws no row at its foot: the block it ends on is the last \
              row it lays"
     );
@@ -1653,10 +1653,10 @@ fn every_fact_of_a_ledger_opens_its_value_on_the_field_and_a_sheet_hangs_its_fig
             "cache",
             "workspace",
             "branch",
-            "skills",
             "sandbox",
             "session",
             "temp",
+            "skills",
         ],
         "the rail states every fact the run holds on a row of its own, under its label"
     );
@@ -2615,4 +2615,25 @@ fn loaded_skill_names_fit_the_rail_without_scope_labels() {
             .all(|(x, part)| x + part.columns() <= 12)
     );
     assert_eq!(rows[0].parts.len(), 2);
+}
+
+#[test]
+fn loading_more_skills_keeps_sandbox_session_and_temp_above_skills() {
+    let mut facts = frame();
+    let area = band(COLUMNS, 30);
+    let before = rows(&facts, Shape::Ledger, area, None);
+    facts.loaded = ["bash", "records", "code-review", "diagnosing-bugs"]
+        .into_iter()
+        .collect();
+    let after = rows(&facts, Shape::Ledger, area, None);
+    let position = |rows: &[Row], kind| {
+        rows.iter()
+            .find(|row| row.kind() == Some(kind))
+            .unwrap()
+            .y()
+    };
+    for kind in [Kind::Sandbox, Kind::Session, Kind::Temp] {
+        assert_eq!(position(&before, kind), position(&after, kind));
+        assert!(position(&after, kind) < position(&after, Kind::Skills));
+    }
 }

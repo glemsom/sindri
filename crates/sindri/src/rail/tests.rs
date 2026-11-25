@@ -174,10 +174,10 @@ const CONTRACT: [(&str, &str); 12] = [
     ("cache", "88%"),
     ("workspace", "…/46-rail"),
     ("branch", "spec/1-capability"),
-    ("skills", "2"),
     ("sandbox", "bwrap"),
     ("session", "9f2c7a41"),
     ("temp", "…/9f2c7a41/tmp"),
+    ("skills", "2"),
 ];
 
 #[test]
@@ -1218,12 +1218,12 @@ fn the_ledger_reads_its_blocks_in_the_contracts_order_with_air_between_two() {
             "  workspace …/46-rail           ",
             "  branch    spec/1-capability   ",
             "                                ",
-            "  skills    2                   ",
-            "                                ",
             "  sandbox   bwrap               ",
             "                                ",
             "  session   9f2c7a41            ",
             "  temp      …/9f2c7a41/tmp      ",
+            "                                ",
+            "  skills    2                   ",
         ],
         "six blocks, an empty row between two of them, nothing given up at this width"
     );

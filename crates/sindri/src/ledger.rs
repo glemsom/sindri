@@ -607,9 +607,9 @@ const BLOCKS: [&[Kind]; 7] = [
     &[Kind::Wire, Kind::Model, Kind::Think],
     &[Kind::Turns, Kind::Ctx, Kind::Cache],
     &[Kind::Workspace, Kind::Branch],
-    &[Kind::Skills],
     &[Kind::Sandbox],
     &[Kind::Session, Kind::Temp],
+    &[Kind::Skills],
 ];
 
 const FOOT: [Kind; 3] = [Kind::Input, Kind::Output, Kind::Total];
