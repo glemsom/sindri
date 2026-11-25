@@ -2468,3 +2468,370 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
             .any(|row| row.contains("rows kept back"))
     );
 }
+
+#[test]
+fn huge_opened_tool_uploads_are_bounded_by_the_visible_band_through_scroll_and_resize() {
+    let words = (0..60_000)
+        .map(|n| format!("row {n}\n"))
+        .collect::<String>();
+    let mut view = View::of(
+        caps::pictured(),
+        railed(),
+        Transcript::of(disclosed_result(sindri_core::run::Exit::Code(1), &words)),
+    );
+    let folded = frame::painted(&mut view, 120, 40);
+    let (y, x) = folded.drawn_at("rows kept back");
+    assert_eq!(
+        view.pointer(folded.told(), Pointer::Press(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    assert!(
+        folded
+            .told()
+            .placements()
+            .iter()
+            .any(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
+    );
+    let mut held = sindri::plane::Held::default();
+    for (cols, rows) in [(120, 40), (120, 40), (80, 24), (40, 24), (120, 48)] {
+        for pass in 0..12 {
+            let frame = frame::painted(&mut view, cols, rows);
+            let band = frame.told().layout().unwrap().transcript;
+            for placement in frame
+                .told()
+                .placements()
+                .iter()
+                .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
+            {
+                assert_eq!(placement.cells().intersection(band), placement.cells());
+                let image = view.planes().image(placement.shade()).unwrap().pixels();
+                assert!(image.width() <= u32::from(band.width) * 10);
+                assert!(
+                    image.height() <= u32::from(band.height) * 20 * 3,
+                    "Tool image height {} exceeds visible-band bound",
+                    image.height()
+                );
+            }
+            let wire = held.pass(frame.told().placements(), view.planes());
+            assert!(wire.len() <= usize::from(cols) * usize::from(rows) * 10 * 20 * 16 + 100_000);
+            use base64::Engine;
+            let text = std::str::from_utf8(&wire).unwrap();
+            let mut payload = String::new();
+            let mut uploads = 0;
+            for op in text.split("\x1b_G").skip(1) {
+                let command = op.split("\x1b\\").next().unwrap();
+                let Some((head, chunk)) = command.split_once(';') else {
+                    continue;
+                };
+                payload.push_str(chunk);
+                if head.split(',').any(|field| field == "m=0") {
+                    let png = base64::engine::general_purpose::STANDARD
+                        .decode(&payload)
+                        .unwrap();
+                    let image = image::load_from_memory(&png).unwrap();
+                    assert!(image.width() <= u32::from(cols) * 10);
+                    assert!(image.height() <= u32::from(rows) * 20 * 3);
+                    assert!(png.len() <= usize::from(cols) * usize::from(rows) * 10 * 20 * 13);
+                    payload.clear();
+                    uploads += 1;
+                }
+            }
+            assert!(payload.is_empty());
+            if pass == 0 {
+                assert!(uploads > 0 || !wire.is_empty());
+            }
+            assert!(
+                held.pass(frame.told().placements(), view.planes())
+                    .is_empty()
+            );
+            if pass % 3 == 0 {
+                view.key(Key::PageUp);
+            } else {
+                view.pointer(frame.told(), Pointer::Wheel(sindri::pointer::Notch::Up));
+            }
+        }
+    }
+}
+
+#[test]
+fn every_ink_keeps_its_floor_on_success_failure_and_running_tool_pixels() {
+    use sindri::palette::{LEGIBLE, channels};
+    let luminance = |rgb: [u8; 3]| {
+        let [r, g, b] = rgb.map(|v| {
+            let v = f64::from(v) / 255.0;
+            if v <= 0.04045 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        });
+        0.2126 * r + 0.7152 * g + 0.0722 * b
+    };
+    for exit in [
+        Some(sindri_core::run::Exit::Code(0)),
+        Some(sindri_core::run::Exit::Code(1)),
+        None,
+    ] {
+        for capabilities in [caps::pictured(), caps::greys()] {
+            let palette = capabilities.palette();
+            let mut view = View::of(
+                capabilities,
+                railed(),
+                Transcript::of({
+                    let mut entries = disclosed_result(
+                        exit.unwrap_or(sindri_core::run::Exit::Code(0)),
+                        "ordinary output 界",
+                    );
+                    if exit.is_none() {
+                        entries.pop();
+                    }
+                    entries
+                }),
+            );
+            let frame = frame::painted(&mut view, 120, 40);
+            for placement in frame.told().placements() {
+                let plane = view.planes().image(placement.shade()).unwrap();
+                let prompt = matches!(placement.shade().id(), sindri::plane::PlaneId::Tool(_));
+                let cell = sindri::graphics::CellSize::NOMINAL;
+                for (x, y, pixel) in plane.pixels().enumerate_pixels() {
+                    if placement.seam().is_some_and(|(axis, _)| match axis {
+                        sindri::plane::Axis::Down => x < cell.width(),
+                        sindri::plane::Axis::Across => y < cell.height(),
+                    }) {
+                        continue;
+                    }
+                    if pixel[3] == 0 {
+                        continue;
+                    }
+                    let bg = luminance([pixel[0], pixel[1], pixel[2]]);
+                    for ink in Ink::ALL {
+                        let Some(rgb) = channels(palette.colour(ink)) else {
+                            continue;
+                        };
+                        let fg = luminance(rgb);
+                        let ratio = (fg.max(bg) + 0.05) / (fg.min(bg) + 0.05);
+                        let floor = if prompt && ink == Ink::Plain {
+                            4.5
+                        } else {
+                            LEGIBLE
+                        };
+                        assert!(
+                            ratio >= floor,
+                            "{ink:?} on {:?}: {ratio}",
+                            placement.shade().id()
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+#[test]
+fn partially_visible_open_tool_stays_clipped_through_resize_scale_and_fallback() {
+    let words = (1..=60)
+        .map(|n| format!("visible literal row {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut view = View::of(
+        caps::pictured(),
+        railed(),
+        Transcript::of(disclosed_result(sindri_core::run::Exit::Code(1), &words)),
+    );
+    let closed = frame::painted(&mut view, 80, 24);
+    let (y, x) = closed.drawn_at("rows kept back");
+    assert_eq!(
+        view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    let mut held = sindri::plane::Held::default();
+    for (cols, rows, cell) in [(80, 24, (10, 20)), (120, 40, (12, 24)), (40, 16, (8, 16))] {
+        view.celled(Some(sindri::graphics::CellSize::new(cell.0, cell.1)));
+        let frame = frame::painted(&mut view, cols, rows);
+        assert!(!frame.words().iter().any(|r| r.contains("rows kept back")));
+        let band = frame.told().layout().unwrap().transcript;
+        let surfaces: Vec<_> = frame
+            .told()
+            .placements()
+            .iter()
+            .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
+            .collect();
+        assert_eq!(surfaces.len(), 1);
+        let p = surfaces[0];
+        assert_eq!(p.cells().intersection(band), p.cells());
+        assert!(p.shows().unwrap().y > 0);
+        assert_eq!(
+            p.shows().unwrap().height,
+            u32::from(p.cells().height) * cell.1
+        );
+        let wire = String::from_utf8(held.pass(frame.told().placements(), view.planes())).unwrap();
+        assert!(wire.contains("a=T"));
+        assert!(
+            held.pass(frame.told().placements(), view.planes())
+                .is_empty()
+        );
+    }
+    view.drawn_on(caps::uncoloured());
+    let fallback = frame::painted(&mut view, 40, 16);
+    let wire = String::from_utf8(held.pass(fallback.told().placements(), view.planes())).unwrap();
+    assert_eq!(wire.matches("a=d,d=I").count(), 1);
+    assert!(!wire.contains("a=T"));
+    assert!(
+        !fallback
+            .words()
+            .iter()
+            .any(|r| r.contains("rows kept back"))
+    );
+    fallback.drawn_at("visible literal row 60");
+}
+
+#[test]
+fn illuminated_tool_clipping_moves_the_original_pixels_and_preserves_end_corners() {
+    let words = (0..8)
+        .map(|n| format!("literal row {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut entries = disclosed_result(sindri_core::run::Exit::Code(1), &words);
+    for n in 0..12 {
+        entries.push(Entry::Assistant {
+            turn: 1,
+            text: SecretSet::default().redact(format!("tail {n}")),
+        });
+    }
+    let mut view = View::of(caps::pictured(), railed(), Transcript::of(entries));
+    let mut held = sindri::plane::Held::default();
+    frame::painted(&mut view, 80, 24);
+    while view.key(Key::PageUp) == Outcome::Edited {
+        frame::painted(&mut view, 80, 24);
+    }
+    let top = frame::painted(&mut view, 80, 24);
+    let band = top.told().layout().unwrap().transcript;
+    let (y, x) = top.drawn_at("rows kept back");
+    view.pointer(top.told(), Pointer::Press(Cell::new(y, x)));
+    let opened = frame::painted(&mut view, 80, 24);
+    let surfaces: Vec<_> = opened
+        .told()
+        .placements()
+        .iter()
+        .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
+        .collect();
+    assert!(!surfaces.is_empty());
+    for p in &surfaces {
+        assert_eq!(p.cells().intersection(band), p.cells());
+    }
+    held.pass(opened.told().placements(), view.planes());
+    view.pointer(opened.told(), Pointer::Wheel(sindri::pointer::Notch::Down));
+    let moved = frame::painted(&mut view, 80, 24);
+    let wire = String::from_utf8(held.pass(moved.told().placements(), view.planes())).unwrap();
+    assert!(
+        wire.contains("a=p"),
+        "scrolling a still-visible surface reuses its pixels"
+    );
+    let prompt = moved
+        .told()
+        .placements()
+        .iter()
+        .find(|p| {
+            matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_))
+                && p.shows().is_some_and(|crop| crop.y > 0)
+        })
+        .unwrap();
+    assert!(prompt.shows().unwrap().y > 0);
+    let plane = view.planes().image(prompt.shade()).unwrap();
+    assert_ne!(
+        plane.pixels().get_pixel(0, 0),
+        plane.pixels().get_pixel(4, 4)
+    );
+    for pixel in plane.pixels().pixels() {
+        let color = ratatui::style::Color::Rgb(pixel[0], pixel[1], pixel[2]);
+        let luminance = |color| {
+            let c = sindri::palette::channels(color).unwrap().map(|v| {
+                let v = f64::from(v) / 255.0;
+                if v <= 0.04045 {
+                    v / 12.92
+                } else {
+                    ((v + 0.055) / 1.055).powf(2.4)
+                }
+            });
+            c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722
+        };
+        let ink = luminance(opened.palette().ink(Ink::Plain).0);
+        let surface = luminance(color);
+        assert!((ink.max(surface) + 0.05) / (ink.min(surface) + 0.05) >= 4.5);
+    }
+}
+
+#[test]
+fn tool_planes_release_on_palette_capability_reset_and_cleanup_without_changing_words() {
+    let mut view = View::of(
+        caps::pictured(),
+        railed(),
+        Transcript::of(disclosed_result(
+            sindri_core::run::Exit::Code(0),
+            "literal 界\n\n  aligned output",
+        )),
+    );
+    let mut held = sindri::plane::Held::default();
+    let first = frame::painted(&mut view, 120, 40);
+    let words = first
+        .words()
+        .iter()
+        .take(6)
+        .map(|r| r.chars().take(26).collect::<String>().trim_end().to_owned())
+        .collect::<Vec<_>>();
+    assert!(
+        String::from_utf8(held.pass(first.told().placements(), view.planes()))
+            .unwrap()
+            .contains("a=T")
+    );
+    assert!(
+        held.pass(first.told().placements(), view.planes())
+            .is_empty()
+    );
+    for capabilities in [
+        caps::greys(),
+        caps::uncoloured(),
+        caps::pictured(),
+        caps::inked(Palette::ANSI),
+        caps::pictured(),
+    ] {
+        view.drawn_on(capabilities);
+        let next = frame::painted(&mut view, 120, 40);
+        assert_eq!(
+            next.words()
+                .iter()
+                .take(6)
+                .map(|r| r.chars().take(26).collect::<String>().trim_end().to_owned())
+                .collect::<Vec<_>>(),
+            words
+        );
+        let wire = String::from_utf8(held.pass(next.told().placements(), view.planes())).unwrap();
+        assert!(wire.contains("a=d,d=I") || wire.contains("a=T"));
+        assert!(
+            held.pass(next.told().placements(), view.planes())
+                .is_empty()
+        );
+    }
+    assert!(
+        String::from_utf8(held.forget())
+            .unwrap()
+            .contains("a=d,d=I")
+    );
+    assert!(held.forget().is_empty());
+    let visible = frame::painted(&mut view, 120, 40);
+    held.pass(visible.told().placements(), view.planes());
+    view.paste("/new");
+    view.key(Key::Enter);
+    let empty = frame::painted(&mut view, 120, 40);
+    assert!(
+        !empty
+            .told()
+            .placements()
+            .iter()
+            .any(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
+    );
+    assert!(
+        String::from_utf8(held.pass(empty.told().placements(), view.planes()))
+            .unwrap()
+            .contains("a=d,d=I")
+    );
+}

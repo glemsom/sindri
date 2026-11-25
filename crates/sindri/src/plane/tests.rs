@@ -265,7 +265,9 @@ fn lit_bands(palette: &Palette) -> Vec<(&'static str, Band, Placement)> {
 fn band_of(placement: &Placement) -> Band {
     match placement.shade().id() {
         PlaneId::Transcript => Band::Well,
-        PlaneId::Rail | PlaneId::Gauge | PlaneId::Bar(_) | PlaneId::Bezel => Band::Rail,
+        PlaneId::Tool(_) | PlaneId::Rail | PlaneId::Gauge | PlaneId::Bar(_) | PlaneId::Bezel => {
+            Band::Rail
+        }
         PlaneId::Prompt(_) | PlaneId::Composer | PlaneId::Caret | PlaneId::Face => Band::Prompt,
     }
 }

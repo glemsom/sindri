@@ -94,6 +94,7 @@ pub struct Row {
     names: Option<usize>,
     band: Option<Band>,
     tool_width: Option<u16>,
+    tool_compact: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -137,6 +138,7 @@ impl Row {
             names: None,
             band: None,
             tool_width: None,
+            tool_compact: false,
         }
     }
 
@@ -165,12 +167,26 @@ impl Row {
             names: None,
             band: None,
             tool_width: None,
+            tool_compact: false,
         }
     }
 
     pub fn standing(mut self, band: Band) -> Row {
         self.band = Some(band);
         self
+    }
+
+    pub(crate) fn tool_surface(&self) -> Option<(u16, Ink, bool)> {
+        self.tool_width.map(|width| {
+            let ink = if self.spans.iter().any(|(_, look)| look.ink() == Ink::Err) {
+                Ink::Err
+            } else if self.spans.iter().any(|(text, _)| text.contains(PENDING)) {
+                Ink::Accent
+            } else {
+                Ink::Dim
+            };
+            (width, ink, self.tool_compact)
+        })
     }
 
     pub fn stands_on(&self) -> Option<Band> {
@@ -257,6 +273,7 @@ impl Row {
             names: self.names,
             band: self.band,
             tool_width: self.tool_width,
+            tool_compact: self.tool_compact,
         }
     }
 
@@ -321,6 +338,20 @@ impl Row {
         links: &mut Links,
         sizes: &mut Sizes,
     ) {
+        if let Some(width) = self.tool_width {
+            pen::claim(
+                buffer,
+                Rect::new(
+                    area.x + MARGIN,
+                    area.y,
+                    width
+                        .saturating_sub(MARGIN)
+                        .min(area.width.saturating_sub(margins())),
+                    1,
+                ),
+                palette.ground(Some(Band::Rail)),
+            );
+        }
         if let Some(band) = self.band {
             let surface = match band {
                 Band::Prompt => Rect {
@@ -1537,6 +1568,13 @@ impl Rows {
             };
             if let Some((mut rows, kept)) = laid {
                 if edged {
+                    let result = held.result.as_ref().or_else(|| match &held.what {
+                        What::Fact(entry @ Entry::Result { .. }) => Some(entry),
+                        _ => None,
+                    });
+                    let compact = held.fold == Fold::Closed && kept.is_none() && result.is_some_and(|entry| {
+                        matches!(entry, Entry::Result { exit: Some(exit), .. } if exit.is_ok())
+                    });
                     let width = rows
                         .iter()
                         .map(Row::width)
@@ -1553,6 +1591,7 @@ impl Rows {
                             fence.gutter = fence.gutter.saturating_add(4);
                         }
                         inset.tool_width = Some(width);
+                        inset.tool_compact = compact;
                         *row = inset;
                     }
                 }

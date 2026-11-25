@@ -2308,7 +2308,7 @@ fn a_call_wears_the_mark_its_verdict_settled_on_and_no_mark_before_one() {
     let opened = painted(&rows.rows(0)[0], 80);
     assert_eq!(
         said(&opened),
-        "… bash running",
+        "  │ … bash running",
         "a call still out wears its ellipsis"
     );
     assert_eq!(
@@ -2321,10 +2321,10 @@ fn a_call_wears_the_mark_its_verdict_settled_on_and_no_mark_before_one() {
     let settled = painted(&rows.rows(0)[0], 80);
     assert_eq!(
         said(&settled),
-        "✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash failure exit 1 2 ms",
         "a call a result settled on wears the cross of its verdict and the name it was called by"
     );
-    assert_eq!(cell_inks(&settled)[0], Ink::Err);
+    assert_eq!(cell_inks(&settled)[4], Ink::Err);
 }
 
 #[test]
@@ -2335,7 +2335,7 @@ fn a_result_the_cache_reads_on_its_own_still_says_the_tool_it_came_from() {
 
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "✓ bash success 2 ms",
+        "  │ ✓ bash success 2 ms",
         "a result with no call above it names the tool, because no call row holds that name for it"
     );
 }
@@ -2352,12 +2352,12 @@ fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_t
     let settled: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         settled[..opened],
-        ["✓ bash success 2 ms", "  ls"],
+        ["    ✓ bash success 2 ms", "      ls"],
         "the call keeps the row it opened and the words it was called with: {settled:?}"
     );
     assert_eq!(
         settled.last().unwrap(),
-        "  exit 0 · 7 bytes",
+        "      exit 0 · 7 bytes",
         "and under them the result says the verdict, how long the call took and how much it \
          wrote: {settled:?}"
     );
@@ -2638,7 +2638,7 @@ fn a_session_read_back_is_folded_again() {
 
     assert_eq!(
         kept_back_row(rows.rows(1)).as_deref(),
-        Some("⋯ 17 rows kept back"),
+        Some("    ⋯ 17 rows kept back"),
         "a result read back from a session is a fold again, because a fold is a fact of the \
          layout and never a state the session carries: {drawn:?}"
     );
@@ -2859,11 +2859,11 @@ fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
         "the run in flight draws its thought as it lands: {laid:?}"
     );
     assert!(
-        laid.iter().any(|row| row.starts_with("✓ bash success")),
+        laid.iter().any(|row| row.starts_with("    ✓ bash success")),
         "and the call the result settled: {laid:?}"
     );
     assert!(
-        laid.iter().any(|row| row == "  exit 0 · 7 bytes"),
+        laid.iter().any(|row| row == "      exit 0 · 7 bytes"),
         "and the result under it: {laid:?}"
     );
     assert!(
@@ -2941,7 +2941,7 @@ fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
         .collect();
     let said: Vec<&String> = laid.iter().map(|(_, row)| row).collect();
     assert!(
-        said.iter().any(|row| row.starts_with("✓ bash success")),
+        said.iter().any(|row| row.starts_with("    ✓ bash success")),
         "the run in flight draws the call of the turn that ended: {said:?}"
     );
     assert!(
@@ -3016,7 +3016,7 @@ fn one_key_opens_the_newest_settled_works_row_and_the_same_key_closes_it_again()
 
     let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        opened[0], "✓ bash success 4.1 s",
+        opened[0], "    ✓ bash success 4.1 s",
         "the opened work is drawn under the prompt as its entries are: {opened:?}"
     );
     assert_eq!(
@@ -3088,7 +3088,7 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
     );
     let still: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        still[0], "✓ bash success 1.8 s",
+        still[0], "    ✓ bash success 1.8 s",
         "the work the reader opened is still open with an entry landing after it: {still:?}"
     );
 
@@ -3097,7 +3097,7 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
     });
     let after: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        after[0], "✓ bash success 1.8 s",
+        after[0], "    ✓ bash success 1.8 s",
         "and the prompt after it is a word of the exchange below, so the work stands as open as \
          the reader left it: {after:?}"
     );
@@ -3130,12 +3130,12 @@ fn a_row_the_mark_is_grown_over_opens_the_work_it_stands_on() {
     let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
         opened[..2],
-        ["✓ bash success 1.8 s", "  ls"],
+        ["    ✓ bash success 1.8 s", "      ls"],
         "the opened work keeps the call's head and the words it was called with: {opened:?}"
     );
     assert_eq!(
         kept_back_row(rows.rows(1)).as_deref(),
-        Some("⋯ 16 rows kept back"),
+        Some("    ⋯ 16 rows kept back"),
         "and the result inside it keeps its own fold, its count and the head it is handed by: \
          {opened:?}"
     );
@@ -3378,13 +3378,13 @@ fn a_transcript_whose_calls_hold_no_identity_pairs_each_result_with_the_call_bef
 
     assert_eq!(rows.len(), 3, "the turn and the two calls it holds");
     assert_eq!(
-        said(&painted(&rows.rows(1)[0], 80)),
-        "✓ bash success 2 ms",
+        said(&painted(&rows.rows(1)[1], 80)),
+        "  │ ✓ bash success 2 ms",
         "with no identity to pair by, the first result settles the first call"
     );
     assert_eq!(
         said(&painted(&rows.rows(2)[0], 80)),
-        "✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash failure exit 1 2 ms",
         "and the second settles the second, so a session from either side of this change draws"
     );
 }
@@ -3418,13 +3418,13 @@ fn a_transcript_of_two_calls_pairs_them_by_identity_when_it_is_read_back() {
 
     assert_eq!(rows.len(), 3, "the turn and the two calls it holds");
     assert_eq!(
-        said(&painted(&rows.rows(1)[0], 80)),
-        "✓ bash success 2 ms",
+        said(&painted(&rows.rows(1)[1], 80)),
+        "  │ ✓ bash success 2 ms",
         "the identity survives the file it is written to, so the call it names settles here"
     );
     assert_eq!(
         said(&painted(&rows.rows(2)[0], 80)),
-        "✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash failure exit 1 2 ms",
         "and the call below it takes its own result, read back in the other order"
     );
 }
@@ -3526,7 +3526,7 @@ fn a_cancelled_call_is_a_row_and_not_a_dangling_spinner() {
     rows.push(call(1));
     let in_flight = said(&painted(&rows.rows(0)[0], 80));
     assert_eq!(
-        in_flight, "… bash running",
+        in_flight, "  │ … bash running",
         "a call that has not settled names itself and claims nothing"
     );
 
@@ -3535,10 +3535,10 @@ fn a_cancelled_call_is_a_row_and_not_a_dangling_spinner() {
 
     assert_eq!(
         said(&settled),
-        "✗ bash failure cancelled 2 ms",
+        "  │ ✗ bash failure cancelled 2 ms",
         "the row the cancelled call settles on says what stopped it"
     );
-    assert_eq!(cell_inks(&settled)[0], Ink::Err);
+    assert_eq!(cell_inks(&settled)[4], Ink::Err);
 }
 
 #[test]
@@ -3553,12 +3553,12 @@ fn a_wave_of_calls_settles_its_rows_in_the_order_the_run_wrote_them() {
     assert_eq!(rows.len(), 2, "two calls, two rows");
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "✓ bash success 2 ms",
+        "  │ ✓ bash success 2 ms",
         "the first result settles the first call"
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash failure exit 1 2 ms",
         "and the second settles the second"
     );
 }
@@ -3575,13 +3575,13 @@ fn a_result_settles_the_call_it_names_when_a_turn_holds_two_calls_to_one_tool() 
     assert_eq!(rows.len(), 2, "two calls, two rows");
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "✓ bash success 2 ms",
+        "  │ ✓ bash success 2 ms",
         "the first call wears the verdict of the result that named it, though that result landed \
          after the one that named the call below it"
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash failure exit 1 2 ms",
         "and the second call wears the verdict of its own result, so neither is guessed"
     );
 }
@@ -3601,12 +3601,12 @@ fn a_result_naming_a_call_the_cache_never_held_opens_a_row_of_its_own() {
     );
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "… bash running",
+        "  │ … bash running",
         "the call the result never named still waits for its own"
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "✓ bash success 2 ms",
+        "  │ ✓ bash success 2 ms",
         "and the result stands alone, saying its verdict and the name the call row it never \
          settled would have held"
     );
@@ -3627,13 +3627,13 @@ fn a_settled_call_keeps_its_words_above_the_row_that_says_how_it_ended() {
     let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         drawn[..2],
-        ["✓ bash success 2 ms", "  ls"],
+        ["    ✓ bash success 2 ms", "      ls"],
         "the entry is the call's rows first, so what was run stands above what came of it: \
          {drawn:?}"
     );
     assert_eq!(
         drawn.last().unwrap(),
-        "  exit 0 · 7 bytes",
+        "      exit 0 · 7 bytes",
         "and the result's row under them: {drawn:?}"
     );
 }
@@ -3674,8 +3674,8 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
         );
     }
     assert_eq!(
-        said(&painted(&rows.rows(settled_at)[0], 80)),
-        "✗ bash failure exit 1 2 ms",
+        said(&painted(&rows.rows(settled_at)[1], 80)),
+        "  │ ✗ bash failure exit 1 2 ms",
         "and the entry the call opened is the one that was laid again"
     );
     assert_eq!(

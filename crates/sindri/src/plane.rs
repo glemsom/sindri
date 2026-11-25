@@ -47,6 +47,7 @@ pub enum PlaneId {
     Bar(Bar),
     Bezel,
     Prompt(u32),
+    Tool(u32),
 }
 
 impl PlaneId {
@@ -76,6 +77,7 @@ impl PlaneId {
             PlaneId::Bar(Bar::Output) => 340,
             PlaneId::Bezel => 341,
             PlaneId::Prompt(id) => 0x8000_0000 | id,
+            PlaneId::Tool(id) => 0x4000_0000 | id,
         }
     }
 }
@@ -114,6 +116,7 @@ impl Size {
 enum Kind {
     Prompt {
         id: u32,
+        tool: bool,
         size: Size,
         full_rows: u16,
         first_row: u16,
@@ -189,7 +192,13 @@ enum Kind {
 impl Shade {
     pub fn id(&self) -> PlaneId {
         match self.kind {
-            Kind::Prompt { id, .. } => PlaneId::Prompt(id),
+            Kind::Prompt { id, tool, .. } => {
+                if tool {
+                    PlaneId::Tool(id)
+                } else {
+                    PlaneId::Prompt(id)
+                }
+            }
             Kind::Transcript { .. } => PlaneId::Transcript,
             Kind::Rail { .. } => PlaneId::Rail,
             Kind::Composer { .. } => PlaneId::Composer,
@@ -332,6 +341,7 @@ impl Shade {
         let size = self.size();
         match self.kind {
             Kind::Prompt {
+                tool,
                 full_rows,
                 first_row,
                 tone,
@@ -359,6 +369,11 @@ impl Shade {
                     }
                     let edge = dx.min(dy);
                     if edge < 1.0 || corner > radius - 1.0 {
+                        let accent = if tool && x >= cell.width().saturating_mul(2) {
+                            tone
+                        } else {
+                            accent
+                        };
                         return image::Rgba(lit(tone, accent, peak));
                     }
                     let light =
@@ -719,6 +734,7 @@ impl Placement {
             shade: Shade {
                 kind: Kind::Prompt {
                     id,
+                    tool: false,
                     size: Size {
                         cols: cells.width,
                         rows: raster_rows,
@@ -760,6 +776,39 @@ impl Placement {
                 },
             },
         ))
+    }
+
+    pub(crate) fn tool(
+        id: u32,
+        cells: Rect,
+        rows: u16,
+        skip: u16,
+        band_rows: u16,
+        cell: Option<CellSize>,
+        palette: &Palette,
+        ink: Ink,
+        compact: bool,
+    ) -> Option<Placement> {
+        if id >= 0x4000_0000 {
+            return None;
+        }
+        let mut at = Self::prompt(id, cells, rows, skip, band_rows, cell, palette)?;
+        if let Kind::Prompt {
+            tool,
+            tone,
+            accent,
+            peak,
+            weight,
+            ..
+        } = &mut at.shade.kind
+        {
+            *tool = true;
+            *tone = palette.band(Band::Rail);
+            *accent = palette.ink(ink).0;
+            *peak = palette.peak(Band::Rail) / 3;
+            *weight = if compact { 0 } else { palette.seam() / 6 };
+        }
+        Some(at)
     }
 
     /// The composer's band: the draft's rows on the prompt's tone, closed on the rail's own.
@@ -1302,7 +1351,7 @@ fn transmit(sent: &mut Vec<u8>, head: &str, encoded: &str) {
 }
 
 fn delete(id: PlaneId) -> Vec<u8> {
-    let mode = if matches!(id, PlaneId::Prompt(_)) {
+    let mode = if matches!(id, PlaneId::Prompt(_) | PlaneId::Tool(_)) {
         'I'
     } else {
         'i'
