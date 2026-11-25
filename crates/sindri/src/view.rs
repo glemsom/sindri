@@ -653,6 +653,11 @@ impl View {
     }
 
     fn fold(&mut self) -> Outcome {
+        if let Some(entry) = self.covered(self.drawn.span())
+            && self.rows.toggle_result(entry)
+        {
+            return Outcome::Edited;
+        }
         match self.rows.toggle_newest() {
             true => Outcome::Edited,
             false => Outcome::Unchanged,

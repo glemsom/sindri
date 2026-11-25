@@ -2333,3 +2333,138 @@ fn huge_opened_prompt_uploads_are_bounded_by_the_visible_band_through_scroll_and
         }
     }
 }
+
+fn disclosed_result(exit: sindri_core::run::Exit, text: &str) -> Vec<Entry> {
+    let secrets = SecretSet::default();
+    vec![
+        Entry::Call {
+            turn: 1,
+            id: None,
+            name: secrets.redact("bash"),
+            arguments: secrets.redact(r#"{"command":"make check"}"#),
+        },
+        Entry::Result {
+            turn: 1,
+            id: None,
+            name: secrets.redact("bash"),
+            text: secrets.redact(text),
+            bytes: text.len() as u64,
+            elapsed_ms: 2,
+            exit: Some(exit),
+        },
+    ]
+}
+
+#[test]
+fn failed_result_discloses_recorded_diagnostic_before_its_output_fold() {
+    let text = "building\n\n  target    state\n  one       waiting\n  two       waiting\n\nerror: permission denied\n";
+    for capabilities in [
+        caps::pictured(),
+        caps::inked(Palette::TRUECOLOR),
+        caps::greys(),
+        caps::inked(Palette::ANSI),
+        caps::uncoloured(),
+        caps::inked(Palette::SLOTS),
+    ] {
+        let mut view = View::of(
+            capabilities.faced(false),
+            railed(),
+            Transcript::of(disclosed_result(sindri_core::run::Exit::Code(1), text)),
+        );
+        let closed = frame::painted(&mut view, 120, 40);
+        let (diagnostic, _) = closed.drawn_at("error: permission denied");
+        let (fold, _) = closed.drawn_at("4 rows kept back");
+        assert!(diagnostic < fold);
+    }
+}
+
+#[test]
+fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow() {
+    let text = "first\n\n  target    state\n  one       waiting\n  two       waiting\n\nlast 界\n";
+    for capabilities in [
+        caps::pictured(),
+        caps::inked(Palette::TRUECOLOR),
+        caps::greys(),
+        caps::inked(Palette::ANSI),
+        caps::uncoloured(),
+        caps::inked(Palette::SLOTS),
+    ] {
+        let pointing = capabilities.reports_pointer();
+        let mut view = View::of(
+            capabilities.faced(false),
+            railed(),
+            Transcript::of(disclosed_result(sindri_core::run::Exit::Code(0), text)),
+        );
+        let closed = frame::painted(&mut view, 120, 40);
+        let (head, _) = closed.drawn_at("first");
+        let (tail, _) = closed.drawn_at("4 rows kept back");
+        view.drag(Cell::new(head, 0), Cell::new(tail, 110));
+        frame::painted(&mut view, 120, 40);
+        assert_eq!(view.key(Key::Copy), Outcome::Copy(text.to_owned()));
+        assert_eq!(view.key(Key::Fold), Outcome::Edited);
+        for (cols, rows) in [(80, 24), (40, 24), (12, 24), (120, 40)] {
+            let open = frame::painted(&mut view, cols, rows);
+            assert!(!open.rows().iter().any(|row| row.contains("rows kept back")));
+        }
+        assert_eq!(view.key(Key::Fold), Outcome::Edited);
+        let closed = frame::painted(&mut view, 120, 40);
+        let (y, x) = closed.drawn_at("4 rows kept back");
+        if !pointing {
+            assert_eq!(
+                view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+                Outcome::Unchanged
+            );
+            continue;
+        }
+        assert_eq!(
+            view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+            Outcome::Edited
+        );
+        let open = frame::painted(&mut view, 120, 40);
+        open.drawn_at("last 界");
+        let (y, x) = open.drawn_at("first");
+        assert_eq!(
+            view.pointer(open.told(), Pointer::Press(Cell::new(y, x))),
+            Outcome::Edited
+        );
+        frame::painted(&mut view, 120, 40).drawn_at("4 rows kept back");
+    }
+}
+
+#[test]
+fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
+    let text = "first\nsecond\nthird\nfourth\nfifth\nsixth\nseventh\neighth";
+    let mut entries = vec![Entry::Prompt {
+        text: SecretSet::default().redact("check this"),
+    }];
+    entries.extend(disclosed_result(sindri_core::run::Exit::Code(0), text));
+    entries.extend(answer("The answer remains here."));
+    entries.push(Entry::Stop {
+        stop: sindri_core::run::Stop::Final,
+    });
+    let mut view = View::of(
+        caps::pictured().faced(false),
+        railed(),
+        Transcript::of(entries),
+    );
+    frame::painted(&mut view, 120, 40).drawn_at("1 call");
+    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    let closed = frame::painted(&mut view, 120, 40);
+    let (y, x) = closed.drawn_at("4 rows kept back");
+    assert_eq!(
+        view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    frame::painted(&mut view, 120, 40).drawn_at("eighth");
+    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    frame::painted(&mut view, 40, 24).drawn_at("1 call");
+    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    let reopened = frame::painted(&mut view, 120, 40);
+    reopened.drawn_at("eighth");
+    assert!(
+        !reopened
+            .rows()
+            .iter()
+            .any(|row| row.contains("rows kept back"))
+    );
+}
