@@ -276,18 +276,35 @@ impl Painted {
 struct Cards {
     dismissed: Option<String>,
     card: Option<commands::Card>,
+    catalog: Option<Catalog>,
 }
 
 impl Cards {
+    fn prepare(&mut self, draft: &str, facts: &Facts) -> Option<&mut commands::Card> {
+        if commands::skill_tail(draft).is_some() && self.catalog.is_none() {
+            self.catalog = facts
+                .workspace()
+                .map(|workspace| Catalog::discover(workspace, facts.home()));
+            self.card = None;
+        }
+        self.follow(draft)
+    }
+
     fn follow(&mut self, draft: &str) -> Option<&mut commands::Card> {
         let words = match draft.starts_with('/') {
             true => draft.trim(),
             false => "",
         };
+        if commands::skill_tail(words).is_none() {
+            self.catalog = None;
+        }
         if self.card.as_ref().map(commands::Card::words) != Some(words) {
             self.card = match self.dismissed.as_deref() == Some(words) {
                 true => None,
-                false => commands::Card::of(words),
+                false => match &self.catalog {
+                    Some(catalog) => commands::Card::with_catalog(words, catalog),
+                    None => commands::Card::of(words),
+                },
             };
         }
         self.card.as_mut()
@@ -458,7 +475,7 @@ impl View {
     }
 
     pub fn card(&mut self) -> Option<&commands::Card> {
-        let card = self.cards.follow(self.composer.text())?;
+        let card = self.cards.prepare(self.composer.text(), &self.facts)?;
         Some(card)
     }
 
@@ -545,7 +562,7 @@ impl View {
         let Some(act) = self.stack.act(key) else {
             return Outcome::Unchanged;
         };
-        match act {
+        let outcome = match act {
             Act::Draft => self.draft(key),
             Act::Up => self.up(),
             Act::Copy => self.copy(),
@@ -571,7 +588,9 @@ impl View {
             Act::Tail => self.tail(key),
             Act::Before => self.prompt(key, Move::Previous),
             Act::After => self.prompt(key, Move::Next),
-        }
+        };
+        self.cards.follow(self.composer.text());
+        outcome
     }
 
     pub fn drag(&mut self, anchor: Cell, head: Cell) {
@@ -936,6 +955,7 @@ impl View {
             return;
         }
         self.composer.paste(text);
+        self.cards.follow(self.composer.text());
     }
 
     pub fn handed(&mut self, facts: Facts) {
@@ -1190,7 +1210,10 @@ impl View {
             let width = card::body_width(area);
             return Some((name, leaves, self.body(screen, width)?));
         }
-        let body = self.cards.follow(self.composer.text())?.body();
+        let body = self
+            .cards
+            .prepare(self.composer.text(), &self.facts)?
+            .body();
         let leaves = Mode::Composer.leaves()?;
         Some((COMMANDS_CARD, leaves, ScreenBody::Rows(body)))
     }

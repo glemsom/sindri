@@ -4,9 +4,9 @@ fn spelling(draft: &str) -> String {
     Card::of(draft).expect("a card holds this draft").spelling()
 }
 
-fn names(draft: &str) -> Vec<&'static str> {
+fn names(draft: &str) -> Vec<String> {
     Card::of(draft)
-        .map(|card| card.rows().iter().map(|row| row.name).collect())
+        .map(|card| card.rows().iter().map(|row| row.name.to_string()).collect())
         .unwrap_or_default()
 }
 
@@ -21,7 +21,7 @@ fn a_bare_slash_holds_every_command() {
     );
     for row in TABLE {
         assert!(
-            held.contains(&row.name),
+            held.contains(&row.name.to_string()),
             "the card holds no row for {:?}: {held:?}",
             row.name
         );
@@ -86,7 +86,7 @@ fn a_draft_whose_first_glyph_is_not_a_slash_holds_no_card() {
 
 #[test]
 fn the_seven_names_the_table_holds_are_seven_different_names() {
-    let names: Vec<&str> = TABLE.iter().map(|row| row.name).collect();
+    let names: Vec<String> = TABLE.iter().map(|row| row.name.to_string()).collect();
     let mut unique = names.clone();
     unique.sort_unstable();
     unique.dedup();
@@ -101,7 +101,7 @@ fn the_seven_names_the_table_holds_are_seven_different_names() {
 fn every_name_but_the_one_that_takes_a_word_reads_back_as_a_command() {
     for row in TABLE.iter().filter(|row| row.name != SKILL) {
         assert!(
-            read(row.name).is_some(),
+            read(&row.name).is_some(),
             "the list names {:?} and a line of it is no command the frame answers",
             row.name
         );

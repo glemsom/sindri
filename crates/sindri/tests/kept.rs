@@ -156,7 +156,7 @@ impl Bench {
             Bench::Card(card) => card
                 .rows()
                 .into_iter()
-                .map(|row| row.name.to_owned())
+                .map(|row| row.name.into_owned())
                 .collect(),
         }
     }

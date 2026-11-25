@@ -74,27 +74,24 @@ fn block(room: u16) -> Vec<Row> {
 
 fn commands(room: u16) -> Vec<Row> {
     let named = || commands::TABLE.iter().take(commands::SPLASH);
-    let column = named().map(|row| pen::cells(row.name)).max().unwrap_or(0) + HANG;
+    let column = named().map(|row| pen::cells(&row.name)).max().unwrap_or(0) + HANG;
     let hang = pen::blank(column);
     let mut rows = Vec::new();
     for row in named() {
         if room < column.saturating_mul(2) {
-            rows.push(Row::of([(
-                String::from(row.name),
-                Look::plain(Ink::Accent),
-            )]));
+            rows.push(Row::of([(row.name.to_string(), Look::plain(Ink::Accent))]));
             rows.extend(
-                wrap_under(row.says, room, room)
+                wrap_under(&row.says, room, room)
                     .into_iter()
                     .map(|line| Row::of([(line, Look::plain(Ink::Dim))])),
             );
             continue;
         }
         let hanging = room - column;
-        let mut lines = wrap_under(row.says, hanging, hanging).into_iter();
+        let mut lines = wrap_under(&row.says, hanging, hanging).into_iter();
         if let Some(first) = lines.next() {
             rows.push(Row::of([
-                (pen::pad(row.name, column), Look::plain(Ink::Accent)),
+                (pen::pad(&row.name, column), Look::plain(Ink::Accent)),
                 (first, Look::plain(Ink::Dim)),
             ]));
         }
