@@ -3,24 +3,24 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 streaming at 120x40
-00 |  on the way. Each is laid out once and kept, so the whole history            wire      anthropic                       | plain:78 dim:10 plain:32
-01 |  scrolled through costs one layout per entry and scrolling it again costs    model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
-02 |  none.                                                                       think     high                            | plain:78 dim:10 plain:32
-03 |                                                                                                                        | plain:120
-04 |┃›what is the transcript's unit?                                              turns         6 /  250                    | dim:1 plain:77 dim:10 plain:32
-05 |⋯ 1 call · 9 ms                                                               ctx       █░░░░░ 48.2k / 200k             | dim:1 plain:1 dim:13 plain:63 dim:10 plain:1 dim:5 plain:26
-06 |  The transcript's unit is the entry. An entry never carries a formatted      cache     88%                             | plain:78 dim:10 plain:32
-07 |  line, so the same run is drawn the same way by the TUI, by a reader of                                                | plain:120
-08 |  the transcript and by whatever front end comes next.                        workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
-09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
-10 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
-11 |  ──────────┼───────────────────────────                                      sandbox   bwrap                           | plain:2 dim:38 plain:38 dim:10 plain:32
-12 |  heading   │ in the answer's own gutter                                                                                | plain:11 dim:3 plain:106
-13 |  code      │ behind a bar, highlighted                                       session   9f2c7a41                        | plain:11 dim:3 plain:64 dim:10 plain:32
-14 |  table     │ columns joined by a bar                                         temp      …/sindri/sessions/9f2c7a41/tmp  | plain:11 dim:3 plain:64 dim:10 plain:32
-15 |                                                                                                                        | plain:120
-16 |┃›what does a row of the band say?                                            skills    2                               | dim:1 plain:77 dim:10 plain:32
-17 |⋯ 1 call · 31 ms                                                              ◆ bash                                    | dim:1 plain:1 dim:14 plain:62 accent:1 plain:41
+00 |  none.                                                                       wire      anthropic                       | plain:78 dim:10 plain:32
+01 |                                                                              model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
+02 |┃›what is the transcript's unit?                                              think     high                            | dim:1 plain:77 dim:10 plain:32
+03 |⋯ 1 call · 9 ms                                                                                                         | dim:1 plain:1 dim:13 plain:105
+04 |                                                                              turns         6 /  250                    | plain:78 dim:10 plain:32
+05 |  The transcript's unit is the entry. An entry never carries a formatted      ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
+06 |  line, so the same run is drawn the same way by the TUI, by a reader of      cache     88%                             | plain:78 dim:10 plain:32
+07 |  the transcript and by whatever front end comes next.                                                                  | plain:120
+08 |                                                                              workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
+09 |  construct │ where it stands                                                 branch    spec/1-capability               | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:49 dim:10 plain:32
+10 |  ──────────┼───────────────────────────                                                                                | plain:2 dim:38 plain:80
+11 |  heading   │ in the answer's own gutter                                      sandbox   bwrap                           | plain:11 dim:3 plain:64 dim:10 plain:32
+12 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
+13 |  table     │ columns joined by a bar                                         session   9f2c7a41                        | plain:11 dim:3 plain:64 dim:10 plain:32
+14 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+15 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+16 |⋯ 1 call · 31 ms                                                              skills    2                               | dim:1 plain:1 dim:14 plain:62 dim:10 plain:32
+17 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
 18 |  A row is one line                                                           ◆ records                                 | plain:2 plain+bold:17 plain:59 accent:1 plain:41
 19 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
 20 |                                                                                                                        | plain:120

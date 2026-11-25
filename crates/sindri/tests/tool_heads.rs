@@ -104,7 +104,11 @@ fn result_rows_preserve_unicode_blank_lines_and_column_relationships() {
     let rows = (0..20).map(|y| shown.row(y)).collect::<Vec<_>>();
     let first = rows.iter().position(|row| row.contains("界")).unwrap();
     assert!(rows[first].contains("  x"));
-    assert!(rows[first + 1].trim().is_empty());
+    assert!(
+        rows[first + 1]
+            .trim_matches(|c: char| c.is_whitespace() || c == '│')
+            .is_empty()
+    );
     assert!(rows[first + 2].contains("      y"));
 }
 
@@ -136,4 +140,83 @@ fn copying_invocation_and_result_returns_original_source_without_head_decoration
     view.drag(Cell::new(row, 2), Cell::new(row, 25));
     frame::painted(&mut view, 80, 24);
     assert_eq!(view.key(Key::Copy), Outcome::Copy(output.to_owned()));
+}
+
+#[test]
+fn invocation_result_and_fold_share_contained_native_edges_on_every_frame_path() {
+    for capabilities in [
+        caps::pictured(),
+        caps::greys(),
+        caps::uncoloured(),
+        caps::inked(Palette::TRUECOLOR),
+        caps::inked(Palette::ANSI),
+        caps::inked(Palette::SLOTS),
+    ] {
+        for (width, height) in [(120, 40), (80, 24), (40, 24), (12, 24)] {
+            let mut view = View::of(
+                capabilities.clone(),
+                Facts::default().asked().running(),
+                Transcript::of(vec![
+                    call(),
+                    result(
+                        Some(Exit::Code(0)),
+                        "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight",
+                    ),
+                ]),
+            );
+            let shown = frame::painted(&mut view, width, height);
+            let head = (0..height)
+                .find(|y| shown.row(*y).contains("bash"))
+                .unwrap();
+            let fold = (0..height).find(|y| shown.row(*y).contains("⋯")).unwrap();
+            if width > 12 {
+                let left = shown.column_of(head, '│').expect("tool edge");
+                assert!(left >= 2);
+                for y in head..=fold {
+                    assert_eq!(shown.glyph(left, y), '│', "{}", shown.row(y));
+                    let right = shown.row(y).rfind('│').unwrap();
+                    assert!(right > usize::from(left));
+                }
+                assert!((head..=fold).all(|y| !shown.row(y).trim().is_empty()));
+            } else {
+                assert!(!shown.row(head).contains('│'));
+            }
+        }
+    }
+}
+
+#[test]
+fn opening_result_work_preserves_source_and_fold_choice_after_resize() {
+    use sindri::composer::{Key, Outcome};
+    use sindri::mark::Cell;
+    for capabilities in [
+        caps::pictured(),
+        caps::greys(),
+        caps::uncoloured(),
+        caps::inked(Palette::TRUECOLOR),
+        caps::inked(Palette::ANSI),
+        caps::inked(Palette::SLOTS),
+    ] {
+        for (width, height) in [(120, 40), (80, 24), (40, 24), (12, 24)] {
+            let output = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten";
+            let mut view = View::of(
+                capabilities.clone(),
+                Facts::default().asked().running(),
+                Transcript::of(vec![call(), result(Some(Exit::Code(0)), output)]),
+            );
+            let shown = frame::painted(&mut view, width, height);
+            let row = (0..height).find(|y| shown.row(*y).contains("one")).unwrap();
+            view.drag(Cell::new(row, 2), Cell::new(row, width - 3));
+            frame::painted(&mut view, width, height);
+            assert_eq!(view.key(Key::ShiftDown), Outcome::Edited);
+            let shown = frame::painted(&mut view, width, height);
+            let row = (0..height).find(|y| shown.row(*y).contains("one")).unwrap();
+            view.drag(Cell::new(row, 2), Cell::new(row, width - 3));
+            frame::painted(&mut view, width, height);
+            assert_eq!(view.key(Key::Copy), Outcome::Copy(output.to_owned()));
+            let shown = frame::painted(&mut view, 80, 24);
+            assert!((0..24).any(|y| shown.row(y).contains("ten")));
+            assert!(!(0..24).any(|y| shown.row(y).contains("kept back")));
+        }
+    }
 }

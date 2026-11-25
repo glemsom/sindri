@@ -93,6 +93,7 @@ pub struct Row {
     source: Option<String>,
     names: Option<usize>,
     band: Option<Band>,
+    tool_width: Option<u16>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -135,6 +136,7 @@ impl Row {
             source: None,
             names: None,
             band: None,
+            tool_width: None,
         }
     }
 
@@ -162,6 +164,7 @@ impl Row {
             source: None,
             names: None,
             band: None,
+            tool_width: None,
         }
     }
 
@@ -253,6 +256,7 @@ impl Row {
             source: self.source,
             names: self.names,
             band: self.band,
+            tool_width: self.tool_width,
         }
     }
 
@@ -335,6 +339,16 @@ impl Row {
                 pen::write(buffer, area, &spans, Clip::Edge, palette);
             }
             None => pen::write(buffer, area, &self.spans, Clip::Edge, palette),
+        }
+        if let Some(width) = self.tool_width {
+            for x in [
+                area.x.saturating_add(MARGIN),
+                area.x.saturating_add(width - 1),
+            ] {
+                if x < area.right().saturating_sub(MARGIN) {
+                    pen::glyph(buffer, x, area.y, '│', Ink::Dim, palette);
+                }
+            }
         }
         if area.width > 0 && self.cut(area.width) {
             pen::glyph(
@@ -692,12 +706,30 @@ fn opening(
     let words = spell::of(name, arguments);
     let mut rows = tool_head(name, exit, None, cols);
     let gutter = pen::cells(margin(INDENT, cols).0);
-    let mut invocation = body(
-        &words,
-        cols,
-        way(name, arguments, &words, ground),
-        Ink::Plain,
-    );
+    let continuation = if cols > 16 { "  " } else { "" };
+    let mut invocation = match way(name, arguments, &words, ground) {
+        Some(way) => body(&words, cols, Some(way), Ink::Plain),
+        None => wrap_under(
+            &words,
+            margin(INDENT, cols).1,
+            margin(INDENT, cols)
+                .1
+                .saturating_sub(pen::cells(continuation)),
+        )
+        .into_iter()
+        .enumerate()
+        .map(|(at, line)| {
+            let inset = if at == 0 { "" } else { continuation };
+            words_past(
+                margin(INDENT, cols).0,
+                Ink::Plain,
+                Ink::Plain,
+                format!("{inset}{line}"),
+                cols,
+            )
+        })
+        .collect(),
+    };
     for row in &mut invocation {
         *row = row.clone().fenced(usize::MAX, gutter).sourced("");
     }
@@ -1466,7 +1498,12 @@ impl Rows {
         if one && at != work.start {
             return &[];
         }
-        let cols = self.measure.cols;
+        let tool = matches!(
+            self.held[at].what,
+            What::Fact(Entry::Call { .. } | Entry::Result { .. })
+        ) && !one;
+        let edged = tool && self.measure.cols > 16;
+        let cols = self.measure.cols.saturating_sub(if edged { 6 } else { 0 });
         let surface = &self.measure.surface;
         let ground = self.measure.ground.as_ref();
         let held = &self.held[at];
@@ -1486,6 +1523,43 @@ impl Rows {
                 (What::Live { .. }, _) => None,
             };
             if let Some((mut rows, kept)) = laid {
+                if edged {
+                    let width = rows
+                        .iter()
+                        .map(Row::width)
+                        .max()
+                        .unwrap_or(0)
+                        .min(cols)
+                        .saturating_add(6);
+                    for row in &mut rows {
+                        let mut inset = row.clone().shifted(4);
+                        inset
+                            .spans
+                            .insert(0, (String::from("    "), Look::plain(Ink::Dim)));
+                        if let Some(fence) = &mut inset.fence {
+                            fence.gutter = fence.gutter.saturating_add(4);
+                        }
+                        inset.tool_width = Some(width);
+                        *row = inset;
+                    }
+                }
+                if at > 0 && !rows.is_empty() {
+                    let prior = matches!(
+                        self.held[at - 1].what,
+                        What::Fact(Entry::Call { .. } | Entry::Result { .. })
+                    );
+                    let prose = matches!(
+                        self.held[at].what,
+                        What::Fact(Entry::Assistant { .. } | Entry::Reasoning { .. })
+                    );
+                    let prior_prose = matches!(
+                        self.held[at - 1].what,
+                        What::Fact(Entry::Assistant { .. } | Entry::Reasoning { .. })
+                    );
+                    if (tool && prior_prose) || (prose && prior) {
+                        rows.insert(0, Row::blank());
+                    }
+                }
                 self.lays += 1;
                 self.walking(at, &mut rows);
                 if at == 0 && is_prompt(&self.held[at]) {

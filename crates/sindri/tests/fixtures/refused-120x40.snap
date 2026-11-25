@@ -4,29 +4,29 @@ expression: self.text(name)
 ---
 refused at 120x40
 00 |                                                                              wire      anthropic                       | plain:78 dim:10 plain:32
-01 |┃›what does the check cost?                                                   model     claude-sonnet-4-5-20250929      | dim:1 plain:77 dim:10 plain:32
-02 |⋯ 1 call · 118 ms                                                             think     high                            | dim:1 plain:1 dim:15 plain:61 dim:10 plain:32
-03 |  What that buys is the plain case and what it costs is the scrolled one:                                               | plain:120
-04 |  a window is a row offset from the tail, so resolving one walks the          turns         6 /  250                    | plain:78 dim:10 plain:32
-05 |  entries between the tail and the window and lays out every one of them      ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
-06 |  on the way. Each is laid out once and kept, so the whole history            cache     88%                             | plain:78 dim:10 plain:32
-07 |  scrolled through costs one layout per entry and scrolling it again costs                                              | plain:120
-08 |  none.                                                                       workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
-09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
-10 |┃›what is the transcript's unit?                                                                                        | dim:1 plain:119
-11 |⋯ 1 call · 9 ms                                                               sandbox   bwrap                           | dim:1 plain:1 dim:13 plain:63 dim:10 plain:32
-12 |  The transcript's unit is the entry. An entry never carries a formatted                                                | plain:120
-13 |  line, so the same run is drawn the same way by the TUI, by a reader of      session   9f2c7a41                        | plain:78 dim:10 plain:32
-14 |  the transcript and by whatever front end comes next.                        temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
-15 |                                                                                                                        | plain:120
-16 |  construct │ where it stands                                                 skills    2                               | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:49 dim:10 plain:32
-17 |  ──────────┼───────────────────────────                                      ◆ bash                                    | plain:2 dim:38 plain:38 accent:1 plain:41
-18 |  heading   │ in the answer's own gutter                                      ◆ records                                 | plain:11 dim:3 plain:64 accent:1 plain:41
-19 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
-20 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
-21 |                                                                                                                        | plain:120
-22 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
-23 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
+01 |  What that buys is the plain case and what it costs is the scrolled one:     model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
+02 |  a window is a row offset from the tail, so resolving one walks the          think     high                            | plain:78 dim:10 plain:32
+03 |  entries between the tail and the window and lays out every one of them                                                | plain:120
+04 |  on the way. Each is laid out once and kept, so the whole history            turns         6 /  250                    | plain:78 dim:10 plain:32
+05 |  scrolled through costs one layout per entry and scrolling it again costs    ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
+06 |  none.                                                                       cache     88%                             | plain:78 dim:10 plain:32
+07 |                                                                                                                        | plain:120
+08 |┃›what is the transcript's unit?                                              workspace …/sindri/.worktrees/46-rail     | dim:1 plain:77 dim:10 plain:32
+09 |⋯ 1 call · 9 ms                                                               branch    spec/1-capability               | dim:1 plain:1 dim:13 plain:63 dim:10 plain:32
+10 |                                                                                                                        | plain:120
+11 |  The transcript's unit is the entry. An entry never carries a formatted      sandbox   bwrap                           | plain:78 dim:10 plain:32
+12 |  line, so the same run is drawn the same way by the TUI, by a reader of                                                | plain:120
+13 |  the transcript and by whatever front end comes next.                        session   9f2c7a41                        | plain:78 dim:10 plain:32
+14 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+15 |  construct │ where it stands                                                                                           | plain:2 plain+bold:9 dim:3 plain+bold:5 plain:1 plain+bold:2 plain:1 plain+bold:6 plain:91
+16 |  ──────────┼───────────────────────────                                      skills    2                               | plain:2 dim:38 plain:38 dim:10 plain:32
+17 |  heading   │ in the answer's own gutter                                      ◆ bash                                    | plain:11 dim:3 plain:64 accent:1 plain:41
+18 |  code      │ behind a bar, highlighted                                       ◆ records                                 | plain:11 dim:3 plain:64 accent:1 plain:41
+19 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
+20 |                                                                                                                        | plain:120
+21 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+22 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
+23 |                                                                                                                        | plain:120
 24 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
 25 |  ─────────────────                                                                                                     | plain:2 accent+faint:17 plain:101
 26 |                                                                                                                        | plain:120

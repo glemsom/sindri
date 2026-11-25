@@ -4,38 +4,38 @@ expression: self.text(name)
 ---
 calls at 120x40
 00 |┃›which calls settle well?                                                    wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
-01 |✓ bash success 18 ms                                                          model     claude-sonnet-4-5-20250929      | ok:1 plain:13 dim:6 plain:58 dim:10 plain:32
-02 |  rg -n 'verdict' src                                                         think     high                            | plain:78 dim:10 plain:32
-03 |  src/rows.rs: the check or the cross in `ok`/`err`                                                                     | muted:51 plain:69
-04 |  exit 0 · 64 bytes                                                           turns         6 /  250                    | dim:19 plain:59 dim:10 plain:32
-05 |  The row is drawn from the verdict the record holds.                         ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
-06 |✗ bash failure exit 1 211 ms                                                  cache     88%                             | err:1 plain:20 dim:7 plain:50 dim:10 plain:32
-07 |  cargo clippy --all-targets                                                                                            | plain:120
-08 |  warning: unused import: `std::fmt`                                          workspace …/sindri/.worktrees/46-rail     | muted:36 plain:42 dim:10 plain:32
-09 |    --> src/rows.rs:12:5                                                      branch    spec/1-capability               | muted:24 plain:54 dim:10 plain:32
-10 |  exit 1 · 96 bytes                                                                                                     | dim:19 plain:101
-11 |  An unused import, and nowhere else to put it.                               sandbox   bwrap                           | plain:78 dim:10 plain:32
-12 |✗ bash failure timed out 2m 00s                                                                                         | err:1 plain:23 dim:7 plain:89
-13 |  cargo test --workspace                                                      session   9f2c7a41                        | plain:78 dim:10 plain:32
-14 |  timed out · 0 bytes                                                         temp      …/sindri/sessions/9f2c7a41/tmp  | dim:21 plain:57 dim:10 plain:32
-15 |  The call ran past its minute and was killed.                                                                          | plain:120
-16 |✗ bash failure cancelled 3.4 s                                                skills    2                               | err:1 plain:23 dim:6 plain:48 dim:10 plain:32
-17 |  make check STAGES=frames                                                    ◆ bash                                    | plain:78 accent:1 plain:41
-18 |  cancelled · 0 bytes                                                         ◆ records                                 | dim:21 plain:57 accent:1 plain:41
-19 |  What a verdict says                                                                                                   | plain:2 plain+bold:19 plain:99
-20 |  ───────────────────                                                                                                   | plain:2 accent+faint:19 plain:99
-21 |                                                                                                                        | plain:120
-22 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft,                                               | plain:38 accent:6 plain:76
-23 |  so the row says ✗ cancelled rather than leaving a spinner turning for a                                               | plain:18 accent:11 plain:91
-24 |  result that will never come.                                                                                          | plain:120
+01 |  │ ✓ bash success 18 ms                                │                     model     claude-sonnet-4-5-20250929      | dim:4 ok:1 plain:13 dim:6 plain:32 dim:1 plain:21 dim:10 plain:32
+02 |  │   rg -n 'verdict' src                               │                     think     high                            | dim:4 plain:52 dim:1 plain:21 dim:10 plain:32
+03 |  │   src/rows.rs: the check or the cross in `ok`/`err` │                                                               | dim:4 muted:51 plain:1 dim:1 plain:63
+04 |  │   exit 0 · 64 bytes                                 │                     turns         6 /  250                    | dim:23 plain:33 dim:1 plain:21 dim:10 plain:32
+05 |                                                                              ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
+06 |  The row is drawn from the verdict the record holds.                         cache     88%                             | plain:78 dim:10 plain:32
+07 |  │ ✗ bash failure exit 1 211 ms         │                                                                              | dim:4 err:1 plain:20 dim:7 plain:9 dim:1 plain:78
+08 |  │   cargo clippy --all-targets         │                                    workspace …/sindri/.worktrees/46-rail     | dim:4 plain:37 dim:1 plain:36 dim:10 plain:32
+09 |  │   warning: unused import: `std::fmt` │                                    branch    spec/1-capability               | dim:4 muted:36 plain:1 dim:1 plain:36 dim:10 plain:32
+10 |  │     --> src/rows.rs:12:5             │                                                                              | dim:4 muted:24 plain:13 dim:1 plain:78
+11 |  │   exit 1 · 96 bytes                  │                                    sandbox   bwrap                           | dim:23 plain:18 dim:1 plain:36 dim:10 plain:32
+12 |                                                                                                                        | plain:120
+13 |  An unused import, and nowhere else to put it.                               session   9f2c7a41                        | plain:78 dim:10 plain:32
+14 |  │ ✗ bash failure timed out 2m 00s │                                         temp      …/sindri/sessions/9f2c7a41/tmp  | dim:4 err:1 plain:23 dim:7 plain:1 dim:1 plain:41 dim:10 plain:32
+15 |  │   cargo test --workspace        │                                                                                   | dim:4 plain:32 dim:1 plain:83
+16 |  │   timed out · 0 bytes           │                                         skills    2                               | dim:25 plain:11 dim:1 plain:41 dim:10 plain:32
+17 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
+18 |  The call ran past its minute and was killed.                                ◆ records                                 | plain:78 accent:1 plain:41
+19 |  │ ✗ bash failure cancelled 3.4 s │                                                                                    | dim:4 err:1 plain:23 dim:6 plain:1 dim:1 plain:84
+20 |  │   make check STAGES=frames     │                                                                                    | dim:4 plain:31 dim:1 plain:84
+21 |  │   cancelled · 0 bytes          │                                                                                    | dim:25 plain:10 dim:1 plain:84
+22 |                                                                                                                        | plain:120
+23 |  What a verdict says                                                                                                   | plain:2 plain+bold:19 plain:99
+24 |  ───────────────────                                                                                                   | plain:2 accent+faint:19 plain:99
 25 |                                                                                                                        | plain:120
-26 |┃›and the one that is still out?                                                                                        | dim:1 plain:119
-27 |… bash running                                                                                                          | dim:1 plain:119
-28 |  make check STAGES=test                                                                                                | plain:120
+26 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft,                                               | plain:38 accent:6 plain:76
+27 |  so the row says ✗ cancelled rather than leaving a spinner turning for a                                               | plain:18 accent:11 plain:91
+28 |  result that will never come.                                                                                          | plain:120
 29 |                                                                                                                        | plain:120
-30 |                                                                                                                        | plain:120
-31 |                                                                                                                        | plain:120
-32 |                                                                                                                        | plain:120
+30 |┃›and the one that is still out?                                                                                        | dim:1 plain:119
+31 |  │ … bash running           │                                                                                          | dim:5 plain:24 dim:1 plain:90
+32 |  │   make check STAGES=test │                                                                                          | dim:4 plain:25 dim:1 plain:90
 33 |                                                                                                                        | plain:120
 34 |                                                                              input     48.2k                           | plain:78 dim:10 plain:32
 35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32

@@ -6023,7 +6023,7 @@ fn a_call_the_record_holds_and_the_result_that_settled_it_are_one_entry_of_the_b
         frame_rows(&drawn)
     );
     assert!(
-        named[0].starts_with('✓'),
+        named[0].trim_start().starts_with("│ ✓"),
         "and it wears the verdict the result settled on: {named:?}"
     );
     for said in ["exit 0", "a.txt"] {
