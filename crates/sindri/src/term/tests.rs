@@ -1305,6 +1305,37 @@ fn a_screen_cleared_for_a_resize_leaves_no_placement_of_the_face_it_drew_before(
 }
 
 #[test]
+fn a_fullscreen_resize_clear_releases_the_face_and_rail_before_drawing_them_again() {
+    let writes = Writes::default();
+    let mut canvas = canvas_over(&writes, Rect::new(0, 0, 160, 50));
+    let face = a_face(Motion::Turning(Some(Turning::FLIGHT)));
+    let rail = rail_placement();
+    let images = held(&[rail]);
+    canvas.backend_mut().face(Some(&face)).unwrap();
+    canvas.backend_mut().placements(&[rail], &images).unwrap();
+    canvas.backend_mut().flush().unwrap();
+    let before = writes.kept().len();
+
+    canvas.backend_mut().clear_region(ClearType::All).unwrap();
+    canvas.backend_mut().face(Some(&face)).unwrap();
+    canvas.backend_mut().placements(&[rail], &images).unwrap();
+    canvas.backend_mut().flush().unwrap();
+    let drawn = carried(&writes.kept()[before..]).concat();
+
+    assert_eq!(
+        drawn.matches("_Ga=d").count(),
+        2,
+        "a canvas resize releases both retained graphics"
+    );
+    assert_eq!(
+        drawn.matches("_Ga=T").count(),
+        2,
+        "the next frame restores both graphics even when their placement is unchanged"
+    );
+    assert!(drawn.rfind("_Ga=d").unwrap() < drawn.find("_Ga=T").unwrap());
+}
+
+#[test]
 fn a_face_the_frame_no_longer_asks_for_is_given_back() {
     let wire = Wire::default();
     let mut backend = Backend::new(wire.clone(), true);

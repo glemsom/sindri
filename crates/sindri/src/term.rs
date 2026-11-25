@@ -503,7 +503,10 @@ impl<W: Write> RatatuiBackend for Backend<W> {
     }
 
     fn clear_region(&mut self, clear: ClearType) -> io::Result<()> {
-        painting(&mut self.screen, &mut self.writing).clear_region(clear)
+        match clear {
+            ClearType::All => self.clear(),
+            _ => painting(&mut self.screen, &mut self.writing).clear_region(clear),
+        }
     }
 }
 
