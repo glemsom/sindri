@@ -1568,7 +1568,7 @@ impl Rows {
             };
             if let Some((mut rows, kept)) = laid {
                 if edged {
-                    let result = held.result.as_ref().or_else(|| match &held.what {
+                    let result = held.result.as_ref().or(match &held.what {
                         What::Fact(entry @ Entry::Result { .. }) => Some(entry),
                         _ => None,
                     });
