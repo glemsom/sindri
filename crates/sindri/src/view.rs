@@ -287,7 +287,9 @@ impl Cards {
                 .map(|workspace| Catalog::discover(workspace, facts.home()));
             self.card = None;
         }
-        self.follow(draft)
+        let card = self.follow(draft)?;
+        card.loading(facts.loaded());
+        Some(card)
     }
 
     fn follow(&mut self, draft: &str) -> Option<&mut commands::Card> {
@@ -678,6 +680,14 @@ impl View {
     }
 
     fn draft(&mut self, key: Key) -> Outcome {
+        if key == Key::Enter
+            && self
+                .cards
+                .prepare(self.composer.text(), &self.facts)
+                .is_some_and(|card| card.refuses())
+        {
+            return Outcome::Unchanged;
+        }
         if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
             return Outcome::Edited;
         }
@@ -1093,6 +1103,7 @@ impl View {
     }
 
     fn draw(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
+        self.cards.prepare(self.composer.text(), &self.facts);
         let mut painted = Painted::none();
         pen::claim(buffer, area, self.capabilities.palette().ground(None));
         let share = self.split(area);
@@ -1665,7 +1676,11 @@ impl View {
     fn honours(&self, when: When) -> bool {
         match when {
             When::Always => true,
-            When::Draft(state) => self.composer.state() == state,
+            When::Draft(state) => {
+                self.composer.state() == state
+                    && (state != State::Idle
+                        || !self.cards.card.as_ref().is_some_and(|card| card.refuses()))
+            }
             When::Queue => !self.queue.is_empty(),
             When::Fence => self.fence.is_some_and(|marked| marked.cut),
         }

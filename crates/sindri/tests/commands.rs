@@ -708,3 +708,100 @@ fn skill_rows_include_skills_written_before_the_card_is_prepared() {
             .any(|row| row.contains("/skill:deploy-new"))
     );
 }
+
+#[test]
+fn loaded_skill_rows_lead_their_description_with_loaded() {
+    let root = workspace_with("deploy", "");
+    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
+    let loaded = Loaded::from_iter(["deploy"]);
+    let mut card = commands::Card::with_catalog("/skill:dep", &catalog).unwrap();
+    card.loading(&loaded);
+    assert_eq!(card.rows()[0].says, "loaded · the deploy skill");
+}
+
+#[test]
+fn an_unmatched_skill_tail_draws_a_refusal_instead_of_command_rows() {
+    let root = workspace_with("deploy", "");
+    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
+    let card = commands::Card::with_catalog("/skill:zx", &catalog).unwrap();
+    assert!(card.rows().is_empty());
+    let body = card.body();
+    assert_eq!(body.len(), 1);
+    assert_eq!(
+        body[0]
+            .spans
+            .iter()
+            .map(|(text, _)| text.as_str())
+            .collect::<String>(),
+        "no skill matches zx"
+    );
+}
+
+#[test]
+fn a_refusal_row_cannot_be_chosen_or_spell_a_replacement() {
+    use sindri::kept::{Kept, Move};
+    let root = workspace_with("deploy", "");
+    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
+    let mut card = commands::Card::with_catalog("/skill:zx keep this", &catalog).unwrap();
+    assert!(!card.pressed(0));
+    assert!(!card.walked(Move::Next));
+    assert_eq!(card.spelling_of(0), None);
+    assert_eq!(card.spelling(), "/skill:zx keep this");
+}
+
+#[test]
+fn the_view_draws_loaded_ahead_of_the_skill_description() {
+    let root = workspace_with("deploy", "");
+    let loaded = Loaded::from_iter(["deploy"]);
+    let mut view = frame_holding(root.path(), &loaded);
+    view.paste("/skill:dep");
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert!(
+        drawn
+            .rows()
+            .iter()
+            .any(|row| row.contains("loaded · the deploy skill"))
+    );
+    drawn.snapshot("commands-skill-loaded", "commands-skill-loaded-120x40");
+}
+
+#[test]
+fn a_refusal_keeps_the_card_open_and_both_keys_leave_the_draft() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/skill:zx keep this");
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert!(card_open(&drawn));
+    assert!(
+        drawn
+            .rows()
+            .iter()
+            .any(|row| row.contains("no skill matches zx"))
+    );
+    view.key(Key::Tab);
+    assert_eq!(view.composer().text(), "/skill:zx keep this");
+    assert_eq!(view.key(Key::Enter), Outcome::Unchanged);
+    assert_eq!(view.composer().text(), "/skill:zx keep this");
+    frame::painted(&mut view, 120, 40)
+        .snapshot("commands-skill-refusal", "commands-skill-refusal-120x40");
+    for draft in ["/skillet", "/usr"] {
+        let mut view = frame(root.path());
+        view.paste(draft);
+        assert!(!card_open(&frame::painted(&mut view, 120, 40)));
+        assert_eq!(view.composer().text(), draft);
+    }
+}
+
+#[test]
+fn a_refusal_footer_does_not_offer_sending_until_the_tail_matches() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/skill:zx");
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert!(!drawn.rows().iter().any(|row| row.contains("Enter send")));
+    view.key(Key::Backspace);
+    view.key(Key::Backspace);
+    view.paste("dep");
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert!(drawn.rows().iter().any(|row| row.contains("Enter send")));
+}

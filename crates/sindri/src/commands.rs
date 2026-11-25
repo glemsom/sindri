@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::sync::OnceLock;
 
+use sindri_core::run::Loaded;
 use sindri_core::skills::Catalog;
 
 use crate::composer::Key;
@@ -65,6 +66,7 @@ pub const SPLASH: usize = 3;
 pub struct Card {
     narrow: Narrow,
     skills: Vec<Row>,
+    loaded: Loaded,
 }
 
 impl Card {
@@ -74,6 +76,7 @@ impl Card {
             true => Some(Card {
                 narrow: Narrow::asked(words),
                 skills: Vec::new(),
+                loaded: Loaded::default(),
             }),
             false => None,
         }
@@ -92,8 +95,25 @@ impl Card {
         Some(card)
     }
 
+    pub fn loading(&mut self, loaded: &Loaded) {
+        self.loaded = loaded.clone();
+    }
+
     pub fn rows(&self) -> Vec<Row> {
-        self.ranked().into_iter().take(CAP).collect()
+        self.ranked()
+            .into_iter()
+            .take(CAP)
+            .map(|mut row| {
+                if row
+                    .name
+                    .strip_prefix("/skill:")
+                    .is_some_and(|name| self.loaded.contains(name))
+                {
+                    row.says = Cow::Owned(format!("loaded · {}", row.says));
+                }
+                row
+            })
+            .collect()
     }
 
     fn ranked(&self) -> Vec<Row> {
@@ -106,6 +126,9 @@ impl Card {
                 .map(|row| (row.name.strip_prefix("/skill:").unwrap(), row.clone())),
             query,
         );
+        if !query.is_empty() && rows.is_empty() {
+            return rows;
+        }
         let command = TABLE.iter().find(|row| row.name == SKILL).unwrap().clone();
         if query.is_empty() {
             rows.insert(0, command);
@@ -113,6 +136,10 @@ impl Card {
             rows.push(command);
         }
         rows
+    }
+
+    pub fn refuses(&self) -> bool {
+        self.ranked().is_empty()
     }
 
     pub fn words(&self) -> &str {
@@ -125,6 +152,14 @@ impl Card {
 
     pub fn body(&self) -> Vec<ScreenRow> {
         let held = self.rows();
+        if held.is_empty()
+            && let Some(query) = skill_tail(self.words())
+        {
+            return vec![list::whole(
+                &format!("no skill matches {query}"),
+                Look::plain(Ink::Err),
+            )];
+        }
         let mut rows = list::List {
             query: None,
             said: None,
@@ -186,6 +221,7 @@ impl Kept for Card {
             Card {
                 narrow: Narrow::asked(words),
                 skills: skills.clone(),
+                loaded: Loaded::default(),
             }
             .rows()
             .len()
