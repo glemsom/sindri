@@ -61,6 +61,7 @@ enum Meaning {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum When {
     Always,
+    Card,
     Draft(State),
     Queue,
     Fence,
@@ -79,7 +80,12 @@ impl Hint {
     }
 }
 
-const HINTS: [Hint; 10] = [
+const HINTS: [Hint; 11] = [
+    Hint {
+        key: "Tab",
+        meaning: Meaning::Words("complete"),
+        when: When::Card,
+    },
     Hint {
         key: "Enter",
         meaning: Meaning::Words("send"),
@@ -294,7 +300,7 @@ impl Cards {
 
     fn follow(&mut self, draft: &str) -> Option<&mut commands::Card> {
         let words = match draft.starts_with('/') {
-            true => draft.trim(),
+            true => draft,
             false => "",
         };
         if commands::skill_tail(words).is_none() {
@@ -566,6 +572,7 @@ impl View {
         };
         let outcome = match act {
             Act::Draft => self.draft(key),
+            Act::Complete => self.complete(),
             Act::Up => self.up(),
             Act::Copy => self.copy(),
             Act::Fold => self.fold(),
@@ -677,6 +684,20 @@ impl View {
             return false;
         };
         self.rows.open(entry)
+    }
+
+    fn complete(&mut self) -> Outcome {
+        if !self.composer.on_first_line() {
+            return Outcome::Unchanged;
+        }
+        let Some(card) = self.cards.follow(self.composer.text()) else {
+            return Outcome::Unchanged;
+        };
+        let Some(line) = card.spelling_of(card.selected()) else {
+            return Outcome::Unchanged;
+        };
+        self.composer.rewrite(&line);
+        Outcome::Edited
     }
 
     fn draft(&mut self, key: Key) -> Outcome {
@@ -1103,7 +1124,11 @@ impl View {
     }
 
     fn draw(&mut self, area: Rect, buffer: &mut Buffer) -> Painted {
-        self.cards.prepare(self.composer.text(), &self.facts);
+        if self.composer.on_first_line() {
+            self.cards.prepare(self.composer.text(), &self.facts);
+        } else {
+            self.cards.card = None;
+        }
         let mut painted = Painted::none();
         pen::claim(buffer, area, self.capabilities.palette().ground(None));
         let share = self.split(area);
@@ -1220,6 +1245,9 @@ impl View {
         if let Some((name, leaves)) = screen.labels() {
             let width = card::body_width(area);
             return Some((name, leaves, self.body(screen, width)?));
+        }
+        if !self.composer.on_first_line() {
+            return None;
         }
         let body = self
             .cards
@@ -1676,6 +1704,7 @@ impl View {
     fn honours(&self, when: When) -> bool {
         match when {
             When::Always => true,
+            When::Card => self.stack.top() == Mode::Composer && self.cards.card.is_some(),
             When::Draft(state) => {
                 self.composer.state() == state
                     && (state != State::Idle

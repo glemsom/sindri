@@ -47,7 +47,7 @@ pub const TABLE: [Row; 7] = [
         says: Cow::Borrowed("start the conversation again, and forget the last one"),
     },
     Row {
-        name: Cow::Borrowed(SKILL),
+        name: Cow::Borrowed("/skill:"),
         says: Cow::Borrowed("load a skill by name"),
     },
     Row {
@@ -71,7 +71,7 @@ pub struct Card {
 
 impl Card {
     pub fn of(draft: &str) -> Option<Card> {
-        let words = draft.trim();
+        let words = draft;
         match draft.starts_with('/') && recognised(word(words)) {
             true => Some(Card {
                 narrow: Narrow::asked(words),
@@ -129,7 +129,11 @@ impl Card {
         if !query.is_empty() && rows.is_empty() {
             return rows;
         }
-        let command = TABLE.iter().find(|row| row.name == SKILL).unwrap().clone();
+        let command = TABLE
+            .iter()
+            .find(|row| row.name == "/skill:")
+            .unwrap()
+            .clone();
         if query.is_empty() {
             rows.insert(0, command);
         } else {
@@ -193,16 +197,7 @@ impl Card {
         let rows = self.rows();
         let chosen = rows.get(at)?;
         let words = self.words();
-        if chosen.name == SKILL && matches!(word(words), "/skill" | "/skill:") {
-            return Some(format!("/skill:{}", &words[word(words).len()..]));
-        }
-        if chosen.name.starts_with("/skill:") {
-            return Some(format!("{}{}", chosen.name, &words[word(words).len()..]));
-        }
-        Some(match word(words).starts_with(chosen.name.as_ref()) {
-            true => words.to_owned(),
-            false => format!("{}{}", chosen.name, tail(words)),
-        })
+        Some(format!("{}{}", chosen.name, &words[word(words).len()..]))
     }
 }
 
@@ -237,20 +232,17 @@ fn word(draft: &str) -> &str {
     draft.split_whitespace().next().unwrap_or_default()
 }
 
-fn tail(draft: &str) -> &str {
-    let word = word(draft);
-    match word.find(':') {
-        Some(at) => &word[at..],
-        None => &draft[word.len()..],
-    }
-}
-
 fn ranked(asked: &str) -> Vec<Row> {
     let Some(body) = asked.strip_prefix('/') else {
         return Vec::new();
     };
     let query = body.split(':').next().unwrap_or_default();
-    leaves(by_name().iter().map(|row| (plain(row), row.clone())), query)
+    leaves(
+        by_name()
+            .iter()
+            .map(|row| (plain(row).trim_end_matches(':'), row.clone())),
+        query,
+    )
 }
 
 fn plain(row: &Row) -> &str {

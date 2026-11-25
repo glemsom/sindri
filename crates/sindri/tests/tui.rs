@@ -4260,3 +4260,24 @@ fn a_refused_open_call_is_drawn_under_its_call_and_the_run_answers_on() {
         drawn.text()
     );
 }
+
+#[test]
+fn a_terminal_tab_byte_completes_the_marked_command_without_sending() {
+    let ground = Ground::new();
+    let (session, mut pty, drawn) = Session::open(&ground);
+    assert!(drawn.wait_for(FIRST_KEY));
+    pty.type_bytes(b"/mod");
+    assert!(drawn.wait_until(|frame| placed(frame).is_some_and(|(_, at)| at == GUTTER + 4)));
+    pty.type_bytes(&[0x09]);
+    assert!(
+        drawn.wait_until(|frame| placed(frame).is_some_and(|(_, at)| at == GUTTER + 6)),
+        "{:?}",
+        drawn.text()
+    );
+    assert!(showing(
+        &String::from_utf8_lossy(&drawn.settled()),
+        "/ commands"
+    ));
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0));
+}

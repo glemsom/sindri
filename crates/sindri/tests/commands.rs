@@ -505,7 +505,7 @@ fn a_command_that_takes_a_word_is_written_into_the_draft_to_name_it() {
     assert_eq!(view.key(Key::Enter), Outcome::Edited);
     assert_eq!(
         view.composer().text(),
-        "/skill",
+        "/skill:",
         "`/skill` is no command without a word after it, so the row writes the name and the \
          reader says which skill"
     );
@@ -516,7 +516,7 @@ fn a_command_that_takes_a_word_is_written_into_the_draft_to_name_it() {
         drawn.rows().join("\n")
     );
 
-    view.paste(":commit-message");
+    view.paste("commit-message");
     assert_eq!(view.key(Key::Enter), Outcome::Edited);
     assert_eq!(loaded.names(), ["commit-message"]);
 }
@@ -582,7 +582,7 @@ fn skill_rows_rank_the_tail_and_show_only_human_invocable_descriptions() {
             "/skill:deploy",
             "/skill:deploy-staging",
             "/skill:redeploy",
-            "/skill"
+            "/skill:"
         ]
     );
     assert_eq!(rows[0].says, "the deploy skill");
@@ -612,7 +612,7 @@ fn skill_rows_keep_catalog_order_and_cap_and_count_only_long_lists() {
                 .map(|row| row.name.as_ref())
                 .collect::<Vec<_>>(),
             [
-                "/skill",
+                "/skill:",
                 "/skill:alpha",
                 "/skill:bravo",
                 "/skill:charlie",
@@ -804,4 +804,113 @@ fn a_refusal_footer_does_not_offer_sending_until_the_tail_matches() {
     view.paste("dep");
     let drawn = frame::painted(&mut view, 120, 40);
     assert!(drawn.rows().iter().any(|row| row.contains("Enter send")));
+}
+
+#[test]
+fn a_row_replaces_only_the_first_word_and_hands_over_the_skill_colon() {
+    for (draft, expected) in [
+        ("/ski  words\tkept\nnext  ", "/skill:  words\tkept\nnext  "),
+        ("/mod  gpt-5  ", "/model  gpt-5  "),
+        ("/model gpt-5", "/model gpt-5"),
+    ] {
+        let card = commands::Card::of(draft).unwrap();
+        assert_eq!(card.spelling(), expected);
+    }
+}
+
+#[test]
+fn tab_completes_without_sending_and_keeps_the_card_and_words() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/mod  gpt-5  ");
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    assert_eq!(view.key(Key::Tab), Outcome::Edited);
+    assert_eq!(view.composer().text(), "/model  gpt-5  ");
+    assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+}
+
+#[test]
+fn shift_tab_and_up_walk_the_mark_back_and_stop_at_the_ends() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/");
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    view.key(Key::Down);
+    assert_eq!(view.card().unwrap().selected(), 1);
+    assert_eq!(view.key(Key::BackTab), Outcome::Edited);
+    assert_eq!(view.card().unwrap().selected(), 0);
+    assert_eq!(view.key(Key::BackTab), Outcome::Unchanged);
+    assert_eq!(view.key(Key::Up), Outcome::Unchanged);
+    for _ in 0..20 {
+        view.key(Key::Down);
+    }
+    assert_eq!(view.card().unwrap().selected(), 6);
+    view.key(Key::Up);
+    assert_eq!(view.card().unwrap().selected(), 5);
+}
+
+#[test]
+fn the_footer_leads_with_completion_only_while_a_card_is_drawn() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/mod");
+    for width in [50, 120] {
+        let drawn = frame::painted(&mut view, width, 24);
+        assert!(
+            drawn
+                .rows()
+                .last()
+                .unwrap()
+                .trim_start()
+                .starts_with("Tab complete"),
+            "{:?}",
+            drawn.rows()
+        );
+    }
+    view.key(Key::Escape);
+    let drawn = frame::painted(&mut view, 120, 24);
+    assert!(!drawn.rows().last().unwrap().contains("Tab"));
+    let mut view = frame(root.path());
+    view.key(Key::Char('?'));
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert!(
+        drawn
+            .rows()
+            .iter()
+            .any(|row| row.contains("Tab") && row.contains("complete the marked"))
+    );
+    assert!(
+        drawn
+            .rows()
+            .iter()
+            .any(|row| row.contains("Shift+Tab") && row.contains("commands row back"))
+    );
+}
+
+#[test]
+fn tab_and_enter_hand_the_skill_row_over_to_naming() {
+    let root = workspace_with("deploy", "");
+    for key in [Key::Tab, Key::Enter] {
+        let mut view = frame(root.path());
+        view.paste("/ski");
+        frame::painted(&mut view, SCREEN.0, SCREEN.1);
+        assert_eq!(view.key(key), Outcome::Edited);
+        assert_eq!(view.composer().text(), "/skill:");
+        let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+        assert!(card_open(&drawn));
+        assert!(drawn.rows().iter().any(|row| row.contains("/skill:deploy")));
+    }
+}
+
+#[test]
+fn tab_is_inert_without_a_drawn_commands_card() {
+    let root = workspace_with("deploy", "");
+    for draft in ["bare", "@file", "words\n/mod", "/mod\nwords"] {
+        let mut view = frame(root.path());
+        view.paste(draft);
+        let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+        assert!(!card_open(&drawn), "{draft}");
+        assert_eq!(view.key(Key::Tab), Outcome::Unchanged, "{draft}");
+        assert_eq!(view.composer().text(), draft);
+    }
 }
