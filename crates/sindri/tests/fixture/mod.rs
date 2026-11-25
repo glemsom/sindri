@@ -317,9 +317,12 @@ fn model_screen(capabilities: Capabilities) -> View {
         .waits(|_| {})
         .served(&at, &Credential::new("sk-ant-recorded"), &at);
     let mut view = View::of(capabilities, Facts::default().asked(), Transcript::none());
+    let root = tempfile::tempdir().expect("a temp workspace");
+    let facts = view.facts().clone();
+    view.handed(facts.clone().working(root.path().to_path_buf(), None));
     view.paste("/model");
     view.key(Key::Enter);
-    view.handed(view.facts().clone().served_by(listing));
+    view.handed(facts.served_by(listing));
     view
 }
 
@@ -1099,6 +1102,9 @@ fn flat_prompt() -> View {
 
 fn refused_run(capabilities: Capabilities) -> View {
     let mut view = running(capabilities, transcript(), Scroll::Tail);
+    let root = tempfile::tempdir().expect("a temp workspace");
+    let facts = view.facts().clone();
+    view.handed(facts.clone().working(root.path().to_path_buf(), None));
     view.paste("why does the retry test fail");
     match view.key(Key::Enter) {
         Outcome::Send(prompt) => view.run_refused(
@@ -1108,6 +1114,7 @@ fn refused_run(capabilities: Capabilities) -> View {
         ),
         other => panic!("a draft should have been sent, and {other:?} came instead"),
     }
+    view.handed(facts);
     view
 }
 
@@ -1167,6 +1174,9 @@ fn draft_long(capabilities: Capabilities) -> View {
 }
 
 fn waiting(mut view: View, prompts: &[&str]) -> View {
+    let root = tempfile::tempdir().expect("a temp workspace");
+    let facts = view.facts().clone();
+    view.handed(facts.clone().working(root.path().to_path_buf(), None));
     for prompt in prompts {
         view.paste(prompt);
         match view.key(Key::Enter) {
@@ -1174,6 +1184,7 @@ fn waiting(mut view: View, prompts: &[&str]) -> View {
             other => panic!("a draft should have been sent, and {other:?} came instead"),
         }
     }
+    view.handed(facts);
     view
 }
 

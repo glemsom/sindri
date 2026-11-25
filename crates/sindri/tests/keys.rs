@@ -26,9 +26,12 @@ fn drafted(mut view: View, lines: &[&str]) -> View {
 }
 
 fn waiting(draft: &[&str], prompts: &[&str]) -> View {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     for prompt in prompts {

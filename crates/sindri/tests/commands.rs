@@ -523,9 +523,12 @@ fn a_command_that_takes_a_word_is_written_into_the_draft_to_name_it() {
 
 #[test]
 fn a_press_on_a_command_row_chooses_it_the_way_a_file_row_is_chosen() {
+    let root = workspace_with("deploy", "");
     let mut clicked = View::of(
         caps::pointing(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     clicked.paste("/s");
@@ -534,7 +537,9 @@ fn a_press_on_a_command_row_chooses_it_the_way_a_file_row_is_chosen() {
 
     let mut typed = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     typed.paste("/stats");
@@ -967,4 +972,101 @@ fn tab_keeps_the_card_when_the_preserved_words_wrap() {
     assert_eq!(view.key(Key::Tab), Outcome::Edited);
     assert_eq!(view.composer().text(), format!("/model{tail}"));
     assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+}
+
+#[test]
+fn an_already_loaded_skill_retains_the_exact_draft_and_sends_nothing() {
+    let root = workspace_with("deploy", "");
+    let loaded = Loaded::from_iter(["deploy"]);
+    let mut view = frame_holding(root.path(), &loaded);
+    let draft = "/skill:deploy  words\tkept\nnext  ";
+    view.paste(draft);
+    for _ in 0..7 {
+        view.key(Key::Left);
+    }
+    assert_eq!(view.key(Key::Enter), Outcome::Unchanged);
+    assert_eq!(view.composer().text(), draft);
+    assert_eq!(loaded.names(), ["deploy"]);
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert!(card_open(&drawn));
+    assert!(
+        drawn
+            .rows()
+            .iter()
+            .any(|row| row.contains("loaded · the deploy skill"))
+    );
+}
+
+#[test]
+fn an_unknown_skill_retains_the_exact_draft_and_sends_nothing() {
+    let root = workspace_with("deploy", "");
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    let draft = "/skill:zx  words\tkept\nnext  ";
+    view.paste(draft);
+    assert_eq!(view.key(Key::Enter), Outcome::Unchanged);
+    assert_eq!(view.composer().text(), draft);
+    assert!(loaded.names().is_empty());
+    for _ in 0..7 {
+        view.key(Key::Left);
+    }
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert!(card_open(&drawn));
+    assert!(
+        drawn
+            .rows()
+            .iter()
+            .any(|row| row.contains("no skill matches zx"))
+    );
+}
+
+#[test]
+fn no_workspace_retains_every_line_and_sends_nothing() {
+    for draft in [
+        "/skill:deploy  kept",
+        "/quit",
+        "/skillet",
+        "ordinary prompt\nkept  ",
+    ] {
+        let loaded = Loaded::default();
+        let mut view = View::of(
+            Capabilities::default(),
+            Facts::default()
+                .asked()
+                .railed(ledger::Facts::default().loading(loaded.clone())),
+            Transcript::none(),
+        );
+        view.paste(draft);
+        assert_eq!(view.key(Key::Enter), Outcome::Unchanged, "{draft}");
+        assert_eq!(view.composer().text(), draft);
+        assert!(loaded.names().is_empty());
+    }
+}
+
+#[test]
+fn a_successful_skill_load_clears_the_draft_without_sending() {
+    let root = workspace_with("deploy", "");
+    for draft in ["/skill:deploy  kept", "/skill deploy"] {
+        let loaded = Loaded::default();
+        let mut view = frame_holding(root.path(), &loaded);
+        view.paste(draft);
+        assert_eq!(view.key(Key::Enter), Outcome::Edited);
+        assert_eq!(view.composer().text(), "");
+        assert_eq!(loaded.names(), ["deploy"]);
+        assert!(!card_open(&frame::painted(&mut view, 120, 40)));
+    }
+}
+
+#[test]
+fn ordinary_prompts_send_the_exact_draft() {
+    let root = workspace_with("deploy", "");
+    for draft in ["ordinary  prompt\nkept  ", "/skillet  kept"] {
+        let mut view = frame(root.path());
+        view.paste(draft);
+        match view.key(Key::Enter) {
+            Outcome::Send(prompt) => assert_eq!(prompt.text(), draft),
+            other => panic!("expected a prompt, got {other:?}"),
+        }
+        assert_eq!(view.composer().text(), "");
+    }
 }

@@ -47,6 +47,11 @@ fn opened(over: View, mode: Mode) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
     std::fs::write(root.path().join("rows.rs"), "").expect("a file");
     let mut view = over;
+    view.handed(
+        view.facts()
+            .clone()
+            .working(root.path().to_path_buf(), None),
+    );
     match mode {
         Mode::Keys => {
             view.key(Key::Char('?'));

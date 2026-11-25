@@ -100,9 +100,12 @@ fn a_pass_hands_back_the_run_it_draws_at_more_than_one_cell() {
 
 #[test]
 fn a_press_on_a_row_the_pass_laid_chooses_that_row() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         caps::pointing(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     view.key(Key::Char('/'));
@@ -118,9 +121,12 @@ fn a_press_on_a_row_the_pass_laid_chooses_that_row() {
 
 #[test]
 fn a_pass_under_a_card_tells_the_terminal_nothing_of_the_frame_beneath_it() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         caps::kitty(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::of(answer(
             "# A gate rule\n\nsee [the gate](https://example.test/gate)",
         )),
@@ -242,9 +248,12 @@ fn a_pass_hands_back_the_span_a_copy_takes() {
 
 #[test]
 fn an_act_that_replaces_the_transcript_empties_what_the_pass_drew() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::of(answer("- gate\n- rule\n- mark")),
     );
     let frame = frame::painted(&mut view, 120, 40);

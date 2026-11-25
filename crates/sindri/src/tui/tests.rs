@@ -473,9 +473,12 @@ fn prompt_of(text: &str) -> Prompt {
 #[test]
 fn a_run_that_cannot_start_leaves_its_row_and_the_draft_and_never_ends_the_launch() {
     let stage = Stage::open();
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     view.paste("why does the retry test fail");
