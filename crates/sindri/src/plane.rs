@@ -599,7 +599,7 @@ impl Light {
     fn parted(self, seam: Seam, cell: CellSize) -> Light {
         let extent = f64::from(match seam.axis {
             Axis::Down => cell.width(),
-            Axis::Across => cell.height(),
+            Axis::Across => (cell.height() / 2).max(1),
         });
         let weight = f64::from(seam.weight);
         Light {

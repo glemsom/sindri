@@ -102,7 +102,7 @@ fn lit_over(placement: &Placement, plane: &Plane, cell: CellSize, x: u32, y: u32
 fn seam_extent(axis: Axis, cell: CellSize) -> u32 {
     match axis {
         Axis::Down => cell.width(),
-        Axis::Across => cell.height(),
+        Axis::Across => (cell.height() / 2).max(1),
     }
 }
 
@@ -110,7 +110,7 @@ fn seam_extent(axis: Axis, cell: CellSize) -> u32 {
 fn in_seam(axis: Axis, cell: CellSize, x: u32, y: u32) -> bool {
     match axis {
         Axis::Down => x < cell.width(),
-        Axis::Across => y < cell.height(),
+        Axis::Across => y < seam_extent(axis, cell),
     }
 }
 
@@ -3219,4 +3219,21 @@ fn two_lights_of_one_shade_are_answered_by_the_one_plane_the_frame_holds() {
             .map(Plane::id)
             .collect::<Vec<PlaneId>>()
     );
+}
+
+#[test]
+fn the_composer_separator_spans_half_a_cell_while_the_rail_keeps_its_width() {
+    for (_, palette) in SPELLED {
+        for (axis, placement) in parted_bands(&palette, CELL) {
+            let plane = drawn(placement);
+            let extent = match axis {
+                Axis::Down => CELL.width(),
+                Axis::Across => CELL.height() / 2,
+            };
+            let (x, y) = along_seam(axis, extent - 1);
+            assert_eq!(lit_over(&placement, &plane, CELL, x, y), weight_of(&palette));
+            let (x, y) = along_seam(axis, extent);
+            assert_eq!(lit_over(&placement, &plane, CELL, x, y), 0);
+        }
+    }
 }
