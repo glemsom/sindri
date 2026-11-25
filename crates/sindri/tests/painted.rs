@@ -1386,3 +1386,213 @@ fn a_width_only_terminal_gets_the_unsized_rails_cells() {
     assert!(partial.told().sizes().laid().is_empty());
     assert_eq!(partial.cells(), plain.cells());
 }
+
+#[test]
+fn submitted_prompt_surfaces_leave_the_transcripts_right_margin_on_the_well() {
+    for palette in [Palette::TRUECOLOR, Palette::ANSI, Palette::SLOTS] {
+        for (cols, rows) in [(80, 24), (120, 40), (40, 24)] {
+            let mut entries = vec![Entry::Prompt {
+                text: SecretSet::default().redact("a short prompt"),
+            }];
+            entries.extend(answer("an answer"));
+            let mut view = View::of(caps::inked(palette), railed(), Transcript::of(entries));
+            let frame = frame::painted(&mut view, cols, rows);
+            let band = frame.told().layout().unwrap().transcript;
+            let (y, _) = frame.drawn_at("a short prompt");
+            for x in band.x..band.right() - 2 {
+                assert_eq!(frame.cell(x, y).bg, palette.band(Band::Prompt));
+            }
+            for x in band.right() - 2..band.right() {
+                assert_eq!(frame.cell(x, y).bg, palette.band(Band::Well));
+            }
+            let (y, _) = frame.drawn_at("an answer");
+            for x in band.x..band.right() {
+                assert_eq!(frame.cell(x, y).bg, palette.band(Band::Well));
+            }
+        }
+    }
+}
+
+#[test]
+fn submitted_prompt_surfaces_preserve_literal_rows_and_ownership_across_capabilities() {
+    let words = "first line\n\n界界 wide words\n```rust\nlet literal = true;\n```";
+    for (cols, rows) in [(80, 24), (120, 40), (40, 24), (12, 24)] {
+        let mut reference = None;
+        for capabilities in [
+            caps::inked(Palette::TRUECOLOR),
+            caps::pictured(),
+            caps::inked(Palette::ANSI),
+            caps::greys(),
+            caps::uncoloured(),
+        ] {
+            let palette = capabilities.palette();
+            let pictured = capabilities.pictures().draws() && palette != Palette::SLOTS;
+            let mut entries = vec![Entry::Prompt {
+                text: SecretSet::default().redact(words),
+            }];
+            entries.extend(answer("answer one"));
+            entries.push(Entry::Prompt {
+                text: SecretSet::default().redact("second prompt"),
+            });
+            entries.extend(answer("answer two"));
+            let mut view = View::of(capabilities.faced(false), railed(), Transcript::of(entries));
+            let frame = frame::painted(&mut view, cols, rows);
+            let band = frame.told().layout().unwrap().transcript;
+            let text: Vec<_> = (band.y..band.bottom())
+                .map(|y| {
+                    frame
+                        .row(y)
+                        .chars()
+                        .take(usize::from(band.width))
+                        .collect::<String>()
+                })
+                .collect();
+            if let Some(reference) = &reference {
+                assert_eq!(&text, reference);
+            } else {
+                reference = Some(text);
+            }
+            for y in band.y..band.bottom() {
+                if frame.cell(band.x, y).symbol() == "┃" {
+                    for x in band.x..band.right() - 2 {
+                        assert_eq!(frame.cell(x, y).bg, palette.band(Band::Prompt));
+                    }
+                    for x in band.right() - 2..band.right() {
+                        assert_eq!(
+                            frame.cell(x, y).bg,
+                            if pictured {
+                                ratatui::style::Color::Reset
+                            } else {
+                                palette.band(Band::Well)
+                            }
+                        );
+                    }
+                }
+            }
+            if cols >= 40 {
+                let (y, x) = frame.drawn_at("first line");
+                assert_eq!(x, 2);
+                assert_eq!(frame.cell(0, y).symbol(), "┃");
+                assert_eq!(frame.cell(1, y).symbol(), "›");
+                assert_eq!(frame.cell(0, y + 1).symbol(), "┃");
+                assert!(frame.row(y + 3).contains("```rust"));
+                let (answer_y, answer_x) = frame.drawn_at("answer one");
+                assert_eq!(answer_x, x);
+                assert_eq!(answer_y, y + 6);
+            }
+        }
+    }
+}
+
+#[test]
+fn submitted_prompt_text_clears_ordinary_text_contrast_on_its_actual_surface() {
+    use sindri::palette::{LEGIBLE, channels};
+    let luminance = |colour| {
+        let [red, green, blue] = channels(colour).unwrap().map(|value| {
+            let value = f64::from(value) / 255.0;
+            if value <= 0.04045 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        });
+        0.2126 * red + 0.7152 * green + 0.0722 * blue
+    };
+    for palette in [Palette::TRUECOLOR, Palette::ANSI] {
+        let mut view = View::of(
+            caps::inked(palette),
+            railed(),
+            Transcript::of(vec![Entry::Prompt {
+                text: SecretSet::default().redact("ordinary prompt text"),
+            }]),
+        );
+        let frame = frame::painted(&mut view, 120, 40);
+        let (y, x) = frame.drawn_at("ordinary prompt text");
+        for column in 0..x + 20 {
+            let cell = frame.cell(column, y);
+            let foreground = luminance(cell.fg);
+            let background = luminance(cell.bg);
+            let contrast =
+                (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05);
+            assert!(contrast >= if column < x { LEGIBLE } else { 4.5 });
+        }
+    }
+}
+
+#[test]
+fn submitted_prompt_folds_keep_original_copy_and_reader_opening_after_reflow() {
+    let words = (1..=16)
+        .map(|line| format!("line {line}: literal 界 words and ``` fence"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut view = View::of(
+        caps::pointing(),
+        railed(),
+        Transcript::of(vec![Entry::Prompt {
+            text: SecretSet::default().redact(&words),
+        }]),
+    );
+    let frame = frame::painted(&mut view, 120, 40);
+    let (head, _) = frame.drawn_at("line 1:");
+    let (count, _) = frame.drawn_at("12 rows kept back");
+    view.drag(Cell::new(head, 0), Cell::new(count, 40));
+    frame::painted(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Copy), Outcome::Copy(words));
+    assert_eq!(
+        view.pointer(frame.told(), Pointer::Press(Cell::new(count, 10))),
+        Outcome::Edited
+    );
+    let opened = frame::painted(&mut view, 120, 40);
+    assert!(opened.rows().iter().any(|row| row.contains("line 16:")));
+    let reflowed = frame::painted(&mut view, 40, 24);
+    assert!(
+        !reflowed
+            .rows()
+            .iter()
+            .any(|row| row.contains("rows kept back"))
+    );
+    let band = reflowed.told().layout().unwrap().transcript;
+    assert_eq!(reflowed.cell(0, band.y).symbol(), "┃");
+    for y in band.y..band.bottom() {
+        for x in band.right() - 2..band.right() {
+            assert_eq!(reflowed.cell(x, y).bg, Palette::TRUECOLOR.band(Band::Well));
+        }
+    }
+}
+
+#[test]
+fn submitted_prompt_fold_counts_follow_width_and_closing_keeps_the_inset_surface() {
+    let words = (1..=16)
+        .map(|line| format!("line {line}: literal 界 words and ``` fence"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut view = View::of(
+        caps::pointing(),
+        railed(),
+        Transcript::of(vec![Entry::Prompt {
+            text: SecretSet::default().redact(words),
+        }]),
+    );
+    frame::painted(&mut view, 120, 40).drawn_at("12 rows kept back");
+    let narrow = frame::painted(&mut view, 40, 24);
+    let (count, _) = narrow.drawn_at("28 rows kept back");
+    assert_eq!(
+        view.pointer(narrow.told(), Pointer::Press(Cell::new(count, 10))),
+        Outcome::Edited
+    );
+    let wide = frame::painted(&mut view, 120, 40);
+    let (head, _) = wide.drawn_at("line 1:");
+    assert_eq!(
+        view.pointer(wide.told(), Pointer::Press(Cell::new(head, 10))),
+        Outcome::Edited
+    );
+    let closed = frame::painted(&mut view, 120, 40);
+    let (count, _) = closed.drawn_at("12 rows kept back");
+    let band = closed.told().layout().unwrap().transcript;
+    for x in band.x..band.right() - 2 {
+        assert_eq!(
+            closed.cell(x, count).bg,
+            Palette::TRUECOLOR.band(Band::Prompt)
+        );
+    }
+}

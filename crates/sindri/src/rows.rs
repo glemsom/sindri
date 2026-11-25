@@ -318,7 +318,14 @@ impl Row {
         sizes: &mut Sizes,
     ) {
         if let Some(band) = self.band {
-            pen::claim(buffer, area, palette.ground(Some(band)));
+            let surface = match band {
+                Band::Prompt => Rect {
+                    width: area.width.saturating_sub(MARGIN),
+                    ..area
+                },
+                _ => area,
+            };
+            pen::claim(buffer, surface, palette.ground(Some(band)));
         }
         match self.fence.filter(|fence| fence.walk > 0) {
             Some(fence) => {

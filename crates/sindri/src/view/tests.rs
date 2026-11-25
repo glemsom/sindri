@@ -1504,7 +1504,7 @@ fn a_prompt_drawn_beside_a_live_draft_stands_on_the_one_band_both_are_read_on() 
         .expect("the frame draws the prompt in the transcript");
     let composer = laid.composer;
 
-    for x in transcript.x..transcript.right() {
+    for x in transcript.x..transcript.right().saturating_sub(MARGIN) {
         assert_eq!(
             under(&buffer, x, asked),
             palette.band(Band::Prompt),
@@ -1549,7 +1549,7 @@ fn the_prompt_in_the_transcript_keeps_the_band_it_is_read_on_beside_the_seam() {
             .find(|y| drawn_row(&buffer, *y).contains("triage the retry test"))
             .expect("the frame draws the prompt the transcript opens on");
 
-        for x in laid.transcript.x..rail.x {
+        for x in laid.transcript.x..rail.x.saturating_sub(MARGIN) {
             assert_eq!(
                 under(&buffer, x, asked),
                 palette.band(Band::Prompt),
