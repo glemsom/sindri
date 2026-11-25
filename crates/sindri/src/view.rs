@@ -593,6 +593,10 @@ impl View {
             Act::Write => self.write(),
             Act::Close => self.close(),
             Act::Back => self.page(Page::Back),
+            Act::Forward if self.stack.top() == Mode::Settings && self.settings.refresh() => {
+                self.handed(self.facts.clone().unserved());
+                Outcome::Served
+            }
             Act::Forward => self.page(Page::Forward),
             Act::Tail => self.tail(key),
             Act::Before => self.prompt(key, Move::Previous),
@@ -872,6 +876,14 @@ impl View {
     }
 
     fn flip(&mut self) -> Outcome {
+        if self.stack.top() == Mode::Settings
+            && !self.settings.editing()
+            && !Config::SCHEMA
+                .get(self.settings.current())
+                .is_some_and(|field| field.switch())
+        {
+            return Outcome::Unchanged;
+        }
         match self.settings.space() {
             true => Outcome::Edited,
             false => Outcome::Unchanged,
@@ -886,6 +898,19 @@ impl View {
     }
 
     fn write(&mut self) -> Outcome {
+        if self.settings.current() < self.settings.rows().count() {
+            let asking = self.settings.activate();
+            return if asking {
+                self.handed(self.facts.clone().unserved());
+                Outcome::Served
+            } else {
+                Outcome::Edited
+            };
+        }
+        if self.settings.current() == self.settings.rows().count() + 1 {
+            self.stack.close();
+            return Outcome::Edited;
+        }
         let touched: Touched = self.settings.touched();
         if touched.is_empty() {
             self.stack.close();
@@ -895,6 +920,9 @@ impl View {
     }
 
     fn close(&mut self) -> Outcome {
+        if self.stack.top() == Mode::Settings && self.settings.cancel_editor() {
+            return Outcome::Edited;
+        }
         if self.stack.modal().is_none() && self.cards.follow(self.composer.text()).is_some() {
             self.cards.dismiss(self.composer.text());
             return Outcome::Edited;
@@ -1016,6 +1044,9 @@ impl View {
             false => State::Idle,
         });
         self.models = std::mem::take(&mut self.models).served_by(facts.served().cloned());
+        if let Some(listing) = facts.served().cloned() {
+            self.settings.listing(listing);
+        }
         if self.files.root() != facts.workspace() {
             self.files = Files::of(facts.workspace());
         }

@@ -86,12 +86,24 @@ fn shown(view: &View, key: &str) -> String {
 }
 
 fn type_into(view: &mut View, text: &str) {
+    if !view.settings().editing() {
+        view.key(Key::Enter);
+        if row_key(view.settings()) == Some("model") {
+            view.key(Key::Clear);
+        }
+    }
     for glyph in text.chars() {
         view.key(Key::Char(glyph));
     }
 }
 
 fn entered(view: &mut View) -> Touched {
+    if view.settings().editing() {
+        view.key(Key::Enter);
+    }
+    while view.settings().current() < Config::SCHEMA.len() {
+        view.key(Key::Down);
+    }
     match view.key(Key::Enter) {
         Outcome::Save(touched) => touched,
         other => panic!("Enter should have asked for a write, and {other:?} came instead"),
@@ -195,6 +207,9 @@ fn enter_writes_once_and_a_visit_that_touched_nothing_writes_at_all() {
     let path = file_in(&home);
     let mut view = opened(&home);
     walk_to(&mut view, "max_turns");
+    while view.settings().current() < Config::SCHEMA.len() {
+        view.key(Key::Down);
+    }
 
     assert_eq!(
         view.key(Key::Enter),
@@ -215,6 +230,7 @@ fn escape_discards_everything_a_reader_typed() {
     view.key(Key::Clear);
     type_into(&mut view, "a model the file never hears about");
 
+    assert_eq!(view.key(Key::Escape), Outcome::Edited);
     assert_eq!(view.key(Key::Escape), Outcome::Edited);
 
     assert_eq!(view.mode(), Mode::Composer, "the screen is gone");
@@ -298,7 +314,9 @@ fn a_tab_walked_row_is_the_row_a_visit_writes() {
 
     view.key(Key::Tab);
     view.key(Key::Tab);
-    type_into(&mut view, "chat");
+    view.key(Key::Enter);
+    view.key(Key::Down);
+    view.key(Key::Enter);
 
     assert_eq!(
         row_key(view.settings()),

@@ -544,7 +544,7 @@ fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
     let body = body_rows(&frame);
     let at = body
         .iter()
-        .position(|row| row.trim_start().starts_with("ssh_agent"))
+        .position(|row| row.trim_start().starts_with("Cancel"))
         .expect("the last key of the schema drawn in the card");
     let last = top + 1 + u16::try_from(at).expect("a row of the card");
 
@@ -597,7 +597,7 @@ fn a_frame_too_short_for_the_settings_visit_draws_the_head_of_the_list_and_keeps
     let drawn = frame.rows().join("\n");
 
     assert!(
-        body.first().is_some_and(|row| row.contains("provider")),
+        body.first().is_some_and(|row| row.contains("Wire")),
         "fourteen rows hold the card's borders and eleven of its body, and the head of the key \
          list is what those eleven rows are for: {body:#?}"
     );

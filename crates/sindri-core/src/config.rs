@@ -91,6 +91,18 @@ impl Field {
         self
     }
 
+    pub fn choices(&self, wire: Option<Wire>) -> Option<Vec<&'static str>> {
+        match self.name {
+            "provider" => Some(Wire::WORDS.to_vec()),
+            "route" => Some(if wire == Some(Wire::Anthropic) {
+                Vec::new()
+            } else {
+                std::iter::once("").chain(Route::WORDS).collect()
+            }),
+            _ => None,
+        }
+    }
+
     pub fn switch(&self) -> bool {
         self.switch
     }

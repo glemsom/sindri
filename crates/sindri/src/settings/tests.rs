@@ -298,3 +298,90 @@ fn a_refusal_is_said_until_the_reader_writes_something_else() {
         "the reason was about the value that was there, and it has been written over"
     );
 }
+
+#[test]
+fn wire_selection_uses_supported_words_and_esc_leaves_the_draft_untouched() {
+    let mut settings = Settings::of(&Config::default());
+    assert!(!settings.activate());
+    assert!(!settings.key(Key::Char('x')));
+    settings.walked(Move::Next);
+    assert!(settings.cancel_editor());
+    assert!(settings.touched().is_empty());
+    settings.activate();
+    settings.walked(Move::Next);
+    settings.activate();
+    assert_eq!(shown(&settings, "provider"), "openai");
+}
+
+#[test]
+fn anthropic_has_no_route_editor_and_switching_to_it_clears_an_override() {
+    let mut settings = Settings::of(&Config {
+        provider: Some(Wire::Openai),
+        route: Some(sindri_core::provider::Route::Chat),
+        ..Config::default()
+    });
+    settings.activate();
+    settings.walked(Move::Previous);
+    settings.activate();
+    assert_eq!(shown(&settings, "route"), "");
+    at(&mut settings, "route");
+    settings.activate();
+    assert!(!settings.editing());
+}
+
+#[test]
+fn automatic_route_is_an_empty_override() {
+    let mut settings = Settings::of(&Config {
+        provider: Some(Wire::Openai),
+        route: Some(sindri_core::provider::Route::Responses),
+        ..Config::default()
+    });
+    at(&mut settings, "route");
+    settings.activate();
+    settings.walked(Move::Previous);
+    settings.walked(Move::Previous);
+    settings.activate();
+    assert_eq!(shown(&settings, "route"), "");
+}
+
+#[test]
+fn model_discovery_can_be_replaced_by_manual_entry_and_cancel_restores_the_value() {
+    let mut settings = Settings::of(&decided());
+    at(&mut settings, "model");
+    assert!(settings.activate());
+    assert!(settings.clear());
+    settings.clear();
+    settings.key(Key::Char('x'));
+    assert!(settings.cancel_editor());
+    assert_eq!(shown(&settings, "model"), "claude-sonnet-4-5");
+    assert!(settings.touched().is_empty());
+}
+
+#[test]
+fn draft_discovery_uses_changed_endpoint_and_preserves_unedited_credentials() {
+    let mut settings = Settings::of(&decided());
+    at(&mut settings, "base_url");
+    settings.activate();
+    for glyph in "https://example.test".chars() {
+        settings.key(Key::Char(glyph));
+    }
+    settings.activate();
+    let draft = settings.draft(&decided()).unwrap();
+    assert_eq!(draft.base_url.as_deref(), Some("https://example.test"));
+    assert_eq!(draft.api_key, decided().api_key);
+}
+
+#[test]
+fn automatic_route_can_be_used_to_discover_models_from_the_draft() {
+    let base = Config {
+        provider: Some(Wire::Openai),
+        route: Some(sindri_core::provider::Route::Chat),
+        ..Config::default()
+    };
+    let mut settings = Settings::of(&base);
+    at(&mut settings, "route");
+    settings.activate();
+    settings.walked(Move::Previous);
+    settings.activate();
+    assert_eq!(settings.draft(&base).unwrap().route, None);
+}

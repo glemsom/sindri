@@ -398,7 +398,19 @@ impl<'a> Loop<'a> {
                 Ok(None)
             }
             Outcome::Served => {
-                self.asking = ask(&self.config, &self.wake);
+                let config = if self.view.mode() == sindri::keys::Mode::Settings {
+                    match self.view.settings().draft(&self.config) {
+                        Ok(draft) => draft,
+                        Err(error) => {
+                            self.view.refuse(&error.to_string());
+                            self.paint()?;
+                            return Ok(None);
+                        }
+                    }
+                } else {
+                    self.config.clone()
+                };
+                self.asking = ask(&config, &self.wake);
                 self.paint()?;
                 Ok(None)
             }
@@ -542,8 +554,19 @@ impl<'a> Loop<'a> {
         let Some(listing) = landed else {
             return Ok(());
         };
-        self.view
-            .handed(self.view.facts().clone().served_by(listing));
+        if self.view.mode() != sindri::keys::Mode::Settings
+            || self
+                .view
+                .settings()
+                .draft(&self.config)
+                .ok()
+                .and_then(|draft| draft.endpoint())
+                .as_ref()
+                == Some(listing.at())
+        {
+            self.view
+                .handed(self.view.facts().clone().served_by(listing));
+        }
         self.paint()?;
         if let Some(flight) = self.asking.take() {
             flight.joined();

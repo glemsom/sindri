@@ -670,9 +670,14 @@ fn refused(capabilities: Capabilities) -> View {
         }
         view.key(Key::Down);
     }
+    view.key(Key::Enter);
     view.key(Key::Clear);
     for glyph in "two hundred".chars() {
         view.key(Key::Char(glyph));
+    }
+    view.key(Key::Enter);
+    while view.settings().current() < Config::SCHEMA.len() {
+        view.key(Key::Down);
     }
     let Outcome::Save(touched) = view.key(Key::Enter) else {
         panic!("a value typed into a row is a visit Enter hands to the save");

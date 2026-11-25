@@ -152,7 +152,11 @@ impl Bench {
                 .into_iter()
                 .map(|(id, _)| id.to_owned())
                 .collect(),
-            Bench::Settings(settings) => settings.rows().map(|(key, _)| key.to_owned()).collect(),
+            Bench::Settings(settings) => settings
+                .rows()
+                .map(|(key, _)| key.to_owned())
+                .chain(["Apply".into(), "Cancel".into()])
+                .collect(),
             Bench::Card(card) => card
                 .rows()
                 .into_iter()
@@ -584,6 +588,10 @@ fn a_glyph_lands_in_the_list_the_screen_keeps() {
     for (at, mode) in LISTS.into_iter().enumerate() {
         let (_root, mut view) = screen(mode, Capabilities::default());
 
+        if mode == Mode::Settings {
+            assert_eq!(view.key(Key::Char('x')), Outcome::Unchanged);
+            continue;
+        }
         assert_eq!(
             view.key(Key::Char('x')),
             Outcome::Edited,
@@ -603,28 +611,16 @@ fn a_glyph_lands_in_the_list_the_screen_keeps() {
 }
 
 #[test]
-fn a_press_on_a_row_of_the_visit_is_no_act() {
+fn a_press_opens_the_settings_row_editor() {
     let (_root, mut view) = screen(Mode::Settings, caps::pointing());
     let frame = frame::painted(&mut view, 120, 40);
     let row = frame.row_holding(frame.area(), "thinking");
-    let before = marks(&view);
-
     assert_eq!(
         view.pointer(frame.told(), Pointer::Press(Cell::new(row, 40))),
-        Outcome::Unchanged,
-        "a row of the visit hangs no choice, so a press on it writes no value and sends no key"
+        Outcome::Edited
     );
-    assert_eq!(
-        marks(&view),
-        before,
-        "and the mark stands on the row the reader walked to rather than on the one that was \
-         pressed: a visit's rows are no list a press moves through"
-    );
-    assert_eq!(
-        view.mode(),
-        Mode::Settings,
-        "and the screen the visit is drawn on is still open"
-    );
+    assert!(view.settings().editing());
+    assert_eq!(view.mode(), Mode::Settings);
 }
 
 #[test]

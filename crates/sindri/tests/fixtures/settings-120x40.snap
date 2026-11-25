@@ -13,26 +13,26 @@ settings at 120x40
 07 |                                                                                                                        | dim:120
 08 |                                                                                                                        | dim:120
 09 |                                                                                                                        | dim:120
-10 |                                                                                                                        | dim:120
-11 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-12 |                        │ › provider              anthropic                                    │                        | dim:25 plain:1 accent:33 plain:36 dim:25
-13 |                        │   model                 claude-sonnet-4-5                            │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-14 |                        │   route                                                              │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-15 |                        │   base_url                                                           │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-16 |                        │   api_key               «redacted»                                   │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-17 |                        │   thinking              true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-18 |                        │   extra_writable_paths  /srv/data                                    │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-19 |                        │   extra_headers                                                      │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-20 |                        │   context_window        200000                                       │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-21 |                        │   max_turns             250                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-22 |                        │   timeout               120                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-23 |                        │   command_budget_ms                                                  │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-24 |                        │   output_budget_bytes                                                │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-25 |                        │   status                                                             │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-26 |                        │   face                  true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-27 |                        │   ssh_agent                                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-28 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
-29 |                                                                                                                        | dim:120
+10 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+11 |                        │ › Wire                  anthropic                                    │                        | dim:25 plain:1 accent:33 plain:36 dim:25
+12 |                        │   model                 claude-sonnet-4-5                            │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+13 |                        │   route                 Not applicable                               │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+14 |                        │   base_url                                                           │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+15 |                        │   api_key               «redacted»                                   │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+16 |                        │   thinking              true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+17 |                        │   extra_writable_paths  /srv/data                                    │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+18 |                        │   extra_headers                                                      │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+19 |                        │   context_window        200000                                       │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+20 |                        │   max_turns             250                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+21 |                        │   timeout               120                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+22 |                        │   command_budget_ms                                                  │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+23 |                        │   output_budget_bytes                                                │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+24 |                        │   status                                                             │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+25 |                        │   face                  true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+26 |                        │   ssh_agent                                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+27 |                        │   Apply                 changes affect the next run                  │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+28 |                        │   Cancel                discard changes                              │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+29 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 30 |                                                                                                                        | dim:120
 31 |                                                                                                                        | dim:120
 32 |                                                                                                                        | dim:120

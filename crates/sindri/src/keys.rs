@@ -364,7 +364,13 @@ const MODELS: [Binding; 5] = [
     },
 ];
 
-const SETTINGS: [Binding; 9] = [
+const SETTINGS: [Binding; 10] = [
+    Binding {
+        key: Key::Forward,
+        name: "Ctrl-F",
+        does: "refresh served names in the model editor",
+        act: Act::Forward,
+    },
     Binding {
         key: Key::Escape,
         name: "Esc",
@@ -374,7 +380,7 @@ const SETTINGS: [Binding; 9] = [
     Binding {
         key: Key::Enter,
         name: "Enter",
-        does: "write the keys you touched, and close",
+        does: "edit or select; Apply saves; Cancel discards",
         act: Act::Write,
     },
     Binding {
@@ -410,7 +416,7 @@ const SETTINGS: [Binding; 9] = [
     Binding {
         key: Key::Char(' '),
         name: "Space",
-        does: "flip a toggle, or type a space",
+        does: "toggle a switch, or type in an editor",
         act: Act::Flip,
     },
     Binding {

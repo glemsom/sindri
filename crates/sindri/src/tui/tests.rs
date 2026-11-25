@@ -237,9 +237,15 @@ fn enter_at_the_settings_modal_writes_the_file_and_the_next_prompt_runs_on_it() 
     view.open_settings(&config);
 
     walk_to(&mut view, "model");
+    view.key(Key::Enter);
+    view.key(Key::Clear);
     view.key(Key::Clear);
     for glyph in "new-model".chars() {
         view.key(Key::Char(glyph));
+    }
+    view.key(Key::Enter);
+    while view.settings().current() < Config::SCHEMA.len() {
+        view.key(Key::Down);
     }
     let mut live = stage.launch(view, config, &environment);
 
@@ -281,7 +287,12 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
     view.open_settings(&config);
 
     walk_to(&mut view, "context_window");
+    view.key(Key::Enter);
     view.key(Key::Char('0'));
+    view.key(Key::Enter);
+    while view.settings().current() < Config::SCHEMA.len() {
+        view.key(Key::Down);
+    }
     let mut live = stage.launch(view, config, &environment);
 
     let ended = live
@@ -377,6 +388,9 @@ fn a_settings_visit_that_turns_the_face_off_repaints_the_frame_it_leaves_without
     view.open_settings(&config);
     walk_to(&mut view, "face");
     view.key(Key::Char(' '));
+    while view.settings().current() < Config::SCHEMA.len() {
+        view.key(Key::Down);
+    }
     let mut live = stage.launch(view, config, &environment);
 
     let ended = live

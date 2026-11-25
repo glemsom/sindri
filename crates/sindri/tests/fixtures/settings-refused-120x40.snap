@@ -11,29 +11,29 @@ settings-refused at 120x40
 05 |                                                                                                                        | dim:120
 06 |                                                                                                                        | dim:120
 07 |                                                                                                                        | dim:120
-08 |                                                                                                                        | dim:120
-09 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-10 |                        │   provider              anthropic                                    │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-11 |                        │   model                 claude-sonnet-4-5                            │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-12 |                        │   route                                                              │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-13 |                        │   base_url                                                           │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-14 |                        │   api_key               «redacted»                                   │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-15 |                        │   thinking              true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-16 |                        │   extra_writable_paths  /srv/data                                    │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-17 |                        │   extra_headers                                                      │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-18 |                        │   context_window        200000                                       │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-19 |                        │ › max_turns             two hundred                                  │                        | dim:25 plain:1 accent:35 plain:34 dim:25
-20 |                        │   timeout               120                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-21 |                        │   command_budget_ms                                                  │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-22 |                        │   output_budget_bytes                                                │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-23 |                        │   status                                                             │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-24 |                        │   face                  true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-25 |                        │   ssh_agent                                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-26 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-27 |                        │ bad value in max_turns: `two hundred` will not parse: invalid digit  │                        | dim:25 plain:1 err:67 plain:2 dim:25
-28 |                        │ found in string                                                      │                        | dim:25 plain:1 err:15 plain:54 dim:25
-29 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
-30 |                                                                                                                        | dim:120
+08 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+09 |                        │   Wire                  anthropic                                    │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+10 |                        │   model                 claude-sonnet-4-5                            │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+11 |                        │   route                 Not applicable                               │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+12 |                        │   base_url                                                           │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+13 |                        │   api_key               «redacted»                                   │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+14 |                        │   thinking              true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+15 |                        │   extra_writable_paths  /srv/data                                    │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+16 |                        │   extra_headers                                                      │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+17 |                        │   context_window        200000                                       │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+18 |                        │   max_turns             two hundred                                  │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+19 |                        │   timeout               120                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+20 |                        │   command_budget_ms                                                  │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+21 |                        │   output_budget_bytes                                                │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+22 |                        │   status                                                             │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+23 |                        │   face                  true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+24 |                        │   ssh_agent                                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+25 |                        │ › Apply                 changes affect the next run                  │                        | dim:25 plain:1 accent:51 plain:18 dim:25
+26 |                        │   Cancel                discard changes                              │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+27 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+28 |                        │ bad value in max_turns: `two hundred` will not parse: invalid digit  │                        | dim:25 plain:1 err:67 plain:2 dim:25
+29 |                        │ found in string                                                      │                        | dim:25 plain:1 err:15 plain:54 dim:25
+30 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 31 |                                                                                                                        | dim:120
 32 |                                                                                                                        | dim:120
 33 |                                                                                                                        | dim:120
