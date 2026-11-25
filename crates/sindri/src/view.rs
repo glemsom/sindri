@@ -1385,7 +1385,7 @@ impl View {
         for piece in window.pieces() {
             let top = y.saturating_sub(area.y);
             let rows = self.rows.rows(piece.entry);
-            let first = usize::from(piece.skip);
+            let first = piece.skip;
             let shown = &rows[first..first + usize::from(piece.rows)];
             let surface_start = rows
                 .iter()
@@ -1407,8 +1407,8 @@ impl View {
                         area.width.saturating_sub(MARGIN),
                         u16::try_from(to - from).ok()?,
                     ),
-                    u16::try_from(end + 1 - start).ok()?,
-                    u16::try_from(from - start).ok()?,
+                    end + 1 - start,
+                    from - start,
                     area.height,
                     self.capabilities.pictures().cell(),
                     &palette,
@@ -1433,13 +1433,14 @@ impl View {
                             .min(area.width.saturating_sub(MARGIN * 2)),
                         u16::try_from(to - from).ok()?,
                     ),
-                    u16::try_from(end + 1 - start).ok()?,
-                    u16::try_from(from - start).ok()?,
-                    area.height,
+                    crate::plane::SurfaceWindow {
+                        rows: end + 1 - start,
+                        skip: from - start,
+                        band_rows: area.height,
+                    },
                     self.capabilities.pictures().cell(),
                     &palette,
-                    ink,
-                    compact,
+                    crate::plane::ToolStyle { ink, compact },
                 )
             });
             if let Some(placement) = decoration {

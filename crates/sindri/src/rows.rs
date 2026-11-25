@@ -51,6 +51,9 @@ const KEPT: char = '⋯';
 
 const CUT: char = '…';
 
+const INVOCATION_SOURCE: usize = usize::MAX;
+const RESULT_SOURCE: usize = usize::MAX - 1;
+
 const FOLD_HEAD: usize = 4;
 
 const FOLD_KEPT: usize = 3;
@@ -83,6 +86,23 @@ impl Place {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ToolOutcome {
+    Running,
+    Failed,
+    Settled,
+}
+
+impl ToolOutcome {
+    fn ink(self) -> Ink {
+        match self {
+            Self::Running => Ink::Accent,
+            Self::Failed => Ink::Err,
+            Self::Settled => Ink::Dim,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     spans: Vec<(String, Look)>,
@@ -95,6 +115,7 @@ pub struct Row {
     band: Option<Band>,
     tool_width: Option<u16>,
     tool_compact: bool,
+    tool_outcome: ToolOutcome,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,6 +160,7 @@ impl Row {
             band: None,
             tool_width: None,
             tool_compact: false,
+            tool_outcome: ToolOutcome::Settled,
         }
     }
 
@@ -168,6 +190,7 @@ impl Row {
             band: None,
             tool_width: None,
             tool_compact: false,
+            tool_outcome: ToolOutcome::Settled,
         }
     }
 
@@ -178,13 +201,7 @@ impl Row {
 
     pub(crate) fn tool_surface(&self) -> Option<(u16, Ink, bool)> {
         self.tool_width.map(|width| {
-            let ink = if self.spans.iter().any(|(_, look)| look.ink() == Ink::Err) {
-                Ink::Err
-            } else if self.spans.iter().any(|(text, _)| text.contains(PENDING)) {
-                Ink::Accent
-            } else {
-                Ink::Dim
-            };
+            let ink = self.tool_outcome.ink();
             (width, ink, self.tool_compact)
         })
     }
@@ -274,6 +291,7 @@ impl Row {
             band: self.band,
             tool_width: self.tool_width,
             tool_compact: self.tool_compact,
+            tool_outcome: self.tool_outcome,
         }
     }
 
@@ -522,7 +540,7 @@ fn laid(
 fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold, failed: bool) -> (Vec<Row>, Option<usize>) {
     let Some(kept) = rows
         .len()
-        .checked_sub(FOLD_HEAD + 1)
+        .checked_sub(FOLD_HEAD)
         .filter(|kept| *kept > FOLD_KEPT)
     else {
         return (rows, None);
@@ -530,9 +548,6 @@ fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold, failed: bool) -> (Vec<Row>,
     if fold == Fold::Open {
         return (rows, Some(kept));
     }
-    let last = rows
-        .pop()
-        .expect("a result whose fold keeps a row back has a last row under its head");
     let diagnostic = failed
         .then(|| {
             rows.iter()
@@ -545,8 +560,7 @@ fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold, failed: bool) -> (Vec<Row>,
     if let Some(diagnostic) = diagnostic {
         rows[FOLD_HEAD - 1] = diagnostic;
     }
-    rows.push(kept_back(kept, cols).naming(usize::MAX - 1));
-    rows.push(last);
+    rows.push(kept_back(kept, cols).naming(RESULT_SOURCE));
     (rows, Some(kept))
 }
 
@@ -774,10 +788,10 @@ fn opening(
         .collect(),
     };
     for row in &mut invocation {
-        *row = row.clone().fenced(usize::MAX, gutter).sourced("");
+        *row = row.clone().fenced(INVOCATION_SOURCE, gutter).sourced("");
     }
     if let Some(row) = invocation.first_mut() {
-        *row = row.clone().sourced(words);
+        *row = row.clone().sourced(spell::source(name, arguments));
     }
     rows.extend(invocation);
     rows
@@ -810,7 +824,7 @@ fn result_rows(
             (String::from(gutter), Ink::Muted),
             (String::from(line), Ink::Muted),
         ])
-        .fenced(usize::MAX - 1, pen::cells(gutter))
+        .fenced(RESULT_SOURCE, pen::cells(gutter))
         .sourced(line)
     }));
     let detail = match exit {
@@ -1141,6 +1155,19 @@ impl Held {
 enum What {
     Fact(Entry),
     Live { revision: u64, head: Option<Head> },
+}
+
+impl What {
+    fn is_tool(&self) -> bool {
+        matches!(self, Self::Fact(Entry::Call { .. } | Entry::Result { .. }))
+    }
+
+    fn is_prose(&self) -> bool {
+        matches!(
+            self,
+            Self::Fact(Entry::Assistant { .. } | Entry::Reasoning { .. })
+        )
+    }
 }
 
 impl Rows {
@@ -1542,10 +1569,7 @@ impl Rows {
         if one && at != work.start {
             return &[];
         }
-        let tool = matches!(
-            self.held[at].what,
-            What::Fact(Entry::Call { .. } | Entry::Result { .. })
-        ) && !one;
+        let tool = self.held[at].what.is_tool() && !one;
         let edged = tool && self.measure.cols > 16;
         let cols = self.measure.cols.saturating_sub(if edged { 6 } else { 0 });
         let surface = &self.measure.surface;
@@ -1593,22 +1617,20 @@ impl Rows {
                         }
                         inset.tool_width = Some(width);
                         inset.tool_compact = compact;
+                        inset.tool_outcome = match result {
+                            Some(Entry::Result {
+                                exit: Some(exit), ..
+                            }) if !exit.is_ok() => ToolOutcome::Failed,
+                            Some(_) => ToolOutcome::Settled,
+                            None => ToolOutcome::Running,
+                        };
                         *row = inset;
                     }
                 }
                 if at > 0 && !rows.is_empty() {
-                    let prior = matches!(
-                        self.held[at - 1].what,
-                        What::Fact(Entry::Call { .. } | Entry::Result { .. })
-                    );
-                    let prose = matches!(
-                        self.held[at].what,
-                        What::Fact(Entry::Assistant { .. } | Entry::Reasoning { .. })
-                    );
-                    let prior_prose = matches!(
-                        self.held[at - 1].what,
-                        What::Fact(Entry::Assistant { .. } | Entry::Reasoning { .. })
-                    );
+                    let prior = self.held[at - 1].what.is_tool();
+                    let prose = self.held[at].what.is_prose();
+                    let prior_prose = self.held[at - 1].what.is_prose();
                     if (tool && prior_prose) || (prose && prior) {
                         rows.insert(0, Row::blank());
                     }
@@ -1747,9 +1769,9 @@ impl Rows {
                 let rows = self.rows(at);
                 let target = match fold {
                     Fold::Closed => rows.iter().position(|row| {
-                        row.fence_id() == Some(usize::MAX - 1) && row.source().is_none()
+                        row.fence_id() == Some(RESULT_SOURCE) && row.source().is_none()
                     }),
-                    Fold::Open => rows.iter().position(|row| row.line_of(usize::MAX - 1)),
+                    Fold::Open => rows.iter().position(|row| row.line_of(RESULT_SOURCE)),
                 };
                 if target == Some(usize::from(row)) {
                     return self.fold(at, fold.other());
@@ -1850,7 +1872,7 @@ impl Rows {
 
     pub fn source(&self, at: usize, fence: usize) -> Option<String> {
         let held = self.held.get(at)?;
-        if fence == usize::MAX - 1
+        if fence == RESULT_SOURCE
             && let Some(Entry::Result { text, .. }) = result_of(held)
         {
             return Some(text.to_string());
@@ -1861,7 +1883,7 @@ impl Rows {
             .filter(|row| row.line_of(fence))
             .filter_map(|row| {
                 row.source()
-                    .filter(|source| fence != usize::MAX || !source.is_empty())
+                    .filter(|source| fence != INVOCATION_SOURCE || !source.is_empty())
             })
             .collect();
         (!lines.is_empty()).then(|| lines.join("\n"))
@@ -1925,14 +1947,12 @@ impl Rows {
             let filled = u32::try_from(self.rows(at).len()).unwrap_or(u32::MAX);
             let skip = below.saturating_add(filled).saturating_sub(top);
             let cut = back.saturating_sub(below);
-            let rows = u16::try_from(filled)
-                .unwrap_or(u16::MAX)
-                .saturating_sub(u16::try_from(skip).unwrap_or(u16::MAX))
-                .saturating_sub(u16::try_from(cut).unwrap_or(u16::MAX));
+            let rows = u16::try_from(filled.saturating_sub(skip).saturating_sub(cut))
+                .expect("visible rows fit the band's height");
             if rows > 0 {
                 pieces.push(Piece {
                     entry: at,
-                    skip: u16::try_from(skip).unwrap_or(u16::MAX),
+                    skip: skip as usize,
                     rows,
                 });
             }
@@ -1989,6 +2009,6 @@ impl Window {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Piece {
     pub entry: usize,
-    pub skip: u16,
+    pub skip: usize,
     pub rows: u16,
 }
