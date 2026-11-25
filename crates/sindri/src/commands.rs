@@ -138,6 +138,10 @@ impl Card {
         rows
     }
 
+    pub fn refuses(&self) -> bool {
+        self.ranked().is_empty()
+    }
+
     pub fn words(&self) -> &str {
         self.narrow.query()
     }

@@ -42,4 +42,4 @@ commands-skill-refusal at 120x40
 36 |                                                                                                                        | dim:120
 37 |                                                                                                             1 command  | dim:120
 38 |┃›/skill:zx keep this                                                                                                   | dim:120
-39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | dim:120
+39 |  / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                                          | dim:120

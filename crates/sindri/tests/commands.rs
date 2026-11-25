@@ -791,3 +791,17 @@ fn a_refusal_keeps_the_card_open_and_both_keys_leave_the_draft() {
         assert_eq!(view.composer().text(), draft);
     }
 }
+
+#[test]
+fn a_refusal_footer_does_not_offer_sending_until_the_tail_matches() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/skill:zx");
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert!(!drawn.rows().iter().any(|row| row.contains("Enter send")));
+    view.key(Key::Backspace);
+    view.key(Key::Backspace);
+    view.paste("dep");
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert!(drawn.rows().iter().any(|row| row.contains("Enter send")));
+}
