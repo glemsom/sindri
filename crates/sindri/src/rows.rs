@@ -464,6 +464,7 @@ fn laid(
             ),
             cols,
             fold,
+            exit.is_some_and(|exit| !exit.is_ok()),
         ),
         Entry::Assistant { text, .. } => (
             answer_on(
@@ -487,7 +488,7 @@ fn laid(
     }
 }
 
-fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>) {
+fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold, failed: bool) -> (Vec<Row>, Option<usize>) {
     let Some(kept) = rows
         .len()
         .checked_sub(FOLD_HEAD + 1)
@@ -501,8 +502,19 @@ fn folded(mut rows: Vec<Row>, cols: u16, fold: Fold) -> (Vec<Row>, Option<usize>
     let last = rows
         .pop()
         .expect("a result whose fold keeps a row back has a last row under its head");
+    let diagnostic = failed
+        .then(|| {
+            rows.iter()
+                .rposition(|row| row.source().is_some_and(|text| !text.trim().is_empty()))
+        })
+        .flatten()
+        .filter(|at| *at >= FOLD_HEAD)
+        .map(|at| rows[at].clone());
     rows.truncate(FOLD_HEAD);
-    rows.push(kept_back(kept, cols));
+    if let Some(diagnostic) = diagnostic {
+        rows[FOLD_HEAD - 1] = diagnostic;
+    }
+    rows.push(kept_back(kept, cols).naming(usize::MAX - 1));
     rows.push(last);
     (rows, Some(kept))
 }
@@ -853,6 +865,7 @@ fn answered(
         result_rows(None, *exit, &text.to_string(), *bytes, *elapsed_ms, cols),
         cols,
         fold,
+        exit.is_some_and(|exit| !exit.is_ok()),
     );
     rows.extend(under);
     (rows, kept)
@@ -1663,6 +1676,16 @@ impl Rows {
         }
     }
 
+    pub fn toggle_result(&mut self, at: usize) -> bool {
+        if at >= self.held.len()
+            || result_of(&self.held[at]).is_none()
+            || self.one_row(&self.work(at))
+        {
+            return false;
+        }
+        self.fold(at, self.held[at].fold.other())
+    }
+
     pub fn toggle(&mut self, at: usize) -> bool {
         let work = self.work(at);
         if !self.worth_a_row(&work) {
@@ -1679,6 +1702,19 @@ impl Rows {
             return false;
         };
         if !is_prompt(held) {
+            if holds_fold(held) && !self.one_row(&self.work(at)) {
+                let fold = held.fold;
+                let rows = self.rows(at);
+                let target = match fold {
+                    Fold::Closed => rows.iter().position(|row| {
+                        row.fence_id() == Some(usize::MAX - 1) && row.source().is_none()
+                    }),
+                    Fold::Open => rows.iter().position(|row| row.line_of(usize::MAX - 1)),
+                };
+                if target == Some(usize::from(row)) {
+                    return self.fold(at, fold.other());
+                }
+            }
             return row == 0 && self.work(at).start == at && self.toggle(at);
         }
         let fold = self.held[at].fold;
@@ -1773,7 +1809,13 @@ impl Rows {
     }
 
     pub fn source(&self, at: usize, fence: usize) -> Option<String> {
-        let rows = self.held.get(at)?.rows.as_ref()?;
+        let held = self.held.get(at)?;
+        if fence == usize::MAX - 1
+            && let Some(Entry::Result { text, .. }) = result_of(held)
+        {
+            return Some(text.to_string());
+        }
+        let rows = held.rows.as_ref()?;
         let lines: Vec<&str> = rows
             .iter()
             .filter(|row| row.line_of(fence))
