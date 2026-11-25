@@ -1414,6 +1414,34 @@ impl View {
                     &palette,
                 )
             });
+            let decoration = decoration.or_else(|| {
+                let start = rows.iter().position(|row| row.tool_surface().is_some())?;
+                let end = rows.iter().rposition(|row| row.tool_surface().is_some())?;
+                let from = first.max(start);
+                let to = (first + shown.len()).min(end + 1);
+                if from >= to {
+                    return None;
+                }
+                let (width, ink, compact) = rows[start].tool_surface()?;
+                Placement::tool(
+                    u32::try_from(piece.entry).ok()?,
+                    Rect::new(
+                        area.x + MARGIN,
+                        y + u16::try_from(from - first).ok()?,
+                        width
+                            .saturating_sub(MARGIN)
+                            .min(area.width.saturating_sub(MARGIN * 2)),
+                        u16::try_from(to - from).ok()?,
+                    ),
+                    u16::try_from(end + 1 - start).ok()?,
+                    u16::try_from(from - start).ok()?,
+                    area.height,
+                    self.capabilities.pictures().cell(),
+                    &palette,
+                    ink,
+                    compact,
+                )
+            });
             if let Some(placement) = decoration {
                 painted.shaded(placement);
             }
@@ -1430,7 +1458,8 @@ impl View {
                     &mut painted.sizes,
                 );
                 if let Some(placement) = decoration
-                    && placement.cells().contains((area.x, y).into())
+                    && y >= placement.cells().y
+                    && y < placement.cells().bottom()
                 {
                     for x in placement.cells().x..placement.cells().right() {
                         buffer[(x, y)].set_bg(ratatui::style::Color::Reset);
