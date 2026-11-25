@@ -556,3 +556,139 @@ fn a_press_on_a_command_row_chooses_it_the_way_a_file_row_is_chosen() {
         "with the same screen standing over it"
     );
 }
+
+#[test]
+fn skill_rows_rank_the_tail_and_show_only_human_invocable_descriptions() {
+    let root = workspace_with("redeploy", "");
+    for (name, flags) in [
+        ("deploy", ""),
+        ("deploy-staging", ""),
+        ("deploy-model", "user-invocable: false\n"),
+    ] {
+        let directory = root.path().join(".agents/skills").join(name);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: the {name} skill\n{flags}---\nBody.\n"),
+        )
+        .unwrap();
+    }
+    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
+    let card = commands::Card::with_catalog("/skill:dep", &catalog).unwrap();
+    let rows = card.rows();
+    assert_eq!(
+        rows.iter().map(|row| row.name.as_ref()).collect::<Vec<_>>(),
+        [
+            "/skill:deploy",
+            "/skill:deploy-staging",
+            "/skill:redeploy",
+            "/skill"
+        ]
+    );
+    assert_eq!(rows[0].says, "the deploy skill");
+    assert_eq!(card.spelling(), "/skill:deploy");
+}
+
+#[test]
+fn skill_rows_keep_catalog_order_and_cap_and_count_only_long_lists() {
+    let root = workspace_with("zulu", "");
+    for name in [
+        "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
+    ] {
+        let directory = root.path().join(".agents/skills").join(name);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: {name}\n---\nBody.\n"),
+        )
+        .unwrap();
+    }
+    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
+    for draft in ["/skill", "/skill:"] {
+        let card = commands::Card::with_catalog(draft, &catalog).unwrap();
+        assert_eq!(
+            card.rows()
+                .iter()
+                .map(|row| row.name.as_ref())
+                .collect::<Vec<_>>(),
+            [
+                "/skill",
+                "/skill:alpha",
+                "/skill:bravo",
+                "/skill:charlie",
+                "/skill:delta",
+                "/skill:echo",
+                "/skill:foxtrot",
+                "/skill:golf"
+            ]
+        );
+        assert_eq!(card.body().len(), 9);
+        assert_eq!(
+            card.body()[8]
+                .spans
+                .iter()
+                .map(|(text, _)| text.as_str())
+                .collect::<String>(),
+            "1–8 of 10"
+        );
+    }
+    let short = commands::Card::with_catalog("/skill:zul", &catalog).unwrap();
+    assert_eq!(short.body().len(), 2);
+}
+
+#[test]
+fn skill_naming_displays_descriptions_and_refreshes_after_leaving() {
+    let root = workspace_with("deploy", "");
+    let mut view = frame(root.path());
+    view.paste("/skill:dep");
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    assert!(
+        drawn
+            .rows()
+            .iter()
+            .any(|row| row.contains("/skill:deploy") && row.contains("the deploy skill"))
+    );
+    let directory = root.path().join(".agents/skills/deploy-new");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(
+        directory.join("SKILL.md"),
+        "---\nname: deploy-new\ndescription: freshly written\n---\nBody.\n",
+    )
+    .unwrap();
+    view.key(Key::Char('l'));
+    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    assert!(
+        !drawn
+            .rows()
+            .iter()
+            .any(|row| row.contains("freshly written"))
+    );
+    for _ in 0..view.composer().text().len() {
+        view.key(Key::Backspace);
+    }
+    view.paste("/mod");
+    assert!(
+        !frame::painted(&mut view, SCREEN.0, SCREEN.1)
+            .rows()
+            .iter()
+            .any(|row| row.contains("freshly written"))
+    );
+    for _ in 0..view.composer().text().len() {
+        view.key(Key::Backspace);
+    }
+    view.paste("/skill:dep");
+    assert!(
+        frame::painted(&mut view, SCREEN.0, SCREEN.1)
+            .rows()
+            .iter()
+            .any(|row| row.contains("/skill:deploy-new") && row.contains("freshly written"))
+    );
+}
+
+#[test]
+fn the_skill_command_row_hands_the_reader_its_colon() {
+    let root = workspace_with("deploy", "");
+    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
+    let card = commands::Card::with_catalog("/skill", &catalog).unwrap();
+    assert_eq!(card.spelling(), "/skill:");
+}

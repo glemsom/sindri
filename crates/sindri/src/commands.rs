@@ -1,8 +1,11 @@
+use std::borrow::Cow;
 use std::sync::OnceLock;
 
+use sindri_core::skills::Catalog;
+
 use crate::composer::Key;
-use crate::ink::Ink;
-use crate::kept::{Kept, Move, Narrow, leaves};
+use crate::ink::{Ink, Look};
+use crate::kept::{CAP, Kept, Move, Narrow, leaves};
 use crate::list::{self, Beside, ScreenRow};
 
 const NEW: &str = "/new";
@@ -19,40 +22,40 @@ const STATS: &str = "/stats";
 
 const QUIT: &str = "/quit";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
-    pub name: &'static str,
-    pub says: &'static str,
+    pub name: Cow<'static, str>,
+    pub says: Cow<'static, str>,
 }
 
 pub const TABLE: [Row; 7] = [
     Row {
-        name: MODEL,
-        says: "ask the wire what it serves, and name the one to run",
+        name: Cow::Borrowed(MODEL),
+        says: Cow::Borrowed("ask the wire what it serves, and name the one to run"),
     },
     Row {
-        name: SETTINGS,
-        says: "the keys the config holds, and the value each is set to",
+        name: Cow::Borrowed(SETTINGS),
+        says: Cow::Borrowed("the keys the config holds, and the value each is set to"),
     },
     Row {
-        name: STATS,
-        says: "the facts the rail is too narrow to hold",
+        name: Cow::Borrowed(STATS),
+        says: Cow::Borrowed("the facts the rail is too narrow to hold"),
     },
     Row {
-        name: NEW,
-        says: "start the conversation again, and forget the last one",
+        name: Cow::Borrowed(NEW),
+        says: Cow::Borrowed("start the conversation again, and forget the last one"),
     },
     Row {
-        name: SKILL,
-        says: "load a skill by name",
+        name: Cow::Borrowed(SKILL),
+        says: Cow::Borrowed("load a skill by name"),
     },
     Row {
-        name: HELP,
-        says: "the keys in force",
+        name: Cow::Borrowed(HELP),
+        says: Cow::Borrowed("the keys in force"),
     },
     Row {
-        name: QUIT,
-        says: "end the launch",
+        name: Cow::Borrowed(QUIT),
+        says: Cow::Borrowed("end the launch"),
     },
 ];
 
@@ -61,6 +64,7 @@ pub const SPLASH: usize = 3;
 #[derive(Clone, Debug)]
 pub struct Card {
     narrow: Narrow,
+    skills: Vec<Row>,
 }
 
 impl Card {
@@ -69,13 +73,46 @@ impl Card {
         match draft.starts_with('/') && recognised(word(words)) {
             true => Some(Card {
                 narrow: Narrow::asked(words),
+                skills: Vec::new(),
             }),
             false => None,
         }
     }
 
+    pub fn with_catalog(draft: &str, catalog: &Catalog) -> Option<Card> {
+        let mut card = Self::of(draft)?;
+        card.skills = catalog
+            .invocable_by_human()
+            .into_iter()
+            .map(|skill| Row {
+                name: Cow::Owned(format!("/skill:{}", skill.name)),
+                says: Cow::Owned(skill.description),
+            })
+            .collect();
+        Some(card)
+    }
+
     pub fn rows(&self) -> Vec<Row> {
-        ranked(word(self.words()))
+        self.ranked().into_iter().take(CAP).collect()
+    }
+
+    fn ranked(&self) -> Vec<Row> {
+        let Some(query) = skill_tail(self.words()) else {
+            return ranked(word(self.words()));
+        };
+        let mut rows = leaves(
+            self.skills
+                .iter()
+                .map(|row| (row.name.strip_prefix("/skill:").unwrap(), row.clone())),
+            query,
+        );
+        let command = TABLE.iter().find(|row| row.name == SKILL).unwrap().clone();
+        if query.is_empty() {
+            rows.insert(0, command);
+        } else {
+            rows.push(command);
+        }
+        rows
     }
 
     pub fn words(&self) -> &str {
@@ -87,11 +124,13 @@ impl Card {
     }
 
     pub fn body(&self) -> Vec<ScreenRow> {
-        list::List {
+        let held = self.rows();
+        let mut rows = list::List {
             query: None,
             said: None,
             items: list::columned(
-                self.rows().into_iter().map(|row| (row.name, row.says)),
+                held.iter()
+                    .map(|row| (row.name.as_ref(), row.says.as_ref())),
                 Ink::Plain,
                 Beside::Own(Ink::Dim),
             ),
@@ -99,7 +138,15 @@ impl Card {
             marker: list::MARK,
             chooses: true,
         }
-        .rows()
+        .rows();
+        let matches = self.ranked().len();
+        if matches > CAP {
+            rows.push(list::whole(
+                &format!("1–{} of {matches}", held.len()),
+                Look::plain(Ink::Dim),
+            ));
+        }
+        rows
     }
 
     pub fn spelling(&self) -> String {
@@ -108,9 +155,16 @@ impl Card {
     }
 
     pub fn spelling_of(&self, at: usize) -> Option<String> {
-        let chosen = *self.rows().get(at)?;
+        let rows = self.rows();
+        let chosen = rows.get(at)?;
         let words = self.words();
-        Some(match word(words).starts_with(chosen.name) {
+        if chosen.name == SKILL && matches!(word(words), "/skill" | "/skill:") {
+            return Some(format!("/skill:{}", &words[word(words).len()..]));
+        }
+        if chosen.name.starts_with("/skill:") {
+            return Some(format!("{}{}", chosen.name, &words[word(words).len()..]));
+        }
+        Some(match word(words).starts_with(chosen.name.as_ref()) {
             true => words.to_owned(),
             false => format!("{}{}", chosen.name, tail(words)),
         })
@@ -127,7 +181,15 @@ impl Kept for Card {
     }
 
     fn typed(&mut self, key: Key) -> bool {
-        self.narrow.typed(key, |words| ranked(word(words)).len())
+        let skills = &self.skills;
+        self.narrow.typed(key, |words| {
+            Card {
+                narrow: Narrow::asked(words),
+                skills: skills.clone(),
+            }
+            .rows()
+            .len()
+        })
     }
 
     fn pressed(&mut self, at: usize) -> bool {
@@ -152,18 +214,18 @@ fn ranked(asked: &str) -> Vec<Row> {
         return Vec::new();
     };
     let query = body.split(':').next().unwrap_or_default();
-    leaves(by_name().iter().map(|row| (plain(row), *row)), query)
+    leaves(by_name().iter().map(|row| (plain(row), row.clone())), query)
 }
 
-fn plain(row: &Row) -> &'static str {
-    row.name.strip_prefix('/').unwrap_or(row.name)
+fn plain(row: &Row) -> &str {
+    row.name.strip_prefix('/').unwrap_or(row.name.as_ref())
 }
 
 fn by_name() -> &'static [Row] {
     static BY_NAME: OnceLock<Vec<Row>> = OnceLock::new();
     BY_NAME.get_or_init(|| {
         let mut rows = TABLE.to_vec();
-        rows.sort_unstable_by_key(|row| row.name);
+        rows.sort_unstable_by(|a, b| a.name.cmp(&b.name));
         rows
     })
 }
@@ -211,3 +273,12 @@ fn named(name: &str) -> Option<Command> {
 
 #[cfg(test)]
 mod tests;
+
+pub fn skill_tail(draft: &str) -> Option<&str> {
+    let first = word(draft);
+    if first == SKILL {
+        Some("")
+    } else {
+        first.strip_prefix("/skill:")
+    }
+}
