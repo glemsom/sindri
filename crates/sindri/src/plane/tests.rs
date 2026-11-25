@@ -3231,7 +3231,10 @@ fn the_composer_separator_spans_half_a_cell_while_the_rail_keeps_its_width() {
                 Axis::Across => CELL.height() / 2,
             };
             let (x, y) = along_seam(axis, extent - 1);
-            assert_eq!(lit_over(&placement, &plane, CELL, x, y), weight_of(&palette));
+            assert_eq!(
+                lit_over(&placement, &plane, CELL, x, y),
+                weight_of(&palette)
+            );
             let (x, y) = along_seam(axis, extent);
             assert_eq!(lit_over(&placement, &plane, CELL, x, y), 0);
         }
