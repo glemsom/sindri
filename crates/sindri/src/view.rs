@@ -287,7 +287,9 @@ impl Cards {
                 .map(|workspace| Catalog::discover(workspace, facts.home()));
             self.card = None;
         }
-        self.follow(draft)
+        let card = self.follow(draft)?;
+        card.loading(facts.loaded());
+        Some(card)
     }
 
     fn follow(&mut self, draft: &str) -> Option<&mut commands::Card> {
@@ -678,6 +680,14 @@ impl View {
     }
 
     fn draft(&mut self, key: Key) -> Outcome {
+        if key == Key::Enter
+            && self
+                .cards
+                .prepare(self.composer.text(), &self.facts)
+                .is_some_and(|card| card.rows().is_empty())
+        {
+            return Outcome::Unchanged;
+        }
         if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
             return Outcome::Edited;
         }
