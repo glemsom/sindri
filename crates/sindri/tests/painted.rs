@@ -1423,6 +1423,7 @@ fn submitted_prompt_surfaces_preserve_literal_rows_and_ownership_across_capabili
             caps::pictured(),
             caps::inked(Palette::ANSI),
             caps::greys(),
+            caps::inked(Palette::SLOTS),
             caps::uncoloured(),
         ] {
             let palette = capabilities.palette();
@@ -2064,4 +2065,192 @@ fn partially_visible_open_prompt_stays_clipped_through_resize_scale_and_fallback
             .any(|r| r.contains("rows kept back"))
     );
     fallback.drawn_at("visible literal row 60");
+}
+
+#[test]
+fn prompt_folds_and_copy_match_in_the_complete_terminal_matrix() {
+    let words = (1..=16)
+        .map(|n| format!("line {n}: literal 界 words and ``` fence"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for capabilities in [
+        caps::pictured(),
+        caps::inked(Palette::TRUECOLOR),
+        caps::greys(),
+        caps::inked(Palette::ANSI),
+        caps::uncoloured(),
+        caps::inked(Palette::SLOTS),
+    ] {
+        for (cols, rows, count) in [
+            (80, 24, "12 rows kept back"),
+            (120, 40, "12 rows kept back"),
+            (40, 24, "28 rows kept back"),
+        ] {
+            let mut view = View::of(
+                capabilities.clone().faced(false),
+                railed(),
+                Transcript::of([Entry::Prompt {
+                    text: SecretSet::default().redact(&words),
+                }]),
+            );
+            let closed = frame::painted(&mut view, cols, rows);
+            let (head, _) = closed.drawn_at("line 1:");
+            let (tail, _) = closed.drawn_at(count);
+            view.drag(Cell::new(head, 0), Cell::new(tail, cols - 3));
+            frame::painted(&mut view, cols, rows);
+            assert_eq!(view.key(Key::Copy), Outcome::Copy(words.clone()));
+            assert_eq!(view.key(Key::Fold), Outcome::Edited);
+            let opened = frame::painted(&mut view, 120, 40);
+            opened.drawn_at("line 16:");
+            let narrow = frame::painted(&mut view, 40, 24);
+            assert!(!narrow.rows().iter().any(|r| r.contains("rows kept back")));
+            let wide = frame::painted(&mut view, 120, 40);
+            wide.drawn_at("line 1:");
+            assert_eq!(view.key(Key::Fold), Outcome::Edited);
+            frame::painted(&mut view, cols, rows).drawn_at(count);
+        }
+    }
+}
+
+#[test]
+fn long_conversations_release_visible_prompt_resources_on_every_scroll_and_resize() {
+    use std::collections::BTreeSet;
+    for count in [100, 1000] {
+        let entries = (0..count).flat_map(|n| {
+            [
+                Entry::Prompt {
+                    text: SecretSet::default().redact(format!("landmark {n} 界")),
+                },
+                Entry::Assistant {
+                    turn: 1,
+                    text: SecretSet::default().redact("calm answer"),
+                },
+            ]
+        });
+        let mut view = View::of(caps::pictured(), railed(), Transcript::of(entries));
+        let mut held = sindri::plane::Held::default();
+        let mut live = BTreeSet::new();
+        for pass in 0..80 {
+            let (cols, rows) = [(80, 24), (120, 40), (40, 24)][pass % 3];
+            view.key(if pass < 40 {
+                Key::PageUp
+            } else {
+                Key::PageDown
+            });
+            let frame = frame::painted(&mut view, cols, rows);
+            let band = frame.told().layout().unwrap().transcript;
+            for p in frame
+                .told()
+                .placements()
+                .iter()
+                .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
+            {
+                assert!(band.contains(Position::new(p.cells().x, p.cells().y)));
+                assert!(p.cells().right() <= band.right() - 2);
+                assert!(p.cells().bottom() <= band.bottom());
+            }
+            let wire =
+                String::from_utf8(held.pass(frame.told().placements(), view.planes())).unwrap();
+            let mut uploads = 0;
+            for op in wire.split("\x1b_G").skip(1) {
+                let head = op.split([';', '\x1b']).next().unwrap();
+                let id = head.split(',').find_map(|field| field.strip_prefix("i="));
+                if let Some(id) = id {
+                    if head.starts_with("a=T,") {
+                        assert!(live.insert(id.to_owned()));
+                        uploads += 1;
+                    } else if head.starts_with("a=d,") {
+                        assert!(live.remove(id));
+                    } else if head.starts_with("a=p,") {
+                        assert!(live.contains(id));
+                    }
+                }
+            }
+            assert_eq!(
+                live.len(),
+                frame
+                    .told()
+                    .placements()
+                    .iter()
+                    .filter(|p| p.places())
+                    .count()
+            );
+            assert!(live.len() <= usize::from(band.height) + 4);
+            assert!(uploads <= live.len());
+            assert!(
+                held.pass(frame.told().placements(), view.planes())
+                    .is_empty()
+            );
+        }
+        let cleanup = String::from_utf8(held.forget()).unwrap();
+        assert_eq!(cleanup.matches("a=d,").count(), live.len());
+        assert!(held.forget().is_empty());
+    }
+}
+
+#[test]
+fn every_ink_keeps_its_floor_on_visible_prompt_answer_and_rail_pixels() {
+    use sindri::palette::{LEGIBLE, channels};
+    let luminance = |rgb: [u8; 3]| {
+        let [r, g, b] = rgb.map(|v| {
+            let v = f64::from(v) / 255.0;
+            if v <= 0.04045 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        });
+        0.2126 * r + 0.7152 * g + 0.0722 * b
+    };
+    for capabilities in [caps::pictured(), caps::greys()] {
+        let palette = capabilities.palette();
+        let mut view = View::of(
+            capabilities,
+            railed(),
+            Transcript::of([
+                Entry::Prompt {
+                    text: SecretSet::default().redact("ordinary prompt 界"),
+                },
+                Entry::Assistant {
+                    turn: 1,
+                    text: SecretSet::default().redact("calm answer"),
+                },
+            ]),
+        );
+        let frame = frame::painted(&mut view, 120, 40);
+        for placement in frame.told().placements() {
+            let plane = view.planes().image(placement.shade()).unwrap();
+            let prompt = matches!(placement.shade().id(), sindri::plane::PlaneId::Prompt(_));
+            let cell = sindri::graphics::CellSize::NOMINAL;
+            for (x, y, pixel) in plane.pixels().enumerate_pixels() {
+                if placement.seam().is_some_and(|(axis, _)| match axis {
+                    sindri::plane::Axis::Down => x < cell.width(),
+                    sindri::plane::Axis::Across => y < cell.height(),
+                }) {
+                    continue;
+                }
+                if pixel[3] == 0 {
+                    continue;
+                }
+                let bg = luminance([pixel[0], pixel[1], pixel[2]]);
+                for ink in Ink::ALL {
+                    let Some(rgb) = channels(palette.colour(ink)) else {
+                        continue;
+                    };
+                    let fg = luminance(rgb);
+                    let ratio = (fg.max(bg) + 0.05) / (fg.min(bg) + 0.05);
+                    let floor = if prompt && ink == Ink::Plain {
+                        4.5
+                    } else {
+                        LEGIBLE
+                    };
+                    assert!(
+                        ratio >= floor,
+                        "{ink:?} on {:?}: {ratio}",
+                        placement.shade().id()
+                    );
+                }
+            }
+        }
+    }
 }
