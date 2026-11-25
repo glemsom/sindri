@@ -356,7 +356,7 @@ fn an_edit_that_re_ranks_the_rows_leaves_the_mark_at_the_index_it_stood_at() {
         card.rows(),
         [
             String::from("/settings"),
-            String::from("/skill"),
+            String::from("/skill:"),
             String::from("/stats")
         ],
         "`s` is the letter three names start, and the fourth row they leave is the one the \

@@ -71,6 +71,7 @@ impl Mode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Act {
     Draft,
+    Complete,
     Up,
     Copy,
     Fold,
@@ -105,7 +106,19 @@ pub struct Binding {
     pub act: Act,
 }
 
-const COMPOSER: [Binding; 27] = [
+const COMPOSER: [Binding; 29] = [
+    Binding {
+        key: Key::BackTab,
+        name: "Shift+Tab",
+        does: "the marked commands row back",
+        act: Act::Previous,
+    },
+    Binding {
+        key: Key::Tab,
+        name: "Tab",
+        does: "complete the marked commands row into the draft",
+        act: Act::Complete,
+    },
     Binding {
         key: Key::Char('?'),
         name: "?",

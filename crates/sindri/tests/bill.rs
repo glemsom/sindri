@@ -112,7 +112,7 @@ fn a_row_a_card_writes_into_the_draft_is_billed_with_it() {
     );
     assert_eq!(
         draft(&view),
-        "/skill",
+        "/skill:",
         "a row whose line names no command yet is a word of the draft"
     );
     let frame = frame::painted(&mut view, 120, 40);

@@ -4091,6 +4091,13 @@ fn a_key_is_drawn_louder_than_the_words_that_say_what_pressing_it_does() {
 #[test]
 fn every_hint_the_table_writes_is_drawn_in_the_frame_that_honours_it() {
     let mut drawn: Vec<&'static str> = Vec::new();
+    let mut completing = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    completing.paste("/mod");
+    completing.card();
     for view in [
         View::of(
             Capabilities::default(),
@@ -4100,6 +4107,7 @@ fn every_hint_the_table_writes_is_drawn_in_the_frame_that_honours_it() {
         asking(0),
         asking(3),
         marked_fence(),
+        completing,
     ] {
         let depth = depth(&view);
         for width in 20..=200u16 {

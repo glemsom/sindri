@@ -13,6 +13,8 @@ const NEW: &str = "/new";
 
 const SKILL: &str = "/skill";
 
+const SKILL_SPELLING: &str = "/skill:";
+
 const MODEL: &str = "/model";
 
 const SETTINGS: &str = "/settings";
@@ -47,7 +49,7 @@ pub const TABLE: [Row; 7] = [
         says: Cow::Borrowed("start the conversation again, and forget the last one"),
     },
     Row {
-        name: Cow::Borrowed(SKILL),
+        name: Cow::Borrowed(SKILL_SPELLING),
         says: Cow::Borrowed("load a skill by name"),
     },
     Row {
@@ -71,7 +73,7 @@ pub struct Card {
 
 impl Card {
     pub fn of(draft: &str) -> Option<Card> {
-        let words = draft.trim();
+        let words = draft;
         match draft.starts_with('/') && recognised(word(words)) {
             true => Some(Card {
                 narrow: Narrow::asked(words),
@@ -106,7 +108,7 @@ impl Card {
             .map(|mut row| {
                 if row
                     .name
-                    .strip_prefix("/skill:")
+                    .strip_prefix(SKILL_SPELLING)
                     .is_some_and(|name| self.loaded.contains(name))
                 {
                     row.says = Cow::Owned(format!("loaded · {}", row.says));
@@ -123,13 +125,17 @@ impl Card {
         let mut rows = leaves(
             self.skills
                 .iter()
-                .map(|row| (row.name.strip_prefix("/skill:").unwrap(), row.clone())),
+                .map(|row| (row.name.strip_prefix(SKILL_SPELLING).unwrap(), row.clone())),
             query,
         );
         if !query.is_empty() && rows.is_empty() {
             return rows;
         }
-        let command = TABLE.iter().find(|row| row.name == SKILL).unwrap().clone();
+        let command = TABLE
+            .iter()
+            .find(|row| row.name == SKILL_SPELLING)
+            .unwrap()
+            .clone();
         if query.is_empty() {
             rows.insert(0, command);
         } else {
@@ -193,16 +199,7 @@ impl Card {
         let rows = self.rows();
         let chosen = rows.get(at)?;
         let words = self.words();
-        if chosen.name == SKILL && matches!(word(words), "/skill" | "/skill:") {
-            return Some(format!("/skill:{}", &words[word(words).len()..]));
-        }
-        if chosen.name.starts_with("/skill:") {
-            return Some(format!("{}{}", chosen.name, &words[word(words).len()..]));
-        }
-        Some(match word(words).starts_with(chosen.name.as_ref()) {
-            true => words.to_owned(),
-            false => format!("{}{}", chosen.name, tail(words)),
-        })
+        Some(format!("{}{}", chosen.name, &words[word(words).len()..]))
     }
 }
 
@@ -237,20 +234,17 @@ fn word(draft: &str) -> &str {
     draft.split_whitespace().next().unwrap_or_default()
 }
 
-fn tail(draft: &str) -> &str {
-    let word = word(draft);
-    match word.find(':') {
-        Some(at) => &word[at..],
-        None => &draft[word.len()..],
-    }
-}
-
 fn ranked(asked: &str) -> Vec<Row> {
     let Some(body) = asked.strip_prefix('/') else {
         return Vec::new();
     };
     let query = body.split(':').next().unwrap_or_default();
-    leaves(by_name().iter().map(|row| (plain(row), row.clone())), query)
+    leaves(
+        by_name()
+            .iter()
+            .map(|row| (plain(row).trim_end_matches(':'), row.clone())),
+        query,
+    )
 }
 
 fn plain(row: &Row) -> &str {
@@ -315,6 +309,6 @@ pub fn skill_tail(draft: &str) -> Option<&str> {
     if first == SKILL {
         Some("")
     } else {
-        first.strip_prefix("/skill:")
+        first.strip_prefix(SKILL_SPELLING)
     }
 }

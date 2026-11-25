@@ -45,7 +45,7 @@ fn the_word_the_draft_names_is_sent_as_the_command_it_stands_for() {
     assert_eq!(spelling("/model gpt-5"), "/model gpt-5");
     assert_eq!(spelling("/skill:commit"), "/skill:commit");
     assert_eq!(spelling("/qui"), "/quit");
-    assert_eq!(spelling("/quit "), "/quit");
+    assert_eq!(spelling("/quit "), "/quit ");
     assert_eq!(
         spelling("/"),
         HELP,
@@ -99,7 +99,7 @@ fn the_seven_names_the_table_holds_are_seven_different_names() {
 
 #[test]
 fn every_name_but_the_one_that_takes_a_word_reads_back_as_a_command() {
-    for row in TABLE.iter().filter(|row| row.name != SKILL) {
+    for row in TABLE.iter().filter(|row| row.name != "/skill:") {
         assert!(
             read(&row.name).is_some(),
             "the list names {:?} and a line of it is no command the frame answers",
