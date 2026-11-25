@@ -3001,7 +3001,7 @@ fn one_key_opens_the_newest_settled_work_and_the_same_key_closes_it_again() {
         frame_rows(&open)
     );
     assert!(
-        holds(&open, "16 rows kept back"),
+        holds(&open, "17 rows kept back"),
         "and the result inside it keeps the fold, the head and the count it was handed by: {:?}",
         frame_rows(&open)
     );
@@ -3030,11 +3030,11 @@ fn a_fold_the_mark_opened_stays_open_through_a_scroll_and_a_resize() {
     );
     let opened = painted(&mut view, 120, 40);
     let row = (0..opened.area.bottom())
-        .find(|y| drawn_row(&opened, *y).contains("56 rows kept back"))
+        .find(|y| drawn_row(&opened, *y).contains("57 rows kept back"))
         .expect("the result inside the opened work draws the row that counts its fold");
     view.drag(Cell::new(row, 2), Cell::new(row, 2));
     assert_eq!(
-        view.key(Key::ShiftDown),
+        view.key(Key::ShiftUp),
         Outcome::Edited,
         "a mark grown over a row of that result opens the fold the row stands in"
     );
@@ -3081,7 +3081,7 @@ fn a_mark_grown_over_a_row_opens_the_fold_it_belongs_to() {
     let mut view = folded_run(20);
     let folded = painted(&mut view, 120, 40);
     let row = (0..folded.area.bottom())
-        .find(|y| drawn_row(&folded, *y).contains("16 rows kept back"))
+        .find(|y| drawn_row(&folded, *y).contains("17 rows kept back"))
         .expect("the folded result draws the row that counts what it keeps back");
     assert!(
         !holds(&folded, "a_row_of_output_12"),
@@ -3096,7 +3096,7 @@ fn a_mark_grown_over_a_row_opens_the_fold_it_belongs_to() {
     );
 
     assert_eq!(
-        view.key(Key::ShiftDown),
+        view.key(Key::ShiftUp),
         Outcome::Edited,
         "the mark grows a row, and a mark that grows is a frame to paint"
     );
@@ -6870,7 +6870,7 @@ fn a_press_on_a_row_the_band_cut_from_the_middle_of_a_work_opens_nothing() {
     let kept = row_holding(&opened, "rows kept back");
     view.drag(Cell::new(kept, 2), Cell::new(kept, 2));
     assert_eq!(
-        view.key(Key::ShiftDown),
+        view.key(Key::ShiftUp),
         Outcome::Edited,
         "and the result inside it opened whole, so the work stands taller than the band"
     );

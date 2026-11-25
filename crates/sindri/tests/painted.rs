@@ -2375,7 +2375,7 @@ fn failed_result_discloses_recorded_diagnostic_before_its_output_fold() {
         );
         let closed = frame::painted(&mut view, 120, 40);
         let (diagnostic, _) = closed.drawn_at("error: permission denied");
-        let (fold, _) = closed.drawn_at("4 rows kept back");
+        let (fold, _) = closed.drawn_at("5 rows kept back");
         assert!(diagnostic < fold);
     }
 }
@@ -2399,7 +2399,7 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
         );
         let closed = frame::painted(&mut view, 120, 40);
         let (head, _) = closed.drawn_at("first");
-        let (tail, _) = closed.drawn_at("4 rows kept back");
+        let (tail, _) = closed.drawn_at("5 rows kept back");
         view.drag(Cell::new(head, 0), Cell::new(tail, 110));
         frame::painted(&mut view, 120, 40);
         assert_eq!(view.key(Key::Copy), Outcome::Copy(text.to_owned()));
@@ -2410,7 +2410,7 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
         }
         assert_eq!(view.key(Key::Fold), Outcome::Edited);
         let closed = frame::painted(&mut view, 120, 40);
-        let (y, x) = closed.drawn_at("4 rows kept back");
+        let (y, x) = closed.drawn_at("5 rows kept back");
         if !pointing {
             assert_eq!(
                 view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
@@ -2429,7 +2429,7 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
             view.pointer(open.told(), Pointer::Press(Cell::new(y, x))),
             Outcome::Edited
         );
-        frame::painted(&mut view, 120, 40).drawn_at("4 rows kept back");
+        frame::painted(&mut view, 120, 40).drawn_at("5 rows kept back");
     }
 }
 
@@ -2452,7 +2452,7 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
     frame::painted(&mut view, 120, 40).drawn_at("1 call");
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
     let closed = frame::painted(&mut view, 120, 40);
-    let (y, x) = closed.drawn_at("4 rows kept back");
+    let (y, x) = closed.drawn_at("5 rows kept back");
     assert_eq!(
         view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
         Outcome::Edited
@@ -2473,7 +2473,7 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
 
 #[test]
 fn huge_opened_tool_uploads_are_bounded_by_the_visible_band_through_scroll_and_resize() {
-    let words = (0..60_000)
+    let words = (0..100_000)
         .map(|n| format!("row {n}\n"))
         .collect::<String>();
     let mut view = View::of(
@@ -2499,6 +2499,13 @@ fn huge_opened_tool_uploads_are_bounded_by_the_visible_band_through_scroll_and_r
         for pass in 0..12 {
             let frame = frame::painted(&mut view, cols, rows);
             let band = frame.told().layout().unwrap().transcript;
+            assert!(
+                frame
+                    .told()
+                    .placements()
+                    .iter()
+                    .any(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
+            );
             for placement in frame
                 .told()
                 .placements()
@@ -2709,6 +2716,9 @@ fn illuminated_tool_clipping_moves_the_original_pixels_and_preserves_end_corners
     let band = top.told().layout().unwrap().transcript;
     let (y, x) = top.drawn_at("rows kept back");
     view.pointer(top.told(), Pointer::Press(Cell::new(y, x)));
+    while view.key(Key::PageUp) == Outcome::Edited {
+        frame::painted(&mut view, 80, 24);
+    }
     let opened = frame::painted(&mut view, 80, 24);
     let surfaces: Vec<_> = opened
         .told()

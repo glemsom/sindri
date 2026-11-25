@@ -405,3 +405,54 @@ fn dense_mixed_work_releases_visible_graphics_and_bounds_transmitted_images_on_e
         assert!(held.forget().is_empty());
     }
 }
+
+#[test]
+fn generic_invocation_copy_preserves_recorded_json_arguments() {
+    use sindri::composer::{Key, Outcome};
+    use sindri::mark::Cell;
+    let original = "{\"nested\": [\"  evidence  \", {\"flag\": true}]}";
+    let mut invocation = call();
+    if let Entry::Call {
+        name, arguments, ..
+    } = &mut invocation
+    {
+        *name = SecretSet::default().redact("generic");
+        *arguments = SecretSet::default().redact(original);
+    }
+    let mut view = View::of(
+        caps::pictured(),
+        Facts::default().asked().running(),
+        Transcript::of(vec![invocation]),
+    );
+    let shown = frame::painted(&mut view, 80, 24);
+    let row = (0..24)
+        .find(|y| shown.row(*y).contains("evidence"))
+        .unwrap();
+    view.drag(Cell::new(row, 2), Cell::new(row, 60));
+    frame::painted(&mut view, 80, 24);
+    assert_eq!(view.key(Key::Copy), Outcome::Copy(original.to_owned()));
+}
+
+#[test]
+fn closed_result_fold_hides_byte_detail_until_opened() {
+    use sindri::composer::{Key, Outcome};
+    use sindri::mark::Cell;
+    let output = (0..12)
+        .map(|n| format!("evidence {n}\n"))
+        .collect::<String>();
+    let mut view = View::of(
+        caps::pictured(),
+        Facts::default().asked().running(),
+        Transcript::of(vec![call(), result(Some(Exit::Code(0)), &output)]),
+    );
+    let shown = frame::painted(&mut view, 80, 24);
+    assert!(!(0..24).any(|y| shown.row(y).contains("bytes")));
+    let row = (0..24)
+        .find(|y| shown.row(*y).contains("rows kept back"))
+        .unwrap();
+    view.drag(Cell::new(row, 2), Cell::new(row, 60));
+    frame::painted(&mut view, 80, 24);
+    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    let shown = frame::painted(&mut view, 80, 40);
+    assert!((0..40).any(|y| shown.row(y).contains("987 bytes")));
+}

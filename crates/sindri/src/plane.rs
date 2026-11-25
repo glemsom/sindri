@@ -114,12 +114,11 @@ impl Size {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
-    Prompt {
-        id: u32,
-        tool: bool,
+    Bounded {
+        owner: PlaneId,
         size: Size,
-        full_rows: u16,
-        first_row: u16,
+        full_rows: usize,
+        first_row: usize,
         cell: CellSize,
         tone: Color,
         well: Color,
@@ -192,13 +191,7 @@ enum Kind {
 impl Shade {
     pub fn id(&self) -> PlaneId {
         match self.kind {
-            Kind::Prompt { id, tool, .. } => {
-                if tool {
-                    PlaneId::Tool(id)
-                } else {
-                    PlaneId::Prompt(id)
-                }
-            }
+            Kind::Bounded { owner, .. } => owner,
             Kind::Transcript { .. } => PlaneId::Transcript,
             Kind::Rail { .. } => PlaneId::Rail,
             Kind::Composer { .. } => PlaneId::Composer,
@@ -211,7 +204,7 @@ impl Shade {
 
     pub fn row(&self, row: u16) -> Color {
         match self.kind {
-            Kind::Prompt { tone, .. } => tone,
+            Kind::Bounded { tone, .. } => tone,
             Kind::Transcript { well, .. } => well,
             Kind::Rail { tone, .. }
             | Kind::Gauge { tone, .. }
@@ -240,7 +233,7 @@ impl Shade {
 
     fn size(&self) -> Size {
         match self.kind {
-            Kind::Prompt { size, .. }
+            Kind::Bounded { size, .. }
             | Kind::Transcript { size, .. }
             | Kind::Rail { size, .. }
             | Kind::Composer { size, .. }
@@ -255,7 +248,7 @@ impl Shade {
     fn seam(&self) -> Option<Seam> {
         match self.kind {
             Kind::Rail { seam, .. } | Kind::Composer { seam, .. } => seam,
-            Kind::Prompt { .. }
+            Kind::Bounded { .. }
             | Kind::Transcript { .. }
             | Kind::Caret { .. }
             | Kind::Gauge { .. }
@@ -269,7 +262,7 @@ impl Shade {
             Kind::Transcript { cell, .. }
             | Kind::Rail { cell, .. }
             | Kind::Composer { cell, .. } => cell,
-            Kind::Prompt { cell, .. }
+            Kind::Bounded { cell, .. }
             | Kind::Caret { cell, .. }
             | Kind::Gauge { cell, .. }
             | Kind::Bar { cell, .. }
@@ -315,7 +308,7 @@ impl Shade {
                 };
                 Light::lamp(peak, centre, reach)
             }
-            Kind::Prompt { .. } | Kind::Rail { .. } | Kind::Composer { .. } => Light::NONE,
+            Kind::Bounded { .. } | Kind::Rail { .. } | Kind::Composer { .. } => Light::NONE,
             Kind::Gauge { .. } | Kind::Bar { .. } | Kind::Bezel { .. } => Light::NONE,
             Kind::Caret { size, peak, .. } => Light::lamp(
                 peak,
@@ -340,8 +333,8 @@ impl Shade {
         let cell = self.cell()?;
         let size = self.size();
         match self.kind {
-            Kind::Prompt {
-                tool,
+            Kind::Bounded {
+                owner,
                 full_rows,
                 first_row,
                 tone,
@@ -352,16 +345,16 @@ impl Shade {
                 ..
             } => {
                 let (width, height) = size.pixels(cell);
-                let full_height = u32::from(full_rows) * cell.height();
-                let first_pixel = u32::from(first_row) * cell.height();
+                let full_height = full_rows as u64 * u64::from(cell.height());
+                let first_pixel = first_row as u64 * u64::from(cell.height());
                 let radius = (cell.height() / 4).max(1) as f64;
                 let tone = channels(tone)?;
                 let well = channels(well)?;
                 let accent = channels(accent)?;
                 return Some(image::RgbaImage::from_fn(width, height, |x, y| {
-                    let y = y + first_pixel;
+                    let y = u64::from(y) + first_pixel;
                     let dx = f64::from(x.min(width - 1 - x));
-                    let dy = f64::from(y.min(full_height - 1 - y));
+                    let dy = y.min(full_height - 1 - y) as f64;
                     let corner =
                         ((radius - dx).max(0.0).powi(2) + (radius - dy).max(0.0).powi(2)).sqrt();
                     if corner > radius {
@@ -369,7 +362,9 @@ impl Shade {
                     }
                     let edge = dx.min(dy);
                     if edge < 1.0 || corner > radius - 1.0 {
-                        let accent = if tool && x >= cell.width().saturating_mul(2) {
+                        let accent = if matches!(owner, PlaneId::Tool(_))
+                            && x >= cell.width().saturating_mul(2)
+                        {
                             tone
                         } else {
                             accent
@@ -377,10 +372,9 @@ impl Shade {
                         return image::Rgba(lit(tone, accent, peak));
                     }
                     let light =
-                        f64::from(peak) * (-f64::from(y) / f64::from(cell.height().max(1))).exp();
-                    let shadow =
-                        f64::from(weight) * (-(f64::from(full_height - 1 - y)) / 2.0).exp();
-                    let spend = dithered(light - shadow, (x, y));
+                        f64::from(peak) * (-(y as f64) / f64::from(cell.height().max(1))).exp();
+                    let shadow = f64::from(weight) * (-((full_height - 1 - y) as f64) / 2.0).exp();
+                    let spend = dithered(light - shadow, (x, (y % 8) as u32));
                     image::Rgba(opaque(
                         tone.map(|at| (i32::from(at) + spend).clamp(0, 255) as u8),
                     ))
@@ -711,12 +705,23 @@ pub struct Placement {
     shows: Option<image::math::Rect>,
 }
 
+pub(crate) struct SurfaceWindow {
+    pub rows: usize,
+    pub skip: usize,
+    pub band_rows: u16,
+}
+
+pub(crate) struct ToolStyle {
+    pub ink: Ink,
+    pub compact: bool,
+}
+
 impl Placement {
     pub(crate) fn prompt(
         id: u32,
         cells: Rect,
-        rows: u16,
-        skip: u16,
+        rows: usize,
+        skip: usize,
         band_rows: u16,
         cell: Option<CellSize>,
         palette: &Palette,
@@ -727,17 +732,16 @@ impl Placement {
         if !covers(cells) || rows == 0 || id >= 0x8000_0000 {
             return None;
         }
-        let reach = band_rows.max(cells.height).max(1);
+        let reach = usize::from(band_rows.max(cells.height).max(1));
         let first_row = (skip / reach).saturating_sub(1) * reach;
         let raster_rows = rows.saturating_sub(first_row).min(reach.saturating_mul(3));
         Some(Placement {
             shade: Shade {
-                kind: Kind::Prompt {
-                    id,
-                    tool: false,
+                kind: Kind::Bounded {
+                    owner: PlaneId::Prompt(id),
                     size: Size {
                         cols: cells.width,
-                        rows: raster_rows,
+                        rows: u16::try_from(raster_rows).ok()?,
                     },
                     full_rows: rows,
                     first_row,
@@ -752,7 +756,7 @@ impl Placement {
             cells,
             shows: Some(image::math::Rect {
                 x: 0,
-                y: u32::from(skip - first_row) * cell.height(),
+                y: u32::try_from(skip - first_row).ok()? * cell.height(),
                 width: u32::from(cells.width) * cell.width(),
                 height: u32::from(cells.height) * cell.height(),
             }),
@@ -781,20 +785,23 @@ impl Placement {
     pub(crate) fn tool(
         id: u32,
         cells: Rect,
-        rows: u16,
-        skip: u16,
-        band_rows: u16,
+        window: SurfaceWindow,
         cell: Option<CellSize>,
         palette: &Palette,
-        ink: Ink,
-        compact: bool,
+        style: ToolStyle,
     ) -> Option<Placement> {
         if id >= 0x4000_0000 {
             return None;
         }
+        let SurfaceWindow {
+            rows,
+            skip,
+            band_rows,
+        } = window;
+        let ToolStyle { ink, compact } = style;
         let mut at = Self::prompt(id, cells, rows, skip, band_rows, cell, palette)?;
-        if let Kind::Prompt {
-            tool,
+        if let Kind::Bounded {
+            owner,
             tone,
             accent,
             peak,
@@ -802,7 +809,7 @@ impl Placement {
             ..
         } = &mut at.shade.kind
         {
-            *tool = true;
+            *owner = PlaneId::Tool(id);
             *tone = palette.band(Band::Rail);
             *accent = palette.ink(ink).0;
             *peak = palette.peak(Band::Rail) / 3;

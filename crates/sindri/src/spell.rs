@@ -24,6 +24,16 @@ pub fn of(name: &str, arguments: &str) -> String {
         .map_or_else(|| spelled(&said), String::from)
 }
 
+pub fn source(name: &str, arguments: &str) -> String {
+    let Ok(said) = serde_json::from_str::<Value>(arguments) else {
+        return arguments.to_owned();
+    };
+    fact_keys(name)
+        .iter()
+        .find_map(|key| said.get(*key).and_then(Value::as_str))
+        .map_or_else(|| arguments.to_owned(), String::from)
+}
+
 pub fn file(name: &str, arguments: &str) -> Option<String> {
     if name != OPEN {
         return None;

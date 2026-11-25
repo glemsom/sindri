@@ -2475,15 +2475,14 @@ fn cell_inks(row: &[(char, Look)]) -> Vec<Ink> {
 }
 
 #[test]
-fn a_result_longer_than_its_fold_draws_its_head_its_last_row_and_the_count_of_rows_kept_back() {
+fn a_result_longer_than_its_fold_draws_its_head_and_the_count_of_rows_kept_back() {
     let rows = layout(&long_result(1), 80);
     let drawn: Vec<String> = rows.iter().map(words).collect();
 
     assert_eq!(
         rows.len(),
-        6,
-        "a folded result is the four rows of its head, the row counting what is kept back and \
-         its last row: {drawn:?}"
+        5,
+        "a folded result is the four rows of its head and the row counting what is kept back: {drawn:?}"
     );
     assert_eq!(
         drawn[0], "✓ bash success 1.8 s",
@@ -2499,14 +2498,10 @@ fn a_result_longer_than_its_fold_draws_its_head_its_last_row_and_the_count_of_ro
         "and the rows of output under it are the first rows the command wrote: {drawn:?}"
     );
     assert_eq!(
-        drawn[4], "⋯ 17 rows kept back",
-        "twenty rows of output under a head of four leave sixteen behind, and the fold says how \
-         many rather than leaving the reader to guess: {drawn:?}"
+        drawn[4], "⋯ 18 rows kept back",
+        "the count includes every withheld output and detail row: {drawn:?}"
     );
-    assert_eq!(
-        drawn[5], "  exit 0 · 640 bytes",
-        "the result's own last row is drawn, so a reader sees where the output ended: {drawn:?}"
-    );
+    assert!(!drawn.iter().any(|row| row.contains("bytes")));
     assert_eq!(
         inks(&rows[4])[0],
         Ink::Dim,
@@ -2638,7 +2633,7 @@ fn a_session_read_back_is_folded_again() {
 
     assert_eq!(
         kept_back_row(rows.rows(1)).as_deref(),
-        Some("    ⋯ 17 rows kept back"),
+        Some("    ⋯ 18 rows kept back"),
         "a result read back from a session is a fold again, because a fold is a fact of the \
          layout and never a state the session carries: {drawn:?}"
     );
@@ -3135,14 +3130,14 @@ fn a_row_the_mark_is_grown_over_opens_the_work_it_stands_on() {
     );
     assert_eq!(
         kept_back_row(rows.rows(1)).as_deref(),
-        Some("    ⋯ 16 rows kept back"),
+        Some("    ⋯ 17 rows kept back"),
         "and the result inside it keeps its own fold, its count and the head it is handed by: \
          {opened:?}"
     );
     assert_eq!(
         opened.len(),
-        8,
-        "two rows of the call, four of the head, the count and the last row: {opened:?}"
+        7,
+        "two rows of the call, four of the head and the count: {opened:?}"
     );
 }
 

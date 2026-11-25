@@ -14,23 +14,23 @@ fold-answer at 120x40
 08 |  │   test rows::a_row_of_output_2 ... ok │                                   workspace …/sindri/.worktrees/46-rail     | dim:4 muted:37 plain:1 dim:1 plain:35 dim:10 plain:32
 09 |  │   test rows::a_row_of_output_3 ... ok │                                   branch    spec/1-capability               | dim:4 muted:37 plain:1 dim:1 plain:35 dim:10 plain:32
 10 |  │   test rows::a_row_of_output_4 ... ok │                                                                             | dim:4 muted:37 plain:1 dim:1 plain:77
-11 |  │ ⋯ 16 rows kept back                   │                                   sandbox   bwrap                           | dim:5 plain:1 dim:17 plain:19 dim:1 plain:35 dim:10 plain:32
-12 |  │   exit 0 · 640 bytes                  │                                                                             | dim:24 plain:18 dim:1 plain:77
-13 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
-14 |  Three rows of the fold are the whole of it: the head, the count and the     temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
-15 |  last.                                                                                                                 | plain:120
-16 |  The run proves the fold and nothing else: every row of a command's          skills    2                               | plain:78 dim:10 plain:32
-17 |  output is drawn in the quieter ink behind the gutter the call opened,       ◆ bash                                    | plain:78 accent:1 plain:41
-18 |  and the rows a reader usually needs are the head of it, the row counting    ◆ records                                 | plain:78 accent:1 plain:41
-19 |  the rows kept back and the last row the command wrote.                                                                | plain:120
-20 |                                                                                                                        | plain:120
-21 |  An answer is the answer, so it is drawn whole in the ink it wears today,                                              | plain:120
-22 |  and a reader reads it beside a folded result without losing one to the                                                | plain:120
-23 |  other.                                                                                                                | plain:120
-24 |                                                                                                                        | plain:120
-25 |  The fold opens on one key and on a mark grown over a row of it, and a                                                 | plain:120
-26 |  fold a reader opened stays open through a scroll, a resize and the entry                                              | plain:120
-27 |  that lands beside it.                                                                                                 | plain:120
+11 |  │ ⋯ 17 rows kept back                   │                                   sandbox   bwrap                           | dim:5 plain:1 dim:17 plain:19 dim:1 plain:35 dim:10 plain:32
+12 |                                                                                                                        | plain:120
+13 |  Three rows of the fold are the whole of it: the head, the count and the     session   9f2c7a41                        | plain:78 dim:10 plain:32
+14 |  last.                                                                       temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+15 |  The run proves the fold and nothing else: every row of a command's                                                    | plain:120
+16 |  output is drawn in the quieter ink behind the gutter the call opened,       skills    2                               | plain:78 dim:10 plain:32
+17 |  and the rows a reader usually needs are the head of it, the row counting    ◆ bash                                    | plain:78 accent:1 plain:41
+18 |  the rows kept back and the last row the command wrote.                      ◆ records                                 | plain:78 accent:1 plain:41
+19 |                                                                                                                        | plain:120
+20 |  An answer is the answer, so it is drawn whole in the ink it wears today,                                              | plain:120
+21 |  and a reader reads it beside a folded result without losing one to the                                                | plain:120
+22 |  other.                                                                                                                | plain:120
+23 |                                                                                                                        | plain:120
+24 |  The fold opens on one key and on a mark grown over a row of it, and a                                                 | plain:120
+25 |  fold a reader opened stays open through a scroll, a resize and the entry                                              | plain:120
+26 |  that lands beside it.                                                                                                 | plain:120
+27 |                                                                                                                        | plain:120
 28 |                                                                                                                        | plain:120
 29 |                                                                                                                        | plain:120
 30 |                                                                                                                        | plain:120

@@ -2,9 +2,9 @@
 
 ## Assembly
 
-Verified on `ticket/593-599`, starting at `f3f15aaa`, the integration merge of
-#598. The implementation tips for #594–#598 are all ancestors of this start.
-No parent or child issues were edited.
+Verified on `ticket/593-review`; `integration/593-tool-surfaces` is an ancestor
+of HEAD (`git merge-base --is-ancestor` passed). Both supplied reviews and the
+#593 spec were read. No parent or child issues were edited.
 
 ## Automated evidence
 
@@ -24,7 +24,7 @@ empty output, failure diagnostics, required narrow-width head facts, byte detail
 pointer and keyboard Fold targets, remeasured counts, Exchange Fold persistence,
 compact/full pixels, Prompt/Answer rendering, contrast, actual-end clipping,
 placement-only motion, replacement/deletion and capability/reset cleanup.
-The existing 60,000-row opened-result test decodes transmitted PNGs and checks
+The existing 100,000-row opened-result test decodes transmitted PNGs and checks
 bounded windows across scrolling and resizing. These are protocol/raster bounds,
 not measured peak RSS or text-reflow bounds. Not every mixed-entry variant is
 combined into every cross-feature sequence.
@@ -36,22 +36,32 @@ Rust/cargo 1.99.0 from the available Nix profile; writable Cargo cache at
 commands explicitly used `--ignore-rust-version`.
 
 - `cargo test --workspace --all-targets --ignore-rust-version`: passed,
-  2,132 tests passed, 5 ignored by the existing suite.
+  2,134 tests passed, 5 ignored by the existing suite.
 - `cargo check --workspace --all-targets --ignore-rust-version`: passed.
 - `cargo fmt --all -- --check`: passed.
-- `cargo clippy --workspace --all-targets --ignore-rust-version`: passed with
-  one remaining `too_many_arguments` warning in `plane.rs:781` (`tool`, 9/7).
-- Strict Clippy (`-- -D warnings`) failed on that assembled-feature lint and
-  an unnecessary lazy Option fallback; the latter is now fixed. The argument
-  count remains disclosed rather than suppressed or refactored in acceptance.
+- `cargo clippy --workspace --all-targets --ignore-rust-version -- -D warnings`:
+  passed without warnings. Named `SurfaceWindow` and `ToolStyle` parameter groups
+  replace the argument-count warning; no lint suppression was added.
 - `git diff --check`: passed.
 
-Initial compilation was blocked by the default read-only Cargo cache; the writable
-cache resolved it. One later workspace test run failed only because the cached
-binary version lacked Git's new `-dirty` suffix. Touching the existing build script
-forced regeneration; the complete workspace suite then passed without skipping it.
-The #598 fixture's unused-function warnings were removed by scoping `dead_code`
-allowance to its import in the frame test binary, matching shared harness practice.
+Review fixes preserve recorded generic invocation arguments when copying, hide
+byte detail under closed result Folds, and retain complete footprints and skips
+above 65,535 rows. New frame regressions cover generic JSON copying and closed/open
+byte disclosure. The opened-result raster regression now uses 100,000 rows and
+requires visible tool placements while checking bounded decoded images through
+scroll and resize. Byte disclosure and large-result regressions failed before
+their fixes; the first generic-copy test invocation timed out during compilation,
+so a completed red run for that regression is not claimed.
+
+Outcome styling now uses explicit recorded state rather than rendered ink/glyphs.
+Source sentinels and entry classifications are named centrally; bounded planes
+carry explicit owning identities. Existing Fold-count assertions and two reviewed
+frame snapshots reflect withheld detail rows. Keyboard mark tests grow upward
+from the Fold, now the final closed row. The clipping test explicitly returns to
+the head before checking placement-only motion.
+
+Initial full-suite runs exposed obsolete Fold expectations and snapshots; these
+were updated, and the final complete suite passed without bypassing tests.
 
 ## Manual acceptance and delivery limitations
 
