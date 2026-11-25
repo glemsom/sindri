@@ -1557,3 +1557,52 @@ fn illuminated_prompts_are_written_under_native_text_in_the_frame_bracket_and_re
     let wire = carried(&writes.kept()).concat();
     assert_eq!(wire.matches("a=d,d=I").count(), 2);
 }
+
+#[test]
+fn illuminated_prompt_reset_releases_images_before_the_next_conversation() {
+    let root = tempfile::tempdir().unwrap();
+    let writes = Writes::default();
+    let mut canvas = canvas_over(&writes, painted_at());
+    let mut view = View::of(
+        pictured(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
+        Transcript::of([Entry::Prompt {
+            text: SecretSet::default().redact("old conversation landmark"),
+        }]),
+    );
+    paint(&mut canvas, &mut view).unwrap();
+    let before = carried(&writes.kept()).concat();
+    assert!(before.contains("a=T"));
+    for ch in "/new".chars() {
+        view.key(Key::Char(ch));
+    }
+    assert_eq!(view.key(Key::Enter), sindri::composer::Outcome::Edited);
+    paint(&mut canvas, &mut view).unwrap();
+    let after = carried(&writes.kept()).concat();
+    let reset = &after[before.len()..];
+    assert_eq!(reset.matches("a=d,d=I").count(), 1);
+    assert!(!reset.contains("old conversation landmark"));
+    paint(&mut canvas, &mut view).unwrap();
+    let again = carried(&writes.kept()).concat();
+    assert!(!again[after.len()..].contains("a=d,d=I"));
+}
+
+#[test]
+fn leaving_a_launch_releases_bounded_images_before_returning_the_shell_screen() {
+    let _one_screen = lock(&ONE_SCREEN);
+    let pty = Pty::open();
+    let terminal = Terminal::pair(pty.slave.as_fd(), pty.slave.as_fd()).unwrap();
+    let screen = Screen::take(&terminal, false, false).unwrap();
+    pty.drawn();
+    drop(screen);
+    let given = pty.drawn();
+    let released = given
+        .find("a=d,d=A")
+        .expect("all bounded images are released");
+    let shell = given.find("\x1b[?1049l").expect("the shell screen returns");
+    assert!(released < shell);
+    give_back();
+    assert!(pty.silent());
+}

@@ -1804,3 +1804,264 @@ fn illuminated_prompts_fall_back_without_colour_and_draft_edits_send_no_surface_
     let wire = String::from_utf8(held.pass(edited.told().placements(), view.planes())).unwrap();
     assert!(!wire.contains("a=T"));
 }
+
+#[test]
+fn illuminated_prompt_opening_keeps_original_copy_and_replaces_only_its_surface() {
+    let words = (1..=16)
+        .map(|n| format!("literal 界 row {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut view = View::of(
+        caps::pictured(),
+        railed(),
+        Transcript::of([
+            Entry::Prompt {
+                text: SecretSet::default().redact(&words),
+            },
+            Entry::Prompt {
+                text: SecretSet::default().redact("unchanged landmark"),
+            },
+        ]),
+    );
+    let mut held = sindri::plane::Held::default();
+    let closed = frame::painted(&mut view, 120, 40);
+    closed.drawn_at("12 rows kept back");
+    held.pass(closed.told().placements(), view.planes());
+    let (y, x) = closed.drawn_at("12 rows kept back");
+    assert_eq!(
+        view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    let opened = frame::painted(&mut view, 120, 40);
+    opened.drawn_at("row 16");
+    let wire = String::from_utf8(held.pass(opened.told().placements(), view.planes())).unwrap();
+    assert_eq!(wire.matches("a=d,d=I").count(), 1);
+    assert_eq!(wire.matches("a=T").count(), 1);
+    assert!(wire.contains("a=p"));
+    let (head, _) = opened.drawn_at("row 1");
+    let (tail, _) = opened.drawn_at("row 16");
+    view.drag(Cell::new(head, 0), Cell::new(tail, 60));
+    frame::painted(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Copy), Outcome::Copy(words));
+    let narrow = frame::painted(&mut view, 40, 24);
+    assert!(
+        !narrow
+            .rows()
+            .iter()
+            .any(|row| row.contains("rows kept back"))
+    );
+    let wide = frame::painted(&mut view, 120, 40);
+    let (head, x) = wide.drawn_at("row 1");
+    view.pointer(wide.told(), Pointer::Press(Cell::new(head, x)));
+    let folded = frame::painted(&mut view, 120, 40);
+    folded.drawn_at("12 rows kept back");
+    let wire = String::from_utf8(held.pass(folded.told().placements(), view.planes())).unwrap();
+    assert_eq!(wire.matches("a=d,d=I").count(), 1);
+    assert_eq!(wire.matches("a=T").count(), 1);
+}
+
+#[test]
+fn illuminated_prompt_resize_and_display_changes_keep_cells_aligned_and_release_old_pixels() {
+    let words = (1..=16)
+        .map(|n| format!("row {n}: literal words long enough to wrap at forty columns"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let entries = || {
+        Transcript::of([Entry::Prompt {
+            text: SecretSet::default().redact(&words),
+        }])
+    };
+    let mut view = View::of(caps::pictured(), railed(), entries());
+    let mut flat = View::of(caps::inked(Palette::TRUECOLOR), railed(), entries());
+    let mut held = sindri::plane::Held::default();
+    let first = frame::painted(&mut view, 120, 40);
+    first.drawn_at("12 rows kept back");
+    held.pass(first.told().placements(), view.planes());
+    for (cols, rows, count) in [
+        (80, 24, "12 rows kept back"),
+        (40, 24, "28 rows kept back"),
+        (120, 40, "12 rows kept back"),
+    ] {
+        let resized = frame::painted(&mut view, cols, rows);
+        let text = frame::painted(&mut flat, cols, rows);
+        let band = resized.told().layout().unwrap().transcript;
+        for y in band.y..band.bottom() {
+            for x in band.x..band.right() {
+                assert_eq!(resized.cell(x, y).symbol(), text.cell(x, y).symbol());
+            }
+        }
+        assert!(
+            resized.rows().iter().any(|r| r.contains(count)),
+            "{cols}: {:?}",
+            resized.rows()
+        );
+        let wire =
+            String::from_utf8(held.pass(resized.told().placements(), view.planes())).unwrap();
+        assert!(wire.contains("a=d,d=I"));
+        assert!(wire.contains("a=T"));
+        assert!(
+            held.pass(resized.told().placements(), view.planes())
+                .is_empty()
+        );
+    }
+    let before = frame::painted(&mut view, 120, 40);
+    let taller = frame::painted(&mut view, 120, 48);
+    let wire = String::from_utf8(held.pass(taller.told().placements(), view.planes())).unwrap();
+    assert!(!wire.contains("a=d,d=I"));
+    let prompt = taller
+        .told()
+        .placements()
+        .iter()
+        .find(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
+        .unwrap();
+    let crop = prompt.shows().unwrap();
+    let surface = format!(
+        ",c={},r={},x=0,y=0,w={},h={}",
+        prompt.cells().width,
+        prompt.cells().height,
+        crop.width,
+        crop.height
+    );
+    assert!(
+        !wire
+            .split("\x1b_G")
+            .any(|op| op.starts_with("a=T") && op.contains(&surface))
+    );
+    assert_eq!(
+        before
+            .words()
+            .iter()
+            .filter(|r| r.contains("row 1:"))
+            .count(),
+        1
+    );
+    view.celled(Some(sindri::graphics::CellSize::new(12, 24)));
+    let scaled = frame::painted(&mut view, 120, 48);
+    assert_eq!(scaled.words(), taller.words());
+    let wire = String::from_utf8(held.pass(scaled.told().placements(), view.planes())).unwrap();
+    assert!(wire.contains("a=d,d=I"));
+    assert!(wire.contains("a=T"));
+    for p in scaled
+        .told()
+        .placements()
+        .iter()
+        .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
+    {
+        let crop = p.shows().unwrap();
+        assert_eq!(crop.width, u32::from(p.cells().width) * 12);
+        assert_eq!(crop.height, u32::from(p.cells().height) * 24);
+    }
+    for caps in [
+        caps::greys(),
+        caps::inked(Palette::TRUECOLOR),
+        caps::inked(Palette::ANSI),
+        caps::uncoloured(),
+        caps::pictured(),
+    ] {
+        view.drawn_on(caps.clone());
+        flat.drawn_on(caps);
+        let changed = frame::painted(&mut view, 80, 24);
+        let reference = frame::painted(&mut flat, 80, 24);
+        assert_eq!(changed.words(), reference.words());
+        changed.drawn_at("12 rows kept back");
+        let wire =
+            String::from_utf8(held.pass(changed.told().placements(), view.planes())).unwrap();
+        if !changed
+            .told()
+            .placements()
+            .iter()
+            .any(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
+        {
+            assert!(!wire.contains("a=T"));
+            let (y, x) = changed.drawn_at("row 1:");
+            assert_eq!(changed.cell(x, y).bg, changed.palette().band(Band::Prompt));
+        } else {
+            assert!(wire.contains("a=T"));
+        }
+    }
+}
+
+#[test]
+fn short_prompt_copy_returns_original_blank_lines_and_literal_words_in_every_fallback() {
+    let words = "界 literal ```\n\n  indented words";
+    for caps in [
+        caps::pictured(),
+        caps::inked(Palette::TRUECOLOR),
+        caps::inked(Palette::ANSI),
+        caps::uncoloured(),
+    ] {
+        let mut view = View::of(
+            caps,
+            railed(),
+            Transcript::of([Entry::Prompt {
+                text: SecretSet::default().redact(words),
+            }]),
+        );
+        let frame = frame::painted(&mut view, 80, 24);
+        let (head, _) = frame.drawn_at("literal");
+        let (tail, _) = frame.drawn_at("indented words");
+        view.drag(Cell::new(head, 0), Cell::new(tail, 50));
+        frame::painted(&mut view, 80, 24);
+        assert_eq!(view.key(Key::Copy), Outcome::Copy(words.to_owned()));
+    }
+}
+
+#[test]
+fn partially_visible_open_prompt_stays_clipped_through_resize_scale_and_fallback() {
+    let words = (1..=60)
+        .map(|n| format!("visible literal row {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut view = View::of(
+        caps::pictured(),
+        railed(),
+        Transcript::of([Entry::Prompt {
+            text: SecretSet::default().redact(words),
+        }]),
+    );
+    let closed = frame::painted(&mut view, 80, 24);
+    let (y, x) = closed.drawn_at("56 rows kept back");
+    assert_eq!(
+        view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    let mut held = sindri::plane::Held::default();
+    for (cols, rows, cell) in [(80, 24, (10, 20)), (120, 40, (12, 24)), (40, 16, (8, 16))] {
+        view.celled(Some(sindri::graphics::CellSize::new(cell.0, cell.1)));
+        let frame = frame::painted(&mut view, cols, rows);
+        assert!(!frame.words().iter().any(|r| r.contains("rows kept back")));
+        let band = frame.told().layout().unwrap().transcript;
+        let surfaces: Vec<_> = frame
+            .told()
+            .placements()
+            .iter()
+            .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
+            .collect();
+        assert_eq!(surfaces.len(), 1);
+        let p = surfaces[0];
+        assert_eq!(p.cells().intersection(band), p.cells());
+        assert!(p.shows().unwrap().y > 0);
+        assert_eq!(
+            p.shows().unwrap().height,
+            u32::from(p.cells().height) * cell.1
+        );
+        let wire = String::from_utf8(held.pass(frame.told().placements(), view.planes())).unwrap();
+        assert!(wire.contains("a=T"));
+        assert!(
+            held.pass(frame.told().placements(), view.planes())
+                .is_empty()
+        );
+    }
+    view.drawn_on(caps::uncoloured());
+    let fallback = frame::painted(&mut view, 40, 16);
+    let wire = String::from_utf8(held.pass(fallback.told().placements(), view.planes())).unwrap();
+    assert_eq!(wire.matches("a=d,d=I").count(), 1);
+    assert!(!wire.contains("a=T"));
+    assert!(
+        !fallback
+            .words()
+            .iter()
+            .any(|r| r.contains("rows kept back"))
+    );
+    fallback.drawn_at("visible literal row 60");
+}

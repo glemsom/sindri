@@ -1661,9 +1661,8 @@ impl Rows {
 
     pub fn folded_prompt(&self, at: usize) -> Option<String> {
         let held = self.held.get(at)?;
-        let closed = held.fold == Fold::Closed && held.kept.is_some();
         match &held.what {
-            What::Fact(Entry::Prompt { text }) if closed => Some(text.to_string()),
+            What::Fact(Entry::Prompt { text }) => Some(text.to_string()),
             _ => None,
         }
     }
