@@ -3377,7 +3377,14 @@ fn a_press_on_no_row_of_the_picker_changes_nothing() {
 
 #[test]
 fn a_press_on_a_commands_row_sends_what_enter_sends() {
-    let mut view = View::of(pointing(), Facts::default().asked(), Transcript::none());
+    let root = tempfile::tempdir().expect("a temp workspace");
+    let mut view = View::of(
+        pointing(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
+        Transcript::none(),
+    );
     view.key(Key::Char('/'));
     let (drawn, told) = painted_and_told(&mut view, 120, 40);
     let row = row_holding(&drawn, "/quit");
@@ -3392,7 +3399,14 @@ fn a_press_on_a_commands_row_sends_what_enter_sends() {
 
 #[test]
 fn a_press_on_a_commands_row_sends_what_enter_on_the_typed_line_sends() {
-    let mut clicked = View::of(pointing(), Facts::default().asked(), Transcript::none());
+    let root = tempfile::tempdir().expect("a temp workspace");
+    let mut clicked = View::of(
+        pointing(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
+        Transcript::none(),
+    );
     for glyph in ['/', 'n'] {
         clicked.key(Key::Char(glyph));
     }
@@ -3401,7 +3415,9 @@ fn a_press_on_a_commands_row_sends_what_enter_on_the_typed_line_sends() {
 
     let mut typed = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     for glyph in "/settings".chars() {
@@ -4877,9 +4893,12 @@ fn a_card_that_takes_a_query_places_the_caret_past_the_last_glyph_typed_at_it() 
 }
 
 fn model_card() -> View {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     view.paste("/model");
@@ -4938,9 +4957,12 @@ fn a_typed_glyph_moves_the_caret_of_every_card_whose_list_has_a_query() {
 
 #[test]
 fn a_card_that_takes_no_key_places_no_caret() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     view.paste("/stats");
@@ -5743,9 +5765,12 @@ fn a_stop_the_record_holds_is_drawn_once() {
 
 #[test]
 fn slash_new_clears_the_band_and_reads_the_record_to_its_end() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     let exchange = || {
@@ -5762,6 +5787,7 @@ fn slash_new_clears_the_band_and_reads_the_record_to_its_end() {
     let facts = |entries: Vec<Entry>| {
         Facts::default()
             .asked()
+            .working(root.path().to_path_buf(), None)
             .recorded(&document(GUID))
             .transcribed(entries)
     };
@@ -6202,6 +6228,7 @@ fn an_answer_the_record_gained_takes_the_marker_from_the_one_before_it() {
 
 #[test]
 fn a_word_a_run_says_after_slash_new_is_drawn_and_the_rows_it_superseded_are_not() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let prompt = Entry::Prompt {
         text: SecretSet::default().redact("the prompt the command superseded"),
     };
@@ -6216,13 +6243,16 @@ fn a_word_a_run_says_after_slash_new_is_drawn_and_the_rows_it_superseded_are_not
     let run = |entries: Vec<Entry>| {
         Facts::default()
             .asked()
+            .working(root.path().to_path_buf(), None)
             .running()
             .recorded(&document(GUID))
             .transcribed(entries)
     };
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     view.handed(run(vec![prompt.clone(), superseded.clone()]));

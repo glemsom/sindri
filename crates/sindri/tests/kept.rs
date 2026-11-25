@@ -675,9 +675,12 @@ fn a_press_marks_the_row_of_the_card_it_landed_on() {
 
 #[test]
 fn a_card_with_no_row_above_gives_the_up_arrow_back_to_the_draft() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     view.paste("queued");

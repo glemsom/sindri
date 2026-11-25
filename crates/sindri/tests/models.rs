@@ -173,7 +173,14 @@ fn a_listing_the_screen_has_not_held_puts_the_mark_back_on_the_first_row() {
 }
 
 fn screen(capabilities: Capabilities) -> View {
-    let mut view = View::of(capabilities, Facts::default().asked(), Transcript::none());
+    let root = tempfile::tempdir().expect("a temp workspace");
+    let mut view = View::of(
+        capabilities,
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
+        Transcript::none(),
+    );
     view.paste("/model");
     view.key(Key::Enter);
     view.handed(view.facts().clone().served_by(listed()));
@@ -183,9 +190,12 @@ fn screen(capabilities: Capabilities) -> View {
 
 #[test]
 fn a_screen_opened_again_asks_the_wire_rather_than_serving_the_names_it_held() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default().asked(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     view.handed(view.facts().clone().served_by(listed()));

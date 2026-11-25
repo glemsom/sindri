@@ -15,9 +15,11 @@ mod fixture;
 use fixture::{GUID, document, facts};
 
 fn opened() -> View {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
         Facts::default()
+            .working(root.path().to_path_buf(), None)
             .asked()
             .railed(facts())
             .recorded(&document()),
@@ -62,10 +64,12 @@ fn a_slash_stats_line_opens_the_screen_and_escape_gives_the_frame_back() {
 
 #[test]
 fn the_rail_draws_the_set_the_frame_was_handed_and_new_empties_it() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let loaded: Loaded = ["deploy"].into_iter().collect();
     let mut view = View::of(
         Capabilities::default(),
         Facts::default()
+            .working(root.path().to_path_buf(), None)
             .asked()
             .railed(facts().loading(loaded.clone()))
             .recorded(&document()),
@@ -161,9 +165,10 @@ fn the_bands_the_screen_stands_over_are_painted_under_its_card() {
 
 #[test]
 fn a_frame_handed_no_record_and_no_fact_still_opens_the_screen_with_its_title_and_no_row() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
-        Facts::default(),
+        Facts::default().working(root.path().to_path_buf(), None),
         Transcript::none(),
     );
     view.paste("/stats");

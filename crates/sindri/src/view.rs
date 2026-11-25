@@ -705,6 +705,9 @@ impl View {
     }
 
     fn draft(&mut self, key: Key) -> Outcome {
+        if key == Key::Enter && self.facts.workspace().is_none() {
+            return Outcome::Unchanged;
+        }
         if key == Key::Enter
             && self
                 .cards
@@ -712,6 +715,20 @@ impl View {
                 .is_some_and(|card| card.refuses())
         {
             return Outcome::Unchanged;
+        }
+        if key == Key::Enter {
+            let command = commands::read(self.composer.text()).or_else(|| {
+                self.cards
+                    .follow(self.composer.text())
+                    .and_then(|card| commands::read(&card.spelling()))
+            });
+            if let Some(Command::Skill(name)) = command {
+                let outcome = self.skill(&name);
+                if outcome == Outcome::Edited {
+                    self.composer.key(key);
+                }
+                return outcome;
+            }
         }
         if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
             return Outcome::Edited;

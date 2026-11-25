@@ -215,10 +215,12 @@ fn the_settings_body_ends_in_the_refusal_that_turned_the_visit_back() {
 
 #[test]
 fn the_ledger_body_holds_the_rows_it_laid_and_the_card_it_is_drawn_on_is_that_tall() {
+    let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         Capabilities::default(),
         sindri::facts::Facts::default()
             .asked()
+            .working(root.path().to_path_buf(), None)
             .railed(facts())
             .recorded(&document()),
         Transcript::none(),
