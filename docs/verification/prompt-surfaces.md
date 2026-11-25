@@ -106,3 +106,7 @@ The first complete package run reached 1,680 passed, two ignored and one unrelat
 version failure: the stale binary reported clean `0249a951` while git reported dirty.
 A clean post-commit run is recorded below. Manual availability limitations above remain;
 no visual terminal, multiplexer or peak-memory measurement was performed.
+
+Clean post-commit verification at `4baf660a`: `cargo check --workspace`,
+`cargo fmt --all -- --check` and `cargo test -p sindri` passed: 1,681 tests passed,
+zero failed, two ignored, including 56 painted tests, 77 TUI tests and both version tests.
