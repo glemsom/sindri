@@ -313,6 +313,9 @@ impl Request {
 }
 
 pub trait Responder {
+    fn compacted(&self) -> bool {
+        false
+    }
     fn replay_loss(&self, _earlier: &[Turn]) -> bool {
         false
     }
@@ -632,6 +635,9 @@ impl<R: Responder, A: Executor> Run<R, A> {
                 return self.state();
             }
         };
+        if self.responder.compacted() {
+            witness.told(Told::Compacted { turn: self.turns });
+        }
         let mut results = Vec::with_capacity(reply.calls.len());
         if !reply.calls.is_empty() {
             witness.told(Told::Waiting { turn: self.turns });

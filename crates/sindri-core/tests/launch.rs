@@ -2119,3 +2119,146 @@ fn target_switch_keeps_evidence_without_transferring_opaque_reasoning() {
         assert!(body.get("previous_response_id").is_none());
     }
 }
+
+#[test]
+fn near_capacity_launch_requests_a_model_summary_before_continuing() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+
+    let homes = Homes::new();
+    let fixture = include_str!("fixtures/providers/anthropic_stream.sse");
+    let replay = Replay::new([Canned::stream(fixture), Canned::stream(fixture)]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let mut evidence = Turn::answered(1, "Completed operation", "SIDE_EFFECT_DONE_616");
+    evidence.calls.push(Call::new(
+        "call_616",
+        "bash",
+        r#"{"command":"printf evidence"}"#,
+    ));
+    evidence.results.push(sindri_core::turn::Acted {
+        text: "EXACT_EVIDENCE_616".into(),
+        bytes: 18,
+        elapsed: std::time::Duration::ZERO,
+        exit: sindri_core::turn::Exit::Code(0),
+    });
+    let earlier = vec![
+        Turn::answered(1, "Preserve OBJECTIVE_616", "old work ".repeat(2800)),
+        evidence,
+        Turn::answered(0, "", "EXACT_SKILL_SNAPSHOT_616"),
+        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
+        Turn::answered(3, "Next", "Do not repeat completed writes"),
+    ];
+    launch
+        .drive(
+            "Continue",
+            &earlier,
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    assert_eq!(
+        requests.len(),
+        2,
+        "a supported summary request precedes continuation"
+    );
+    assert!(requests[0].body.contains("OBJECTIVE_616"));
+    assert!(requests[0].body.contains("completed side effects"));
+    assert!(!requests[0].body.contains("\"tools\""));
+    assert!(
+        requests[1]
+            .body
+            .contains("Client-managed conversation summary")
+    );
+    assert!(requests[1].body.contains("EXACT_RECENT_616"));
+    for sentinel in [
+        "SIDE_EFFECT_DONE_616",
+        "EXACT_EVIDENCE_616",
+        "EXACT_SKILL_SNAPSHOT_616",
+        "call_616",
+    ] {
+        assert!(requests[1].body.contains(sentinel));
+    }
+    assert!(!requests[1].body.contains(&"old work ".repeat(100)));
+    assert_eq!(earlier[0].text.len(), 25200);
+}
+
+#[test]
+fn failed_model_summary_retains_material_and_sends_no_continuation() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+
+    let homes = Homes::new();
+    let replay = Replay::new([Canned::reply(
+        400,
+        r#"{"error":{"type":"invalid_request_error","message":"summary refused"}}"#,
+    )]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let mut evidence = Turn::answered(1, "Completed operation", "SIDE_EFFECT_DONE_616");
+    evidence.calls.push(Call::new(
+        "call_616",
+        "bash",
+        r#"{"command":"printf evidence"}"#,
+    ));
+    evidence.results.push(sindri_core::turn::Acted {
+        text: "EXACT_EVIDENCE_616".into(),
+        bytes: 18,
+        elapsed: std::time::Duration::ZERO,
+        exit: sindri_core::turn::Exit::Code(0),
+    });
+    let earlier = vec![
+        Turn::answered(1, "Preserve OBJECTIVE_616", "old work ".repeat(2800)),
+        evidence,
+        Turn::answered(0, "", "EXACT_SKILL_SNAPSHOT_616"),
+        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
+        Turn::answered(3, "Next", "Do not repeat completed writes"),
+    ];
+    launch
+        .drive(
+            "Continue",
+            &earlier,
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].body.contains("OBJECTIVE_616"));
+    assert_eq!(earlier[0].text.len(), 25200);
+}

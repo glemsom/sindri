@@ -190,7 +190,7 @@ fn told_turns(watching: &Watching) -> (Vec<u32>, Vec<u32>) {
         match told {
             Told::Asking { turn } => asking.push(*turn),
             Told::Waiting { turn } => waiting.push(*turn),
-            Told::Idle | Told::Stopped { .. } => {}
+            Told::Idle | Told::Compacted { .. } | Told::Stopped { .. } => {}
         }
     }
     (asking, waiting)
