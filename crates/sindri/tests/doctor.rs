@@ -208,7 +208,7 @@ fn every_skill_found_is_listed_with_the_scope_it_came_from() {
         out.contains("skills (3 found)"),
         "the catalog is counted, and the builtin is one of them:\n{out}"
     );
-    let builtin = row(&out, "commit-message");
+    let builtin = row(&out, "web-access");
     assert!(
         builtin.trim_start().starts_with("builtin"),
         "a compiled-in skill says so, having no path to show: {builtin}"
@@ -482,7 +482,7 @@ fn a_skill_file_that_will_not_parse_is_reported_where_it_lies() {
 #[test]
 fn a_builtin_shadowed_by_a_nearer_scope_is_named_by_the_scope_alone() {
     let ground = Ground::new();
-    ground.repo_skill("commit-message", "the repository's own way with a subject");
+    ground.repo_skill("web-access", "the repository's own way with a subject");
     let path = ground.machine(PROVES);
 
     let output = run(ground.command(&path).args(["doctor"]));
@@ -490,10 +490,10 @@ fn a_builtin_shadowed_by_a_nearer_scope_is_named_by_the_scope_alone() {
     let out = text(&output.stdout);
     a_report_was_made(&output);
     assert!(
-        row(&out, "commit-message").trim_start().starts_with("repo"),
+        row(&out, "web-access").trim_start().starts_with("repo"),
         "a repository skill may take a compiled-in name:\n{out}"
     );
-    let reported = shadow(&out, "commit-message");
+    let reported = shadow(&out, "web-access");
     assert!(
         reported.trim_end().ends_with("repo wins over builtin"),
         "a builtin has no path to name, so its scope word is the whole of it: {reported}"

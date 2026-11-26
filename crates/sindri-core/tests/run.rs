@@ -2065,20 +2065,18 @@ fn a_builtin_skill_loads_from_the_binary_and_lists_no_files_beside_it() {
 
     let acted = shell
         .execute(
-            &Call::new("toolu_1", "skill", r#"{"name":"commit-message"}"#),
+            &Call::new("toolu_1", "skill", r#"{"name":"web-access"}"#),
             &loaded,
         )
         .expect("the binary carries this skill");
 
     assert!(
-        acted
-            .text
-            .contains("Write from the diff, never from memory"),
+        acted.text.contains("Pick the fetch path by content type"),
         "the body is handed back: {}",
         acted.text
     );
     assert!(
-        !acted.text.contains("description:") && !acted.text.contains("name: commit-message"),
+        !acted.text.contains("description:") && !acted.text.contains("name: web-access"),
         "the frontmatter is stripped rather than echoed: {}",
         acted.text
     );

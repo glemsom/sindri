@@ -54,6 +54,36 @@ fn builtin_skills_ship_compiled_in_and_parse_as_discovery_reads_them() {
 }
 
 #[test]
+fn commit_message_is_not_builtin_but_can_be_supplied_by_the_repository() {
+    let (_root, workspace, home) = empty_world();
+    assert!(
+        Catalog::discover(&workspace, Some(&home))
+            .get("commit-message")
+            .is_none()
+    );
+
+    let directory = workspace.join(".agents/skills/commit-message");
+    std::fs::create_dir_all(&directory).expect("the skill directory");
+    std::fs::write(
+        directory.join("SKILL.md"),
+        "---\nname: commit-message\ndescription: the repo's way\n---\n\nThe repo's body.\n",
+    )
+    .expect("the SKILL.md");
+
+    let catalog = Catalog::discover(&workspace, Some(&home));
+    let skill = catalog
+        .get("commit-message")
+        .expect("the repository's skill loads");
+    assert_eq!(skill.scope, Scope::Repo);
+    let row = catalog
+        .listing()
+        .into_iter()
+        .find(|row| row.name == "commit-message")
+        .expect("the skill is listed");
+    assert!(row.shadows.is_empty());
+}
+
+#[test]
 fn web_access_is_embedded_and_invocable_by_model_and_human() {
     let (_root, workspace, home) = empty_world();
     let catalog = Catalog::discover(&workspace, Some(&home));
@@ -76,8 +106,8 @@ fn the_listing_a_doctor_would_print_names_the_builtin_scope() {
 
     let row = listing
         .iter()
-        .find(|row| row.name == "commit-message")
-        .expect("the built-in commit-message skill is listed");
+        .find(|row| row.name == "web-access")
+        .expect("the built-in web-access skill is listed");
     assert_eq!(row.scope, Scope::Builtin);
     assert_eq!(row.scope.word(), "builtin", "the word a doctor prints");
     assert!(
@@ -93,11 +123,11 @@ fn the_listing_a_doctor_would_print_names_the_builtin_scope() {
 #[test]
 fn a_repo_skill_takes_the_name_and_the_listing_names_the_builtin_it_shadowed() {
     let (_root, workspace, home) = empty_world();
-    let directory = workspace.join(".agents/skills/commit-message");
+    let directory = workspace.join(".agents/skills/web-access");
     std::fs::create_dir_all(&directory).expect("the skill directory");
     std::fs::write(
         directory.join("SKILL.md"),
-        "---\nname: commit-message\ndescription: the repo's way\n---\n\nThe repo's body.\n",
+        "---\nname: web-access\ndescription: the repo's way\n---\n\nThe repo's body.\n",
     )
     .expect("the SKILL.md");
 
@@ -105,7 +135,7 @@ fn a_repo_skill_takes_the_name_and_the_listing_names_the_builtin_it_shadowed() {
 
     let row = listing
         .iter()
-        .find(|row| row.name == "commit-message")
+        .find(|row| row.name == "web-access")
         .expect("the name is still listed once");
     assert_eq!(
         row.scope,
@@ -115,7 +145,7 @@ fn a_repo_skill_takes_the_name_and_the_listing_names_the_builtin_it_shadowed() {
     assert_eq!(
         row.shadows,
         vec![Shadowing {
-            name: String::from("commit-message"),
+            name: String::from("web-access"),
             winner: Scope::Repo,
             winner_path: Some(directory),
             loser: Scope::Builtin,
@@ -180,12 +210,6 @@ fn removing_the_source_directory_leaves_the_builtin_in_a_fresh_process() {
         String::from_utf8_lossy(&child.stdout),
         String::from_utf8_lossy(&child.stderr)
     );
-    assert!(
-        String::from_utf8_lossy(&child.stdout).contains("commit-message\tbuiltin"),
-        "the child listed the built-in under the builtin scope, and said so: {}",
-        String::from_utf8_lossy(&child.stdout)
-    );
-
     assert!(
         String::from_utf8_lossy(&child.stdout).contains("web-access\tbuiltin"),
         "web-access survives without its source directory too"
