@@ -12,7 +12,7 @@ use crate::pipe::Stream;
 use crate::policy::{Boundary, BoundaryError, Enforcement};
 use crate::run::Cancel;
 
-pub const SHELL: &str = "/bin/sh";
+pub const SHELL: &str = "/bin/bash";
 
 pub const SANDBOX_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 

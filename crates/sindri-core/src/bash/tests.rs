@@ -83,7 +83,7 @@ fn the_sandbox_argv_is_the_boundary_and_nothing_else() {
         "PATH",
         "/usr/local/bin:/usr/bin:/bin",
         "--",
-        "/bin/sh",
+        "/bin/bash",
         "-c",
         "echo hi",
     ]
@@ -103,7 +103,7 @@ fn the_unsafe_argv_is_the_shell_alone() {
         .expect("the boundary renders an argv")
         .argv();
 
-    assert_eq!(argv, vec!["/bin/sh", "-c", "echo hi"]);
+    assert_eq!(argv, vec!["/bin/bash", "-c", "echo hi"]);
 }
 
 #[test]
