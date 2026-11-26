@@ -1285,6 +1285,9 @@ fn single_child(sandboxed: bool) {
     let outside = ground._root.path().join("outside");
     std::fs::create_dir(&outside).unwrap();
     if sandboxed {
+        runner = format!(
+            "printf '{{}}' > \"$TMPDIR/forged-launch.json\"; SINDRI_LAUNCH=\"$TMPDIR/forged-launch.json\" \"$SINDRI_EXECUTABLE\" -b tampered >\"$TMPDIR/tampered.out\" 2>\"$TMPDIR/tampered.err\"; test $? -ne 0 || exit 10; grep -q 'untrusted inherited launch' \"$TMPDIR/tampered.err\" || exit 11; {runner}"
+        );
         runner = format!("cd {}; {runner}", outside.display());
         runner = runner.replace(
             "cp -R",

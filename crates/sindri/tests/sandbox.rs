@@ -347,6 +347,7 @@ fn enforcement_becomes_unsafe_only_where_the_command_line_flag_is_read() {
                 "crates/sindri-core/src/policy"
                     | "crates/sindri-core/src/bash"
                     | "crates/sindri-core/src/sandbox"
+                    | "crates/sindri-core/src/handoff"
             ),
             "the core reads the fact only where it defines, enforces and proves it, \
              never in {file} where a config could reach it"

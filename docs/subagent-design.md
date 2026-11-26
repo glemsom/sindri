@@ -122,11 +122,23 @@ continues to check the call deadline and cancellation.
 
 Cleanup requires Linux `/proc` and parent-death signals; nested bubblewrap requires working user/PID
 namespaces and its normal proof. Restricted hosts must refuse rather than fall back to unsafe mode.
-These checks establish execution in this workspace, not portability to every host. The supervisor currently performs Rust filesystem/allocation work after fork and before exec;
-this is not an async-signal-safe design for a multithreaded parent. Uninterruptible kernel tasks
-can delay cleanup without a bound. Seals establish immutability, not provenance: an explicitly
-unsafe same-user process can substitute a separately sealed descriptor; that trust attack is
-not prevented. These remaining risks must not be represented as a complete adversarial guarantee. Timeout/cancellation
+These checks establish execution in this workspace, not portability to every host. The fork
+supervisor uses fixed stack buffers and async-signal-safe Linux calls only; it never allocates,
+uses Rust filesystem APIs or sleeps through Rust's thread runtime. Descendant cleanup has a
+two-second scanning budget and a depth ceiling of 128. Kernel-blocked tasks cannot be guaranteed
+stopped or reaped on a deadline; final `Child::wait` and filesystem operations can still block.
+The bounded stop grace is not proof of quiescence: an adversarial fork race can escape the
+unsafe-mode descendant scan. The supervisor walks each process leader's `/proc` children;
+children forked by other threads can also evade that best-effort walk. Bubblewrap's PID namespace and parent-death lifecycle remain the
+sandbox boundary, not that best-effort host scan.
+
+Seals establish immutability, not identity. Read-only launch mounts cannot authorize unsafe
+handoffs. A sandbox cannot modify the sealed data or gain host authority by substituting a
+handoff: its kernel confinement persists across exec, and unsafe mount handoffs are refused.
+An explicitly unsafe actor already has full same-user host authority, including the ability
+to create another sealed descriptor or invoke the executable without a handoff. Authenticating
+such descriptors would not revoke that authority; it is outside the sandbox threat boundary.
+Timeout/cancellation
 may interrupt collection before completed sibling answers are printed. Artifacts last only until
 parent session cleanup. The recipe cannot guarantee model brevity, coordination or non-recursion.
 

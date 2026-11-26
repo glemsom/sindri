@@ -46,9 +46,12 @@ impl Handoff {
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes)
             .map_err(|_| "cannot read inherited launch".to_owned())?;
-        serde_json::from_slice(&bytes)
-            .map(Some)
-            .map_err(|_| "invalid inherited launch".to_owned())
+        let handoff: Self =
+            serde_json::from_slice(&bytes).map_err(|_| "invalid inherited launch".to_owned())?;
+        if readonly_mount && handoff.boundary.enforcement() == crate::policy::Enforcement::Unsafe {
+            return Err("untrusted unsafe inherited launch mount".to_owned());
+        }
+        Ok(Some(handoff))
     }
 
     pub fn write(

@@ -214,11 +214,12 @@ pub fn run_with_handoff(
                 return Err(std::io::Error::last_os_error());
             }
             if getppid() != parent as i32 {
-                return Err(std::io::Error::other("bash parent ended before spawn"));
+                return Err(std::io::Error::from_raw_os_error(libc::ECHILD));
             }
             if prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0 {
                 return Err(std::io::Error::last_os_error());
             }
+            let supervisor = getpid();
             let root = fork();
             if root < 0 {
                 return Err(std::io::Error::last_os_error());
@@ -227,8 +228,15 @@ pub fn run_with_handoff(
                 // The supervisor must release Command's exec-error pipe before waiting.
                 close_range(3, u32::MAX, 0);
                 let mut status = 0;
-                while waitpid(root, &mut status, 0) < 0 {}
-                stop_descendants(getpid());
+                while waitpid(root, &mut status, 0) < 0 {
+                    if *libc::__errno_location() != libc::EINTR {
+                        _exit(127);
+                    }
+                }
+                let mut end: libc::timespec = std::mem::zeroed();
+                libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut end);
+                end.tv_sec += 2;
+                supervise_cleanup(getpid(), 0, end);
                 if status & 127 != 0 {
                     signal(status & 127, 0);
                     kill(getpid(), status & 127);
@@ -237,6 +245,9 @@ pub fn run_with_handoff(
             }
             if prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0) != 0 {
                 return Err(std::io::Error::last_os_error());
+            }
+            if getppid() != supervisor {
+                return Err(std::io::Error::from_raw_os_error(libc::ECHILD));
             }
             if let Some(fd) = descriptor
                 && (dup2(fd, 198) < 0 || fcntl(198, 2, 0) < 0)
@@ -325,7 +336,7 @@ fn stop(child: &mut Child) {
     unsafe {
         kill(pid, SIGSTOP);
     }
-    stop_descendants(pid);
+    stop_descendants(pid, Instant::now() + Duration::from_secs(2));
     // The negative pid names the group. One the kernel already reaped has nothing left to
     // signal: a kill that lost a race, not a failure.
     unsafe {
@@ -333,8 +344,86 @@ fn stop(child: &mut Child) {
     }
 }
 
-fn stop_descendants(parent: i32) {
-    loop {
+// After fork only stack storage and async-signal-safe syscalls may be used.
+unsafe fn supervise_cleanup(parent: i32, depth: usize, end: libc::timespec) {
+    if depth >= 128 {
+        return;
+    }
+    let mut path = [0u8; 80];
+    let mut length = 0;
+    for part in [
+        b"/proc/".as_slice(),
+        &pid_digits(parent),
+        b"/task/",
+        &pid_digits(parent),
+        b"/children",
+    ] {
+        for &byte in part {
+            if byte != 0 {
+                path[length] = byte;
+                length += 1;
+            }
+        }
+    }
+    unsafe {
+        let fd = libc::open(path.as_ptr().cast(), libc::O_RDONLY | libc::O_CLOEXEC);
+        if fd < 0 {
+            return;
+        }
+        let mut bytes = [0u8; 4096];
+        let mut pid = 0i32;
+        loop {
+            let mut now: libc::timespec = std::mem::zeroed();
+            libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now);
+            if (now.tv_sec, now.tv_nsec) >= (end.tv_sec, end.tv_nsec) {
+                break;
+            }
+            let count = libc::read(fd, bytes.as_mut_ptr().cast(), bytes.len());
+            if count <= 0 {
+                break;
+            }
+            for &byte in &bytes[..count as usize] {
+                if byte.is_ascii_digit() {
+                    pid = pid
+                        .saturating_mul(10)
+                        .saturating_add(i32::from(byte - b'0'));
+                } else if pid > 0 {
+                    libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now);
+                    if (now.tv_sec, now.tv_nsec) >= (end.tv_sec, end.tv_nsec) {
+                        libc::close(fd);
+                        return;
+                    }
+                    libc::kill(pid, SIGSTOP);
+                    // A bounded stop grace cannot guarantee quiescence of kernel-blocked tasks.
+                    let pause = libc::timespec {
+                        tv_sec: 0,
+                        tv_nsec: 10_000_000,
+                    };
+                    libc::nanosleep(&pause, std::ptr::null_mut());
+                    supervise_cleanup(pid, depth + 1, end);
+                    libc::kill(pid, SIGKILL);
+                    pid = 0;
+                }
+            }
+        }
+        libc::close(fd);
+    }
+}
+
+fn pid_digits(pid: i32) -> [u8; 10] {
+    let mut digits = [0; 10];
+    let mut value = pid as u32;
+    let mut index = 10;
+    while value > 0 {
+        index -= 1;
+        digits[index] = b'0' + (value % 10) as u8;
+        value /= 10;
+    }
+    digits
+}
+
+fn stop_descendants(parent: i32, deadline: Instant) {
+    while Instant::now() < deadline {
         let Ok(entries) = std::fs::read_dir("/proc") else {
             return;
         };
@@ -352,7 +441,7 @@ fn stop_descendants(parent: i32) {
             unsafe {
                 kill(pid, SIGSTOP);
             }
-            loop {
+            while Instant::now() < deadline {
                 match process_state(pid) {
                     Some(('T' | 't' | 'Z', _)) | None => break,
                     _ => thread::sleep(Duration::from_millis(1)),
@@ -364,11 +453,13 @@ fn stop_descendants(parent: i32) {
             return;
         }
         for pid in children {
-            stop_descendants(pid);
+            stop_descendants(pid, deadline);
             unsafe {
                 kill(pid, SIGKILL);
             }
-            while process_state(pid).is_some_and(|(state, _)| state != 'Z') {
+            while Instant::now() < deadline
+                && process_state(pid).is_some_and(|(state, _)| state != 'Z')
+            {
                 thread::sleep(Duration::from_millis(1));
             }
         }
