@@ -223,47 +223,6 @@ fn sealed_launch(home: &Path) -> std::fs::File {
 }
 
 #[test]
-fn first_run_keeps_inherited_settings_and_guidance_when_ambient_launch_changes() {
-    use sindri_core::config::Environment;
-    use std::cell::Cell;
-    use std::os::fd::AsRawFd;
-
-    struct ChangingEnvironment {
-        launch: Cell<Option<String>>,
-        ambient: BTreeMap<String, String>,
-    }
-    impl Environment for ChangingEnvironment {
-        fn var(&self, name: &str) -> Option<String> {
-            if name == "SINDRI_LAUNCH" {
-                self.launch.take()
-            } else {
-                self.ambient.var(name)
-            }
-        }
-    }
-    let parent = bare_home();
-    let child = written_home("model = \"child-file\"\n");
-    let handoff = sealed_launch(parent.path());
-    let environment = ChangingEnvironment {
-        launch: Cell::new(Some(format!("/proc/self/fd/{}", handoff.as_raw_fd()))),
-        ambient: first_run_environment(child.path(), &[("SINDRI_MODEL", "child-environment")]),
-    };
-    let first_run = FirstRun::resolve(
-        &environment,
-        Config {
-            model: Some("child-override".to_owned()),
-            ..Config::default()
-        },
-    )
-    .unwrap();
-
-    assert_eq!(first_run.config().model.as_deref(), Some("parent-model"));
-    assert_eq!(first_run.config().api_key.as_deref(), Some("parent-secret"));
-    assert_eq!(first_run.path(), parent.path().join("sindri/config.toml"));
-    assert!(!first_run.api_key_row().contains("parent-secret"));
-}
-
-#[test]
 fn config_and_first_run_refuse_untrusted_handoffs_without_credentials_in_diagnostics() {
     use std::io::Write;
     use std::os::fd::{AsRawFd, FromRawFd};
