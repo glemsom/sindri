@@ -11,7 +11,16 @@ impl FirstRun {
         environment: &impl Environment,
         overrides: Config,
     ) -> Result<FirstRun, ConfigError> {
-        let path = config_path(environment)?;
+        let inherited =
+            crate::handoff::Handoff::read(environment).map_err(|reason| ConfigError::BadValue {
+                origin: "inherited launch".to_owned(),
+                reason,
+            })?;
+        let path = if let Some(handoff) = &inherited {
+            config_path(&handoff.environment)?
+        } else {
+            config_path(environment)?
+        };
         Ok(FirstRun {
             config: Config::resolve(environment, overrides)?,
             path,

@@ -1228,3 +1228,188 @@ fn a_reply_that_asks_for_the_files_in_the_folder_runs_bash_and_answers_with_what
         asked[1]
     );
 }
+
+fn bash_reply(command: &str) -> Reply {
+    let input = serde_json::json!({"command": command}).to_string();
+    let body = TOOL_USE.replace(
+        "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\":\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\" \\\"ls\\\"}\"}}",
+        &format!("data: {}", serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":input}})),
+    );
+    assert_ne!(body, TOOL_USE);
+    Reply::stream(Box::leak(body.into_boxed_str()))
+}
+
+#[test]
+fn bash_launches_a_fresh_child_with_effective_settings_and_authorized_edits() {
+    single_child(false);
+}
+
+#[test]
+fn nested_sandbox_child_preserves_the_writable_boundary() {
+    if let Some(reason) = sandbox_refusal() {
+        eprintln!("NOT VERIFIED: nested sandbox prerequisite: {reason}");
+        return;
+    }
+    single_child(true);
+}
+
+fn single_child(sandboxed: bool) {
+    let ground = Ground::new();
+    let skill = include_str!("../../sindri-core/skills/subagents/SKILL.md");
+    let recipe = skill
+        .split("```bash\n")
+        .nth(1)
+        .unwrap()
+        .split("```")
+        .next()
+        .unwrap();
+    let recipe = recipe.replace("briefs=('Work in the inherited workspace. Do not delegate. Inspect the assigned area; return a short verified summary. Make no edits.')", "briefs=('child-only-brief')");
+    let mut runner = format!(
+        "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\"; cp -R \"$TMPDIR/children/sindri/sessions\" child-sessions"
+    );
+    runner = format!("test \"$(stat -c %a \"$SINDRI_LAUNCH\")\" = 600 || exit 8; {runner}");
+    let outside = ground._root.path().join("outside");
+    std::fs::create_dir(&outside).unwrap();
+    if sandboxed {
+        runner = format!("cd {}; {runner}", outside.display());
+        runner = runner.replace(
+            "cp -R",
+            &format!("cd {}; cp -R", ground.workspace.display()),
+        );
+    }
+
+    let artifact = ground.workspace.join("shared-deliverable.txt");
+    let child_command = if sandboxed {
+        format!(
+            "printf authorized > {}; printf shared > {}; if printf forbidden > denied.txt 2>/dev/null; then exit 9; fi",
+            ground.workspace.join("child-edit.txt").display(),
+            artifact.display()
+        )
+    } else {
+        "printf authorized > child-edit.txt".to_owned()
+    };
+    let repo_skill = ground.workspace.join(".agents/skills/local-check");
+    std::fs::create_dir_all(&repo_skill).unwrap();
+    std::fs::write(
+        repo_skill.join("SKILL.md"),
+        "---\nname: local-check\ndescription: local check\n---\n# Local check\n",
+    )
+    .unwrap();
+    let wire = Wire::answering(vec![
+        bash_reply(&runner),
+        bash_reply(&child_command),
+        Reply::stream(ANTHROPIC),
+        Reply::stream(ANTHROPIC),
+    ]);
+    let mut command = ground.asking(&wire, "parent-private-history");
+    if !sandboxed && sandbox_refusal().is_none() {
+        command.arg("--yolo-unsafe");
+    }
+    let output = command
+        .env("SINDRI_MAX_TURNS", "7")
+        .env("SINDRI_TIMEOUT", "40")
+        .env("SINDRI_COMMAND_BUDGET_MS", "60000")
+        .env("SINDRI_OUTPUT_BUDGET_BYTES", "99999")
+        .args([
+            "--api-key",
+            "cli-child-secret",
+            "--context-window",
+            "12345",
+            "--format",
+            "json",
+        ])
+        .output()
+        .expect("parent launch");
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    assert_eq!(
+        std::fs::read_to_string(ground.workspace.join("child-edit.txt")).expect("child edit"),
+        "authorized"
+    );
+    assert!(!outside.join("denied.txt").exists());
+    let requests = wire.requests();
+    assert_eq!(
+        requests.len(),
+        4,
+        "{}",
+        std::fs::read_to_string(ground.session().join("transcript.jsonl")).unwrap()
+    );
+    assert!(requests[1].contains("child-only-brief"));
+    assert!(!requests[1].contains("parent-private-history"));
+    assert!(requests[1].contains("cli-child-secret"));
+    assert!(requests[1].contains("local-check"));
+    let children = std::fs::read_dir(ground.workspace.join("child-sessions"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(children.len(), 1);
+    assert_ne!(children[0].file_name(), ground.session().file_name());
+    let child_document = std::fs::read_to_string(children[0].join("session.json")).unwrap();
+    assert!(child_document.contains("claude-sonnet-4-6"));
+    assert!(!child_document.contains("cli-child-secret"));
+    let document: serde_json::Value = serde_json::from_str(&child_document).unwrap();
+    assert_eq!(document["policy"]["timeout_seconds"], 40);
+    assert_eq!(document["policy"]["command_budget_ms"], 60000);
+    assert_eq!(document["policy"]["output_budget_bytes"], 99999);
+    assert_eq!(document["dials"]["max_turns"], 7);
+    assert_eq!(
+        document["enforcement"],
+        if sandboxed { "bubblewrap" } else { "unsafe" }
+    );
+    let child_transcript = std::fs::read_to_string(children[0].join("transcript.jsonl")).unwrap();
+    assert!(child_transcript.contains("child-only-brief"));
+    assert!(!child_transcript.contains("parent-private-history"));
+    let transcript =
+        std::fs::read_to_string(ground.session().join("transcript.jsonl")).expect("parent record");
+    assert!(transcript.contains("brief=0 exit=0"), "{transcript}");
+    assert!(transcript.contains("Hello world"));
+    assert!(!transcript.contains("cli-child-secret"));
+    assert!(!text(&output.stdout).contains("cli-child-secret"));
+    assert!(!text(&output.stderr).contains("cli-child-secret"));
+    assert!(
+        ground
+            .session()
+            .join("tmp")
+            .read_dir()
+            .unwrap()
+            .next()
+            .is_none()
+    );
+}
+
+#[test]
+fn a_bash_child_inherits_copilot_signing_and_cli_route_without_secret_argv() {
+    let ground = Ground::new();
+    ground.signed_in();
+    let runner = r#"env -i PATH="$PATH" SINDRI_LAUNCH="$SINDRI_LAUNCH" "$SINDRI_EXECUTABLE" -b 'signed-child' --format json </dev/null >"$TMPDIR/signed.json" 2>"$TMPDIR/signed.stderr"; printf 'child-exit=%s\n' "$?"; cat "$TMPDIR/signed.json""#;
+    let tool = serde_json::json!({"id":"call_child","type":"function","function":{"name":"bash","arguments":serde_json::json!({"command":runner}).to_string()}});
+    let stream = format!(
+        "data: {}\n\ndata: [DONE]\n\n",
+        serde_json::json!({"id":"chatcmpl-parent","object":"chat.completion.chunk","created":0,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":tool["id"],"type":"function","function":tool["function"]}]},"finish_reason":"tool_calls"}]})
+    );
+    let wire = Wire::answering(vec![
+        Reply::stream(Box::leak(stream.into_boxed_str())),
+        Reply::stream(COPILOT_CHAT),
+        Reply::stream(COPILOT_CHAT),
+    ]);
+    let output = ground
+        .copilot(&wire, "parent-signing")
+        .args(["--route", "chat", "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let requests = wire.requests();
+    assert_eq!(
+        requests.len(),
+        3,
+        "{}",
+        std::fs::read_to_string(ground.session().join("transcript.jsonl")).unwrap()
+    );
+    assert!(requests[1].contains("signed-child"));
+    assert!(requests[1].contains("/chat/completions"));
+    assert!(requests[1].contains(SESSION));
+    let transcript = std::fs::read_to_string(ground.session().join("transcript.jsonl")).unwrap();
+    assert!(transcript.contains("child-exit=0"), "{transcript}");
+    assert!(!transcript.contains(SESSION));
+    assert!(!text(&output.stdout).contains(SESSION));
+    assert!(!text(&output.stderr).contains(SESSION));
+}

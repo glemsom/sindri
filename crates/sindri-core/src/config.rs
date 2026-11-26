@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use toml_edit::{DocumentMut, Item, Value};
 pub const MODE: u32 = 0o600;
-#[derive(Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Deserialize, serde::Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub provider: Option<Wire>,
@@ -510,6 +510,14 @@ impl Config {
         environment: &impl Environment,
         overrides: Config,
     ) -> Result<Config, ConfigError> {
+        if let Some(inherited) =
+            crate::handoff::Handoff::read(environment).map_err(|reason| ConfigError::BadValue {
+                origin: "inherited launch".to_owned(),
+                reason,
+            })?
+        {
+            return Ok(inherited.config);
+        }
         let file = Config::load(environment)?;
         let above = overrides.above(Config::from_environment(environment)?);
         let wire_key = above
