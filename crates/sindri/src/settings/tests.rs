@@ -42,6 +42,9 @@ fn the_screen_walks_every_schema_field_in_connection_run_and_access_groups() {
         "base_url",
         "api_key",
         "extra_headers",
+        "responses_continuation",
+        "responses_store",
+        "responses_continuation_verified",
         "thinking",
         "context_window",
         "output_headroom",
@@ -193,7 +196,15 @@ fn space_flips_every_row_the_table_calls_a_switch_and_types_into_every_other() {
         .collect();
     assert_eq!(
         switches,
-        vec!["thinking", "status", "face", "ssh_agent"],
+        vec![
+            "responses_continuation",
+            "responses_store",
+            "responses_continuation_verified",
+            "thinking",
+            "status",
+            "face",
+            "ssh_agent"
+        ],
         "the space flips a key only where the table names it a switch"
     );
 

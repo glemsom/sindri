@@ -20,7 +20,7 @@ settings at 40x24
 14 |    Extra headers                       | plain:40
 15 |    Not set                             | plain:40
 16 |                                        | plain:40
-17 |  ⋯ 27 rows kept back · ↑↓ scroll       | plain:2 dim:31 plain:7
+17 |  ⋯ 33 rows kept back · ↑↓ scroll       | plain:2 dim:31 plain:7
 18 |                                        | plain:40
 19 |  Wire · Select the wire used to ask    | plain:2 muted:34 plain:4
 20 |  the endpoint.                         | plain:2 muted:13 plain:25

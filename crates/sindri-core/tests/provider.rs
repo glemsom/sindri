@@ -324,3 +324,31 @@ fn an_openai_ask_on_the_chat_route_replays_them_the_way_that_route_spells_them()
         "the same prompts read the same on either route"
     );
 }
+
+#[test]
+fn server_continuation_never_client_compacts_or_admits_only_the_handle_delta() {
+    let replay = Replay::new([Canned::stream(OPENAI_RESPONSES)]);
+    let client = client_over(&replay);
+    let ask = Ask::new(Wire::Openai, "gpt-5")
+        .route(Route::Responses)
+        .key("sk-recorded")
+        .continuation(true, Some(true), false)
+        .prompt("FIRST_CHAIN_SENTINEL");
+    let answer = client.ask(&ask, &mut ()).unwrap();
+    let mut turn = Turn::answered(1, "FIRST_CHAIN_SENTINEL", answer.text);
+    turn.responses = answer.responses;
+    let mut earlier = Vec::new();
+    for _ in 0..4 {
+        let mut retained = turn.clone();
+        retained.prompt = "CHAIN_EVIDENCE".repeat(4000);
+        earlier.push(retained);
+    }
+    let ask = ask
+        .earlier(earlier)
+        .prompt("NEW_CHAIN_INPUT")
+        .capacity(Some(40_000), 1024, 1024);
+    assert!(ask.compact(&client).unwrap().is_none());
+    assert!(ask.guard_capacity().is_err());
+    assert!(client.ask(&ask, &mut ()).is_err());
+    assert_eq!(replay.requests().len(), 1);
+}

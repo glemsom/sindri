@@ -1,7 +1,8 @@
 # Conversation replay
 
 Conversation requests replay retained client-side material, including native assistant
-blocks and Responses output items. They do not use `previous_response_id`.
+blocks and Responses output items. By default they do not use `previous_response_id`; explicit verified Responses
+continuation is described in [Responses continuation](responses-continuation.md).
 Responses requests leave `store` unset, preserving the pre-existing endpoint storage
 policy rather than silently switching it on or off. Full client replay does not itself
 promise stateless operation or disable the endpoint's default persistence.
@@ -35,8 +36,8 @@ captures that generation when a run starts, not when a prompt enters the queue.
 Late display/session reports do not become retained model-facing material.
 
 Reset leaves launch ownership, session-temp lifetime and confinement unchanged.
-There is currently no provider continuation handle; any future handle must belong
-to this reset boundary and obey the same generation check, not a frontend cache.
+Provider continuation handles belong to retained native turns and obey this same
+generation check, not a frontend cache.
 
 ## Wire target changes
 
@@ -49,9 +50,8 @@ native artifacts and reasoning are omitted. The terminal reports that loss. Loca
 retained material remains available; no completed tool is executed by the transition.
 
 `Ask::replay_target`, `Ask::transition` and `Ask::replay_capabilities` expose the
-core decision. Continuation and compaction capabilities are currently false for
-all endpoints, including Copilot and custom addresses. No handle, compaction or
-storage configuration is enabled here. Same-target native replay remains supported
+core decision. Provider-native compaction remains unsupported. Continuation is opt-in and gated
+by route, endpoint verification and explicit storage authorization. Same-target native replay remains supported
 by the existing adapter capture tests; that is not verification of custom endpoint
 continuation features.
 

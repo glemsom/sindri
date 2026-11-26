@@ -5,7 +5,7 @@ pub(super) struct FieldView {
     pub(super) help: &'static str,
 }
 
-pub(super) const FIELDS: [FieldView; 18] = [
+pub(super) const FIELDS: [FieldView; 21] = [
     FieldView {
         key: "provider",
         label: "Wire",
@@ -41,6 +41,24 @@ pub(super) const FIELDS: [FieldView; 18] = [
         label: "Extra headers",
         group: "CONNECTION",
         help: "Additional request headers (extra_headers).",
+    },
+    FieldView {
+        key: "responses_continuation",
+        label: "Responses continuation",
+        group: "RUN & LIMITS",
+        help: "Use stored response handles instead of full replay.",
+    },
+    FieldView {
+        key: "responses_store",
+        label: "Responses storage",
+        group: "RUN & LIMITS",
+        help: "Explicitly allow or disable server response storage.",
+    },
+    FieldView {
+        key: "responses_continuation_verified",
+        label: "Verified continuation",
+        group: "RUN & LIMITS",
+        help: "Assert custom endpoint storage and chaining were verified.",
     },
     FieldView {
         key: "thinking",

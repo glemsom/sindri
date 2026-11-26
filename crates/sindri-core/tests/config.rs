@@ -31,12 +31,15 @@ fn resolved_in(text: &str, vars: &[(&str, &str)], flags: Config) -> Config {
     resolved(home.path(), vars, flags).expect("the config loads")
 }
 
-const EXAMPLES: [(&str, &str); 18] = [
+const EXAMPLES: [(&str, &str); 21] = [
     ("provider", "\"openai\""),
     ("model", "\"claude-sonnet-4-5\""),
     ("route", "\"responses\""),
     ("base_url", "\"https://gateway.test/v1\""),
     ("api_key", "\"sk-not-a-real-key\""),
+    ("responses_continuation", "true"),
+    ("responses_store", "true"),
+    ("responses_continuation_verified", "true"),
     ("thinking", "true"),
     ("extra_writable_paths", "[\"/srv/data\"]"),
     ("extra_headers", "[\"X-Gateway-Session: {session}\"]"),
@@ -52,7 +55,7 @@ const EXAMPLES: [(&str, &str); 18] = [
     ("ssh_agent", "false"),
 ];
 
-const SPOKEN: [(&str, &str, &str); 18] = [
+const SPOKEN: [(&str, &str, &str); 21] = [
     ("provider", "openai", "\"openai\""),
     ("model", "claude-sonnet-4-5", "\"claude-sonnet-4-5\""),
     ("route", "responses", "\"responses\""),
@@ -62,6 +65,9 @@ const SPOKEN: [(&str, &str, &str); 18] = [
         "\"https://gateway.test/\"",
     ),
     ("api_key", "sk-not-a-real-key", "\"sk-not-a-real-key\""),
+    ("responses_continuation", "true", "true"),
+    ("responses_store", "true", "true"),
+    ("responses_continuation_verified", "true", "true"),
     ("thinking", "true", "true"),
     (
         "extra_writable_paths",
@@ -190,6 +196,9 @@ fn the_table_names_every_key_of_the_schema_in_the_order_the_screen_reads_them() 
         "route",
         "base_url",
         "api_key",
+        "responses_continuation",
+        "responses_store",
+        "responses_continuation_verified",
         "thinking",
         "extra_writable_paths",
         "extra_headers",
@@ -220,7 +229,15 @@ fn the_table_names_every_key_of_the_schema_in_the_order_the_screen_reads_them() 
 
     assert_eq!(
         switches,
-        vec!["thinking", "status", "face", "ssh_agent"],
+        vec![
+            "responses_continuation",
+            "responses_store",
+            "responses_continuation_verified",
+            "thinking",
+            "status",
+            "face",
+            "ssh_agent"
+        ],
         "a key the table calls a switch is one the screen's space flips, and no other key is"
     );
 }
@@ -903,6 +920,9 @@ fn two_configs_that_differ_only_in_what_a_frame_reads_decide_the_same_run() {
             "base_url" => other.base_url = Some(String::from("https://gateway.test/v1")),
             "api_key" => other.api_key = Some(String::from("sk-another-key")),
             "thinking" => other.thinking = Some(true),
+            "responses_continuation" => other.responses_continuation = Some(true),
+            "responses_store" => other.responses_store = Some(true),
+            "responses_continuation_verified" => other.responses_continuation_verified = Some(true),
             "extra_writable_paths" => other.extra_writable_paths = Some(vec![PathBuf::from("/w")]),
             "extra_headers" => other.extra_headers = Some(vec![String::from("x-one: 1")]),
             "context_window" => other.context_window = Some(200_000),

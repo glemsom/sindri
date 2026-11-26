@@ -373,6 +373,9 @@ fn a_file_that_is_not_toml_is_never_rewritten() {
 
 fn every_key_set() -> Config {
     Config {
+        responses_continuation: Some(true),
+        responses_store: Some(true),
+        responses_continuation_verified: Some(true),
         provider: Some(Wire::Anthropic),
         model: Some(String::from("claude-sonnet-4-5")),
         route: Some(Route::Responses),
@@ -672,6 +675,9 @@ fn every_row_of_the_table_shows_the_value_its_own_key_holds() {
         ("route", "responses"),
         ("base_url", "https://gateway.test/v1"),
         ("api_key", sindri_core::redact::MASK),
+        ("responses_continuation", "true"),
+        ("responses_store", "true"),
+        ("responses_continuation_verified", "true"),
         ("thinking", "true"),
         ("extra_writable_paths", "/srv/data"),
         ("extra_headers", "X-Gateway-Session: {session}"),
