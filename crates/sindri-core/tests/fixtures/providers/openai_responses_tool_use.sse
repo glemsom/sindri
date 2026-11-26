@@ -1,0 +1,15 @@
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc_01","call_id":"call_01","name":"bash","arguments":""}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","item_id":"fc_01","output_index":0,"delta":"{\"command\":\"ls\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","item_id":"fc_01","output_index":0,"arguments":"{\"command\":\"ls\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","id":"fc_01","call_id":"call_01","name":"bash","arguments":"{\"command\":\"ls\"}"}}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_tool","object":"response","status":"completed","model":"gpt-5","output":[{"type":"function_call","id":"fc_01","call_id":"call_01","name":"bash","arguments":"{\"command\":\"ls\"}"}],"usage":{"input_tokens":9,"output_tokens":4,"total_tokens":13}}}
+

@@ -23,6 +23,12 @@ but a final answer still joins with what it ended on — except one `/new` super
 went with the conversation.
 _Avoid_: Chat, thread, memory, context, history (that one is a run's own turns)
 
+**Retained material**:
+The words and work a conversation asks the model with again: each prompt once, every completed
+turn’s assistant words, calls and matching results in order, not only its answer. It belongs to
+the conversation, not to the displayed exchanges or the session’s record, and `/new` empties it.
+_Avoid_: History (that one is a run’s own turns), exchange, transcript
+
 **Exchange**:
 The band's unit: the prompt wearing the sigil it was asked with, what the run did under it, and the
 answer. That work is no row of the band while the run fills it — each thought, call, result and
@@ -43,7 +49,7 @@ _Avoid_: Step, iteration, wave
 
 **Witness**:
 What a **Run**'s loop reports to: the phase it is in and the turn it is on as it goes, each finished
-**Turn**, and the state the run settled on with the turn a conversation keeps for it and what its turns
+**Turn**, and the state the run settled on with its retained material and what its turns
 spent, so the **Launch** writes the record with it and hands the front end the facts. The loop is the
 run's own, so a launch and a test are driven by the same one.
 _Avoid_: Listener, observer, callback, subscriber

@@ -380,6 +380,7 @@ pub trait Witness {
 }
 
 pub struct Settled<'a> {
+    pub retained: &'a [Turn],
     pub state: &'a State,
     pub kept: &'a Turn,
     pub spent: &'a Usage,
@@ -593,7 +594,17 @@ impl<R: Responder, A: Executor> Run<R, A> {
                 witness.ended(ended);
             }
         }
+        let mut retained = if self.history.is_empty() {
+            vec![self.kept()]
+        } else {
+            self.history.clone()
+        };
+        // A retained prompt marks its run boundary; later turns replay under that same prompt.
+        for turn in retained.iter_mut().skip(1) {
+            turn.prompt.clear();
+        }
         witness.settled(&Settled {
+            retained: &retained,
             state: &self.state,
             kept: &self.kept(),
             spent: &totaled(&self.history),

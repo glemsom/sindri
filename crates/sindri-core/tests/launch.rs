@@ -1080,3 +1080,149 @@ fn a_launch_hands_the_front_end_every_turn_it_took() {
         "the record writes each turn once, in the order the loop took them"
     );
 }
+
+#[test]
+fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+
+    for (wire, model, route, tool, answer) in [
+        (
+            Wire::Anthropic,
+            "claude-sonnet-4-6",
+            Route::Chat,
+            include_str!("fixtures/providers/anthropic_tool_use.sse"),
+            include_str!("fixtures/providers/anthropic_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-4o",
+            Route::Chat,
+            include_str!("fixtures/providers/openai_chat_tool_use.sse"),
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-5",
+            Route::Responses,
+            include_str!("fixtures/providers/openai_responses_tool_use.sse"),
+            include_str!("fixtures/providers/openai_responses_stream.sse"),
+        ),
+        (
+            Wire::Copilot,
+            "gpt-5",
+            Route::Chat,
+            include_str!("fixtures/providers/openai_chat_tool_use.sse"),
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+    ] {
+        let homes = Homes::new();
+        let executed = homes.at("executed");
+        let command = format!(
+            "printf x >> {}; printf REPLAY_; printf EVIDENCE_ONLY",
+            executed.display()
+        );
+        let tool = tool.replace(r#"ls\""#, &format!(r#"{command}\""#));
+        let tool = if route == Route::Chat && wire != Wire::Anthropic {
+            tool.replace(r#""content":null"#, r#""content":"Inspecting evidence""#)
+        } else {
+            tool
+        };
+
+        let replay = Replay::new([
+            Canned::stream(Box::leak(tool.clone().into_boxed_str())),
+            Canned::stream(Box::leak(tool.replace("_01", "_02").into_boxed_str())),
+            Canned::stream(answer),
+            Canned::stream(answer),
+        ]);
+        let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+        config.provider = Some(wire);
+        config.model = Some(model.into());
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+            .unwrap()
+            .answered_by(
+                &homes.machine(),
+                &config,
+                Enforcement::Unsafe,
+                FrontEnd::Terminal,
+                None,
+                |_, ask, tools| Asking::new(client.clone(), ask.route(route), tools),
+            )
+            .ok()
+            .unwrap();
+        let prompt = format!("Inspect {}", homes.root.path().display());
+        let mut retaining = Retaining::default();
+        let first = launch
+            .drive(&prompt, &[], &mut Quiet, &mut retaining, Cancel::new())
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        assert!(!first.answer().unwrap().contains("REPLAY_EVIDENCE_ONLY"));
+        let earlier = retaining.0.turns().to_vec();
+        launch
+            .drive(
+                "Use the evidence",
+                &earlier,
+                &mut Quiet,
+                &mut retaining,
+                Cancel::new(),
+            )
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        assert_eq!(std::fs::read_to_string(&executed).unwrap(), "xx");
+        let requests = replay.requests();
+        assert_eq!(
+            requests.len(),
+            4,
+            "completed tools must not run again for {wire:?}/{route:?}: {}",
+            first.stopped()
+        );
+        let last: serde_json::Value = serde_json::from_str(&requests[3].body).unwrap();
+        let previous: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+        let field = if route == Route::Responses {
+            "input"
+        } else {
+            "messages"
+        };
+        let messages = last[field].as_array().unwrap();
+        let prefix = previous[field].as_array().unwrap();
+        assert!(messages.len() > prefix.len());
+        if route == Route::Chat && wire != Wire::Anthropic {
+            assert_eq!(requests[3].body.matches("Inspecting evidence").count(), 2);
+        }
+
+        let id = if wire == Wire::Anthropic {
+            "toolu"
+        } else {
+            "call"
+        };
+        for suffix in ["01", "02"] {
+            assert_eq!(
+                requests[3].body.matches(&format!("{id}_{suffix}")).count(),
+                2
+            );
+        }
+        assert_eq!(
+            &messages[..prefix.len()],
+            prefix,
+            "the request prefix stays stable for {wire:?}"
+        );
+        assert_eq!(
+            requests[3].body.matches("REPLAY_EVIDENCE_ONLY").count(),
+            2,
+            "both tool results survive for {wire:?}: {}",
+            requests[3].body
+        );
+    }
+}

@@ -536,7 +536,11 @@ impl<'a> Loop<'a> {
                     );
                     painted = true;
                 }
-                Report::Kept(kept) => self.view.kept(&kept),
+                Report::Retained(retained) => {
+                    for turn in retained {
+                        self.view.kept(&turn);
+                    }
+                }
                 Report::Stopped { stop, elapsed_ms } => stopped = Some((stop, elapsed_ms)),
             }
         }
