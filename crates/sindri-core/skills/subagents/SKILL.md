@@ -110,8 +110,10 @@ inline; the runner retries nothing.
 Set the tool timeout for the slowest brief plus launch/collection overhead, within the inherited
 command budget. Launch, wait and collect synchronously in that call. Timeout/cancellation can
 interrupt collection; completed artifacts are session-scoped, not a detached collection service.
-Linux process-tree cleanup covers separately grouped nested bash calls, with parent-death signals
-and bubblewrap namespace teardown as additional guards. Children must remain attached descendants.
+Linux subreaper cleanup kills and reaps all descendants, including thread-owned children and
+separate groups, before returning. Kernel-uninterruptible tasks can delay cleanup beyond the
+timeout; SIGKILL has no instant-exit guarantee. Forced supervisor/launch death is outside this
+synchronous contract; parent-death signals and sandbox teardown are additional guards.
 
 Execution evidence: batch fixtures exercised mixed failures, full sibling answers, parallel nested
 bubblewrap launches, timeout and SIGINT cancellation. Actual child processes stopped and delayed

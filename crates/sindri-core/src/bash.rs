@@ -23,7 +23,7 @@ pub const TEMP_VARIABLE: &str = "TMPDIR";
 const MAX_NAP: Duration = Duration::from_millis(25);
 
 const SIGKILL: i32 = 9;
-const SIGSTOP: i32 = 19;
+const SIGTERM: i32 = 15;
 const PR_SET_PDEATHSIG: i32 = 1;
 const PR_SET_CHILD_SUBREAPER: i32 = 36;
 
@@ -219,6 +219,17 @@ pub fn run_with_handoff(
             if prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0 {
                 return Err(std::io::Error::last_os_error());
             }
+            let mut blocked: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut blocked);
+            libc::sigaddset(&mut blocked, SIGTERM);
+            let mut previous: libc::sigset_t = std::mem::zeroed();
+            if libc::sigprocmask(libc::SIG_BLOCK, &blocked, &mut previous) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let fd = libc::open(c"/proc/thread-self/children".as_ptr(), libc::O_RDONLY);
+            if fd < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
             let supervisor = getpid();
             let root = fork();
             if root < 0 {
@@ -226,23 +237,40 @@ pub fn run_with_handoff(
             }
             if root > 0 {
                 // The supervisor must release Command's exec-error pipe before waiting.
-                close_range(3, u32::MAX, 0);
+                if dup2(fd, 199) < 0 {
+                    _exit(127);
+                }
+                close_range(3, 198, 0);
+                close_range(200, u32::MAX, 0);
                 let mut status = 0;
-                while waitpid(root, &mut status, 0) < 0 {
-                    if *libc::__errno_location() != libc::EINTR {
+                loop {
+                    let waited = waitpid(root, &mut status, libc::WNOHANG);
+                    if waited == root {
+                        break;
+                    }
+                    if waited < 0 && *libc::__errno_location() != libc::EINTR {
                         _exit(127);
                     }
+                    let poll = libc::timespec {
+                        tv_sec: 0,
+                        tv_nsec: 25_000_000,
+                    };
+                    if libc::sigtimedwait(&blocked, std::ptr::null_mut(), &poll) == SIGTERM {
+                        status = SIGTERM;
+                        break;
+                    }
                 }
-                let mut end: libc::timespec = std::mem::zeroed();
-                libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut end);
-                end.tv_sec += 2;
-                supervise_cleanup(getpid(), 0, end);
+                // Adoption after each reap exposes the next generation, regardless of thread ownership.
+                supervise_cleanup(199);
                 if status & 127 != 0 {
                     signal(status & 127, 0);
+                    libc::sigprocmask(libc::SIG_SETMASK, &previous, std::ptr::null_mut());
                     kill(getpid(), status & 127);
                 }
                 _exit((status >> 8) & 255);
             }
+            libc::close(fd);
+            libc::sigprocmask(libc::SIG_SETMASK, &previous, std::ptr::null_mut());
             if prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0) != 0 {
                 return Err(std::io::Error::last_os_error());
             }
@@ -325,152 +353,56 @@ pub fn run_with_handoff(
     })
 }
 
-/// Kills the process group outright, so no child a command started outlives the call. A
-/// sandboxed command needs it too: a kill that reaches only the sandbox's edge leaves a
-/// command still working inside it.
 fn stop(child: &mut Child) {
-    let Ok(pid) = i32::try_from(child.id()) else {
-        let _ = child.kill();
-        return;
-    };
     unsafe {
-        kill(pid, SIGSTOP);
-    }
-    stop_descendants(pid, Instant::now() + Duration::from_secs(2));
-    // The negative pid names the group. One the kernel already reaped has nothing left to
-    // signal: a kill that lost a race, not a failure.
-    unsafe {
-        kill(-pid, SIGKILL);
+        kill(child.id() as i32, SIGTERM);
     }
 }
 
 // After fork only stack storage and async-signal-safe syscalls may be used.
-unsafe fn supervise_cleanup(parent: i32, depth: usize, end: libc::timespec) {
-    if depth >= 128 {
-        return;
-    }
-    let mut path = [0u8; 80];
-    let mut length = 0;
-    for part in [
-        b"/proc/".as_slice(),
-        &pid_digits(parent),
-        b"/task/",
-        &pid_digits(parent),
-        b"/children",
-    ] {
-        for &byte in part {
-            if byte != 0 {
-                path[length] = byte;
-                length += 1;
-            }
-        }
-    }
+unsafe fn supervise_cleanup(fd: i32) {
     unsafe {
-        let fd = libc::open(path.as_ptr().cast(), libc::O_RDONLY | libc::O_CLOEXEC);
-        if fd < 0 {
-            return;
-        }
-        let mut bytes = [0u8; 4096];
-        let mut pid = 0i32;
         loop {
-            let mut now: libc::timespec = std::mem::zeroed();
-            libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now);
-            if (now.tv_sec, now.tv_nsec) >= (end.tv_sec, end.tv_nsec) {
-                break;
+            if libc::lseek(fd, 0, libc::SEEK_SET) < 0 {
+                _exit(127);
             }
-            let count = libc::read(fd, bytes.as_mut_ptr().cast(), bytes.len());
-            if count <= 0 {
-                break;
-            }
-            for &byte in &bytes[..count as usize] {
-                if byte.is_ascii_digit() {
-                    pid = pid
-                        .saturating_mul(10)
-                        .saturating_add(i32::from(byte - b'0'));
-                } else if pid > 0 {
-                    libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now);
-                    if (now.tv_sec, now.tv_nsec) >= (end.tv_sec, end.tv_nsec) {
-                        libc::close(fd);
-                        return;
+            let mut bytes = [0u8; 4096];
+            let mut pid = 0i32;
+            loop {
+                let count = libc::read(fd, bytes.as_mut_ptr().cast(), bytes.len());
+                if count < 0 {
+                    if *libc::__errno_location() == libc::EINTR {
+                        continue;
                     }
-                    libc::kill(pid, SIGSTOP);
-                    // A bounded stop grace cannot guarantee quiescence of kernel-blocked tasks.
-                    let pause = libc::timespec {
-                        tv_sec: 0,
-                        tv_nsec: 10_000_000,
-                    };
-                    libc::nanosleep(&pause, std::ptr::null_mut());
-                    supervise_cleanup(pid, depth + 1, end);
-                    libc::kill(pid, SIGKILL);
-                    pid = 0;
+                    _exit(127);
+                }
+                if count == 0 {
+                    if pid > 0 {
+                        kill(pid, SIGKILL);
+                    }
+                    break;
+                }
+                for &byte in &bytes[..count as usize] {
+                    if byte.is_ascii_digit() {
+                        pid = pid
+                            .saturating_mul(10)
+                            .saturating_add(i32::from(byte - b'0'));
+                    } else if pid > 0 {
+                        kill(pid, SIGKILL);
+                        pid = 0;
+                    }
+                }
+            }
+            let mut status = 0;
+            if waitpid(-1, &mut status, 0) < 0 {
+                match *libc::__errno_location() {
+                    libc::ECHILD => return,
+                    libc::EINTR => continue,
+                    _ => _exit(127),
                 }
             }
         }
-        libc::close(fd);
     }
-}
-
-fn pid_digits(pid: i32) -> [u8; 10] {
-    let mut digits = [0; 10];
-    let mut value = pid as u32;
-    let mut index = 10;
-    while value > 0 {
-        index -= 1;
-        digits[index] = b'0' + (value % 10) as u8;
-        value /= 10;
-    }
-    digits
-}
-
-fn stop_descendants(parent: i32, deadline: Instant) {
-    while Instant::now() < deadline {
-        let Ok(entries) = std::fs::read_dir("/proc") else {
-            return;
-        };
-        let mut children = Vec::new();
-        for entry in entries.flatten() {
-            let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else {
-                continue;
-            };
-            let Some((state, ppid)) = process_state(pid) else {
-                continue;
-            };
-            if ppid != parent || state == 'Z' {
-                continue;
-            }
-            unsafe {
-                kill(pid, SIGSTOP);
-            }
-            while Instant::now() < deadline {
-                match process_state(pid) {
-                    Some(('T' | 't' | 'Z', _)) | None => break,
-                    _ => thread::sleep(Duration::from_millis(1)),
-                }
-            }
-            children.push(pid);
-        }
-        if children.is_empty() {
-            return;
-        }
-        for pid in children {
-            stop_descendants(pid, deadline);
-            unsafe {
-                kill(pid, SIGKILL);
-            }
-            while Instant::now() < deadline
-                && process_state(pid).is_some_and(|(state, _)| state != 'Z')
-            {
-                thread::sleep(Duration::from_millis(1));
-            }
-        }
-    }
-}
-
-fn process_state(pid: i32) -> Option<(char, i32)> {
-    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-    let (_, fields) = stat.rsplit_once(") ")?;
-    let mut fields = fields.split_whitespace();
-    Some((fields.next()?.chars().next()?, fields.next()?.parse().ok()?))
 }
 
 unsafe extern "C" {
@@ -508,6 +440,102 @@ mod lifecycle_tests {
         );
         let outcome = run(&boundary, temp.path(), &command, &cancel).unwrap();
         (outcome, temp)
+    }
+
+    #[test]
+    fn early_exit_reaps_children_owned_by_non_leader_threads() {
+        let (outcome, _) = exercise(
+            r#"python3 -c '
+import os, threading, time
+ready = threading.Event()
+def worker():
+    pid = os.fork()
+    if pid == 0:
+        os.setsid()
+        time.sleep(30)
+        os._exit(0)
+    print(pid, flush=True)
+    ready.set()
+    time.sleep(30)
+threading.Thread(target=worker).start()
+ready.wait()
+os._exit(7)
+'"#,
+            5,
+            Cancel::default(),
+        );
+        assert_eq!(outcome.code, Some(7));
+        for pid in outcome.stdout.lines() {
+            let path = format!("/proc/{pid}");
+            let survived = Path::new(&path).exists();
+            if survived {
+                unsafe {
+                    kill(pid.parse().unwrap(), SIGKILL);
+                }
+            }
+            assert!(!survived, "thread-owned child {pid} survived the call");
+        }
+    }
+
+    #[test]
+    fn cancellation_reaps_concurrent_thread_forks() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = Config {
+            timeout: Some(5),
+            ..Config::default()
+        };
+        let boundary = Boundary::from_config(&config, temp.path(), Enforcement::Unsafe).unwrap();
+        let cancel = Cancel::default();
+        let trigger = cancel.clone();
+        let ready = temp.path().join("ready");
+        let observed = ready.clone();
+        let monitor = thread::spawn(move || {
+            while !observed.exists() {
+                thread::yield_now();
+            }
+            trigger.now();
+        });
+        let command = format!(
+            r#"python3 -c '
+import os, threading, time
+lock = threading.Lock()
+count = 0
+def worker():
+    global count
+    while True:
+        with lock:
+            pid = os.fork()
+            if pid == 0:
+                os.setsid()
+                time.sleep(30)
+                os._exit(0)
+            print(pid, flush=True)
+            count += 1
+            if count == 16:
+                open("{}", "w").close()
+        time.sleep(0.001)
+for _ in range(4):
+    threading.Thread(target=worker).start()
+time.sleep(30)
+'"#,
+            ready.display()
+        );
+        let outcome = run(&boundary, temp.path(), &command, &cancel).unwrap();
+        monitor.join().unwrap();
+        assert!(outcome.cancelled);
+        assert!(outcome.stdout.lines().count() >= 16);
+        for pid in outcome.stdout.lines() {
+            let survived = Path::new(&format!("/proc/{pid}")).exists();
+            if survived {
+                unsafe {
+                    kill(pid.parse().unwrap(), SIGKILL);
+                }
+            }
+            assert!(
+                !survived,
+                "concurrently forked child {pid} survived cancellation"
+            );
+        }
     }
 
     #[test]

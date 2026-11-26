@@ -115,8 +115,21 @@ Batch regressions attempt to overwrite the handoff before both unsafe and sandbo
 launches and reject writable-file substitutions. Real bash regressions observe delayed survivor
 files after root-shell exit, retained pipes under timeout, and cancellation during detached forks.
 A per-call subreaper waits for the root, then stops descendants before preserving its exit status.
-Cleanup confirms stopped states before descending and rescans adopted children. Pipe collection
-continues to check the call deadline and cancellation.
+The supervisor opens its own Linux children descriptor before launching the runner and retains it
+outside the runner's sandbox. Timeout/cancellation requests cleanup through a blocked signal;
+the supervisor remains alive to adopt and reap descendants. Cleanup repeatedly kills direct
+children, waits for a reap, and rescans adopted children until the kernel reports ECHILD. Killing
+an ancestor exposes the next generation, including children originally owned by non-leader threads,
+without recursive traversal, depth ceilings, or stop-grace assumptions. Concurrent forks made
+before a parent exits are adopted; cleanup does not report completion while children remain.
+The 25ms signal polling interval affects responsiveness only, not cleanup correctness.
+Pipe collection continues to check the call deadline and cancellation.
+
+New real-bash regressions assert that recorded descendant PIDs are absent immediately after
+return for unexpected runner exit with thread-owned children and cancellation during concurrent
+forking from four threads. The concurrent regression fails against the previous implementation
+with an observed survivor and passes with adoption-based cleanup. Full workspace tests, including
+the 38 batch tests and actual nested sandbox execution, pass after this change.
 
 ## Remaining limitations
 
@@ -124,13 +137,19 @@ Cleanup requires Linux `/proc` and parent-death signals; nested bubblewrap requi
 namespaces and its normal proof. Restricted hosts must refuse rather than fall back to unsafe mode.
 These checks establish execution in this workspace, not portability to every host. The fork
 supervisor uses fixed stack buffers and async-signal-safe Linux calls only; it never allocates,
-uses Rust filesystem APIs or sleeps through Rust's thread runtime. Descendant cleanup has a
-two-second scanning budget and a depth ceiling of 128. Kernel-blocked tasks cannot be guaranteed
-stopped or reaped on a deadline; final `Child::wait` and filesystem operations can still block.
-The bounded stop grace is not proof of quiescence: an adversarial fork race can escape the
-unsafe-mode descendant scan. The supervisor walks each process leader's `/proc` children;
-children forked by other threads can also evade that best-effort walk. Bubblewrap's PID namespace and parent-death lifecycle remain the
-sandbox boundary, not that best-effort host scan.
+uses Rust filesystem APIs or sleeps through Rust's thread runtime. Cleanup has no scanning budget, depth ceiling, or arbitrary grace sleep. A timeout bounds
+command execution intent, not synchronous cleanup duration: SIGKILL cannot force a task out of
+kernel-uninterruptible sleep immediately. Waiting for exit/adoption/reaping can therefore exceed
+the timeout indefinitely; hostile sustained resource exhaustion can also delay convergence.
+These are OS limits, not permission to return with known children still running. Bubblewrap's
+PID namespace and parent-death lifecycle remain the sandbox boundary; host-side adoption does
+not broaden permissions or require unsafe mode. Setup refuses if subreaper/proc setup fails.
+
+The synchronous guarantee covers normal return, unexpected runner exit, timeout and cancellation
+while the per-call supervisor and calling launch remain alive. Forced SIGKILL of the supervisor
+or launch, hostile same-user unsafe code killing the supervisor, external reparenting through
+ptrace, and machine failure are outside that guarantee. Parent-death signals remain defense in
+depth, not a claim that an abruptly killed reaper can finish host-side cleanup.
 
 Seals establish immutability, not identity. Read-only launch mounts cannot authorize unsafe
 handoffs. A sandbox cannot modify the sealed data or gain host authority by substituting a
