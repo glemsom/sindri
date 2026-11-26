@@ -254,6 +254,7 @@ pub struct Reply {
     pub assistant: crate::provider::Assistant,
     pub text: String,
     pub reasoning: Option<String>,
+    pub responses: Option<crate::provider::Responses>,
     pub calls: Vec<Call>,
     pub usage: Usage,
 }
@@ -268,6 +269,7 @@ impl Reply {
             assistant: crate::provider::Assistant::default(),
             text: text.into(),
             reasoning: None,
+            responses: None,
             calls: calls.into_iter().collect(),
             usage: Usage::default(),
         }
@@ -575,6 +577,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
             calls: reply.calls.clone(),
             results,
             reasoning: reply.reasoning.clone(),
+            responses: reply.responses.clone(),
             usage: reply.usage,
         });
 

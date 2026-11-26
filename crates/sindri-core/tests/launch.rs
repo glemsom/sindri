@@ -1130,11 +1130,31 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
         ),
     ] {
         let homes = Homes::new();
+        let answer = if route == Route::Responses {
+            answer.replace(
+                r#""id":"rs_01","type":"reasoning","summary""#,
+                r#""id":"rs_01","type":"reasoning","encrypted_content":"FINAL_OPAQUE","summary""#,
+            )
+        } else {
+            answer.to_owned()
+        };
         let executed = homes.at("executed");
         let command = format!(
             "printf x >> {}; printf REPLAY_; printf EVIDENCE_ONLY",
             executed.display()
         );
+        let tool = if route == Route::Responses {
+            let tool = tool.replace(r#""output_index":0"#, r#""output_index":1"#);
+            let tool = format!(
+                "event: response.output_item.done\ndata: {{\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{{\"type\":\"reasoning\",\"id\":\"rs_tool_01\",\"summary\":[],\"encrypted_content\":\"OPAQUE_01\"}}}}\n\n{tool}"
+            );
+            tool.replace(
+                r#""output":[{"type":"function_call""#,
+                r#""output":[{"type":"reasoning","id":"rs_tool_01","summary":[],"encrypted_content":"OPAQUE_01"},{"type":"function_call""#,
+            )
+        } else {
+            tool.to_owned()
+        };
         let tool = tool.replace(r#"ls\""#, &format!(r#"{command}\""#));
         let tool = if route == Route::Chat && wire != Wire::Anthropic {
             tool.replace(r#""content":null"#, r#""content":"Inspecting evidence""#)
@@ -1145,8 +1165,8 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
         let replay = Replay::new([
             Canned::stream(Box::leak(tool.clone().into_boxed_str())),
             Canned::stream(Box::leak(tool.replace("_01", "_02").into_boxed_str())),
-            Canned::stream(answer),
-            Canned::stream(answer),
+            Canned::stream(Box::leak(answer.clone().into_boxed_str())),
+            Canned::stream(Box::leak(answer.clone().into_boxed_str())),
         ]);
         let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
         config.provider = Some(wire);
@@ -1196,6 +1216,36 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
         } else {
             "messages"
         };
+        if route == Route::Responses {
+            for (request, expected) in [(&requests[1], 1), (&requests[2], 2), (&requests[3], 2)] {
+                let body: serde_json::Value = serde_json::from_str(&request.body).unwrap();
+                assert_eq!(body["store"], false);
+                assert!(body.get("previous_response_id").is_none());
+                let items = body["input"].as_array().unwrap();
+                for suffix in ["01", "02"].into_iter().take(expected) {
+                    let position = items
+                        .iter()
+                        .position(|item| item["id"] == format!("rs_tool_{suffix}"))
+                        .expect("original reasoning item");
+                    assert_eq!(
+                        items[position],
+                        serde_json::json!({"type":"reasoning","id":format!("rs_tool_{suffix}"),"summary":[],"encrypted_content":format!("OPAQUE_{suffix}")})
+                    );
+                    assert_eq!(items[position + 1]["id"], format!("fc_{suffix}"));
+                    assert_eq!(items[position + 1]["call_id"], format!("call_{suffix}"));
+                    assert_eq!(items[position + 2]["type"], "function_call_output");
+                    assert_eq!(items[position + 2]["call_id"], format!("call_{suffix}"));
+                }
+            }
+            assert!(
+                last["input"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|item| item["id"] == "msg_01"),
+                "{last}"
+            );
+        }
         let messages = last[field].as_array().unwrap();
         let prefix = previous[field].as_array().unwrap();
         assert!(messages.len() > prefix.len());
@@ -1261,4 +1311,50 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
             requests[3].body
         );
     }
+}
+
+#[test]
+fn a_responses_launch_refuses_a_call_whose_original_item_never_completed() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    let homes = Homes::new();
+    let tool = include_str!("fixtures/providers/openai_responses_tool_use.sse");
+    let tool = tool
+        .lines()
+        .filter(|line| !line.contains("output_item.done") && !line.contains("response.completed"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let tool = format!(
+        "{tool}\n\nevent: response.completed\ndata: {{\"type\":\"response.completed\",\"response\":{{\"id\":\"resp_tool\",\"status\":\"completed\",\"model\":\"gpt-5\",\"output\":[]}}}}\n\n"
+    );
+    let replay = Replay::new([Canned::stream(Box::leak(tool.into_boxed_str()))]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Openai);
+    config.model = Some("gpt-5".into());
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask.route(Route::Responses), tools),
+        )
+        .ok()
+        .unwrap();
+    let outcome = launch
+        .drive(
+            "Inspect",
+            &[],
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+    assert!(matches!(outcome.stopped(), Stop::Error(_)));
+    assert_eq!(replay.requests().len(), 1);
 }

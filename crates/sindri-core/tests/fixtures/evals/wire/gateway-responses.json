@@ -1,5 +1,8 @@
 {
   "body": {
+    "include": [
+      "reasoning.encrypted_content"
+    ],
     "input": [
       {
         "content": [
@@ -13,6 +16,7 @@
       }
     ],
     "model": "gpt-5",
+    "store": false,
     "stream": true
   },
   "headers": {

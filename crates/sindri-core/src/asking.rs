@@ -58,6 +58,7 @@ impl From<Answer> for Reply {
             assistant: answer.assistant,
             text: answer.text,
             reasoning: answer.reasoning,
+            responses: answer.responses,
             calls: answer.calls,
             usage: answer.usage,
         }
