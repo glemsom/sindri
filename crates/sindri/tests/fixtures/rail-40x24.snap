@@ -4,11 +4,11 @@ expression: self.text(name)
 ---
 rail at 40x24
 00 |┃›where does rendering live?            | dim:1 plain:39
-01 |  │ ✓ bash success 23 ms             │  | dim:4 ok:1 plain:13 dim:6 plain:13 dim:1 plain:2
-02 |  │   rg -n 'fence' src              │  | dim:4 plain:33 dim:1 plain:2
-03 |  │   src/rows.rs: the glyph a turn o│e…| dim:4 muted:33 dim:1 muted:1 dim:1
-04 |  │   src/rows.rs: a word longer than│a…| dim:4 muted:33 dim:1 muted:1 dim:1
-05 |  │   exit 0 · 412 bytes             │  | dim:24 plain:13 dim:1 plain:2
+01 |  │ ✓ bash success 23 ms                | dim:4 ok:1 plain:13 dim:6 plain:16
+02 |  │ rg -n 'fence' src                   | dim:4 plain:36
+03 |  │ src/rows.rs: the glyph a turn opens…| dim:4 muted:35 dim:1
+04 |  │ src/rows.rs: a word longer than a r…| dim:4 muted:35 dim:1
+05 |  │ exit 0 · 412 bytes                  | dim:22 plain:18
 06 |                                        | plain:40
 07 |  Rendering lives in the front end and  | plain:40
 08 |  not in the core, because an entry is  | plain:40

@@ -8,13 +8,13 @@ fold-answer at 120x40
 02 |  entry, and a row of a command's output is set behind it rather than         think     high                            | plain:78 dim:10 plain:32
 03 |  beside the answer.                                                                                                    | plain:120
 04 |                                                                              turns         6 /  250                    | plain:78 dim:10 plain:32
-05 |  │ ✓ bash success 1.8 s                  │                                   ctx       █░░░░░ 48.2k / 200k             | dim:4 ok:1 plain:13 dim:6 plain:18 dim:1 plain:35 dim:10 plain:1 dim:5 plain:26
-06 |  │   cargo test -p sindri --test rows    │                                   cache     88%                             | dim:4 plain:38 dim:1 plain:35 dim:10 plain:32
-07 |  │   test rows::a_row_of_output_1 ... ok │                                                                             | dim:4 muted:37 plain:1 dim:1 plain:77
-08 |  │   test rows::a_row_of_output_2 ... ok │                                   workspace …/sindri/.worktrees/46-rail     | dim:4 muted:37 plain:1 dim:1 plain:35 dim:10 plain:32
-09 |  │   test rows::a_row_of_output_3 ... ok │                                   branch    spec/1-capability               | dim:4 muted:37 plain:1 dim:1 plain:35 dim:10 plain:32
-10 |  │   test rows::a_row_of_output_4 ... ok │                                                                             | dim:4 muted:37 plain:1 dim:1 plain:77
-11 |  │ ⋯ 17 rows kept back                   │                                   sandbox   bwrap                           | dim:5 plain:1 dim:17 plain:19 dim:1 plain:35 dim:10 plain:32
+05 |  │ ✓ bash success 1.8 s                                                      ctx       █░░░░░ 48.2k / 200k             | dim:4 ok:1 plain:13 dim:6 plain:54 dim:10 plain:1 dim:5 plain:26
+06 |  │ cargo test -p sindri --test rows                                          cache     88%                             | dim:4 plain:74 dim:10 plain:32
+07 |  │ test rows::a_row_of_output_1 ... ok                                                                                 | dim:4 muted:35 plain:81
+08 |  │ test rows::a_row_of_output_2 ... ok                                       workspace …/sindri/.worktrees/46-rail     | dim:4 muted:35 plain:39 dim:10 plain:32
+09 |  │ test rows::a_row_of_output_3 ... ok                                       branch    spec/1-capability               | dim:4 muted:35 plain:39 dim:10 plain:32
+10 |  │ test rows::a_row_of_output_4 ... ok                                                                                 | dim:4 muted:35 plain:81
+11 |  │ ⋯ 17 rows kept back                                                       sandbox   bwrap                           | dim:5 plain:1 dim:17 plain:55 dim:10 plain:32
 12 |                                                                                                                        | plain:120
 13 |  Three rows of the fold are the whole of it: the head, the count and the     session   9f2c7a41                        | plain:78 dim:10 plain:32
 14 |  last.                                                                       temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32

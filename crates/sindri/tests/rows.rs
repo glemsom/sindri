@@ -2352,12 +2352,12 @@ fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_t
     let settled: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         settled[..opened],
-        ["    ✓ bash success 2 ms", "      ls"],
+        ["    ✓ bash success 2 ms", "    ls"],
         "the call keeps the row it opened and the words it was called with: {settled:?}"
     );
     assert_eq!(
         settled.last().unwrap(),
-        "      exit 0 · 7 bytes",
+        "    exit 0 · 7 bytes",
         "and under them the result says the verdict, how long the call took and how much it \
          wrote: {settled:?}"
     );
@@ -2858,7 +2858,7 @@ fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
         "and the call the result settled: {laid:?}"
     );
     assert!(
-        laid.iter().any(|row| row == "      exit 0 · 7 bytes"),
+        laid.iter().any(|row| row == "    exit 0 · 7 bytes"),
         "and the result under it: {laid:?}"
     );
     assert!(
@@ -3125,7 +3125,7 @@ fn a_row_the_mark_is_grown_over_opens_the_work_it_stands_on() {
     let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
         opened[..2],
-        ["    ✓ bash success 1.8 s", "      ls"],
+        ["    ✓ bash success 1.8 s", "    ls"],
         "the opened work keeps the call's head and the words it was called with: {opened:?}"
     );
     assert_eq!(
@@ -3622,13 +3622,13 @@ fn a_settled_call_keeps_its_words_above_the_row_that_says_how_it_ended() {
     let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         drawn[..2],
-        ["    ✓ bash success 2 ms", "      ls"],
+        ["    ✓ bash success 2 ms", "    ls"],
         "the entry is the call's rows first, so what was run stands above what came of it: \
          {drawn:?}"
     );
     assert_eq!(
         drawn.last().unwrap(),
-        "      exit 0 · 7 bytes",
+        "    exit 0 · 7 bytes",
         "and the result's row under them: {drawn:?}"
     );
 }
