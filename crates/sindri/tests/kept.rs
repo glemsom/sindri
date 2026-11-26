@@ -799,7 +799,7 @@ fn the_rows_of_one_rank_come_nearest_first_and_in_the_order_they_were_handed() {
 fn settings_actions_and_the_selected_field_remain_reachable_in_short_narrow_frames() {
     for (width, height) in [(80, 24), (40, 24), (40, 14), (120, 10)] {
         let (_root, mut view) = screen(Mode::Settings, caps::pointing());
-        for _ in 0..15 {
+        for _ in 0..17 {
             view.key(Key::Down);
         }
         let frame = frame::painted(&mut view, width, height);

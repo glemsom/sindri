@@ -486,6 +486,11 @@ pub fn served(machine: &Machine<'_>, config: &Config) -> Option<Listing> {
 
 fn ask(config: &Config, endpoint: Endpoint, model: String, preamble: String) -> Ask {
     Ask::of(endpoint, model)
+        .capacity(
+            config.context_window,
+            config.output_headroom.unwrap_or(4096),
+            config.tool_result_headroom.unwrap_or(4096),
+        )
         .preamble(preamble)
         .credential(config.credential())
         .thinking(config.thinking.unwrap_or(false))

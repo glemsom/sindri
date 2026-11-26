@@ -315,5 +315,5 @@ fn settings_groups_readable_fields_and_states_the_units_and_unset_values() {
         assert!(words.iter().any(|row| row.contains(expected)), "{words:#?}");
     }
     let fields: Vec<usize> = rows(&body).iter().filter_map(|row| row.choice).collect();
-    assert_eq!(fields, (0..18).collect::<Vec<_>>());
+    assert_eq!(fields, (0..20).collect::<Vec<_>>());
 }
