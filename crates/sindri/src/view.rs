@@ -9,7 +9,7 @@ use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Load, Stop, Turn};
-use sindri_core::skills::{Catalog, Skill};
+use sindri_core::skills::Catalog;
 
 use crate::band;
 use crate::bill::Bill;
@@ -738,10 +738,10 @@ impl View {
             return Outcome::Unchanged;
         };
         let catalog = Catalog::discover(&workspace, self.facts.home());
-        if !catalog.get(name).is_some_and(Skill::human_invocable) {
+        let Some(skill) = catalog.get(name).filter(|skill| skill.human_invocable()) else {
             return Outcome::Unchanged;
-        }
-        match self.facts.loaded().load(name) {
+        };
+        match self.facts.loaded().activate(skill).0 {
             Load::Loaded => Outcome::Edited,
             Load::AlreadyLoaded => Outcome::Unchanged,
         }

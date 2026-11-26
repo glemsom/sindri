@@ -329,6 +329,7 @@ pub enum Load {
 #[derive(Clone, Debug, Default)]
 pub struct Loaded {
     names: Arc<Mutex<Vec<String>>>,
+    material: Arc<Mutex<Vec<(String, String)>>>,
 }
 
 impl Loaded {
@@ -350,8 +351,53 @@ impl Loaded {
         Load::Loaded
     }
 
+    pub fn activate(&self, skill: &crate::skills::Skill) -> (Load, String) {
+        let mut material = self
+            .material
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if material.iter().any(|(name, _)| name == &skill.name) {
+            return (
+                Load::AlreadyLoaded,
+                format!(
+                    "already_loaded: `{}` instructions remain available in this conversation.",
+                    skill.name
+                ),
+            );
+        }
+        let body = skill.wrapper();
+        material.push((skill.name.clone(), body.clone()));
+        self.load(&skill.name);
+        (Load::Loaded, body)
+    }
+
+    pub fn protected(&self) -> Vec<String> {
+        self.material
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .map(|(_, body)| body.clone())
+            .collect()
+    }
+
+    pub fn missing(&self, turns: &[Turn]) -> Vec<Turn> {
+        self.protected()
+            .into_iter()
+            .filter(|body| {
+                !turns.iter().any(|turn| {
+                    turn.text == *body || turn.results.iter().any(|result| result.text == *body)
+                })
+            })
+            .map(|body| Turn::answered(0, "", body))
+            .collect()
+    }
+
     pub fn clear(&self) {
         self.lock().clear();
+        self.material
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
     }
 
     fn lock(&self) -> MutexGuard<'_, Vec<String>> {
@@ -369,6 +415,7 @@ impl<S: Into<String>> FromIterator<S> for Loaded {
     fn from_iter<I: IntoIterator<Item = S>>(names: I) -> Loaded {
         Loaded {
             names: Arc::new(Mutex::new(names.into_iter().map(Into::into).collect())),
+            material: Arc::default(),
         }
     }
 }
@@ -781,13 +828,7 @@ impl Shell {
                 ))
             })?;
 
-        let text = match loaded.load(&name) {
-            Load::Loaded => skill.wrapper(),
-            Load::AlreadyLoaded => format!(
-                "already_loaded: `{name}` was loaded earlier in this conversation, so its \
-                 instructions are already in hand and are not repeated here."
-            ),
-        };
+        let (_, text) = loaded.activate(skill);
         Ok(Acted {
             text,
             bytes: 0,
