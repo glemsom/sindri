@@ -5,13 +5,15 @@ use crate::run::{Reply, Request, Responder};
 use crate::tools::ToolSet;
 use crate::turn::Usage;
 
+type Compacted = Option<(Vec<crate::turn::Turn>, Vec<crate::turn::Turn>)>;
+
 #[derive(Clone, Debug)]
 pub struct Asking {
     client: Client,
     ask: Ask,
     tools: ToolSet,
     spent: Arc<Mutex<Usage>>,
-    compacted: Arc<Mutex<Option<(Vec<crate::turn::Turn>, Vec<crate::turn::Turn>)>>>,
+    compacted: Arc<Mutex<Compacted>>,
     event: Arc<Mutex<bool>>,
 }
 

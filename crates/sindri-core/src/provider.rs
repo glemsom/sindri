@@ -181,9 +181,9 @@ impl Ask {
         let mut protected = Vec::new();
         for (index, turn) in self.earlier.iter().enumerate() {
             if index >= boundary
-                || !turn.calls.is_empty()
-                || !turn.results.is_empty()
-                || turn.prompt.is_empty()
+                || turn.calls.iter().any(|call| call.name == "skill")
+                || turn.calls.len() != turn.results.len()
+                || (turn.turn == 0 && turn.prompt.is_empty())
             {
                 protected.push(turn.clone());
             } else {

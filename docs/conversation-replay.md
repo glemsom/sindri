@@ -61,9 +61,13 @@ With a validated `context_window`, requests reaching three quarters of the confi
 capacity attempt a separate ordinary, tool-free model summary request. Unknown capacity
 still replays faithfully. The summary asks for objectives, constraints, exact identifiers,
 evidence, actual side effects versus plans, unresolved errors and next actions.
-Tool-bearing turns, instruction deliveries and the last two retained turns remain exact;
-current-run exchanges are never split. Native artifacts are not transferred into the
-new summary prefix. Protected exchanges use the ordinary target-compatibility transition.
+Skill-delivery exchanges, standalone instruction snapshots, incomplete exchanges and the
+last two retained turns remain exact; current-run exchanges are never split. Older completed
+tool exchanges enter the summary atomically rather than accumulating in the protected prefix.
+Repeated skill calls are still protected, so pathological skill-loading conversations can
+exhaust admission. Summary fidelity depends on the model; deterministic captures verify the
+summary request includes evidence and the supplied summary retains continuation facts.
+Native artifacts are not transferred into the new summary prefix. Protected exchanges use the ordinary target-compatibility transition.
 
 Both the summary request and the resulting continuation must pass capacity admission.
 Failure leaves original material intact and refuses rather than submitting oversized

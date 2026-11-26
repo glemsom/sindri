@@ -2160,10 +2160,10 @@ fn near_capacity_launch_requests_a_model_summary_before_continuing() {
     });
     let earlier = vec![
         Turn::answered(1, "Preserve OBJECTIVE_616", "old work ".repeat(2800)),
-        evidence,
         Turn::answered(0, "", "EXACT_SKILL_SNAPSHOT_616"),
-        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
         Turn::answered(3, "Next", "Do not repeat completed writes"),
+        evidence,
+        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
     ];
     launch
         .drive(
@@ -2243,10 +2243,10 @@ fn failed_model_summary_retains_material_and_sends_no_continuation() {
     });
     let earlier = vec![
         Turn::answered(1, "Preserve OBJECTIVE_616", "old work ".repeat(2800)),
-        evidence,
         Turn::answered(0, "", "EXACT_SKILL_SNAPSHOT_616"),
-        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
         Turn::answered(3, "Next", "Do not repeat completed writes"),
+        evidence,
+        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
     ];
     launch
         .drive(
@@ -2261,4 +2261,173 @@ fn failed_model_summary_retains_material_and_sends_no_continuation() {
     assert_eq!(requests.len(), 1);
     assert!(requests[0].body.contains("OBJECTIVE_616"));
     assert_eq!(earlier[0].text.len(), 25200);
+}
+
+#[test]
+fn real_tool_and_skill_work_is_summarized_without_unbounded_exchange_pinning() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+    let homes = Homes::new();
+    homes.user_skill("deploy", "ship the branch");
+    let tool = include_str!("fixtures/providers/openai_chat_tool_use.sse");
+    let skill = tool
+        .replace("bash", "skill")
+        .replace("command", "name")
+        .replace(r#"\"ls\""#, r#"\"deploy\""#);
+    let work = tool.replace("call_01", "call_write_616").replace(
+        r#"\"ls\""#,
+        r#"\"printf SIDE_EFFECT_DONE_616; printf EXACT_PATH_616; printf '%025000d' 0\""#,
+    );
+    let answer = include_str!("fixtures/providers/copilot_chat_stream.sse");
+    let summary = answer.replace("Hello", "OBJECTIVE_616 constraint: no repeat writes; SIDE_EFFECT_DONE_616 EXACT_PATH_616 unresolved error ERROR_616; next VERIFY_616");
+    let replay = Replay::new([
+        Canned::stream(Box::leak(skill.into_boxed_str())),
+        Canned::stream(answer),
+        Canned::stream(Box::leak(work.into_boxed_str())),
+        Canned::stream(answer),
+        Canned::stream(answer),
+        Canned::stream(Box::leak(summary.clone().into_boxed_str())),
+        Canned::stream(answer),
+        Canned::stream(Box::leak(summary.into_boxed_str())),
+        Canned::stream(answer),
+        Canned::stream(answer),
+    ]);
+    let mut config = naming_wire(UNANSWERED_ENDPOINT.into());
+    config.provider = Some(Wire::Openai);
+    config.model = Some("gpt-4o".into());
+    config.context_window = Some(46_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask.route(Route::Chat), tools),
+        )
+        .ok()
+        .unwrap();
+    let mut retained = Retaining::default();
+    for prompt in [
+        "OBJECTIVE_616: load deploy",
+        "Write once; constraint: no repeat writes",
+        "ERROR_616 unresolved; next VERIFY_616",
+        &format!("Continue {}", "x".repeat(6000)),
+    ] {
+        let earlier = retained.0.turns().to_vec();
+        let report = launch
+            .drive(prompt, &earlier, &mut Quiet, &mut retained, Cancel::new())
+            .unwrap_or_else(|r| panic!("{}", r.message()));
+        assert_eq!(report.stopped(), &Stop::Final);
+    }
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 7);
+    let summary_request = &requests[5].body;
+    assert!(summary_request.contains("SIDE_EFFECT_DONE_616"));
+    assert!(summary_request.contains("EXACT_PATH_616"));
+    assert!(summary_request.contains("completed side effects"));
+    let continued = &requests[6].body;
+    assert!(continued.contains("Client-managed conversation summary"));
+    assert!(!continued.contains(&"0".repeat(100)));
+    for fact in [
+        "OBJECTIVE_616",
+        "SIDE_EFFECT_DONE_616",
+        "EXACT_PATH_616",
+        "ERROR_616",
+        "VERIFY_616",
+    ] {
+        assert!(continued.contains(fact), "{fact}");
+    }
+    assert_eq!(continued.matches("Body of deploy.").count(), 1);
+    let body: serde_json::Value = serde_json::from_str(continued).unwrap();
+    let messages = body["messages"].as_array().unwrap();
+    for (index, message) in messages.iter().enumerate() {
+        if message["role"] == "tool" {
+            assert!(
+                messages[index - 1]["tool_calls"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|call| call["id"] == message["tool_call_id"])
+            );
+        }
+    }
+    assert!(
+        retained
+            .0
+            .turns()
+            .iter()
+            .any(|t| t.results.iter().any(|r| r.text.contains(&"0".repeat(100))))
+    );
+    config.model = Some("o3".into());
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut switched = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask.route(Route::Chat), tools),
+        )
+        .ok()
+        .unwrap();
+    let earlier = retained.0.turns().to_vec();
+    switched
+        .drive(
+            "Continue on the new model",
+            &earlier,
+            &mut Quiet,
+            &mut retained,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let switched_requests = replay.requests();
+    assert_eq!(switched_requests.len(), 9);
+    assert!(switched_requests[8].body.contains("SIDE_EFFECT_DONE_616"));
+    assert_eq!(
+        switched_requests[8].body.matches("Body of deploy.").count(),
+        1
+    );
+    let switched_body: serde_json::Value =
+        serde_json::from_str(&switched_requests[8].body).unwrap();
+    assert_eq!(switched_body["model"], "o3");
+    assert!(switched_body.get("previous_response_id").is_none());
+    retained.0.reset(launch.loaded());
+    launch
+        .drive(
+            "New independent task",
+            &[],
+            &mut Quiet,
+            &mut retained,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 10);
+    for old in [
+        "SIDE_EFFECT_DONE_616",
+        "Body of deploy.",
+        "Client-managed conversation summary",
+    ] {
+        assert!(!requests[9].body.contains(old));
+    }
 }
