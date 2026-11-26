@@ -374,6 +374,9 @@ impl<R: Responder + Clone> Launch<R> {
         cancel: Cancel,
     ) -> Result<Outcome, Refusal> {
         let started = Instant::now();
+        let injected = self.loaded.missing(earlier);
+        turns.retained(&injected);
+        let earlier: Vec<Turn> = earlier.iter().chain(&injected).cloned().collect();
         let mut run = Run::new(prompt, self.asking.clone(), self.shell.clone())
             .limits(self.limits)
             .tools(&self.tools)

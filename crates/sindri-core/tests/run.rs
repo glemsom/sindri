@@ -2005,7 +2005,7 @@ fn two_identical_loads_in_one_turn_are_one_load() {
 }
 
 #[test]
-fn a_human_load_makes_the_next_model_load_already_loaded() {
+fn a_name_without_instructions_does_not_suppress_model_delivery() {
     let ground = SkillGround::new();
     let (tools, log) = ground.recorded();
     let model = Scripted::answering([
@@ -2024,8 +2024,8 @@ fn a_human_load_makes_the_next_model_load_already_loaded() {
     let answers = answers(&log);
     assert_eq!(answers.len(), 1);
     assert!(
-        answers[0].contains("already_loaded") && !answers[0].contains("Run `scripts/release.sh`"),
-        "the model's later load is the same conversation's load, so it carries no body: {}",
+        !answers[0].contains("already_loaded") && answers[0].contains("Run `scripts/release.sh`"),
+        "a name alone cannot suppress delivery of instructions: {}",
         answers[0]
     );
 }
