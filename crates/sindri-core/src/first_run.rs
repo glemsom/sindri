@@ -2,7 +2,7 @@ use crate::config::{Config, ConfigError, Environment, MODE, config_path};
 use std::path::{Path, PathBuf};
 
 pub struct FirstRun {
-    config: Config,
+    preparation: crate::launch::Preparation,
     path: PathBuf,
 }
 
@@ -11,24 +11,13 @@ impl FirstRun {
         environment: &impl Environment,
         overrides: Config,
     ) -> Result<FirstRun, ConfigError> {
-        let inherited =
-            crate::handoff::Handoff::read(environment).map_err(|reason| ConfigError::BadValue {
-                origin: "inherited launch".to_owned(),
-                reason,
-            })?;
-        let path = if let Some(handoff) = &inherited {
-            config_path(&handoff.environment)?
-        } else {
-            config_path(environment)?
-        };
-        Ok(FirstRun {
-            config: Config::resolve(environment, overrides)?,
-            path,
-        })
+        let preparation = crate::launch::Preparation::resolve(environment, overrides)?;
+        let path = config_path(&preparation.environment(environment))?;
+        Ok(FirstRun { preparation, path })
     }
 
     pub fn config(&self) -> &Config {
-        &self.config
+        self.preparation.config()
     }
 
     pub fn path(&self) -> &Path {
@@ -36,7 +25,7 @@ impl FirstRun {
     }
 
     pub fn api_key_row(&self) -> String {
-        let mut sources = self.config.credential_variables();
+        let mut sources = self.config().credential_variables();
         sources.push("--api-key");
         format!(
             "api key   from {}\n          will be written to {}, mode {:04o}\n          and is never shown again",
