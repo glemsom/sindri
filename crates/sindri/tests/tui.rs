@@ -2224,8 +2224,13 @@ fn ask(pty: &mut Pty, drawn: &Drawn, wire: &Wire) {
 
 fn answered(drawn: &Drawn) {
     assert!(
-        drawn.wait_until(|frame| ANSWER_WORDS.iter().all(|word| frame.contains(word))
-            && frame.contains('\u{2713}')),
+        drawn.wait_until(|drawn| {
+            let rows = frame::read(drawn, COLS, ROWS).rows();
+            ANSWER_WORDS
+                .iter()
+                .all(|word| rows.iter().any(|row| row.contains(word)))
+                && rows.iter().any(|row| row.contains('\u{2713}'))
+        }),
         "the run answered and stopped: {:?}",
         drawn.text()
     );

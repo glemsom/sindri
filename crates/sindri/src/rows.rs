@@ -51,6 +51,10 @@ const KEPT: char = '⋯';
 
 const CUT: char = '…';
 
+const RULE: char = '│';
+
+const RULE_INSET: &str = "    ";
+
 const INVOCATION_SOURCE: usize = usize::MAX;
 const RESULT_SOURCE: usize = usize::MAX - 1;
 
@@ -356,20 +360,6 @@ impl Row {
         links: &mut Links,
         sizes: &mut Sizes,
     ) {
-        if let Some(width) = self.tool_width {
-            pen::claim(
-                buffer,
-                Rect::new(
-                    area.x + MARGIN,
-                    area.y,
-                    width
-                        .saturating_sub(MARGIN)
-                        .min(area.width.saturating_sub(margins())),
-                    1,
-                ),
-                palette.ground(Some(Band::Rail)),
-            );
-        }
         if let Some(band) = self.band {
             let surface = match band {
                 Band::Prompt => Rect {
@@ -389,15 +379,8 @@ impl Row {
             }
             None => pen::write(buffer, area, &self.spans, Clip::Edge, palette),
         }
-        if let Some(width) = self.tool_width {
-            for x in [
-                area.x.saturating_add(MARGIN),
-                area.x.saturating_add(width - 1),
-            ] {
-                if x < area.right().saturating_sub(MARGIN) {
-                    pen::glyph(buffer, x, area.y, '│', Ink::Dim, palette);
-                }
-            }
+        if self.tool_width.is_some() && area.x.saturating_add(MARGIN) < area.right() {
+            pen::glyph(buffer, area.x + MARGIN, area.y, RULE, Ink::Dim, palette);
         }
         if area.width > 0 && self.cut(area.width) {
             pen::glyph(
@@ -469,12 +452,13 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
 }
 
 pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Ground>) -> Vec<Row> {
-    laid(entry, cols, surface, ground, Fold::Closed, None).0
+    laid(entry, cols, INDENT, surface, ground, Fold::Closed, None).0
 }
 
 fn laid(
     entry: &Entry,
     cols: u16,
+    gutter: &str,
     surface: &Surface,
     ground: Option<&Ground>,
     fold: Fold,
@@ -490,6 +474,7 @@ fn laid(
                 &name.to_string(),
                 &arguments.to_string(),
                 cols,
+                gutter,
                 ground,
                 None,
             ),
@@ -510,6 +495,7 @@ fn laid(
                 *bytes,
                 *elapsed_ms,
                 cols,
+                gutter,
             ),
             cols,
             fold,
@@ -637,7 +623,7 @@ fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
     if let Stop::Error(message) = stop {
         let said = message.to_string();
         let line = said.lines().next().unwrap_or_default();
-        rows.extend(body(line, cols, None, Ink::Muted));
+        rows.extend(body(line, cols, INDENT, None, Ink::Muted));
     }
     rows
 }
@@ -757,19 +743,19 @@ fn opening(
     name: &str,
     arguments: &str,
     cols: u16,
+    gutter: &str,
     ground: Option<&Ground>,
     exit: Option<Exit>,
 ) -> Vec<Row> {
     let words = spell::of(name, arguments);
     let mut rows = tool_head(name, exit, None, cols);
-    let gutter = pen::cells(margin(INDENT, cols).0);
     let continuation = if cols > 16 { "  " } else { "" };
     let mut invocation = match way(name, arguments, &words, ground) {
-        Some(way) => body(&words, cols, Some(way), Ink::Plain),
+        Some(way) => body(&words, cols, gutter, Some(way), Ink::Plain),
         None => wrap_under(
             &words,
-            margin(INDENT, cols).1,
-            margin(INDENT, cols)
+            margin(gutter, cols).1,
+            margin(gutter, cols)
                 .1
                 .saturating_sub(pen::cells(continuation)),
         )
@@ -778,7 +764,7 @@ fn opening(
         .map(|(at, line)| {
             let inset = if at == 0 { "" } else { continuation };
             words_past(
-                margin(INDENT, cols).0,
+                margin(gutter, cols).0,
                 Ink::Plain,
                 Ink::Plain,
                 format!("{inset}{line}"),
@@ -788,7 +774,10 @@ fn opening(
         .collect(),
     };
     for row in &mut invocation {
-        *row = row.clone().fenced(INVOCATION_SOURCE, gutter).sourced("");
+        *row = row
+            .clone()
+            .fenced(INVOCATION_SOURCE, pen::cells(margin(gutter, cols).0))
+            .sourced("");
     }
     if let Some(row) = invocation.first_mut() {
         *row = row.clone().sourced(spell::source(name, arguments));
@@ -814,11 +803,12 @@ fn result_rows(
     bytes: u64,
     elapsed_ms: u64,
     cols: u16,
+    gutter: &str,
 ) -> Vec<Row> {
     let mut rows = name.map_or_else(Vec::new, |name| {
         tool_head(name, exit, Some(elapsed_ms), cols)
     });
-    let gutter = margin(INDENT, cols).0;
+    let gutter = margin(gutter, cols).0;
     rows.extend(text.split('\n').filter(|_| !text.is_empty()).map(|line| {
         Row::of([
             (String::from(gutter), Ink::Muted),
@@ -831,7 +821,7 @@ fn result_rows(
         Some(exit) => format!("{} · {bytes} bytes", exit.word()),
         None => format!("{bytes} bytes"),
     };
-    rows.extend(body(&detail, cols, None, Ink::Dim));
+    rows.extend(body(&detail, cols, gutter, None, Ink::Dim));
     rows
 }
 
@@ -873,6 +863,7 @@ fn answered(
     call: &Entry,
     result: &Entry,
     cols: u16,
+    gutter: &str,
     surface: &Surface,
     ground: Option<&Ground>,
     fold: Fold,
@@ -891,8 +882,8 @@ fn answered(
         },
     ) = (call, result)
     else {
-        let (mut rows, _) = laid(call, cols, surface, ground, fold, None);
-        let (under, kept) = laid(result, cols, surface, ground, fold, None);
+        let (mut rows, _) = laid(call, cols, gutter, surface, ground, fold, None);
+        let (under, kept) = laid(result, cols, gutter, surface, ground, fold, None);
         rows.extend(under);
         return (rows, kept);
     };
@@ -900,6 +891,7 @@ fn answered(
         &name.to_string(),
         &arguments.to_string(),
         cols,
+        gutter,
         ground,
         *exit,
     );
@@ -907,7 +899,15 @@ fn answered(
     let live_head = tool_head(&name.to_string(), *exit, None, cols).len();
     rows.extend(invocation.into_iter().skip(live_head));
     let (under, kept) = folded(
-        result_rows(None, *exit, &text.to_string(), *bytes, *elapsed_ms, cols),
+        result_rows(
+            None,
+            *exit,
+            &text.to_string(),
+            *bytes,
+            *elapsed_ms,
+            cols,
+            gutter,
+        ),
         cols,
         fold,
         exit.is_some_and(|exit| !exit.is_ok()),
@@ -940,11 +940,11 @@ fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
     Row::of(kept)
 }
 
-fn body(text: &str, cols: u16, way: Option<Way>, ink: Ink) -> Vec<Row> {
+fn body(text: &str, cols: u16, gutter: &str, way: Option<Way>, ink: Ink) -> Vec<Row> {
     if text.is_empty() {
         return Vec::new();
     }
-    let (gutter, room) = margin(INDENT, cols);
+    let (gutter, room) = margin(gutter, cols);
     let named = way.and_then(|way| markdown::body(text, room, &way));
     match named {
         Some(rows) => rows
@@ -1570,8 +1570,16 @@ impl Rows {
             return &[];
         }
         let tool = self.held[at].what.is_tool() && !one;
-        let edged = tool && self.measure.cols > 16;
-        let cols = self.measure.cols.saturating_sub(if edged { 6 } else { 0 });
+        let ruled = tool && self.measure.cols > 16;
+        let rule = pen::cells(RULE_INSET);
+        let gutter = match ruled {
+            true => "",
+            false => INDENT,
+        };
+        let cols = self.measure.cols.saturating_sub(match ruled {
+            true => rule,
+            false => 0,
+        });
         let surface = &self.measure.surface;
         let ground = self.measure.ground.as_ref();
         let held = &self.held[at];
@@ -1583,15 +1591,15 @@ impl Rows {
                         true => self.head.as_ref(),
                         false => None,
                     };
-                    Some(laid(entry, cols, surface, ground, held.fold, head))
+                    Some(laid(entry, cols, gutter, surface, ground, held.fold, head))
                 }
-                (What::Fact(call), Some(result)) => {
-                    Some(answered(call, result, cols, surface, ground, held.fold))
-                }
+                (What::Fact(call), Some(result)) => Some(answered(
+                    call, result, cols, gutter, surface, ground, held.fold,
+                )),
                 (What::Live { .. }, _) => None,
             };
             if let Some((mut rows, kept)) = laid {
-                if edged {
+                if ruled {
                     let result = held.result.as_ref().or(match &held.what {
                         What::Fact(entry @ Entry::Result { .. }) => Some(entry),
                         _ => None,
@@ -1606,14 +1614,14 @@ impl Rows {
                         .max()
                         .unwrap_or(0)
                         .min(cols)
-                        .saturating_add(6);
+                        .saturating_add(rule);
                     for row in &mut rows {
-                        let mut inset = row.clone().shifted(4);
+                        let mut inset = row.clone().shifted(rule);
                         inset
                             .spans
-                            .insert(0, (String::from("    "), Look::plain(Ink::Dim)));
+                            .insert(0, (String::from(RULE_INSET), Look::plain(Ink::Dim)));
                         if let Some(fence) = &mut inset.fence {
-                            fence.gutter = fence.gutter.saturating_add(4);
+                            fence.gutter = fence.gutter.saturating_add(rule);
                         }
                         inset.tool_width = Some(width);
                         inset.tool_compact = compact;
