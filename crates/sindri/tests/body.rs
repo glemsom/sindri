@@ -311,7 +311,7 @@ fn settings_groups_readable_fields_and_states_the_units_and_unset_values() {
     for expected in ["CONNECTION", "RUN & LIMITS", "ACCESS & APPEARANCE"] {
         assert!(words.iter().any(|row| row == expected), "{words:#?}");
     }
-    for expected in ["120 seconds", "200,000 tokens", "[on]", "Not set"] {
+    for expected in ["2 min", "200,000 tokens", "[on]", "Not set"] {
         assert!(words.iter().any(|row| row.contains(expected)), "{words:#?}");
     }
     let fields: Vec<usize> = rows(&body).iter().filter_map(|row| row.choice).collect();
