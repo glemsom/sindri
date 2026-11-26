@@ -371,3 +371,58 @@ fn exposed_cache_reads_and_writes_are_measured_without_logging_response_artifact
     assert!(!usage.to_string().contains("sk-ant-recorded"));
     assert!(!usage.to_string().contains("Hello"));
 }
+
+#[test]
+fn unsigned_anthropic_thinking_is_refused_before_accepting_tools() {
+    let fixture = include_str!("fixtures/providers/anthropic_thinking_tool_use.sse");
+    let unsigned = fixture
+        .split("\n\n")
+        .filter(|event| !event.contains("signature_delta"))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let replay = Replay::new([Canned::stream(Box::leak(unsigned.into_boxed_str()))]);
+    let result = client_over(&replay).ask(&anthropic_ask(), &mut Transcript::default());
+    assert!(
+        result.is_err(),
+        "unsigned thinking must not authorize tools"
+    );
+}
+
+#[test]
+fn failed_tool_outcomes_are_explicit_on_chat_and_responses() {
+    use sindri_core::turn::{Acted, Call, Exit};
+    for route in [Route::Chat, Route::Responses] {
+        let replay = Replay::new([Canned::stream(if route == Route::Chat {
+            CHAT
+        } else {
+            OPENAI_RESPONSES
+        })]);
+        let mut turn = Turn::answered(1, "A", "operation started");
+        turn.calls.push(Call {
+            id: "call_failed".into(),
+            name: "bash".into(),
+            arguments: r#"{"command":"exit 1"}"#.into(),
+        });
+        turn.results.push(Acted {
+            text: "plausible success prefix".into(),
+            bytes: 0,
+            elapsed: std::time::Duration::ZERO,
+            exit: Exit::Code(1),
+        });
+        client_over(&replay)
+            .ask(
+                &Ask::new(Wire::Openai, "gpt-5")
+                    .key("test-key")
+                    .route(route)
+                    .earlier([turn])
+                    .prompt("B"),
+                &mut (),
+            )
+            .unwrap();
+        assert!(
+            replay.requests()[0].body.contains("exit 1"),
+            "the outcome must survive the serializer"
+        );
+        assert!(replay.requests()[0].body.contains("Tool outcome: failed"));
+    }
+}

@@ -845,3 +845,45 @@ fn a_focus_report_recedes_the_frame_and_the_stop_nobody_watched_raises_the_notif
         "a run that ends while the report says nobody is reading raises the notification: {said:?}"
     );
 }
+
+#[test]
+fn launch_worker_shares_frontend_skill_owner_before_facts_and_after_relaunch() {
+    use sindri_core::run::Loaded;
+    use sindri_core::skills::Catalog;
+    let root = tempfile::tempdir().unwrap();
+    let skill = root.path().join(".agents/skills/human");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(skill.join("SKILL.md"), "---\nname: human\ndescription: exact\ndisable-model-invocation: true\n---\nEXACT_FRONTEND_SNAPSHOT\n").unwrap();
+    let catalog = Catalog::discover(root.path(), None);
+    let owner = Loaded::default();
+    owner.activate(catalog.get("human").unwrap());
+    let config = Config {
+        provider: Some(Wire::Anthropic),
+        model: Some("claude-sonnet-4-6".into()),
+        api_key: Some("test-key".into()),
+        ..Config::default()
+    };
+    let environment = std::collections::BTreeMap::from([
+        ("HOME".into(), root.path().display().to_string()),
+        ("XDG_STATE_HOME".into(), root.path().display().to_string()),
+    ]);
+    let first = FirstRun::resolve(&environment, config.clone()).unwrap();
+    for _ in 0..2 {
+        let launch = first
+            .open(
+                &Machine::new(&environment, root.path().join("bwrap")),
+                &config,
+                Cli::parse_from(["sindri", "--yolo-unsafe"]).enforcement(),
+                FrontEnd::Terminal,
+                None,
+            )
+            .unwrap_or_else(|r| panic!("{}", r.message()))
+            .with_loaded(owner.clone());
+        assert!(launch.loaded().protected()[0].contains("EXACT_FRONTEND_SNAPSHOT"));
+        let worker = launch.loaded().scoped();
+        owner.clear();
+        worker.activate(catalog.get("human").unwrap());
+        assert!(owner.protected().is_empty());
+        owner.activate(catalog.get("human").unwrap());
+    }
+}

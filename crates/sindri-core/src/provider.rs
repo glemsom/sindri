@@ -241,20 +241,7 @@ impl Ask {
         if self.native_compaction {
             return self.compact_native(client);
         }
-        let boundary = self.earlier.len().saturating_sub(2);
-        let mut older = Vec::new();
-        let mut protected = Vec::new();
-        for (index, turn) in self.earlier.iter().enumerate() {
-            if index >= boundary
-                || turn.calls.iter().any(|call| call.name == "skill")
-                || turn.calls.len() != turn.results.len()
-                || (turn.turn == 0 && turn.prompt.is_empty())
-            {
-                protected.push(turn.clone());
-            } else {
-                older.push(turn.clone());
-            }
-        }
+        let (older, protected) = self.compaction_partition(false);
         if older.is_empty() {
             return Ok(None);
         }
@@ -278,7 +265,6 @@ impl Ask {
             answer.text,
         )];
         compacted.earlier.extend(protected);
-        compacted.guard_capacity()?;
         Ok(Some(compacted))
     }
 
@@ -314,6 +300,26 @@ impl Ask {
         encoded.map_err(|_| self.native_failure("Cannot encode native compaction input"))
     }
 
+    fn compaction_partition(&self, native: bool) -> (Vec<Turn>, Vec<Turn>) {
+        let boundary = self.earlier.len().saturating_sub(2);
+        let mut input = Vec::new();
+        let mut protected = Vec::new();
+        for (index, turn) in self.earlier.iter().enumerate() {
+            let incomplete = turn.calls.len() != turn.results.len();
+            let instructions = turn.calls.iter().any(|call| call.name == "skill")
+                || (turn.turn == 0
+                    && turn.prompt.is_empty()
+                    && (!native || turn.responses.is_none()));
+            if index >= boundary || incomplete || instructions {
+                protected.push(turn.clone());
+            }
+            if index < boundary && !incomplete {
+                input.push(turn.clone());
+            }
+        }
+        (input, protected)
+    }
+
     fn compact_native(&self, client: &Client) -> Result<Option<Self>, Failure> {
         if self.earlier.is_empty() || !self.turns.is_empty() {
             return Ok(None);
@@ -323,35 +329,18 @@ impl Ask {
         {
             return Err(self.native_failure("Anthropic native compaction with preserved thinking requires a verified prefix contract not implemented here; disable native compaction to use client summarization."));
         }
-        self.guard_capacity()?;
         let mut secrets = client.secrets.clone();
         let key = client
             .credential(&self.credential, &mut secrets)?
             .ok_or_else(|| Failure::unconfigured(self.endpoint.wire()))?;
         let mut input = self.clone();
-        let boundary = self.earlier.len().saturating_sub(2);
-        let mut protected = Vec::new();
-        input.earlier = self
-            .earlier
-            .iter()
-            .enumerate()
-            .filter_map(|(index, turn)| {
-                if index >= boundary
-                    || turn.calls.iter().any(|call| call.name == "skill")
-                    || turn.calls.len() != turn.results.len()
-                    || (turn.turn == 0 && turn.prompt.is_empty() && turn.responses.is_none())
-                {
-                    protected.push(turn.clone());
-                    None
-                } else {
-                    Some(turn.clone())
-                }
-            })
-            .collect();
+        let (older, protected) = self.compaction_partition(true);
+        input.earlier = older;
         if input.earlier.is_empty() {
             return Ok(None);
         }
-        input.prompt.clear();
+        input.prompt = "Native compaction boundary".into();
+        input.guard_capacity()?;
         let encoded = input.encoded(&key)?;
         let rig_core::wire::Body::Bytes(bytes) = encoded.request.body() else {
             return Err(self.native_failure("Unsupported compaction body"));
@@ -473,9 +462,7 @@ impl Ask {
             Some(window),
         ));
         compacted.earlier = vec![boundary];
-        // Skill snapshots stay exact outside the provider-written summary.
         compacted.earlier.extend(protected);
-        compacted.guard_capacity()?;
         Ok(Some(compacted))
     }
 
@@ -619,6 +606,15 @@ impl Ask {
                     .filter(|message| matches!(message, Message::User { .. })),
             );
         } else {
+            if handle.is_some()
+                && let Some(turn) = self.earlier.last()
+            {
+                conversation.extend(
+                    turn_messages(turn)
+                        .into_iter()
+                        .filter(|message| matches!(message, Message::User { .. })),
+                );
+            }
             conversation.push(Message::user(self.prompt.clone()));
             conversation.extend(self.turns.iter().flat_map(turn_messages));
         }
@@ -714,7 +710,17 @@ fn turn_messages(turn: &Turn) -> Vec<Message> {
                     call.arguments
                 )
             },
-            |acted| acted.text.clone(),
+            |acted| {
+                if acted.exit.is_ok() {
+                    acted.text.clone()
+                } else {
+                    format!(
+                        "Tool outcome: failed ({})\n{}",
+                        acted.exit.word(),
+                        acted.text
+                    )
+                }
+            },
         );
         results.push(ToolResult {
             call: id,
@@ -744,6 +750,7 @@ pub trait Deltas {
     fn text(&mut self, fragment: &str);
 
     fn reasoning(&mut self, fragment: &str);
+    fn completed_text(&mut self, _text: &str) {}
 }
 
 impl Deltas for () {
@@ -1145,6 +1152,8 @@ impl Client {
                 .stream(request.clone())
                 .map_err(|error| Failure::from_wire(error, false, secrets))?;
             let mut streamed = false;
+            let mut reasoning_parts = 0usize;
+            let mut signed_parts = 0usize;
             while let Some(item) = streaming.next().await {
                 match item {
                     Ok(Item::Event(StreamEvent::Text { text, .. })) => {
@@ -1154,6 +1163,25 @@ impl Client {
                     Ok(Item::Event(StreamEvent::Reasoning { text, .. })) => {
                         streamed |= !text.is_empty();
                         deltas.reasoning(&text);
+                    }
+                    Ok(Item::Event(StreamEvent::Start {
+                        kind: rig_core::streaming::PartKind::Reasoning,
+                        ..
+                    })) => reasoning_parts += 1,
+                    Ok(Item::Event(StreamEvent::End { content, .. })) => {
+                        if let AssistantContent::Text(text) = &content {
+                            deltas.completed_text(&text.text);
+                        }
+                        if content.native_item().is_some_and(|item| {
+                            (item["type"] == "thinking"
+                                && item["signature"]
+                                    .as_str()
+                                    .is_some_and(|signature| !signature.is_empty()))
+                                || (item["type"] == "redacted_thinking"
+                                    && item["data"].as_str().is_some_and(|data| !data.is_empty()))
+                        }) {
+                            signed_parts += 1;
+                        }
                     }
                     Ok(_) => {}
                     Err(error) => {
@@ -1165,7 +1193,10 @@ impl Client {
                 .finish()
                 .await
                 .map_err(|error| Failure::from_wire(error, streamed, secrets))?;
-            if finished.stop().is_failure() {
+            if finished.stop().is_failure()
+                || (finished.origin.api.as_str() == "anthropic.messages"
+                    && reasoning_parts != signed_parts)
+            {
                 return Err(Failure {
                     verdict: Verdict::Broken,
                     retryable: false,

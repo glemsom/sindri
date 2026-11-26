@@ -313,6 +313,9 @@ impl Request {
 }
 
 pub trait Responder {
+    fn observed_usage(&self) -> Usage {
+        Usage::default()
+    }
     fn compacted(&self) -> bool {
         false
     }
@@ -628,9 +631,48 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self.turns += 1;
         witness.told(Told::Asking { turn: self.turns });
         let request = self.request();
-        let reply = match self.responder.respond(&request, deltas) {
+        struct Visible<'a> {
+            deltas: &'a mut dyn Deltas,
+            completed: Vec<String>,
+        }
+        impl Deltas for Visible<'_> {
+            fn text(&mut self, text: &str) {
+                self.deltas.text(text);
+            }
+            fn reasoning(&mut self, text: &str) {
+                self.deltas.reasoning(text);
+            }
+            fn completed_text(&mut self, text: &str) {
+                self.completed.push(text.into());
+            }
+        }
+        let mut visible = Visible {
+            deltas,
+            completed: Vec::new(),
+        };
+        let observed_before = self.responder.observed_usage();
+        let reply = match self.responder.respond(&request, &mut visible) {
             Ok(reply) => reply,
             Err(failure) => {
+                let observed = self.responder.observed_usage();
+                if observed != observed_before || !visible.completed.is_empty() {
+                    let mut turn = Turn::answered(
+                        self.turns,
+                        self.prompt.clone(),
+                        "Request failed after observed compaction; original material retained.",
+                    );
+                    if !visible.completed.is_empty() {
+                        turn.text = format!(
+                            "Partial response failed; completed visible discoveries only (not a final answer):\n{}",
+                            visible.completed.join("\n")
+                        );
+                    }
+                    turn.usage = observed.since(observed_before);
+                    self.history.push(turn);
+                }
+                if self.responder.compacted() {
+                    witness.told(Told::Compacted { turn: self.turns });
+                }
                 self.settle(Stop::Error(failure.message));
                 return self.state();
             }
