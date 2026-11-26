@@ -192,7 +192,7 @@ fn a_workspace_with_no_agents_md_adds_no_project_instructions() {
 }
 
 #[test]
-fn the_persona_names_the_product_the_channel_and_the_reader() {
+fn the_persona_identifies_sindri_as_an_ai_assistant() {
     let tree = Tree::new();
 
     let preamble = Preamble::for_workspace(&tree.workspace()).render();
@@ -203,10 +203,29 @@ fn the_persona_names_the_product_the_channel_and_the_reader() {
         .expect("a principles section");
     assert_eq!(
         preamble[persona..principles].trim_end(),
-        "## Persona\n\nYou are Sindri, the agent behind a Unix filter and a terminal UI: you act \
-         only through `bash`, and answer in words the reader can use.",
-        "the persona names the job as a Unix filter and a terminal UI, the shell it acts through, \
-         and the words the reader gets"
+        "## Persona\n\nYou are Sindri, an AI assistant."
+    );
+}
+
+#[test]
+fn the_environment_names_shell_staging_temp_and_the_actual_working_directory() {
+    let tree = Tree::new();
+
+    let preamble = Preamble::for_workspace(&tree.workspace()).render();
+
+    let environment = preamble
+        .find("## Environment")
+        .expect("an environment section");
+    assert_eq!(
+        preamble[environment..].trim_end(),
+        format!(
+            "## Environment\n\n\
+- GNU/Linux; use `bash` for shell commands.\n\
+- For multi-stage commands, use `set -o pipefail` and label each stage.\n\
+- Put temporary artifacts in `$TMPDIR`; never hard-code `/tmp`.\n\
+- The working directory is `{}`; relative paths resolve there.",
+            tree.workspace().display()
+        )
     );
 }
 

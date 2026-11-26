@@ -7,8 +7,7 @@ pub const PROJECT_INSTRUCTIONS_FILE: &str = "AGENTS.md";
 const PERSONA: &str = "\
 ## Persona
 
-You are Sindri, the agent behind a Unix filter and a terminal UI: you act only through \
-`bash`, and answer in words the reader can use.";
+You are Sindri, an AI assistant.";
 
 const PRINCIPLES: &str = "\
 ## Principles
@@ -54,10 +53,10 @@ fn environment(workspace: &Path) -> String {
         "\
 ## Environment
 
-- GNU/Linux, `bash` first: the shell is how a run acts.
-- Stage multi-step commands under `set -o pipefail`, and label each stage so a failure names itself.
-- Anything a run makes goes in `$TMPDIR`; never a hard-coded `/tmp`.
-- The run stands in `{}`; relative paths resolve there.",
+- GNU/Linux; use `bash` for shell commands.
+- For multi-stage commands, use `set -o pipefail` and label each stage.
+- Put temporary artifacts in `$TMPDIR`; never hard-code `/tmp`.
+- The working directory is `{}`; relative paths resolve there.",
         workspace.display()
     )
 }
