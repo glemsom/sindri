@@ -59,7 +59,7 @@ pub fn run(cli: &Cli, first_run: sindri_core::first_run::FirstRun) -> ExitCode {
             return crate::refuse(&format!("the terminal could not be taken: {error}"), SETUP);
         }
     };
-    // The same directory `Launch::open` gives a run, read the same way, so a path a reader
+    // The same directory `FirstRun::open` gives a run, read the same way, so a path a reader
     // picks is one the run's own commands can read. Read before the screen is taken, so a
     // refusal is a line on the reader's own shell.
     let workspace = match std::env::current_dir() {

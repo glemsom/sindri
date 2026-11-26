@@ -148,44 +148,7 @@ pub struct Launch<R = Asking> {
     helpers: Helpers,
 }
 
-impl Launch<Asking> {
-    pub fn open(
-        machine: &Machine<'_>,
-        config: &Config,
-        enforcement: Enforcement,
-        front_end: FrontEnd,
-        opener: Option<Arc<dyn Opener>>,
-    ) -> Result<Launch<Asking>, Refusal> {
-        Launch::answered_by(machine, config, enforcement, front_end, opener, Asking::new)
-    }
-}
-
 impl<R> Launch<R> {
-    pub fn answered_by(
-        machine: &Machine<'_>,
-        config: &Config,
-        enforcement: Enforcement,
-        front_end: FrontEnd,
-        opener: Option<Arc<dyn Opener>>,
-        adapter: impl FnOnce(Client, Ask, ToolSet) -> R,
-    ) -> Result<Launch<R>, Refusal> {
-        let inherited = crate::handoff::Handoff::read(&machine.environment)
-            .map_err(|reason| Refusal::new(reason, SETUP))?;
-        let preparation = Preparation {
-            config: config.clone(),
-            inherited,
-        };
-        Self::prepared_by(
-            machine,
-            &preparation,
-            config,
-            enforcement,
-            front_end,
-            opener,
-            adapter,
-        )
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn prepared_by(
         machine: &Machine<'_>,

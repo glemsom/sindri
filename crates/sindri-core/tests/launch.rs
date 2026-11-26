@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use sindri_core::config::Config;
+use sindri_core::first_run::FirstRun;
 use sindri_core::launch::{Handed, Launch, Machine, Turns};
 use sindri_core::open::{Handover, Opener, Opening};
 use sindri_core::policy::{Boundary, Enforcement};
@@ -111,13 +112,16 @@ fn naming_wire(base_url: String) -> Config {
 fn a_config_that_names_no_run_is_refused_by_the_launch_in_one_vocabulary() {
     let homes = Homes::new();
 
-    let Err(refusal) = Launch::open(
-        &homes.machine(),
-        &Config::default(),
-        Enforcement::Bubblewrap,
-        FrontEnd::Batch,
-        None,
-    ) else {
+    let Err(refusal) = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .open(
+            &homes.machine(),
+            &Config::default(),
+            Enforcement::Bubblewrap,
+            FrontEnd::Batch,
+            None,
+        )
+    else {
         panic!("a config naming neither a provider nor a model names no run");
     };
 
@@ -141,14 +145,17 @@ fn a_launch_refused_by_the_sandbox_keeps_no_record_and_asks_no_turn() {
     let machine = homes.machine_that_refuses();
     let script = Scripted::answering(Vec::new());
 
-    let Err(refusal) = Launch::answered_by(
-        &machine,
-        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
-        Enforcement::Bubblewrap,
-        FrontEnd::Batch,
-        None,
-        |_, _, _| script.clone(),
-    ) else {
+    let Err(refusal) = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &machine,
+            &naming_wire(String::from(UNANSWERED_ENDPOINT)),
+            Enforcement::Bubblewrap,
+            FrontEnd::Batch,
+            None,
+            |_, _, _| script.clone(),
+        )
+    else {
         panic!("this machine cannot make the sandbox");
     };
 
@@ -264,16 +271,18 @@ impl Turns for Kept {
 
 fn launch_answering(homes: &Homes, script: &Scripted, front_end: FrontEnd) -> Launch<Scripted> {
     let script = script.clone();
-    Launch::answered_by(
-        &homes.machine(),
-        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
-        Enforcement::Unsafe,
-        front_end,
-        None,
-        |_, _, _| script.clone(),
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run")
+    FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &naming_wire(String::from(UNANSWERED_ENDPOINT)),
+            Enforcement::Unsafe,
+            front_end,
+            None,
+            |_, _, _| script.clone(),
+        )
+        .ok()
+        .expect("a config naming a wire, a model and a key names a run")
 }
 
 #[test]
@@ -712,24 +721,28 @@ fn a_launch_hands_the_transcript_its_record_wrote() {
 #[test]
 fn a_launch_that_names_no_session_mints_a_guid_of_its_own() {
     let homes = Homes::new();
-    let first = Launch::open(
-        &homes.machine(),
-        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
-        Enforcement::Unsafe,
-        FrontEnd::Terminal,
-        None,
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run");
-    let second = Launch::open(
-        &homes.machine(),
-        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
-        Enforcement::Unsafe,
-        FrontEnd::Terminal,
-        None,
-    )
-    .ok()
-    .expect("a second launch of the same config");
+    let first = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .open(
+            &homes.machine(),
+            &naming_wire(String::from(UNANSWERED_ENDPOINT)),
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+        )
+        .ok()
+        .expect("a config naming a wire, a model and a key names a run");
+    let second = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .open(
+            &homes.machine(),
+            &naming_wire(String::from(UNANSWERED_ENDPOINT)),
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+        )
+        .ok()
+        .expect("a second launch of the same config");
 
     assert_ne!(
         first.session().guid(),
@@ -804,15 +817,17 @@ fn a_launch_hands_the_words_and_skills_its_tools_were_built_from() {
     homes.user_skill("triage", "sort the tickets before you read them");
     let config = naming_wire(String::from(UNANSWERED_ENDPOINT));
 
-    let launch = Launch::open(
-        &homes.machine(),
-        &config,
-        Enforcement::Unsafe,
-        FrontEnd::Batch,
-        None,
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run");
+    let launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .open(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Batch,
+            None,
+        )
+        .ok()
+        .expect("a config naming a wire, a model and a key names a run");
 
     let workspace = std::env::current_dir().expect("this process has a working directory");
     let described = Boundary::from_config(&config, &workspace, Enforcement::Unsafe)
@@ -839,15 +854,17 @@ fn a_launch_hands_the_words_and_skills_its_tools_were_built_from() {
 #[test]
 fn a_launch_nobody_drove_leaves_no_session_behind() {
     let homes = Homes::new();
-    let launch = Launch::open(
-        &homes.machine(),
-        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
-        Enforcement::Unsafe,
-        FrontEnd::Batch,
-        None,
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run");
+    let launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .open(
+            &homes.machine(),
+            &naming_wire(String::from(UNANSWERED_ENDPOINT)),
+            Enforcement::Unsafe,
+            FrontEnd::Batch,
+            None,
+        )
+        .ok()
+        .expect("a config naming a wire, a model and a key names a run");
     let session = launch.figure().session;
     assert!(
         session.is_dir(),
@@ -875,13 +892,16 @@ fn a_launch_nobody_drove_leaves_no_session_behind() {
 fn a_launch_the_sandbox_refuses_leaves_no_session_behind() {
     let homes = Homes::new();
 
-    let Err(refusal) = Launch::open(
-        &homes.machine_that_refuses(),
-        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
-        Enforcement::Bubblewrap,
-        FrontEnd::Batch,
-        None,
-    ) else {
+    let Err(refusal) = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .open(
+            &homes.machine_that_refuses(),
+            &naming_wire(String::from(UNANSWERED_ENDPOINT)),
+            Enforcement::Bubblewrap,
+            FrontEnd::Batch,
+            None,
+        )
+    else {
         panic!("this machine cannot make the sandbox");
     };
 
@@ -926,15 +946,17 @@ fn every_tool_a_terminal_launch_registers_is_a_tool_its_own_executor_answers() {
     let homes = Homes::new();
     homes.user_skill("deploy", "ship the branch");
 
-    let launch = Launch::open(
-        &homes.machine(),
-        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
-        Enforcement::Unsafe,
-        FrontEnd::Terminal,
-        Some(Arc::new(OpensNowhere)),
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run");
+    let launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .open(
+            &homes.machine(),
+            &naming_wire(String::from(UNANSWERED_ENDPOINT)),
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            Some(Arc::new(OpensNowhere)),
+        )
+        .ok()
+        .expect("a config naming a wire, a model and a key names a run");
 
     assert!(
         launch.tools().iter().any(|tool| tool.name() == OPEN),
@@ -949,15 +971,17 @@ fn every_tool_a_batch_launch_registers_is_a_tool_its_own_executor_answers() {
     let homes = Homes::new();
     homes.user_skill("deploy", "ship the branch");
 
-    let launch = Launch::open(
-        &homes.machine(),
-        &naming_wire(String::from(UNANSWERED_ENDPOINT)),
-        Enforcement::Unsafe,
-        FrontEnd::Batch,
-        None,
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run");
+    let launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .open(
+            &homes.machine(),
+            &naming_wire(String::from(UNANSWERED_ENDPOINT)),
+            Enforcement::Unsafe,
+            FrontEnd::Batch,
+            None,
+        )
+        .ok()
+        .expect("a config naming a wire, a model and a key names a run");
 
     assert!(
         launch.tools().iter().any(|tool| tool.name() == SKILL),
@@ -993,16 +1017,18 @@ fn a_launch_stopped_by_the_turn_cap_writes_the_turn_it_took_once() {
         Reply::answer("never asked"),
     ]);
     let script = script.clone();
-    let mut launch = Launch::answered_by(
-        &homes.machine(),
-        &config,
-        Enforcement::Unsafe,
-        FrontEnd::Batch,
-        None,
-        |_, _, _| script.clone(),
-    )
-    .ok()
-    .expect("a config naming a wire, a model and a key names a run");
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Batch,
+            None,
+            |_, _, _| script.clone(),
+        )
+        .ok()
+        .expect("a config naming a wire, a model and a key names a run");
     let figure = launch.figure();
 
     let mut kept = Kept::default();
