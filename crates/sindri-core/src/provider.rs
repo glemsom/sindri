@@ -35,14 +35,33 @@ use crate::wire::Wire;
 pub use crate::turn::{Call, Turn, Usage};
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Assistant(Option<AssistantMessage>);
+pub struct Assistant(Option<AssistantMessage>, Option<ReplayTarget>);
 
 impl Eq for Assistant {}
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Responses(AssistantMessage);
+pub struct Responses(AssistantMessage, Option<ReplayTarget>);
 
 impl Eq for Responses {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReplayTarget {
+    endpoint: Endpoint,
+    route: Option<Route>,
+    model: String,
+    storage: StoragePolicy,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StoragePolicy {
+    Inherited,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReplayCapabilities {
+    pub continuation: bool,
+    pub compaction: bool,
+}
 
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Credential(Option<String>);
@@ -190,6 +209,51 @@ impl Ask {
         self
     }
 
+    pub fn replay_target(&self) -> ReplayTarget {
+        ReplayTarget {
+            endpoint: self.endpoint.clone(),
+            route: self.endpoint.route_of(&self.model),
+            model: self.model.clone(),
+            storage: StoragePolicy::Inherited,
+        }
+    }
+
+    pub fn replay_capabilities(&self) -> ReplayCapabilities {
+        ReplayCapabilities {
+            continuation: false,
+            compaction: false,
+        }
+    }
+
+    pub fn transition(&self, earlier: &[Turn]) -> (Vec<Turn>, bool) {
+        let target = self.replay_target();
+        let mut lost = false;
+        let turns = earlier
+            .iter()
+            .cloned()
+            .map(|mut turn| {
+                let incompatible = turn
+                    .assistant
+                    .1
+                    .as_ref()
+                    .is_some_and(|origin| origin != &target)
+                    || turn
+                        .responses
+                        .as_ref()
+                        .and_then(|items| items.1.as_ref())
+                        .is_some_and(|origin| origin != &target);
+                if incompatible {
+                    turn.assistant = Assistant::default();
+                    turn.responses = None;
+                    turn.reasoning = None;
+                    lost = true;
+                }
+                turn
+            })
+            .collect();
+        (turns, lost)
+    }
+
     pub fn thinks(&self) -> bool {
         self.thinking
     }
@@ -205,7 +269,8 @@ impl Ask {
             if !ended.prompt.is_empty() {
                 messages.push(Message::user(ended.prompt.clone()));
             }
-            messages.extend(turn_messages(ended));
+            let (compatible, _) = self.transition(std::slice::from_ref(ended));
+            messages.extend(turn_messages(&compatible[0]));
         }
         messages
     }
@@ -320,15 +385,18 @@ impl From<&CompletionResponse> for Answer {
         }
         let reasoning = response.reasoning();
         Self {
-            assistant: Assistant(response.message().and_then(|message| match message {
-                Message::Assistant(assistant) => Some(assistant),
-                _ => None,
-            })),
+            assistant: Assistant(
+                response.message().and_then(|message| match message {
+                    Message::Assistant(assistant) => Some(assistant),
+                    _ => None,
+                }),
+                None,
+            ),
             text,
             reasoning: (!reasoning.is_empty()).then_some(reasoning),
             responses: if response.origin.api.as_str() == "openai.responses" {
                 response.message().and_then(|message| match message {
-                    Message::Assistant(assistant) => Some(Responses(assistant)),
+                    Message::Assistant(assistant) => Some(Responses(assistant, None)),
                     _ => None,
                 })
             } else {
@@ -537,8 +605,15 @@ impl Client {
             deltas,
             &secrets,
         )?;
+        let target = ask.replay_target();
+        if answer.assistant.0.is_some() {
+            answer.assistant.1 = Some(target.clone());
+        }
+        if let Some(items) = &mut answer.responses {
+            items.1 = Some(target);
+        }
         if ask.endpoint.wire() != Wire::Anthropic {
-            answer.assistant.0 = None;
+            answer.assistant = Assistant::default();
         }
         Ok(answer)
     }

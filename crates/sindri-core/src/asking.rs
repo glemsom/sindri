@@ -41,6 +41,9 @@ impl Asking {
 }
 
 impl Responder for Asking {
+    fn replay_loss(&self, earlier: &[crate::turn::Turn]) -> bool {
+        self.ask.transition(earlier).1
+    }
     fn respond(&self, request: &Request, deltas: &mut dyn Deltas) -> Result<Reply, Failure> {
         let asked = self.ask(request);
         let answer = self.client.ask(&asked, deltas)?;

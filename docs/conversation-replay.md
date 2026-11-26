@@ -25,6 +25,8 @@ live-provider compatibility evidence. Run the wire goldens explicitly with:
 cargo test -p sindri-core --test eval_wire -- --ignored --nocapture --test-threads=1
 ```
 
+## Conversation reset
+
 `/new` uses core `Conversation::reset` to clear retained turns (including native
 artifacts) and the launch's loaded instruction snapshots/names. Runs receive a
 scoped loaded-skill view: reset invalidates their authority to activate instructions.
@@ -35,3 +37,20 @@ Late display/session reports do not become retained model-facing material.
 Reset leaves launch ownership, session-temp lifetime and confinement unchanged.
 There is currently no provider continuation handle; any future handle must belong
 to this reset boundary and obey the same generation check, not a frontend cache.
+
+## Wire target changes
+
+Captured native material is bound to its endpoint address, effective route, exact
+served model and inherited storage policy. Model matching is deliberately stricter
+than family matching: no cross-model opaque compatibility has been verified.
+Changing any of these creates a visible-message boundary: prompts, assistant text,
+call IDs, original arguments and actual tool outcomes replay, while incompatible
+native artifacts and reasoning are omitted. The terminal reports that loss. Local
+retained material remains available; no completed tool is executed by the transition.
+
+`Ask::replay_target`, `Ask::transition` and `Ask::replay_capabilities` expose the
+core decision. Continuation and compaction capabilities are currently false for
+all endpoints, including Copilot and custom addresses. No handle, compaction or
+storage configuration is enabled here. Same-target native replay remains supported
+by the existing adapter capture tests; that is not verification of custom endpoint
+continuation features.

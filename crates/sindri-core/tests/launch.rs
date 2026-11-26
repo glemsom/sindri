@@ -2032,3 +2032,90 @@ fn capacity_headroom_settings_reject_zero_negative_and_overflow() {
         }
     }
 }
+
+#[test]
+fn target_switch_keeps_evidence_without_transferring_opaque_reasoning() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    #[derive(Default)]
+    struct Retaining(Vec<Turn>, usize);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn replay_boundary(&mut self) {
+            self.1 += 1;
+        }
+        fn retained(&mut self, turns: &[Turn]) {
+            self.0.extend_from_slice(turns);
+        }
+    }
+    for change in ["endpoint", "model", "route"] {
+        let homes = Homes::new();
+        let fixture = include_str!("fixtures/providers/openai_responses_stream.sse").replace(
+            r#""id":"rs_01","type":"reasoning","summary""#,
+            r#""id":"rs_01","type":"reasoning","encrypted_content":"SWITCH_OPAQUE","summary""#,
+        );
+        let replay = Replay::new([
+            Canned::stream(Box::leak(fixture.into_boxed_str())),
+            Canned::stream(include_str!(
+                "fixtures/providers/openai_responses_stream.sse"
+            )),
+            Canned::stream(if change == "route" {
+                include_str!("fixtures/providers/copilot_chat_stream.sse")
+            } else {
+                include_str!("fixtures/providers/openai_responses_stream.sse")
+            }),
+        ]);
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut retained = Retaining::default();
+        for _ in 0..3 {
+            let model = "gpt-5";
+            let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+            config.provider = Some(Wire::Openai);
+            config.model = Some(model.into());
+            let switching = retained.0.len() == 2;
+            if switching && change == "endpoint" {
+                config.base_url = Some("http://changed.invalid".into());
+            }
+            if switching && change == "model" {
+                config.model = Some("o3".into());
+            }
+            let route = if switching && change == "route" {
+                Route::Chat
+            } else {
+                Route::Responses
+            };
+            let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+                .unwrap()
+                .answered_by(
+                    &homes.machine(),
+                    &config,
+                    Enforcement::Unsafe,
+                    FrontEnd::Terminal,
+                    None,
+                    |_, ask, tools| Asking::new(client.clone(), ask.route(route), tools),
+                )
+                .ok()
+                .unwrap();
+            let earlier = retained.0.clone();
+            launch
+                .drive(
+                    "Keep the exact discovery",
+                    &earlier,
+                    &mut Quiet,
+                    &mut retained,
+                    Cancel::new(),
+                )
+                .unwrap_or_else(|r| panic!("{}", r.message()));
+        }
+        let requests = replay.requests();
+        assert_eq!(requests.len(), 3);
+        assert_eq!(retained.1, 1);
+        assert!(requests[1].body.contains("SWITCH_OPAQUE"));
+        assert!(!requests[2].body.contains("SWITCH_OPAQUE"));
+        assert!(requests[2].body.contains("Hi there"));
+        let body: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+        assert!(body.get("store").is_none());
+        assert!(body.get("previous_response_id").is_none());
+    }
+}
