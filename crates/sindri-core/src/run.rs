@@ -636,7 +636,7 @@ pub struct Shell {
     cancel: Cancel,
     ground: Option<Ground>,
     opener: Option<Arc<dyn Opener>>,
-    handoff: Option<(PathBuf, PathBuf)>,
+    handoff: Option<crate::handoff::ChildLaunch>,
 }
 
 impl Shell {
@@ -652,8 +652,8 @@ impl Shell {
         }
     }
 
-    pub fn handoff(mut self, executable: PathBuf, path: PathBuf) -> Shell {
-        self.handoff = Some((executable, path));
+    pub fn handoff(mut self, launch: crate::handoff::ChildLaunch) -> Shell {
+        self.handoff = Some(launch);
         self
     }
 
@@ -687,33 +687,22 @@ impl Shell {
             ))
         })?;
 
-        let command = if let Some((executable, path)) = &self.handoff {
-            let inherited = crate::handoff::Handoff::read(&std::collections::BTreeMap::from([(
-                crate::handoff::VARIABLE.to_owned(),
-                path.display().to_string(),
-            )]))
-            .map_err(|reason| SecretSet::default().redact(reason))?
-            .ok_or_else(|| SecretSet::default().redact("missing child launch"))?;
-            let exports = inherited
-                .environment
-                .iter()
-                .map(|(name, value)| format!("{name}={}", crate::handoff::quoted(value)))
-                .collect::<Vec<_>>()
-                .join(" ");
-            format!(
-                "export SINDRI_EXECUTABLE={} SINDRI_LAUNCH={} TMPDIR={} {}; {}",
-                crate::handoff::quoted(&executable.display().to_string()),
-                crate::handoff::quoted(&path.display().to_string()),
-                crate::handoff::quoted(&self.temp.display().to_string()),
-                exports,
-                command
-            )
+        let command = if let Some(launch) = &self.handoff {
+            launch.command(&self.temp, &command)
         } else {
             command
         };
         let started = Instant::now();
-        let outcome = bash::run(&self.boundary, &self.temp, &command, &self.cancel)
-            .map_err(|error| SecretSet::default().redact(error.to_string()))?;
+        let outcome = bash::run_with_handoff(
+            &self.boundary,
+            &self.temp,
+            &command,
+            &self.cancel,
+            self.handoff
+                .as_ref()
+                .map(crate::handoff::ChildLaunch::descriptor),
+        )
+        .map_err(|error| SecretSet::default().redact(error.to_string()))?;
         Ok(Acted {
             text: rendered(&outcome),
             bytes: u64::try_from(outcome.stdout.len() + outcome.stderr.len()).unwrap_or(u64::MAX),

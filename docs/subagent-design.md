@@ -16,7 +16,7 @@ edits and concurrent parent edits to child-owned files; dependencies use sequent
 ## Launch handoff
 
 The launch publishes `SINDRI_EXECUTABLE` (the current executable's absolute path) and
-`SINDRI_LAUNCH` (a session-temp JSON handoff path) to bash execution. The recipe starts the executable
+`SINDRI_LAUNCH` (an immutable JSON handoff reference) to bash execution. The recipe starts the executable
 with an explicit batch prompt, `--format json`, `/dev/null` stdin, and a clean environment containing
 only PATH and the handoff path. It does not forward arbitrary environment variables.
 
@@ -36,8 +36,10 @@ must be outside the child's own disposable temp. This is not a persistent retent
 ## Credentials and confinement
 
 The handoff contains API keys and extra headers; never read it into prompts, argv, logs or tool
-output. It is created exclusively with mode 0600 beneath session temp and normal session cleanup
-removes it. The supported Copilot signing record is copied into a protected session-scoped config
+output. The parent holds a mode-0600 sealed memfd. Sandboxed bash receives a read-only data mount
+at session-temp `launch.json`; unsafe bash reads the parent descriptor through `/proc`.
+Readers require complete memfd seals or a read-only launch mount; transport setup refuses on failure.
+The parent closes the descriptor during normal launch cleanup. The supported Copilot signing record is copied into a protected session-scoped config
 store, also mode 0600. This allows signing machinery to operate under the existing writable temp
 rather than trying to update the user's read-only config mount. HOME remains the user skill root.
 No credential is placed in the child argv or exported environment. Existing redaction still applies.
@@ -63,7 +65,7 @@ Missing/invalid JSON, launch refusal, nonzero exit or a non-final `stopped` valu
 Keep completed sibling answers identifiable; inspect failure stderr selectively rather than dumping
 it. The parent decides retries or inline completion. Traps stop/wait children on runner exit; existing
 bash process-group timeout/cancellation and bubblewrap parent-death semantics bind execution to
-the tool call. Children must not detach or escape their process group. There is no asynchronous
+the tool call. A per-call Linux subreaper retains orphaned descendants, including separate process groups. There is no asynchronous
 collection across calls or automatic retry policy.
 
 ## Verified single-child slice
@@ -106,26 +108,25 @@ matrix exercises setup refusal, missing/invalid/multiple JSON, invalid answer ty
 exit status and representative max_turns/budget/cancelled/error outcomes. These synthetic outcome
 cases validate collection, not the provider loop's production of every stop.
 
-Execution in this GNU/Linux workspace passed 37 batch integration tests, 9 core bash integration
-tests and 4 bash unit tests; all-target Clippy with warnings denied also passed. Nested sandbox
-prerequisites succeeded: tests actually ran, with no NOT VERIFIED skips. Parallel sandbox success
-uses a fixture gate requiring both requests before either response. Existing boundary-after-cwd-change,
-CLI credential override, Copilot signing, protected handoff and secret-masking checks remain green.
-
-The lifecycle tracer initially failed: a separately grouped child bash still performed a delayed
-write after the parent timeout. Bash now installs a Linux parent-death SIGKILL before exec (checking
-the spawn race), and timeout/cancellation freezes and kills the observable descendant tree before
-killing the root group. This reaches child bash groups that group-only killing missed. Bubblewrap
-also tears down its PID namespace when its supervising process dies. Tests run two actual child
-batches with nested bash commands under both unsafe and bubblewrap enforcement, then verify child
-processes are gone or dead and neither delayed write occurs after timeout or parent SIGINT.
+The current GNU/Linux devbox verification passed `cargo test --workspace`,
+`cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`.
+All 38 batch tests passed, including actual nested sandbox execution.
+Batch regressions attempt to overwrite the handoff before both unsafe and sandboxed child
+launches and reject writable-file substitutions. Real bash regressions observe delayed survivor
+files after root-shell exit, retained pipes under timeout, and cancellation during detached forks.
+A per-call subreaper waits for the root, then stops descendants before preserving its exit status.
+Cleanup confirms stopped states before descending and rescans adopted children. Pipe collection
+continues to check the call deadline and cancellation.
 
 ## Remaining limitations
 
 Cleanup requires Linux `/proc` and parent-death signals; nested bubblewrap requires working user/PID
 namespaces and its normal proof. Restricted hosts must refuse rather than fall back to unsafe mode.
-These checks establish execution in this workspace, not portability to every host. Deliberately
-reparented/detached processes are outside the synchronous recipe's contract. Timeout/cancellation
+These checks establish execution in this workspace, not portability to every host. The supervisor currently performs Rust filesystem/allocation work after fork and before exec;
+this is not an async-signal-safe design for a multithreaded parent. Uninterruptible kernel tasks
+can delay cleanup without a bound. Seals establish immutability, not provenance: an explicitly
+unsafe same-user process can substitute a separately sealed descriptor; that trust attack is
+not prevented. These remaining risks must not be represented as a complete adversarial guarantee. Timeout/cancellation
 may interrupt collection before completed sibling answers are printed. Artifacts last only until
 parent session cleanup. The recipe cannot guarantee model brevity, coordination or non-recursion.
 

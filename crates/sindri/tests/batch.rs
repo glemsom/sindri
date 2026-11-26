@@ -1240,6 +1240,26 @@ fn bash_reply(command: &str) -> Reply {
 }
 
 #[test]
+fn a_child_refuses_an_agent_writable_launch_substitution() {
+    let ground = Ground::new();
+    let forged = ground.workspace.join("launch.json");
+    std::fs::write(&forged, r#"{"config":{},"boundary":{"writable":{"paths":[]},"timeout_seconds":10,"command_budget_ms":1000,"output_budget_bytes":1000,"enforcement":"unsafe"},"workspace":"/","environment":{}}"#).unwrap();
+    let output = ground
+        .command()
+        .env("SINDRI_LAUNCH", &forged)
+        .args(["-b", "child brief"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        text(&output.stderr).contains("untrusted inherited launch"),
+        "{}",
+        text(&output.stderr)
+    );
+    assert!(output.stdout.is_empty());
+}
+
+#[test]
 fn bash_launches_a_fresh_child_with_effective_settings_and_authorized_edits() {
     single_child(false);
 }
@@ -1255,19 +1275,13 @@ fn nested_sandbox_child_preserves_the_writable_boundary() {
 
 fn single_child(sandboxed: bool) {
     let ground = Ground::new();
-    let skill = include_str!("../../sindri-core/skills/subagents/SKILL.md");
-    let recipe = skill
-        .split("```bash\n")
-        .nth(1)
-        .unwrap()
-        .split("```")
-        .next()
-        .unwrap();
-    let recipe = recipe.replace("briefs=('Work in the inherited workspace. Do not delegate. Inspect the assigned area; return a short verified summary. Make no edits.')", "briefs=('child-only-brief')");
+    let recipe = group_recipe("'child-only-brief'");
     let mut runner = format!(
         "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\"; cp -R \"$TMPDIR/children/sindri/sessions\" child-sessions"
     );
-    runner = format!("test \"$(stat -c %a \"$SINDRI_LAUNCH\")\" = 600 || exit 8; {runner}");
+    runner = format!(
+        "test \"$(stat -Lc %a \"$SINDRI_LAUNCH\")\" = 600 || exit 8; if printf '{{}}' > \"$SINDRI_LAUNCH\" 2>/dev/null; then exit 9; fi; {runner}"
+    );
     let outside = ground._root.path().join("outside");
     std::fs::create_dir(&outside).unwrap();
     if sandboxed {
@@ -1432,21 +1446,7 @@ fn parallel_briefs(sandboxed: bool) {
     let ground = Ground::new();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
-    let skill = include_str!("../../sindri-core/skills/subagents/SKILL.md");
-    let recipe = skill
-        .split("```bash\n")
-        .nth(1)
-        .unwrap()
-        .split("```")
-        .next()
-        .unwrap();
-    let start = recipe.find("briefs=(").unwrap();
-    let end = start + recipe[start..].find("\npids=()").unwrap();
-    let recipe = format!(
-        "{}briefs=('parallel-alpha' 'parallel-beta'){}",
-        &recipe[..start],
-        &recipe[end..]
-    );
+    let recipe = group_recipe("'parallel-alpha' 'parallel-beta'");
     let runner = format!(
         "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\"; cp -R \"$TMPDIR/children/sindri/sessions\" child-sessions; cp -R \"$TMPDIR\"/subagents.* collected"
     );
@@ -1465,7 +1465,6 @@ fn parallel_briefs(sandboxed: bool) {
             let request = read_request(&mut stream);
             children.push((stream, request));
         }
-        // Neither child receives a response until both requests have arrived.
         for (mut stream, request) in children {
             let body: serde_json::Value =
                 serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();

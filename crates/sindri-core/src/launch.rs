@@ -226,7 +226,10 @@ impl<R> Launch<R> {
         let executable = std::env::current_exe()
             .map_err(|_| Refusal::new("cannot locate child executable", SETUP))?;
         let shell = Shell::new(boundary.clone(), session.temp(), catalog.clone())
-            .handoff(executable, handoff)
+            .handoff(crate::handoff::ChildLaunch {
+                executable,
+                transport: handoff,
+            })
             .ground(ground)
             .opener(opener);
 
