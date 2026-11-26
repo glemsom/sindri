@@ -6,9 +6,10 @@ use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
 use sindri::keys::Mode;
-use sindri::settings::{self, Settings};
+use sindri::settings::Settings;
 use sindri::view::{Transcript, View};
 use sindri_core::config::{Config, MODE, Touched};
+use sindri_core::first_run::FirstRun;
 use tempfile::TempDir;
 
 const HAND_WRITTEN: &str = "\
@@ -120,7 +121,10 @@ fn enter_writes_the_one_row_a_reader_touched_and_every_other_byte_survives() {
     type_into(&mut view, "new-model");
 
     let touched = entered(&mut view);
-    settings::persist(&environment(&home), &touched, Config::default()).expect("the write lands");
+    FirstRun::resolve(&environment(&home), Config::default())
+        .unwrap()
+        .persist(&environment(&home), &touched, Config::default())
+        .expect("the write lands");
     view.saved();
 
     assert_eq!(
@@ -154,7 +158,9 @@ fn enter_writes_at_once_and_the_next_prompt_runs_on_the_value_it_wrote() {
     type_into(&mut view, "claude-sonnet-4-5");
 
     let touched = entered(&mut view);
-    let fresh = settings::persist(&environment(&home), &touched, Config::default())
+    let fresh = FirstRun::resolve(&environment(&home), Config::default())
+        .unwrap()
+        .persist(&environment(&home), &touched, Config::default())
         .expect("the write lands");
 
     assert_eq!(
@@ -189,8 +195,10 @@ fn a_save_keeps_the_credential_the_wire_its_own_variable_gave_the_launch() {
     type_into(&mut view, "claude-sonnet-4-5");
 
     let touched = entered(&mut view);
-    let fresh =
-        settings::persist(&environment, &touched, Config::default()).expect("the write lands");
+    let fresh = FirstRun::resolve(&environment, Config::default())
+        .unwrap()
+        .persist(&environment, &touched, Config::default())
+        .expect("the write lands");
 
     assert_eq!(
         fresh.api_key.as_deref(),
@@ -259,7 +267,10 @@ fn an_emptied_row_unsets_the_key_so_the_environment_speaks_again() {
 
     view.key(Key::Clear);
     let touched = entered(&mut view);
-    let fresh = settings::persist(&environment, &touched, Config::default()).expect("the write");
+    let fresh = FirstRun::resolve(&environment, Config::default())
+        .unwrap()
+        .persist(&environment, &touched, Config::default())
+        .expect("the write");
 
     let after = read(&path);
     assert!(
@@ -283,7 +294,9 @@ fn a_bad_value_is_refused_on_the_screen_naming_its_key_and_nothing_is_written() 
     type_into(&mut view, "two hundred");
 
     let touched = entered(&mut view);
-    let error = settings::persist(&environment(&home), &touched, Config::default())
+    let error = FirstRun::resolve(&environment(&home), Config::default())
+        .unwrap()
+        .persist(&environment(&home), &touched, Config::default())
         .expect_err("a turn cap that is not a number is a bad value");
     view.refuse(&error.to_string());
 
@@ -324,7 +337,10 @@ fn a_tab_walked_row_is_the_row_a_visit_writes() {
          of walking the list"
     );
     let touched = entered(&mut view);
-    settings::persist(&environment(&home), &touched, Config::default()).expect("the write");
+    FirstRun::resolve(&environment(&home), Config::default())
+        .unwrap()
+        .persist(&environment(&home), &touched, Config::default())
+        .expect("the write");
 
     assert_eq!(
         read(&path),
@@ -343,7 +359,10 @@ fn space_flips_a_toggle_and_the_file_holds_the_word_it_was_flipped_to() {
 
     view.key(Key::Char(' '));
     let touched = entered(&mut view);
-    settings::persist(&environment(&home), &touched, Config::default()).expect("the write");
+    FirstRun::resolve(&environment(&home), Config::default())
+        .unwrap()
+        .persist(&environment(&home), &touched, Config::default())
+        .expect("the write");
 
     assert_eq!(
         read(&path),
@@ -369,7 +388,10 @@ fn the_face_is_shown_on_the_screen_and_the_word_it_is_flipped_to_is_written() {
 
     view.key(Key::Char(' '));
     let touched = entered(&mut view);
-    settings::persist(&environment(&home), &touched, Config::default()).expect("the write");
+    FirstRun::resolve(&environment(&home), Config::default())
+        .unwrap()
+        .persist(&environment(&home), &touched, Config::default())
+        .expect("the write");
 
     assert_eq!(
         read(&path),
@@ -391,7 +413,9 @@ fn a_context_window_typed_into_the_modal_round_trips_through_the_file() {
     type_into(&mut view, "200000");
 
     let touched = entered(&mut view);
-    let fresh = settings::persist(&environment(&home), &touched, Config::default())
+    let fresh = FirstRun::resolve(&environment(&home), Config::default())
+        .unwrap()
+        .persist(&environment(&home), &touched, Config::default())
         .expect("the write lands");
 
     assert_eq!(
@@ -421,7 +445,9 @@ fn a_context_window_of_nothing_typed_into_the_modal_is_refused_naming_the_row() 
     type_into(&mut view, "0");
 
     let touched = entered(&mut view);
-    let error = settings::persist(&environment(&home), &touched, Config::default())
+    let error = FirstRun::resolve(&environment(&home), Config::default())
+        .unwrap()
+        .persist(&environment(&home), &touched, Config::default())
         .expect_err("a window of no tokens is a share nothing can be taken of");
     view.refuse(&error.to_string());
 

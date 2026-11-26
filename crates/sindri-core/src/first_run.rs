@@ -28,6 +28,25 @@ impl FirstRun {
         front_end: crate::tools::FrontEnd,
         opener: Option<std::sync::Arc<dyn crate::open::Opener>>,
     ) -> Result<crate::launch::Launch, crate::launch::Refusal> {
+        self.answered_by(
+            machine,
+            config,
+            enforcement,
+            front_end,
+            opener,
+            crate::asking::Asking::new,
+        )
+    }
+
+    pub fn answered_by<R>(
+        &self,
+        machine: &crate::launch::Machine<'_>,
+        config: &Config,
+        enforcement: crate::policy::Enforcement,
+        front_end: crate::tools::FrontEnd,
+        opener: Option<std::sync::Arc<dyn crate::open::Opener>>,
+        adapter: impl FnOnce(crate::provider::Client, crate::provider::Ask, crate::tools::ToolSet) -> R,
+    ) -> Result<crate::launch::Launch<R>, crate::launch::Refusal> {
         crate::launch::Launch::prepared_by(
             machine,
             &self.preparation,
@@ -35,7 +54,7 @@ impl FirstRun {
             enforcement,
             front_end,
             opener,
-            crate::asking::Asking::new,
+            adapter,
         )
     }
 
