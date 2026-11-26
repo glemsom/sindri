@@ -1080,3 +1080,2366 @@ fn a_launch_hands_the_front_end_every_turn_it_took() {
         "the record writes each turn once, in the order the loop took them"
     );
 }
+
+#[test]
+fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+
+    for (wire, model, route, tool, answer) in [
+        (
+            Wire::Anthropic,
+            "claude-sonnet-4-6",
+            Route::Chat,
+            include_str!("fixtures/providers/anthropic_thinking_tool_use.sse"),
+            include_str!("fixtures/providers/anthropic_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-4o",
+            Route::Chat,
+            include_str!("fixtures/providers/openai_chat_tool_use.sse"),
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-5",
+            Route::Responses,
+            include_str!("fixtures/providers/openai_responses_tool_use.sse"),
+            include_str!("fixtures/providers/openai_responses_stream.sse"),
+        ),
+        (
+            Wire::Copilot,
+            "gpt-5",
+            Route::Chat,
+            include_str!("fixtures/providers/openai_chat_tool_use.sse"),
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+    ] {
+        let homes = Homes::new();
+        let answer = if route == Route::Responses {
+            answer.replace(
+                r#""id":"rs_01","type":"reasoning","summary""#,
+                r#""id":"rs_01","type":"reasoning","encrypted_content":"FINAL_OPAQUE","summary""#,
+            )
+        } else {
+            answer.to_owned()
+        };
+        let executed = homes.at("executed");
+        let command = format!(
+            "printf x >> {}; printf REPLAY_; printf EVIDENCE_ONLY",
+            executed.display()
+        );
+        let tool = if route == Route::Responses {
+            let tool = tool.replace(r#""output_index":0"#, r#""output_index":1"#);
+            let tool = format!(
+                "event: response.output_item.done\ndata: {{\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{{\"type\":\"reasoning\",\"id\":\"rs_tool_01\",\"summary\":[],\"encrypted_content\":\"OPAQUE_01\"}}}}\n\n{tool}"
+            );
+            tool.replace(
+                r#""output":[{"type":"function_call""#,
+                r#""output":[{"type":"reasoning","id":"rs_tool_01","summary":[],"encrypted_content":"OPAQUE_01"},{"type":"function_call""#,
+            )
+        } else {
+            tool.to_owned()
+        };
+        let tool = tool.replace(r#"ls\""#, &format!(r#"{command}\""#));
+        let tool = if route == Route::Chat && wire != Wire::Anthropic {
+            tool.replace(r#""content":null"#, r#""content":"Inspecting evidence""#)
+        } else {
+            tool
+        };
+
+        let replay = Replay::new([
+            Canned::stream(Box::leak(tool.clone().into_boxed_str())),
+            Canned::stream(Box::leak(tool.replace("_01", "_02").into_boxed_str())),
+            Canned::stream(Box::leak(answer.clone().into_boxed_str())),
+            Canned::stream(Box::leak(answer.clone().into_boxed_str())),
+        ]);
+        let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+        config.provider = Some(wire);
+        config.model = Some(model.into());
+        config.thinking = Some(wire == Wire::Anthropic);
+        config.context_window = Some(1_000_000);
+
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+            .unwrap()
+            .answered_by(
+                &homes.machine(),
+                &config,
+                Enforcement::Unsafe,
+                FrontEnd::Terminal,
+                None,
+                |_, ask, tools| Asking::new(client.clone(), ask.route(route), tools),
+            )
+            .ok()
+            .unwrap();
+        let prompt = format!("Inspect {}", homes.root.path().display());
+        let mut retaining = Retaining::default();
+        let first = launch
+            .drive(&prompt, &[], &mut Quiet, &mut retaining, Cancel::new())
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        assert!(!first.answer().unwrap().contains("REPLAY_EVIDENCE_ONLY"));
+        let earlier = retaining.0.turns().to_vec();
+        launch
+            .drive(
+                "Use the evidence",
+                &earlier,
+                &mut Quiet,
+                &mut retaining,
+                Cancel::new(),
+            )
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        assert_eq!(std::fs::read_to_string(&executed).unwrap(), "xx");
+        let requests = replay.requests();
+        assert_eq!(
+            requests.len(),
+            4,
+            "completed tools must not run again for {wire:?}/{route:?}: {}",
+            first.stopped()
+        );
+        let last: serde_json::Value = serde_json::from_str(&requests[3].body).unwrap();
+        let previous: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+        let field = if route == Route::Responses {
+            "input"
+        } else {
+            "messages"
+        };
+        if route == Route::Responses {
+            for (request, expected) in [(&requests[1], 1), (&requests[2], 2), (&requests[3], 2)] {
+                let body: serde_json::Value = serde_json::from_str(&request.body).unwrap();
+                assert!(body.get("store").is_none());
+                assert!(body.get("previous_response_id").is_none());
+                let items = body["input"].as_array().unwrap();
+                for suffix in ["01", "02"].into_iter().take(expected) {
+                    let position = items
+                        .iter()
+                        .position(|item| item["id"] == format!("rs_tool_{suffix}"))
+                        .expect("original reasoning item");
+                    assert_eq!(
+                        items[position],
+                        serde_json::json!({"type":"reasoning","id":format!("rs_tool_{suffix}"),"summary":[],"encrypted_content":format!("OPAQUE_{suffix}")})
+                    );
+                    assert_eq!(items[position + 1]["id"], format!("fc_{suffix}"));
+                    assert_eq!(items[position + 1]["call_id"], format!("call_{suffix}"));
+                    assert_eq!(items[position + 2]["type"], "function_call_output");
+                    assert_eq!(items[position + 2]["call_id"], format!("call_{suffix}"));
+                }
+            }
+            assert!(
+                last["input"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|item| item["id"] == "msg_01"),
+                "{last}"
+            );
+        }
+        let messages = last[field].as_array().unwrap();
+        let prefix = previous[field].as_array().unwrap();
+        for stable in ["instructions", "system", "tools", "tool_choice"] {
+            assert_eq!(
+                last.get(stable),
+                previous.get(stable),
+                "stable {stable} for {wire:?}"
+            );
+        }
+
+        assert!(messages.len() > prefix.len());
+        if route == Route::Chat && wire != Wire::Anthropic {
+            assert_eq!(requests[3].body.matches("Inspecting evidence").count(), 2);
+        }
+
+        if wire == Wire::Anthropic {
+            for request in &requests[1..] {
+                let body: serde_json::Value = serde_json::from_str(&request.body).unwrap();
+                let messages = body["messages"].as_array().unwrap();
+                let assistant = messages
+                    .iter()
+                    .position(|m| m["role"] == "assistant")
+                    .unwrap();
+                assert_eq!(
+                    messages[assistant]["content"],
+                    serde_json::json!([
+                        {"type":"thinking","thinking":"Private plan","signature":"opaque_SIG_+/=01"},
+                        {"type":"redacted_thinking","data":"opaque_REDACTED_+/=01"},
+                        {"type":"text","text":"Inspecting evidence"},
+                        {"type":"tool_use","id":"toolu_01","name":"bash","input":{"command":command}}
+                    ])
+                );
+                assert_eq!(
+                    messages[assistant + 1]["content"][0]["tool_use_id"],
+                    "toolu_01"
+                );
+                if messages.len() > assistant + 2 && messages[assistant + 2]["role"] == "assistant"
+                {
+                    let second = &messages[assistant + 2]["content"];
+                    assert_eq!(second[0]["signature"], "opaque_SIG_+/=01");
+                    assert_eq!(second[1]["data"], "opaque_REDACTED_+/=01");
+                    assert_eq!(second[3]["id"], "toolu_02");
+                    assert_eq!(
+                        messages[assistant + 3]["content"][0]["tool_use_id"],
+                        "toolu_02"
+                    );
+                }
+            }
+        }
+
+        let id = if wire == Wire::Anthropic {
+            "toolu"
+        } else {
+            "call"
+        };
+        for suffix in ["01", "02"] {
+            assert_eq!(
+                requests[3].body.matches(&format!("{id}_{suffix}")).count(),
+                2
+            );
+        }
+        assert_eq!(
+            &messages[..prefix.len()],
+            prefix,
+            "the request prefix stays stable for {wire:?}"
+        );
+        assert_eq!(
+            requests[3].body.matches("REPLAY_EVIDENCE_ONLY").count(),
+            2,
+            "both tool results survive for {wire:?}: {}",
+            requests[3].body
+        );
+        let generation = retaining.0.generation();
+        let late = retaining.0.turns().to_vec();
+        retaining.0.reset(launch.loaded());
+        for turn in late {
+            retaining.0.join_for(generation, turn);
+        }
+        let earlier = retaining.0.turns().to_vec();
+        launch
+            .drive(
+                "Fresh conversation",
+                &earlier,
+                &mut Quiet,
+                &mut retaining,
+                Cancel::new(),
+            )
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        let requests = replay.requests();
+        for sentinel in [
+            "REPLAY_EVIDENCE_ONLY",
+            "OPAQUE_01",
+            "OPAQUE_02",
+            "FINAL_OPAQUE",
+            "opaque_SIG",
+            "opaque_REDACTED",
+            "Use the evidence",
+        ] {
+            assert!(!requests[4].body.contains(sentinel), "{wire:?}: {sentinel}");
+        }
+        assert_eq!(std::fs::read_to_string(&executed).unwrap(), "xx");
+    }
+}
+
+#[test]
+fn a_responses_launch_refuses_a_call_whose_original_item_never_completed() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    let homes = Homes::new();
+    let tool = include_str!("fixtures/providers/openai_responses_tool_use.sse");
+    let tool = tool
+        .lines()
+        .filter(|line| !line.contains("output_item.done") && !line.contains("response.completed"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let tool = format!(
+        "{tool}\n\nevent: response.completed\ndata: {{\"type\":\"response.completed\",\"response\":{{\"id\":\"resp_tool\",\"status\":\"completed\",\"model\":\"gpt-5\",\"output\":[]}}}}\n\n"
+    );
+    let replay = Replay::new([Canned::stream(Box::leak(tool.into_boxed_str()))]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Openai);
+    config.model = Some("gpt-5".into());
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask.route(Route::Responses), tools),
+        )
+        .ok()
+        .unwrap();
+    let outcome = launch
+        .drive(
+            "Inspect",
+            &[],
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+    assert!(matches!(outcome.stopped(), Stop::Error(_)));
+    assert_eq!(replay.requests().len(), 1);
+}
+
+#[test]
+fn two_prompts_keep_activated_skill_snapshots_on_each_wire() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+
+    for (wire, model, route, tool, answer) in [
+        (
+            Wire::Anthropic,
+            "claude-sonnet-4-6",
+            Route::Chat,
+            include_str!("fixtures/providers/anthropic_tool_use.sse"),
+            include_str!("fixtures/providers/anthropic_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-4o",
+            Route::Chat,
+            include_str!("fixtures/providers/openai_chat_tool_use.sse"),
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-5",
+            Route::Responses,
+            include_str!("fixtures/providers/openai_responses_tool_use.sse"),
+            include_str!("fixtures/providers/openai_responses_stream.sse"),
+        ),
+        (
+            Wire::Copilot,
+            "gpt-5",
+            Route::Chat,
+            include_str!("fixtures/providers/openai_chat_tool_use.sse"),
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+    ] {
+        let homes = Homes::new();
+        homes.user_skill("deploy", "ship the branch");
+        let tool = tool
+            .replace("bash", "skill")
+            .replace("command", "name")
+            .replace(r#"\"ls\""#, r#"\"deploy\""#);
+
+        let replay = Replay::new([
+            Canned::stream(Box::leak(tool.clone().into_boxed_str())),
+            Canned::stream(answer),
+            Canned::stream(answer),
+        ]);
+        let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+        config.provider = Some(wire);
+        config.model = Some(model.into());
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+            .unwrap()
+            .answered_by(
+                &homes.machine(),
+                &config,
+                Enforcement::Unsafe,
+                FrontEnd::Terminal,
+                None,
+                |_, ask, tools| Asking::new(client.clone(), ask.route(route), tools),
+            )
+            .ok()
+            .unwrap();
+        let prompt = format!("Inspect {}", homes.root.path().display());
+        let mut retaining = Retaining::default();
+        let first = launch
+            .drive(&prompt, &[], &mut Quiet, &mut retaining, Cancel::new())
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        assert!(
+            !first
+                .answer()
+                .unwrap_or_else(|| panic!("{wire:?}: {}", first.stopped()))
+                .contains("Body of deploy.")
+        );
+        let protected = launch.loaded().protected();
+        std::fs::write(
+            homes.at("home/.agents/skills/deploy/SKILL.md"),
+            "---\nname: deploy\ndescription: changed\n---\nREPLACED_BODY",
+        )
+        .unwrap();
+        assert_eq!(launch.loaded().protected(), protected);
+        let earlier = retaining.0.turns().to_vec();
+        launch
+            .drive(
+                "Use the evidence",
+                &earlier,
+                &mut Quiet,
+                &mut retaining,
+                Cancel::new(),
+            )
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        let requests = replay.requests();
+        assert_eq!(requests.len(), 3);
+        let last: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+        let previous: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+        let field = if route == Route::Responses {
+            "input"
+        } else {
+            "messages"
+        };
+        let messages = last[field].as_array().unwrap();
+        let prefix = previous[field].as_array().unwrap();
+        for stable in ["instructions", "system", "tools", "tool_choice"] {
+            assert_eq!(
+                last.get(stable),
+                previous.get(stable),
+                "stable {stable} for {wire:?}"
+            );
+        }
+
+        assert!(messages.len() > prefix.len());
+        assert_eq!(
+            &messages[..prefix.len()],
+            prefix,
+            "the request prefix stays stable for {wire:?}"
+        );
+        assert_eq!(
+            requests[2].body.matches("Body of deploy.").count(),
+            1,
+            "the exact skill body survives once for {wire:?}: {}",
+            requests[2].body
+        );
+    }
+}
+
+#[test]
+fn human_activation_delivers_and_retains_skill_snapshots_on_each_wire() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+
+    for (wire, model, route, tool, answer) in [
+        (
+            Wire::Anthropic,
+            "claude-sonnet-4-6",
+            Route::Chat,
+            include_str!("fixtures/providers/anthropic_tool_use.sse"),
+            include_str!("fixtures/providers/anthropic_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-4o",
+            Route::Chat,
+            include_str!("fixtures/providers/openai_chat_tool_use.sse"),
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-5",
+            Route::Responses,
+            include_str!("fixtures/providers/openai_responses_tool_use.sse"),
+            include_str!("fixtures/providers/openai_responses_stream.sse"),
+        ),
+        (
+            Wire::Copilot,
+            "gpt-5",
+            Route::Chat,
+            include_str!("fixtures/providers/openai_chat_tool_use.sse"),
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+    ] {
+        let homes = Homes::new();
+        homes.user_skill("deploy", "ship the branch");
+        let _tool = tool
+            .replace("bash", "skill")
+            .replace("command", "name")
+            .replace(r#"\"ls\""#, r#"\"deploy\""#);
+
+        let replay = Replay::new([
+            Canned::stream(answer),
+            Canned::stream(answer),
+            Canned::stream(answer),
+        ]);
+        let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+        config.provider = Some(wire);
+        config.model = Some(model.into());
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+            .unwrap()
+            .answered_by(
+                &homes.machine(),
+                &config,
+                Enforcement::Unsafe,
+                FrontEnd::Terminal,
+                None,
+                |_, ask, tools| Asking::new(client.clone(), ask.route(route), tools),
+            )
+            .ok()
+            .unwrap();
+        let catalog =
+            sindri_core::skills::Catalog::discover(homes.root.path(), Some(&homes.at("home")));
+        launch.loaded().activate(catalog.get("deploy").unwrap());
+        let prompt = format!("Inspect {}", homes.root.path().display());
+        let mut retaining = Retaining::default();
+        let first = launch
+            .drive(&prompt, &[], &mut Quiet, &mut retaining, Cancel::new())
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        assert!(
+            !first
+                .answer()
+                .unwrap_or_else(|| panic!("{wire:?}: {}", first.stopped()))
+                .contains("Body of deploy.")
+        );
+        let protected = launch.loaded().protected();
+        std::fs::write(
+            homes.at("home/.agents/skills/deploy/SKILL.md"),
+            "---\nname: deploy\ndescription: changed\n---\nREPLACED_BODY",
+        )
+        .unwrap();
+        assert_eq!(launch.loaded().protected(), protected);
+        let earlier = retaining.0.turns().to_vec();
+        launch
+            .drive(
+                "Use the evidence",
+                &earlier,
+                &mut Quiet,
+                &mut retaining,
+                Cancel::new(),
+            )
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        let requests = replay.requests();
+        assert_eq!(requests.len(), 2);
+        let last: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+        let previous: serde_json::Value = serde_json::from_str(&requests[0].body).unwrap();
+        let field = if route == Route::Responses {
+            "input"
+        } else {
+            "messages"
+        };
+        let messages = last[field].as_array().unwrap();
+        let prefix = previous[field].as_array().unwrap();
+        for stable in ["instructions", "system", "tools", "tool_choice"] {
+            assert_eq!(
+                last.get(stable),
+                previous.get(stable),
+                "stable {stable} for {wire:?}"
+            );
+        }
+
+        assert!(messages.len() > prefix.len());
+        assert_eq!(
+            &messages[..prefix.len()],
+            prefix,
+            "the request prefix stays stable for {wire:?}"
+        );
+        assert_eq!(
+            requests[1].body.matches("Body of deploy.").count(),
+            1,
+            "the exact skill body survives once for {wire:?}: {}",
+            requests[1].body
+        );
+        let generation = retaining.0.generation();
+        let superseded = launch.loaded().scoped();
+        retaining.0.reset(launch.loaded());
+        superseded.activate(catalog.get("deploy").unwrap());
+        retaining
+            .0
+            .join_for(generation, Turn::answered(1, "OLD_PROMPT", "OLD_ARTIFACT"));
+        let earlier = retaining.0.turns().to_vec();
+        launch
+            .drive(
+                "Independent prompt",
+                &earlier,
+                &mut Quiet,
+                &mut retaining,
+                Cancel::new(),
+            )
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        let requests = replay.requests();
+        for sentinel in [
+            "Body of deploy.",
+            "OLD_PROMPT",
+            "OLD_ARTIFACT",
+            "Use the evidence",
+        ] {
+            assert!(!requests[2].body.contains(sentinel), "{wire:?}: {sentinel}");
+        }
+        assert!(launch.loaded().names().is_empty());
+    }
+}
+
+#[test]
+fn interrupted_parallel_work_replays_truthful_outcomes_without_reexecution() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+
+    for (wire, model, route, answer) in [
+        (
+            Wire::Anthropic,
+            "claude-sonnet-4-6",
+            Route::Chat,
+            include_str!("fixtures/providers/anthropic_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-4o",
+            Route::Chat,
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-5",
+            Route::Responses,
+            include_str!("fixtures/providers/openai_responses_stream.sse"),
+        ),
+        (
+            Wire::Copilot,
+            "gpt-5",
+            Route::Chat,
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+    ] {
+        for stop in ["error", "budget", "max_turns", "cancelled", "failed"] {
+            let homes = Homes::new();
+            let executed = homes.at("executed");
+            let command = format!(
+                "printf x >> {}; printf PARTIAL_EVIDENCE{}",
+                executed.display(),
+                if stop == "cancelled" {
+                    "; sleep 10"
+                } else {
+                    ""
+                }
+            );
+            let second = if stop == "error" {
+                "{\"command\":".to_owned()
+            } else {
+                serde_json::json!({"command": format!("printf y >> {}", executed.display())})
+                    .to_string()
+            };
+            let calls = serde_json::json!([
+                {"index":0,"id":"call_done","type":"function","function":{"name":"bash","arguments":serde_json::json!({"command": if stop == "failed" { format!("{command}; exit 7") } else { command }}).to_string()}},
+                {"index":1,"id":"call_pending","type":"function","function":{"name":"bash","arguments":second}}
+            ]);
+            let mut tool = format!(
+                "data: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
+                serde_json::json!({"id":"chatcmpl-partial","object":"chat.completion.chunk","created":1760000001,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":calls},"finish_reason":null}]}),
+                serde_json::json!({"id":"chatcmpl-partial","object":"chat.completion.chunk","created":1760000001,"model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]})
+            );
+            if wire == Wire::Anthropic || route == Route::Responses {
+                let fixture = if wire == Wire::Anthropic {
+                    include_str!("fixtures/providers/anthropic_tool_use.sse")
+                } else {
+                    include_str!("fixtures/providers/openai_responses_tool_use.sse")
+                };
+                let mut events = Vec::new();
+                for block in fixture.trim().split("\n\n") {
+                    let mut lines = block.lines();
+                    let event = lines.next().unwrap();
+                    let data = lines.next().unwrap().strip_prefix("data: ").unwrap();
+                    let value: serde_json::Value = serde_json::from_str(data).unwrap();
+                    if event.contains("content_block")
+                        || event.contains("response.output_item")
+                        || event.contains("response.function_call")
+                    {
+                        for (index, call) in calls.as_array().unwrap().iter().enumerate() {
+                            let mut value = value.clone();
+                            let arguments = call["function"]["arguments"].as_str().unwrap();
+                            let id = call["id"].as_str().unwrap();
+                            if wire == Wire::Anthropic {
+                                value["index"] = index.into();
+                                if let Some(block) = value.get_mut("content_block") {
+                                    block["id"] = id.into();
+                                }
+                                if let Some(delta) = value.get_mut("delta") {
+                                    delta["partial_json"] =
+                                        if data.contains("ls") { "" } else { arguments }.into();
+                                }
+                            } else {
+                                if value.get("output_index").is_some() {
+                                    value["output_index"] = index.into();
+                                }
+                                if value.get("item_id").is_some() {
+                                    value["item_id"] = format!("fc_{index}").into();
+                                }
+                                if value.get("delta").is_some() {
+                                    value["delta"] = arguments.into();
+                                }
+                                if value.get("arguments").is_some() {
+                                    value["arguments"] = arguments.into();
+                                }
+                                if let Some(item) = value.get_mut("item") {
+                                    item["id"] = format!("fc_{index}").into();
+                                    item["call_id"] = id.into();
+                                    if !item["arguments"].as_str().unwrap().is_empty() {
+                                        item["arguments"] = arguments.into();
+                                    }
+                                }
+                            }
+                            events.push(format!("{event}\ndata: {value}\n\n"));
+                        }
+                    } else {
+                        let mut value = value;
+                        if let Some(response) = value.get_mut("response") {
+                            response["output"] = serde_json::Value::Array(calls.as_array().unwrap().iter().enumerate().map(|(index, call)| serde_json::json!({"type":"function_call","id":format!("fc_{index}"),"call_id":call["id"],"name":"bash","arguments":call["function"]["arguments"]})).collect());
+                        }
+                        events.push(format!("{event}\ndata: {value}\n\n"));
+                    }
+                }
+                tool = events.concat();
+            }
+            let replay = Replay::new([
+                Canned::stream(Box::leak(tool.into_boxed_str())),
+                Canned::stream(answer),
+            ]);
+            let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+            config.provider = Some(wire);
+            config.model = Some(model.into());
+            config.max_turns = Some(1);
+            if stop == "budget" {
+                config.output_budget_bytes = Some(1);
+            }
+            let cancel = Cancel::new();
+            let watcher = if stop == "cancelled" {
+                let executed = executed.clone();
+                let cancel = cancel.clone();
+                Some(std::thread::spawn(move || {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                    while !executed.exists() && std::time::Instant::now() < deadline {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    }
+                    cancel.now();
+                }))
+            } else {
+                None
+            };
+            let client = Client::over(replay.clone(), SecretSet::default());
+            let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+                .unwrap()
+                .answered_by(
+                    &homes.machine(),
+                    &config,
+                    Enforcement::Unsafe,
+                    FrontEnd::Terminal,
+                    None,
+                    |_, ask, tools| Asking::new(client.clone(), ask.route(route), tools),
+                )
+                .ok()
+                .unwrap();
+            let mut retaining = Retaining::default();
+            let prompt = format!("Inspect {}", homes.root.path().display());
+            let first = launch
+                .drive(&prompt, &[], &mut Quiet, &mut retaining, cancel.clone())
+                .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+            if let Some(watcher) = watcher {
+                watcher.join().unwrap();
+            }
+            assert_eq!(
+                first.stopped().word(),
+                if stop == "failed" { "max_turns" } else { stop }
+            );
+            let earlier = retaining.0.turns().to_vec();
+            launch
+                .drive(
+                    "Recover without repeating work",
+                    &earlier,
+                    &mut Quiet,
+                    &mut retaining,
+                    Cancel::new(),
+                )
+                .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+            let requests = replay.requests();
+            let body = &requests.last().unwrap().body;
+            assert!(body.contains("PARTIAL_EVIDENCE"), "{stop}: {body}");
+            assert_eq!(body.matches("call_done").count(), 2, "{stop}: {body}");
+            assert!(body.contains("call_pending"), "{stop}: {body}");
+            if stop == "budget" || stop == "cancelled" {
+                assert!(body.contains("not executed"), "{body}");
+                assert_eq!(body.matches("call_pending").count(), 2);
+            }
+            if stop == "error" {
+                assert!(body.contains("command"));
+                assert!(body.contains("failed"), "{body}");
+            }
+            let serialized: serde_json::Value = serde_json::from_str(body).unwrap();
+            let field = if route == Route::Responses {
+                "input"
+            } else {
+                "messages"
+            };
+            let messages = serialized[field].as_array().unwrap();
+            if wire == Wire::Anthropic {
+                let tool_results = messages
+                    .iter()
+                    .filter_map(|message| message["content"].as_array())
+                    .flat_map(|blocks| blocks.iter())
+                    .filter(|block| block["type"] == "tool_result")
+                    .collect::<Vec<_>>();
+                assert_eq!(tool_results.len(), 2);
+                assert_eq!(tool_results[0]["tool_use_id"], "call_done");
+                assert_eq!(tool_results[1]["tool_use_id"], "call_pending");
+                assert_eq!(
+                    tool_results[0]["is_error"].as_bool().unwrap_or(false),
+                    stop == "failed",
+                    "{stop}: {body}"
+                );
+                assert_eq!(
+                    tool_results[1]["is_error"].as_bool().unwrap_or(false),
+                    stop == "error" || stop == "budget" || stop == "cancelled"
+                );
+            }
+            assert!(body.find("call_done").unwrap() < body.find("call_pending").unwrap());
+            assert_eq!(body.matches("Recover without repeating work").count(), 1);
+            assert_eq!(
+                std::fs::read_to_string(&executed).unwrap(),
+                if stop == "error" || stop == "budget" || stop == "cancelled" {
+                    "x"
+                } else {
+                    "xy"
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn known_capacity_refuses_large_retained_material_before_the_wire() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::Replay;
+
+    let homes = Homes::new();
+    let replay = Replay::new([]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.context_window = Some(20_000);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let earlier = vec![Turn::answered(
+        1,
+        "Remember exact evidence",
+        "x".repeat(30_000),
+    )];
+    let outcome = launch
+        .drive(
+            "Continue",
+            &earlier,
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert!(format!("{:?}", outcome).contains("capacity"));
+    assert!(replay.requests().is_empty());
+    assert_eq!(earlier[0].text.len(), 30_000);
+}
+
+#[test]
+fn capacity_admission_preserves_full_replay_and_unknown_rejections() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+
+    for capacity in [None, Some(200_000), Some(1)] {
+        let homes = Homes::new();
+        let replay = Replay::new([Canned::reply(
+            400,
+            r#"{"error":{"type":"invalid_request_error","message":"context window exceeded"}}"#,
+        )]);
+        let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+        config.context_window = capacity;
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+            .unwrap()
+            .answered_by(
+                &homes.machine(),
+                &config,
+                Enforcement::Unsafe,
+                FrontEnd::Terminal,
+                None,
+                |_, ask, tools| Asking::new(client.clone(), ask, tools),
+            )
+            .ok()
+            .unwrap();
+        let earlier = vec![Turn::answered(1, "EXACT_PROMPT", "EXACT_EVIDENCE")];
+        let outcome = launch
+            .drive(
+                "Continue",
+                &earlier,
+                &mut Quiet,
+                &mut Kept::default(),
+                Cancel::new(),
+            )
+            .unwrap_or_else(|r| panic!("{}", r.message()));
+        let requests = replay.requests();
+        if capacity == Some(1) {
+            assert!(
+                requests.is_empty(),
+                "instructions and tools alone exceed the known room"
+            );
+            assert!(format!("{outcome:?}").contains("capacity"));
+        } else {
+            assert_eq!(requests.len(), 1);
+            assert!(requests[0].body.contains("EXACT_PROMPT"));
+            assert!(requests[0].body.contains("EXACT_EVIDENCE"));
+            assert!(requests[0].body.contains("bash"));
+            assert!(format!("{outcome:?}").contains("context window exceeded"));
+        }
+        assert_eq!(earlier[0].text, "EXACT_EVIDENCE");
+    }
+}
+
+#[test]
+fn capacity_headroom_settings_reject_zero_negative_and_overflow() {
+    for key in ["output_headroom", "tool_result_headroom"] {
+        for value in ["0", "-1", "18446744073709551616"] {
+            assert!(Config::field(key).unwrap().read(value).is_err());
+        }
+    }
+}
+
+#[test]
+fn target_switch_keeps_evidence_without_transferring_opaque_reasoning() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    #[derive(Default)]
+    struct Retaining(Vec<Turn>, usize);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn replay_boundary(&mut self) {
+            self.1 += 1;
+        }
+        fn retained(&mut self, turns: &[Turn]) {
+            self.0.extend_from_slice(turns);
+        }
+    }
+    for change in ["endpoint", "model", "route"] {
+        let homes = Homes::new();
+        let fixture = include_str!("fixtures/providers/openai_responses_stream.sse").replace(
+            r#""id":"rs_01","type":"reasoning","summary""#,
+            r#""id":"rs_01","type":"reasoning","encrypted_content":"SWITCH_OPAQUE","summary""#,
+        );
+        let replay = Replay::new([
+            Canned::stream(Box::leak(fixture.into_boxed_str())),
+            Canned::stream(include_str!(
+                "fixtures/providers/openai_responses_stream.sse"
+            )),
+            Canned::stream(if change == "route" {
+                include_str!("fixtures/providers/copilot_chat_stream.sse")
+            } else {
+                include_str!("fixtures/providers/openai_responses_stream.sse")
+            }),
+        ]);
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut retained = Retaining::default();
+        for _ in 0..3 {
+            let model = "gpt-5";
+            let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+            config.provider = Some(Wire::Openai);
+            config.model = Some(model.into());
+            let switching = retained.0.len() == 2;
+            if switching && change == "endpoint" {
+                config.base_url = Some("http://changed.invalid".into());
+            }
+            if switching && change == "model" {
+                config.model = Some("o3".into());
+            }
+            let route = if switching && change == "route" {
+                Route::Chat
+            } else {
+                Route::Responses
+            };
+            let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+                .unwrap()
+                .answered_by(
+                    &homes.machine(),
+                    &config,
+                    Enforcement::Unsafe,
+                    FrontEnd::Terminal,
+                    None,
+                    |_, ask, tools| Asking::new(client.clone(), ask.route(route), tools),
+                )
+                .ok()
+                .unwrap();
+            let earlier = retained.0.clone();
+            launch
+                .drive(
+                    "Keep the exact discovery",
+                    &earlier,
+                    &mut Quiet,
+                    &mut retained,
+                    Cancel::new(),
+                )
+                .unwrap_or_else(|r| panic!("{}", r.message()));
+        }
+        let requests = replay.requests();
+        assert_eq!(requests.len(), 3);
+        assert_eq!(retained.1, 1);
+        assert!(requests[1].body.contains("SWITCH_OPAQUE"));
+        assert!(!requests[2].body.contains("SWITCH_OPAQUE"));
+        assert!(requests[2].body.contains("Hi there"));
+        let body: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+        assert!(body.get("store").is_none());
+        assert!(body.get("previous_response_id").is_none());
+    }
+}
+
+#[test]
+fn near_capacity_launch_requests_a_model_summary_before_continuing() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+
+    let homes = Homes::new();
+    let fixture = include_str!("fixtures/providers/anthropic_stream.sse");
+    let replay = Replay::new([Canned::stream(fixture), Canned::stream(fixture)]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let mut evidence = Turn::answered(1, "Completed operation", "SIDE_EFFECT_DONE_616");
+    evidence.calls.push(Call::new(
+        "call_616",
+        "bash",
+        r#"{"command":"printf evidence"}"#,
+    ));
+    evidence.results.push(sindri_core::turn::Acted {
+        text: "EXACT_EVIDENCE_616".into(),
+        bytes: 18,
+        elapsed: std::time::Duration::ZERO,
+        exit: sindri_core::turn::Exit::Code(0),
+    });
+    let earlier = vec![
+        Turn::answered(1, "Preserve OBJECTIVE_616", "old work ".repeat(2800)),
+        Turn::answered(0, "", "EXACT_SKILL_SNAPSHOT_616"),
+        Turn::answered(3, "Next", "Do not repeat completed writes"),
+        evidence,
+        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
+    ];
+    let mut kept = Kept::default();
+    launch
+        .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert_eq!(kept.ended_on().usage.client_compactions, Some(1));
+    assert_eq!(
+        kept.document.as_ref().unwrap().usage.client_compactions,
+        Some(1)
+    );
+    assert!(kept.ended_on().usage.request_ms.is_some());
+    assert!(kept.told.contains(&Told::Compacted { turn: 1 }));
+    let requests = replay.requests();
+    assert_eq!(
+        requests.len(),
+        2,
+        "a supported summary request precedes continuation"
+    );
+    assert!(requests[0].body.contains("OBJECTIVE_616"));
+    assert!(requests[0].body.contains("EXACT_SKILL_SNAPSHOT_616"));
+    assert!(requests[0].body.contains("completed side effects"));
+    assert!(!requests[0].body.contains("\"tools\""));
+    assert!(
+        requests[1]
+            .body
+            .contains("Client-managed conversation summary")
+    );
+    assert!(requests[1].body.contains("EXACT_RECENT_616"));
+    for sentinel in [
+        "SIDE_EFFECT_DONE_616",
+        "EXACT_EVIDENCE_616",
+        "EXACT_SKILL_SNAPSHOT_616",
+        "call_616",
+    ] {
+        assert!(requests[1].body.contains(sentinel));
+    }
+    assert!(!requests[1].body.contains(&"old work ".repeat(100)));
+    assert_eq!(earlier[0].text.len(), 25200);
+}
+
+#[test]
+fn failed_model_summary_retains_material_and_sends_no_continuation() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+
+    let homes = Homes::new();
+    let replay = Replay::new([Canned::reply(
+        400,
+        r#"{"error":{"type":"invalid_request_error","message":"summary refused"}}"#,
+    )]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let mut evidence = Turn::answered(1, "Completed operation", "SIDE_EFFECT_DONE_616");
+    evidence.calls.push(Call::new(
+        "call_616",
+        "bash",
+        r#"{"command":"printf evidence"}"#,
+    ));
+    evidence.results.push(sindri_core::turn::Acted {
+        text: "EXACT_EVIDENCE_616".into(),
+        bytes: 18,
+        elapsed: std::time::Duration::ZERO,
+        exit: sindri_core::turn::Exit::Code(0),
+    });
+    let earlier = vec![
+        Turn::answered(1, "Preserve OBJECTIVE_616", "old work ".repeat(2800)),
+        Turn::answered(0, "", "EXACT_SKILL_SNAPSHOT_616"),
+        Turn::answered(3, "Next", "Do not repeat completed writes"),
+        evidence,
+        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
+    ];
+    launch
+        .drive(
+            "Continue",
+            &earlier,
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].body.contains("OBJECTIVE_616"));
+    assert_eq!(earlier[0].text.len(), 25200);
+}
+
+#[test]
+fn real_tool_and_skill_work_is_summarized_without_unbounded_exchange_pinning() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+    let homes = Homes::new();
+    homes.user_skill("deploy", "ship the branch");
+    let tool = include_str!("fixtures/providers/openai_chat_tool_use.sse");
+    let skill = tool
+        .replace("bash", "skill")
+        .replace("command", "name")
+        .replace(r#"\"ls\""#, r#"\"deploy\""#);
+    let work = tool.replace("call_01", "call_write_616").replace(
+        r#"\"ls\""#,
+        r#"\"printf SIDE_EFFECT_DONE_616; printf EXACT_PATH_616; printf '%025000d' 0\""#,
+    );
+    let answer = include_str!("fixtures/providers/copilot_chat_stream.sse");
+    let summary = answer.replace("Hello", "OBJECTIVE_616 constraint: no repeat writes; SIDE_EFFECT_DONE_616 EXACT_PATH_616 unresolved error ERROR_616; next VERIFY_616");
+    let replay = Replay::new([
+        Canned::stream(Box::leak(skill.into_boxed_str())),
+        Canned::stream(answer),
+        Canned::stream(Box::leak(work.into_boxed_str())),
+        Canned::stream(answer),
+        Canned::stream(answer),
+        Canned::stream(Box::leak(summary.clone().into_boxed_str())),
+        Canned::stream(answer),
+        Canned::stream(Box::leak(summary.into_boxed_str())),
+        Canned::stream(answer),
+        Canned::stream(answer),
+    ]);
+    let mut config = naming_wire(UNANSWERED_ENDPOINT.into());
+    config.provider = Some(Wire::Openai);
+    config.model = Some("gpt-4o".into());
+    config.context_window = Some(46_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask.route(Route::Chat), tools),
+        )
+        .ok()
+        .unwrap();
+    let mut retained = Retaining::default();
+    for prompt in [
+        "OBJECTIVE_616: load deploy",
+        "Write once; constraint: no repeat writes",
+        "ERROR_616 unresolved; next VERIFY_616",
+        &format!("Continue {}", "x".repeat(6000)),
+    ] {
+        let earlier = retained.0.turns().to_vec();
+        let report = launch
+            .drive(prompt, &earlier, &mut Quiet, &mut retained, Cancel::new())
+            .unwrap_or_else(|r| panic!("{}", r.message()));
+        assert_eq!(report.stopped(), &Stop::Final);
+    }
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 7);
+    let summary_request = &requests[5].body;
+    assert!(summary_request.contains("SIDE_EFFECT_DONE_616"));
+    assert!(summary_request.contains("EXACT_PATH_616"));
+    assert!(summary_request.contains("completed side effects"));
+    let continued = &requests[6].body;
+    assert!(continued.contains("Client-managed conversation summary"));
+    assert!(!continued.contains(&"0".repeat(100)));
+    for fact in [
+        "OBJECTIVE_616",
+        "SIDE_EFFECT_DONE_616",
+        "EXACT_PATH_616",
+        "ERROR_616",
+        "VERIFY_616",
+    ] {
+        assert!(continued.contains(fact), "{fact}");
+    }
+    assert_eq!(continued.matches("Body of deploy.").count(), 1);
+    let body: serde_json::Value = serde_json::from_str(continued).unwrap();
+    let messages = body["messages"].as_array().unwrap();
+    for (index, message) in messages.iter().enumerate() {
+        if message["role"] == "tool" {
+            assert!(
+                messages[index - 1]["tool_calls"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|call| call["id"] == message["tool_call_id"])
+            );
+        }
+    }
+    assert!(
+        retained
+            .0
+            .turns()
+            .iter()
+            .any(|t| t.results.iter().any(|r| r.text.contains(&"0".repeat(100))))
+    );
+    config.model = Some("o3".into());
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut switched = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask.route(Route::Chat), tools),
+        )
+        .ok()
+        .unwrap();
+    let earlier = retained.0.turns().to_vec();
+    switched
+        .drive(
+            "Continue on the new model",
+            &earlier,
+            &mut Quiet,
+            &mut retained,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let switched_requests = replay.requests();
+    assert_eq!(switched_requests.len(), 9);
+    assert!(switched_requests[8].body.contains("SIDE_EFFECT_DONE_616"));
+    assert_eq!(
+        switched_requests[8].body.matches("Body of deploy.").count(),
+        1
+    );
+    let switched_body: serde_json::Value =
+        serde_json::from_str(&switched_requests[8].body).unwrap();
+    assert_eq!(switched_body["model"], "o3");
+    assert!(switched_body.get("previous_response_id").is_none());
+    retained.0.reset(launch.loaded());
+    launch
+        .drive(
+            "New independent task",
+            &[],
+            &mut Quiet,
+            &mut retained,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 10);
+    for old in [
+        "SIDE_EFFECT_DONE_616",
+        "Body of deploy.",
+        "Client-managed conversation summary",
+    ] {
+        assert!(!requests[9].body.contains(old));
+    }
+}
+
+#[test]
+fn responses_continuation_sends_only_new_input_and_resupplies_instructions() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+    let homes = Homes::new();
+    let replay = Replay::new([Canned::stream(include_str!(
+        "fixtures/providers/openai_responses_stream.sse"
+    ))]);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Openai);
+    config.model = Some("gpt-5".into());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| {
+                Asking::new(
+                    client.clone(),
+                    ask.route(Route::Responses)
+                        .continuation(true, Some(true), true),
+                    tools,
+                )
+            },
+        )
+        .ok()
+        .unwrap();
+    let mut retaining = Retaining::default();
+    launch
+        .drive(
+            "FIRST_SENTINEL",
+            &[],
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let earlier = retaining.0.turns().to_vec();
+    launch
+        .drive(
+            "SECOND_SENTINEL",
+            &earlier,
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    let first: serde_json::Value = serde_json::from_str(&requests[0].body).unwrap();
+    let second: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert_eq!(first["store"], true);
+    assert_eq!(second["previous_response_id"], "resp_01");
+    assert!(!second["input"].to_string().contains("FIRST_SENTINEL"));
+    assert!(second["input"].to_string().contains("SECOND_SENTINEL"));
+    assert_eq!(first["instructions"], second["instructions"]);
+    assert_eq!(first["tools"], second["tools"]);
+}
+
+#[test]
+fn responses_rejected_handle_replays_tool_evidence_once_and_reset_excludes_late_work() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+    let homes = Homes::new();
+    let executed = homes.at("executed");
+    let command = format!("printf x >> {}; printf TOOL_EVIDENCE", executed.display());
+    let tool = include_str!("fixtures/providers/openai_responses_tool_use.sse")
+        .replace(r#"ls\""#, &format!(r#"{command}\""#));
+    let answer = include_str!("fixtures/providers/openai_responses_stream.sse");
+    let replay = Replay::new([
+        Canned::stream(Box::leak(tool.into_boxed_str())),
+        Canned::stream(answer),
+        Canned::reply(
+            400,
+            r#"{"error":{"message":"previous_response_id expired","type":"invalid_request_error","code":"previous_response_not_found"}}"#,
+        ),
+        Canned::stream(answer),
+        Canned::stream(answer),
+        Canned::stream(answer),
+    ]);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Openai);
+    config.model = Some("gpt-5".into());
+    config.responses_continuation = Some(true);
+    config.responses_store = Some(true);
+    config.responses_continuation_verified = Some(true);
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask.route(Route::Responses), tools),
+        )
+        .ok()
+        .unwrap();
+    let mut retaining = Retaining::default();
+    launch
+        .drive(
+            "FIRST_SENTINEL",
+            &[],
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let earlier = retaining.0.turns().to_vec();
+    launch
+        .drive(
+            "SECOND_SENTINEL",
+            &earlier,
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 4);
+    let body: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert_eq!(body["previous_response_id"], "resp_tool");
+    let input = body["input"].as_array().unwrap();
+    assert_eq!(input.len(), 1);
+    assert_eq!(input[0]["type"], "function_call_output");
+    let recovered: serde_json::Value = serde_json::from_str(&requests[3].body).unwrap();
+    assert!(recovered.get("previous_response_id").is_none());
+    assert!(recovered["input"].to_string().contains("TOOL_EVIDENCE"));
+    assert_eq!(std::fs::read_to_string(&executed).unwrap(), "x");
+    let earlier = retaining.0.turns().to_vec();
+    launch
+        .drive(
+            "THIRD_SENTINEL",
+            &earlier,
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let generation = retaining.0.generation();
+    retaining.0.reset(launch.loaded());
+    for turn in earlier {
+        retaining.0.join_for(generation, turn);
+    }
+    let earlier = retaining.0.turns().to_vec();
+    assert!(earlier.is_empty());
+    launch
+        .drive(
+            "NEW_SENTINEL",
+            &earlier,
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    for index in [4, 5] {
+        let body: serde_json::Value = serde_json::from_str(&requests[index].body).unwrap();
+        assert!(body.get("previous_response_id").is_none());
+    }
+    assert!(!requests[5].body.contains("FIRST_SENTINEL"));
+    assert!(!requests[5].body.contains("TOOL_EVIDENCE"));
+}
+
+#[test]
+fn responses_continuation_refuses_unverified_endpoints_and_inherited_storage() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    for (wire, route, store, verified) in [
+        (Wire::Openai, Route::Responses, Some(true), false),
+        (Wire::Openai, Route::Responses, None, true),
+        (Wire::Openai, Route::Responses, Some(false), true),
+        (Wire::Openai, Route::Chat, Some(true), true),
+        (Wire::Copilot, Route::Responses, Some(true), true),
+    ] {
+        let homes = Homes::new();
+        let replay = Replay::new([Canned::stream(include_str!(
+            "fixtures/providers/openai_responses_stream.sse"
+        ))]);
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+        config.provider = Some(wire);
+        config.model = Some("gpt-5".into());
+        let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+            .unwrap()
+            .answered_by(
+                &homes.machine(),
+                &config,
+                Enforcement::Unsafe,
+                FrontEnd::Terminal,
+                None,
+                |_, ask, tools| {
+                    Asking::new(
+                        client.clone(),
+                        ask.route(route).continuation(true, store, verified),
+                        tools,
+                    )
+                },
+            )
+            .ok()
+            .unwrap();
+        let outcome = launch
+            .drive("Never send", &[], &mut Quiet, &mut (), Cancel::new())
+            .unwrap_or_else(|r| panic!("{}", r.message()));
+        assert!(matches!(outcome.stopped(), Stop::Error(_)));
+        assert!(replay.requests().is_empty());
+    }
+}
+
+#[test]
+fn continuation_target_switch_replays_visible_evidence_without_reusing_handles() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    #[derive(Default)]
+    struct Retaining(Vec<Turn>, usize);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn replay_boundary(&mut self) {
+            self.1 += 1;
+        }
+        fn retained(&mut self, turns: &[Turn]) {
+            self.0.extend_from_slice(turns);
+        }
+    }
+    for change in ["endpoint", "model", "route"] {
+        let homes = Homes::new();
+        let fixture = include_str!("fixtures/providers/openai_responses_stream.sse").replace(
+            r#""id":"rs_01","type":"reasoning","summary""#,
+            r#""id":"rs_01","type":"reasoning","encrypted_content":"SWITCH_OPAQUE","summary""#,
+        );
+        let replay = Replay::new([
+            Canned::stream(Box::leak(fixture.into_boxed_str())),
+            Canned::stream(include_str!(
+                "fixtures/providers/openai_responses_stream.sse"
+            )),
+            Canned::stream(if change == "route" {
+                include_str!("fixtures/providers/copilot_chat_stream.sse")
+            } else {
+                include_str!("fixtures/providers/openai_responses_stream.sse")
+            }),
+        ]);
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut retained = Retaining::default();
+        for _ in 0..3 {
+            let model = "gpt-5";
+            let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+            config.provider = Some(Wire::Openai);
+            config.model = Some(model.into());
+            config.responses_continuation = Some(true);
+            config.responses_store = Some(true);
+            config.responses_continuation_verified = Some(true);
+            let switching = retained.0.len() == 2;
+            if switching && change == "endpoint" {
+                config.base_url = Some("http://changed.invalid".into());
+            }
+            if switching && change == "model" {
+                config.model = Some("o3".into());
+            }
+            let route = if switching && change == "route" {
+                Route::Chat
+            } else {
+                Route::Responses
+            };
+            if switching && change == "route" {
+                config.responses_continuation = Some(false);
+            }
+            let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+                .unwrap()
+                .answered_by(
+                    &homes.machine(),
+                    &config,
+                    Enforcement::Unsafe,
+                    FrontEnd::Terminal,
+                    None,
+                    |_, ask, tools| Asking::new(client.clone(), ask.route(route), tools),
+                )
+                .ok()
+                .unwrap();
+            let earlier = retained.0.clone();
+            launch
+                .drive(
+                    "Keep the exact discovery",
+                    &earlier,
+                    &mut Quiet,
+                    &mut retained,
+                    Cancel::new(),
+                )
+                .unwrap_or_else(|r| panic!("{}", r.message()));
+        }
+        let requests = replay.requests();
+        assert_eq!(requests.len(), 3);
+        assert_eq!(retained.1, 1);
+        assert!(!requests[1].body.contains("SWITCH_OPAQUE"));
+        let chained: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+        assert_eq!(chained["previous_response_id"], "resp_01");
+        assert!(!requests[2].body.contains("SWITCH_OPAQUE"));
+        assert!(requests[2].body.contains("Hi there"));
+        let body: serde_json::Value = serde_json::from_str(&requests[2].body).unwrap();
+        if change != "route" {
+            assert_eq!(body["store"], true);
+        }
+        assert!(body.get("previous_response_id").is_none());
+    }
+}
+
+#[test]
+fn native_responses_compaction_replays_the_whole_canonical_window() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    let homes = Homes::new();
+    let fixture = include_str!("fixtures/providers/openai_responses_stream.sse");
+    let canonical = serde_json::json!([
+        {"type":"message","role":"user","content":"RETAINED_CANONICAL_618"},
+        {"type":"compaction","id":"cmp_618","encrypted_content":"OPAQUE_618","future_field":{"exact":true}}
+    ]);
+    let body = Box::leak(
+        serde_json::json!({"id":"compact_618","object":"response.compaction","output":canonical,"usage":{"input_tokens":10,"output_tokens":5,"input_tokens_details":{"cached_tokens":4},"output_tokens_details":{"reasoning_tokens":2}}})
+            .to_string()
+            .into_boxed_str(),
+    );
+    let replay = Replay::new([
+        Canned::reply(200, body),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+    ]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Openai);
+    config.route = Some(Route::Responses);
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    config.native_compaction = Some(true);
+    config.native_compaction_verified = Some(true);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let earlier = vec![
+        Turn::answered(1, "OBJECTIVE_618", "old work ".repeat(2800)),
+        Turn::answered(0, "", "EXACT_ACTIVE_SKILL_618"),
+        Turn::answered(2, "Recent", "EXACT_RECENT_618"),
+        Turn::answered(3, "Recent again", "DONE_WRITE_618"),
+    ];
+    let mut kept = Kept::default();
+    launch
+        .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let mut next = earlier.clone();
+    next.push(kept.ended_on());
+    launch
+        .drive(
+            "Follow up",
+            &next,
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    launch
+        .drive(
+            "Independent reset boundary",
+            &[],
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert_eq!(kept.ended_on().usage.native_compactions, Some(1));
+    assert_eq!(kept.ended_on().usage.input, Some(19));
+    assert_eq!(kept.ended_on().usage.output, Some(9));
+    assert_eq!(kept.ended_on().usage.cache_read, Some(7));
+    assert_eq!(kept.ended_on().usage.reasoning, Some(4));
+    assert_eq!(kept.ended_on().usage.cache_write, None);
+
+    assert_eq!(
+        kept.document.as_ref().unwrap().usage.native_compactions,
+        Some(1)
+    );
+    assert!(kept.ended_on().usage.request_ms.is_some());
+    assert!(kept.told.contains(&Told::Compacted { turn: 1 }));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 4);
+    assert!(requests[2].body.contains("OPAQUE_618") || requests[2].body.contains("UNCHANGED_618"));
+    assert_eq!(
+        requests[2].body.matches("EXACT_ACTIVE_SKILL_618").count(),
+        1
+    );
+    assert!(!requests[3].body.contains("OPAQUE_618"));
+    assert!(!requests[3].body.contains("UNCHANGED_618"));
+    assert!(!requests[3].body.contains("EXACT_ACTIVE_SKILL_618"));
+    assert!(requests[0].url.ends_with("/responses/compact"));
+    let continued: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert_eq!(
+        &continued["input"].as_array().unwrap()[..2],
+        canonical.as_array().unwrap()
+    );
+    assert!(requests[1].body.contains("EXACT_ACTIVE_SKILL_618"));
+    assert!(requests[1].body.contains("EXACT_RECENT_618"));
+    assert!(!requests[1].body.contains(&"old work ".repeat(100)));
+    assert!(!requests[1].body.contains("previous_response_id"));
+}
+
+#[test]
+fn native_anthropic_compaction_replays_complete_blocks() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+    let homes = Homes::new();
+    let fixture = include_str!("fixtures/providers/anthropic_stream.sse");
+    let blocks = serde_json::json!([
+        {"type":"compaction","content":"EXACT_NATIVE_SUMMARY_618","opaque_extra":"UNCHANGED_618"}
+    ]);
+    let canonical = serde_json::json!([{"role":"assistant","content":blocks}]);
+    let body = Box::leak(
+        serde_json::json!({"stop_reason":"compaction","content":blocks})
+            .to_string()
+            .into_boxed_str(),
+    );
+    let replay = Replay::new([
+        Canned::reply(200, body),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+    ]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Anthropic);
+    config.route = None;
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    config.native_compaction = Some(true);
+    config.native_compaction_verified = Some(true);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let earlier = vec![
+        Turn::answered(1, "OBJECTIVE_618", "old work ".repeat(2800)),
+        Turn::answered(0, "", "EXACT_ACTIVE_SKILL_618"),
+        Turn::answered(2, "Recent", "EXACT_RECENT_618"),
+        Turn::answered(3, "Recent again", "DONE_WRITE_618"),
+    ];
+    let mut kept = Kept::default();
+    launch
+        .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let mut next = earlier.clone();
+    next.push(kept.ended_on());
+    launch
+        .drive(
+            "Follow up",
+            &next,
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    launch
+        .drive(
+            "Independent reset boundary",
+            &[],
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert_eq!(kept.ended_on().usage.native_compactions, Some(1));
+    assert_eq!(
+        kept.document.as_ref().unwrap().usage.native_compactions,
+        Some(1)
+    );
+    assert!(kept.ended_on().usage.request_ms.is_some());
+    assert!(kept.told.contains(&Told::Compacted { turn: 1 }));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 4);
+    assert!(requests[2].body.contains("OPAQUE_618") || requests[2].body.contains("UNCHANGED_618"));
+    assert_eq!(
+        requests[2].body.matches("EXACT_ACTIVE_SKILL_618").count(),
+        1
+    );
+    assert!(!requests[3].body.contains("OPAQUE_618"));
+    assert!(!requests[3].body.contains("UNCHANGED_618"));
+    assert!(!requests[3].body.contains("EXACT_ACTIVE_SKILL_618"));
+    assert!(requests[0].url.ends_with("/messages"));
+    let compact: serde_json::Value = serde_json::from_str(&requests[0].body).unwrap();
+    assert_eq!(
+        compact["compaction"],
+        serde_json::json!({"type":"summarize"})
+    );
+    let continued: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert_eq!(
+        &continued["messages"].as_array().unwrap()[..1],
+        canonical.as_array().unwrap()
+    );
+    assert!(requests[1].body.contains("EXACT_ACTIVE_SKILL_618"));
+    assert!(requests[1].body.contains("EXACT_RECENT_618"));
+    assert!(!requests[1].body.contains(&"old work ".repeat(100)));
+    assert!(!requests[1].body.contains("previous_response_id"));
+}
+
+#[test]
+fn native_compaction_rejections_keep_original_material_and_refuse_chains() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    for (verified, chained, status, body, expected_requests) in [
+        (false, false, 200, "{}", 0),
+        (true, true, 200, "{}", 0),
+        (true, false, 400, "{}", 1),
+        (true, false, 200, r#"{"output":[]}"#, 1),
+        (
+            true,
+            false,
+            200,
+            r#"{"output":[{"type":"message","role":"user","content":"not compacted"}]}"#,
+            1,
+        ),
+    ] {
+        let homes = Homes::new();
+        let replay = Replay::new([Canned::reply(status, body)]);
+        let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+        config.provider = Some(Wire::Openai);
+        config.route = Some(Route::Responses);
+        config.context_window = Some(40_000);
+        config.output_headroom = Some(1024);
+        config.tool_result_headroom = Some(1024);
+        config.native_compaction = Some(true);
+        config.native_compaction_verified = Some(verified);
+        config.responses_continuation = Some(chained);
+        config.responses_continuation_verified = Some(true);
+        config.responses_store = Some(true);
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+            .unwrap()
+            .answered_by(
+                &homes.machine(),
+                &config,
+                Enforcement::Unsafe,
+                FrontEnd::Terminal,
+                None,
+                |_, ask, tools| Asking::new(client.clone(), ask, tools),
+            )
+            .ok()
+            .unwrap();
+        let earlier = vec![
+            Turn::answered(1, "OBJECTIVE_618", "old work ".repeat(2800)),
+            Turn::answered(2, "Recent", "EXACT_RECENT_618"),
+            Turn::answered(3, "Recent again", "DONE_WRITE_618"),
+        ];
+        let original = earlier.clone();
+        let mut kept = Kept::default();
+        let outcome = launch
+            .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+            .unwrap_or_else(|r| panic!("{}", r.message()));
+        assert!(matches!(outcome.stopped(), Stop::Error(_)));
+        assert_eq!(replay.requests().len(), expected_requests);
+        assert_eq!(earlier, original);
+    }
+}
+
+#[test]
+fn responses_cross_run_handle_forwards_completed_outputs_before_new_prompt() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+    let homes = Homes::new();
+    let replay = Replay::new([Canned::stream(include_str!(
+        "fixtures/providers/openai_responses_tool_use.sse"
+    ))]);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Openai);
+    config.model = Some("gpt-5".into());
+    config.max_turns = Some(1);
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| {
+                Asking::new(
+                    client.clone(),
+                    ask.route(Route::Responses)
+                        .continuation(true, Some(true), true),
+                    tools,
+                )
+            },
+        )
+        .ok()
+        .unwrap();
+    let mut retaining = Retaining::default();
+    launch
+        .drive(
+            "FIRST_SENTINEL",
+            &[],
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let earlier = retaining.0.turns().to_vec();
+    launch
+        .drive(
+            "SECOND_SENTINEL",
+            &earlier,
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    let first: serde_json::Value = serde_json::from_str(&requests[0].body).unwrap();
+    let second: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert_eq!(first["store"], true);
+    assert_eq!(second["input"][0]["type"], "function_call_output");
+    assert_eq!(second["input"][0]["call_id"], "call_01");
+    assert_eq!(second["previous_response_id"], "resp_tool");
+    assert!(!second["input"].to_string().contains("FIRST_SENTINEL"));
+    assert!(second["input"].to_string().contains("SECOND_SENTINEL"));
+    assert_eq!(first["instructions"], second["instructions"]);
+    assert_eq!(first["tools"], second["tools"]);
+}
+
+#[test]
+fn native_compaction_admits_prefix_when_protected_suffix_exceeds_window() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    let homes = Homes::new();
+    let fixture = include_str!("fixtures/providers/openai_responses_stream.sse");
+    let canonical = serde_json::json!([
+        {"type":"message","role":"user","content":"RETAINED_CANONICAL_618"},
+        {"type":"compaction","id":"cmp_618","encrypted_content":"OPAQUE_618","future_field":{"exact":true}}
+    ]);
+    let body = Box::leak(
+        serde_json::json!({"id":"compact_618","object":"response.compaction","output":canonical,"usage":{"input_tokens":10,"output_tokens":5,"input_tokens_details":{"cached_tokens":4},"output_tokens_details":{"reasoning_tokens":2}}})
+            .to_string()
+            .into_boxed_str(),
+    );
+    let replay = Replay::new([
+        Canned::reply(200, body),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+    ]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Openai);
+    config.route = Some(Route::Responses);
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    config.native_compaction = Some(true);
+    config.native_compaction_verified = Some(true);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let earlier = vec![
+        Turn::answered(1, "OBJECTIVE_618", "old work ".repeat(2800)),
+        Turn::answered(0, "", "EXACT_ACTIVE_SKILL_618"),
+        Turn::answered(
+            2,
+            "Recent",
+            format!("EXACT_RECENT_618 {}", "recent ".repeat(2000)),
+        ),
+        Turn::answered(3, "Recent again", "DONE_WRITE_618"),
+    ];
+    let mut kept = Kept::default();
+    launch
+        .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert_eq!(kept.ended_on().usage.native_compactions, Some(1));
+    assert_eq!(kept.ended_on().usage.input, Some(19));
+    assert_eq!(kept.ended_on().usage.output, Some(9));
+    assert_eq!(kept.ended_on().usage.cache_read, Some(7));
+    assert_eq!(kept.ended_on().usage.reasoning, Some(4));
+    assert_eq!(kept.ended_on().usage.cache_write, None);
+
+    assert_eq!(
+        kept.document.as_ref().unwrap().usage.native_compactions,
+        Some(1)
+    );
+    assert!(kept.ended_on().usage.request_ms.is_some());
+    assert!(kept.told.contains(&Told::Compacted { turn: 1 }));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].url.ends_with("/responses/compact"));
+    assert!(!requests[0].body.contains("EXACT_RECENT_618"));
+    assert!(requests[0].body.contains("EXACT_ACTIVE_SKILL_618"));
+    assert!(requests[1].body.contains("EXACT_RECENT_618"));
+}
+
+#[test]
+fn successful_summary_usage_is_reported_when_continuation_fails() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+
+    let homes = Homes::new();
+    let fixture = include_str!("fixtures/providers/anthropic_stream.sse");
+    let replay = Replay::new([
+        Canned::stream(fixture),
+        Canned::reply(
+            400,
+            r#"{"error":{"message":"continuation refused","type":"invalid_request_error"}}"#,
+        ),
+    ]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let mut evidence = Turn::answered(1, "Completed operation", "SIDE_EFFECT_DONE_616");
+    evidence.calls.push(Call::new(
+        "call_616",
+        "bash",
+        r#"{"command":"printf evidence"}"#,
+    ));
+    evidence.results.push(sindri_core::turn::Acted {
+        text: "EXACT_EVIDENCE_616".into(),
+        bytes: 18,
+        elapsed: std::time::Duration::ZERO,
+        exit: sindri_core::turn::Exit::Code(0),
+    });
+    let earlier = vec![
+        Turn::answered(1, "Preserve OBJECTIVE_616", "old work ".repeat(2800)),
+        Turn::answered(0, "", "EXACT_SKILL_SNAPSHOT_616"),
+        Turn::answered(3, "Next", "Do not repeat completed writes"),
+        evidence,
+        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
+    ];
+    let mut kept = Kept::default();
+    launch
+        .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert_eq!(kept.ended_on().usage.client_compactions, Some(1));
+    assert_eq!(
+        kept.document.as_ref().unwrap().usage.client_compactions,
+        Some(1)
+    );
+    assert!(kept.ended_on().usage.request_ms.is_some());
+    assert!(kept.told.contains(&Told::Compacted { turn: 1 }));
+    let requests = replay.requests();
+    assert_eq!(
+        requests.len(),
+        2,
+        "a supported summary request precedes continuation"
+    );
+    assert!(requests[0].body.contains("OBJECTIVE_616"));
+    assert!(requests[0].body.contains("EXACT_SKILL_SNAPSHOT_616"));
+    assert!(requests[0].body.contains("completed side effects"));
+    assert!(!requests[0].body.contains("\"tools\""));
+    assert!(
+        requests[1]
+            .body
+            .contains("Client-managed conversation summary")
+    );
+}
+
+#[test]
+fn completed_visible_partial_discovery_is_labelled_and_replayed_after_failure() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+    let homes = Homes::new();
+    let complete = include_str!("fixtures/providers/openai_responses_stream.sse");
+    let partial = complete.split("event: response.completed").next().unwrap();
+    let replay = Replay::new([Canned::stream(partial), Canned::stream(complete)]);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Openai);
+    config.model = Some("gpt-5".into());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| {
+                Asking::new(
+                    client.clone(),
+                    ask.route(Route::Responses).continuation(false, None, false),
+                    tools,
+                )
+            },
+        )
+        .ok()
+        .unwrap();
+    let mut retaining = Retaining::default();
+    launch
+        .drive(
+            "FIRST_SENTINEL",
+            &[],
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let earlier = retaining.0.turns().to_vec();
+    launch
+        .drive(
+            "SECOND_SENTINEL",
+            &earlier,
+            &mut Quiet,
+            &mut retaining,
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    let first: serde_json::Value = serde_json::from_str(&requests[0].body).unwrap();
+    let second: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert!(first.get("store").is_none());
+    assert!(second["input"].to_string().contains("Hi there"));
+    assert!(
+        second["input"]
+            .to_string()
+            .contains("Partial response failed")
+    );
+    assert!(second.get("previous_response_id").is_none());
+}
+
+#[test]
+fn oversized_summary_is_charged_without_replacing_original_material() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+
+    let homes = Homes::new();
+    let fixture = include_str!("fixtures/providers/anthropic_stream.sse");
+    let oversized = fixture.replace("world", &"oversized summary ".repeat(4000));
+    let replay = Replay::new([Canned::stream(Box::leak(oversized.into_boxed_str()))]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let mut evidence = Turn::answered(1, "Completed operation", "SIDE_EFFECT_DONE_616");
+    evidence.calls.push(Call::new(
+        "call_616",
+        "bash",
+        r#"{"command":"printf evidence"}"#,
+    ));
+    evidence.results.push(sindri_core::turn::Acted {
+        text: "EXACT_EVIDENCE_616".into(),
+        bytes: 18,
+        elapsed: std::time::Duration::ZERO,
+        exit: sindri_core::turn::Exit::Code(0),
+    });
+    let earlier = vec![
+        Turn::answered(1, "Preserve OBJECTIVE_616", "old work ".repeat(2800)),
+        Turn::answered(0, "", "EXACT_SKILL_SNAPSHOT_616"),
+        Turn::answered(3, "Next", "Do not repeat completed writes"),
+        evidence,
+        Turn::answered(2, "Recent", "EXACT_RECENT_616"),
+    ];
+    let mut kept = Kept::default();
+    launch
+        .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert_eq!(kept.ended_on().usage.client_compactions, Some(1));
+    assert_eq!(
+        kept.document.as_ref().unwrap().usage.client_compactions,
+        Some(1)
+    );
+    assert!(kept.ended_on().usage.request_ms.is_some());
+    assert!(kept.told.contains(&Told::Compacted { turn: 1 }));
+    let requests = replay.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "oversized continuation never reaches the endpoint"
+    );
+    assert_eq!(earlier[0].text.len(), 25200);
+}

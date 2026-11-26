@@ -776,6 +776,7 @@ fn a_turn_written_and_read_back_shows_every_entry_kind_a_turn_can_produce() {
 
     record
         .wrote(&Turn {
+            assistant: Default::default(),
             turn: 1,
             prompt: String::from("triage this"),
             text: String::from("two files."),
@@ -795,6 +796,7 @@ fn a_turn_written_and_read_back_shows_every_entry_kind_a_turn_can_produce() {
                 },
             ],
             reasoning: Some(String::from("list both before answering")),
+            responses: None,
             usage: Usage::default(),
         })
         .expect("a turn is written whole");
@@ -1048,6 +1050,7 @@ fn no_line_of_the_record_carries_a_secret() {
                 exit: Exit::Code(0),
             }],
             reasoning: Some(String::from("the key is hunter2, so read the file")),
+            responses: None,
             ..Turn::answered(
                 1,
                 "the key is hunter2, so triage this",
@@ -1332,6 +1335,7 @@ fn the_usage_of_every_ask_is_summed_and_what_nobody_reported_is_left_out() {
             total: Some(15),
             cached_input: None,
             reasoning: None,
+            ..Usage::default()
         },
         Usage {
             input: Some(1),
@@ -1339,6 +1343,7 @@ fn the_usage_of_every_ask_is_summed_and_what_nobody_reported_is_left_out() {
             total: Some(3),
             cached_input: Some(7),
             reasoning: None,
+            ..Usage::default()
         },
         Usage::default(),
     ] {
@@ -1690,6 +1695,7 @@ fn child_writes_entries_until_it_is_killed() {
                 total: Some(15),
                 cached_input: None,
                 reasoning: None,
+                ..Usage::default()
             })
             .expect("an ask is charged");
         println!("turn {turn}");

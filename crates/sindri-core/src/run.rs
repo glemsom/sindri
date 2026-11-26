@@ -251,8 +251,10 @@ impl Spent {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Reply {
+    pub assistant: crate::provider::Assistant,
     pub text: String,
     pub reasoning: Option<String>,
+    pub responses: Option<crate::provider::Responses>,
     pub calls: Vec<Call>,
     pub usage: Usage,
 }
@@ -264,8 +266,10 @@ impl Reply {
 
     pub fn asking(text: impl Into<String>, calls: impl IntoIterator<Item = Call>) -> Reply {
         Reply {
+            assistant: crate::provider::Assistant::default(),
             text: text.into(),
             reasoning: None,
+            responses: None,
             calls: calls.into_iter().collect(),
             usage: Usage::default(),
         }
@@ -309,6 +313,15 @@ impl Request {
 }
 
 pub trait Responder {
+    fn observed_usage(&self) -> Usage {
+        Usage::default()
+    }
+    fn compacted(&self) -> bool {
+        false
+    }
+    fn replay_loss(&self, _earlier: &[Turn]) -> bool {
+        false
+    }
     fn respond(&self, request: &Request, deltas: &mut dyn Deltas) -> Result<Reply, Failure>;
 }
 
@@ -324,34 +337,114 @@ pub enum Load {
 
 #[derive(Clone, Debug, Default)]
 pub struct Loaded {
-    names: Arc<Mutex<Vec<String>>>,
+    state: Arc<Mutex<LoadedState>>,
+    generation: Option<u64>,
+}
+
+#[derive(Debug, Default)]
+struct LoadedState {
+    names: Vec<String>,
+    material: Vec<(String, String)>,
+    generation: u64,
 }
 
 impl Loaded {
+    pub fn scoped(&self) -> Self {
+        Self {
+            state: Arc::clone(&self.state),
+            generation: Some(self.generation.unwrap_or_else(|| self.lock().generation)),
+        }
+    }
+
+    fn current(&self, state: &LoadedState) -> bool {
+        self.generation
+            .is_none_or(|generation| generation == state.generation)
+    }
+
     pub fn names(&self) -> Vec<String> {
-        self.lock().clone()
+        let state = self.lock();
+        if self.current(&state) {
+            state.names.clone()
+        } else {
+            Vec::new()
+        }
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        holds(&self.lock(), name)
+        holds(&self.names(), name)
     }
 
     pub fn load(&self, name: impl Into<String>) -> Load {
         let name = name.into();
-        let mut names = self.lock();
-        if holds(&names, &name) {
+        let mut state = self.lock();
+        if !self.current(&state) || holds(&state.names, &name) {
             return Load::AlreadyLoaded;
         }
-        names.push(name);
+        state.names.push(name);
         Load::Loaded
     }
 
-    pub fn clear(&self) {
-        self.lock().clear();
+    pub fn activate(&self, skill: &crate::skills::Skill) -> (Load, String) {
+        let mut state = self.lock();
+        if !self.current(&state) {
+            return (Load::AlreadyLoaded, "conversation superseded".into());
+        }
+        if state.material.iter().any(|(name, _)| name == &skill.name) {
+            return (
+                Load::AlreadyLoaded,
+                format!(
+                    "already_loaded: `{}` instructions remain available in this conversation.",
+                    skill.name
+                ),
+            );
+        }
+        let body = skill.wrapper();
+        state.material.push((skill.name.clone(), body.clone()));
+        if !holds(&state.names, &skill.name) {
+            state.names.push(skill.name.clone());
+        }
+        (Load::Loaded, body)
     }
 
-    fn lock(&self) -> MutexGuard<'_, Vec<String>> {
-        self.names
+    pub fn protected(&self) -> Vec<String> {
+        let state = self.lock();
+        if self.current(&state) {
+            state
+                .material
+                .iter()
+                .map(|(_, body)| body.clone())
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub fn missing(&self, turns: &[Turn]) -> Vec<Turn> {
+        self.protected()
+            .into_iter()
+            .filter(|body| {
+                !turns.iter().any(|turn| {
+                    turn.text == *body || turn.results.iter().any(|result| result.text == *body)
+                })
+            })
+            .map(|body| Turn::answered(0, "", body))
+            .collect()
+    }
+
+    pub fn clear(&self) {
+        let mut state = self.lock();
+        if self.current(&state) {
+            state.names.clear();
+            state.material.clear();
+            state.generation = state
+                .generation
+                .checked_add(1)
+                .expect("conversation generation exhausted");
+        }
+    }
+
+    fn lock(&self) -> MutexGuard<'_, LoadedState> {
+        self.state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
@@ -364,7 +457,11 @@ fn holds(names: &[String], name: &str) -> bool {
 impl<S: Into<String>> FromIterator<S> for Loaded {
     fn from_iter<I: IntoIterator<Item = S>>(names: I) -> Loaded {
         Loaded {
-            names: Arc::new(Mutex::new(names.into_iter().map(Into::into).collect())),
+            state: Arc::new(Mutex::new(LoadedState {
+                names: names.into_iter().map(Into::into).collect(),
+                ..LoadedState::default()
+            })),
+            generation: None,
         }
     }
 }
@@ -380,6 +477,7 @@ pub trait Witness {
 }
 
 pub struct Settled<'a> {
+    pub retained: &'a [Turn],
     pub state: &'a State,
     pub kept: &'a Turn,
     pub spent: &'a Usage,
@@ -533,13 +631,55 @@ impl<R: Responder, A: Executor> Run<R, A> {
         self.turns += 1;
         witness.told(Told::Asking { turn: self.turns });
         let request = self.request();
-        let reply = match self.responder.respond(&request, deltas) {
+        struct Visible<'a> {
+            deltas: &'a mut dyn Deltas,
+            completed: Vec<String>,
+        }
+        impl Deltas for Visible<'_> {
+            fn text(&mut self, text: &str) {
+                self.deltas.text(text);
+            }
+            fn reasoning(&mut self, text: &str) {
+                self.deltas.reasoning(text);
+            }
+            fn completed_text(&mut self, text: &str) {
+                self.completed.push(text.into());
+            }
+        }
+        let mut visible = Visible {
+            deltas,
+            completed: Vec::new(),
+        };
+        let observed_before = self.responder.observed_usage();
+        let reply = match self.responder.respond(&request, &mut visible) {
             Ok(reply) => reply,
             Err(failure) => {
+                let observed = self.responder.observed_usage();
+                if observed != observed_before || !visible.completed.is_empty() {
+                    let mut turn = Turn::answered(
+                        self.turns,
+                        self.prompt.clone(),
+                        "Request failed after observed compaction; original material retained.",
+                    );
+                    if !visible.completed.is_empty() {
+                        turn.text = format!(
+                            "Partial response failed; completed visible discoveries only (not a final answer):\n{}",
+                            visible.completed.join("\n")
+                        );
+                    }
+                    turn.usage = observed.since(observed_before);
+                    self.history.push(turn);
+                }
+                if self.responder.compacted() {
+                    witness.told(Told::Compacted { turn: self.turns });
+                }
                 self.settle(Stop::Error(failure.message));
                 return self.state();
             }
         };
+        if self.responder.compacted() {
+            witness.told(Told::Compacted { turn: self.turns });
+        }
         let mut results = Vec::with_capacity(reply.calls.len());
         if !reply.calls.is_empty() {
             witness.told(Told::Waiting { turn: self.turns });
@@ -548,6 +688,12 @@ impl<R: Responder, A: Executor> Run<R, A> {
             let acted = match self.executor.execute(call, &self.loaded) {
                 Ok(acted) => acted,
                 Err(message) => {
+                    results.push(Acted {
+                        text: format!("tool execution failed: {message}"),
+                        bytes: 0,
+                        elapsed: Duration::ZERO,
+                        exit: Exit::Code(1),
+                    });
                     self.settle(Stop::Error(message));
                     break;
                 }
@@ -565,12 +711,14 @@ impl<R: Responder, A: Executor> Run<R, A> {
         }
 
         self.history.push(Turn {
+            assistant: reply.assistant.clone(),
             turn: self.turns,
             prompt: self.prompt.clone(),
             text: reply.text.clone(),
             calls: reply.calls.clone(),
             results,
             reasoning: reply.reasoning.clone(),
+            responses: reply.responses.clone(),
             usage: reply.usage,
         });
 
@@ -593,7 +741,17 @@ impl<R: Responder, A: Executor> Run<R, A> {
                 witness.ended(ended);
             }
         }
+        let mut retained = if self.history.is_empty() {
+            vec![self.kept()]
+        } else {
+            self.history.clone()
+        };
+        // A retained prompt marks its run boundary; later turns replay under that same prompt.
+        for turn in retained.iter_mut().skip(1) {
+            turn.prompt.clear();
+        }
         witness.settled(&Settled {
+            retained: &retained,
             state: &self.state,
             kept: &self.kept(),
             spent: &totaled(&self.history),
@@ -764,13 +922,7 @@ impl Shell {
                 ))
             })?;
 
-        let text = match loaded.load(&name) {
-            Load::Loaded => skill.wrapper(),
-            Load::AlreadyLoaded => format!(
-                "already_loaded: `{name}` was loaded earlier in this conversation, so its \
-                 instructions are already in hand and are not repeated here."
-            ),
-        };
+        let (_, text) = loaded.activate(skill);
         Ok(Acted {
             text,
             bytes: 0,

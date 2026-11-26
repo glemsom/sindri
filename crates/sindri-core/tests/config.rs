@@ -31,16 +31,23 @@ fn resolved_in(text: &str, vars: &[(&str, &str)], flags: Config) -> Config {
     resolved(home.path(), vars, flags).expect("the config loads")
 }
 
-const EXAMPLES: [(&str, &str); 16] = [
+const EXAMPLES: [(&str, &str); 23] = [
     ("provider", "\"openai\""),
     ("model", "\"claude-sonnet-4-5\""),
     ("route", "\"responses\""),
     ("base_url", "\"https://gateway.test/v1\""),
     ("api_key", "\"sk-not-a-real-key\""),
+    ("responses_continuation", "true"),
+    ("responses_store", "true"),
+    ("responses_continuation_verified", "true"),
+    ("native_compaction", "true"),
+    ("native_compaction_verified", "true"),
     ("thinking", "true"),
     ("extra_writable_paths", "[\"/srv/data\"]"),
     ("extra_headers", "[\"X-Gateway-Session: {session}\"]"),
     ("context_window", "200000"),
+    ("output_headroom", "4096"),
+    ("tool_result_headroom", "4096"),
     ("max_turns", "250"),
     ("timeout", "120"),
     ("command_budget_ms", "3600000"),
@@ -50,7 +57,7 @@ const EXAMPLES: [(&str, &str); 16] = [
     ("ssh_agent", "false"),
 ];
 
-const SPOKEN: [(&str, &str, &str); 16] = [
+const SPOKEN: [(&str, &str, &str); 23] = [
     ("provider", "openai", "\"openai\""),
     ("model", "claude-sonnet-4-5", "\"claude-sonnet-4-5\""),
     ("route", "responses", "\"responses\""),
@@ -60,6 +67,11 @@ const SPOKEN: [(&str, &str, &str); 16] = [
         "\"https://gateway.test/\"",
     ),
     ("api_key", "sk-not-a-real-key", "\"sk-not-a-real-key\""),
+    ("responses_continuation", "true", "true"),
+    ("responses_store", "true", "true"),
+    ("responses_continuation_verified", "true", "true"),
+    ("native_compaction", "true", "true"),
+    ("native_compaction_verified", "true", "true"),
     ("thinking", "true", "true"),
     (
         "extra_writable_paths",
@@ -72,6 +84,8 @@ const SPOKEN: [(&str, &str, &str); 16] = [
         "[\"X-Gateway-Session: {session}\", \"X-Trace: on\"]",
     ),
     ("context_window", "200000", "200000"),
+    ("output_headroom", "4096", "4096"),
+    ("tool_result_headroom", "4096", "4096"),
     ("max_turns", "250", "250"),
     ("timeout", "120", "120"),
     ("command_budget_ms", "3600000", "3600000"),
@@ -186,10 +200,17 @@ fn the_table_names_every_key_of_the_schema_in_the_order_the_screen_reads_them() 
         "route",
         "base_url",
         "api_key",
+        "responses_continuation",
+        "responses_store",
+        "responses_continuation_verified",
+        "native_compaction",
+        "native_compaction_verified",
         "thinking",
         "extra_writable_paths",
         "extra_headers",
         "context_window",
+        "output_headroom",
+        "tool_result_headroom",
         "max_turns",
         "timeout",
         "command_budget_ms",
@@ -214,7 +235,17 @@ fn the_table_names_every_key_of_the_schema_in_the_order_the_screen_reads_them() 
 
     assert_eq!(
         switches,
-        vec!["thinking", "status", "face", "ssh_agent"],
+        vec![
+            "responses_continuation",
+            "responses_store",
+            "responses_continuation_verified",
+            "native_compaction",
+            "native_compaction_verified",
+            "thinking",
+            "status",
+            "face",
+            "ssh_agent"
+        ],
         "a key the table calls a switch is one the screen's space flips, and no other key is"
     );
 }
@@ -282,10 +313,10 @@ fn a_context_window_in_the_file_is_read_as_tokens_beside_the_turn_cap() {
         .expect("the schema names the window");
 
     assert_eq!(
-        keys.get(at + 1),
+        keys.get(at + 3),
         Some(&"max_turns"),
         "the settings modal walks the schema's order, so the window is one of the run dials \
-         and sits immediately before the cap: {keys:?}"
+         and its headroom sits before the cap: {keys:?}"
     );
 
     let home = config_home("context_window = 200000\n");
@@ -897,9 +928,16 @@ fn two_configs_that_differ_only_in_what_a_frame_reads_decide_the_same_run() {
             "base_url" => other.base_url = Some(String::from("https://gateway.test/v1")),
             "api_key" => other.api_key = Some(String::from("sk-another-key")),
             "thinking" => other.thinking = Some(true),
+            "responses_continuation" => other.responses_continuation = Some(true),
+            "responses_store" => other.responses_store = Some(true),
+            "responses_continuation_verified" => other.responses_continuation_verified = Some(true),
+            "native_compaction" => other.native_compaction = Some(true),
+            "native_compaction_verified" => other.native_compaction_verified = Some(true),
             "extra_writable_paths" => other.extra_writable_paths = Some(vec![PathBuf::from("/w")]),
             "extra_headers" => other.extra_headers = Some(vec![String::from("x-one: 1")]),
             "context_window" => other.context_window = Some(200_000),
+            "output_headroom" => other.output_headroom = Some(2048),
+            "tool_result_headroom" => other.tool_result_headroom = Some(2048),
             "max_turns" => other.max_turns = Some(7),
             "timeout" => other.timeout = Some(30),
             "command_budget_ms" => other.command_budget_ms = Some(1_000),

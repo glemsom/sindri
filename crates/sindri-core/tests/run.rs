@@ -190,7 +190,7 @@ fn told_turns(watching: &Watching) -> (Vec<u32>, Vec<u32>) {
         match told {
             Told::Asking { turn } => asking.push(*turn),
             Told::Waiting { turn } => waiting.push(*turn),
-            Told::Idle | Told::Stopped { .. } => {}
+            Told::Idle | Told::Compacted { .. } | Told::Stopped { .. } => {}
         }
     }
     (asking, waiting)
@@ -418,6 +418,7 @@ fn a_run_keeps_the_reasoning_its_reply_brought_beside_the_turn_it_produced() {
         "why does the retry test fail?",
         Scripted::answering([Reply {
             reasoning: Some(String::from("read the retry helper first")),
+            responses: None,
             ..Reply::answer("it was the retry")
         }]),
         Tools::cheap(),
@@ -531,6 +532,7 @@ fn a_responder_is_handed_the_very_turn_the_run_keeps() {
     run.drive(&mut Transcript::default(), &mut ());
 
     let asked = Turn {
+        assistant: Default::default(),
         turn: 1,
         prompt: String::from("why does the retry test fail?"),
         text: String::from("running it"),
@@ -542,6 +544,7 @@ fn a_responder_is_handed_the_very_turn_the_run_keeps() {
             exit: Exit::Code(0),
         }],
         reasoning: None,
+        responses: None,
         usage: Usage {
             input: Some(1_200),
             output: Some(20),
@@ -599,6 +602,7 @@ fn a_run_keeps_the_very_turn_it_took() {
     run.turn(&mut Transcript::default(), &mut ());
 
     let took = Turn {
+        assistant: Default::default(),
         turn: 1,
         prompt: String::from("count the files"),
         text: String::from("let me list them"),
@@ -610,6 +614,7 @@ fn a_run_keeps_the_very_turn_it_took() {
             exit: Exit::Code(0),
         }],
         reasoning: None,
+        responses: None,
         usage: Usage {
             input: Some(1_200),
             output: Some(20),
@@ -2005,7 +2010,7 @@ fn two_identical_loads_in_one_turn_are_one_load() {
 }
 
 #[test]
-fn a_human_load_makes_the_next_model_load_already_loaded() {
+fn a_name_without_instructions_does_not_suppress_model_delivery() {
     let ground = SkillGround::new();
     let (tools, log) = ground.recorded();
     let model = Scripted::answering([
@@ -2024,8 +2029,8 @@ fn a_human_load_makes_the_next_model_load_already_loaded() {
     let answers = answers(&log);
     assert_eq!(answers.len(), 1);
     assert!(
-        answers[0].contains("already_loaded") && !answers[0].contains("Run `scripts/release.sh`"),
-        "the model's later load is the same conversation's load, so it carries no body: {}",
+        !answers[0].contains("already_loaded") && answers[0].contains("Run `scripts/release.sh`"),
+        "a name alone cannot suppress delivery of instructions: {}",
         answers[0]
     );
 }

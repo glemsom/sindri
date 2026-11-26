@@ -459,6 +459,7 @@ impl<'a> Loop<'a> {
                 }
             }
         };
+        let launching = launching.with_loaded(self.view.facts().loaded().clone());
         self.session = Some(launching.session());
         self.view.settle();
         let ground = launching.ground();
@@ -517,9 +518,6 @@ impl<'a> Loop<'a> {
                 }
                 Report::Told(told) => self.told(told)?,
                 Report::Facts(rail) => {
-                    for name in self.view.facts().loaded().names() {
-                        rail.loaded.load(name);
-                    }
                     self.view.handed(self.view.facts().clone().railed(rail));
                     painted = true;
                 }
@@ -536,7 +534,15 @@ impl<'a> Loop<'a> {
                     );
                     painted = true;
                 }
-                Report::Kept(kept) => self.view.kept(&kept),
+                Report::ReplayBoundary => {
+                    self.view.refuse("Wire target changed: incompatible native state omitted; visible evidence and completed tool outcomes retained.");
+                    painted = true;
+                }
+                Report::Retained(retained) => {
+                    for turn in retained {
+                        self.view.kept(&turn);
+                    }
+                }
                 Report::Stopped { stop, elapsed_ms } => stopped = Some((stop, elapsed_ms)),
             }
         }

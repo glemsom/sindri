@@ -1350,7 +1350,7 @@ fn single_child(sandboxed: bool) {
             "--api-key",
             "cli-child-secret",
             "--context-window",
-            "12345",
+            "200000",
             "--format",
             "json",
         ])

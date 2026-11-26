@@ -23,9 +23,16 @@ pub struct Config {
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub thinking: Option<bool>,
+    pub responses_continuation: Option<bool>,
+    pub responses_store: Option<bool>,
+    pub responses_continuation_verified: Option<bool>,
+    pub native_compaction: Option<bool>,
+    pub native_compaction_verified: Option<bool>,
     pub extra_writable_paths: Option<Vec<PathBuf>>,
     pub extra_headers: Option<Vec<String>>,
     pub context_window: Option<u64>,
+    pub output_headroom: Option<u64>,
+    pub tool_result_headroom: Option<u64>,
     pub max_turns: Option<u32>,
     pub timeout: Option<u64>,
     pub command_budget_ms: Option<u64>,
@@ -182,7 +189,7 @@ impl Field {
 }
 
 impl Config {
-    pub const SCHEMA: [Field; 16] = [
+    pub const SCHEMA: [Field; 23] = [
         Field::typed(
             "provider",
             "SINDRI_PROVIDER",
@@ -248,6 +255,68 @@ impl Config {
             },
             |key, config, document| write_text(key, config.api_key.as_ref(), document),
             or_lower!(api_key),
+        ),
+        Field::typed(
+            "responses_continuation",
+            "SINDRI_RESPONSES_CONTINUATION",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.responses_continuation),
+            |key, config, text| {
+                config.responses_continuation = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| write_value(key, config.responses_continuation, document),
+            or_lower!(responses_continuation),
+        ),
+        Field::typed(
+            "responses_store",
+            "SINDRI_RESPONSES_STORE",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.responses_store),
+            |key, config, text| {
+                config.responses_store = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| write_value(key, config.responses_store, document),
+            or_lower!(responses_store),
+        ),
+        Field::typed(
+            "responses_continuation_verified",
+            "SINDRI_RESPONSES_CONTINUATION_VERIFIED",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.responses_continuation_verified),
+            |key, config, text| {
+                config.responses_continuation_verified = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| {
+                write_value(key, config.responses_continuation_verified, document)
+            },
+            or_lower!(responses_continuation_verified),
+        ),
+        Field::typed(
+            "native_compaction",
+            "SINDRI_NATIVE_COMPACTION",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.native_compaction),
+            |key, config, text| {
+                config.native_compaction = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| write_value(key, config.native_compaction, document),
+            or_lower!(native_compaction),
+        ),
+        Field::typed(
+            "native_compaction_verified",
+            "SINDRI_NATIVE_COMPACTION_VERIFIED",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.native_compaction_verified),
+            |key, config, text| {
+                config.native_compaction_verified = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| write_value(key, config.native_compaction_verified, document),
+            or_lower!(native_compaction_verified),
         ),
         Field::typed(
             "thinking",
@@ -327,6 +396,30 @@ impl Config {
             },
             |key, config, document| write_window(key, config.context_window, document),
             or_lower!(context_window),
+        ),
+        Field::typed(
+            "output_headroom",
+            "SINDRI_OUTPUT_HEADROOM",
+            FieldKind::Integer,
+            |config| number_or_empty(config.output_headroom),
+            |key, config, text| {
+                config.output_headroom = Some(nonzero_window(key, parsed(key, text)?)?);
+                Ok(())
+            },
+            |key, config, document| write_window(key, config.output_headroom, document),
+            or_lower!(output_headroom),
+        ),
+        Field::typed(
+            "tool_result_headroom",
+            "SINDRI_TOOL_RESULT_HEADROOM",
+            FieldKind::Integer,
+            |config| number_or_empty(config.tool_result_headroom),
+            |key, config, text| {
+                config.tool_result_headroom = Some(nonzero_window(key, parsed(key, text)?)?);
+                Ok(())
+            },
+            |key, config, document| write_window(key, config.tool_result_headroom, document),
+            or_lower!(tool_result_headroom),
         ),
         Field::typed(
             "max_turns",
@@ -466,6 +559,14 @@ impl Config {
                 })?;
         if let Some(window) = config.context_window {
             nonzero_window(&path.display().to_string(), window)?;
+        }
+        for (key, value) in [
+            ("output_headroom", config.output_headroom),
+            ("tool_result_headroom", config.tool_result_headroom),
+        ] {
+            if let Some(value) = value {
+                nonzero_window(key, value)?;
+            }
         }
         Ok(config)
     }

@@ -324,3 +324,105 @@ fn an_openai_ask_on_the_chat_route_replays_them_the_way_that_route_spells_them()
         "the same prompts read the same on either route"
     );
 }
+
+#[test]
+fn server_continuation_never_client_compacts_or_admits_only_the_handle_delta() {
+    let replay = Replay::new([Canned::stream(OPENAI_RESPONSES)]);
+    let client = client_over(&replay);
+    let ask = Ask::new(Wire::Openai, "gpt-5")
+        .route(Route::Responses)
+        .key("sk-recorded")
+        .continuation(true, Some(true), false)
+        .prompt("FIRST_CHAIN_SENTINEL");
+    let answer = client.ask(&ask, &mut ()).unwrap();
+    let mut turn = Turn::answered(1, "FIRST_CHAIN_SENTINEL", answer.text);
+    turn.responses = answer.responses;
+    let mut earlier = Vec::new();
+    for _ in 0..4 {
+        let mut retained = turn.clone();
+        retained.prompt = "CHAIN_EVIDENCE".repeat(4000);
+        earlier.push(retained);
+    }
+    let ask = ask
+        .earlier(earlier)
+        .prompt("NEW_CHAIN_INPUT")
+        .capacity(Some(40_000), 1024, 1024);
+    assert!(ask.compact(&client).unwrap().is_none());
+    assert!(ask.guard_capacity().is_err());
+    assert!(client.ask(&ask, &mut ()).is_err());
+    assert_eq!(replay.requests().len(), 1);
+}
+
+#[test]
+fn exposed_cache_reads_and_writes_are_measured_without_logging_response_artifacts() {
+    let fixture = include_str!("fixtures/providers/anthropic_stream_cached.sse").replace(
+        "\"cache_read_input_tokens\":4",
+        "\"cache_read_input_tokens\":4,\"cache_creation_input_tokens\":9",
+    );
+    let fixture = Box::leak(fixture.into_boxed_str());
+    let replay = Replay::new([Canned::stream(fixture)]);
+    let answer = client_over(&replay).ask(&anthropic_ask(), &mut ()).unwrap();
+    let usage = serde_json::to_value(answer.usage).unwrap();
+    assert_eq!(usage["cache_read"], 4);
+    assert_eq!(usage["cache_write"], 9);
+    assert!(usage["request_ms"].is_u64());
+    assert!(usage.get("client_compactions").is_none());
+    assert!(usage.get("native_compactions").is_none());
+    assert!(!usage.to_string().contains("sk-ant-recorded"));
+    assert!(!usage.to_string().contains("Hello"));
+}
+
+#[test]
+fn unsigned_anthropic_thinking_is_refused_before_accepting_tools() {
+    let fixture = include_str!("fixtures/providers/anthropic_thinking_tool_use.sse");
+    let unsigned = fixture
+        .split("\n\n")
+        .filter(|event| !event.contains("signature_delta"))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let replay = Replay::new([Canned::stream(Box::leak(unsigned.into_boxed_str()))]);
+    let result = client_over(&replay).ask(&anthropic_ask(), &mut Transcript::default());
+    assert!(
+        result.is_err(),
+        "unsigned thinking must not authorize tools"
+    );
+}
+
+#[test]
+fn failed_tool_outcomes_are_explicit_on_chat_and_responses() {
+    use sindri_core::turn::{Acted, Call, Exit};
+    for route in [Route::Chat, Route::Responses] {
+        let replay = Replay::new([Canned::stream(if route == Route::Chat {
+            CHAT
+        } else {
+            OPENAI_RESPONSES
+        })]);
+        let mut turn = Turn::answered(1, "A", "operation started");
+        turn.calls.push(Call {
+            id: "call_failed".into(),
+            name: "bash".into(),
+            arguments: r#"{"command":"exit 1"}"#.into(),
+        });
+        turn.results.push(Acted {
+            text: "plausible success prefix".into(),
+            bytes: 0,
+            elapsed: std::time::Duration::ZERO,
+            exit: Exit::Code(1),
+        });
+        client_over(&replay)
+            .ask(
+                &Ask::new(Wire::Openai, "gpt-5")
+                    .key("test-key")
+                    .route(route)
+                    .earlier([turn])
+                    .prompt("B"),
+                &mut (),
+            )
+            .unwrap();
+        assert!(
+            replay.requests()[0].body.contains("exit 1"),
+            "the outcome must survive the serializer"
+        );
+        assert!(replay.requests()[0].body.contains("Tool outcome: failed"));
+    }
+}

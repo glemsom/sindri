@@ -9,7 +9,7 @@ use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Load, Stop, Turn};
-use sindri_core::skills::{Catalog, Skill};
+use sindri_core::skills::Catalog;
 
 use crate::band;
 use crate::bill::Bill;
@@ -327,6 +327,7 @@ pub struct View {
     queue: Queue,
     conversation: Conversation,
     superseded: bool,
+    joined_generation: u64,
     stack: Stack,
     facts: Facts,
     read: ReadMark,
@@ -389,6 +390,7 @@ impl View {
             queue: Queue::default(),
             conversation: Conversation::default(),
             superseded: false,
+            joined_generation: 0,
             stack: Stack::default(),
             models: Models::new(),
             facts: Facts::default(),
@@ -442,9 +444,8 @@ impl View {
     }
 
     pub fn kept(&mut self, ended: &Turn) {
-        if !self.superseded {
-            self.conversation.join(ended.clone());
-        }
+        self.conversation
+            .join_for(self.joined_generation, ended.clone());
     }
 
     pub fn settle(&mut self) {
@@ -454,6 +455,7 @@ impl View {
         self.composer.set_state(State::Idle);
         self.facts = self.facts.clone().asked();
         self.superseded = false;
+        self.joined_generation = self.conversation.generation();
     }
 
     pub fn picker(&self) -> &Picker {
@@ -727,8 +729,7 @@ impl View {
         self.facts = self.facts.clone().pulsed(None);
         self.mark = None;
         self.drawn = Drawn::none();
-        self.facts.loaded().clear();
-        self.conversation.clear();
+        self.conversation.reset(self.facts.loaded());
         self.superseded = true;
         Outcome::Edited
     }
@@ -738,10 +739,10 @@ impl View {
             return Outcome::Unchanged;
         };
         let catalog = Catalog::discover(&workspace, self.facts.home());
-        if !catalog.get(name).is_some_and(Skill::human_invocable) {
+        let Some(skill) = catalog.get(name).filter(|skill| skill.human_invocable()) else {
             return Outcome::Unchanged;
-        }
-        match self.facts.loaded().load(name) {
+        };
+        match self.facts.loaded().activate(skill).0 {
             Load::Loaded => Outcome::Edited,
             Load::AlreadyLoaded => Outcome::Unchanged,
         }

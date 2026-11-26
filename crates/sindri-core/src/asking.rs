@@ -5,12 +5,16 @@ use crate::run::{Reply, Request, Responder};
 use crate::tools::ToolSet;
 use crate::turn::Usage;
 
+type Compacted = Option<(Vec<crate::turn::Turn>, Vec<crate::turn::Turn>)>;
+
 #[derive(Clone, Debug)]
 pub struct Asking {
     client: Client,
     ask: Ask,
     tools: ToolSet,
     spent: Arc<Mutex<Usage>>,
+    compacted: Arc<Mutex<Compacted>>,
+    event: Arc<Mutex<bool>>,
 }
 
 impl Asking {
@@ -20,6 +24,8 @@ impl Asking {
             ask,
             tools,
             spent: Arc::new(Mutex::new(Usage::default())),
+            compacted: Arc::new(Mutex::new(None)),
+            event: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -41,13 +47,60 @@ impl Asking {
 }
 
 impl Responder for Asking {
+    fn compacted(&self) -> bool {
+        std::mem::take(
+            &mut *self
+                .event
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    }
+    fn observed_usage(&self) -> Usage {
+        self.spent()
+    }
+    fn replay_loss(&self, earlier: &[crate::turn::Turn]) -> bool {
+        self.ask.transition(earlier).1
+    }
     fn respond(&self, request: &Request, deltas: &mut dyn Deltas) -> Result<Reply, Failure> {
-        let asked = self.ask(request);
-        let answer = self.client.ask(&asked, deltas)?;
+        let mut earlier = request.earlier().to_vec();
+        let mut cache = self
+            .compacted
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((original, replacement)) = cache.as_ref() {
+            if earlier.starts_with(original) {
+                earlier = replacement
+                    .iter()
+                    .cloned()
+                    .chain(earlier[original.len()..].iter().cloned())
+                    .collect();
+            } else {
+                *cache = None;
+            }
+        }
+        let asked = self.ask(request).earlier(earlier);
+        let compacted = asked.compact(&self.client)?;
+        if let Some(compacted) = &compacted {
+            self.spent
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .charge(&compacted.compaction_usage());
+            *self
+                .event
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+        }
+        let mut answer = self
+            .client
+            .ask(compacted.as_ref().unwrap_or(&asked), deltas)?;
         self.spent
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .charge(&answer.usage);
+        if let Some(compacted) = compacted {
+            answer.usage.charge(&compacted.compaction_usage());
+            *cache = Some((request.earlier().to_vec(), compacted.retained().to_vec()));
+        }
         Ok(Reply::from(answer))
     }
 }
@@ -55,8 +108,10 @@ impl Responder for Asking {
 impl From<Answer> for Reply {
     fn from(answer: Answer) -> Reply {
         Reply {
+            assistant: answer.assistant,
             text: answer.text,
             reasoning: answer.reasoning,
+            responses: answer.responses,
             calls: answer.calls,
             usage: answer.usage,
         }

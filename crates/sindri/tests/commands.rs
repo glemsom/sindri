@@ -977,8 +977,9 @@ fn tab_keeps_the_card_when_the_preserved_words_wrap() {
 #[test]
 fn an_already_loaded_skill_retains_the_exact_draft_and_sends_nothing() {
     let root = workspace_with("deploy", "");
-    let loaded = Loaded::from_iter(["deploy"]);
+    let loaded = Loaded::default();
     let mut view = frame_holding(root.path(), &loaded);
+    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Edited);
     let draft = "/skill:deploy  words\tkept\nnext  ";
     view.paste(draft);
     for _ in 0..7 {
@@ -1069,4 +1070,39 @@ fn ordinary_prompts_send_the_exact_draft() {
         }
         assert_eq!(view.composer().text(), "");
     }
+}
+
+#[test]
+fn human_only_activation_protects_the_original_body_after_catalog_changes() {
+    let root = workspace_with("deploy", "disable-model-invocation: true\n");
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Edited);
+    let protected = loaded.protected();
+    assert_eq!(protected.len(), 1);
+    assert!(protected[0].contains("Body."));
+    std::fs::remove_dir_all(root.path().join(".agents/skills/deploy")).unwrap();
+    assert_eq!(loaded.protected(), protected);
+}
+
+#[test]
+fn human_activation_keeps_repo_precedence_and_load_order() {
+    let root = workspace_with("deploy", "");
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Edited);
+    let catalog = sindri_core::skills::Catalog::discover(root.path(), None);
+    assert_eq!(
+        loaded.protected(),
+        [catalog.get("deploy").unwrap().wrapper()]
+    );
+    let directory = root.path().join(".agents/skills/deploy");
+    std::fs::write(
+        directory.join("SKILL.md"),
+        "---\nname: deploy\ndescription: changed\n---\nCHANGED_BODY",
+    )
+    .unwrap();
+    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Unchanged);
+    assert!(!loaded.protected()[0].contains("CHANGED_BODY"));
+    assert_eq!(loaded.names(), ["deploy"]);
 }

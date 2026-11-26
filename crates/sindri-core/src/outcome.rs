@@ -97,7 +97,12 @@ fn reported(usage: Usage) -> Option<Usage> {
         || usage.output.is_some()
         || usage.total.is_some()
         || usage.cached_input.is_some()
-        || usage.reasoning.is_some();
+        || usage.reasoning.is_some()
+        || usage.cache_read.is_some()
+        || usage.cache_write.is_some()
+        || usage.request_ms.is_some()
+        || usage.client_compactions.is_some()
+        || usage.native_compactions.is_some();
     reported.then_some(usage)
 }
 

@@ -307,3 +307,16 @@ fn the_report_is_one_compact_line_with_nothing_after_it() {
     );
     assert!(json.starts_with('{') && json.ends_with('}'), "{json}");
 }
+
+#[test]
+fn a_json_outcome_reports_only_observed_request_cache_and_compaction_metrics() {
+    let mut run = Run::new("hello", Says("hi"), Costs);
+    run.drive(&mut Quiet, &mut ());
+    let mut told = facts("recorded", "served");
+    let measured =
+        serde_json::json!({"cache_read":4,"cache_write":9,"request_ms":12,"native_compactions":1});
+    told.usage = serde_json::from_value(measured.clone()).unwrap();
+    let report: serde_json::Value =
+        serde_json::from_str(&Outcome::of(&run, told).unwrap().json()).unwrap();
+    assert_eq!(report["usage"], measured);
+}

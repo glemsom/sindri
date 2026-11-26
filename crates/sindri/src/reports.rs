@@ -99,6 +99,7 @@ fn millis(span: Duration) -> u64 {
 }
 
 pub(crate) enum Report {
+    ReplayBoundary,
     Text(String),
     Reasoning(String),
     Told(Told),
@@ -107,7 +108,7 @@ pub(crate) enum Report {
         document: SessionDocument,
         transcript: Vec<Entry>,
     },
-    Kept(Turn),
+    Retained(Vec<Turn>),
     Stopped {
         stop: Stop,
         elapsed_ms: u64,
@@ -156,8 +157,12 @@ impl Turns for Reports {
         });
     }
 
-    fn kept(&mut self, kept: &Turn) {
-        self.push(Report::Kept(kept.clone()));
+    fn replay_boundary(&mut self) {
+        self.push(Report::ReplayBoundary);
+    }
+
+    fn retained(&mut self, retained: &[Turn]) {
+        self.push(Report::Retained(retained.to_vec()));
     }
 }
 

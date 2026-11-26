@@ -599,7 +599,7 @@ impl Settings {
             }
         }
         let unit = match row.key.name {
-            "context_window" => " tokens",
+            "context_window" | "output_headroom" | "tool_result_headroom" => " tokens",
             "timeout" => " seconds",
             "command_budget_ms" => " ms",
             "output_budget_bytes" => " bytes",

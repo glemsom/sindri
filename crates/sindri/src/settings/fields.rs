@@ -5,7 +5,7 @@ pub(super) struct FieldView {
     pub(super) help: &'static str,
 }
 
-pub(super) const FIELDS: [FieldView; 16] = [
+pub(super) const FIELDS: [FieldView; 23] = [
     FieldView {
         key: "provider",
         label: "Wire",
@@ -43,6 +43,36 @@ pub(super) const FIELDS: [FieldView; 16] = [
         help: "Additional request headers (extra_headers).",
     },
     FieldView {
+        key: "responses_continuation",
+        label: "Responses continuation",
+        group: "RUN & LIMITS",
+        help: "Use stored response handles instead of full replay.",
+    },
+    FieldView {
+        key: "responses_store",
+        label: "Responses storage",
+        group: "RUN & LIMITS",
+        help: "Explicitly allow or disable server response storage.",
+    },
+    FieldView {
+        key: "responses_continuation_verified",
+        label: "Verified continuation",
+        group: "RUN & LIMITS",
+        help: "Assert custom endpoint storage and chaining were verified.",
+    },
+    FieldView {
+        key: "native_compaction",
+        label: "Native compaction",
+        group: "RUN & LIMITS",
+        help: "Explicit standalone provider compaction; incompatible with chains.",
+    },
+    FieldView {
+        key: "native_compaction_verified",
+        label: "Verified compaction",
+        group: "RUN & LIMITS",
+        help: "Assert this exact endpoint and model support the documented contract.",
+    },
+    FieldView {
         key: "thinking",
         label: "Thinking",
         group: "RUN & LIMITS",
@@ -53,6 +83,18 @@ pub(super) const FIELDS: [FieldView; 16] = [
         label: "Context window",
         group: "RUN & LIMITS",
         help: "Declare the model window in tokens (context_window).",
+    },
+    FieldView {
+        key: "output_headroom",
+        label: "Output headroom",
+        group: "RUN & LIMITS",
+        help: "Reserve tokens for the model output.",
+    },
+    FieldView {
+        key: "tool_result_headroom",
+        label: "Tool result headroom",
+        group: "RUN & LIMITS",
+        help: "Reserve tokens for expected tool results.",
     },
     FieldView {
         key: "max_turns",

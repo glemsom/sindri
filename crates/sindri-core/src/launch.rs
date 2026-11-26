@@ -331,6 +331,11 @@ impl<R> Launch<R> {
         &self.shell
     }
 
+    pub fn with_loaded(mut self, loaded: Loaded) -> Self {
+        self.loaded = loaded;
+        self
+    }
+
     pub fn loaded(&self) -> &Loaded {
         &self.loaded
     }
@@ -374,11 +379,17 @@ impl<R: Responder + Clone> Launch<R> {
         cancel: Cancel,
     ) -> Result<Outcome, Refusal> {
         let started = Instant::now();
+        if self.asking.replay_loss(earlier) {
+            turns.replay_boundary();
+        }
+        let injected = self.loaded.missing(earlier);
+        turns.retained(&injected);
+        let earlier: Vec<Turn> = earlier.iter().chain(&injected).cloned().collect();
         let mut run = Run::new(prompt, self.asking.clone(), self.shell.clone())
             .limits(self.limits)
             .tools(&self.tools)
             .earlier(earlier.iter().cloned())
-            .loaded(self.loaded.clone())
+            .loaded(self.loaded.scoped())
             .cancel(cancel);
         note(self.record.asked(prompt));
         run.drive(
@@ -412,11 +423,14 @@ pub struct Handed<'a> {
 }
 
 pub trait Turns {
+    fn replay_boundary(&mut self) {}
     fn turn(&mut self, ended: &Turn);
 
     fn told(&mut self, _told: Told) {}
 
     fn kept(&mut self, _kept: &Turn) {}
+
+    fn retained(&mut self, _retained: &[Turn]) {}
 
     fn facts(&mut self, _facts: Handed<'_>) {}
 }
@@ -452,6 +466,7 @@ impl<R> Witness for Recording<'_, R> {
 
     fn settled(&mut self, settled: &Settled<'_>) {
         self.turns.kept(settled.kept);
+        self.turns.retained(settled.retained);
         note(self.launch.record.charged(settled.spent));
         note(self.launch.record.stopped(settled.state));
         hand(self.turns, self.launch);
@@ -483,9 +498,23 @@ pub fn served(machine: &Machine<'_>, config: &Config) -> Option<Listing> {
 
 fn ask(config: &Config, endpoint: Endpoint, model: String, preamble: String) -> Ask {
     Ask::of(endpoint, model)
+        .capacity(
+            config.context_window,
+            config.output_headroom.unwrap_or(4096),
+            config.tool_result_headroom.unwrap_or(4096),
+        )
         .preamble(preamble)
         .credential(config.credential())
         .thinking(config.thinking.unwrap_or(false))
+        .native_compaction(
+            config.native_compaction.unwrap_or(false),
+            config.native_compaction_verified.unwrap_or(false),
+        )
+        .continuation(
+            config.responses_continuation.unwrap_or(false),
+            config.responses_store,
+            config.responses_continuation_verified.unwrap_or(false),
+        )
 }
 
 fn headers(config: &Config) -> Vec<(String, String)> {

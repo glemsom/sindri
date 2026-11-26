@@ -347,12 +347,14 @@ fn a_turn_is_replayed_with_each_call_beside_the_text_that_call_answered() {
     let (listing, listed) = read('a', "ls", "Cargo.toml");
     let (counting, counted) = read('b', "wc -l", "12 Cargo.toml");
     let ended = Turn {
+        assistant: Default::default(),
         turn: 1,
         prompt: String::from("read the crate"),
         text: String::from("reading it twice"),
         calls: vec![listing, counting],
         results: vec![listed, counted],
         reasoning: None,
+        responses: None,
         usage: Usage::default(),
     };
     let ask = ask()
