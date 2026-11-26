@@ -54,6 +54,7 @@ struct Report {
     enforcement: Enforcement,
     workspace: PathBuf,
     proof: String,
+    helpers: String,
     described: String,
     listing: Vec<Listing>,
     diagnostics: Vec<Diagnostic>,
@@ -66,6 +67,7 @@ impl Report {
             enforcement: figure.enforcement,
             workspace: figure.workspace,
             proof: figure.proof,
+            helpers: launch.helpers().render(),
             described: launch.bash_description().to_owned(),
             listing: launch.listing(),
             diagnostics: launch.diagnostics().to_vec(),
@@ -77,6 +79,10 @@ impl Report {
         lines.push(fact("enforcement", self.enforcement.word()));
         lines.push(fact("workspace", &self.workspace.display().to_string()));
         lines.push(fact("sandbox", &self.proof));
+
+        lines.push(String::new());
+        lines.push("recommended helpers (execution environment)".to_owned());
+        lines.push(self.helpers);
 
         lines.push(String::new());
         lines.push(format!("the description the model is given for `{BASH}`"));

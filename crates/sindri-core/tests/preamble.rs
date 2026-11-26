@@ -223,7 +223,9 @@ fn the_environment_names_shell_staging_temp_and_the_actual_working_directory() {
 - GNU/Linux; use `bash` for shell commands.\n\
 - For multi-stage commands, use `set -o pipefail` and label each stage.\n\
 - Put temporary artifacts in `$TMPDIR`; never hard-code `/tmp`.\n\
-- The working directory is `{}`; relative paths resolve there.",
+- The working directory is `{}`; relative paths resolve there.\n\
+- Helper availability is a launch-time snapshot, not an exhaustive inventory; later command results take precedence. Check unlisted commands and required versions before relying on them.\n\
+- Prefer Python’s standard library for ordinary file work; check third-party dependencies in the task’s intended interpreter or project environment.",
             tree.workspace().display()
         )
     );
@@ -261,4 +263,32 @@ fn the_rule_against_flattery_sits_beside_the_rule_about_what_was_seen() {
         "the rule against pleasing sits immediately after the rule against reporting what was \
          never seen"
     );
+}
+
+#[test]
+fn file_work_guidance_preserves_freedom_and_existing_changes() {
+    let tree = Tree::new();
+    let preamble = Preamble::for_workspace(&tree.workspace()).render();
+    assert!(preamble.contains("unless the target is already known"));
+    assert!(preamble.contains("widen it when needed"));
+    assert!(preamble.contains("Do not treat partial output as complete evidence"));
+    assert!(preamble.contains("preserving unrelated content and existing user changes"));
+    assert!(!preamble.contains("run relevant checks"));
+}
+
+#[test]
+fn the_environment_includes_the_execution_helper_snapshot() {
+    let tree = Tree::new();
+    let boundary =
+        Boundary::from_config(&Config::default(), &tree.workspace(), Enforcement::Unsafe)
+            .expect("an unsafe boundary");
+    let helpers =
+        sindri_core::helpers::Helpers::probe(&boundary, tree.root.path(), Path::new("bwrap"));
+    let summary = helpers.render();
+    assert!(summary.contains("Available recommended helpers"));
+    let preamble = Preamble::for_workspace(&tree.workspace())
+        .helpers(helpers)
+        .render();
+    assert!(preamble.contains(&summary));
+    assert!(preamble.contains("later command results take precedence"));
 }

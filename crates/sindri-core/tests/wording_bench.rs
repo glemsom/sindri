@@ -8,7 +8,7 @@ use sindri_core::skills::Catalog;
 use sindri_core::tools::{FrontEnd, ToolSet};
 use tiktoken_rs::CoreBPE;
 
-const BUDGET_TOKENS: usize = 581;
+const BUDGET_TOKENS: usize = 680;
 
 const SECTION_MARKERS: [(&str, &str); 4] = [
     ("persona", "## Persona"),
@@ -75,7 +75,15 @@ struct Measure {
 impl Measure {
     fn take() -> Measure {
         let root = repo_root();
-        let rendered = normalize(&Preamble::for_workspace(&root).render(), &root);
+        let temp = tempfile::tempdir().expect("session temp");
+        let probe_boundary = Boundary::from_config(&Config::default(), &root, Enforcement::Unsafe)
+            .expect("a probe boundary");
+        let helpers =
+            sindri_core::helpers::Helpers::probe(&probe_boundary, temp.path(), Path::new("bwrap"));
+        let rendered = normalize(
+            &Preamble::for_workspace(&root).helpers(helpers).render(),
+            &root,
+        );
 
         let boundary = Boundary::from_config(&Config::default(), &root, Enforcement::Bubblewrap)
             .expect("the boundary of a tree whose config names no exception holds");

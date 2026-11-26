@@ -5,6 +5,7 @@ use std::time::Instant;
 use crate::asking::Asking;
 use crate::bash::BWRAP;
 use crate::config::{Config, Environment, Process};
+use crate::helpers::Helpers;
 use crate::open::{Ground, Opener};
 use crate::outcome::{Facts as Reported, Outcome};
 use crate::policy::{Boundary, Enforcement};
@@ -94,6 +95,7 @@ pub struct Launch<R = Asking> {
     measured: Usage,
     loaded: Loaded,
     proof: Proof,
+    helpers: Helpers,
 }
 
 impl Launch<Asking> {
@@ -196,7 +198,11 @@ impl<R> Launch<R> {
         if let Some(Signing::Unreadable(reason)) = client.sign_in() {
             return Err(Refusal::new(reason.to_string(), USAGE));
         }
-        let ask = ask(config, endpoint, model.clone(), &workspace);
+        let helpers = Helpers::probe(&boundary, session.temp(), &machine.bwrap);
+        let preamble = Preamble::for_workspace(&workspace)
+            .helpers(helpers.clone())
+            .render();
+        let ask = ask(config, endpoint, model.clone(), preamble);
         let route = ask.route_of();
         let thinking = ask.thinks();
         let record = Record::open(
@@ -250,6 +256,7 @@ impl<R> Launch<R> {
             measured: Usage::default(),
             loaded: Loaded::default(),
             proof,
+            helpers,
         })
     }
 
@@ -267,6 +274,10 @@ impl<R> Launch<R> {
 
     pub fn ground(&self) -> Option<Ground> {
         self.shell.grounded().cloned()
+    }
+
+    pub fn helpers(&self) -> &Helpers {
+        &self.helpers
     }
 
     pub fn bash_description(&self) -> &str {
@@ -434,9 +445,9 @@ pub fn served(machine: &Machine<'_>, config: &Config) -> Option<Listing> {
     Some(client.served(&endpoint, &config.credential(), &endpoint))
 }
 
-fn ask(config: &Config, endpoint: Endpoint, model: String, workspace: &std::path::Path) -> Ask {
+fn ask(config: &Config, endpoint: Endpoint, model: String, preamble: String) -> Ask {
     Ask::of(endpoint, model)
-        .preamble(Preamble::for_workspace(workspace).render())
+        .preamble(preamble)
         .credential(config.credential())
         .thinking(config.thinking.unwrap_or(false))
 }

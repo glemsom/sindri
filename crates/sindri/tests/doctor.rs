@@ -405,7 +405,7 @@ fn the_proof_is_a_real_bubblewrap_invocation_rather_than_a_version_probe() {
     );
     let sandbox: Vec<&&str> = invocations
         .iter()
-        .filter(|args| !args.contains("--version") && args.contains("--ro-bind"))
+        .filter(|args| args.contains("--ro-bind") && args.ends_with("true"))
         .collect();
     assert_eq!(
         sandbox.len(),
@@ -422,6 +422,15 @@ fn the_proof_is_a_real_bubblewrap_invocation_rather_than_a_version_probe() {
         "and the command inside it is the smallest thing that proves it starts: {}",
         sandbox[0]
     );
+    let helpers = invocations
+        .iter()
+        .find(|args| args.contains("for helper in"))
+        .expect("helper availability is probed inside the sandbox");
+    assert!(
+        helpers.contains("--clearenv")
+            && helpers.contains("--setenv PATH /usr/local/bin:/usr/bin:/bin")
+    );
+    assert!(helpers.contains("git python3 jq yq awk sed rg grep"));
     assert!(
         kept_sessions(&ground).is_empty(),
         "the temp the proof borrowed went with the session it borrowed it from: {:?}",
@@ -524,4 +533,22 @@ fn an_unsafe_run_is_told_so_and_has_no_sandbox_to_prove() {
         out.contains("sandbox not proved: this run asked for no sandbox"),
         "and claims no proof it did not make:\n{out}"
     );
+}
+
+#[test]
+fn doctor_reports_recommended_helpers_without_requiring_them() {
+    let ground = Ground::new();
+    let output = run(ground
+        .command("/usr/bin:/bin")
+        .args(["--yolo-unsafe", "doctor"]));
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let out = text(&output.stdout);
+    assert!(out.contains("recommended helpers (execution environment)"));
+    assert!(out.contains("Available recommended helpers on the execution PATH:"));
+    for name in sindri_core::helpers::RECOMMENDED {
+        assert!(
+            out.contains(name),
+            "helper {name} absent from report: {out}"
+        );
+    }
 }
