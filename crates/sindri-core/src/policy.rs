@@ -44,7 +44,7 @@ impl fmt::Display for Enforcement {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct WritableSet {
     paths: Vec<PathBuf>,
 }
@@ -105,7 +105,7 @@ impl WritableSet {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Boundary {
     writable: WritableSet,
     timeout_seconds: u64,
@@ -142,6 +142,21 @@ impl Boundary {
                 .unwrap_or(DEFAULT_OUTPUT_BUDGET_BYTES),
             enforcement,
         })
+    }
+
+    pub(crate) fn with_temp(&self, temp: &Path) -> Result<Self, BoundaryError> {
+        let mut boundary = self.clone();
+        if !self
+            .writable
+            .paths()
+            .iter()
+            .any(|path| temp.starts_with(path))
+        {
+            let mut paths = self.writable.paths().to_vec();
+            paths.push(temp.to_owned());
+            boundary.writable = WritableSet::new(paths)?;
+        }
+        Ok(boundary)
     }
 
     pub fn writable(&self) -> &WritableSet {

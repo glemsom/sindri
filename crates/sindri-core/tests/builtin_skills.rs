@@ -243,3 +243,39 @@ fn prove_the_builtin_survives() -> ! {
             .all(|skill| skill.scope == Scope::Builtin && !skill.body.trim().is_empty());
     std::process::exit(if intact { 0 } else { 1 });
 }
+
+#[test]
+fn subagents_is_discoverable_and_loadable() {
+    let (_root, workspace, home) = empty_world();
+    let catalog = Catalog::discover(&workspace, Some(&home));
+    let skill = catalog
+        .skills()
+        .iter()
+        .find(|skill| skill.name == "subagents")
+        .expect("builtin subagents");
+    assert_eq!(skill.scope, Scope::Builtin);
+    assert!(skill.model_invocable());
+    assert!(skill.wrapper().contains("Bash runner"));
+}
+
+#[test]
+fn subagents_obeys_user_then_repository_shadowing() {
+    let (_root, workspace, home) = empty_world();
+    for (base, scope) in [(&home, Scope::User), (&workspace, Scope::Repo)] {
+        let directory = base.join(".agents/skills/subagents");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("SKILL.md"),
+            "---\nname: subagents\ndescription: local delegation\n---\n# Local delegation\n",
+        )
+        .unwrap();
+        let catalog = Catalog::discover(&workspace, Some(&home));
+        let skill = catalog
+            .skills()
+            .iter()
+            .find(|skill| skill.name == "subagents")
+            .unwrap();
+        assert_eq!(skill.scope, scope);
+        assert!(skill.wrapper().contains("Local delegation"));
+    }
+}

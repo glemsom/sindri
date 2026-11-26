@@ -636,6 +636,7 @@ pub struct Shell {
     cancel: Cancel,
     ground: Option<Ground>,
     opener: Option<Arc<dyn Opener>>,
+    handoff: Option<(PathBuf, PathBuf)>,
 }
 
 impl Shell {
@@ -647,7 +648,13 @@ impl Shell {
             cancel: Cancel::new(),
             ground: None,
             opener: None,
+            handoff: None,
         }
+    }
+
+    pub fn handoff(mut self, executable: PathBuf, path: PathBuf) -> Shell {
+        self.handoff = Some((executable, path));
+        self
     }
 
     pub fn cancel(mut self, cancel: Cancel) -> Shell {
@@ -680,6 +687,30 @@ impl Shell {
             ))
         })?;
 
+        let command = if let Some((executable, path)) = &self.handoff {
+            let inherited = crate::handoff::Handoff::read(&std::collections::BTreeMap::from([(
+                crate::handoff::VARIABLE.to_owned(),
+                path.display().to_string(),
+            )]))
+            .map_err(|reason| SecretSet::default().redact(reason))?
+            .ok_or_else(|| SecretSet::default().redact("missing child launch"))?;
+            let exports = inherited
+                .environment
+                .iter()
+                .map(|(name, value)| format!("{name}={}", crate::handoff::quoted(value)))
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!(
+                "export SINDRI_EXECUTABLE={} SINDRI_LAUNCH={} TMPDIR={} {}; {}",
+                crate::handoff::quoted(&executable.display().to_string()),
+                crate::handoff::quoted(&path.display().to_string()),
+                crate::handoff::quoted(&self.temp.display().to_string()),
+                exports,
+                command
+            )
+        } else {
+            command
+        };
         let started = Instant::now();
         let outcome = bash::run(&self.boundary, &self.temp, &command, &self.cancel)
             .map_err(|error| SecretSet::default().redact(error.to_string()))?;
