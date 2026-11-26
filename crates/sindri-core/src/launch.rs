@@ -418,6 +418,8 @@ pub trait Turns {
 
     fn kept(&mut self, _kept: &Turn) {}
 
+    fn retained(&mut self, _retained: &[Turn]) {}
+
     fn facts(&mut self, _facts: Handed<'_>) {}
 }
 
@@ -452,6 +454,7 @@ impl<R> Witness for Recording<'_, R> {
 
     fn settled(&mut self, settled: &Settled<'_>) {
         self.turns.kept(settled.kept);
+        self.turns.retained(settled.retained);
         note(self.launch.record.charged(settled.spent));
         note(self.launch.record.stopped(settled.state));
         hand(self.turns, self.launch);

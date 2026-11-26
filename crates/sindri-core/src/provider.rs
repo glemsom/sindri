@@ -152,15 +152,13 @@ impl Ask {
         self
     }
 
-    /// Every dialect refuses an empty message, so a prompt that got no answer travels alone: the
-    /// words that were asked are not given up with the answer that never came.
     fn replayed(&self) -> Vec<Message> {
         let mut messages = Vec::new();
         for ended in &self.earlier {
-            messages.push(Message::user(ended.prompt.clone()));
-            if !ended.text.trim().is_empty() {
-                messages.push(Message::assistant(ended.text.clone()));
+            if !ended.prompt.is_empty() {
+                messages.push(Message::user(ended.prompt.clone()));
             }
+            messages.extend(turn_messages(ended));
         }
         messages
     }

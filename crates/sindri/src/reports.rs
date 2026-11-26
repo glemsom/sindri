@@ -107,7 +107,7 @@ pub(crate) enum Report {
         document: SessionDocument,
         transcript: Vec<Entry>,
     },
-    Kept(Turn),
+    Retained(Vec<Turn>),
     Stopped {
         stop: Stop,
         elapsed_ms: u64,
@@ -156,8 +156,8 @@ impl Turns for Reports {
         });
     }
 
-    fn kept(&mut self, kept: &Turn) {
-        self.push(Report::Kept(kept.clone()));
+    fn retained(&mut self, retained: &[Turn]) {
+        self.push(Report::Retained(retained.to_vec()));
     }
 }
 
