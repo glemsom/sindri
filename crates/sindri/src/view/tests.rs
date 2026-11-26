@@ -6992,3 +6992,39 @@ fn the_two_frames_part_the_one_seam_in_the_same_cells_and_the_pictured_one_in_pi
         }
     }
 }
+
+#[test]
+fn slash_new_excludes_late_work_and_queued_prompts_join_when_started() {
+    let root = tempfile::tempdir().unwrap();
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
+        Transcript::none(),
+    );
+    view.settle();
+    view.kept(&Turn::answered(1, "old prompt", "old evidence"));
+    view.facts.loaded().load("old skill");
+    let late_skills = view.facts.loaded().scoped();
+    let mut composer = Composer::new();
+    composer.insert("queued prompt");
+    let Outcome::Send(prompt) = composer.key(Key::Enter) else {
+        panic!("prompt not sent")
+    };
+    view.enqueue(prompt);
+    view.paste("/new");
+    assert_eq!(view.key(Key::Enter), Outcome::Edited);
+    late_skills.load("late skill");
+    view.kept(&Turn::answered(2, "old prompt", "late artifact"));
+    assert!(view.earlier().is_empty());
+    assert!(view.facts.loaded().names().is_empty());
+    let queued = view.dequeue().unwrap();
+    assert_eq!(queued.text(), "queued prompt");
+    view.settle();
+    view.kept(&Turn::answered(1, queued.text(), "new evidence"));
+    assert_eq!(
+        view.earlier(),
+        [Turn::answered(1, "queued prompt", "new evidence")]
+    );
+}

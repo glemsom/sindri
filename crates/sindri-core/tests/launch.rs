@@ -1312,6 +1312,35 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
             "both tool results survive for {wire:?}: {}",
             requests[3].body
         );
+        let generation = retaining.0.generation();
+        let late = retaining.0.turns().to_vec();
+        retaining.0.reset(launch.loaded());
+        for turn in late {
+            retaining.0.join_for(generation, turn);
+        }
+        let earlier = retaining.0.turns().to_vec();
+        launch
+            .drive(
+                "Fresh conversation",
+                &earlier,
+                &mut Quiet,
+                &mut retaining,
+                Cancel::new(),
+            )
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        let requests = replay.requests();
+        for sentinel in [
+            "REPLAY_EVIDENCE_ONLY",
+            "OPAQUE_01",
+            "OPAQUE_02",
+            "FINAL_OPAQUE",
+            "opaque_SIG",
+            "opaque_REDACTED",
+            "Use the evidence",
+        ] {
+            assert!(!requests[4].body.contains(sentinel), "{wire:?}: {sentinel}");
+        }
+        assert_eq!(std::fs::read_to_string(&executed).unwrap(), "xx");
     }
 }
 
@@ -1546,7 +1575,11 @@ fn human_activation_delivers_and_retains_skill_snapshots_on_each_wire() {
             .replace("command", "name")
             .replace(r#"\"ls\""#, r#"\"deploy\""#);
 
-        let replay = Replay::new([Canned::stream(answer), Canned::stream(answer)]);
+        let replay = Replay::new([
+            Canned::stream(answer),
+            Canned::stream(answer),
+            Canned::stream(answer),
+        ]);
         let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
         config.provider = Some(wire);
         config.model = Some(model.into());
@@ -1617,6 +1650,33 @@ fn human_activation_delivers_and_retains_skill_snapshots_on_each_wire() {
             "the exact skill body survives once for {wire:?}: {}",
             requests[1].body
         );
+        let generation = retaining.0.generation();
+        let superseded = launch.loaded().scoped();
+        retaining.0.reset(launch.loaded());
+        superseded.activate(catalog.get("deploy").unwrap());
+        retaining
+            .0
+            .join_for(generation, Turn::answered(1, "OLD_PROMPT", "OLD_ARTIFACT"));
+        let earlier = retaining.0.turns().to_vec();
+        launch
+            .drive(
+                "Independent prompt",
+                &earlier,
+                &mut Quiet,
+                &mut retaining,
+                Cancel::new(),
+            )
+            .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+        let requests = replay.requests();
+        for sentinel in [
+            "Body of deploy.",
+            "OLD_PROMPT",
+            "OLD_ARTIFACT",
+            "Use the evidence",
+        ] {
+            assert!(!requests[2].body.contains(sentinel), "{wire:?}: {sentinel}");
+        }
+        assert!(launch.loaded().names().is_empty());
     }
 }
 

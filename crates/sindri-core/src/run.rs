@@ -328,35 +328,59 @@ pub enum Load {
 
 #[derive(Clone, Debug, Default)]
 pub struct Loaded {
-    names: Arc<Mutex<Vec<String>>>,
-    material: Arc<Mutex<Vec<(String, String)>>>,
+    state: Arc<Mutex<LoadedState>>,
+    generation: Option<u64>,
+}
+
+#[derive(Debug, Default)]
+struct LoadedState {
+    names: Vec<String>,
+    material: Vec<(String, String)>,
+    generation: u64,
 }
 
 impl Loaded {
+    pub fn scoped(&self) -> Self {
+        Self {
+            state: Arc::clone(&self.state),
+            generation: Some(self.generation.unwrap_or_else(|| self.lock().generation)),
+        }
+    }
+
+    fn current(&self, state: &LoadedState) -> bool {
+        self.generation
+            .is_none_or(|generation| generation == state.generation)
+    }
+
     pub fn names(&self) -> Vec<String> {
-        self.lock().clone()
+        let state = self.lock();
+        if self.current(&state) {
+            state.names.clone()
+        } else {
+            Vec::new()
+        }
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        holds(&self.lock(), name)
+        holds(&self.names(), name)
     }
 
     pub fn load(&self, name: impl Into<String>) -> Load {
         let name = name.into();
-        let mut names = self.lock();
-        if holds(&names, &name) {
+        let mut state = self.lock();
+        if !self.current(&state) || holds(&state.names, &name) {
             return Load::AlreadyLoaded;
         }
-        names.push(name);
+        state.names.push(name);
         Load::Loaded
     }
 
     pub fn activate(&self, skill: &crate::skills::Skill) -> (Load, String) {
-        let mut material = self
-            .material
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if material.iter().any(|(name, _)| name == &skill.name) {
+        let mut state = self.lock();
+        if !self.current(&state) {
+            return (Load::AlreadyLoaded, "conversation superseded".into());
+        }
+        if state.material.iter().any(|(name, _)| name == &skill.name) {
             return (
                 Load::AlreadyLoaded,
                 format!(
@@ -366,18 +390,24 @@ impl Loaded {
             );
         }
         let body = skill.wrapper();
-        material.push((skill.name.clone(), body.clone()));
-        self.load(&skill.name);
+        state.material.push((skill.name.clone(), body.clone()));
+        if !holds(&state.names, &skill.name) {
+            state.names.push(skill.name.clone());
+        }
         (Load::Loaded, body)
     }
 
     pub fn protected(&self) -> Vec<String> {
-        self.material
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .iter()
-            .map(|(_, body)| body.clone())
-            .collect()
+        let state = self.lock();
+        if self.current(&state) {
+            state
+                .material
+                .iter()
+                .map(|(_, body)| body.clone())
+                .collect()
+        } else {
+            Vec::new()
+        }
     }
 
     pub fn missing(&self, turns: &[Turn]) -> Vec<Turn> {
@@ -393,15 +423,19 @@ impl Loaded {
     }
 
     pub fn clear(&self) {
-        self.lock().clear();
-        self.material
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
+        let mut state = self.lock();
+        if self.current(&state) {
+            state.names.clear();
+            state.material.clear();
+            state.generation = state
+                .generation
+                .checked_add(1)
+                .expect("conversation generation exhausted");
+        }
     }
 
-    fn lock(&self) -> MutexGuard<'_, Vec<String>> {
-        self.names
+    fn lock(&self) -> MutexGuard<'_, LoadedState> {
+        self.state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
@@ -414,8 +448,11 @@ fn holds(names: &[String], name: &str) -> bool {
 impl<S: Into<String>> FromIterator<S> for Loaded {
     fn from_iter<I: IntoIterator<Item = S>>(names: I) -> Loaded {
         Loaded {
-            names: Arc::new(Mutex::new(names.into_iter().map(Into::into).collect())),
-            material: Arc::default(),
+            state: Arc::new(Mutex::new(LoadedState {
+                names: names.into_iter().map(Into::into).collect(),
+                ..LoadedState::default()
+            })),
+            generation: None,
         }
     }
 }
