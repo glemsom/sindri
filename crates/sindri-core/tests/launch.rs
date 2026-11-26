@@ -2766,3 +2766,258 @@ fn continuation_target_switch_replays_visible_evidence_without_reusing_handles()
         assert!(body.get("previous_response_id").is_none());
     }
 }
+
+#[test]
+fn native_responses_compaction_replays_the_whole_canonical_window() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    let homes = Homes::new();
+    let fixture = include_str!("fixtures/providers/openai_responses_stream.sse");
+    let canonical = serde_json::json!([
+        {"type":"message","role":"user","content":"RETAINED_CANONICAL_618"},
+        {"type":"compaction","id":"cmp_618","encrypted_content":"OPAQUE_618","future_field":{"exact":true}}
+    ]);
+    let body = Box::leak(
+        serde_json::json!({"id":"compact_618","object":"response.compaction","output":canonical})
+            .to_string()
+            .into_boxed_str(),
+    );
+    let replay = Replay::new([
+        Canned::reply(200, body),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+    ]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Openai);
+    config.route = Some(Route::Responses);
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    config.native_compaction = Some(true);
+    config.native_compaction_verified = Some(true);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let earlier = vec![
+        Turn::answered(1, "OBJECTIVE_618", "old work ".repeat(2800)),
+        Turn::answered(0, "", "EXACT_ACTIVE_SKILL_618"),
+        Turn::answered(2, "Recent", "EXACT_RECENT_618"),
+        Turn::answered(3, "Recent again", "DONE_WRITE_618"),
+    ];
+    let mut kept = Kept::default();
+    launch
+        .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let mut next = earlier.clone();
+    next.push(kept.ended_on());
+    launch
+        .drive(
+            "Follow up",
+            &next,
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    launch
+        .drive(
+            "Independent reset boundary",
+            &[],
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 4);
+    assert!(requests[2].body.contains("OPAQUE_618") || requests[2].body.contains("UNCHANGED_618"));
+    assert_eq!(
+        requests[2].body.matches("EXACT_ACTIVE_SKILL_618").count(),
+        1
+    );
+    assert!(!requests[3].body.contains("OPAQUE_618"));
+    assert!(!requests[3].body.contains("UNCHANGED_618"));
+    assert!(!requests[3].body.contains("EXACT_ACTIVE_SKILL_618"));
+    assert!(requests[0].url.ends_with("/responses/compact"));
+    let continued: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert_eq!(
+        &continued["input"].as_array().unwrap()[..2],
+        canonical.as_array().unwrap()
+    );
+    assert!(requests[1].body.contains("EXACT_ACTIVE_SKILL_618"));
+    assert!(requests[1].body.contains("EXACT_RECENT_618"));
+    assert!(!requests[1].body.contains(&"old work ".repeat(100)));
+    assert!(!requests[1].body.contains("previous_response_id"));
+}
+
+#[test]
+fn native_anthropic_compaction_replays_complete_blocks() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+    let homes = Homes::new();
+    let fixture = include_str!("fixtures/providers/anthropic_stream.sse");
+    let blocks = serde_json::json!([
+        {"type":"compaction","content":"EXACT_NATIVE_SUMMARY_618","opaque_extra":"UNCHANGED_618"}
+    ]);
+    let canonical = serde_json::json!([{"role":"assistant","content":blocks}]);
+    let body = Box::leak(
+        serde_json::json!({"stop_reason":"compaction","content":blocks})
+            .to_string()
+            .into_boxed_str(),
+    );
+    let replay = Replay::new([
+        Canned::reply(200, body),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+        Canned::stream(fixture),
+    ]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.provider = Some(Wire::Anthropic);
+    config.route = None;
+    config.context_window = Some(40_000);
+    config.output_headroom = Some(1024);
+    config.tool_result_headroom = Some(1024);
+    config.native_compaction = Some(true);
+    config.native_compaction_verified = Some(true);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let earlier = vec![
+        Turn::answered(1, "OBJECTIVE_618", "old work ".repeat(2800)),
+        Turn::answered(0, "", "EXACT_ACTIVE_SKILL_618"),
+        Turn::answered(2, "Recent", "EXACT_RECENT_618"),
+        Turn::answered(3, "Recent again", "DONE_WRITE_618"),
+    ];
+    let mut kept = Kept::default();
+    launch
+        .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let mut next = earlier.clone();
+    next.push(kept.ended_on());
+    launch
+        .drive(
+            "Follow up",
+            &next,
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    launch
+        .drive(
+            "Independent reset boundary",
+            &[],
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let requests = replay.requests();
+    assert_eq!(requests.len(), 4);
+    assert!(requests[2].body.contains("OPAQUE_618") || requests[2].body.contains("UNCHANGED_618"));
+    assert_eq!(
+        requests[2].body.matches("EXACT_ACTIVE_SKILL_618").count(),
+        1
+    );
+    assert!(!requests[3].body.contains("OPAQUE_618"));
+    assert!(!requests[3].body.contains("UNCHANGED_618"));
+    assert!(!requests[3].body.contains("EXACT_ACTIVE_SKILL_618"));
+    assert!(requests[0].url.ends_with("/messages"));
+    let compact: serde_json::Value = serde_json::from_str(&requests[0].body).unwrap();
+    assert_eq!(
+        compact["compaction"],
+        serde_json::json!({"type":"summarize"})
+    );
+    let continued: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+    assert_eq!(
+        &continued["messages"].as_array().unwrap()[..1],
+        canonical.as_array().unwrap()
+    );
+    assert!(requests[1].body.contains("EXACT_ACTIVE_SKILL_618"));
+    assert!(requests[1].body.contains("EXACT_RECENT_618"));
+    assert!(!requests[1].body.contains(&"old work ".repeat(100)));
+    assert!(!requests[1].body.contains("previous_response_id"));
+}
+
+#[test]
+fn native_compaction_rejections_keep_original_material_and_refuse_chains() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+    for (verified, chained, status, body, expected_requests) in [
+        (false, false, 200, "{}", 0),
+        (true, true, 200, "{}", 0),
+        (true, false, 400, "{}", 1),
+        (true, false, 200, r#"{"output":[]}"#, 1),
+        (
+            true,
+            false,
+            200,
+            r#"{"output":[{"type":"message","role":"user","content":"not compacted"}]}"#,
+            1,
+        ),
+    ] {
+        let homes = Homes::new();
+        let replay = Replay::new([Canned::reply(status, body)]);
+        let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+        config.provider = Some(Wire::Openai);
+        config.route = Some(Route::Responses);
+        config.context_window = Some(40_000);
+        config.output_headroom = Some(1024);
+        config.tool_result_headroom = Some(1024);
+        config.native_compaction = Some(true);
+        config.native_compaction_verified = Some(verified);
+        config.responses_continuation = Some(chained);
+        config.responses_continuation_verified = Some(true);
+        config.responses_store = Some(true);
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+            .unwrap()
+            .answered_by(
+                &homes.machine(),
+                &config,
+                Enforcement::Unsafe,
+                FrontEnd::Terminal,
+                None,
+                |_, ask, tools| Asking::new(client.clone(), ask, tools),
+            )
+            .ok()
+            .unwrap();
+        let earlier = vec![
+            Turn::answered(1, "OBJECTIVE_618", "old work ".repeat(2800)),
+            Turn::answered(2, "Recent", "EXACT_RECENT_618"),
+            Turn::answered(3, "Recent again", "DONE_WRITE_618"),
+        ];
+        let original = earlier.clone();
+        let mut kept = Kept::default();
+        let outcome = launch
+            .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
+            .unwrap_or_else(|r| panic!("{}", r.message()));
+        assert!(matches!(outcome.stopped(), Stop::Error(_)));
+        assert_eq!(replay.requests().len(), expected_requests);
+        assert_eq!(earlier, original);
+    }
+}

@@ -501,6 +501,10 @@ fn ask(config: &Config, endpoint: Endpoint, model: String, preamble: String) -> 
         .preamble(preamble)
         .credential(config.credential())
         .thinking(config.thinking.unwrap_or(false))
+        .native_compaction(
+            config.native_compaction.unwrap_or(false),
+            config.native_compaction_verified.unwrap_or(false),
+        )
         .continuation(
             config.responses_continuation.unwrap_or(false),
             config.responses_store,

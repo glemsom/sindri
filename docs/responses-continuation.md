@@ -31,7 +31,8 @@ streamed failures do not trigger recovery. If replay is rejected or exceeds the
 configured capacity, the run reports the failure and retains the material;
 recovery is not guaranteed for missing or incompatible opaque artifacts.
 Storage authorization and server retention remain endpoint/operator constraints.
-No durable session resume or provider-native compaction is implemented here.
+No durable session resume is implemented. Standalone [native compaction](native-compaction.md)
+is separately selected and refuses combination with continuation.
 Client-managed summary compaction is disabled whenever continuation is selected,
 including local recovery: a server chain is never independently pruned. Capacity
 admission conservatively counts the full retained replay, not merely the new

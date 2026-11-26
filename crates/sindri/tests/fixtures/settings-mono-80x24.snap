@@ -18,8 +18,8 @@ settings-mono at 80x24
 12 |    │   Responses continuation Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
 13 |    │   Responses storage      Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
 14 |    │   Verified continuation  Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
-15 |    │   Thinking               [on]                                        │    | dim:5 plain:3 muted:23 plain:44 dim:5
-16 |    │ ⋯ 13 rows kept back · ↑↓ scroll                                      │    | dim:5 plain:1 dim:31 plain:38 dim:5
+15 |    │   Native compaction      Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
+16 |    │ ⋯ 15 rows kept back · ↑↓ scroll                                      │    | dim:5 plain:1 dim:31 plain:38 dim:5
 17 |    │                                                                      │    | dim:5 plain:70 dim:5
 18 |    │ Model · Choose a served name; Ctrl-U in the listing enters one       │    | dim:5 plain:1 muted:62 plain:7 dim:5
 19 |    │ manually.                                                            │    | dim:5 plain:1 muted:9 plain:60 dim:5

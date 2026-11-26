@@ -29,6 +29,12 @@ turn’s assistant words, calls and matching results in order, not only its answ
 the conversation, not to the displayed exchanges or the session’s record, and `/new` empties it.
 _Avoid_: History (that one is a run’s own turns), exchange, transcript
 
+**Native compacted window**:
+The provider's returned continuation material after explicitly selected compaction,
+bound to its endpoint, route, served model and storage policy. A standalone Responses
+window is replayed whole; Anthropic compaction blocks remain complete and unchanged.
+_Avoid_: Answer, client summary, continuation handle
+
 **Continuation handle**:
 A stored Responses response's identifier owned by its retained turn, bound to endpoint,
 route, model and explicit storage policy. Opt-in continuation submits only new input;

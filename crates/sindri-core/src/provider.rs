@@ -40,7 +40,12 @@ pub struct Assistant(Option<AssistantMessage>, Option<ReplayTarget>);
 impl Eq for Assistant {}
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Responses(AssistantMessage, Option<ReplayTarget>, Option<String>);
+pub struct Responses(
+    AssistantMessage,
+    Option<ReplayTarget>,
+    Option<String>,
+    Option<serde_json::Value>,
+);
 
 impl Eq for Responses {}
 
@@ -105,6 +110,8 @@ pub struct Ask {
     continuation: bool,
     storage: Option<bool>,
     verified_continuation: bool,
+    native_compaction: bool,
+    verified_compaction: bool,
     capacity: Option<u64>,
     output_headroom: u64,
     tool_result_headroom: u64,
@@ -129,6 +136,8 @@ impl Ask {
             continuation: false,
             storage: None,
             verified_continuation: false,
+            native_compaction: false,
+            verified_compaction: false,
             capacity: None,
             output_headroom: 4096,
             tool_result_headroom: 4096,
@@ -139,6 +148,12 @@ impl Ask {
         self.continuation = enabled;
         self.storage = storage;
         self.verified_continuation = verified;
+        self
+    }
+
+    pub fn native_compaction(mut self, enabled: bool, verified: bool) -> Self {
+        self.native_compaction = enabled;
+        self.verified_compaction = verified;
         self
     }
 
@@ -200,6 +215,9 @@ impl Ask {
     }
 
     pub fn compact(&self, client: &Client) -> Result<Option<Self>, Failure> {
+        if self.native_compaction && (!self.replay_capabilities().compaction || self.continuation) {
+            return Err(self.native_failure("Native compaction requires native_compaction_verified=true for the selected endpoint/model. Standalone compaction cannot prune a Responses continuation chain; disable continuation or native compaction."));
+        }
         if self.continuation {
             return Ok(None);
         }
@@ -213,6 +231,9 @@ impl Ask {
             < window.saturating_mul(3) / 4
         {
             return Ok(None);
+        }
+        if self.native_compaction {
+            return self.compact_native(client);
         }
         let boundary = self.earlier.len().saturating_sub(2);
         let mut older = Vec::new();
@@ -248,6 +269,185 @@ impl Ask {
             "Client-managed conversation summary",
             answer.text,
         )];
+        compacted.earlier.extend(protected);
+        compacted.guard_capacity()?;
+        Ok(Some(compacted))
+    }
+
+    fn native_failure(&self, message: &str) -> Failure {
+        Failure {
+            verdict: Verdict::Refused,
+            retryable: false,
+            streamed: false,
+            message: SecretSet::default().redact(message),
+        }
+    }
+
+    fn serving(&self, key: &str, native_beta: bool) -> Serving {
+        match self.endpoint.serving(key) {
+            Serving::Messages(config) if native_beta => {
+                Serving::Messages(config.with_beta("compact-2026-09-04"))
+            }
+            serving => serving,
+        }
+    }
+
+    fn encoded(&self, key: &str) -> Result<Encoded, Failure> {
+        let request = self.request();
+        let encoded = match self.endpoint.serving(key) {
+            Serving::OpenAi(config) => {
+                rig_core::providers::openai::wire::OpenAiWire::new(config, &self.model)
+                    .encode(request, rig_core::wire::Mode::Unary)
+            }
+            Serving::Messages(config) => config
+                .completion(&self.model)
+                .encode(request, rig_core::wire::Mode::Unary),
+        };
+        encoded.map_err(|_| self.native_failure("Cannot encode native compaction input"))
+    }
+
+    fn compact_native(&self, client: &Client) -> Result<Option<Self>, Failure> {
+        if self.earlier.is_empty() || !self.turns.is_empty() {
+            return Ok(None);
+        }
+        if self.endpoint.wire() == Wire::Anthropic
+            && (self.thinking || self.earlier.iter().any(|turn| turn.reasoning.is_some()))
+        {
+            return Err(self.native_failure("Anthropic native compaction with preserved thinking requires a verified prefix contract not implemented here; disable native compaction to use client summarization."));
+        }
+        self.guard_capacity()?;
+        let mut secrets = client.secrets.clone();
+        let key = client
+            .credential(&self.credential, &mut secrets)?
+            .ok_or_else(|| Failure::unconfigured(self.endpoint.wire()))?;
+        let mut input = self.clone();
+        let boundary = self.earlier.len().saturating_sub(2);
+        let mut protected = Vec::new();
+        input.earlier = self
+            .earlier
+            .iter()
+            .enumerate()
+            .filter_map(|(index, turn)| {
+                if index >= boundary
+                    || turn.calls.iter().any(|call| call.name == "skill")
+                    || turn.calls.len() != turn.results.len()
+                    || (turn.turn == 0 && turn.prompt.is_empty() && turn.responses.is_none())
+                {
+                    protected.push(turn.clone());
+                    None
+                } else {
+                    Some(turn.clone())
+                }
+            })
+            .collect();
+        if input.earlier.is_empty() {
+            return Ok(None);
+        }
+        input.prompt.clear();
+        let encoded = input.encoded(&key)?;
+        let rig_core::wire::Body::Bytes(bytes) = encoded.request.body() else {
+            return Err(self.native_failure("Unsupported compaction body"));
+        };
+        let mut body: serde_json::Value = serde_json::from_slice(bytes)
+            .map_err(|_| self.native_failure("Invalid compaction input"))?;
+        let anthropic = self.endpoint.wire() == Wire::Anthropic;
+        let field = if anthropic { "messages" } else { "input" };
+        body[field]
+            .as_array_mut()
+            .ok_or_else(|| self.native_failure("Missing compaction input"))?
+            .pop();
+        body.as_object_mut().unwrap().remove("stream");
+
+        let mut request = encoded.request.map(|_| Vec::<u8>::new());
+        if anthropic {
+            body["compaction"] = serde_json::json!({"type":"summarize"});
+
+            let beta = request
+                .headers()
+                .get("anthropic-beta")
+                .and_then(|value| value.to_str().ok())
+                .map_or_else(
+                    || "compact-2026-09-04".to_owned(),
+                    |existing| format!("{existing},compact-2026-09-04"),
+                );
+            request.headers_mut().insert(
+                "anthropic-beta",
+                http::HeaderValue::from_str(&beta)
+                    .map_err(|_| self.native_failure("Invalid compaction beta header"))?,
+            );
+        } else {
+            body.as_object_mut()
+                .unwrap()
+                .retain(|key, _| matches!(key.as_str(), "model" | "input" | "instructions"));
+            *request.uri_mut() = format!("{}/compact", request.uri())
+                .parse()
+                .map_err(|_| self.native_failure("Invalid compaction endpoint"))?;
+        }
+        *request.body_mut() = serde_json::to_vec(&body).unwrap();
+        let returned = futures::executor::block_on(async {
+            let response = client
+                .transport
+                .send::<Vec<u8>, Vec<u8>>(request)
+                .await
+                .map_err(|_| {
+                    self.native_failure(
+                        "Native compaction transport failed; original material retained",
+                    )
+                })?;
+            if !response.status().is_success() {
+                return Err(
+                    self.native_failure("Native compaction rejected; original material retained")
+                );
+            }
+            let bytes = response.into_body().await.map_err(|_| {
+                self.native_failure("Native compaction response failed; original material retained")
+            })?;
+            serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|_| {
+                self.native_failure(
+                    "Invalid native compaction response; original material retained",
+                )
+            })
+        })?;
+        let window = if anthropic {
+            if returned["stop_reason"] != "compaction" {
+                return Err(self.native_failure(
+                    "Native compaction did not complete; original material retained",
+                ));
+            }
+            serde_json::json!([{"role":"assistant", "content":returned["content"]}])
+        } else {
+            returned["output"].clone()
+        };
+        let items = window
+            .as_array()
+            .filter(|items| !items.is_empty())
+            .ok_or_else(|| {
+                self.native_failure("Empty native compaction window; original material retained")
+            })?;
+        if !items.iter().any(|item| {
+            item["type"] == "compaction"
+                || item["content"]
+                    .as_array()
+                    .is_some_and(|blocks| blocks.iter().any(|block| block["type"] == "compaction"))
+        }) {
+            return Err(
+                self.native_failure("Missing native compaction item; original material retained")
+            );
+        }
+        let mut compacted = self.clone();
+        let mut boundary = Turn::answered(
+            0,
+            "",
+            "Native compacted conversation: opaque context requires the original endpoint and model.",
+        );
+        boundary.responses = Some(Responses(
+            AssistantMessage::new(Vec::new()),
+            Some(self.replay_target()),
+            None,
+            Some(window),
+        ));
+        compacted.earlier = vec![boundary];
+        // Skill snapshots stay exact outside the provider-written summary.
         compacted.earlier.extend(protected);
         compacted.guard_capacity()?;
         Ok(Some(compacted))
@@ -322,7 +522,10 @@ impl Ask {
             continuation: self.endpoint.wire() == Wire::Openai
                 && self.endpoint.route_of(&self.model) == Some(Route::Responses)
                 && (self.endpoint.base_url().is_none() || self.verified_continuation),
-            compaction: false,
+            compaction: self.verified_compaction
+                && (self.endpoint.wire() == Wire::Anthropic
+                    || (self.endpoint.wire() == Wire::Openai
+                        && self.endpoint.route_of(&self.model) == Some(Route::Responses))),
         }
     }
 
@@ -417,11 +620,52 @@ impl Ask {
                 request = request.additional_params(serde_json::Value::Object(params));
             }
         }
+        if let Some(window) = self.earlier.iter().find_map(|turn| {
+            turn.responses
+                .as_ref()
+                .and_then(|items| items.3.as_ref())
+                .filter(|_| {
+                    turn.responses.as_ref().unwrap().1.as_ref() == Some(&self.replay_target())
+                })
+        }) {
+            let field = if self.endpoint.wire() == Wire::Anthropic {
+                "messages"
+            } else {
+                "input"
+            };
+            let mut baseline = self.clone();
+            baseline.earlier.retain(|turn| {
+                !turn
+                    .responses
+                    .as_ref()
+                    .is_some_and(|items| items.3.is_some())
+            });
+            if let Ok(encoded) = baseline.encoded("")
+                && let rig_core::wire::Body::Bytes(bytes) = encoded.request.body()
+                && let Ok(body) = serde_json::from_slice::<serde_json::Value>(bytes)
+            {
+                let mut items = window.as_array().unwrap().clone();
+                items.extend(body[field].as_array().into_iter().flatten().cloned());
+                let mut params = request
+                    .additional_params
+                    .clone()
+                    .unwrap_or_else(|| serde_json::json!({}));
+                params[field] = items.into();
+                request = request.additional_params(params);
+            }
+        }
         request.options(options)
     }
 }
 
 fn turn_messages(turn: &Turn) -> Vec<Message> {
+    if turn
+        .responses
+        .as_ref()
+        .is_some_and(|items| items.3.is_some())
+    {
+        return Vec::new();
+    }
     let mut content = Vec::new();
     if !turn.text.trim().is_empty() {
         content.push(AssistantContent::text(turn.text.clone()));
@@ -526,6 +770,7 @@ impl From<&CompletionResponse> for Answer {
                         assistant,
                         None,
                         response.response_id().map(str::to_owned),
+                        None,
                     )),
                     _ => None,
                 })
@@ -727,6 +972,11 @@ impl Client {
         }
         ask.guard_capacity()?;
         let request = ask.request();
+        let native_beta = ask.earlier.iter().any(|turn| {
+            turn.responses.as_ref().is_some_and(|items| {
+                items.3.is_some() && items.1.as_ref() == Some(&ask.replay_target())
+            })
+        }) && ask.endpoint.wire() == Wire::Anthropic;
         // A session resolved here joins the set this ask is scrubbed with, so a wire
         // that echoes it back is echoed back masked.
         let mut secrets = self.secrets.clone();
@@ -735,7 +985,7 @@ impl Client {
             return Err(Failure::unconfigured(ask.endpoint.wire()));
         };
         let carried = self.carry(
-            ask.endpoint.serving(&key),
+            ask.serving(&key, native_beta),
             &ask.model,
             request,
             deltas,
@@ -758,7 +1008,7 @@ impl Client {
                 replay.guard_capacity()?;
                 recovered = true;
                 self.carry(
-                    ask.endpoint.serving(&key),
+                    ask.serving(&key, native_beta),
                     &ask.model,
                     replay.request(),
                     deltas,
