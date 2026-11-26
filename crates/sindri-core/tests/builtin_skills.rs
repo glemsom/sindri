@@ -54,6 +54,21 @@ fn builtin_skills_ship_compiled_in_and_parse_as_discovery_reads_them() {
 }
 
 #[test]
+fn web_access_is_embedded_and_invocable_by_model_and_human() {
+    let (_root, workspace, home) = empty_world();
+    let catalog = Catalog::discover(&workspace, Some(&home));
+
+    let skill = catalog
+        .get("web-access")
+        .expect("web-access ships built in");
+    assert_eq!(skill.scope, Scope::Builtin);
+    assert_eq!(skill.directory, None);
+    assert!(skill.model_invocable());
+    assert!(skill.human_invocable());
+    assert!(skill.body.starts_with("# Web access"));
+}
+
+#[test]
 fn the_listing_a_doctor_would_print_names_the_builtin_scope() {
     let (_root, workspace, home) = empty_world();
 
@@ -169,6 +184,11 @@ fn removing_the_source_directory_leaves_the_builtin_in_a_fresh_process() {
         String::from_utf8_lossy(&child.stdout).contains("commit-message\tbuiltin"),
         "the child listed the built-in under the builtin scope, and said so: {}",
         String::from_utf8_lossy(&child.stdout)
+    );
+
+    assert!(
+        String::from_utf8_lossy(&child.stdout).contains("web-access\tbuiltin"),
+        "web-access survives without its source directory too"
     );
 
     drop(restore);

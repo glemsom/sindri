@@ -256,7 +256,10 @@ type ByName = BTreeMap<String, Skill>;
 /// `include_str!` bakes the text in, so deleting the directory afterwards changes
 /// nothing about the skills this build offers; the directory is where it is edited,
 /// never where it is read.
-const BUILTIN_SKILLS: &[&str] = &[include_str!("../skills/commit-message/SKILL.md")];
+const BUILTIN_SKILLS: &[&str] = &[
+    include_str!("../skills/commit-message/SKILL.md"),
+    include_str!("../skills/web-access/SKILL.md"),
+];
 
 enum Source {
     Embedded(&'static str),
