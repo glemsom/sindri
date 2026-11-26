@@ -158,6 +158,63 @@ impl Ask {
         }
     }
 
+    pub fn retained(&self) -> &[Turn] {
+        &self.earlier
+    }
+
+    pub fn compact(&self, client: &Client) -> Result<Option<Self>, Failure> {
+        let Some(window) = self.capacity else {
+            return Ok(None);
+        };
+        let bytes = serde_json::to_vec(&self.request())
+            .map_err(|_| self.capacity_failure())?
+            .len() as u64;
+        if bytes
+            .saturating_add(self.output_headroom)
+            .saturating_add(self.tool_result_headroom)
+            < window.saturating_mul(3) / 4
+        {
+            return Ok(None);
+        }
+        let boundary = self.earlier.len().saturating_sub(2);
+        let mut older = Vec::new();
+        let mut protected = Vec::new();
+        for (index, turn) in self.earlier.iter().enumerate() {
+            if index >= boundary
+                || turn.calls.iter().any(|call| call.name == "skill")
+                || turn.calls.len() != turn.results.len()
+                || (turn.turn == 0 && turn.prompt.is_empty())
+            {
+                protected.push(turn.clone());
+            } else {
+                older.push(turn.clone());
+            }
+        }
+        if older.is_empty() {
+            return Ok(None);
+        }
+        let mut summary = self.clone();
+        summary.earlier = self.transition(&older).0;
+        summary.turns.clear();
+        summary.tools.clear();
+        summary.thinking = false;
+        summary.prompt = "Summarize this conversation for continuation. Preserve task objectives, constraints, exact important identifiers and evidence, completed side effects (never repeat them), unresolved errors, recent work and next actions. Distinguish plans from actual outcomes. Return only the faithful summary, not a final answer.".into();
+        summary.guard_capacity()?;
+        let answer = client.ask(&summary, &mut ())?;
+        if answer.text.trim().is_empty() || !answer.calls.is_empty() {
+            return Err(self.capacity_failure());
+        }
+        let mut compacted = self.clone();
+        compacted.earlier = vec![Turn::answered(
+            0,
+            "Client-managed conversation summary",
+            answer.text,
+        )];
+        compacted.earlier.extend(protected);
+        compacted.guard_capacity()?;
+        Ok(Some(compacted))
+    }
+
     pub fn prompt(mut self, prompt: impl Into<String>) -> Self {
         self.prompt = prompt.into();
         self

@@ -393,6 +393,7 @@ impl Phase {
 pub enum Told {
     Idle,
     Asking { turn: u32 },
+    Compacted { turn: u32 },
     Waiting { turn: u32 },
     Stopped { turn: u32, stop: Stop },
 }
@@ -400,7 +401,7 @@ impl Told {
     pub fn phase(&self) -> Phase {
         match self {
             Told::Idle => Phase::Idle,
-            Told::Asking { .. } => Phase::Working,
+            Told::Asking { .. } | Told::Compacted { .. } => Phase::Working,
             Told::Waiting { .. } => Phase::Blocked,
             Told::Stopped { stop, .. } => match stop {
                 Stop::Error(_) => Phase::Error,
@@ -412,6 +413,9 @@ impl Told {
         match self {
             Told::Idle => "waiting for a prompt",
             Told::Asking { .. } => "asking the model",
+            Told::Compacted { .. } => {
+                "compacted conversation with a model summary; retained protected exchanges"
+            }
             Told::Waiting { .. } => "waiting for a command",
             Told::Stopped { stop, .. } => match stop {
                 Stop::Final => "answered",
@@ -425,7 +429,10 @@ impl Told {
     pub fn turn(&self) -> u32 {
         match self {
             Told::Idle => 0,
-            Told::Asking { turn } | Told::Waiting { turn } | Told::Stopped { turn, .. } => *turn,
+            Told::Compacted { turn }
+            | Told::Asking { turn }
+            | Told::Waiting { turn }
+            | Told::Stopped { turn, .. } => *turn,
         }
     }
 }

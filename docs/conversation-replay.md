@@ -54,3 +54,25 @@ all endpoints, including Copilot and custom addresses. No handle, compaction or
 storage configuration is enabled here. Same-target native replay remains supported
 by the existing adapter capture tests; that is not verification of custom endpoint
 continuation features.
+
+## Client-managed compaction
+
+With a validated `context_window`, requests reaching three quarters of the configured
+capacity attempt a separate ordinary, tool-free model summary request. Unknown capacity
+still replays faithfully. The summary asks for objectives, constraints, exact identifiers,
+evidence, actual side effects versus plans, unresolved errors and next actions.
+Skill-delivery exchanges, standalone instruction snapshots, incomplete exchanges and the
+last two retained turns remain exact; current-run exchanges are never split. Older completed
+tool exchanges enter the summary atomically rather than accumulating in the protected prefix.
+Repeated skill calls are still protected, so pathological skill-loading conversations can
+exhaust admission. Summary fidelity depends on the model; deterministic captures verify the
+summary request includes evidence and the supplied summary retains continuation facts.
+Native artifacts are not transferred into the new summary prefix. Protected exchanges use the ordinary target-compatibility transition.
+
+Both the summary request and the resulting continuation must pass capacity admission.
+Failure leaves original material intact and refuses rather than submitting oversized
+input. Fully protected conversations may require a larger configured window or `/new`.
+Original session records are not replaced. Successful continuation reports a compaction
+status event. This deliberate prefix transition is not provider-native compaction, storage
+opt-in or a continuation handle; `replay_capabilities` still describes those unsupported
+provider features. No live-provider summary-quality guarantee is claimed.
