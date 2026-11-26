@@ -177,39 +177,38 @@ fn the_served_names_body_asks_while_the_wire_is_unasked_and_says_so_when_it_serv
 }
 
 #[test]
-fn the_settings_body_ends_in_the_refusal_that_turned_the_visit_back() {
+fn the_settings_body_focuses_the_refused_field_and_keeps_actions_below_the_reason() {
     let mut view = View::of(
         Capabilities::default(),
         sindri::facts::Facts::default().asked(),
         Transcript::none(),
     );
     view.open_settings(&Config::default());
-    let body = view
-        .body(Mode::Settings, 60)
-        .expect("the settings screen holds a body of keys");
-    let kept = said(&body);
-
-    view.refuse("the schema refused a max_turns it cannot read");
-    let body = view
-        .body(Mode::Settings, 60)
-        .expect("a refused visit is still the screen it was opened as");
+    let before: Vec<_> = view
+        .settings()
+        .rows()
+        .map(|(key, value)| (key, value.to_owned()))
+        .collect();
+    let reason = "the schema refused a max_turns it cannot read";
+    view.refuse(reason);
+    let body = view.body(Mode::Settings, 60).expect("settings body");
     let words = said(&body);
-
-    assert!(
-        words.len() > kept.len() && words[..kept.len()] == kept[..],
-        "a refusal adds a blank row and its own words under the keys, and changes no row above it, \
-         so a visit that was turned back keeps every value it held: {words:#?} against {kept:#?}"
-    );
+    let refusal = words
+        .iter()
+        .position(|row| row == reason)
+        .expect("visible refusal");
+    let apply = words
+        .iter()
+        .position(|row| row.contains("Apply 0 changes"))
+        .expect("apply action");
+    assert!(refusal < apply);
+    assert!(words.iter().any(|row| row.starts_with("› Maximum turns")));
     assert_eq!(
-        words.last().map(String::as_str),
-        Some("the schema refused a max_turns it cannot read"),
-        "the refusal the frame was handed is the last words of the body, under the keys whose \
-         visit it turned back: {words:#?}"
-    );
-    assert_eq!(
-        words[words.len() - 2],
-        "",
-        "and a blank row sets it apart from the keys above it: {words:#?}"
+        view.settings()
+            .rows()
+            .map(|(key, value)| (key, value.to_owned()))
+            .collect::<Vec<_>>(),
+        before
     );
 }
 
@@ -292,4 +291,29 @@ fn the_keys_body_hangs_no_choice_off_any_of_its_rows() {
             words(row)
         );
     }
+}
+
+#[test]
+fn settings_groups_readable_fields_and_states_the_units_and_unset_values() {
+    let mut view = View::of(
+        Capabilities::default(),
+        sindri::facts::Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.open_settings(&Config {
+        timeout: Some(120),
+        context_window: Some(200_000),
+        thinking: Some(true),
+        ..Config::default()
+    });
+    let body = view.body(Mode::Settings, 68).expect("settings body");
+    let words = said(&body);
+    for expected in ["CONNECTION", "RUN & LIMITS", "ACCESS & APPEARANCE"] {
+        assert!(words.iter().any(|row| row == expected), "{words:#?}");
+    }
+    for expected in ["120 seconds", "200,000 tokens", "[on]", "Not set"] {
+        assert!(words.iter().any(|row| row.contains(expected)), "{words:#?}");
+    }
+    let fields: Vec<usize> = rows(&body).iter().filter_map(|row| row.choice).collect();
+    assert_eq!(fields, (0..18).collect::<Vec<_>>());
 }

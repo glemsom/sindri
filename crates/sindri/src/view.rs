@@ -881,11 +881,7 @@ impl View {
     }
 
     fn flip(&mut self) -> Outcome {
-        if self.stack.top() == Mode::Settings
-            && !self.settings.editing()
-            && !Config::SCHEMA
-                .get(self.settings.current())
-                .is_some_and(|field| field.switch())
+        if self.stack.top() == Mode::Settings && !self.settings.editing() && !self.settings.switch()
         {
             return Outcome::Unchanged;
         }
@@ -918,8 +914,7 @@ impl View {
         }
         let touched: Touched = self.settings.touched();
         if touched.is_empty() {
-            self.stack.close();
-            return Outcome::Edited;
+            return Outcome::Unchanged;
         }
         Outcome::Save(touched)
     }
@@ -1248,7 +1243,7 @@ impl View {
         self.composer_band(layout.composer, layout.queue, buffer, &mut painted);
         self.footer(layout.footer, buffer);
         let screen = self.stack.top();
-        let Some((name, leaves, body)) = self.over(area, screen) else {
+        let Some((name, leaves, mut body)) = self.over(area, screen) else {
             painted
                 .sizes
                 .settle(layout.transcript, buffer, &self.capabilities.palette());
@@ -1268,6 +1263,14 @@ impl View {
         };
         self.highlight(layout.transcript, buffer, drawn.span());
         self.note(&mut painted, drawn);
+        if screen == Mode::Settings {
+            let room = if area.width < 50 {
+                area.height.saturating_sub(1)
+            } else {
+                area.height.saturating_sub(2)
+            };
+            body = ScreenBody::Rows(self.settings.frame(card::body_width(area), room));
+        }
         let rows = body.held();
         let bounds = card::bounds(area, rows);
         let held = card::paint(

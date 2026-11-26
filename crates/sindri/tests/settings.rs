@@ -202,7 +202,7 @@ fn a_save_keeps_the_credential_the_wire_its_own_variable_gave_the_launch() {
 }
 
 #[test]
-fn enter_writes_once_and_a_visit_that_touched_nothing_writes_at_all() {
+fn apply_without_changes_neither_writes_nor_closes_the_card() {
     let home = home(HAND_WRITTEN);
     let path = file_in(&home);
     let mut view = opened(&home);
@@ -213,11 +213,10 @@ fn enter_writes_once_and_a_visit_that_touched_nothing_writes_at_all() {
 
     assert_eq!(
         view.key(Key::Enter),
-        Outcome::Edited,
-        "a visit that read the screen and wrote nothing has nothing to hand the file: Enter \
-         closes, and no write is asked for"
+        Outcome::Unchanged,
+        "Apply is disabled when nothing changed"
     );
-    assert_eq!(view.mode(), Mode::Composer);
+    assert_eq!(view.mode(), Mode::Settings);
     assert_eq!(read(&path), HAND_WRITTEN, "the file is the file it was");
 }
 
@@ -475,4 +474,65 @@ fn the_screen_starts_from_the_config_as_it_resolved_and_not_from_the_file_alone(
         "and a row nobody wrote into is never written: the model the environment speaks \
          stays out of the file, however plainly the screen was showing it"
     );
+}
+
+#[test]
+fn reverting_a_toggle_removes_the_pending_change_and_apply_does_not_close() {
+    let home = home("thinking = true\n");
+    let mut view = opened(&home);
+    walk_to(&mut view, "thinking");
+    view.key(Key::Char(' '));
+    assert_eq!(view.settings().changed(), 1);
+    view.key(Key::Char(' '));
+    assert_eq!(view.settings().changed(), 0);
+    assert!(view.settings().touched().is_empty());
+    while view.settings().current() < Config::SCHEMA.len() {
+        view.key(Key::Down);
+    }
+    assert_eq!(view.key(Key::Enter), Outcome::Unchanged);
+    assert_eq!(view.mode(), Mode::Settings);
+}
+
+#[test]
+fn browsing_does_not_edit_and_enter_confirms_a_text_edit_without_leaving_settings() {
+    let home = home("base_url = \"https://old.test\"\n");
+    let mut view = opened(&home);
+    walk_to(&mut view, "base_url");
+    view.key(Key::Char('x'));
+    view.key(Key::Backspace);
+    assert_eq!(shown(&view, "base_url"), "https://old.test");
+    assert_eq!(view.settings().changed(), 0);
+    view.key(Key::Enter);
+    view.key(Key::Char('x'));
+    view.key(Key::Enter);
+    assert!(!view.settings().editing());
+    assert_eq!(shown(&view, "base_url"), "https://old.testx");
+    assert_eq!(view.settings().changed(), 1);
+    assert_eq!(view.mode(), Mode::Settings);
+}
+
+#[test]
+fn every_schema_field_is_available_once_in_settings() {
+    let settings = Settings::of(&Config::default());
+    let mut available: Vec<_> = settings.rows().map(|(key, _)| key).collect();
+    let mut expected: Vec<_> = Config::SCHEMA.iter().map(|field| field.name).collect();
+    available.sort_unstable();
+    expected.sort_unstable();
+    assert_eq!(available, expected);
+}
+
+#[test]
+fn cancelling_a_text_edit_restores_the_value_and_its_pending_change_count() {
+    let home = home("base_url = \"https://old.test\"\n");
+    let mut view = opened(&home);
+    walk_to(&mut view, "base_url");
+    view.key(Key::Enter);
+    view.key(Key::Clear);
+    type_into(&mut view, "https://new.test");
+    assert_eq!(view.settings().changed(), 1);
+    view.key(Key::Escape);
+    assert_eq!(shown(&view, "base_url"), "https://old.test");
+    assert_eq!(view.settings().changed(), 0);
+    assert!(!view.settings().editing());
+    assert_eq!(view.mode(), Mode::Settings);
 }

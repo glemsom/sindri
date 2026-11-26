@@ -1,0 +1,19 @@
+---
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
+---
+settings-refused at 40x14
+00 |── /settings ───────────────────────────| accent+faint:40
+01 |    Thinking                            | plain:40
+02 |    [on]                                | plain:40
+03 |    Context window                      | plain:40
+04 |    200,000 tokens                      | plain:40
+05 |  › Maximum turns *                     | plain:2 accent+reversed:17 plain:21
+06 |    two hundred                         | plain:2 accent+reversed:13 plain:25
+07 |  ⋯ 33 rows kept back · ↑↓ scroll       | plain:2 dim:31 plain:7
+08 |  bad value in max_turns: `two          | plain:2 err:28 plain:10
+09 |  hundred` will not parse: invalid      | plain:2 err:32 plain:6
+10 |  digit found in string                 | plain:2 err:21 plain:17
+11 |    Apply 1 change · next run           | plain:2 accent:27 plain:11
+12 |    Cancel · discard changes            | plain:2 accent:26 plain:12
+13 |  ↑↓ move · Enter edit · Esc cancel     | plain:2 muted:33 plain:5

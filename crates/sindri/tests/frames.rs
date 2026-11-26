@@ -552,3 +552,23 @@ fn markdown_fence_named_80x24_is_a_fence_that_names_the_file_it_was_written_in()
 fn markdown_fence_named_cut_40x24_is_that_name_cut_at_the_bands_edge() {
     fixture::assert_frame("markdown-fence-named-cut", 40, 24);
 }
+
+#[test]
+fn settings_80x24_pins_actions_below_the_scrollable_fields() {
+    fixture::assert_frame("settings", 80, 24);
+}
+
+#[test]
+fn settings_40x24_stacks_labels_and_values_in_a_borderless_card() {
+    fixture::assert_frame("settings", 40, 24);
+}
+
+#[test]
+fn settings_refused_40x14_keeps_the_refused_field_and_recovery_actions_visible() {
+    fixture::assert_frame("settings-refused", 40, 14);
+}
+
+#[test]
+fn settings_mono_80x24_keeps_section_names_and_selection_without_colour() {
+    fixture::assert_frame("settings-mono", 80, 24);
+}

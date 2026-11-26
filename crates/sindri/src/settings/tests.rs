@@ -18,7 +18,8 @@ fn shown(settings: &Settings, key: &str) -> String {
 }
 
 fn at(settings: &mut Settings, key: &str) {
-    for _ in 0..settings.rows().count() {
+    while settings.walked(Move::Previous) {}
+    for _ in 0..settings.rows().count() + 2 {
         if settings
             .rows()
             .nth(settings.current())
@@ -33,24 +34,24 @@ fn at(settings: &mut Settings, key: &str) {
 }
 
 #[test]
-fn the_screen_walks_every_key_the_schema_has_in_the_order_the_schema_names_them() {
+fn the_screen_walks_every_schema_field_in_connection_run_and_access_groups() {
     let order = [
         "provider",
         "model",
         "route",
         "base_url",
         "api_key",
-        "thinking",
-        "extra_writable_paths",
         "extra_headers",
+        "thinking",
         "context_window",
         "max_turns",
         "timeout",
         "command_budget_ms",
         "output_budget_bytes",
+        "extra_writable_paths",
+        "ssh_agent",
         "status",
         "face",
-        "ssh_agent",
     ];
 
     let settings = Settings::of(&Config::default());
@@ -58,8 +59,7 @@ fn the_screen_walks_every_key_the_schema_has_in_the_order_the_schema_names_them(
 
     assert_eq!(
         rows, order,
-        "the screen reads the table's rows in the table's order, so a key the schema gains is \
-             a row here with nothing to remember"
+        "the screen groups all schema fields by purpose"
     );
 }
 

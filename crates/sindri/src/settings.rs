@@ -2,10 +2,14 @@ use sindri_core::config::{self, Config, ConfigError, Environment, Touched};
 use sindri_core::redact::MASK;
 
 use crate::composer::Key;
-use crate::ink::Ink;
+use crate::ink::{Faces, Ink, Look};
 use crate::kept::{Kept, Move, Narrow};
 use crate::list::{self, Beside, ScreenRow};
 use crate::models::Models;
+use crate::pen;
+
+mod fields;
+use fields::{FIELDS, grouped};
 use sindri_core::provider::served::Listing;
 use sindri_core::wire::Wire;
 
@@ -35,11 +39,15 @@ struct Row {
     key: &'static config::Field,
     text: String,
     touched: bool,
+    before: String,
 }
 
 impl PartialEq for Row {
     fn eq(&self, other: &Row) -> bool {
-        self.key.name == other.key.name && self.text == other.text && self.touched == other.touched
+        self.key.name == other.key.name
+            && self.text == other.text
+            && self.before == other.before
+            && self.touched == other.touched
     }
 }
 
@@ -48,11 +56,15 @@ impl Eq for Row {}
 impl Settings {
     pub fn of(config: &Config) -> Settings {
         Settings {
-            rows: Config::SCHEMA
+            rows: FIELDS
                 .iter()
+                .map(|field| {
+                    Config::field(field.key).expect("settings field belongs to the schema")
+                })
                 .map(|key| Row {
                     key,
                     text: key.shown(config),
+                    before: key.shown(config),
                     touched: false,
                 })
                 .collect(),
@@ -230,86 +242,320 @@ impl Settings {
             }
             _ => {}
         }
-        let mut shown: Vec<(String, String)> = self
-            .rows()
-            .map(|(key, value)| {
-                let label = if key == "provider" { "Wire" } else { key };
-                let value = if key == "route" && self.wire() == Some(Wire::Anthropic) {
-                    "Not applicable".to_owned()
-                } else if key == "route" && value.is_empty() {
-                    let mut endpoint = self
-                        .wire()
-                        .map(sindri_core::provider::endpoint::Endpoint::own);
-                    if let Some(url) = self
-                        .rows
-                        .iter()
-                        .find(|row| row.key.name == "base_url")
-                        .filter(|row| !row.text.is_empty())
-                    {
-                        endpoint = endpoint.map(|endpoint| endpoint.based(&url.text));
-                    }
-                    let model = self
-                        .rows
-                        .iter()
-                        .find(|row| row.key.name == "model")
-                        .map(|row| row.text.as_str())
-                        .unwrap_or("");
-                    match endpoint.and_then(|endpoint| endpoint.route_of(model)) {
-                        Some(route) => format!("Automatic → {route}"),
-                        None => "Automatic".to_owned(),
-                    }
-                } else {
-                    value.to_owned()
-                };
-                (label.to_owned(), value)
-            })
-            .collect();
-        shown.push(("Apply".into(), "changes affect the next run".into()));
-        shown.push(("Cancel".into(), "discard changes".into()));
-        let keys: Vec<(&str, &str)> = shown
-            .iter()
-            .map(|(k, v)| (k.as_str(), v.as_str()))
-            .collect();
-        let mut rows = list::List {
-            query: None,
-            said: None,
-            items: list::columned(keys.into_iter(), Ink::Muted, Beside::Row),
-            selected: self.current(),
-            marker: list::MARK,
-            chooses: true,
+        let mut rows = vec![list::whole(
+            &format!(
+                "Next run · {} pending {}",
+                self.changed(),
+                self.change_word()
+            ),
+            Look::plain(Ink::Muted),
+        )];
+        let mut group = "";
+        for (at, row) in self.rows.iter().enumerate() {
+            let field = &FIELDS[at];
+            if field.group != group {
+                rows.push(list::whole("", Look::plain(Ink::Dim)));
+                rows.push(list::whole(
+                    field.group,
+                    Look::new(Ink::Accent, Faces::BOLD),
+                ));
+                group = field.group;
+            }
+            let selected = at == self.current();
+            let look = if selected {
+                Look::new(Ink::Accent, Faces::REVERSED)
+            } else {
+                Look::plain(Ink::Plain)
+            };
+            let editing = selected && matches!(self.editor, Some(Editor::Text { .. }));
+            let value = if editing && row.key.name != "api_key" {
+                row.text.clone()
+            } else {
+                self.value(row)
+            };
+            let marker = if selected { "› " } else { "  " };
+            let dirty = if row.touched && row.text != row.before {
+                " *"
+            } else {
+                ""
+            };
+            let mut lines = if width < 44 {
+                vec![
+                    ScreenRow::cut(vec![(format!("{marker}{}{dirty}", field.label), look)])
+                        .choosing(at),
+                    ScreenRow::cut(vec![(format!("  {value}"), look)]).choosing(at),
+                ]
+            } else {
+                vec![
+                    ScreenRow::cut(vec![
+                        (marker.to_owned(), look),
+                        (
+                            pen::pad(field.label, 23),
+                            if selected {
+                                look
+                            } else {
+                                Look::plain(Ink::Muted)
+                            },
+                        ),
+                        (format!("{value}{dirty}"), look),
+                    ])
+                    .choosing(at),
+                ]
+            };
+            if editing {
+                let line = lines.last_mut().expect("a field has a value row");
+                line.caret = Some(pen::width(&line.spans));
+            }
+            rows.extend(lines);
         }
-        .rows();
-        if self
-            .rows
+        rows.extend(self.footer(width));
+        rows
+    }
+
+    pub fn changed(&self) -> usize {
+        self.rows
             .iter()
-            .any(|row| row.touched && matches!(row.key.name, "provider" | "base_url"))
-        {
+            .filter(|row| row.touched && row.text != row.before)
+            .count()
+    }
+
+    fn change_word(&self) -> &'static str {
+        if self.changed() == 1 {
+            "change"
+        } else {
+            "changes"
+        }
+    }
+
+    pub fn switch(&self) -> bool {
+        self.rows
+            .get(self.current())
+            .is_some_and(|row| row.key.switch())
+    }
+
+    fn value(&self, row: &Row) -> String {
+        if row.key.name == "api_key" && !row.text.is_empty() {
+            return "Configured · hidden".into();
+        }
+        if row.key.name == "route" {
+            if self.wire() == Some(Wire::Anthropic) {
+                return "Not applicable".into();
+            }
+            if row.text.is_empty() {
+                let model = self
+                    .rows
+                    .iter()
+                    .find(|row| row.key.name == "model")
+                    .map(|row| row.text.as_str())
+                    .unwrap_or("");
+                let url = self
+                    .rows
+                    .iter()
+                    .find(|row| row.key.name == "base_url")
+                    .map(|row| row.text.as_str())
+                    .unwrap_or("");
+                let endpoint = self
+                    .wire()
+                    .map(sindri_core::provider::endpoint::Endpoint::own)
+                    .map(|endpoint| {
+                        if url.is_empty() {
+                            endpoint
+                        } else {
+                            endpoint.based(url)
+                        }
+                    });
+                return match endpoint.and_then(|endpoint| endpoint.route_of(model)) {
+                    Some(route) => format!("Automatic → {route}"),
+                    None => "Automatic".into(),
+                };
+            }
+        }
+        if row.text.is_empty() {
+            return "Not set".into();
+        }
+        if row.key.switch() {
+            return match row.text.as_str() {
+                "true" => "[on]".into(),
+                "false" => "[off]".into(),
+                _ => row.text.clone(),
+            };
+        }
+        let unit = match row.key.name {
+            "context_window" => " tokens",
+            "timeout" => " seconds",
+            "command_budget_ms" => " ms",
+            "output_budget_bytes" => " bytes",
+            _ => "",
+        };
+        let value = if !unit.is_empty() {
+            grouped(&row.text)
+        } else {
+            row.text.clone()
+        };
+        format!("{value}{unit}")
+    }
+
+    fn footer(&self, width: u16) -> Vec<ScreenRow> {
+        let mut rows = vec![list::whole("", Look::plain(Ink::Dim))];
+        if let Some(field) = FIELDS.get(self.current()) {
+            for line in crate::rows::wrap(&format!("{} · {}", field.label, field.help), width) {
+                rows.push(list::whole(&line, Look::plain(Ink::Muted)));
+            }
+        }
+        let hints = if matches!(self.editor, Some(Editor::Text { .. })) {
+            if width < 44 {
+                "Enter confirm · Esc restore"
+            } else {
+                "Enter confirms · Esc restores · Ctrl-U clears"
+            }
+        } else if width < 44 {
+            if self.switch() {
+                "↑↓ move · Space toggle · Esc cancel"
+            } else {
+                "↑↓ move · Enter edit · Esc cancel"
+            }
+        } else if self.switch() {
+            "↑↓ move · Space toggle · Enter edit · Esc cancel · Tab next"
+        } else {
+            "↑↓ move · Enter edit · Esc cancel · Tab next"
+        };
+        if self.rows.iter().any(|row| {
+            row.touched && row.text != row.before && matches!(row.key.name, "provider" | "base_url")
+        }) {
             rows.extend(list::refusal(
                 "Endpoint changed: check the model, address and credentials before Apply",
-                width,
-            ));
-        }
-        if matches!(self.editor, Some(Editor::Text { .. })) {
-            rows.extend(list::refusal(
-                "Editing: Enter confirms; Esc restores; Ctrl-U clears",
                 width,
             ));
         }
         if let Some(reason) = self.refusal() {
             rows.extend(list::refusal(reason, width));
         }
+        for (at, text) in [
+            (
+                self.rows.len(),
+                if width < 44 {
+                    format!("Apply {} {} · next run", self.changed(), self.change_word())
+                } else {
+                    format!(
+                        "Apply {} {} · changes affect the next run",
+                        self.changed(),
+                        self.change_word()
+                    )
+                },
+            ),
+            (self.rows.len() + 1, "Cancel · discard changes".into()),
+        ] {
+            let selected = at == self.current();
+            let ink = if at == self.rows.len() && self.changed() == 0 {
+                Ink::Dim
+            } else {
+                Ink::Accent
+            };
+            let look = Look::new(
+                ink,
+                if selected {
+                    Faces::REVERSED
+                } else {
+                    Faces::PLAIN
+                },
+            );
+            rows.push(
+                ScreenRow::cut(vec![(
+                    format!("{}{text}", if selected { "› " } else { "  " }),
+                    look,
+                )])
+                .choosing(at),
+            );
+        }
+        rows.push(ScreenRow::cut(vec![(
+            hints.into(),
+            Look::plain(Ink::Muted),
+        )]));
         rows
+    }
+
+    pub fn frame(&self, width: u16, height: u16) -> Vec<ScreenRow> {
+        let mut rows = self.body(width);
+        let height = usize::from(height);
+        if rows.len() <= height {
+            return rows;
+        }
+        if matches!(self.editor, Some(Editor::Model(_) | Editor::Choices { .. })) {
+            let selected = rows
+                .iter()
+                .position(|row| {
+                    row.spans
+                        .first()
+                        .is_some_and(|(text, _)| text.starts_with(list::MARK))
+                })
+                .unwrap_or(0);
+            let start = selected.saturating_sub(height.saturating_sub(1));
+            return rows.drain(start..).take(height).collect();
+        }
+        let footer = self.footer(width);
+        rows.truncate(rows.len() - footer.len());
+        let mut footer = footer;
+        if footer.len() + 4 > height {
+            let actions = footer.split_off(footer.len().saturating_sub(3));
+            let room = height.saturating_sub(4 + actions.len());
+            let reason = self
+                .refusal()
+                .map(|reason| crate::rows::wrap(reason, width))
+                .unwrap_or_default();
+            footer = reason
+                .into_iter()
+                .take(room)
+                .map(|line| list::whole(&line, Look::plain(Ink::Err)))
+                .collect();
+            footer.extend(actions);
+        }
+        if height <= footer.len() {
+            return footer
+                .into_iter()
+                .rev()
+                .take(height)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
+        }
+        let room = height - footer.len();
+        let selected = rows
+            .iter()
+            .rposition(|row| row.choice == Some(self.current()))
+            .unwrap_or(0);
+        let start = selected.saturating_sub(room.saturating_sub(2));
+        let end = (start + room.saturating_sub(1)).min(rows.len());
+        let count = rows.len() - (end - start);
+        let mut visible: Vec<_> = rows.drain(start..end).collect();
+        visible.push(list::whole(
+            &format!("⋯ {count} rows kept back · ↑↓ scroll"),
+            Look::plain(Ink::Dim),
+        ));
+        visible.extend(footer);
+        visible
     }
 
     pub fn touched(&self) -> Touched {
         let mut touched = Touched::new();
-        for row in self.rows.iter().filter(|row| row.touched) {
+        for row in self
+            .rows
+            .iter()
+            .filter(|row| row.touched && row.text != row.before)
+        {
             touched.set(row.key.name, row.text.as_str());
         }
         touched
     }
 
     pub fn refuse(&mut self, reason: &str) {
+        if let Some(at) = self
+            .rows
+            .iter()
+            .position(|row| reason.contains(row.key.name))
+        {
+            self.narrow.pressed(at, self.rows.len() + 2);
+        }
         self.refusal = Some(reason.to_owned());
     }
 

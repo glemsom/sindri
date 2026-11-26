@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
+---
+settings at 80x24
+00 |    ╭─ /settings ──────────────────────────────────────────────────────────╮    | dim:4 accent+faint:72 dim:4
+01 |    │ Next run · 0 pending changes                                         │    | dim:5 plain:1 muted:28 plain:41 dim:5
+02 |    │                                                                      │    | dim:5 plain:70 dim:5
+03 |    │ CONNECTION                                                           │    | dim:5 plain:1 accent+bold:10 plain:59 dim:5
+04 |    │ › Wire                   anthropic                                   │    | dim:5 plain:1 accent+reversed:34 plain:35 dim:5
+05 |    │   Model                  claude-sonnet-4-5                           │    | dim:5 plain:3 muted:23 plain:44 dim:5
+06 |    │   Route                  Not applicable                              │    | dim:5 plain:3 muted:23 plain:44 dim:5
+07 |    │   Base URL               Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
+08 |    │   Credential             Configured · hidden                         │    | dim:5 plain:3 muted:23 plain:44 dim:5
+09 |    │   Extra headers          Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
+10 |    │                                                                      │    | dim:5 plain:70 dim:5
+11 |    │ RUN & LIMITS                                                         │    | dim:5 plain:1 accent+bold:12 plain:57 dim:5
+12 |    │   Thinking               [on]                                        │    | dim:5 plain:3 muted:23 plain:44 dim:5
+13 |    │   Context window         200,000 tokens                              │    | dim:5 plain:3 muted:23 plain:44 dim:5
+14 |    │   Maximum turns          250                                         │    | dim:5 plain:3 muted:23 plain:44 dim:5
+15 |    │   Request timeout        120 seconds                                 │    | dim:5 plain:3 muted:23 plain:44 dim:5
+16 |    │   Command budget         Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
+17 |    │ ⋯ 7 rows kept back · ↑↓ scroll                                       │    | dim:5 plain:1 dim:30 plain:39 dim:5
+18 |    │                                                                      │    | dim:5 plain:70 dim:5
+19 |    │ Wire · Select the wire used to ask the endpoint.                     │    | dim:5 plain:1 muted:48 plain:21 dim:5
+20 |    │   Apply 0 changes · changes affect the next run                      │    | dim:5 plain:1 dim:47 plain:22 dim:5
+21 |    │   Cancel · discard changes                                           │    | dim:5 plain:1 accent:26 plain:43 dim:5
+22 |┃›wh│ ↑↓ move · Enter edit · Esc cancel · Tab next                         │    | dim:5 plain:1 muted:44 plain:25 dim:5
+23 |  En╰──────────────────────────────────────────────────────────────── Esc ─╯    | dim:70 plain+bold:3 dim:7

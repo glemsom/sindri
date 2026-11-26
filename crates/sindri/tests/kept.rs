@@ -614,7 +614,7 @@ fn a_glyph_lands_in_the_list_the_screen_keeps() {
 fn a_press_opens_the_settings_row_editor() {
     let (_root, mut view) = screen(Mode::Settings, caps::pointing());
     let frame = frame::painted(&mut view, 120, 40);
-    let row = frame.row_holding(frame.area(), "thinking");
+    let row = frame.row_holding(frame.area(), "Thinking");
     assert_eq!(
         view.pointer(frame.told(), Pointer::Press(Cell::new(row, 40))),
         Outcome::Edited
@@ -793,4 +793,26 @@ fn the_rows_of_one_rank_come_nearest_first_and_in_the_order_they_were_handed() {
         "an empty query is a query every name starts, and two rows of one rank and one \
          nearness come back in the order they were handed in, whatever their names are"
     );
+}
+
+#[test]
+fn settings_actions_and_the_selected_field_remain_reachable_in_short_narrow_frames() {
+    for (width, height) in [(80, 24), (40, 24), (40, 14), (120, 10)] {
+        let (_root, mut view) = screen(Mode::Settings, caps::pointing());
+        for _ in 0..15 {
+            view.key(Key::Down);
+        }
+        let frame = frame::painted(&mut view, width, height);
+        let words = frame.rows().join("\n");
+        assert!(words.contains("Sindri's face"), "{width}x{height}: {words}");
+        assert!(words.contains("Apply"), "{words}");
+        assert!(words.contains("Cancel"), "{words}");
+        let row = frame.row_holding(frame.area(), "Cancel");
+        let layout = frame.told().layout().expect("layout").card.expect("card");
+        assert_eq!(
+            view.pointer(frame.told(), Pointer::Press(Cell::new(row, layout.x))),
+            Outcome::Edited
+        );
+        assert_eq!(view.mode(), Mode::Composer);
+    }
 }

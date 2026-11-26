@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
+---
+settings at 40x24
+00 |── /settings ───────────────────────────| accent+faint:40
+01 |  Next run · 0 pending changes          | plain:2 muted:28 plain:10
+02 |                                        | plain:40
+03 |  CONNECTION                            | plain:2 accent+bold:10 plain:28
+04 |  › Wire                                | plain:2 accent+reversed:6 plain:32
+05 |    anthropic                           | plain:2 accent+reversed:11 plain:27
+06 |    Model                               | plain:40
+07 |    claude-sonnet-4-5                   | plain:40
+08 |    Route                               | plain:40
+09 |    Not applicable                      | plain:40
+10 |    Base URL                            | plain:40
+11 |    Not set                             | plain:40
+12 |    Credential                          | plain:40
+13 |    Configured · hidden                 | plain:40
+14 |    Extra headers                       | plain:40
+15 |    Not set                             | plain:40
+16 |                                        | plain:40
+17 |  ⋯ 23 rows kept back · ↑↓ scroll       | plain:2 dim:31 plain:7
+18 |                                        | plain:40
+19 |  Wire · Select the wire used to ask    | plain:2 muted:34 plain:4
+20 |  the endpoint.                         | plain:2 muted:13 plain:25
+21 |    Apply 0 changes · next run          | plain:2 dim:28 plain:10
+22 |    Cancel · discard changes            | plain:2 accent:26 plain:12
+23 |  ↑↓ move · Enter edit · Esc cancel     | plain:2 muted:33 plain:5

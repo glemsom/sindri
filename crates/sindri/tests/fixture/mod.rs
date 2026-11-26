@@ -239,6 +239,16 @@ fn named(name: &str, capabilities: Capabilities) -> View {
             view.open_settings(&in_force());
             view
         }
+        "settings-mono" => {
+            let mut view = View::of(
+                crate::caps::uncoloured(),
+                Facts::default().asked(),
+                Transcript::none(),
+            );
+            view.open_settings(&in_force());
+            view.key(Key::Down);
+            view
+        }
         "settings-refused" => refused(capabilities),
         "stats" => stats(capabilities),
         "footer" => View::of(capabilities, Facts::default().asked(), Transcript::none()),

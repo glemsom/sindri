@@ -6,39 +6,39 @@ settings-refused at 120x40
 00 |                                                                                                                        | dim:120
 01 |                                                                                                                        | dim:120
 02 |                                                                                                                        | dim:120
-03 |                                                                                                                        | dim:120
-04 |                                                                                                                        | dim:120
-05 |                                                                                                                        | dim:120
-06 |                                                                                                                        | dim:120
-07 |                                                                                                                        | dim:120
-08 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-09 |                        │   Wire                  anthropic                                    │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-10 |                        │   model                 claude-sonnet-4-5                            │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-11 |                        │   route                 Not applicable                               │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-12 |                        │   base_url                                                           │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-13 |                        │   api_key               «redacted»                                   │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-14 |                        │   thinking              true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-15 |                        │   extra_writable_paths  /srv/data                                    │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-16 |                        │   extra_headers                                                      │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-17 |                        │   context_window        200000                                       │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-18 |                        │   max_turns             two hundred                                  │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-19 |                        │   timeout               120                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-20 |                        │   command_budget_ms                                                  │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-21 |                        │   output_budget_bytes                                                │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-22 |                        │   status                                                             │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-23 |                        │   face                  true                                         │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-24 |                        │   ssh_agent                                                          │                        | dim:25 plain:1 muted:24 plain:45 dim:25
-25 |                        │ › Apply                 changes affect the next run                  │                        | dim:25 plain:1 accent:51 plain:18 dim:25
-26 |                        │   Cancel                discard changes                              │                        | dim:25 plain:1 muted:24 plain:45 dim:25
+03 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+04 |                        │ Next run · 1 pending change                                          │                        | dim:25 plain:1 muted:27 plain:42 dim:25
+05 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+06 |                        │ CONNECTION                                                           │                        | dim:25 plain:1 accent+bold:10 plain:59 dim:25
+07 |                        │   Wire                   anthropic                                   │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+08 |                        │   Model                  claude-sonnet-4-5                           │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+09 |                        │   Route                  Not applicable                              │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+10 |                        │   Base URL               Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+11 |                        │   Credential             Configured · hidden                         │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+12 |                        │   Extra headers          Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+13 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+14 |                        │ RUN & LIMITS                                                         │                        | dim:25 plain:1 accent+bold:12 plain:57 dim:25
+15 |                        │   Thinking               [on]                                        │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+16 |                        │   Context window         200,000 tokens                              │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+17 |                        │ › Maximum turns          two hundred *                               │                        | dim:25 plain:1 accent+reversed:38 plain:31 dim:25
+18 |                        │   Request timeout        120 seconds                                 │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+19 |                        │   Command budget         Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+20 |                        │   Output budget          Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+21 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+22 |                        │ ACCESS & APPEARANCE                                                  │                        | dim:25 plain:1 accent+bold:19 plain:50 dim:25
+23 |                        │   Extra writable paths   /srv/data                                   │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+24 |                        │   SSH agent              Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+25 |                        │   Status reporting       Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+26 |                        │   Sindri's face          [on]                                        │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 27 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-28 |                        │ bad value in max_turns: `two hundred` will not parse: invalid digit  │                        | dim:25 plain:1 err:67 plain:2 dim:25
-29 |                        │ found in string                                                      │                        | dim:25 plain:1 err:15 plain:54 dim:25
-30 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
-31 |                                                                                                                        | dim:120
-32 |                                                                                                                        | dim:120
-33 |                                                                                                                        | dim:120
-34 |                                                                                                                        | dim:120
-35 |                                                                                                                        | dim:120
+28 |                        │ Maximum turns · Stop after this many model turns (max_turns).        │                        | dim:25 plain:1 muted:61 plain:8 dim:25
+29 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+30 |                        │ bad value in max_turns: `two hundred` will not parse: invalid digit  │                        | dim:25 plain:1 err:67 plain:2 dim:25
+31 |                        │ found in string                                                      │                        | dim:25 plain:1 err:15 plain:54 dim:25
+32 |                        │   Apply 1 change · changes affect the next run                       │                        | dim:25 plain:1 accent:46 plain:23 dim:25
+33 |                        │   Cancel · discard changes                                           │                        | dim:25 plain:1 accent:26 plain:43 dim:25
+34 |                        │ ↑↓ move · Enter edit · Esc cancel · Tab next                         │                        | dim:25 plain:1 muted:44 plain:25 dim:25
+35 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 36 |                                                                                                                        | dim:120
 37 |                                                                                                                        | dim:120
 38 |┃›what should the run do?                                                                                               | dim:120

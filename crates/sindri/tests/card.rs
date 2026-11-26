@@ -425,7 +425,7 @@ fn the_card_covers_the_frame_behind_it_rather_than_letting_it_read_through() {
          through it: {inside:?}"
     );
     assert!(
-        inside.contains("model"),
+        inside.contains("Model"),
         "and the card's own rows are what is on it: {inside:?}"
     );
 }
@@ -529,9 +529,9 @@ fn the_reason_a_value_was_refused_is_drawn_whole_however_narrow_the_card() {
 }
 
 #[test]
-fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
-    let reason = "bad value in max_turns: `two hundred` will not parse: invalid digit found in \
-                  string";
+fn a_refusal_is_drawn_in_error_ink_above_the_pinned_actions() {
+    let reason =
+        "bad value in max_turns: `two hundred` will not parse: invalid digit found in string";
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -540,49 +540,39 @@ fn a_refusal_is_drawn_as_a_verdict_under_the_last_key_row() {
     view.open_settings(&Config::default());
     view.refuse(reason);
     let frame = frame::painted(&mut view, 120, 40);
-    let (top, bottom, left, _) = corners(&frame).expect("a card drawn with its border");
     let body = body_rows(&frame);
-    let at = body
+    let begin = body
         .iter()
-        .position(|row| row.trim_start().starts_with("Cancel"))
-        .expect("the last key of the schema drawn in the card");
-    let last = top + 1 + u16::try_from(at).expect("a row of the card");
-
+        .position(|row| row.contains("bad value in"))
+        .expect("reason");
+    let end = body
+        .iter()
+        .position(|row| row.contains("Apply 0 changes"))
+        .expect("apply");
     assert_eq!(
-        said(&frame, last + 1),
-        "",
-        "a blank row stands under the last key, so the refusal reads as a verdict on the visit and \
-         not as that key's value: {body:#?}"
+        body[begin..end]
+            .iter()
+            .flat_map(|row| row.split_whitespace())
+            .collect::<Vec<_>>()
+            .join(" "),
+        reason
     );
-
-    let mut y = last + 2;
-    let mut drawn = Vec::new();
-    while y < bottom && !said(&frame, y).is_empty() {
-        let row = said(&frame, y);
-        let start = u16::try_from(row.len() - row.trim_start().len()).expect("a column");
-        let words = row.trim_start();
-        let inks: Vec<Ink> = (0..sindri::pen::cells(words))
-            .map(|px| frame.look(left + 1 + start + px, y).ink())
-            .collect();
-        assert!(
-            inks.iter().all(|ink| *ink == Ink::Err),
-            "every cell of the verdict is drawn in the ink an error is read in, so it is not \
-             mistaken for a key or a value: {words:?} in {inks:?}"
-        );
-        drawn.extend(words.split_whitespace().map(str::to_owned));
-        y += 1;
+    let (top, _, left, _) = corners(&frame).expect("border");
+    for (at, row) in body.iter().enumerate().take(end).skip(begin) {
+        let offset = sindri::pen::cells(row) - sindri::pen::cells(row.trim_start());
+        for column in 0..sindri::pen::cells(row.trim()) {
+            assert_eq!(
+                frame
+                    .look(left + 1 + offset + column, top + 1 + at as u16)
+                    .ink(),
+                Ink::Err
+            );
+        }
     }
-    assert_eq!(
-        drawn.join(" "),
-        reason,
-        "the verdict stands between the blank row and the card's bottom border whole, and not cut \
-         at the border with its tail lost: {body:#?}"
-    );
 }
 
 #[test]
-fn a_frame_too_short_for_the_settings_visit_draws_the_head_of_the_list_and_keeps_the_verdict_back()
-{
+fn a_short_settings_card_scrolls_to_the_refused_field_and_pins_recovery_actions() {
     let mut view = View::of(
         Capabilities::default(),
         Facts::default().asked(),
@@ -594,29 +584,16 @@ fn a_frame_too_short_for_the_settings_visit_draws_the_head_of_the_list_and_keeps
     );
     let frame = frame::painted(&mut view, 120, 14);
     let body = body_rows(&frame);
-    let drawn = frame.rows().join("\n");
-
-    assert!(
-        body.first().is_some_and(|row| row.contains("Wire")),
-        "fourteen rows hold the card's borders and eleven of its body, and the head of the key \
-         list is what those eleven rows are for: {body:#?}"
-    );
-    assert!(
-        !body.iter().any(|row| row.contains("ssh_agent")),
-        "so the tail of the key list is kept back rather than drawn over the card's last row: \
-         {body:#?}"
-    );
-    assert!(
-        body.iter().any(|row| row.ends_with("rows kept back")),
-        "the card's own count row says how much of the visit it could not hold, in the last row \
-         the body has: {body:#?}"
-    );
-    for word in ["parse:", "invalid", "digit", "hundred"] {
-        assert!(
-            !drawn.contains(word),
-            "a verdict the frame has no room for is not drawn at all rather than cut into `{word}`, \
-             which would say a reason the reader cannot read: {drawn}"
-        );
+    let drawn = body.join(" ");
+    for expected in [
+        "Maximum turns",
+        "rows kept back",
+        "invalid digit",
+        "Apply 0 changes",
+        "Cancel",
+        "Esc cancel",
+    ] {
+        assert!(drawn.contains(expected), "{body:#?}");
     }
 }
 
@@ -978,7 +955,10 @@ fn every_screen_is_drawn_on_a_card_as_tall_as_the_rows_it_holds() {
                 frame.rows()
             );
             assert!(
-                above + below > 0 || said(&frame, bottom - 1).contains("kept back"),
+                above + below > 0
+                    || body_rows(&frame)
+                        .iter()
+                        .any(|row| row.contains("kept back")),
                 "{}'s card at {cols}x{tall} is the whole frame, and a card is only as tall as the \
                  frame when its body is taller than the room it has: the row above its bottom \
                  border says how many rows it keeps back, where a card that is the frame's height \
