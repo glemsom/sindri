@@ -311,10 +311,6 @@ fn a_settings_value_the_schema_refuses_names_its_row_and_writes_nothing() {
     walk_to(&mut view, "context_window");
     view.key(Key::Enter);
     view.key(Key::Char('0'));
-    view.key(Key::Enter);
-    while view.settings().current() < Config::SCHEMA.len() {
-        view.key(Key::Down);
-    }
     let mut live = stage.launch(view, config, &environment);
 
     let ended = live

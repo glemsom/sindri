@@ -18,7 +18,7 @@ settings at 80x24
 12 |    │   Thinking               [on]                                        │    | dim:5 plain:3 muted:23 plain:44 dim:5
 13 |    │   Context window         200,000 tokens                              │    | dim:5 plain:3 muted:23 plain:44 dim:5
 14 |    │   Maximum turns          250                                         │    | dim:5 plain:3 muted:23 plain:44 dim:5
-15 |    │   Request timeout        120 seconds                                 │    | dim:5 plain:3 muted:23 plain:44 dim:5
+15 |    │   Request timeout        2 min                                       │    | dim:5 plain:3 muted:23 plain:44 dim:5
 16 |    │   Command budget         Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
 17 |    │ ⋯ 7 rows kept back · ↑↓ scroll                                       │    | dim:5 plain:1 dim:30 plain:39 dim:5
 18 |    │                                                                      │    | dim:5 plain:70 dim:5

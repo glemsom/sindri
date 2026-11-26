@@ -34,7 +34,7 @@ pub(super) const FIELDS: [FieldView; 16] = [
         key: "api_key",
         label: "Credential",
         group: "CONNECTION",
-        help: "Kept hidden, not verified. Typing replaces the credential.",
+        help: "Kept hidden, not verified. Choose Replace or Remove explicitly.",
     },
     FieldView {
         key: "extra_headers",

@@ -385,3 +385,173 @@ fn automatic_route_can_be_used_to_discover_models_from_the_draft() {
     settings.activate();
     assert_eq!(settings.draft(&base).unwrap().route, None);
 }
+
+#[test]
+fn boolean_choices_have_labels_and_inherited_serialization() {
+    let mut settings = Settings::of(&decided());
+    at(&mut settings, "thinking");
+    settings.activate();
+    let text: String = settings
+        .body(80)
+        .iter()
+        .flat_map(|row| row.spans.iter().map(|(text, _)| text.clone()))
+        .collect();
+    for label in ["On", "Off", "Use inherited value"] {
+        assert!(text.contains(label));
+    }
+    settings.walked(Move::Next);
+    settings.activate();
+    assert_eq!(shown(&settings, "thinking"), "false");
+    settings.activate();
+    settings.walked(Move::Next);
+    settings.activate();
+    assert_eq!(shown(&settings, "thinking"), "");
+    settings.space();
+    assert_eq!(shown(&settings, "thinking"), "true");
+}
+
+#[test]
+fn text_confirmation_validates_normalizes_and_escape_restores() {
+    for (key, input, expected) in [
+        ("timeout", "2m", "120"),
+        ("command_budget_ms", "2s", "2000"),
+        ("output_budget_bytes", "2KiB", "2048"),
+    ] {
+        let mut settings = Settings::of(&Config::default());
+        at(&mut settings, key);
+        settings.activate();
+        for c in input.chars() {
+            settings.key(Key::Char(c));
+        }
+        settings.activate();
+        assert!(!settings.editing());
+        assert_eq!(shown(&settings, key), expected);
+    }
+    for (key, input) in [
+        ("context_window", "0"),
+        ("base_url", "not-a-url"),
+        ("timeout", "nonsense"),
+    ] {
+        let mut settings = Settings::of(&Config::default());
+        at(&mut settings, key);
+        settings.activate();
+        for c in input.chars() {
+            settings.key(Key::Char(c));
+        }
+        settings.activate();
+        assert!(settings.editing());
+        assert!(settings.refusal().unwrap().contains(key));
+        assert_eq!(shown(&settings, key), input);
+        settings.cancel_editor();
+        assert!(settings.refusal().is_none());
+        assert!(settings.touched().is_empty());
+        assert_eq!(shown(&settings, key), "");
+    }
+}
+
+#[test]
+fn collections_add_edit_remove_done_and_rollback() {
+    let mut settings = Settings::of(&Config::default());
+    at(&mut settings, "extra_writable_paths");
+    settings.activate();
+    settings.activate();
+    for c in "/one".chars() {
+        settings.key(Key::Char(c));
+    }
+    settings.activate();
+    assert_eq!(shown(&settings, "extra_writable_paths"), "/one");
+    settings.activate();
+    settings.clear();
+    for c in "/two".chars() {
+        settings.key(Key::Char(c));
+    }
+    settings.activate();
+    assert_eq!(shown(&settings, "extra_writable_paths"), "/two");
+    settings.walked(Move::Next);
+    settings.activate();
+    assert_eq!(shown(&settings, "extra_writable_paths"), "");
+    settings.cancel_editor();
+    assert!(settings.touched().is_empty());
+    at(&mut settings, "extra_headers");
+    settings.activate();
+    settings.activate();
+    for c in "X-Test".chars() {
+        settings.key(Key::Char(c));
+    }
+    settings.activate();
+    for c in "value".chars() {
+        settings.key(Key::Char(c));
+    }
+    settings.activate();
+    assert_eq!(shown(&settings, "extra_headers"), "X-Test: value");
+    settings.walked(Move::Next);
+    settings.walked(Move::Next);
+    settings.walked(Move::Next);
+    settings.activate();
+    assert!(!settings.editing());
+    assert_eq!(
+        Config::field("extra_headers")
+            .unwrap()
+            .read(&shown(&settings, "extra_headers"))
+            .unwrap()
+            .extra_headers
+            .unwrap(),
+        vec!["X-Test: value"]
+    );
+}
+
+#[test]
+fn credential_replace_is_explicit_and_can_be_restored_or_removed() {
+    let mut settings = Settings::of(&decided());
+    at(&mut settings, "api_key");
+    settings.activate();
+    assert!(!settings.key(Key::Char('x')));
+    settings.activate();
+    settings.key(Key::Char('x'));
+    settings.cancel_editor();
+    assert_eq!(shown(&settings, "api_key"), MASK);
+    assert!(settings.touched().is_empty());
+    settings.activate();
+    settings.walked(Move::Next);
+    settings.activate();
+    assert_eq!(shown(&settings, "api_key"), "");
+}
+
+#[test]
+fn header_refusal_retains_value_and_escape_restores_the_original_list() {
+    let mut settings = Settings::of(&Config::default());
+    at(&mut settings, "extra_headers");
+    settings.activate();
+    settings.activate();
+    for c in "Bad,Name".chars() {
+        settings.key(Key::Char(c));
+    }
+    settings.activate();
+    settings.key(Key::Char('v'));
+    settings.activate();
+    assert!(settings.refusal().is_some());
+    assert!(
+        matches!(&settings.editor, Some(Editor::Collection { input: Some((_, value, Some(name))), .. }) if value == "v" && name == "Bad,Name")
+    );
+    settings.cancel_editor();
+    assert!(settings.refusal().is_none());
+    assert!(settings.touched().is_empty());
+}
+
+#[test]
+fn credential_confirmation_keeps_the_secret_not_its_display_mask() {
+    let mut settings = Settings::of(&decided());
+    at(&mut settings, "api_key");
+    settings.activate();
+    settings.activate();
+    for glyph in "replacement".chars() {
+        settings.key(Key::Char(glyph));
+    }
+    settings.activate();
+    assert_eq!(shown(&settings, "api_key"), "replacement");
+    assert!(settings.body(80).iter().all(|row| {
+        row.spans
+            .iter()
+            .all(|(text, _)| !text.contains("replacement"))
+    }));
+}

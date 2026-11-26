@@ -23,7 +23,7 @@ settings at 120x40
 17 |                        │   Thinking               [on]                                        │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 18 |                        │   Context window         200,000 tokens                              │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 19 |                        │   Maximum turns          250                                         │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-20 |                        │   Request timeout        120 seconds                                 │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+20 |                        │   Request timeout        2 min                                       │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 21 |                        │   Command budget         Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 22 |                        │   Output budget          Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 23 |                        │                                                                      │                        | dim:25 plain:70 dim:25

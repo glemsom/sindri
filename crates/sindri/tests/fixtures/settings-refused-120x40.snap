@@ -21,7 +21,7 @@ settings-refused at 120x40
 15 |                        │   Thinking               [on]                                        │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 16 |                        │   Context window         200,000 tokens                              │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 17 |                        │ › Maximum turns          two hundred *                               │                        | dim:25 plain:1 accent+reversed:38 plain:31 dim:25
-18 |                        │   Request timeout        120 seconds                                 │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+18 |                        │   Request timeout        2 min                                       │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 19 |                        │   Command budget         Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 20 |                        │   Output budget          Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
 21 |                        │                                                                      │                        | dim:25 plain:70 dim:25
@@ -37,7 +37,7 @@ settings-refused at 120x40
 31 |                        │ found in string                                                      │                        | dim:25 plain:1 err:15 plain:54 dim:25
 32 |                        │   Apply 1 change · changes affect the next run                       │                        | dim:25 plain:1 accent:46 plain:23 dim:25
 33 |                        │   Cancel · discard changes                                           │                        | dim:25 plain:1 accent:26 plain:43 dim:25
-34 |                        │ ↑↓ move · Enter edit · Esc cancel · Tab next                         │                        | dim:25 plain:1 muted:44 plain:25 dim:25
+34 |                        │ Enter confirms · Esc restores · Ctrl-U clears                        │                        | dim:25 plain:1 muted:45 plain:24 dim:25
 35 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 36 |                                                                                                                        | dim:120
 37 |                                                                                                                        | dim:120

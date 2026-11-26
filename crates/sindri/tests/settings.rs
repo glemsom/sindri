@@ -293,12 +293,8 @@ fn a_bad_value_is_refused_on_the_screen_naming_its_key_and_nothing_is_written() 
     view.key(Key::Clear);
     type_into(&mut view, "two hundred");
 
-    let touched = entered(&mut view);
-    let error = FirstRun::resolve(&environment(&home), Config::default())
-        .unwrap()
-        .persist(&environment(&home), &touched, Config::default())
-        .expect_err("a turn cap that is not a number is a bad value");
-    view.refuse(&error.to_string());
+    view.key(Key::Enter);
+    assert!(view.settings().editing());
 
     assert_eq!(
         view.mode(),
@@ -309,7 +305,7 @@ fn a_bad_value_is_refused_on_the_screen_naming_its_key_and_nothing_is_written() 
         view.settings()
             .refusal()
             .is_some_and(|reason| reason.contains("max_turns")),
-        "and it names the key a reader has to go and change, and it says: {error}"
+        "and it names the key a reader has to go and change"
     );
     assert_eq!(
         read(&path),
@@ -444,12 +440,9 @@ fn a_context_window_of_nothing_typed_into_the_modal_is_refused_naming_the_row() 
     walk_to(&mut view, "context_window");
     type_into(&mut view, "0");
 
-    let touched = entered(&mut view);
-    let error = FirstRun::resolve(&environment(&home), Config::default())
-        .unwrap()
-        .persist(&environment(&home), &touched, Config::default())
-        .expect_err("a window of no tokens is a share nothing can be taken of");
-    view.refuse(&error.to_string());
+    view.key(Key::Enter);
+    assert!(view.settings().editing());
+    assert_eq!(shown(&view, "context_window"), "0");
 
     assert_eq!(
         view.mode(),
@@ -460,7 +453,7 @@ fn a_context_window_of_nothing_typed_into_the_modal_is_refused_naming_the_row() 
         view.settings().refusal().is_some_and(
             |reason| reason.contains("context_window") && reason.contains("at least one token")
         ),
-        "and it names the row and the smallest window that would do, and it says: {error}"
+        "and it names the row and the smallest window that would do"
     );
     assert_eq!(
         read(&path),
@@ -561,4 +554,19 @@ fn cancelling_a_text_edit_restores_the_value_and_its_pending_change_count() {
     assert_eq!(view.settings().changed(), 0);
     assert!(!view.settings().editing());
     assert_eq!(view.mode(), Mode::Settings);
+}
+
+#[test]
+fn quantity_confirmation_persists_normalized_seconds() {
+    let home = home(HAND_WRITTEN);
+    let mut view = opened(&home);
+    walk_to(&mut view, "timeout");
+    type_into(&mut view, "2m");
+    let touched = entered(&mut view);
+    let fresh = FirstRun::resolve(&environment(&home), Config::default())
+        .unwrap()
+        .persist(&environment(&home), &touched, Config::default())
+        .unwrap();
+    assert_eq!(fresh.timeout, Some(120));
+    assert!(read(&file_in(&home)).contains("timeout = 120"));
 }

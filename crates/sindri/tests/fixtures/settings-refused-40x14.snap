@@ -16,4 +16,4 @@ settings-refused at 40x14
 10 |  digit found in string                 | plain:2 err:21 plain:17
 11 |    Apply 1 change · next run           | plain:2 accent:27 plain:11
 12 |    Cancel · discard changes            | plain:2 accent:26 plain:12
-13 |  ↑↓ move · Enter edit · Esc cancel     | plain:2 muted:33 plain:5
+13 |  Enter confirm · Esc restore           | plain:2 muted:27 plain:11

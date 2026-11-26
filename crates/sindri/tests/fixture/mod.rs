@@ -687,18 +687,7 @@ fn refused(capabilities: Capabilities) -> View {
         view.key(Key::Char(glyph));
     }
     view.key(Key::Enter);
-    while view.settings().current() < Config::SCHEMA.len() {
-        view.key(Key::Down);
-    }
-    let Outcome::Save(touched) = view.key(Key::Enter) else {
-        panic!("a value typed into a row is a visit Enter hands to the save");
-    };
-    let path = tempfile::tempdir()
-        .expect("a temp dir")
-        .path()
-        .join("config.toml");
-    let error = Config::save_touched_to(&path, &touched).expect_err("a turn cap is a number");
-    view.refuse(&error.to_string());
+    assert!(view.settings().refusal().is_some());
     view
 }
 

@@ -40,11 +40,26 @@ type Reading = fn(&'static str, &mut Config, &str) -> Result<(), ConfigError>;
 type Writing = fn(&'static str, &Config, &mut DocumentMut) -> Result<(), ConfigError>;
 type Merging = fn(&mut Config, &Config);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldKind {
+    Boolean,
+    Text,
+    Integer,
+    DurationSeconds,
+    DurationMilliseconds,
+    ByteSize,
+    Url,
+    Credential,
+    Paths,
+    Headers,
+    Choice,
+}
+
 #[derive(Debug)]
 pub struct Field {
     pub name: &'static str,
     pub variable: &'static str,
-    switch: bool,
+    pub kind: FieldKind,
     shown: Shown,
     reading: Reading,
     writing: Writing,
@@ -64,6 +79,7 @@ impl Field {
     const fn typed(
         name: &'static str,
         variable: &'static str,
+        kind: FieldKind,
         shown: Shown,
         reading: Reading,
         writing: Writing,
@@ -72,7 +88,7 @@ impl Field {
         Field {
             name,
             variable,
-            switch: false,
+            kind,
             shown,
             reading,
             writing,
@@ -81,17 +97,15 @@ impl Field {
         }
     }
 
-    const fn switched(mut self) -> Field {
-        self.switch = true;
-        self
-    }
-
     const fn spoken(mut self, spoken: Reading) -> Field {
         self.spoken = spoken;
         self
     }
 
     pub fn choices(&self, wire: Option<Wire>) -> Option<Vec<&'static str>> {
+        if self.kind == FieldKind::Boolean {
+            return Some(vec!["true", "false", ""]);
+        }
         match self.name {
             "provider" => Some(Wire::WORDS.to_vec()),
             "route" => Some(if wire == Some(Wire::Anthropic) {
@@ -104,7 +118,7 @@ impl Field {
     }
 
     pub fn switch(&self) -> bool {
-        self.switch
+        self.kind == FieldKind::Boolean
     }
 
     pub fn shown(&self, config: &Config) -> String {
@@ -121,7 +135,44 @@ impl Field {
 
     pub fn read(&self, text: &str) -> Result<Config, ConfigError> {
         let mut config = Config::default();
-        (self.reading)(self.name, &mut config, text)?;
+        if text.is_empty() && self.kind == FieldKind::Boolean {
+            return Ok(config);
+        }
+        let normalized = match self.kind {
+            FieldKind::DurationSeconds => {
+                Some(quantity(self.name, text, false, 1_000_000_000)?.to_string())
+            }
+            FieldKind::DurationMilliseconds => {
+                Some(quantity(self.name, text, false, 1_000_000)?.to_string())
+            }
+            FieldKind::ByteSize => Some(quantity(self.name, text, true, 1)?.to_string()),
+            FieldKind::Url => {
+                let url = text.parse::<http::Uri>().map_err(|_| {
+                    bad_input(
+                        self.name,
+                        "expected an absolute http or https URL with a host",
+                    )
+                })?;
+                if !matches!(url.scheme_str(), Some("http" | "https"))
+                    || url.host().is_none_or(str::is_empty)
+                {
+                    return Err(bad_input(
+                        self.name,
+                        "expected an absolute http or https URL with a host",
+                    ));
+                }
+                None
+            }
+            _ => None,
+        };
+        (self.reading)(
+            self.name,
+            &mut config,
+            normalized.as_deref().unwrap_or(text),
+        )?;
+        if self.kind == FieldKind::Integer {
+            integer(self.name, parsed(self.name, text)?)?;
+        }
         Ok(config)
     }
 
@@ -135,6 +186,7 @@ impl Config {
         Field::typed(
             "provider",
             "SINDRI_PROVIDER",
+            FieldKind::Choice,
             |config| word_or_empty(config.provider.map(Wire::word)),
             |key, config, text| {
                 config.provider = Some(as_wire(key, text)?);
@@ -146,6 +198,7 @@ impl Config {
         Field::typed(
             "model",
             "SINDRI_MODEL",
+            FieldKind::Text,
             |config| string_or_empty(&config.model),
             |_, config, text| {
                 config.model = Some(text.to_owned());
@@ -157,6 +210,7 @@ impl Config {
         Field::typed(
             "route",
             "SINDRI_ROUTE",
+            FieldKind::Choice,
             |config| word_or_empty(config.route.map(Route::word)),
             |key, config, text| {
                 config.route = Some(as_route(key, text)?);
@@ -168,6 +222,7 @@ impl Config {
         Field::typed(
             "base_url",
             "SINDRI_BASE_URL",
+            FieldKind::Url,
             |config| string_or_empty(&config.base_url),
             |_, config, text| {
                 config.base_url = Some(text.to_owned());
@@ -179,6 +234,7 @@ impl Config {
         Field::typed(
             "api_key",
             "SINDRI_API_KEY",
+            FieldKind::Credential,
             |config| {
                 if config.api_key.is_some() {
                     MASK.to_owned()
@@ -196,6 +252,7 @@ impl Config {
         Field::typed(
             "thinking",
             "SINDRI_THINKING",
+            FieldKind::Boolean,
             |config| on_or_empty(config.thinking),
             |key, config, text| {
                 config.thinking = Some(parsed(key, text)?);
@@ -203,11 +260,11 @@ impl Config {
             },
             |key, config, document| write_value(key, config.thinking, document),
             or_lower!(thinking),
-        )
-        .switched(),
+        ),
         Field::typed(
             "extra_writable_paths",
             "SINDRI_EXTRA_WRITABLE_PATHS",
+            FieldKind::Paths,
             |config| {
                 let paths = config.extra_writable_paths.as_deref().unwrap_or_default();
                 paths
@@ -233,6 +290,7 @@ impl Config {
         Field::typed(
             "extra_headers",
             "SINDRI_EXTRA_HEADERS",
+            FieldKind::Headers,
             |config| {
                 config
                     .extra_headers
@@ -261,6 +319,7 @@ impl Config {
         Field::typed(
             "context_window",
             "SINDRI_CONTEXT_WINDOW",
+            FieldKind::Integer,
             |config| number_or_empty(config.context_window),
             |key, config, text| {
                 config.context_window = Some(nonzero_window(key, parsed(key, text)?)?);
@@ -272,6 +331,7 @@ impl Config {
         Field::typed(
             "max_turns",
             "SINDRI_MAX_TURNS",
+            FieldKind::Integer,
             |config| number_or_empty(config.max_turns),
             |key, config, text| {
                 config.max_turns = Some(parsed(key, text)?);
@@ -283,6 +343,7 @@ impl Config {
         Field::typed(
             "timeout",
             "SINDRI_TIMEOUT",
+            FieldKind::DurationSeconds,
             |config| number_or_empty(config.timeout),
             |key, config, text| {
                 config.timeout = Some(parsed(key, text)?);
@@ -294,6 +355,7 @@ impl Config {
         Field::typed(
             "command_budget_ms",
             "SINDRI_COMMAND_BUDGET_MS",
+            FieldKind::DurationMilliseconds,
             |config| number_or_empty(config.command_budget_ms),
             |key, config, text| {
                 config.command_budget_ms = Some(parsed(key, text)?);
@@ -305,6 +367,7 @@ impl Config {
         Field::typed(
             "output_budget_bytes",
             "SINDRI_OUTPUT_BUDGET_BYTES",
+            FieldKind::ByteSize,
             |config| number_or_empty(config.output_budget_bytes),
             |key, config, text| {
                 config.output_budget_bytes = Some(parsed(key, text)?);
@@ -316,6 +379,7 @@ impl Config {
         Field::typed(
             "status",
             "SINDRI_STATUS",
+            FieldKind::Boolean,
             |config| on_or_empty(config.status),
             |key, config, text| {
                 config.status = Some(parsed(key, text)?);
@@ -323,11 +387,11 @@ impl Config {
             },
             |key, config, document| write_value(key, config.status, document),
             or_lower!(status),
-        )
-        .switched(),
+        ),
         Field::typed(
             "face",
             "SINDRI_FACE",
+            FieldKind::Boolean,
             |config| on_or_empty(config.face),
             |key, config, text| {
                 config.face = Some(parsed(key, text)?);
@@ -335,11 +399,11 @@ impl Config {
             },
             |key, config, document| write_value(key, config.face, document),
             or_lower!(face),
-        )
-        .switched(),
+        ),
         Field::typed(
             "ssh_agent",
             "SINDRI_SSH_AGENT",
+            FieldKind::Boolean,
             |config| on_or_empty(config.ssh_agent),
             |key, config, text| {
                 config.ssh_agent = Some(parsed(key, text)?);
@@ -347,8 +411,7 @@ impl Config {
             },
             |key, config, document| write_value(key, config.ssh_agent, document),
             or_lower!(ssh_agent),
-        )
-        .switched(),
+        ),
     ];
 
     pub fn field(name: &str) -> Option<&'static Field> {
@@ -620,6 +683,14 @@ impl Touched {
 }
 
 fn listed(text: &str) -> Vec<String> {
+    if let Ok(Value::Array(values)) = text.parse::<Value>()
+        && values.iter().all(|value| value.as_str().is_some())
+    {
+        return values
+            .iter()
+            .map(|value| value.as_str().unwrap().to_owned())
+            .collect();
+    }
     text.split(',')
         .map(str::trim)
         .filter(|item| !item.is_empty())
@@ -831,6 +902,99 @@ where
         reason: format!("`{text}` will not parse: {error}"),
     })
 }
+fn bad_input(origin: &str, reason: &str) -> ConfigError {
+    ConfigError::BadValue {
+        origin: origin.to_owned(),
+        reason: reason.to_owned(),
+    }
+}
+
+fn quantity(origin: &str, text: &str, bytes: bool, divisor: u128) -> Result<u64, ConfigError> {
+    let invalid = || {
+        bad_input(
+            origin,
+            "expected a nonnegative quantity in whole config units within the TOML integer range",
+        )
+    };
+    let text = text.trim();
+    if let Ok(value) = text.parse::<u64>() {
+        integer(origin, value)?;
+        return Ok(value);
+    }
+    let mut rest = text;
+    let mut total = 0u128;
+    let mut count = 0;
+    while !rest.is_empty() {
+        let end = rest
+            .find(|c: char| !c.is_ascii_digit() && c != '.')
+            .unwrap_or(rest.len());
+        let number = &rest[..end];
+        let (whole, fraction) = number.split_once('.').unwrap_or((number, ""));
+        if whole.is_empty()
+            || !whole.bytes().all(|c| c.is_ascii_digit())
+            || !fraction.bytes().all(|c| c.is_ascii_digit())
+            || fraction.len() > 18
+        {
+            return Err(invalid());
+        }
+        let scale = 10u128
+            .checked_pow(fraction.len() as u32)
+            .ok_or_else(invalid)?;
+        let numerator = whole
+            .parse::<u128>()
+            .map_err(|_| invalid())?
+            .checked_mul(scale)
+            .and_then(|n| n.checked_add(fraction.parse::<u128>().unwrap_or(0)))
+            .ok_or_else(invalid)?;
+        rest = rest[end..].trim_start();
+        let end = rest
+            .find(|c: char| !c.is_ascii_alphabetic())
+            .unwrap_or(rest.len());
+        let unit = rest[..end].to_ascii_lowercase();
+        let multiplier: u128 = if bytes {
+            match unit.as_str() {
+                "b" | "byte" | "bytes" => 1,
+                "kb" => 1_000,
+                "mb" => 1_000_000,
+                "gb" => 1_000_000_000,
+                "tb" => 1_000_000_000_000,
+                "kib" => 1 << 10,
+                "mib" => 1 << 20,
+                "gib" => 1 << 30,
+                "tib" => 1 << 40,
+                _ => return Err(invalid()),
+            }
+        } else {
+            match unit.as_str() {
+                "ns" => 1,
+                "us" => 1_000,
+                "ms" | "millisecond" | "milliseconds" => 1_000_000,
+                "s" | "sec" | "secs" | "second" | "seconds" => 1_000_000_000,
+                "m" | "min" | "mins" | "minute" | "minutes" => 60_000_000_000,
+                "h" | "hr" | "hrs" | "hour" | "hours" => 3_600_000_000_000,
+                "d" | "day" | "days" => 86_400_000_000_000,
+                _ => return Err(invalid()),
+            }
+        };
+        let scaled = numerator.checked_mul(multiplier).ok_or_else(invalid)?;
+        if scaled % scale != 0 {
+            return Err(invalid());
+        }
+        total = total.checked_add(scaled / scale).ok_or_else(invalid)?;
+        count += 1;
+        rest = rest[end..].trim_start();
+        if bytes && !rest.is_empty() {
+            return Err(invalid());
+        }
+    }
+    if count == 0 || !total.is_multiple_of(divisor) {
+        return Err(invalid());
+    }
+    let value = u64::try_from(total / divisor).map_err(|_| invalid())?;
+    integer(origin, value)?;
+    Ok(value)
+}
+
 pub const WINDOW_REFUSAL: &str = "the context window must be at least one token";
 fn nonzero_window(origin: &str, window: u64) -> Result<u64, ConfigError> {
     if window == 0 {
@@ -860,7 +1024,13 @@ fn as_wire(origin: &str, text: &str) -> Result<Wire, ConfigError> {
     })
 }
 fn header_shape(origin: &str, headers: &[String]) -> Result<(), ConfigError> {
-    match headers.iter().find(|header| !header.contains(':')) {
+    match headers.iter().find(|header| {
+        let Some((name, value)) = header.split_once(':') else {
+            return true;
+        };
+        name.parse::<http::header::HeaderName>().is_err()
+            || http::header::HeaderValue::from_str(value.trim()).is_err()
+    }) {
         Some(bad) => Err(ConfigError::BadValue {
             origin: origin.to_owned(),
             reason: format!("`{bad}` is not a header; a header is `Name: value`"),
@@ -904,3 +1074,15 @@ impl fmt::Display for ConfigError {
     }
 }
 impl Error for ConfigError {}
+
+pub fn collection_text(items: &[String]) -> String {
+    if items.iter().any(|item| item.contains(',')) {
+        let mut array = toml_edit::Array::new();
+        for item in items {
+            array.push(item.as_str());
+        }
+        array.to_string()
+    } else {
+        items.join(", ")
+    }
+}

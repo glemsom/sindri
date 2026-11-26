@@ -1,4 +1,4 @@
-use sindri_core::config::{self, Config, ConfigError, Touched};
+use sindri_core::config::{self, Config, ConfigError, FieldKind, Touched, collection_text};
 use sindri_core::redact::MASK;
 
 use crate::composer::Key;
@@ -31,6 +31,14 @@ enum Editor {
         values: Vec<&'static str>,
         narrow: Narrow,
     },
+    Collection {
+        before: String,
+        touched: bool,
+        items: Vec<String>,
+        narrow: Narrow,
+        input: Option<(Option<usize>, String, Option<String>)>,
+    },
+    Credential(Narrow),
     Model(Models),
 }
 
@@ -137,7 +145,116 @@ impl Settings {
     pub fn activate(&mut self) -> bool {
         if let Some(editor) = self.editor.take() {
             let value = match editor {
-                Editor::Text { .. } => return false,
+                Editor::Text { before, touched } => {
+                    let row = self.standing();
+                    let result = if row.text.trim().is_empty() {
+                        Ok(Config::default())
+                    } else {
+                        row.key.read(row.text.trim())
+                    };
+                    match result {
+                        Ok(config) => {
+                            let value = if row.key.kind == FieldKind::Credential {
+                                row.text.clone()
+                            } else {
+                                row.key.shown(&config)
+                            };
+                            self.replace(value);
+                        }
+                        Err(error) => {
+                            self.refusal = Some(error.to_string());
+                            self.editor = Some(Editor::Text { before, touched });
+                        }
+                    }
+                    return false;
+                }
+                Editor::Credential(narrow) => {
+                    if narrow.mark() == 1 {
+                        self.replace(String::new());
+                    } else {
+                        let row = self.standing();
+                        self.editor = Some(Editor::Text {
+                            before: row.text.clone(),
+                            touched: row.touched,
+                        });
+                        self.standing().text.clear();
+                    }
+                    return false;
+                }
+                Editor::Collection {
+                    before,
+                    touched,
+                    mut items,
+                    mut narrow,
+                    mut input,
+                } => {
+                    if let Some((index, text, name)) = input.take() {
+                        if self.standing().key.kind == FieldKind::Headers && name.is_none() {
+                            input = Some((
+                                index,
+                                index
+                                    .and_then(|i| {
+                                        items[i]
+                                            .split_once(':')
+                                            .map(|(_, value)| value.trim().to_owned())
+                                    })
+                                    .unwrap_or_default(),
+                                Some(text),
+                            ));
+                        } else {
+                            let original = (index, text.clone(), name.clone());
+                            let value = name.map(|name| format!("{name}: {text}")).unwrap_or(text);
+                            let mut candidate = items.clone();
+                            if let Some(index) = index {
+                                candidate[index] = value;
+                            } else {
+                                candidate.push(value);
+                            }
+                            let text = collection_text(&candidate);
+                            match self.standing().key.read(&text) {
+                                Ok(_) => {
+                                    items = candidate;
+                                    self.replace(text);
+                                }
+                                Err(error) => {
+                                    self.refusal = Some(error.to_string());
+                                    input = Some(original);
+                                }
+                            }
+                        }
+                    } else {
+                        let at = narrow.mark();
+                        if at > items.len() * 2 {
+                            return false;
+                        }
+                        if at == items.len() * 2 {
+                            input = Some((None, String::new(), None));
+                        } else if at % 2 == 1 {
+                            items.remove(at / 2);
+                            self.replace(collection_text(&items));
+                            narrow.pressed(at.min(items.len() * 2), items.len() * 2 + 2);
+                        } else if let Some(value) = items.get(at / 2) {
+                            let text = if self.standing().key.kind == FieldKind::Headers {
+                                value
+                                    .split_once(':')
+                                    .map(|(name, _)| name)
+                                    .unwrap_or(value)
+                                    .to_owned()
+                            } else {
+                                value.clone()
+                            };
+                            input = Some((Some(at / 2), text, None));
+                        }
+                    }
+                    self.editor = Some(Editor::Collection {
+                        before,
+                        touched,
+                        items,
+                        narrow,
+                        input,
+                    });
+                    return false;
+                }
                 Editor::Choices { values, narrow } => {
                     values.get(narrow.mark()).map(|v| (*v).to_owned())
                 }
@@ -151,7 +268,33 @@ impl Settings {
         let Some(row) = self.rows.get(self.current()) else {
             return false;
         };
-        self.editor = if row.key.name == "model" {
+        self.editor = if matches!(row.key.kind, FieldKind::Paths | FieldKind::Headers) {
+            Some(Editor::Collection {
+                before: row.text.clone(),
+                touched: row.touched,
+                items: row
+                    .key
+                    .read(&row.text)
+                    .ok()
+                    .map(|config| {
+                        if row.key.kind == FieldKind::Headers {
+                            config.extra_headers.unwrap_or_default()
+                        } else {
+                            config
+                                .extra_writable_paths
+                                .unwrap_or_default()
+                                .iter()
+                                .map(|path| path.display().to_string())
+                                .collect()
+                        }
+                    })
+                    .unwrap_or_default(),
+                narrow: Narrow::default(),
+                input: None,
+            })
+        } else if row.key.kind == FieldKind::Credential {
+            Some(Editor::Credential(Narrow::default()))
+        } else if row.key.name == "model" {
             Some(Editor::Model(Models::new()))
         } else if let Some(values) = row.key.choices(self.wire()) {
             if values.is_empty() {
@@ -189,10 +332,15 @@ impl Settings {
         let Some(editor) = self.editor.take() else {
             return false;
         };
-        if let Editor::Text { before, touched } = editor {
+        if let Editor::Text { before, touched }
+        | Editor::Collection {
+            before, touched, ..
+        } = editor
+        {
             self.standing().text = before;
             self.standing().touched = touched;
         }
+        self.refusal = None;
         true
     }
 
@@ -223,14 +371,68 @@ impl Settings {
                 }
                 return rows;
             }
+            Some(Editor::Credential(narrow)) => {
+                return editor_menu(vec!["Replace".into(), "Remove".into()], narrow.mark());
+            }
+            Some(Editor::Collection {
+                items,
+                narrow,
+                input,
+                ..
+            }) => {
+                let mut rows = if let Some((_, text, name)) = input {
+                    let label = if self.rows[self.current()].key.kind == FieldKind::Headers {
+                        if name.is_some() {
+                            "Header value"
+                        } else {
+                            "Header name"
+                        }
+                    } else {
+                        "Path"
+                    };
+                    let mut row = list::whole(&format!("{label}: {text}"), Look::plain(Ink::Plain));
+                    row.caret = Some(pen::width(&row.spans));
+                    vec![row]
+                } else {
+                    let mut labels = Vec::new();
+                    for item in items {
+                        labels.push(format!("Edit {item}"));
+                        labels.push(format!("Remove {item}"));
+                    }
+                    labels.push("Add".into());
+                    labels.push("Done".into());
+                    editor_menu(labels, narrow.mark())
+                };
+                rows.extend(list::refusal(
+                    "Enter confirm · Esc restore · Ctrl-U clears input",
+                    width,
+                ));
+                if let Some(reason) = self.refusal() {
+                    rows.extend(list::refusal(reason, width));
+                }
+                return rows;
+            }
             Some(Editor::Choices { values, narrow }) => {
                 return list::List {
                     query: None,
                     said: None,
                     items: list::columned(
-                        values
-                            .iter()
-                            .map(|v| (if v.is_empty() { "Automatic" } else { *v }, "")),
+                        values.iter().map(|v| {
+                            (
+                                if self.rows[self.current()].key.kind == FieldKind::Boolean {
+                                    match *v {
+                                        "true" => "On",
+                                        "false" => "Off",
+                                        _ => "Use inherited value",
+                                    }
+                                } else if v.is_empty() {
+                                    "Automatic"
+                                } else {
+                                    *v
+                                },
+                                "",
+                            )
+                        }),
                         Ink::Plain,
                         Beside::Row,
                     ),
@@ -380,6 +582,22 @@ impl Settings {
                 _ => row.text.clone(),
             };
         }
+        if let Ok(value) = row.text.parse::<u64>() {
+            let units: &[(u64, &str)] = match row.key.kind {
+                FieldKind::DurationSeconds => &[(3600, "h"), (60, "min")],
+                FieldKind::DurationMilliseconds => {
+                    &[(3_600_000, "h"), (60_000, "min"), (1000, "s")]
+                }
+                FieldKind::ByteSize => &[(1 << 30, "GiB"), (1 << 20, "MiB"), (1 << 10, "KiB")],
+                _ => &[],
+            };
+            if let Some((scale, unit)) = units
+                .iter()
+                .find(|(scale, _)| value >= *scale && value.is_multiple_of(*scale))
+            {
+                return format!("{} {unit}", grouped(&(value / scale).to_string()));
+            }
+        }
         let unit = match row.key.name {
             "context_window" => " tokens",
             "timeout" => " seconds",
@@ -480,6 +698,21 @@ impl Settings {
         if rows.len() <= height {
             return rows;
         }
+        if matches!(
+            self.editor,
+            Some(Editor::Collection { .. } | Editor::Credential(_))
+        ) {
+            let selected = rows
+                .iter()
+                .position(|row| {
+                    row.spans
+                        .first()
+                        .is_some_and(|(text, _)| text.starts_with(list::MARK))
+                })
+                .unwrap_or(0);
+            let start = selected.saturating_sub(height.saturating_sub(2));
+            return rows.drain(start..).take(height).collect();
+        }
         if matches!(self.editor, Some(Editor::Model(_) | Editor::Choices { .. })) {
             let selected = rows
                 .iter()
@@ -560,6 +793,21 @@ impl Settings {
     }
 
     pub fn clear(&mut self) -> bool {
+        if let Some(Editor::Collection {
+            input: Some((_, text, _)),
+            ..
+        }) = &mut self.editor
+        {
+            text.clear();
+            self.refusal = None;
+            return true;
+        }
+        if matches!(
+            self.editor,
+            Some(Editor::Credential(_) | Editor::Collection { .. })
+        ) {
+            return false;
+        }
         if matches!(self.editor, Some(Editor::Model(_))) {
             self.editor = Some(Editor::Text {
                 before: self.standing().text.clone(),
@@ -584,6 +832,12 @@ impl Settings {
     }
 
     pub fn space(&mut self) -> bool {
+        if matches!(
+            self.editor,
+            Some(Editor::Collection { .. } | Editor::Credential(_))
+        ) {
+            return self.key(Key::Char(' '));
+        }
         if matches!(self.editor, Some(Editor::Model(_) | Editor::Choices { .. })) {
             return self.key(Key::Char(' '));
         }
@@ -604,6 +858,26 @@ impl Settings {
     }
 
     pub fn key(&mut self, key: Key) -> bool {
+        if let Some(Editor::Collection { input, .. }) = &mut self.editor {
+            let Some((_, text, _)) = input else {
+                return false;
+            };
+            let changed = match key {
+                Key::Char(c) if !c.is_control() => {
+                    text.push(c);
+                    true
+                }
+                Key::Backspace => text.pop().is_some(),
+                _ => false,
+            };
+            if changed {
+                self.refusal = None;
+            }
+            return changed;
+        }
+        if matches!(self.editor, Some(Editor::Credential(_))) {
+            return false;
+        }
         if let Some(Editor::Model(models)) = &mut self.editor {
             return models.key(key);
         }
@@ -666,6 +940,13 @@ impl Kept for Settings {
         match &mut self.editor {
             Some(Editor::Model(models)) => models.walked(way),
             Some(Editor::Choices { values, narrow }) => narrow.walked(way, values.len()),
+            Some(Editor::Credential(narrow)) => narrow.walked(way, 2),
+            Some(Editor::Collection {
+                items,
+                narrow,
+                input,
+                ..
+            }) => input.is_none() && narrow.walked(way, items.len() * 2 + 2),
             Some(Editor::Text { .. }) => false,
             None => self.narrow.walked(way, self.rows.len() + 2),
         }
@@ -682,6 +963,13 @@ impl Kept for Settings {
         match &mut self.editor {
             Some(Editor::Model(models)) => models.pressed(at),
             Some(Editor::Choices { values, narrow }) => narrow.pressed(at, values.len()),
+            Some(Editor::Credential(narrow)) => narrow.pressed(at, 2),
+            Some(Editor::Collection {
+                items,
+                narrow,
+                input,
+                ..
+            }) => input.is_none() && narrow.pressed(at, items.len() * 2 + 2),
             Some(Editor::Text { .. }) => false,
             None => self.narrow.pressed(at, self.rows.len() + 2),
         }
@@ -690,3 +978,19 @@ impl Kept for Settings {
 
 #[cfg(test)]
 mod tests;
+
+fn editor_menu(labels: Vec<String>, selected: usize) -> Vec<ScreenRow> {
+    list::List {
+        query: None,
+        said: None,
+        items: list::columned(
+            labels.iter().map(|label| (label.as_str(), "")),
+            Ink::Plain,
+            Beside::Row,
+        ),
+        selected,
+        marker: list::MARK,
+        chooses: true,
+    }
+    .rows()
+}
