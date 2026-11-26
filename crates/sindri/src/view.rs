@@ -327,6 +327,7 @@ pub struct View {
     queue: Queue,
     conversation: Conversation,
     superseded: bool,
+    joined_generation: u64,
     stack: Stack,
     facts: Facts,
     read: ReadMark,
@@ -389,6 +390,7 @@ impl View {
             queue: Queue::default(),
             conversation: Conversation::default(),
             superseded: false,
+            joined_generation: 0,
             stack: Stack::default(),
             models: Models::new(),
             facts: Facts::default(),
@@ -442,9 +444,8 @@ impl View {
     }
 
     pub fn kept(&mut self, ended: &Turn) {
-        if !self.superseded {
-            self.conversation.join(ended.clone());
-        }
+        self.conversation
+            .join_for(self.joined_generation, ended.clone());
     }
 
     pub fn settle(&mut self) {
@@ -454,6 +455,7 @@ impl View {
         self.composer.set_state(State::Idle);
         self.facts = self.facts.clone().asked();
         self.superseded = false;
+        self.joined_generation = self.conversation.generation();
     }
 
     pub fn picker(&self) -> &Picker {
@@ -727,8 +729,7 @@ impl View {
         self.facts = self.facts.clone().pulsed(None);
         self.mark = None;
         self.drawn = Drawn::none();
-        self.facts.loaded().clear();
-        self.conversation.clear();
+        self.conversation.reset(self.facts.loaded());
         self.superseded = true;
         Outcome::Edited
     }

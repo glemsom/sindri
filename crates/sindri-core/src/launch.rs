@@ -381,7 +381,7 @@ impl<R: Responder + Clone> Launch<R> {
             .limits(self.limits)
             .tools(&self.tools)
             .earlier(earlier.iter().cloned())
-            .loaded(self.loaded.clone())
+            .loaded(self.loaded.scoped())
             .cancel(cancel);
         note(self.record.asked(prompt));
         run.drive(
