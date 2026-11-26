@@ -887,3 +887,74 @@ fn launch_worker_shares_frontend_skill_owner_before_facts_and_after_relaunch() {
         owner.activate(catalog.get("human").unwrap());
     }
 }
+
+#[test]
+fn new_before_first_facts_clears_the_worker_owner_without_delayed_resurrection() {
+    let root = tempfile::tempdir().unwrap();
+    let skill = root.path().join(".agents/skills/human");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(skill.join("SKILL.md"), "---\nname: human\ndescription: exact\ndisable-model-invocation: true\n---\nEXACT_SCHEDULING_SNAPSHOT\n").unwrap();
+    let environment = std::collections::BTreeMap::from([
+        ("HOME".into(), root.path().display().to_string()),
+        ("XDG_STATE_HOME".into(), root.path().display().to_string()),
+    ]);
+    let config = Config {
+        provider: Some(Wire::Anthropic),
+        model: Some("claude-sonnet-4-6".into()),
+        api_key: Some("test-key".into()),
+        base_url: Some("http://127.0.0.1:1".into()),
+        ..Config::default()
+    };
+    let mut stage = Stage::open();
+    stage.cli = Cli::parse_from(["sindri", "--yolo-unsafe"]);
+    let view = View::of(
+        Capabilities::default(),
+        Facts::default().working(root.path().to_path_buf(), None),
+        Transcript::none(),
+    );
+    let opened = FirstRun::resolve(&environment, config.clone())
+        .unwrap()
+        .open(
+            &Machine::new(&environment, root.path().join("bwrap")),
+            &config,
+            stage.cli.enforcement(),
+            FrontEnd::Terminal,
+            None,
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    let mut live = stage.launch(view, config, &environment);
+    live.launch = Some(opened);
+    live.answer(Event::Paste("/skill:human".into())).unwrap();
+    live.answer(Event::Key(Key::Enter)).unwrap();
+    assert!(live.view.facts().loaded().protected()[0].contains("EXACT_SCHEDULING_SNAPSHOT"));
+    let stale = live.view.facts().loaded().scoped();
+    live.send(prompt_of("first prompt")).unwrap();
+    assert!(live.running.is_some(), "{}", stage.drawn());
+    assert!(
+        live.running
+            .as_ref()
+            .unwrap()
+            .finished_within(Duration::from_secs(10))
+    );
+    live.answer(Event::Paste("/new".into())).unwrap();
+    live.answer(Event::Key(Key::Enter)).unwrap();
+    let catalog = sindri_core::skills::Catalog::discover(root.path(), None);
+    stale.activate(catalog.get("human").unwrap());
+    live.take().unwrap();
+    assert!(live.view.facts().loaded().protected().is_empty());
+    assert!(live.view.facts().loaded().names().is_empty());
+    assert!(
+        live.launch
+            .as_ref()
+            .unwrap()
+            .loaded()
+            .protected()
+            .is_empty()
+    );
+    live.answer(Event::Paste("/skill:human".into())).unwrap();
+    live.answer(Event::Key(Key::Enter)).unwrap();
+    assert!(
+        live.launch.as_ref().unwrap().loaded().protected()[0].contains("EXACT_SCHEDULING_SNAPSHOT")
+    );
+    live.ending();
+}
