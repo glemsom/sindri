@@ -1226,3 +1226,250 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
         );
     }
 }
+
+#[test]
+fn interrupted_parallel_work_replays_truthful_outcomes_without_reexecution() {
+    use sindri_core::asking::Asking;
+    use sindri_core::conversation::Conversation;
+    use sindri_core::provider::transport::{Canned, Replay};
+    use sindri_core::provider::{Client, Route};
+
+    #[derive(Default)]
+    struct Retaining(Conversation);
+    impl Turns for Retaining {
+        fn turn(&mut self, _: &Turn) {}
+        fn retained(&mut self, turns: &[Turn]) {
+            for turn in turns {
+                self.0.join(turn.clone());
+            }
+        }
+    }
+
+    for (wire, model, route, answer) in [
+        (
+            Wire::Anthropic,
+            "claude-sonnet-4-6",
+            Route::Chat,
+            include_str!("fixtures/providers/anthropic_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-4o",
+            Route::Chat,
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+        (
+            Wire::Openai,
+            "gpt-5",
+            Route::Responses,
+            include_str!("fixtures/providers/openai_responses_stream.sse"),
+        ),
+        (
+            Wire::Copilot,
+            "gpt-5",
+            Route::Chat,
+            include_str!("fixtures/providers/copilot_chat_stream.sse"),
+        ),
+    ] {
+        for stop in ["error", "budget", "max_turns", "cancelled", "failed"] {
+            let homes = Homes::new();
+            let executed = homes.at("executed");
+            let command = format!(
+                "printf x >> {}; printf PARTIAL_EVIDENCE{}",
+                executed.display(),
+                if stop == "cancelled" {
+                    "; sleep 10"
+                } else {
+                    ""
+                }
+            );
+            let second = if stop == "error" {
+                "{\"command\":".to_owned()
+            } else {
+                serde_json::json!({"command": format!("printf y >> {}", executed.display())})
+                    .to_string()
+            };
+            let calls = serde_json::json!([
+                {"index":0,"id":"call_done","type":"function","function":{"name":"bash","arguments":serde_json::json!({"command": if stop == "failed" { format!("{command}; exit 7") } else { command }}).to_string()}},
+                {"index":1,"id":"call_pending","type":"function","function":{"name":"bash","arguments":second}}
+            ]);
+            let mut tool = format!(
+                "data: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
+                serde_json::json!({"id":"chatcmpl-partial","object":"chat.completion.chunk","created":1760000001,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":calls},"finish_reason":null}]}),
+                serde_json::json!({"id":"chatcmpl-partial","object":"chat.completion.chunk","created":1760000001,"model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]})
+            );
+            if wire == Wire::Anthropic || route == Route::Responses {
+                let fixture = if wire == Wire::Anthropic {
+                    include_str!("fixtures/providers/anthropic_tool_use.sse")
+                } else {
+                    include_str!("fixtures/providers/openai_responses_tool_use.sse")
+                };
+                let mut events = Vec::new();
+                for block in fixture.trim().split("\n\n") {
+                    let mut lines = block.lines();
+                    let event = lines.next().unwrap();
+                    let data = lines.next().unwrap().strip_prefix("data: ").unwrap();
+                    let value: serde_json::Value = serde_json::from_str(data).unwrap();
+                    if event.contains("content_block")
+                        || event.contains("response.output_item")
+                        || event.contains("response.function_call")
+                    {
+                        for (index, call) in calls.as_array().unwrap().iter().enumerate() {
+                            let mut value = value.clone();
+                            let arguments = call["function"]["arguments"].as_str().unwrap();
+                            let id = call["id"].as_str().unwrap();
+                            if wire == Wire::Anthropic {
+                                value["index"] = index.into();
+                                if let Some(block) = value.get_mut("content_block") {
+                                    block["id"] = id.into();
+                                }
+                                if let Some(delta) = value.get_mut("delta") {
+                                    delta["partial_json"] =
+                                        if data.contains("ls") { "" } else { arguments }.into();
+                                }
+                            } else {
+                                if value.get("output_index").is_some() {
+                                    value["output_index"] = index.into();
+                                }
+                                if value.get("item_id").is_some() {
+                                    value["item_id"] = format!("fc_{index}").into();
+                                }
+                                if value.get("delta").is_some() {
+                                    value["delta"] = arguments.into();
+                                }
+                                if value.get("arguments").is_some() {
+                                    value["arguments"] = arguments.into();
+                                }
+                                if let Some(item) = value.get_mut("item") {
+                                    item["id"] = format!("fc_{index}").into();
+                                    item["call_id"] = id.into();
+                                    if !item["arguments"].as_str().unwrap().is_empty() {
+                                        item["arguments"] = arguments.into();
+                                    }
+                                }
+                            }
+                            events.push(format!("{event}\ndata: {value}\n\n"));
+                        }
+                    } else {
+                        let mut value = value;
+                        if let Some(response) = value.get_mut("response") {
+                            response["output"] = serde_json::Value::Array(calls.as_array().unwrap().iter().enumerate().map(|(index, call)| serde_json::json!({"type":"function_call","id":format!("fc_{index}"),"call_id":call["id"],"name":"bash","arguments":call["function"]["arguments"]})).collect());
+                        }
+                        events.push(format!("{event}\ndata: {value}\n\n"));
+                    }
+                }
+                tool = events.concat();
+            }
+            let replay = Replay::new([
+                Canned::stream(Box::leak(tool.into_boxed_str())),
+                Canned::stream(answer),
+            ]);
+            let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+            config.provider = Some(wire);
+            config.model = Some(model.into());
+            config.max_turns = Some(1);
+            if stop == "budget" {
+                config.output_budget_bytes = Some(1);
+            }
+            let cancel = Cancel::new();
+            let watcher = if stop == "cancelled" {
+                let executed = executed.clone();
+                let cancel = cancel.clone();
+                Some(std::thread::spawn(move || {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                    while !executed.exists() && std::time::Instant::now() < deadline {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    }
+                    cancel.now();
+                }))
+            } else {
+                None
+            };
+            let client = Client::over(replay.clone(), SecretSet::default());
+            let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+                .unwrap()
+                .answered_by(
+                    &homes.machine(),
+                    &config,
+                    Enforcement::Unsafe,
+                    FrontEnd::Terminal,
+                    None,
+                    |_, ask, tools| Asking::new(client.clone(), ask.route(route), tools),
+                )
+                .ok()
+                .unwrap();
+            let mut retaining = Retaining::default();
+            let prompt = format!("Inspect {}", homes.root.path().display());
+            let first = launch
+                .drive(&prompt, &[], &mut Quiet, &mut retaining, cancel.clone())
+                .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+            if let Some(watcher) = watcher {
+                watcher.join().unwrap();
+            }
+            assert_eq!(
+                first.stopped().word(),
+                if stop == "failed" { "max_turns" } else { stop }
+            );
+            let earlier = retaining.0.turns().to_vec();
+            launch
+                .drive(
+                    "Recover without repeating work",
+                    &earlier,
+                    &mut Quiet,
+                    &mut retaining,
+                    Cancel::new(),
+                )
+                .unwrap_or_else(|refusal| panic!("{}", refusal.message()));
+            let requests = replay.requests();
+            let body = &requests.last().unwrap().body;
+            assert!(body.contains("PARTIAL_EVIDENCE"), "{stop}: {body}");
+            assert_eq!(body.matches("call_done").count(), 2, "{stop}: {body}");
+            assert!(body.contains("call_pending"), "{stop}: {body}");
+            if stop == "budget" || stop == "cancelled" {
+                assert!(body.contains("not executed"), "{body}");
+                assert_eq!(body.matches("call_pending").count(), 2);
+            }
+            if stop == "error" {
+                assert!(body.contains("command"));
+                assert!(body.contains("failed"), "{body}");
+            }
+            let serialized: serde_json::Value = serde_json::from_str(body).unwrap();
+            let field = if route == Route::Responses {
+                "input"
+            } else {
+                "messages"
+            };
+            let messages = serialized[field].as_array().unwrap();
+            if wire == Wire::Anthropic {
+                let tool_results = messages
+                    .iter()
+                    .filter_map(|message| message["content"].as_array())
+                    .flat_map(|blocks| blocks.iter())
+                    .filter(|block| block["type"] == "tool_result")
+                    .collect::<Vec<_>>();
+                assert_eq!(tool_results.len(), 2);
+                assert_eq!(tool_results[0]["tool_use_id"], "call_done");
+                assert_eq!(tool_results[1]["tool_use_id"], "call_pending");
+                assert_eq!(
+                    tool_results[0]["is_error"].as_bool().unwrap_or(false),
+                    stop == "failed",
+                    "{stop}: {body}"
+                );
+                assert_eq!(
+                    tool_results[1]["is_error"].as_bool().unwrap_or(false),
+                    stop == "error" || stop == "budget" || stop == "cancelled"
+                );
+            }
+            assert!(body.find("call_done").unwrap() < body.find("call_pending").unwrap());
+            assert_eq!(body.matches("Recover without repeating work").count(), 1);
+            assert_eq!(
+                std::fs::read_to_string(&executed).unwrap(),
+                if stop == "error" || stop == "budget" || stop == "cancelled" {
+                    "x"
+                } else {
+                    "xy"
+                }
+            );
+        }
+    }
+}
