@@ -75,6 +75,17 @@ impl Preparation {
         &self.config
     }
 
+    pub(crate) fn refresh(
+        &self,
+        environment: &impl Environment,
+        overrides: Config,
+    ) -> Result<Config, crate::config::ConfigError> {
+        match &self.inherited {
+            Some(_) => Ok(self.config.clone()),
+            None => Config::resolve_ambient(environment, overrides),
+        }
+    }
+
     pub(crate) fn into_config(self) -> Config {
         self.config
     }
@@ -158,24 +169,52 @@ impl<R> Launch<R> {
         opener: Option<Arc<dyn Opener>>,
         adapter: impl FnOnce(Client, Ask, ToolSet) -> R,
     ) -> Result<Launch<R>, Refusal> {
+        let inherited = crate::handoff::Handoff::read(&machine.environment)
+            .map_err(|reason| Refusal::new(reason, SETUP))?;
+        let preparation = Preparation {
+            config: config.clone(),
+            inherited,
+        };
+        Self::prepared_by(
+            machine,
+            &preparation,
+            config,
+            enforcement,
+            front_end,
+            opener,
+            adapter,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prepared_by(
+        machine: &Machine<'_>,
+        preparation: &Preparation,
+        config: &Config,
+        enforcement: Enforcement,
+        front_end: FrontEnd,
+        opener: Option<Arc<dyn Opener>>,
+        adapter: impl FnOnce(Client, Ask, ToolSet) -> R,
+    ) -> Result<Launch<R>, Refusal> {
+        let config = if preparation.inherited.is_some() {
+            preparation.config()
+        } else {
+            config
+        };
         let (Some(endpoint), Some(model)) = (config.endpoint(), config.model.clone()) else {
             return Err(Refusal::new(
                 "a run needs a provider and a model: set them in the config or in the environment",
                 USAGE,
             ));
         };
-        let inherited = crate::handoff::Handoff::read(&machine.environment)
-            .map_err(|reason| Refusal::new(reason, SETUP))?;
-        let child_environment = inherited.as_ref().map(|handoff| &handoff.environment);
-        let state_environment: &dyn Environment = child_environment
-            .map(|environment| environment as &dyn Environment)
-            .unwrap_or(machine.environment);
-        let state_home = session::state_home(&state_environment)
+        let environment = preparation.environment(&machine.environment);
+        let state_home = session::state_home(&environment)
             .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
         let session = Session::create(&state_home)
             .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
         Launch::assemble(
             machine,
+            preparation,
             config,
             enforcement,
             front_end,
@@ -191,6 +230,7 @@ impl<R> Launch<R> {
     #[allow(clippy::too_many_arguments)]
     fn assemble(
         machine: &Machine<'_>,
+        preparation: &Preparation,
         config: &Config,
         enforcement: Enforcement,
         front_end: FrontEnd,
@@ -204,23 +244,17 @@ impl<R> Launch<R> {
         let workspace = std::env::current_dir().map_err(|error| {
             Refusal::new(format!("cannot read the working directory: {error}"), SETUP)
         })?;
-        let environment = machine.environment;
-        let inherited = crate::handoff::Handoff::read(&environment)
-            .map_err(|reason| Refusal::new(reason, SETUP))?;
-        let boundary = if let Some(handoff) = &inherited {
-            handoff.boundary.clone()
-        } else {
-            Boundary::from_config(config, &workspace, enforcement)
-                .map_err(|error| Refusal::new(error.to_string(), SETUP))?
+        let boundary = match &preparation.inherited {
+            Some(handoff) => handoff.boundary.clone(),
+            None => Boundary::from_config(config, &workspace, enforcement)
+                .map_err(|error| Refusal::new(error.to_string(), SETUP))?,
         };
-        let discovery_workspace = inherited
+        let discovery_workspace = preparation
+            .inherited
             .as_ref()
             .map(|handoff| handoff.workspace.as_path())
             .unwrap_or(&workspace);
-        let inherited_environment = inherited.as_ref().map(|handoff| &handoff.environment);
-        let environment: &dyn Environment = inherited_environment
-            .map(|environment| environment as &dyn Environment)
-            .unwrap_or(environment);
+        let environment = preparation.environment(&machine.environment);
         // Proved before a turn is asked or a record written: nothing here proceeds unconfined.
         let proof = sandbox::prove_with(&machine.bwrap, &boundary, session.temp())
             .map_err(|card| Refusal::new(card.to_string(), card.exit_code()))?;

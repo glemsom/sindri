@@ -12,7 +12,6 @@ use sindri::decode::{Decoder, Event};
 use sindri::facts::Facts;
 use sindri::pointer;
 use sindri::pulse::{self, Pulse};
-use sindri::settings::persist;
 use sindri::view::{Painted, Transcript, View};
 use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::launch::{Launch, Machine, Refusal};
@@ -38,7 +37,8 @@ const MODEL: &str = "model";
 
 const GRACE: Duration = Duration::from_secs(2);
 
-pub fn run(cli: &Cli, config: &Config) -> ExitCode {
+pub fn run(cli: &Cli, first_run: sindri_core::first_run::FirstRun) -> ExitCode {
+    let config = first_run.config();
     if let Some(reason) = missing_terminal() {
         return crate::refuse(&reason, USAGE);
     }
@@ -107,6 +107,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
         &terminal,
         cli,
         config.clone(),
+        first_run,
         &Process,
         view,
         telling,
@@ -152,6 +153,7 @@ struct Loop<'a> {
     view: View,
     cli: &'a Cli,
     config: Config,
+    first_run: sindri_core::first_run::FirstRun,
     environment: &'a dyn Environment,
     telling: Window<File>,
     launch: Option<Launch>,
@@ -185,10 +187,12 @@ impl<'a> Loop<'a> {
         crate::term::canvas_at(terminal, crate::term::painted_at())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn new(
         terminal: &'a Terminal,
         cli: &'a Cli,
         config: Config,
+        first_run: sindri_core::first_run::FirstRun,
         environment: &'a dyn Environment,
         view: View,
         telling: Window<File>,
@@ -200,6 +204,7 @@ impl<'a> Loop<'a> {
             view,
             cli,
             config,
+            first_run,
             environment,
             telling,
             launch: None,
@@ -353,7 +358,10 @@ impl<'a> Loop<'a> {
                 Ok(None)
             }
             Outcome::Save(touched) => {
-                match persist(&self.environment, &touched, self.cli.flags()) {
+                match self
+                    .first_run
+                    .persist(&self.environment, &touched, self.cli.flags())
+                {
                     Ok(fresh) => {
                         self.config = fresh;
                         self.telling.switch(self.config.tells_status())?;
@@ -380,7 +388,10 @@ impl<'a> Loop<'a> {
             Outcome::Model(name) => {
                 let mut touched = Touched::new();
                 touched.set(MODEL, name);
-                match persist(&self.environment, &touched, self.cli.flags()) {
+                match self
+                    .first_run
+                    .persist(&self.environment, &touched, self.cli.flags())
+                {
                     Ok(fresh) => {
                         self.config = fresh;
                         self.paint()?;
@@ -430,13 +441,14 @@ impl<'a> Loop<'a> {
                 if let Some(mut ended) = ended {
                     ended.close();
                 }
-                match Launch::open(
+                let opened = self.first_run.open(
                     &Machine::this(),
                     &self.config,
                     self.cli.enforcement(),
                     FrontEnd::Terminal,
                     Some(Arc::new(self.opener.clone())),
-                ) {
+                );
+                match opened {
                     Ok(opened) => opened,
                     Err(refusal) => {
                         self.view.run_refused(refusal.message(), prompt);

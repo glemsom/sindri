@@ -3,7 +3,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use sindri_core::config::Config;
-use sindri_core::launch::{Launch, Machine, Turns};
+use sindri_core::launch::{Machine, Turns};
 use sindri_core::outcome::Outcome;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Told;
@@ -67,13 +67,14 @@ fn piped_words() -> Option<String> {
     (!words.is_empty()).then_some(words)
 }
 
-pub fn run(job: Job, cli: &Cli, config: &Config) -> ExitCode {
+pub fn run(job: Job, cli: &Cli, first_run: &sindri_core::first_run::FirstRun) -> ExitCode {
+    let config = first_run.config();
     let started = Instant::now();
     let prompt = match job.prompt() {
         Ok(prompt) => prompt,
         Err(usage) => return refuse(&usage, USAGE),
     };
-    let opened = Launch::open(
+    let opened = first_run.open(
         &Machine::this(),
         config,
         cli.enforcement(),

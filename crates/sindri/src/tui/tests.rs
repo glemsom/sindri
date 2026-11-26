@@ -194,10 +194,20 @@ impl Stage {
             std::path::Path::new("/work/sindri"),
             carries,
         );
+        struct WithHome<'a>(&'a dyn Environment);
+        impl Environment for WithHome<'_> {
+            fn var(&self, name: &str) -> Option<String> {
+                self.0
+                    .var(name)
+                    .or_else(|| (name == "HOME").then(|| "/nonexistent".to_owned()))
+            }
+        }
         let live = Loop::new(
             &self.terminal,
             &self.cli,
-            config,
+            config.clone(),
+            sindri_core::first_run::FirstRun::resolve(&WithHome(environment), config)
+                .expect("prepared facts"),
             environment,
             view,
             telling,

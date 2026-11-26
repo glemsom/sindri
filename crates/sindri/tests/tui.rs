@@ -268,11 +268,17 @@ impl Wire {
     fn wait_for_prompt(&self, prompt: &str) -> bool {
         let deadline = Instant::now() + PATIENCE;
         while Instant::now() < deadline {
-            if self
-                .requests()
-                .iter()
-                .any(|request| request.contains(prompt))
-            {
+            if self.requests().iter().any(|request| {
+                request
+                    .split_once("\r\n\r\n")
+                    .and_then(|(_, body)| serde_json::from_str::<serde_json::Value>(body).ok())
+                    .and_then(|body| body["messages"].as_array()?.last().cloned())
+                    .is_some_and(|message| {
+                        message["content"].as_array().is_some_and(|content| {
+                            content.iter().any(|part| part["text"] == prompt)
+                        })
+                    })
+            }) {
                 return true;
             }
             thread::sleep(Duration::from_millis(10));
