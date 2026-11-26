@@ -99,6 +99,16 @@ pub struct Usage {
     pub cached_input: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_read: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_write: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_compactions: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_compactions: Option<u64>,
 }
 
 impl Usage {
@@ -108,6 +118,11 @@ impl Usage {
         self.total = added(self.total, spent.total);
         self.cached_input = added(self.cached_input, spent.cached_input);
         self.reasoning = added(self.reasoning, spent.reasoning);
+        self.cache_read = added(self.cache_read, spent.cache_read);
+        self.cache_write = added(self.cache_write, spent.cache_write);
+        self.request_ms = added(self.request_ms, spent.request_ms);
+        self.client_compactions = added(self.client_compactions, spent.client_compactions);
+        self.native_compactions = added(self.native_compactions, spent.native_compactions);
     }
 }
 

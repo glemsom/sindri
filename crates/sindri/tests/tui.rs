@@ -3457,9 +3457,10 @@ fn two_prompts_in_one_launch_leave_one_session_that_counts_both() {
     );
     assert_eq!(
         recorded["usage"],
-        serde_json::json!({"input": 22, "output": 14, "total": 36, "cached_input": 8}),
+        serde_json::json!({"input": 22, "output": 14, "total": 36, "cached_input": 8, "cache_read":8, "request_ms": recorded["usage"]["request_ms"]}),
         "and sums what both asks spent: {recorded}"
     );
+    assert!(recorded["usage"]["request_ms"].is_u64());
     assert_eq!(
         prompts(&found[0]),
         ["hi my name is Glenn", "what is my name?"],

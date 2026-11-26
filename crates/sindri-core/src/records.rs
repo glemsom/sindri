@@ -413,9 +413,7 @@ impl Told {
         match self {
             Told::Idle => "waiting for a prompt",
             Told::Asking { .. } => "asking the model",
-            Told::Compacted { .. } => {
-                "compacted conversation with a model summary; retained protected exchanges"
-            }
+            Told::Compacted { .. } => "compacted conversation; retained protected exchanges",
             Told::Waiting { .. } => "waiting for a command",
             Told::Stopped { stop, .. } => match stop {
                 Stop::Final => "answered",

@@ -115,6 +115,7 @@ pub struct Ask {
     capacity: Option<u64>,
     output_headroom: u64,
     tool_result_headroom: u64,
+    compaction_usage: Usage,
 }
 
 impl Ask {
@@ -141,6 +142,7 @@ impl Ask {
             capacity: None,
             output_headroom: 4096,
             tool_result_headroom: 4096,
+            compaction_usage: Usage::default(),
         }
     }
 
@@ -214,6 +216,10 @@ impl Ask {
         &self.earlier
     }
 
+    pub fn compaction_usage(&self) -> Usage {
+        self.compaction_usage
+    }
+
     pub fn compact(&self, client: &Client) -> Result<Option<Self>, Failure> {
         if self.native_compaction && (!self.replay_capabilities().compaction || self.continuation) {
             return Err(self.native_failure("Native compaction requires native_compaction_verified=true for the selected endpoint/model. Standalone compaction cannot prune a Responses continuation chain; disable continuation or native compaction."));
@@ -264,6 +270,8 @@ impl Ask {
             return Err(self.capacity_failure());
         }
         let mut compacted = self.clone();
+        compacted.compaction_usage = answer.usage;
+        compacted.compaction_usage.client_compactions = Some(1);
         compacted.earlier = vec![Turn::answered(
             0,
             "Client-managed conversation summary",
@@ -384,6 +392,7 @@ impl Ask {
                 .map_err(|_| self.native_failure("Invalid compaction endpoint"))?;
         }
         *request.body_mut() = serde_json::to_vec(&body).unwrap();
+        let started = std::time::Instant::now();
         let returned = futures::executor::block_on(async {
             let response = client
                 .transport
@@ -435,6 +444,23 @@ impl Ask {
             );
         }
         let mut compacted = self.clone();
+        let usage = &returned["usage"];
+        compacted.compaction_usage = Usage {
+            input: usage["input_tokens"].as_u64(),
+            output: usage["output_tokens"].as_u64(),
+            total: usage["total_tokens"].as_u64(),
+            cached_input: usage["cache_read_input_tokens"]
+                .as_u64()
+                .or_else(|| usage["input_tokens_details"]["cached_tokens"].as_u64()),
+            cache_read: usage["cache_read_input_tokens"]
+                .as_u64()
+                .or_else(|| usage["input_tokens_details"]["cached_tokens"].as_u64()),
+            cache_write: usage["cache_creation_input_tokens"].as_u64(),
+            reasoning: usage["output_tokens_details"]["reasoning_tokens"].as_u64(),
+            request_ms: Some(u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)),
+            native_compactions: Some(1),
+            ..Usage::default()
+        };
         let mut boundary = Turn::answered(
             0,
             "",
@@ -784,6 +810,9 @@ impl From<&CompletionResponse> for Answer {
                 total: response.usage.total_tokens,
                 cached_input: response.usage.cached_input_tokens,
                 reasoning: response.usage.reasoning_tokens,
+                cache_read: response.usage.cached_input_tokens,
+                cache_write: response.usage.cache_creation_input_tokens,
+                ..Usage::default()
             },
         }
     }
@@ -984,6 +1013,7 @@ impl Client {
         let Some(key) = credential else {
             return Err(Failure::unconfigured(ask.endpoint.wire()));
         };
+        let started = std::time::Instant::now();
         let carried = self.carry(
             ask.serving(&key, native_beta),
             &ask.model,
@@ -1017,6 +1047,8 @@ impl Client {
             }
             other => other?,
         };
+        answer.usage.request_ms =
+            Some(u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX));
         let target = ask.replay_target();
         if answer.assistant.0.is_some() {
             answer.assistant.1 = Some(target.clone());

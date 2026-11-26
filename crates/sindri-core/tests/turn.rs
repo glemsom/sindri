@@ -34,6 +34,7 @@ fn the_usage_a_turn_spends_is_the_one_total_a_record_keeps() {
         total: Some(7),
         cached_input: Some(1),
         reasoning: Some(2),
+        ..records::Usage::default()
     };
     let mut kept = records::Usage::default();
     kept.charge(&spent);
@@ -52,4 +53,13 @@ fn the_usage_a_turn_spends_is_the_one_total_a_record_keeps() {
         json!({}),
         "a count nobody reported is absent, not a zero"
     );
+}
+
+#[test]
+fn observed_request_and_compaction_metrics_survive_reporting_without_invented_counts() {
+    let observed = json!({"cache_read":4,"cache_write":9,"request_ms":12,"client_compactions":1,"native_compactions":2});
+    let usage: records::Usage = serde_json::from_value(observed.clone()).unwrap();
+    let mut total = records::Usage::default();
+    total.charge(&usage);
+    assert_eq!(serde_json::to_value(total).unwrap(), observed);
 }
