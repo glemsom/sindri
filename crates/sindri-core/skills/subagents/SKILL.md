@@ -65,11 +65,29 @@ for i in "${!pids[@]}"; do
   code=0
   wait "${pids[$i]}" || code=$?
   printf 'brief=%s exit=%s artifacts=%s\n' "$i" "$code" "$group/$i"
-  if ! jq -e 'type == "object" and (.stopped | type == "string")' "$group/$i.json" >/dev/null 2>&1; then
-    printf 'missing or invalid JSON; inspect stderr selectively\n'
+  if [[ ! -s "$group/$i.json" ]]; then
+    case "$code" in
+      2|3) status=setup_or_refusal ;;
+      *) status=missing_json ;;
+    esac
+  elif ! jq -se 'length == 1 and (.[0] | type == "object" and
+      (.stopped | IN("final", "max_turns", "budget", "cancelled", "error")) and
+      ((has("answer") | not) or (.answer | type == "string")))' "$group/$i.json" >/dev/null 2>&1; then
+    status=invalid_json
   else
-    jq -r '"stop=" + .stopped, (.answer // "no final answer")' "$group/$i.json"
+    stopped=$(jq -r '.stopped' "$group/$i.json")
+    if [[ "$stopped" != final ]]; then
+      status="non_final:$stopped"
+    elif [[ "$code" != 0 ]]; then
+      status=exit_failure
+    elif ! jq -e '.answer | type == "string"' "$group/$i.json" >/dev/null; then
+      status=missing_answer
+    else
+      status=success
+    fi
   fi
+  printf 'status=%s json=%s stderr=%s\n' "$status" "$group/$i.json" "$group/$i.stderr"
+  if [[ "$status" == success ]]; then jq -r '.answer' "$group/$i.json"; fi
 done
 trap - EXIT
 ```
@@ -79,3 +97,24 @@ invalid JSON is not success. Inspect stderr only when needed, never dump it by d
 whether to retry or finish inline. The existing bash timeout/cancellation kills the process group;
 children must not escape it or run detached. The child preserves enforcement (including explicitly
 unsafe launches); a nested sandbox refusal must be reported, never bypassed with an unsafe flag.
+
+
+## Failure and lifecycle decisions
+
+Only `status=success` prints an answer: exit zero, one valid outcome, `stopped=final`, and a
+string answer. Other statuses retain explicit JSON/stderr paths; non-final partial answers stay
+in JSON. Inspect only the relevant artifact (for example a bounded stderr range). A setup/refusal
+never justifies weakening enforcement. Choose a new explicit brief for a manual retry, or finish
+inline; the runner retries nothing.
+
+Set the tool timeout for the slowest brief plus launch/collection overhead, within the inherited
+command budget. Launch, wait and collect synchronously in that call. Timeout/cancellation can
+interrupt collection; completed artifacts are session-scoped, not a detached collection service.
+Linux process-tree cleanup covers separately grouped nested bash calls, with parent-death signals
+and bubblewrap namespace teardown as additional guards. Children must remain attached descendants.
+
+Execution evidence: batch fixtures exercised mixed failures, full sibling answers, parallel nested
+bubblewrap launches, timeout and SIGINT cancellation. Actual child processes stopped and delayed
+writes did not occur. Writable-boundary and protected credential/signing inheritance tests passed.
+Compatibility requires Linux `/proc`, parent-death signals and working nested bubblewrap user/PID
+namespaces; prerequisite skips are not evidence. Other hosts need their own execution checks.

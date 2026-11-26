@@ -95,12 +95,39 @@ separate for each index. The parent receives both stable identifiers, zero exits
 continue to execute the same recipe. Parallel evidence uses explicitly unsafe enforcement;
 the separate single-child test remains the evidence for nested sandbox compatibility.
 
-## Remaining execution evidence
+## Verified failure and lifecycle slice
 
-Successful sibling collection after failure, invalid/missing JSON and non-final-stop matrices,
-and child-group timeout/cancellation survivor checks remain follow-up work. Existing batch
-signal tests alone do not establish nested-child cancellation on every platform. The recipe is
-guidance, not a guarantee of model compliance with brevity, coordination or non-recursion.
+The canonical recipe now accepts exactly one outcome object, validates stop and answer types,
+and prints an answer only for a zero-exit final stop with a string answer. Identifiable statuses
+separate setup/refusal, missing/invalid JSON, missing answers, non-final stops and exit failures.
+Raw JSON and stderr stay separate; no failure logs or partial answers are automatically dumped.
+A real provider-refused child was collected alongside a successful sibling. A batch wrapper
+matrix exercises setup refusal, missing/invalid/multiple JSON, invalid answer types, inconsistent
+exit status and representative max_turns/budget/cancelled/error outcomes. These synthetic outcome
+cases validate collection, not the provider loop's production of every stop.
+
+Execution in this GNU/Linux workspace passed 37 batch integration tests, 9 core bash integration
+tests and 4 bash unit tests; all-target Clippy with warnings denied also passed. Nested sandbox
+prerequisites succeeded: tests actually ran, with no NOT VERIFIED skips. Parallel sandbox success
+uses a fixture gate requiring both requests before either response. Existing boundary-after-cwd-change,
+CLI credential override, Copilot signing, protected handoff and secret-masking checks remain green.
+
+The lifecycle tracer initially failed: a separately grouped child bash still performed a delayed
+write after the parent timeout. Bash now installs a Linux parent-death SIGKILL before exec (checking
+the spawn race), and timeout/cancellation freezes and kills the observable descendant tree before
+killing the root group. This reaches child bash groups that group-only killing missed. Bubblewrap
+also tears down its PID namespace when its supervising process dies. Tests run two actual child
+batches with nested bash commands under both unsafe and bubblewrap enforcement, then verify child
+processes are gone or dead and neither delayed write occurs after timeout or parent SIGINT.
+
+## Remaining limitations
+
+Cleanup requires Linux `/proc` and parent-death signals; nested bubblewrap requires working user/PID
+namespaces and its normal proof. Restricted hosts must refuse rather than fall back to unsafe mode.
+These checks establish execution in this workspace, not portability to every host. Deliberately
+reparented/detached processes are outside the synchronous recipe's contract. Timeout/cancellation
+may interrupt collection before completed sibling answers are printed. Artifacts last only until
+parent session cleanup. The recipe cannot guarantee model brevity, coordination or non-recursion.
 
 Out of scope: a scheduling service, recursive delegation, detached work, automatic retries,
 answer-length enforcement, child-only read restrictions, worktree/branch management, locks,

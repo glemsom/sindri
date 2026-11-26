@@ -173,7 +173,20 @@ pub fn run(
 
     // No stdin: a command that reads one would hang the run. It leads a process group of its
     // own, so one kill takes everything it started.
-    let mut child = Command::new(&program)
+    let parent = std::process::id();
+    let mut command = Command::new(&program);
+    unsafe {
+        command.pre_exec(move || {
+            if prctl(1, SIGKILL, 0, 0, 0) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if getppid() != parent as i32 {
+                return Err(std::io::Error::other("bash parent ended before spawn"));
+            }
+            Ok(())
+        });
+    }
+    let mut child = command
         .args(invocation.args())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -237,6 +250,10 @@ fn stop(child: &mut Child) {
         let _ = child.kill();
         return;
     };
+    unsafe {
+        kill(pid, 19);
+    }
+    stop_descendants(pid);
     // The negative pid names the group. One the kernel already reaped has nothing left to
     // signal: a kill that lost a race, not a failure.
     unsafe {
@@ -244,8 +261,48 @@ fn stop(child: &mut Child) {
     }
 }
 
+fn stop_descendants(parent: i32) {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return;
+    };
+    let mut children = Vec::new();
+    for entry in entries.flatten() {
+        let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else {
+            continue;
+        };
+        let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else {
+            continue;
+        };
+        let Some((_, fields)) = stat.rsplit_once(") ") else {
+            continue;
+        };
+        if fields
+            .split_whitespace()
+            .nth(1)
+            .and_then(|value| value.parse::<i32>().ok())
+            == Some(parent)
+        {
+            unsafe {
+                kill(pid, 19);
+            }
+            children.push(pid);
+        }
+    }
+    for pid in children {
+        unsafe {
+            kill(pid, 19);
+        }
+        stop_descendants(pid);
+        unsafe {
+            kill(pid, SIGKILL);
+        }
+    }
+}
+
 unsafe extern "C" {
     fn kill(pid: i32, signal: i32) -> i32;
+    fn prctl(option: i32, arg2: i32, arg3: i32, arg4: i32, arg5: i32) -> i32;
+    fn getppid() -> i32;
 }
 
 #[cfg(test)]

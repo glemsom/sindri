@@ -1416,6 +1416,19 @@ fn a_bash_child_inherits_copilot_signing_and_cli_route_without_secret_argv() {
 
 #[test]
 fn parallel_briefs_share_accessible_deliverables_and_collect_complete_sparse_answers() {
+    parallel_briefs(false);
+}
+
+#[test]
+fn nested_sandbox_parallel_briefs_collect_complete_answers() {
+    if let Some(reason) = sandbox_refusal() {
+        eprintln!("NOT VERIFIED: nested sandbox prerequisite: {reason}");
+        return;
+    }
+    parallel_briefs(true);
+}
+
+fn parallel_briefs(sandboxed: bool) {
     let ground = Ground::new();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -1489,7 +1502,7 @@ fn parallel_briefs_share_accessible_deliverables_and_collect_complete_sparse_ans
         write_reply(&mut stream, Reply::stream(ANTHROPIC)).unwrap();
     });
     let mut command = ground.command();
-    if sandbox_refusal().is_none() {
+    if !sandboxed && sandbox_refusal().is_none() {
         command.arg("--yolo-unsafe");
     }
     let output = command
@@ -1556,4 +1569,282 @@ fn parallel_briefs_share_accessible_deliverables_and_collect_complete_sparse_ans
                 .exists()
         );
     }
+}
+
+fn group_recipe(briefs: &str) -> String {
+    let skill = include_str!("../../sindri-core/skills/subagents/SKILL.md");
+    let recipe = skill
+        .split("```bash\n")
+        .nth(1)
+        .unwrap()
+        .split("```")
+        .next()
+        .unwrap();
+    let start = recipe.find("briefs=(").unwrap();
+    let end = start + recipe[start..].find("\npids=()").unwrap();
+    format!("{}briefs=({briefs}){}", &recipe[..start], &recipe[end..])
+}
+
+#[test]
+fn collection_classifies_failures_without_losing_successful_siblings() {
+    let ground = Ground::new();
+    let wrapper = ground.workspace.join("child-wrapper");
+    std::fs::write(&wrapper, format!(r#"#!/bin/bash
+case "$2" in
+  missing*) exit 0 ;;
+  invalid*) printf '{{broken'; exit 0 ;;
+  shape*) printf '{{"stopped":"final","answer":42}}'; exit 0 ;;
+  many*) printf '{{"stopped":"final","answer":"false-success"}}\n{{"stopped":"final","answer":"false-success"}}'; exit 0 ;;
+  setup*) SINDRI_LAUNCH=/nonexistent exec '{}' "$@" ;;
+  max_turns*|budget*|cancelled*|error*) stop=${{2%%$'\n'*}}; printf '{{"stopped":"%s","answer":"partial-not-final"}}' "$stop"; exit 100 ;;
+  badexit*) printf '{{"stopped":"final","answer":"false-success"}}'; exit 3 ;;
+  *) exec '{}' "$@" ;;
+esac
+"#, env!("CARGO_BIN_EXE_sindri"), env!("CARGO_BIN_EXE_sindri"))).unwrap();
+    std::fs::set_permissions(
+        &wrapper,
+        std::os::unix::fs::PermissionsExt::from_mode(0o700),
+    )
+    .unwrap();
+    let recipe = group_recipe(
+        "'missing' 'invalid' 'shape' 'many' 'setup' 'max_turns' 'budget' 'cancelled' 'error' 'badexit' 'success'",
+    );
+    let runner = format!(
+        "export SINDRI_EXECUTABLE={}; cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\"; cp -R \"$TMPDIR\"/subagents.* collected",
+        wrapper.display()
+    );
+    let wire = Wire::answering(vec![bash_reply(&runner), Reply::stream(ANTHROPIC)]);
+    let output = ground.asking(&wire, "parent").output().unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let transcript = std::fs::read_to_string(ground.session().join("transcript.jsonl")).unwrap();
+    let entries = transcript
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let transcript = entries
+        .iter()
+        .filter(|entry| entry["kind"] == "result")
+        .map(|entry| entry["text"].as_str().unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    for status in [
+        "missing_json",
+        "invalid_json",
+        "setup_or_refusal",
+        "non_final:max_turns",
+        "non_final:budget",
+        "non_final:cancelled",
+        "non_final:error",
+        "exit_failure",
+        "success",
+    ] {
+        assert!(
+            transcript.contains(&format!("status={status}")),
+            "{status}: {transcript}"
+        );
+    }
+    assert!(!transcript.contains("partial-not-final"));
+    assert!(!transcript.contains("false-success"));
+    assert!(transcript.contains("brief=10 exit=0"));
+    assert!(transcript.contains(ANSWER));
+    for i in 0..11 {
+        assert!(
+            ground
+                .workspace
+                .join(format!("collected/{i}.json"))
+                .exists()
+        );
+        assert!(
+            ground
+                .workspace
+                .join(format!("collected/{i}.stderr"))
+                .exists()
+        );
+    }
+}
+
+#[test]
+fn timeout_stops_parallel_children_and_their_nested_bash_processes() {
+    child_lifecycle(false, false);
+}
+
+#[test]
+fn cancellation_stops_parallel_children_and_their_nested_bash_processes() {
+    child_lifecycle(false, true);
+}
+
+#[test]
+fn nested_sandbox_timeout_stops_parallel_children() {
+    if let Some(reason) = sandbox_refusal() {
+        eprintln!("NOT VERIFIED: nested sandbox prerequisite: {reason}");
+        return;
+    }
+    child_lifecycle(true, false);
+}
+
+#[test]
+fn nested_sandbox_cancellation_stops_parallel_children() {
+    if let Some(reason) = sandbox_refusal() {
+        eprintln!("NOT VERIFIED: nested sandbox prerequisite: {reason}");
+        return;
+    }
+    child_lifecycle(true, true);
+}
+
+fn child_lifecycle(sandboxed: bool, cancelled: bool) {
+    let ground = Ground::new();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let recipe = group_recipe("'lifecycle-alpha' 'lifecycle-beta'");
+    let runner = format!(
+        "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\""
+    );
+    let workspace = ground.workspace.clone();
+    let (sent, received) = channel();
+    std::thread::spawn(move || {
+        let (mut parent, _) = listener.accept().unwrap();
+        read_request(&mut parent);
+        write_reply(&mut parent, bash_reply(&runner)).unwrap();
+        let mut children = Vec::new();
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_request(&mut stream);
+            children.push((stream, request));
+        }
+        for (mut stream, request) in children {
+            let id = if request.contains("lifecycle-alpha") {
+                "alpha"
+            } else {
+                "beta"
+            };
+            let command = format!(
+                "printf ready > '{}/{id}.ready'; sleep 4; printf survivor > '{}/{id}.survivor'",
+                workspace.display(),
+                workspace.display()
+            );
+            write_reply(&mut stream, bash_reply(&command)).unwrap();
+        }
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_request(&mut stream);
+        sent.send(request).unwrap();
+        let _ = write_reply(&mut stream, Reply::stream(ANTHROPIC));
+    });
+    let mut command = ground.command();
+    if !sandboxed && sandbox_refusal().is_none() {
+        command.arg("--yolo-unsafe");
+    }
+    let child = command
+        .env("SINDRI_BASE_URL", format!("http://127.0.0.1:{port}"))
+        .env("SINDRI_TIMEOUT", "2")
+        .args(["-b", "lifecycle-parent"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !["alpha", "beta"]
+        .iter()
+        .all(|id| ground.workspace.join(format!("{id}.ready")).exists())
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "both nested bash calls must start"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let running = std::fs::read_dir("/proc")
+        .unwrap()
+        .flatten()
+        .filter_map(|entry| {
+            let bytes = std::fs::read(entry.path().join("cmdline")).ok()?;
+            let command = String::from_utf8_lossy(&bytes);
+            (command.starts_with(env!("CARGO_BIN_EXE_sindri"))
+                && (command.contains("lifecycle-alpha") || command.contains("lifecycle-beta"))
+                && command.contains(ground._root.path().to_str().unwrap()))
+            .then(|| entry.path())
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        running.len() >= 2,
+        "both actual child processes are observable"
+    );
+    if cancelled {
+        signal(&child);
+    }
+    let output = child.wait_with_output().unwrap();
+    if cancelled {
+        assert_eq!(output.status.code(), Some(130), "{}", text(&output.stderr));
+    } else {
+        assert!(output.status.success(), "{}", text(&output.stderr));
+        let request = received.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert!(request.contains("timeout"), "{request}");
+    }
+    std::thread::sleep(Duration::from_secs(5));
+    for process in running {
+        if let Ok(stat) = std::fs::read_to_string(process.join("stat")) {
+            let state = stat
+                .rsplit_once(") ")
+                .unwrap()
+                .1
+                .split_whitespace()
+                .next()
+                .unwrap();
+            assert!(state == "Z" || state == "X", "child survived: {stat}");
+        }
+    }
+    for id in ["alpha", "beta"] {
+        assert!(
+            !ground.workspace.join(format!("{id}.survivor")).exists(),
+            "{id} kept executing after the parent tool ended"
+        );
+    }
+}
+
+#[test]
+fn a_real_child_provider_failure_keeps_the_successful_sibling_answer() {
+    let ground = Ground::new();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let recipe = group_recipe("'refused-child' 'successful-child'");
+    let runner = format!(
+        "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\""
+    );
+    let (sent, received) = channel();
+    std::thread::spawn(move || {
+        let (mut parent, _) = listener.accept().unwrap();
+        read_request(&mut parent);
+        write_reply(&mut parent, bash_reply(&runner)).unwrap();
+        let mut children = Vec::new();
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_request(&mut stream);
+            children.push((stream, request));
+        }
+        for (mut stream, request) in children {
+            let reply = if request.contains("refused-child") {
+                Reply::refusal(400, BAD_REQUEST)
+            } else {
+                Reply::stream(ANTHROPIC)
+            };
+            write_reply(&mut stream, reply).unwrap();
+        }
+        let (mut stream, _) = listener.accept().unwrap();
+        sent.send(read_request(&mut stream)).unwrap();
+        write_reply(&mut stream, Reply::stream(ANTHROPIC)).unwrap();
+    });
+    let output = ground
+        .command()
+        .env("SINDRI_BASE_URL", format!("http://127.0.0.1:{port}"))
+        .args(["-b", "mixed-parent"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let request = received.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert!(request.contains("brief=0 exit=1"), "{request}");
+    assert!(request.contains("status=non_final:error"), "{request}");
+    assert!(request.contains("brief=1 exit=0"), "{request}");
+    assert!(request.contains("status=success"), "{request}");
+    assert!(request.contains(ANSWER));
+    assert!(!request.contains("unknown model"));
 }
