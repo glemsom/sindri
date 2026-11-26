@@ -55,6 +55,7 @@ impl Responder for Asking {
 impl From<Answer> for Reply {
     fn from(answer: Answer) -> Reply {
         Reply {
+            assistant: answer.assistant,
             text: answer.text,
             reasoning: answer.reasoning,
             calls: answer.calls,

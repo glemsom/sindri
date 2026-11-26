@@ -531,6 +531,7 @@ fn a_responder_is_handed_the_very_turn_the_run_keeps() {
     run.drive(&mut Transcript::default(), &mut ());
 
     let asked = Turn {
+        assistant: Default::default(),
         turn: 1,
         prompt: String::from("why does the retry test fail?"),
         text: String::from("running it"),
@@ -599,6 +600,7 @@ fn a_run_keeps_the_very_turn_it_took() {
     run.turn(&mut Transcript::default(), &mut ());
 
     let took = Turn {
+        assistant: Default::default(),
         turn: 1,
         prompt: String::from("count the files"),
         text: String::from("let me list them"),

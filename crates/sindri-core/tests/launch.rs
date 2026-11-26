@@ -1104,7 +1104,7 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
             Wire::Anthropic,
             "claude-sonnet-4-6",
             Route::Chat,
-            include_str!("fixtures/providers/anthropic_tool_use.sse"),
+            include_str!("fixtures/providers/anthropic_thinking_tool_use.sse"),
             include_str!("fixtures/providers/anthropic_stream.sse"),
         ),
         (
@@ -1151,6 +1151,7 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
         let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
         config.provider = Some(wire);
         config.model = Some(model.into());
+        config.thinking = Some(wire == Wire::Anthropic);
         let client = Client::over(replay.clone(), SecretSet::default());
         let mut launch = FirstRun::resolve(&homes.environment, Config::default())
             .unwrap()
@@ -1200,6 +1201,41 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
         assert!(messages.len() > prefix.len());
         if route == Route::Chat && wire != Wire::Anthropic {
             assert_eq!(requests[3].body.matches("Inspecting evidence").count(), 2);
+        }
+
+        if wire == Wire::Anthropic {
+            for request in &requests[1..] {
+                let body: serde_json::Value = serde_json::from_str(&request.body).unwrap();
+                let messages = body["messages"].as_array().unwrap();
+                let assistant = messages
+                    .iter()
+                    .position(|m| m["role"] == "assistant")
+                    .unwrap();
+                assert_eq!(
+                    messages[assistant]["content"],
+                    serde_json::json!([
+                        {"type":"thinking","thinking":"Private plan","signature":"opaque_SIG_+/=01"},
+                        {"type":"redacted_thinking","data":"opaque_REDACTED_+/=01"},
+                        {"type":"text","text":"Inspecting evidence"},
+                        {"type":"tool_use","id":"toolu_01","name":"bash","input":{"command":command}}
+                    ])
+                );
+                assert_eq!(
+                    messages[assistant + 1]["content"][0]["tool_use_id"],
+                    "toolu_01"
+                );
+                if messages.len() > assistant + 2 && messages[assistant + 2]["role"] == "assistant"
+                {
+                    let second = &messages[assistant + 2]["content"];
+                    assert_eq!(second[0]["signature"], "opaque_SIG_+/=01");
+                    assert_eq!(second[1]["data"], "opaque_REDACTED_+/=01");
+                    assert_eq!(second[3]["id"], "toolu_02");
+                    assert_eq!(
+                        messages[assistant + 3]["content"][0]["tool_use_id"],
+                        "toolu_02"
+                    );
+                }
+            }
         }
 
         let id = if wire == Wire::Anthropic {

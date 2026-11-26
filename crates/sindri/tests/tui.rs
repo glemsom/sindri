@@ -71,7 +71,13 @@ fn replayed(request: &str) -> Vec<(String, String)> {
         .map(|message| {
             (
                 String::from(message["role"].as_str().unwrap_or_default()),
-                String::from(message["content"][0]["text"].as_str().unwrap_or_default()),
+                message["content"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|block| block["type"] == "text")
+                    .filter_map(|block| block["text"].as_str())
+                    .collect::<String>(),
             )
         })
         .collect()

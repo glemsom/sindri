@@ -776,6 +776,7 @@ fn a_turn_written_and_read_back_shows_every_entry_kind_a_turn_can_produce() {
 
     record
         .wrote(&Turn {
+            assistant: Default::default(),
             turn: 1,
             prompt: String::from("triage this"),
             text: String::from("two files."),
