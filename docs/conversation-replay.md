@@ -50,7 +50,7 @@ native artifacts and reasoning are omitted. The terminal reports that loss. Loca
 retained material remains available; no completed tool is executed by the transition.
 
 `Ask::replay_target`, `Ask::transition` and `Ask::replay_capabilities` expose the
-core decision. Provider-native compaction remains unsupported. Continuation is opt-in and gated
+core decision. Explicit verified standalone native compaction is described in [Native compaction](native-compaction.md). Continuation is opt-in and gated
 by route, endpoint verification and explicit storage authorization. Same-target native replay remains supported
 by the existing adapter capture tests; that is not verification of custom endpoint
 continuation features.
@@ -74,5 +74,4 @@ Failure leaves original material intact and refuses rather than submitting overs
 input. Fully protected conversations may require a larger configured window or `/new`.
 Original session records are not replaced. Successful continuation reports a compaction
 status event. This deliberate prefix transition is not provider-native compaction, storage
-opt-in or a continuation handle; `replay_capabilities` still describes those unsupported
-provider features. No live-provider summary-quality guarantee is claimed.
+opt-in or a continuation handle; `replay_capabilities` distinguishes verified native support from client summarization. No live-provider summary-quality guarantee is claimed.

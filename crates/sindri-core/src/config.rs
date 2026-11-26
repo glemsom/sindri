@@ -26,6 +26,8 @@ pub struct Config {
     pub responses_continuation: Option<bool>,
     pub responses_store: Option<bool>,
     pub responses_continuation_verified: Option<bool>,
+    pub native_compaction: Option<bool>,
+    pub native_compaction_verified: Option<bool>,
     pub extra_writable_paths: Option<Vec<PathBuf>>,
     pub extra_headers: Option<Vec<String>>,
     pub context_window: Option<u64>,
@@ -187,7 +189,7 @@ impl Field {
 }
 
 impl Config {
-    pub const SCHEMA: [Field; 21] = [
+    pub const SCHEMA: [Field; 23] = [
         Field::typed(
             "provider",
             "SINDRI_PROVIDER",
@@ -291,6 +293,30 @@ impl Config {
                 write_value(key, config.responses_continuation_verified, document)
             },
             or_lower!(responses_continuation_verified),
+        ),
+        Field::typed(
+            "native_compaction",
+            "SINDRI_NATIVE_COMPACTION",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.native_compaction),
+            |key, config, text| {
+                config.native_compaction = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| write_value(key, config.native_compaction, document),
+            or_lower!(native_compaction),
+        ),
+        Field::typed(
+            "native_compaction_verified",
+            "SINDRI_NATIVE_COMPACTION_VERIFIED",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.native_compaction_verified),
+            |key, config, text| {
+                config.native_compaction_verified = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| write_value(key, config.native_compaction_verified, document),
+            or_lower!(native_compaction_verified),
         ),
         Field::typed(
             "thinking",

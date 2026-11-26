@@ -31,7 +31,7 @@ fn resolved_in(text: &str, vars: &[(&str, &str)], flags: Config) -> Config {
     resolved(home.path(), vars, flags).expect("the config loads")
 }
 
-const EXAMPLES: [(&str, &str); 21] = [
+const EXAMPLES: [(&str, &str); 23] = [
     ("provider", "\"openai\""),
     ("model", "\"claude-sonnet-4-5\""),
     ("route", "\"responses\""),
@@ -40,6 +40,8 @@ const EXAMPLES: [(&str, &str); 21] = [
     ("responses_continuation", "true"),
     ("responses_store", "true"),
     ("responses_continuation_verified", "true"),
+    ("native_compaction", "true"),
+    ("native_compaction_verified", "true"),
     ("thinking", "true"),
     ("extra_writable_paths", "[\"/srv/data\"]"),
     ("extra_headers", "[\"X-Gateway-Session: {session}\"]"),
@@ -55,7 +57,7 @@ const EXAMPLES: [(&str, &str); 21] = [
     ("ssh_agent", "false"),
 ];
 
-const SPOKEN: [(&str, &str, &str); 21] = [
+const SPOKEN: [(&str, &str, &str); 23] = [
     ("provider", "openai", "\"openai\""),
     ("model", "claude-sonnet-4-5", "\"claude-sonnet-4-5\""),
     ("route", "responses", "\"responses\""),
@@ -68,6 +70,8 @@ const SPOKEN: [(&str, &str, &str); 21] = [
     ("responses_continuation", "true", "true"),
     ("responses_store", "true", "true"),
     ("responses_continuation_verified", "true", "true"),
+    ("native_compaction", "true", "true"),
+    ("native_compaction_verified", "true", "true"),
     ("thinking", "true", "true"),
     (
         "extra_writable_paths",
@@ -199,6 +203,8 @@ fn the_table_names_every_key_of_the_schema_in_the_order_the_screen_reads_them() 
         "responses_continuation",
         "responses_store",
         "responses_continuation_verified",
+        "native_compaction",
+        "native_compaction_verified",
         "thinking",
         "extra_writable_paths",
         "extra_headers",
@@ -233,6 +239,8 @@ fn the_table_names_every_key_of_the_schema_in_the_order_the_screen_reads_them() 
             "responses_continuation",
             "responses_store",
             "responses_continuation_verified",
+            "native_compaction",
+            "native_compaction_verified",
             "thinking",
             "status",
             "face",
@@ -923,6 +931,8 @@ fn two_configs_that_differ_only_in_what_a_frame_reads_decide_the_same_run() {
             "responses_continuation" => other.responses_continuation = Some(true),
             "responses_store" => other.responses_store = Some(true),
             "responses_continuation_verified" => other.responses_continuation_verified = Some(true),
+            "native_compaction" => other.native_compaction = Some(true),
+            "native_compaction_verified" => other.native_compaction_verified = Some(true),
             "extra_writable_paths" => other.extra_writable_paths = Some(vec![PathBuf::from("/w")]),
             "extra_headers" => other.extra_headers = Some(vec![String::from("x-one: 1")]),
             "context_window" => other.context_window = Some(200_000),

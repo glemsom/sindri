@@ -5,7 +5,7 @@ pub(super) struct FieldView {
     pub(super) help: &'static str,
 }
 
-pub(super) const FIELDS: [FieldView; 21] = [
+pub(super) const FIELDS: [FieldView; 23] = [
     FieldView {
         key: "provider",
         label: "Wire",
@@ -59,6 +59,18 @@ pub(super) const FIELDS: [FieldView; 21] = [
         label: "Verified continuation",
         group: "RUN & LIMITS",
         help: "Assert custom endpoint storage and chaining were verified.",
+    },
+    FieldView {
+        key: "native_compaction",
+        label: "Native compaction",
+        group: "RUN & LIMITS",
+        help: "Explicit standalone provider compaction; incompatible with chains.",
+    },
+    FieldView {
+        key: "native_compaction_verified",
+        label: "Verified compaction",
+        group: "RUN & LIMITS",
+        help: "Assert this exact endpoint and model support the documented contract.",
     },
     FieldView {
         key: "thinking",
