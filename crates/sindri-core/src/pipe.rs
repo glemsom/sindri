@@ -54,6 +54,15 @@ impl Stream {
         self.keeping.store(false, Ordering::Relaxed);
     }
 
+    pub fn finished(&self) -> bool {
+        self.reader.is_finished()
+    }
+
+    pub fn collected(self) -> Vec<u8> {
+        self.forget();
+        self.sink.lock().expect("the sink is not poisoned").clone()
+    }
+
     pub fn finish(self) -> Vec<u8> {
         let deadline = Instant::now() + GRACE;
         while !self.reader.is_finished() && Instant::now() < deadline {

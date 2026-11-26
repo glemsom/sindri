@@ -205,7 +205,7 @@ fn every_skill_found_is_listed_with_the_scope_it_came_from() {
     a_report_was_made(&output);
 
     assert!(
-        out.contains("skills (3 found)"),
+        out.contains("skills (4 found)"),
         "the catalog is counted, and the builtin is one of them:\n{out}"
     );
     let builtin = row(&out, "web-access");

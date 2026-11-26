@@ -1228,3 +1228,625 @@ fn a_reply_that_asks_for_the_files_in_the_folder_runs_bash_and_answers_with_what
         asked[1]
     );
 }
+
+fn bash_reply(command: &str) -> Reply {
+    let input = serde_json::json!({"command": command}).to_string();
+    let body = TOOL_USE.replace(
+        "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\":\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\" \\\"ls\\\"}\"}}",
+        &format!("data: {}", serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":input}})),
+    );
+    assert_ne!(body, TOOL_USE);
+    Reply::stream(Box::leak(body.into_boxed_str()))
+}
+
+#[test]
+fn a_child_refuses_an_agent_writable_launch_substitution() {
+    let ground = Ground::new();
+    let forged = ground.workspace.join("launch.json");
+    std::fs::write(&forged, r#"{"config":{},"boundary":{"writable":{"paths":[]},"timeout_seconds":10,"command_budget_ms":1000,"output_budget_bytes":1000,"enforcement":"unsafe"},"workspace":"/","environment":{}}"#).unwrap();
+    let output = ground
+        .command()
+        .env("SINDRI_LAUNCH", &forged)
+        .args(["-b", "child brief"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        text(&output.stderr).contains("untrusted inherited launch"),
+        "{}",
+        text(&output.stderr)
+    );
+    assert!(output.stdout.is_empty());
+}
+
+#[test]
+fn bash_launches_a_fresh_child_with_effective_settings_and_authorized_edits() {
+    single_child(false);
+}
+
+#[test]
+fn nested_sandbox_child_preserves_the_writable_boundary() {
+    if let Some(reason) = sandbox_refusal() {
+        eprintln!("NOT VERIFIED: nested sandbox prerequisite: {reason}");
+        return;
+    }
+    single_child(true);
+}
+
+fn single_child(sandboxed: bool) {
+    let ground = Ground::new();
+    let recipe = group_recipe("'child-only-brief'");
+    let mut runner = format!(
+        "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\"; cp -R \"$TMPDIR/children/sindri/sessions\" child-sessions"
+    );
+    runner = format!(
+        "test \"$(stat -Lc %a \"$SINDRI_LAUNCH\")\" = 600 || exit 8; if printf '{{}}' > \"$SINDRI_LAUNCH\" 2>/dev/null; then exit 9; fi; {runner}"
+    );
+    let outside = ground._root.path().join("outside");
+    std::fs::create_dir(&outside).unwrap();
+    if sandboxed {
+        runner = format!(
+            "printf '{{}}' > \"$TMPDIR/forged-launch.json\"; SINDRI_LAUNCH=\"$TMPDIR/forged-launch.json\" \"$SINDRI_EXECUTABLE\" -b tampered >\"$TMPDIR/tampered.out\" 2>\"$TMPDIR/tampered.err\"; test $? -ne 0 || exit 10; grep -q 'untrusted inherited launch' \"$TMPDIR/tampered.err\" || exit 11; {runner}"
+        );
+        runner = format!("cd {}; {runner}", outside.display());
+        runner = runner.replace(
+            "cp -R",
+            &format!("cd {}; cp -R", ground.workspace.display()),
+        );
+    }
+
+    let artifact = ground.workspace.join("shared-deliverable.txt");
+    let child_command = if sandboxed {
+        format!(
+            "printf authorized > {}; printf shared > {}; if printf forbidden > denied.txt 2>/dev/null; then exit 9; fi",
+            ground.workspace.join("child-edit.txt").display(),
+            artifact.display()
+        )
+    } else {
+        "printf authorized > child-edit.txt".to_owned()
+    };
+    let repo_skill = ground.workspace.join(".agents/skills/local-check");
+    std::fs::create_dir_all(&repo_skill).unwrap();
+    std::fs::write(
+        repo_skill.join("SKILL.md"),
+        "---\nname: local-check\ndescription: local check\n---\n# Local check\n",
+    )
+    .unwrap();
+    let wire = Wire::answering(vec![
+        bash_reply(&runner),
+        bash_reply(&child_command),
+        Reply::stream(ANTHROPIC),
+        Reply::stream(ANTHROPIC),
+    ]);
+    let mut command = ground.asking(&wire, "parent-private-history");
+    if !sandboxed && sandbox_refusal().is_none() {
+        command.arg("--yolo-unsafe");
+    }
+    let output = command
+        .env("SINDRI_MAX_TURNS", "7")
+        .env("SINDRI_TIMEOUT", "40")
+        .env("SINDRI_COMMAND_BUDGET_MS", "60000")
+        .env("SINDRI_OUTPUT_BUDGET_BYTES", "99999")
+        .args([
+            "--api-key",
+            "cli-child-secret",
+            "--context-window",
+            "12345",
+            "--format",
+            "json",
+        ])
+        .output()
+        .expect("parent launch");
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    assert_eq!(
+        std::fs::read_to_string(ground.workspace.join("child-edit.txt")).expect("child edit"),
+        "authorized"
+    );
+    assert!(!outside.join("denied.txt").exists());
+    let requests = wire.requests();
+    assert_eq!(
+        requests.len(),
+        4,
+        "{}",
+        std::fs::read_to_string(ground.session().join("transcript.jsonl")).unwrap()
+    );
+    assert!(requests[1].contains("child-only-brief"));
+    assert!(!requests[1].contains("parent-private-history"));
+    assert!(requests[1].contains("cli-child-secret"));
+    assert!(requests[1].contains("local-check"));
+    let children = std::fs::read_dir(ground.workspace.join("child-sessions"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(children.len(), 1);
+    assert_ne!(children[0].file_name(), ground.session().file_name());
+    let child_document = std::fs::read_to_string(children[0].join("session.json")).unwrap();
+    assert!(child_document.contains("claude-sonnet-4-6"));
+    assert!(!child_document.contains("cli-child-secret"));
+    let document: serde_json::Value = serde_json::from_str(&child_document).unwrap();
+    assert_eq!(document["policy"]["timeout_seconds"], 40);
+    assert_eq!(document["policy"]["command_budget_ms"], 60000);
+    assert_eq!(document["policy"]["output_budget_bytes"], 99999);
+    assert_eq!(document["dials"]["max_turns"], 7);
+    assert_eq!(
+        document["enforcement"],
+        if sandboxed { "bubblewrap" } else { "unsafe" }
+    );
+    let child_transcript = std::fs::read_to_string(children[0].join("transcript.jsonl")).unwrap();
+    assert!(child_transcript.contains("child-only-brief"));
+    assert!(!child_transcript.contains("parent-private-history"));
+    let transcript =
+        std::fs::read_to_string(ground.session().join("transcript.jsonl")).expect("parent record");
+    assert!(transcript.contains("brief=0 exit=0"), "{transcript}");
+    assert!(transcript.contains("Hello world"));
+    assert!(!transcript.contains("cli-child-secret"));
+    assert!(!text(&output.stdout).contains("cli-child-secret"));
+    assert!(!text(&output.stderr).contains("cli-child-secret"));
+    assert!(
+        ground
+            .session()
+            .join("tmp")
+            .read_dir()
+            .unwrap()
+            .next()
+            .is_none()
+    );
+}
+
+#[test]
+fn a_bash_child_inherits_copilot_signing_and_cli_route_without_secret_argv() {
+    let ground = Ground::new();
+    ground.signed_in();
+    let runner = r#"env -i PATH="$PATH" SINDRI_LAUNCH="$SINDRI_LAUNCH" "$SINDRI_EXECUTABLE" -b 'signed-child' --format json </dev/null >"$TMPDIR/signed.json" 2>"$TMPDIR/signed.stderr"; printf 'child-exit=%s\n' "$?"; cat "$TMPDIR/signed.json""#;
+    let tool = serde_json::json!({"id":"call_child","type":"function","function":{"name":"bash","arguments":serde_json::json!({"command":runner}).to_string()}});
+    let stream = format!(
+        "data: {}\n\ndata: [DONE]\n\n",
+        serde_json::json!({"id":"chatcmpl-parent","object":"chat.completion.chunk","created":0,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":tool["id"],"type":"function","function":tool["function"]}]},"finish_reason":"tool_calls"}]})
+    );
+    let wire = Wire::answering(vec![
+        Reply::stream(Box::leak(stream.into_boxed_str())),
+        Reply::stream(COPILOT_CHAT),
+        Reply::stream(COPILOT_CHAT),
+    ]);
+    let output = ground
+        .copilot(&wire, "parent-signing")
+        .args(["--route", "chat", "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let requests = wire.requests();
+    assert_eq!(
+        requests.len(),
+        3,
+        "{}",
+        std::fs::read_to_string(ground.session().join("transcript.jsonl")).unwrap()
+    );
+    assert!(requests[1].contains("signed-child"));
+    assert!(requests[1].contains("/chat/completions"));
+    assert!(requests[1].contains(SESSION));
+    let transcript = std::fs::read_to_string(ground.session().join("transcript.jsonl")).unwrap();
+    assert!(transcript.contains("child-exit=0"), "{transcript}");
+    assert!(!transcript.contains(SESSION));
+    assert!(!text(&output.stdout).contains(SESSION));
+    assert!(!text(&output.stderr).contains(SESSION));
+}
+
+#[test]
+fn parallel_briefs_share_accessible_deliverables_and_collect_complete_sparse_answers() {
+    parallel_briefs(false);
+}
+
+#[test]
+fn nested_sandbox_parallel_briefs_collect_complete_answers() {
+    if let Some(reason) = sandbox_refusal() {
+        eprintln!("NOT VERIFIED: nested sandbox prerequisite: {reason}");
+        return;
+    }
+    parallel_briefs(true);
+}
+
+fn parallel_briefs(sandboxed: bool) {
+    let ground = Ground::new();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let recipe = group_recipe("'parallel-alpha' 'parallel-beta'");
+    let runner = format!(
+        "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\"; cp -R \"$TMPDIR/children/sindri/sessions\" child-sessions; cp -R \"$TMPDIR\"/subagents.* collected"
+    );
+    let (sent, received) = channel();
+    let expected = (0..300)
+        .map(|i| format!("verified detail {i:03}\n"))
+        .collect::<String>();
+    let answer = expected.clone();
+    std::thread::spawn(move || {
+        let (mut parent, _) = listener.accept().unwrap();
+        read_request(&mut parent);
+        write_reply(&mut parent, bash_reply(&runner)).unwrap();
+        let mut children = Vec::new();
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_request(&mut stream);
+            children.push((stream, request));
+        }
+        for (mut stream, request) in children {
+            let body: serde_json::Value =
+                serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+            let prompt = body["messages"][0]["content"][0]["text"].as_str().unwrap();
+            let directory = prompt
+                .split("Shared artifact directory: ")
+                .nth(1)
+                .expect("shared directory in brief")
+                .lines()
+                .next()
+                .unwrap();
+            let id = if prompt.contains("parallel-alpha") {
+                "alpha"
+            } else {
+                "beta"
+            };
+            let command = format!(
+                "printf 'bulky {id}' > '{directory}/{id}.txt'; printf 'edit {id}' > {id}.txt; printf intermediate-chatter"
+            );
+            write_reply(&mut stream, bash_reply(&command)).unwrap();
+        }
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            read_request(&mut stream);
+            let encoded = serde_json::to_string(&answer).unwrap();
+            let body = ANTHROPIC
+                .replace("\"text\":\"Hello \"", &format!("\"text\":{encoded}"))
+                .replace("\"text\":\"world\"", "\"text\":\"\"");
+            write_reply(&mut stream, Reply::stream(Box::leak(body.into_boxed_str()))).unwrap();
+        }
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_request(&mut stream);
+        sent.send(request).unwrap();
+        write_reply(&mut stream, Reply::stream(ANTHROPIC)).unwrap();
+    });
+    let mut command = ground.command();
+    if !sandboxed && sandbox_refusal().is_none() {
+        command.arg("--yolo-unsafe");
+    }
+    let output = command
+        .env("SINDRI_BASE_URL", format!("http://127.0.0.1:{port}"))
+        .env("SINDRI_TIMEOUT", "15")
+        .env("SINDRI_OUTPUT_BUDGET_BYTES", "99999")
+        .args(["-b", "private-parent-context", "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let request = received
+        .recv_timeout(Duration::from_secs(2))
+        .expect("parallel group completed");
+    let body: serde_json::Value =
+        serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+    let results = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|message| message["content"].as_array().into_iter().flatten())
+        .flat_map(|block| block["content"].as_array().into_iter().flatten())
+        .filter_map(|block| block["text"].as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(results.contains("brief=0 exit=0"), "{results}");
+    assert!(results.contains("brief=1 exit=0"), "{results}");
+    assert_eq!(
+        results.matches(&expected).count(),
+        2,
+        "complete answers: {results}"
+    );
+    assert!(!results.contains("intermediate-chatter"));
+    for id in ["alpha", "beta"] {
+        assert_eq!(
+            std::fs::read_to_string(ground.workspace.join(format!("{id}.txt"))).unwrap(),
+            format!("edit {id}")
+        );
+        assert_eq!(
+            std::fs::read_to_string(ground.workspace.join(format!("collected/{id}.txt"))).unwrap(),
+            format!("bulky {id}")
+        );
+    }
+    let sessions = std::fs::read_dir(ground.workspace.join("child-sessions"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(sessions.len(), 2);
+    assert_ne!(sessions[0], sessions[1]);
+    for session in sessions {
+        assert_ne!(session.file_name(), ground.session().file_name());
+        let transcript = std::fs::read_to_string(session.join("transcript.jsonl")).unwrap();
+        assert!(!transcript.contains("private-parent-context"));
+    }
+    for i in 0..2 {
+        let json: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(ground.workspace.join(format!("collected/{i}.json"))).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(json["answer"], expected);
+        assert!(
+            ground
+                .workspace
+                .join(format!("collected/{i}.stderr"))
+                .exists()
+        );
+    }
+}
+
+fn group_recipe(briefs: &str) -> String {
+    let skill = include_str!("../../sindri-core/skills/subagents/SKILL.md");
+    let recipe = skill
+        .split("```bash\n")
+        .nth(1)
+        .unwrap()
+        .split("```")
+        .next()
+        .unwrap();
+    let start = recipe.find("briefs=(").unwrap();
+    let end = start + recipe[start..].find("\npids=()").unwrap();
+    format!("{}briefs=({briefs}){}", &recipe[..start], &recipe[end..])
+}
+
+#[test]
+fn collection_classifies_failures_without_losing_successful_siblings() {
+    let ground = Ground::new();
+    let wrapper = ground.workspace.join("child-wrapper");
+    std::fs::write(&wrapper, format!(r#"#!/bin/bash
+case "$2" in
+  missing*) exit 0 ;;
+  invalid*) printf '{{broken'; exit 0 ;;
+  shape*) printf '{{"stopped":"final","answer":42}}'; exit 0 ;;
+  many*) printf '{{"stopped":"final","answer":"false-success"}}\n{{"stopped":"final","answer":"false-success"}}'; exit 0 ;;
+  setup*) SINDRI_LAUNCH=/nonexistent exec '{}' "$@" ;;
+  max_turns*|budget*|cancelled*|error*) stop=${{2%%$'\n'*}}; printf '{{"stopped":"%s","answer":"partial-not-final"}}' "$stop"; exit 100 ;;
+  badexit*) printf '{{"stopped":"final","answer":"false-success"}}'; exit 3 ;;
+  *) exec '{}' "$@" ;;
+esac
+"#, env!("CARGO_BIN_EXE_sindri"), env!("CARGO_BIN_EXE_sindri"))).unwrap();
+    std::fs::set_permissions(
+        &wrapper,
+        std::os::unix::fs::PermissionsExt::from_mode(0o700),
+    )
+    .unwrap();
+    let recipe = group_recipe(
+        "'missing' 'invalid' 'shape' 'many' 'setup' 'max_turns' 'budget' 'cancelled' 'error' 'badexit' 'success'",
+    );
+    let runner = format!(
+        "export SINDRI_EXECUTABLE={}; cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\"; cp -R \"$TMPDIR\"/subagents.* collected",
+        wrapper.display()
+    );
+    let wire = Wire::answering(vec![bash_reply(&runner), Reply::stream(ANTHROPIC)]);
+    let output = ground.asking(&wire, "parent").output().unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let transcript = std::fs::read_to_string(ground.session().join("transcript.jsonl")).unwrap();
+    let entries = transcript
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let transcript = entries
+        .iter()
+        .filter(|entry| entry["kind"] == "result")
+        .map(|entry| entry["text"].as_str().unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    for status in [
+        "missing_json",
+        "invalid_json",
+        "setup_or_refusal",
+        "non_final:max_turns",
+        "non_final:budget",
+        "non_final:cancelled",
+        "non_final:error",
+        "exit_failure",
+        "success",
+    ] {
+        assert!(
+            transcript.contains(&format!("status={status}")),
+            "{status}: {transcript}"
+        );
+    }
+    assert!(!transcript.contains("partial-not-final"));
+    assert!(!transcript.contains("false-success"));
+    assert!(transcript.contains("brief=10 exit=0"));
+    assert!(transcript.contains(ANSWER));
+    for i in 0..11 {
+        assert!(
+            ground
+                .workspace
+                .join(format!("collected/{i}.json"))
+                .exists()
+        );
+        assert!(
+            ground
+                .workspace
+                .join(format!("collected/{i}.stderr"))
+                .exists()
+        );
+    }
+}
+
+#[test]
+fn timeout_stops_parallel_children_and_their_nested_bash_processes() {
+    child_lifecycle(false, false);
+}
+
+#[test]
+fn cancellation_stops_parallel_children_and_their_nested_bash_processes() {
+    child_lifecycle(false, true);
+}
+
+#[test]
+fn nested_sandbox_timeout_stops_parallel_children() {
+    if let Some(reason) = sandbox_refusal() {
+        eprintln!("NOT VERIFIED: nested sandbox prerequisite: {reason}");
+        return;
+    }
+    child_lifecycle(true, false);
+}
+
+#[test]
+fn nested_sandbox_cancellation_stops_parallel_children() {
+    if let Some(reason) = sandbox_refusal() {
+        eprintln!("NOT VERIFIED: nested sandbox prerequisite: {reason}");
+        return;
+    }
+    child_lifecycle(true, true);
+}
+
+fn child_lifecycle(sandboxed: bool, cancelled: bool) {
+    let ground = Ground::new();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let recipe = group_recipe("'lifecycle-alpha' 'lifecycle-beta'");
+    let runner = format!(
+        "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\""
+    );
+    let workspace = ground.workspace.clone();
+    let (sent, received) = channel();
+    std::thread::spawn(move || {
+        let (mut parent, _) = listener.accept().unwrap();
+        read_request(&mut parent);
+        write_reply(&mut parent, bash_reply(&runner)).unwrap();
+        let mut children = Vec::new();
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_request(&mut stream);
+            children.push((stream, request));
+        }
+        for (mut stream, request) in children {
+            let id = if request.contains("lifecycle-alpha") {
+                "alpha"
+            } else {
+                "beta"
+            };
+            let command = format!(
+                "printf ready > '{}/{id}.ready'; sleep 4; printf survivor > '{}/{id}.survivor'",
+                workspace.display(),
+                workspace.display()
+            );
+            write_reply(&mut stream, bash_reply(&command)).unwrap();
+        }
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_request(&mut stream);
+        sent.send(request).unwrap();
+        let _ = write_reply(&mut stream, Reply::stream(ANTHROPIC));
+    });
+    let mut command = ground.command();
+    if !sandboxed && sandbox_refusal().is_none() {
+        command.arg("--yolo-unsafe");
+    }
+    let child = command
+        .env("SINDRI_BASE_URL", format!("http://127.0.0.1:{port}"))
+        .env("SINDRI_TIMEOUT", "2")
+        .args(["-b", "lifecycle-parent"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !["alpha", "beta"]
+        .iter()
+        .all(|id| ground.workspace.join(format!("{id}.ready")).exists())
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "both nested bash calls must start"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let running = std::fs::read_dir("/proc")
+        .unwrap()
+        .flatten()
+        .filter_map(|entry| {
+            let bytes = std::fs::read(entry.path().join("cmdline")).ok()?;
+            let command = String::from_utf8_lossy(&bytes);
+            (command.starts_with(env!("CARGO_BIN_EXE_sindri"))
+                && (command.contains("lifecycle-alpha") || command.contains("lifecycle-beta"))
+                && command.contains(ground._root.path().to_str().unwrap()))
+            .then(|| entry.path())
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        running.len() >= 2,
+        "both actual child processes are observable"
+    );
+    if cancelled {
+        signal(&child);
+    }
+    let output = child.wait_with_output().unwrap();
+    if cancelled {
+        assert_eq!(output.status.code(), Some(130), "{}", text(&output.stderr));
+    } else {
+        assert!(output.status.success(), "{}", text(&output.stderr));
+        let request = received.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert!(request.contains("timeout"), "{request}");
+    }
+    std::thread::sleep(Duration::from_secs(5));
+    for process in running {
+        if let Ok(stat) = std::fs::read_to_string(process.join("stat")) {
+            let state = stat
+                .rsplit_once(") ")
+                .unwrap()
+                .1
+                .split_whitespace()
+                .next()
+                .unwrap();
+            assert!(state == "Z" || state == "X", "child survived: {stat}");
+        }
+    }
+    for id in ["alpha", "beta"] {
+        assert!(
+            !ground.workspace.join(format!("{id}.survivor")).exists(),
+            "{id} kept executing after the parent tool ended"
+        );
+    }
+}
+
+#[test]
+fn a_real_child_provider_failure_keeps_the_successful_sibling_answer() {
+    let ground = Ground::new();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let recipe = group_recipe("'refused-child' 'successful-child'");
+    let runner = format!(
+        "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\""
+    );
+    let (sent, received) = channel();
+    std::thread::spawn(move || {
+        let (mut parent, _) = listener.accept().unwrap();
+        read_request(&mut parent);
+        write_reply(&mut parent, bash_reply(&runner)).unwrap();
+        let mut children = Vec::new();
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_request(&mut stream);
+            children.push((stream, request));
+        }
+        for (mut stream, request) in children {
+            let reply = if request.contains("refused-child") {
+                Reply::refusal(400, BAD_REQUEST)
+            } else {
+                Reply::stream(ANTHROPIC)
+            };
+            write_reply(&mut stream, reply).unwrap();
+        }
+        let (mut stream, _) = listener.accept().unwrap();
+        sent.send(read_request(&mut stream)).unwrap();
+        write_reply(&mut stream, Reply::stream(ANTHROPIC)).unwrap();
+    });
+    let output = ground
+        .command()
+        .env("SINDRI_BASE_URL", format!("http://127.0.0.1:{port}"))
+        .args(["-b", "mixed-parent"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let request = received.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert!(request.contains("brief=0 exit=1"), "{request}");
+    assert!(request.contains("status=non_final:error"), "{request}");
+    assert!(request.contains("brief=1 exit=0"), "{request}");
+    assert!(request.contains("status=success"), "{request}");
+    assert!(request.contains(ANSWER));
+    assert!(!request.contains("unknown model"));
+}

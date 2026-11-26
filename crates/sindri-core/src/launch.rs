@@ -123,7 +123,13 @@ impl<R> Launch<R> {
                 USAGE,
             ));
         };
-        let state_home = session::state_home(&machine.environment)
+        let inherited = crate::handoff::Handoff::read(&machine.environment)
+            .map_err(|reason| Refusal::new(reason, SETUP))?;
+        let child_environment = inherited.as_ref().map(|handoff| &handoff.environment);
+        let state_environment: &dyn Environment = child_environment
+            .map(|environment| environment as &dyn Environment)
+            .unwrap_or(machine.environment);
+        let state_home = session::state_home(&state_environment)
             .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
         let session = Session::create(&state_home)
             .map_err(|error| Refusal::new(error.to_string(), error.exit_code()))?;
@@ -158,13 +164,27 @@ impl<R> Launch<R> {
             Refusal::new(format!("cannot read the working directory: {error}"), SETUP)
         })?;
         let environment = machine.environment;
-        let boundary = Boundary::from_config(config, &workspace, enforcement)
-            .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
+        let inherited = crate::handoff::Handoff::read(&environment)
+            .map_err(|reason| Refusal::new(reason, SETUP))?;
+        let boundary = if let Some(handoff) = &inherited {
+            handoff.boundary.clone()
+        } else {
+            Boundary::from_config(config, &workspace, enforcement)
+                .map_err(|error| Refusal::new(error.to_string(), SETUP))?
+        };
+        let discovery_workspace = inherited
+            .as_ref()
+            .map(|handoff| handoff.workspace.as_path())
+            .unwrap_or(&workspace);
+        let inherited_environment = inherited.as_ref().map(|handoff| &handoff.environment);
+        let environment: &dyn Environment = inherited_environment
+            .map(|environment| environment as &dyn Environment)
+            .unwrap_or(environment);
         // Proved before a turn is asked or a record written: nothing here proceeds unconfined.
         let proof = sandbox::prove_with(&machine.bwrap, &boundary, session.temp())
             .map_err(|card| Refusal::new(card.to_string(), card.exit_code()))?;
         let limits = Limits::from_config(config, &boundary);
-        let catalog = Catalog::discover(&workspace, home(&environment).as_deref());
+        let catalog = Catalog::discover(discovery_workspace, home(&environment).as_deref());
         let tools = ToolSet::new(&boundary, &catalog, front_end);
         let client = Client::for_endpoint(
             &endpoint,
@@ -195,7 +215,21 @@ impl<R> Launch<R> {
         .map_err(|error| Refusal::new(error.to_string(), SETUP))?;
         let asking = adapter(client, ask, tools.clone());
         let ground = Ground::new(&boundary, session.temp(), &workspace).ok();
+        let handoff = crate::handoff::Handoff::write(
+            config,
+            &boundary,
+            discovery_workspace,
+            session.temp(),
+            &environment,
+        )
+        .map_err(|reason| Refusal::new(reason, SETUP))?;
+        let executable = std::env::current_exe()
+            .map_err(|_| Refusal::new("cannot locate child executable", SETUP))?;
         let shell = Shell::new(boundary.clone(), session.temp(), catalog.clone())
+            .handoff(crate::handoff::ChildLaunch {
+                executable,
+                transport: handoff,
+            })
             .ground(ground)
             .opener(opener);
 

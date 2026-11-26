@@ -636,6 +636,7 @@ pub struct Shell {
     cancel: Cancel,
     ground: Option<Ground>,
     opener: Option<Arc<dyn Opener>>,
+    handoff: Option<crate::handoff::ChildLaunch>,
 }
 
 impl Shell {
@@ -647,7 +648,13 @@ impl Shell {
             cancel: Cancel::new(),
             ground: None,
             opener: None,
+            handoff: None,
         }
+    }
+
+    pub fn handoff(mut self, launch: crate::handoff::ChildLaunch) -> Shell {
+        self.handoff = Some(launch);
+        self
     }
 
     pub fn cancel(mut self, cancel: Cancel) -> Shell {
@@ -680,9 +687,22 @@ impl Shell {
             ))
         })?;
 
+        let command = if let Some(launch) = &self.handoff {
+            launch.command(&self.temp, &command)
+        } else {
+            command
+        };
         let started = Instant::now();
-        let outcome = bash::run(&self.boundary, &self.temp, &command, &self.cancel)
-            .map_err(|error| SecretSet::default().redact(error.to_string()))?;
+        let outcome = bash::run_with_handoff(
+            &self.boundary,
+            &self.temp,
+            &command,
+            &self.cancel,
+            self.handoff
+                .as_ref()
+                .map(crate::handoff::ChildLaunch::descriptor),
+        )
+        .map_err(|error| SecretSet::default().redact(error.to_string()))?;
         Ok(Acted {
             text: rendered(&outcome),
             bytes: u64::try_from(outcome.stdout.len() + outcome.stderr.len()).unwrap_or(u64::MAX),
