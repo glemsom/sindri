@@ -1699,13 +1699,12 @@ fn a_picture_ground_follows_the_band_and_leaves_words_intact() {
         "the composer's band carries the prompt's own tone at every column of it, and the light \
          under the caret is a light of its own over the band"
     );
-    assert_ne!(
-        light_plane(&view)
-            .pixels()
-            .get_pixel(light_centre(light_plane(&view)), 30)
-            .0[..3],
-        prompt,
-        "the caret the frame stands on its cell glows, and that light is no tone of the band"
+    assert!(
+        frame
+            .told()
+            .placements()
+            .iter()
+            .all(|placement| { placement.shade().id() != PlaneId::Caret })
     );
 }
 
@@ -1746,7 +1745,7 @@ fn no_pixel_of_the_composers_band_is_a_blend_of_the_two_tones_it_closes_through(
                 carried.iter().all(|light| *light == one),
                 "column {x} of pixel row {y} is {drawn:?} where the {tone:?} its row sits on has \
                  one light added to every channel: a ground mixed between two surfaces is a \
-                 state, and the caret's glow is the one blend the band makes"
+                 state rather than a single surface"
             );
             assert!(
                 seam || one == 0,
@@ -1956,75 +1955,6 @@ fn the_bands_ground_is_the_shade_sampled_row_by_row_from_the_prompt_band_to_the_
 }
 
 #[test]
-fn the_carets_light_peaks_on_the_head_of_the_band_and_is_spent_by_its_foot() {
-    let (_root, workspace) = workspace(10, 20);
-    let mut view = frame(caps::at(cell()), &workspace, "hello");
-    view.paste("forge");
-    frame::painted(&mut view, 80, 24);
-    let ground = light_plane(&view);
-    let (width, height) = ground.pixels().dimensions();
-    let at = light_centre(ground);
-    let step = |y: u32| {
-        let lit = ground.pixels().get_pixel(at, y);
-        let far = ground.pixels().get_pixel(width - 1, y);
-        i32::from(lit[0]) - i32::from(far[0])
-    };
-
-    let waited = step(0);
-    assert!(
-        waited > 0,
-        "the column the caret waits in is no lighter than the band's far side on its first pixel          row: the band is lit from above, and the caret's light lands on its head"
-    );
-    let dither = 2;
-    for y in 1..height.saturating_sub(1) {
-        assert!(
-            step(y + 1) <= step(y) + dither,
-            "the light over the caret is {0} on pixel row {y} and {1} on the row above it, so the              glow does not fall down the band: it is painted across it",
-            step(y + 1),
-            step(y)
-        );
-    }
-    assert!(
-        step(height - 1) <= 0,
-        "the foot of the band carries {} channels of the caret's light where its far side carries          none: the light is spent by the band it falls down",
-        step(height - 1)
-    );
-}
-
-#[test]
-fn the_carets_light_still_falls_off_away_from_the_caret() {
-    let (_root, workspace) = workspace(10, 20);
-    let mut view = frame(caps::at(cell()), &workspace, "hello");
-    view.paste("forge");
-    frame::painted(&mut view, 80, 24);
-    let ground = light_plane(&view);
-    let (width, height) = ground.pixels().dimensions();
-    let row = height / 10;
-    let at = light_centre(ground);
-    let lit = ground.pixels().get_pixel(at, row);
-    let mut step = cell().width();
-    while step < width {
-        let further = ground.pixels().get_pixel((at + step).min(width - 1), row);
-        for channel in 0..3 {
-            assert!(
-                lit[channel] >= further[channel],
-                "pixel channel {channel} of the cell the caret waits in is darker than the one \
-                 {step} pixels from it: {lit:?} against {further:?}"
-            );
-        }
-        step += cell().width();
-    }
-    let far = ground.pixels().get_pixel(width - 1, row);
-    for channel in 0..3 {
-        assert!(
-            lit[channel] > far[channel],
-            "pixel channel {channel} of the cell the caret waits in is no lighter than the \
-             light's far side: {lit:?} against {far:?}"
-        );
-    }
-}
-
-#[test]
 fn the_bands_head_row_is_the_frames_seam_claimed_over_its_plane() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
@@ -2102,11 +2032,10 @@ fn a_rails_band_is_a_plane_of_its_own_beside_the_composers() {
             PlaneId::Rail,
             PlaneId::Gauge,
             PlaneId::Transcript,
-            PlaneId::Composer,
-            PlaneId::Caret
+            PlaneId::Composer
         ],
         "the frame hands back the rail's shading and the instruments it is handed under it, \
-         beside the transcript band's, the composer's and the light under the caret, each under \
+         beside the transcript band's and the composer's, each under \
          its own identity"
     );
     let band = plane_of(&view, PlaneId::Rail);
@@ -2261,11 +2190,9 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
             PlaneId::Rail,
             PlaneId::Gauge,
             PlaneId::Transcript,
-            PlaneId::Composer,
-            PlaneId::Caret
+            PlaneId::Composer
         ],
-        "a frame hands back a plane for each of the three bands it draws and the light under its \
-         caret, with the rail's instruments where the rail paints them, each under its own \
+        "a frame hands back a plane for each of the three bands it draws, with the rail's instruments where the rail paints them, each under its own \
          identity, in the order it paints them"
     );
     for (id, area) in bands {
@@ -2647,33 +2574,24 @@ fn a_pass_that_shades_the_same_bands_makes_no_band_image() {
 }
 
 #[test]
-fn a_pass_whose_caret_column_moved_makes_no_image_and_moves_the_lamp() {
+fn moving_the_caret_keeps_the_composer_planes_unchanged_without_a_glow() {
     let (_root, workspace) = workspace(10, 20);
     let mut view = frame(caps::at(cell()), &workspace, "hello");
     view.paste("forge");
     let first = frame::painted(&mut view, 80, 24);
     let made = view.planes().made();
-    let band = first.told().layout().expect("a laid out frame").composer;
-    let stood = placement_of(&first, PlaneId::Caret);
+    assert!(
+        first
+            .told()
+            .placements()
+            .iter()
+            .all(|placement| { placement.shade().id() != PlaneId::Caret })
+    );
     view.paste(" more");
     let again = frame::painted(&mut view, 80, 24);
-    assert_eq!(
-        again.told().layout().expect("a laid out frame").composer,
-        band,
-        "the band stands where it did, and only the caret's column moved"
-    );
-    assert_eq!(
-        view.planes().made(),
-        made,
-        "a pass in which the caret's column moved makes no image at all: the light the frame \
-         carries is placed again where it stands, and the bands under it never changed"
-    );
-    assert_ne!(
-        placement_of(&again, PlaneId::Caret),
-        stood,
-        "and the lamp the frame hands back stands on the cells the caret moved to, drawn from \
-         the shade it was drawn from before"
-    );
+    assert_ne!(first.caret(), again.caret());
+    assert_eq!(view.planes().made(), made);
+    assert_eq!(first.told().placements(), again.told().placements());
 }
 
 #[test]
@@ -2835,16 +2753,6 @@ fn plane_of(view: &View, id: PlaneId) -> &Plane {
 
 fn composer_plane(view: &View) -> &Plane {
     plane_of(view, PlaneId::Composer)
-}
-
-fn light_plane(view: &View) -> &Plane {
-    plane_of(view, PlaneId::Caret)
-}
-
-/// Where the light is centred, in the pixels of the image it is drawn as.
-fn light_centre(plane: &Plane) -> u32 {
-    let cell = cell().width();
-    (plane.pixels().width() / 2 / cell) * cell + cell / 2
 }
 
 fn placement_of(drawn: &frame::Frame, id: PlaneId) -> Placement {

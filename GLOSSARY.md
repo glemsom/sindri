@@ -260,14 +260,12 @@ the share its band names of that most, and a lamp a pixel reads rather than a ro
 band's crowned at its head and fallen back to the well by its third row, and the **Rail**'s centred
 on **Sindri's face**, brightest at it and gone by the rail's own margin on both axes, with no step
 of it visible between two pixels. A band's joint is a light that goes the other way: a shadow at the
-joint and a hairline on the band's own edge, at one weight on both axes. The light the **Caret**
-casts is a plane of its own over the band under the composer's **Seam**, and it is no light on a
-joint: it is placed again on the column the caret moved to and is made again for no keystroke. A
+joint and a hairline on the band's own edge, at one weight on both axes. A
 submitted **Prompt** holds a bounded plane inside its occupied footprint, with corners at its
 actual ends, a warm rim, upper-edge light and shallow shadow. This decoration uses the prompt
 rung's proved lift, adds no rows, and leaves words and Fold counts in native cells. A band plane
 covers the band's own columns and no column of the band beside it, and a frame holds one image
-under each band, one under each **Instrument**, and one under that light, each by its own identity,
+under each band, one under each **Instrument**, each by its own identity,
 placed at one depth that a cell carrying a background still wins over. A terminal that places no picture, or a band in a palette
 with no colour, is given none, and the band's own rows are claimed from its shade.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer, blend
@@ -296,8 +294,7 @@ inside that portion belonging only to Placement; the cell the plane
 is drawn at, the light its band carries — the peak it spends of the proved lift and the rect that
 light is a lamp around — and a frame holds each band's image against it, so a pass in which it
 stands makes no image. A shade holds no placement: the cells it stands on are a **Placement**'s and
-no fact of the shade, so one shade answers for a band that moved. The **Caret**'s light is a shade of
-its own, and the column it is placed on is no part of any image.
+no fact of the shade, so one shade answers for a band that moved.
 _Avoid_: Colour, tone, gradient, paint, style
 
 **Placement**:

@@ -1562,11 +1562,6 @@ impl View {
         if let Some(placement) = Placement::composer(band, cell, &palette) {
             placement.claim(buffer, &palette);
             painted.shaded(placement);
-            if let Some(caret) = self.caret(band, queue, None).map(|(x, _)| x)
-                && let Some(light) = Placement::caret(band, cell, caret, &palette)
-            {
-                painted.shaded(light);
-            }
         }
         self.composer_inside(band, queue, buffer);
         self.composer_head(band, buffer);
