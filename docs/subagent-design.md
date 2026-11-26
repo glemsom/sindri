@@ -94,8 +94,9 @@ no unprovided parent history, non-overlapping authorized workspace edits, and fi
 in the shared directory that remain readable after the child launches end. JSON and stderr are
 separate for each index. The parent receives both stable identifiers, zero exits and complete
 300-line final answers; child tool chatter is absent from collected results. The singleton tests
-continue to execute the same recipe. Parallel evidence uses explicitly unsafe enforcement;
-the separate single-child test remains the evidence for nested sandbox compatibility.
+continue to execute the same recipe. Parallel coverage includes explicitly unsafe enforcement
+and nested bubblewrap execution. The nested parallel and single-child variants skip with an
+explicit prerequisite refusal when bubblewrap cannot create an unprivileged sandbox.
 
 ## Verified failure and lifecycle slice
 

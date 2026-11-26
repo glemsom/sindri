@@ -240,8 +240,14 @@ pub fn run_with_handoff(
                 if dup2(fd, 199) < 0 {
                     _exit(127);
                 }
-                close_range(3, 198, 0);
-                close_range(200, u32::MAX, 0);
+                if close_range(3, 198, 0) != 0 || close_range(200, u32::MAX, 0) != 0 {
+                    let error = std::io::Error::last_os_error();
+                    kill(root, SIGKILL);
+                    while waitpid(root, std::ptr::null_mut(), 0) < 0
+                        && *libc::__errno_location() == libc::EINTR
+                    {}
+                    return Err(error);
+                }
                 let mut status = 0;
                 loop {
                     let waited = waitpid(root, &mut status, libc::WNOHANG);
@@ -263,9 +269,13 @@ pub fn run_with_handoff(
                 // Adoption after each reap exposes the next generation, regardless of thread ownership.
                 supervise_cleanup(199);
                 if status & 127 != 0 {
-                    signal(status & 127, 0);
-                    libc::sigprocmask(libc::SIG_SETMASK, &previous, std::ptr::null_mut());
-                    kill(getpid(), status & 127);
+                    let terminating = status & 127;
+                    signal(terminating, 0);
+                    libc::sigemptyset(&mut blocked);
+                    libc::sigaddset(&mut blocked, terminating);
+                    libc::sigprocmask(libc::SIG_UNBLOCK, &blocked, std::ptr::null_mut());
+                    kill(getpid(), terminating);
+                    _exit(128 + terminating);
                 }
                 _exit((status >> 8) & 255);
             }
@@ -413,7 +423,7 @@ unsafe extern "C" {
     fn getppid() -> i32;
     fn getpid() -> i32;
     fn fork() -> i32;
-    fn close_range(first: u32, last: u32, flags: i32) -> i32;
+    fn close_range(first: u32, last: u32, flags: u32) -> i32;
     fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
     fn _exit(status: i32) -> !;
     fn signal(signum: i32, handler: usize) -> usize;

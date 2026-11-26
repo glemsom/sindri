@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -404,5 +405,109 @@ fn a_cancel_kills_a_sandboxed_command_before_it_can_write() {
         !late.exists(),
         "nothing in the sandbox was left running to write {}",
         late.display()
+    );
+}
+
+fn isolated_supervisor_regression(name: &str) {
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name, "--nocapture"])
+        .env("SINDRI_SUPERVISOR_REGRESSION", name)
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "isolated regression failed: {status}");
+            return;
+        }
+        if Instant::now() >= deadline {
+            unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
+            child.wait().unwrap();
+            panic!("supervisor setup hung");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn inherited_blocked_sigint_does_not_turn_signal_termination_into_success() {
+    let name = "inherited_blocked_sigint_does_not_turn_signal_termination_into_success";
+    if std::env::var("SINDRI_SUPERVISOR_REGRESSION").as_deref() != Ok(name) {
+        isolated_supervisor_regression(name);
+        return;
+    }
+    let ground = Ground::new();
+    let boundary = boundary(&ground, Enforcement::Unsafe, 2);
+    unsafe {
+        let mut mask = std::mem::zeroed();
+        libc::sigemptyset(&mut mask);
+        libc::sigaddset(&mut mask, libc::SIGINT);
+        assert_eq!(
+            libc::pthread_sigmask(libc::SIG_BLOCK, &mask, std::ptr::null_mut()),
+            0
+        );
+    }
+    let outcome = bash::run(
+        &boundary,
+        &ground.temp(),
+        "exec python3 -c 'import signal,os; signal.signal(signal.SIGINT, signal.SIG_DFL); signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT}); os.kill(os.getpid(), signal.SIGINT)'",
+        &Cancel::new(),
+    ).unwrap();
+    assert_eq!(outcome.code, None, "{outcome:?}");
+    assert!(!outcome.timed_out);
+}
+
+#[test]
+fn denied_close_range_refuses_setup_without_waiting_for_runner() {
+    let name = "denied_close_range_refuses_setup_without_waiting_for_runner";
+    if std::env::var("SINDRI_SUPERVISOR_REGRESSION").as_deref() != Ok(name) {
+        isolated_supervisor_regression(name);
+        return;
+    }
+    let ground = Ground::new();
+    let boundary = boundary(&ground, Enforcement::Unsafe, 1);
+    let temp = ground.temp();
+    let mut filter = [
+        libc::sock_filter {
+            code: 0x20,
+            jt: 0,
+            jf: 0,
+            k: 0,
+        },
+        libc::sock_filter {
+            code: 0x15,
+            jt: 0,
+            jf: 1,
+            k: libc::SYS_close_range as u32,
+        },
+        libc::sock_filter {
+            code: 0x06,
+            jt: 0,
+            jf: 0,
+            k: libc::SECCOMP_RET_ERRNO | libc::EPERM as u32,
+        },
+        libc::sock_filter {
+            code: 0x06,
+            jt: 0,
+            jf: 0,
+            k: libc::SECCOMP_RET_ALLOW,
+        },
+    ];
+    let program = libc::sock_fprog {
+        len: filter.len() as u16,
+        filter: filter.as_mut_ptr(),
+    };
+    unsafe {
+        assert_eq!(libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0), 0);
+        assert_eq!(
+            libc::prctl(libc::PR_SET_SECCOMP, libc::SECCOMP_MODE_FILTER, &program),
+            0
+        );
+    }
+    let result = bash::run(&boundary, &temp, "sleep 30", &Cancel::new());
+    assert!(
+        matches!(result, Err(bash::BashError::Process { .. })),
+        "{result:?}"
     );
 }
