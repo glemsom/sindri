@@ -415,6 +415,11 @@ unsafe fn supervise_cleanup(fd: i32) {
     }
 }
 
+// musl does not provide the close_range wrapper used by the supervisor.
+unsafe fn close_range(first: u32, last: u32, flags: u32) -> i32 {
+    unsafe { libc::syscall(libc::SYS_close_range, first, last, flags) as i32 }
+}
+
 unsafe extern "C" {
     fn dup2(old: i32, new: i32) -> i32;
     fn fcntl(fd: i32, command: i32, value: i32) -> i32;
@@ -423,7 +428,6 @@ unsafe extern "C" {
     fn getppid() -> i32;
     fn getpid() -> i32;
     fn fork() -> i32;
-    fn close_range(first: u32, last: u32, flags: u32) -> i32;
     fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
     fn _exit(status: i32) -> !;
     fn signal(signum: i32, handler: usize) -> usize;
