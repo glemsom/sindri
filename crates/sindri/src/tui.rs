@@ -536,6 +536,10 @@ impl<'a> Loop<'a> {
                     );
                     painted = true;
                 }
+                Report::ReplayBoundary => {
+                    self.view.refuse("Wire target changed: incompatible native state omitted; visible evidence and completed tool outcomes retained.");
+                    painted = true;
+                }
                 Report::Retained(retained) => {
                     for turn in retained {
                         self.view.kept(&turn);

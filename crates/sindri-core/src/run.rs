@@ -313,6 +313,9 @@ impl Request {
 }
 
 pub trait Responder {
+    fn replay_loss(&self, _earlier: &[Turn]) -> bool {
+        false
+    }
     fn respond(&self, request: &Request, deltas: &mut dyn Deltas) -> Result<Reply, Failure>;
 }
 

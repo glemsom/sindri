@@ -374,6 +374,9 @@ impl<R: Responder + Clone> Launch<R> {
         cancel: Cancel,
     ) -> Result<Outcome, Refusal> {
         let started = Instant::now();
+        if self.asking.replay_loss(earlier) {
+            turns.replay_boundary();
+        }
         let injected = self.loaded.missing(earlier);
         turns.retained(&injected);
         let earlier: Vec<Turn> = earlier.iter().chain(&injected).cloned().collect();
@@ -415,6 +418,7 @@ pub struct Handed<'a> {
 }
 
 pub trait Turns {
+    fn replay_boundary(&mut self) {}
     fn turn(&mut self, ended: &Turn);
 
     fn told(&mut self, _told: Told) {}
