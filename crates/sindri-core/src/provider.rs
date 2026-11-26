@@ -44,7 +44,6 @@ pub struct Responses(AssistantMessage);
 
 impl Eq for Responses {}
 
-
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Credential(Option<String>);
 
@@ -264,7 +263,6 @@ fn turn_messages(turn: &Turn) -> Vec<Message> {
         });
     }
     if content.is_empty() && turn.assistant.0.is_none() && turn.responses.is_none() {
-
         return Vec::new();
     }
     let assistant = turn

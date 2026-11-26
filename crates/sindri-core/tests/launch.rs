@@ -1618,7 +1618,6 @@ fn human_activation_delivers_and_retains_skill_snapshots_on_each_wire() {
             requests[1].body
         );
     }
-
 }
 
 #[test]
@@ -1866,7 +1865,6 @@ fn interrupted_parallel_work_replays_truthful_outcomes_without_reexecution() {
             );
         }
     }
-
 }
 
 #[test]
@@ -1973,5 +1971,4 @@ fn capacity_headroom_settings_reject_zero_negative_and_overflow() {
             assert!(Config::field(key).unwrap().read(value).is_err());
         }
     }
-
 }
