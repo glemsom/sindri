@@ -1,10 +1,10 @@
 ---
 name: subagents
-description: Delegate substantial work to fresh batch contexts through bash.
+description: Delegate substantial implementation, testing, review or research to fresh batch contexts through bash.
 ---
 # Subagents
 
-Fresh context is the purpose; concurrency is optional. Write a temporary Bash runner under
+Fresh context is the primary purpose; concurrency is optional. Keep trivial command-sized work inline. Write a temporary Bash runner under
 `TMPDIR` and execute it with the existing bash tool in one call. The launch supplies
 `SINDRI_EXECUTABLE` and `SINDRI_LAUNCH`; never read, print, copy or put the handoff's contents
 in a prompt or argv. It contains secrets and expires with the parent session temp.
@@ -14,7 +14,25 @@ expectations and a concise answer shape/length suggestion. Children see neither 
 nor loaded skills. They can discover the same skills and edit with the same authority, not more.
 Tell children not to delegate. Avoid overlapping child edits and your own edits to child-owned files;
 use sequential groups for dependencies. Request bulky deliverables in workspace files or the group's
-artifact directory, not a child's disposable temp. Collect paths and short summaries.
+artifact directory, not a child's disposable temp. Collect paths and short summaries. Children cannot rely on asking the user for clarification.
+
+## Prepare briefs
+
+Select independent work and assign exclusive file/area ownership before launching. Keep parent
+edits outside those areas until collection finishes; sequence dependent or overlapping work.
+Each array element should supply:
+
+- Workspace path and relevant repository instructions.
+- Goal, known facts, relevant files and any decisions the child needs from parent history.
+- Scope, authorized edits and exclusive ownership (or explicitly no edits).
+- Verification commands and expected evidence; report limitations rather than inventing results.
+- Deliverable shape: findings/changes, verification, paths and blockers; suggest roughly 150–300
+  words when useful, not a hard cap. Save bulky detail in authorized workspace files or the shared
+  artifact directory appended by the runner. Child temp disappears when its launch ends.
+- Complete this brief directly; do not delegate recursively or depend on user clarification.
+
+Children retain equal permissions. This recipe prescribes neither branch nor workdir management.
+Choose all briefs in the group yourself; there is no scheduler or automatic retry.
 
 ## Bash runner
 
@@ -38,7 +56,8 @@ trap stop_group EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 for i in "${!briefs[@]}"; do
-  env -i PATH="$PATH" SINDRI_LAUNCH="$SINDRI_LAUNCH" "$SINDRI_EXECUTABLE" -b "${briefs[$i]}" --format json \
+  prompt=$(printf '%s\nShared artifact directory: %s\n' "${briefs[$i]}" "$group")
+  env -i PATH="$PATH" SINDRI_LAUNCH="$SINDRI_LAUNCH" "$SINDRI_EXECUTABLE" -b "$prompt" --format json \
     </dev/null >"$group/$i.json" 2>"$group/$i.stderr" &
   pids+=("$!")
 done

@@ -1413,3 +1413,147 @@ fn a_bash_child_inherits_copilot_signing_and_cli_route_without_secret_argv() {
     assert!(!text(&output.stdout).contains(SESSION));
     assert!(!text(&output.stderr).contains(SESSION));
 }
+
+#[test]
+fn parallel_briefs_share_accessible_deliverables_and_collect_complete_sparse_answers() {
+    let ground = Ground::new();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let skill = include_str!("../../sindri-core/skills/subagents/SKILL.md");
+    let recipe = skill
+        .split("```bash\n")
+        .nth(1)
+        .unwrap()
+        .split("```")
+        .next()
+        .unwrap();
+    let start = recipe.find("briefs=(").unwrap();
+    let end = start + recipe[start..].find("\npids=()").unwrap();
+    let recipe = format!(
+        "{}briefs=('parallel-alpha' 'parallel-beta'){}",
+        &recipe[..start],
+        &recipe[end..]
+    );
+    let runner = format!(
+        "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\"; cp -R \"$TMPDIR/children/sindri/sessions\" child-sessions; cp -R \"$TMPDIR\"/subagents.* collected"
+    );
+    let (sent, received) = channel();
+    let expected = (0..300)
+        .map(|i| format!("verified detail {i:03}\n"))
+        .collect::<String>();
+    let answer = expected.clone();
+    std::thread::spawn(move || {
+        let (mut parent, _) = listener.accept().unwrap();
+        read_request(&mut parent);
+        write_reply(&mut parent, bash_reply(&runner)).unwrap();
+        let mut children = Vec::new();
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_request(&mut stream);
+            children.push((stream, request));
+        }
+        // Neither child receives a response until both requests have arrived.
+        for (mut stream, request) in children {
+            let body: serde_json::Value =
+                serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+            let prompt = body["messages"][0]["content"][0]["text"].as_str().unwrap();
+            let directory = prompt
+                .split("Shared artifact directory: ")
+                .nth(1)
+                .expect("shared directory in brief")
+                .lines()
+                .next()
+                .unwrap();
+            let id = if prompt.contains("parallel-alpha") {
+                "alpha"
+            } else {
+                "beta"
+            };
+            let command = format!(
+                "printf 'bulky {id}' > '{directory}/{id}.txt'; printf 'edit {id}' > {id}.txt; printf intermediate-chatter"
+            );
+            write_reply(&mut stream, bash_reply(&command)).unwrap();
+        }
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().unwrap();
+            read_request(&mut stream);
+            let encoded = serde_json::to_string(&answer).unwrap();
+            let body = ANTHROPIC
+                .replace("\"text\":\"Hello \"", &format!("\"text\":{encoded}"))
+                .replace("\"text\":\"world\"", "\"text\":\"\"");
+            write_reply(&mut stream, Reply::stream(Box::leak(body.into_boxed_str()))).unwrap();
+        }
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_request(&mut stream);
+        sent.send(request).unwrap();
+        write_reply(&mut stream, Reply::stream(ANTHROPIC)).unwrap();
+    });
+    let mut command = ground.command();
+    if sandbox_refusal().is_none() {
+        command.arg("--yolo-unsafe");
+    }
+    let output = command
+        .env("SINDRI_BASE_URL", format!("http://127.0.0.1:{port}"))
+        .env("SINDRI_TIMEOUT", "15")
+        .env("SINDRI_OUTPUT_BUDGET_BYTES", "99999")
+        .args(["-b", "private-parent-context", "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    let request = received
+        .recv_timeout(Duration::from_secs(2))
+        .expect("parallel group completed");
+    let body: serde_json::Value =
+        serde_json::from_str(request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+    let results = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|message| message["content"].as_array().into_iter().flatten())
+        .flat_map(|block| block["content"].as_array().into_iter().flatten())
+        .filter_map(|block| block["text"].as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(results.contains("brief=0 exit=0"), "{results}");
+    assert!(results.contains("brief=1 exit=0"), "{results}");
+    assert_eq!(
+        results.matches(&expected).count(),
+        2,
+        "complete answers: {results}"
+    );
+    assert!(!results.contains("intermediate-chatter"));
+    for id in ["alpha", "beta"] {
+        assert_eq!(
+            std::fs::read_to_string(ground.workspace.join(format!("{id}.txt"))).unwrap(),
+            format!("edit {id}")
+        );
+        assert_eq!(
+            std::fs::read_to_string(ground.workspace.join(format!("collected/{id}.txt"))).unwrap(),
+            format!("bulky {id}")
+        );
+    }
+    let sessions = std::fs::read_dir(ground.workspace.join("child-sessions"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(sessions.len(), 2);
+    assert_ne!(sessions[0], sessions[1]);
+    for session in sessions {
+        assert_ne!(session.file_name(), ground.session().file_name());
+        let transcript = std::fs::read_to_string(session.join("transcript.jsonl")).unwrap();
+        assert!(!transcript.contains("private-parent-context"));
+    }
+    for i in 0..2 {
+        let json: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(ground.workspace.join(format!("collected/{i}.json"))).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(json["answer"], expected);
+        assert!(
+            ground
+                .workspace
+                .join(format!("collected/{i}.stderr"))
+                .exists()
+        );
+    }
+}
