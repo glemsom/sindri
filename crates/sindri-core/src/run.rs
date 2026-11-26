@@ -600,6 +600,12 @@ impl<R: Responder, A: Executor> Run<R, A> {
             let acted = match self.executor.execute(call, &self.loaded) {
                 Ok(acted) => acted,
                 Err(message) => {
+                    results.push(Acted {
+                        text: format!("tool execution failed: {message}"),
+                        bytes: 0,
+                        elapsed: Duration::ZERO,
+                        exit: Exit::Code(1),
+                    });
                     self.settle(Stop::Error(message));
                     break;
                 }

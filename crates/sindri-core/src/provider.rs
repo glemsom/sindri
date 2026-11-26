@@ -208,21 +208,30 @@ fn turn_messages(turn: &Turn) -> Vec<Message> {
         content.push(AssistantContent::text(turn.text.clone()));
     }
     let mut results = Vec::new();
-    for (call, acted) in turn.calls.iter().zip(&turn.results) {
+    for (index, call) in turn.calls.iter().enumerate() {
         let Ok(name) = ToolName::new(call.name.clone()) else {
             continue;
         };
         let id = CallId::from_wire(call.id.clone());
-        let arguments = serde_json::from_str(&call.arguments).unwrap_or(serde_json::Value::Null);
         content.push(AssistantContent::ToolCall(ToolCall::new(
             id.clone(),
-            ToolFunction::new(name.clone(), arguments),
+            ToolFunction::parse(name.clone(), &call.arguments),
         )));
+        let acted = turn.results.get(index);
+        let text = acted.map_or_else(
+            || {
+                format!(
+                    "not executed: the run stopped before this call; arguments: {}",
+                    call.arguments
+                )
+            },
+            |acted| acted.text.clone(),
+        );
         results.push(ToolResult {
             call: id,
             name,
-            content: vec![ToolResultContent::text(acted.text.clone())],
-            is_error: false,
+            content: vec![ToolResultContent::text(text)],
+            is_error: acted.is_none_or(|acted| !acted.exit.is_ok()),
         });
     }
     if content.is_empty() && turn.assistant.0.is_none() && turn.responses.is_none() {
