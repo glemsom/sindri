@@ -352,3 +352,22 @@ fn server_continuation_never_client_compacts_or_admits_only_the_handle_delta() {
     assert!(client.ask(&ask, &mut ()).is_err());
     assert_eq!(replay.requests().len(), 1);
 }
+
+#[test]
+fn exposed_cache_reads_and_writes_are_measured_without_logging_response_artifacts() {
+    let fixture = include_str!("fixtures/providers/anthropic_stream_cached.sse").replace(
+        "\"cache_read_input_tokens\":4",
+        "\"cache_read_input_tokens\":4,\"cache_creation_input_tokens\":9",
+    );
+    let fixture = Box::leak(fixture.into_boxed_str());
+    let replay = Replay::new([Canned::stream(fixture)]);
+    let answer = client_over(&replay).ask(&anthropic_ask(), &mut ()).unwrap();
+    let usage = serde_json::to_value(answer.usage).unwrap();
+    assert_eq!(usage["cache_read"], 4);
+    assert_eq!(usage["cache_write"], 9);
+    assert!(usage["request_ms"].is_u64());
+    assert!(usage.get("client_compactions").is_none());
+    assert!(usage.get("native_compactions").is_none());
+    assert!(!usage.to_string().contains("sk-ant-recorded"));
+    assert!(!usage.to_string().contains("Hello"));
+}

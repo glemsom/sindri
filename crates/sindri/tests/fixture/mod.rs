@@ -47,6 +47,11 @@ const MEASURED: Usage = Usage {
     output: None,
     total: None,
     reasoning: None,
+    cache_read: None,
+    cache_write: None,
+    request_ms: None,
+    client_compactions: None,
+    native_compactions: None,
 };
 
 const SERVED: &str =
@@ -757,6 +762,7 @@ fn document_of(config: &Config) -> SessionDocument {
             total: Some(51_300),
             cached_input: Some(12_000),
             reasoning: Some(900),
+            ..Usage::default()
         },
         stopped: RunState::Stopped(Stop::Final),
         route: Some(Route::Chat),

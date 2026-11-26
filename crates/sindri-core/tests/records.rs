@@ -1335,6 +1335,7 @@ fn the_usage_of_every_ask_is_summed_and_what_nobody_reported_is_left_out() {
             total: Some(15),
             cached_input: None,
             reasoning: None,
+            ..Usage::default()
         },
         Usage {
             input: Some(1),
@@ -1342,6 +1343,7 @@ fn the_usage_of_every_ask_is_summed_and_what_nobody_reported_is_left_out() {
             total: Some(3),
             cached_input: Some(7),
             reasoning: None,
+            ..Usage::default()
         },
         Usage::default(),
     ] {
@@ -1693,6 +1695,7 @@ fn child_writes_entries_until_it_is_killed() {
                 total: Some(15),
                 cached_input: None,
                 reasoning: None,
+                ..Usage::default()
             })
             .expect("an ask is charged");
         println!("turn {turn}");

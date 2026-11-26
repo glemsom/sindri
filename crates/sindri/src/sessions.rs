@@ -140,6 +140,11 @@ fn spending(usage: Usage) -> String {
         ("total", usage.total),
         ("cached input", usage.cached_input),
         ("reasoning", usage.reasoning),
+        ("cache read", usage.cache_read),
+        ("cache write", usage.cache_write),
+        ("request ms", usage.request_ms),
+        ("client compactions", usage.client_compactions),
+        ("native compactions", usage.native_compactions),
     ] {
         if let Some(count) = count {
             counted.push(format!("{label} {count}"));

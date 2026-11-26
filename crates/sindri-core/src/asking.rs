@@ -77,10 +77,11 @@ impl Responder for Asking {
         }
         let asked = self.ask(request).earlier(earlier);
         let compacted = asked.compact(&self.client)?;
-        let answer = self
+        let mut answer = self
             .client
             .ask(compacted.as_ref().unwrap_or(&asked), deltas)?;
         if let Some(compacted) = compacted {
+            answer.usage.charge(&compacted.compaction_usage());
             *cache = Some((request.earlier().to_vec(), compacted.retained().to_vec()));
             *self
                 .event

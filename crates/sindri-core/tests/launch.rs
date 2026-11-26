@@ -1250,6 +1250,14 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
         }
         let messages = last[field].as_array().unwrap();
         let prefix = previous[field].as_array().unwrap();
+        for stable in ["instructions", "system", "tools", "tool_choice"] {
+            assert_eq!(
+                last.get(stable),
+                previous.get(stable),
+                "stable {stable} for {wire:?}"
+            );
+        }
+
         assert!(messages.len() > prefix.len());
         if route == Route::Chat && wire != Wire::Anthropic {
             assert_eq!(requests[3].body.matches("Inspecting evidence").count(), 2);
@@ -1505,6 +1513,14 @@ fn two_prompts_keep_activated_skill_snapshots_on_each_wire() {
         };
         let messages = last[field].as_array().unwrap();
         let prefix = previous[field].as_array().unwrap();
+        for stable in ["instructions", "system", "tools", "tool_choice"] {
+            assert_eq!(
+                last.get(stable),
+                previous.get(stable),
+                "stable {stable} for {wire:?}"
+            );
+        }
+
         assert!(messages.len() > prefix.len());
         assert_eq!(
             &messages[..prefix.len()],
@@ -1638,6 +1654,14 @@ fn human_activation_delivers_and_retains_skill_snapshots_on_each_wire() {
         };
         let messages = last[field].as_array().unwrap();
         let prefix = previous[field].as_array().unwrap();
+        for stable in ["instructions", "system", "tools", "tool_choice"] {
+            assert_eq!(
+                last.get(stable),
+                previous.get(stable),
+                "stable {stable} for {wire:?}"
+            );
+        }
+
         assert!(messages.len() > prefix.len());
         assert_eq!(
             &messages[..prefix.len()],
@@ -2165,15 +2189,17 @@ fn near_capacity_launch_requests_a_model_summary_before_continuing() {
         evidence,
         Turn::answered(2, "Recent", "EXACT_RECENT_616"),
     ];
+    let mut kept = Kept::default();
     launch
-        .drive(
-            "Continue",
-            &earlier,
-            &mut Quiet,
-            &mut Kept::default(),
-            Cancel::new(),
-        )
+        .drive("Continue", &earlier, &mut Quiet, &mut kept, Cancel::new())
         .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert_eq!(kept.ended_on().usage.client_compactions, Some(1));
+    assert_eq!(
+        kept.document.as_ref().unwrap().usage.client_compactions,
+        Some(1)
+    );
+    assert!(kept.ended_on().usage.request_ms.is_some());
+    assert!(kept.told.contains(&Told::Compacted { turn: 1 }));
     let requests = replay.requests();
     assert_eq!(
         requests.len(),
@@ -2779,7 +2805,7 @@ fn native_responses_compaction_replays_the_whole_canonical_window() {
         {"type":"compaction","id":"cmp_618","encrypted_content":"OPAQUE_618","future_field":{"exact":true}}
     ]);
     let body = Box::leak(
-        serde_json::json!({"id":"compact_618","object":"response.compaction","output":canonical})
+        serde_json::json!({"id":"compact_618","object":"response.compaction","output":canonical,"usage":{"input_tokens":10,"output_tokens":5,"input_tokens_details":{"cached_tokens":4},"output_tokens_details":{"reasoning_tokens":2}}})
             .to_string()
             .into_boxed_str(),
     );
@@ -2840,6 +2866,19 @@ fn native_responses_compaction_replays_the_whole_canonical_window() {
             Cancel::new(),
         )
         .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert_eq!(kept.ended_on().usage.native_compactions, Some(1));
+    assert_eq!(kept.ended_on().usage.input, Some(19));
+    assert_eq!(kept.ended_on().usage.output, Some(9));
+    assert_eq!(kept.ended_on().usage.cache_read, Some(7));
+    assert_eq!(kept.ended_on().usage.reasoning, Some(4));
+    assert_eq!(kept.ended_on().usage.cache_write, None);
+
+    assert_eq!(
+        kept.document.as_ref().unwrap().usage.native_compactions,
+        Some(1)
+    );
+    assert!(kept.ended_on().usage.request_ms.is_some());
+    assert!(kept.told.contains(&Told::Compacted { turn: 1 }));
     let requests = replay.requests();
     assert_eq!(requests.len(), 4);
     assert!(requests[2].body.contains("OPAQUE_618") || requests[2].body.contains("UNCHANGED_618"));
@@ -2935,6 +2974,13 @@ fn native_anthropic_compaction_replays_complete_blocks() {
             Cancel::new(),
         )
         .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert_eq!(kept.ended_on().usage.native_compactions, Some(1));
+    assert_eq!(
+        kept.document.as_ref().unwrap().usage.native_compactions,
+        Some(1)
+    );
+    assert!(kept.ended_on().usage.request_ms.is_some());
+    assert!(kept.told.contains(&Told::Compacted { turn: 1 }));
     let requests = replay.requests();
     assert_eq!(requests.len(), 4);
     assert!(requests[2].body.contains("OPAQUE_618") || requests[2].body.contains("UNCHANGED_618"));

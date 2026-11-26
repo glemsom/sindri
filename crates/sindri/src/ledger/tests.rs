@@ -496,6 +496,7 @@ fn document(guid: &str) -> SessionDocument {
             total: Some(51_300),
             cached_input: Some(12_000),
             reasoning: Some(900),
+            ..Usage::default()
         },
         stopped: RunState::Stopped(Stop::Final),
         route: Some(Route::Chat),
