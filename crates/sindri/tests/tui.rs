@@ -113,11 +113,9 @@ const ASK_FOCUS: &[u8] = b"\x1b[?1004h";
 
 const GIVE_UP_FOCUS: &[u8] = b"\x1b[?1004l";
 
-/// `CSI ? 1000 h` and `CSI ? 1006 h`: the press and the wheel are reported, and a press names the
-/// cell it landed on.
-const TAKE_POINTER: &[u8] = b"\x1b[?1000h\x1b[?1006h";
+const TAKE_POINTER: &[u8] = b"\x1b[?1002h\x1b[?1006h";
 
-const GIVE_UP_POINTER: &[u8] = b"\x1b[?1000l\x1b[?1006l";
+const GIVE_UP_POINTER: &[u8] = b"\x1b[?1002l\x1b[?1006l";
 
 const SERVED: &str =
     include_str!("../../sindri-core/tests/fixtures/providers/anthropic_models.json");

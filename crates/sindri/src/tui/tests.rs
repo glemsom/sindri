@@ -26,7 +26,15 @@ use super::*;
 fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
     let stage = Stage::open();
     let view = View::of(
-        Capabilities::default(),
+        Capabilities::probed(
+            &std::collections::BTreeMap::from([(
+                String::from("TERM"),
+                String::from("xterm-kitty"),
+            )]),
+            &sindri::capability::Answers::silent(),
+            false,
+        )
+        .0,
         Facts::default().asked(),
         Transcript::of(vec![Entry::Assistant {
             turn: 1,
@@ -34,14 +42,18 @@ fn a_copy_leaves_the_terminal_by_osc_52_and_asks_no_clipboard_utility() {
         }]),
     );
 
-    // No mark, so `Ctrl-Y` copies the last answer: the words go down the wire the frame does,
-    // which is what makes a copy work over SSH.
     let environment = std::collections::BTreeMap::new();
     let mut live = stage.launch(view, Config::default(), &environment);
 
+    live.paint().expect("frame");
+    let band = live.painted.layout().unwrap().transcript;
+    let start = sindri::mark::Cell::new(band.y, band.x + 2);
+    let end = sindri::mark::Cell::new(band.y, band.x + 20);
+    live.answer(Event::Pointer(sindri::pointer::Pointer::Press(start)))
+        .unwrap();
     let ended = live
-        .answer(Event::Key(Key::Copy))
-        .expect("the copy is written");
+        .answer(Event::Pointer(sindri::pointer::Pointer::Release(end)))
+        .unwrap();
 
     assert!(ended.is_none(), "a copy is not the key that quits");
     let drawn = stage.drawn();

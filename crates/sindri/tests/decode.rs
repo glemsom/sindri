@@ -81,7 +81,6 @@ fn a_reported_key_is_the_key_the_byte_beside_it_would_be() {
         (&b"\x1b[99;5u"[..], Key::Cancel),
         (&b"\x1b[113;5u"[..], Key::Quit),
         (&b"\x1b[120;5u"[..], Key::Drop),
-        (&b"\x1b[121;5u"[..], Key::Copy),
         (&b"\x1b[117;5u"[..], Key::Clear),
         (&b"\x1b[106;5u"[..], Key::Newline),
         (&b"\x1b[104;5u"[..], Key::Backspace),
@@ -268,13 +267,9 @@ fn ctrl_d_arrives_as_the_key_that_moves_the_transcript_on() {
 }
 
 #[test]
-fn ctrl_y_arrives_as_the_key_that_copies() {
-    assert_eq!(
-        event(b"\x19"),
-        key(Key::Copy),
-        "`Ctrl-Y` is one control byte, and it is the key the mark is copied with \
-         rather than a glyph of the draft"
-    );
+fn ctrl_y_is_not_a_transcript_copy_key() {
+    assert!(events(&[b"\x19"]).is_empty());
+    assert!(events(&[b"\x1b[121;5u"]).is_empty());
 }
 
 #[test]
@@ -395,24 +390,16 @@ fn a_press_names_the_cell_it_landed_on() {
 }
 
 #[test]
-fn a_report_naming_no_act_of_the_frames_is_no_event() {
-    for (bytes, why) in [
-        (
-            &b"\x1b[<0;10;5m"[..],
-            "a release is nothing a frame answers",
-        ),
-        (&b"\x1b[<32;10;5M"[..], "a move is no press"),
-        (
-            &b"\x1b[<2;10;5M"[..],
-            "a right button is a press nothing hangs from",
-        ),
-    ] {
-        assert!(
-            events(&[bytes]).is_empty(),
-            "{why}: {:?}",
-            String::from_utf8_lossy(bytes)
-        );
-    }
+fn motion_and_release_report_cells_and_other_buttons_are_ignored() {
+    assert_eq!(
+        event(b"\x1b[<32;10;5M"),
+        Event::Pointer(Pointer::Drag(Cell::new(4, 9)))
+    );
+    assert_eq!(
+        event(b"\x1b[<0;10;5m"),
+        Event::Pointer(Pointer::Release(Cell::new(4, 9)))
+    );
+    assert!(events(&[b"\x1b[<2;10;5M"]).is_empty());
 }
 
 #[test]

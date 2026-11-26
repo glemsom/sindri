@@ -73,12 +73,7 @@ pub enum Act {
     Draft,
     Complete,
     Up,
-    Copy,
     Fold,
-    ExtendDown,
-    ExtendUp,
-    SidewaysBack,
-    SidewaysForward,
     Drop,
     Keys,
     Files,
@@ -106,7 +101,7 @@ pub struct Binding {
     pub act: Act,
 }
 
-const COMPOSER: [Binding; 29] = [
+const COMPOSER: [Binding; 24] = [
     Binding {
         key: Key::BackTab,
         name: "Shift+Tab",
@@ -204,30 +199,6 @@ const COMPOSER: [Binding; 29] = [
         act: Act::After,
     },
     Binding {
-        key: Key::ShiftDown,
-        name: "Shift+↓",
-        does: "grow the mark a row down",
-        act: Act::ExtendDown,
-    },
-    Binding {
-        key: Key::ShiftUp,
-        name: "Shift+↑",
-        does: "grow the mark a row up",
-        act: Act::ExtendUp,
-    },
-    Binding {
-        key: Key::ShiftLeft,
-        name: "Shift+←",
-        does: "the marked fence sideways back",
-        act: Act::SidewaysBack,
-    },
-    Binding {
-        key: Key::ShiftRight,
-        name: "Shift+→",
-        does: "the marked fence sideways on",
-        act: Act::SidewaysForward,
-    },
-    Binding {
         key: Key::Left,
         name: "←",
         does: "a glyph left",
@@ -250,12 +221,6 @@ const COMPOSER: [Binding; 29] = [
         name: "End",
         does: "the tail of the run, or the end of the line",
         act: Act::Tail,
-    },
-    Binding {
-        key: Key::Copy,
-        name: "Ctrl-Y",
-        does: "copy the mark, or the last answer",
-        act: Act::Copy,
     },
     Binding {
         key: Key::Fold,

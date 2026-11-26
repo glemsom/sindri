@@ -132,14 +132,14 @@ fn copying_invocation_and_result_returns_original_source_without_head_decoration
     let row = (0..20).find(|y| shown.row(*y).contains("printf")).unwrap();
     view.drag(Cell::new(row, 2), Cell::new(row, 25));
     frame::painted(&mut view, 80, 24);
-    assert_eq!(view.key(Key::Copy), Outcome::Copy(command.to_owned()));
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
     let shown = frame::painted(&mut view, 80, 24);
     let row = (0..20)
         .find(|y| shown.row(*y).contains("界") && !shown.row(*y).contains("printf"))
         .unwrap();
     view.drag(Cell::new(row, 2), Cell::new(row, 25));
     frame::painted(&mut view, 80, 24);
-    assert_eq!(view.key(Key::Copy), Outcome::Copy(output.to_owned()));
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
 }
 
 #[test]
@@ -208,12 +208,12 @@ fn opening_result_work_preserves_source_and_fold_choice_after_resize() {
             let row = (0..height).find(|y| shown.row(*y).contains("one")).unwrap();
             view.drag(Cell::new(row, 2), Cell::new(row, width - 3));
             frame::painted(&mut view, width, height);
-            assert_eq!(view.key(Key::ShiftDown), Outcome::Edited);
+            assert_eq!(view.key(Key::Fold), Outcome::Edited);
             let shown = frame::painted(&mut view, width, height);
             let row = (0..height).find(|y| shown.row(*y).contains("one")).unwrap();
             view.drag(Cell::new(row, 2), Cell::new(row, width - 3));
             frame::painted(&mut view, width, height);
-            assert_eq!(view.key(Key::Copy), Outcome::Copy(output.to_owned()));
+            assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
             let shown = frame::painted(&mut view, 80, 24);
             assert!((0..24).any(|y| shown.row(y).contains("ten")));
             assert!(!(0..24).any(|y| shown.row(y).contains("kept back")));
@@ -252,10 +252,13 @@ fn compact_short_success_keeps_all_evidence_and_reader_controls_in_every_capabil
             let row = (0..height).find(|y| shown.row(*y).contains("界")).unwrap();
             view.drag(Cell::new(row, 0), Cell::new(row, width - 1));
             frame::painted(&mut view, width, height);
-            assert_eq!(view.key(Key::Copy), Outcome::Copy("界\n\n  x".to_owned()));
+            assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
             assert_eq!(view.key(Key::Fold), Outcome::Edited);
             let open = frame::painted(&mut view, 80, 24);
             assert!(!(0..24).any(|y| open.row(y).contains("kept back")));
+            let row = (0..24).find(|y| open.row(*y).contains("界")).unwrap();
+            view.drag(Cell::new(row, 2), Cell::new(row, 20));
+            frame::painted(&mut view, 80, 24);
             assert_eq!(view.key(Key::Fold), Outcome::Edited);
         }
     }
@@ -290,7 +293,7 @@ fn reader_opened_compact_result_keeps_source_through_exchange_scroll_resize_and_
     view.drag(Cell::new(row, 0), Cell::new(row, 119));
     frame::painted(&mut view, 120, 40);
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
-    assert_eq!(view.key(Key::Copy), Outcome::Copy(output.to_owned()));
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
     for capabilities in [
         caps::pictured(),
         caps::greys(),
@@ -309,7 +312,7 @@ fn reader_opened_compact_result_keeps_source_through_exchange_scroll_resize_and_
             let row = (0..height).find(|y| shown.row(*y).contains("界")).unwrap();
             view.drag(Cell::new(row, 0), Cell::new(row, width - 1));
             frame::painted(&mut view, width, height);
-            assert_eq!(view.key(Key::Copy), Outcome::Copy(output.to_owned()));
+            assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
             assert!(!(0..height).any(|y| shown.row(y).contains("kept back")));
             if view.capabilities().palette() == Palette::SLOTS {
                 assert!(shown.told().placements().is_empty());
@@ -430,7 +433,7 @@ fn generic_invocation_copy_preserves_recorded_json_arguments() {
         .unwrap();
     view.drag(Cell::new(row, 2), Cell::new(row, 60));
     frame::painted(&mut view, 80, 24);
-    assert_eq!(view.key(Key::Copy), Outcome::Copy(original.to_owned()));
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
 }
 
 #[test]

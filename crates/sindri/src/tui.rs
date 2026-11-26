@@ -380,6 +380,7 @@ impl<'a> Loop<'a> {
             }
             Outcome::Copy(words) => {
                 tell(&self.terminal.screen, &crate::osc::copy(&words))?;
+                self.paint()?;
                 Ok(None)
             }
             // Written through the settings card's own save — atomic, 0600, patching only the `model`

@@ -1,5 +1,6 @@
 ---
 source: crates/sindri/tests/frame/mod.rs
+assertion_line: 210
 expression: self.text(name)
 ---
 mark at 120x40
@@ -26,7 +27,7 @@ mark at 120x40
 20 |  code      │ behind a bar, highlighted                                                                                 | plain:2 mark:37 plain:81
 21 |  table     │ columns joined by a bar                                                                                   | plain:2 mark:35 plain:83
 22 |                                                                                                                        | plain:120
-23 |┃›what does a row of the band say?                                                                                      | mark:34 plain:86
+23 |┃›what does a row of the band say?                                                                                      | dim:1 plain:1 mark:32 plain:86
 24 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 25 |                                                                                                                        | plain:120
 26 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101

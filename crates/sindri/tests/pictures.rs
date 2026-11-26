@@ -8,7 +8,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 
 use sindri::capability::Capabilities;
-use sindri::composer::{Key, Outcome};
+use sindri::composer::Outcome;
 use sindri::face;
 use sindri::facts;
 use sindri::graphics::{Ceiling, CellSize};
@@ -1057,9 +1057,14 @@ fn a_picture_block_copied_out_of_the_band_is_its_words_and_never_its_bytes() {
         .first()
         .expect("the picture is on the screen");
 
-    view.drag(Cell::new(drawn, 0), Cell::new(drawn, SCREEN.0 - 1));
-    frame::painted(&mut view, SCREEN.0, SCREEN.1);
-    let taken = match view.key(Key::Copy) {
+    view.pointer(
+        painted.told(),
+        sindri::pointer::Pointer::Press(Cell::new(drawn, 0)),
+    );
+    let taken = match view.pointer(
+        painted.told(),
+        sindri::pointer::Pointer::Release(Cell::new(drawn, SCREEN.0 - 1)),
+    ) {
         Outcome::Copy(words) => words,
         other => panic!("Ctrl-Y is a copy, and this frame answered it {other:?}"),
     };

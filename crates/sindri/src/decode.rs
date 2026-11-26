@@ -289,7 +289,6 @@ fn control(byte: u8) -> Option<Key> {
         0x18 => Some(Key::Drop),
         b'\t' => Some(Key::Tab),
         0x11 => Some(Key::Quit),
-        0x19 => Some(Key::Copy),
         0x0f => Some(Key::Fold),
         0x7f | 0x08 => Some(Key::Backspace),
         // `Ctrl-J` is the plain newline every terminal sends: it breaks a line and does not send
@@ -302,28 +301,21 @@ fn control(byte: u8) -> Option<Key> {
     }
 }
 
-/// The pointer one SGR report names: `CSI < b ; x ; y M` for a press and `m` for a release, and
-/// the wheel is a button like the rest. A report naming no act of this frame's — a release, a
-/// move, a button nothing hangs from — is no event at all.
 fn pointer(last: u8, params: &str) -> Option<Pointer> {
-    if last != b'M' {
-        return None;
-    }
     let mut fields = params.strip_prefix('<')?.split(';');
     let button: u32 = fields.next()?.parse().ok()?;
     let column: u16 = fields.next()?.parse().ok()?;
     let row: u16 = fields.next()?.parse().ok()?;
-    let button = button & !MODIFIERS;
-    if button & MOTION != 0 {
+    if fields.next().is_some() || row == 0 || column == 0 {
         return None;
     }
-    match button {
-        0 => Some(Pointer::Press(Cell::new(
-            row.saturating_sub(1),
-            column.saturating_sub(1),
-        ))),
-        64 => Some(Pointer::Wheel(Notch::Up)),
-        65 => Some(Pointer::Wheel(Notch::Down)),
+    let at = Cell::new(row - 1, column - 1);
+    match (last, button & !MODIFIERS) {
+        (b'M', 0) => Some(Pointer::Press(at)),
+        (b'M', MOTION) => Some(Pointer::Drag(at)),
+        (b'm', 0) => Some(Pointer::Release(at)),
+        (b'M', 64) => Some(Pointer::Wheel(Notch::Up)),
+        (b'M', 65) => Some(Pointer::Wheel(Notch::Down)),
         _ => None,
     }
 }

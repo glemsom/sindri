@@ -354,10 +354,9 @@ nothing more, marker-like words and all.
 _Avoid_: Callout, admonition, banner, badge, note (that one is a kind)
 
 **Source**:
-The words a fence was written with, line for line, kept beside the rows the frame draws them as: a
-copy of a marked fence hands the source back whole — the line breaks and indentation it was written
-with, and nothing the band drew into it — where the cells are what the band made of it. A fence's
-tag row is no line of its source, and a mark on it takes the fence whole all the same.
+The words a fence was written with, line for line, kept beside the rows the frame draws them as.
+Source keeps the line breaks and indentation the fence was written with, where the cells are what
+the band made of it. A fence's tag row is no line of its source.
 _Avoid_: Body, content, raw text
 
 **Spine**:
@@ -446,10 +445,12 @@ is handed the same frame and the same keys.
 _Avoid_: Keyboard enhancement, CSI u, key encoding
 
 **Pointer**:
-The wheel's notch and the cell a press landed on. A launch asks whether its terminal reports one on
+The wheel's notch and the cells a press, drag or release landed on. A launch asks whether its terminal reports one on
 taking the screen, and a terminal nobody can vouch for gets a frame that takes none. Where it is
 taken, one notch moves the transcript, a press on a card's row chooses it and sends the key it hangs
-from, and a press on no row of a card is no act — a pointer is never drawn into a cell.
+from, and a press on no row of a card is no act. A drag in the transcript selects its visible words,
+copied to the clipboard on release; a click on a fold opens or closes it.
+A pointer is never drawn into a cell.
 _Avoid_: Mouse, cursor (that one is the Caret), hover
 
 **Notch**:

@@ -256,11 +256,12 @@ fn named(name: &str, capabilities: Capabilities) -> View {
         "footer-queue" => waiting(asked(capabilities), DURING_A_RUN),
         "picture" => pictured(),
         "mark" => {
-            let mut view = View::of(
+            let view = View::of(
                 capabilities,
                 Facts::default().asked(),
                 Transcript::of(transcript()),
             );
+            let mut view = drawn(view, 120, 40);
             view.drag(mark::Cell::new(20, 0), mark::Cell::new(23, 70));
             view
         }

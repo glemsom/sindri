@@ -12,6 +12,8 @@ pub fn speaks(term: Option<&str>, program: Option<&str>, vte: Option<&str>) -> b
 pub enum Pointer {
     Wheel(Notch),
     Press(Cell),
+    Drag(Cell),
+    Release(Cell),
 }
 
 pub(crate) const ROWS: u32 = 3;

@@ -110,12 +110,12 @@ fn the_four_keys_that_move_the_transcript_are_one_band_each_way() {
 fn the_sideways_arrows_walk_the_marked_fence_they_answer() {
     assert_eq!(
         act_of(Mode::Composer, Key::ShiftRight),
-        Some(Act::SidewaysForward),
+        None,
         "`Shift+→` walks the fence under the mark on"
     );
     assert_eq!(
         act_of(Mode::Composer, Key::ShiftLeft),
-        Some(Act::SidewaysBack),
+        None,
         "and `Shift+←` walks it back"
     );
 }

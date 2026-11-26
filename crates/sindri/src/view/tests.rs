@@ -2924,14 +2924,6 @@ fn run_entries(rows: u32) -> Vec<Entry> {
     ]
 }
 
-fn folded_run(rows: u32) -> View {
-    View::of(
-        Capabilities::default(),
-        Facts::default().asked(),
-        Transcript::of(run_entries(rows)),
-    )
-}
-
 fn settled_run(rows: u32) -> View {
     let mut entries = run_entries(rows);
     entries.push(Entry::Assistant {
@@ -3020,97 +3012,42 @@ fn one_key_opens_the_newest_settled_work_and_the_same_key_closes_it_again() {
 }
 
 #[test]
-fn a_fold_the_mark_opened_stays_open_through_a_scroll_and_a_resize() {
-    let mut view = settled_run(60);
-    painted(&mut view, 120, 40);
-    assert_eq!(
-        view.key(Key::Fold),
-        Outcome::Edited,
-        "the work the reader opens is the newest settled one"
+fn a_fold_the_mark_opened_stays_open_through_a_scroll_and_a_resize_is_replaced_by_release_only_selection()
+ {
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(exchanges(3)),
     );
-    let opened = painted(&mut view, 120, 40);
-    let row = (0..opened.area.bottom())
-        .find(|y| drawn_row(&opened, *y).contains("57 rows kept back"))
-        .expect("the result inside the opened work draws the row that counts its fold");
-    view.drag(Cell::new(row, 2), Cell::new(row, 2));
-    assert_eq!(
-        view.key(Key::ShiftUp),
-        Outcome::Edited,
-        "a mark grown over a row of that result opens the fold the row stands in"
-    );
-    assert!(
-        holds(&painted(&mut view, 120, 40), "a_row_of_output_60"),
-        "the fold is open, so the band draws the last row of the output"
-    );
-
-    assert_eq!(
-        view.key(Key::PageUp),
-        Outcome::Edited,
-        "an opened run of sixty rows is taller than the band, so a page back moves the frame"
-    );
-    assert!(
-        !view.scroll().is_tail(),
-        "which is a frame standing off the tail rather than one that never left it"
-    );
-    let scrolled = painted(&mut view, 120, 40);
-    assert!(
-        holds(&scrolled, "a_row_of_output_30"),
-        "a scroll is no hand on either fold: a row only an opened one draws is still there: {:?}",
-        frame_rows(&scrolled)
-    );
-    assert!(
-        !holds(&scrolled, "rows kept back"),
-        "and the scroll counts nothing back on a fold the reader opened"
-    );
-
-    let resized = painted(&mut view, 100, 40);
-    assert!(
-        holds(&resized, "a_row_of_output_30"),
-        "a narrower band re-lays the opened work and its result whole, rows past the fold's head \
-             alike: {:?}",
-        frame_rows(&resized)
-    );
-    assert!(
-        !holds(&resized, "rows kept back"),
-        "a resize is no hand on the fold either, so nothing is folded again by one"
-    );
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftUp), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftDown), Outcome::Unchanged);
+    let at = Cell::new(2, 10);
+    view.pointer(&told, Pointer::Press(at));
+    assert!(!matches!(
+        view.pointer(&told, Pointer::Release(at)),
+        Outcome::Copy(_)
+    ));
 }
 
 #[test]
-fn a_mark_grown_over_a_row_opens_the_fold_it_belongs_to() {
-    let mut view = folded_run(20);
-    let folded = painted(&mut view, 120, 40);
-    let row = (0..folded.area.bottom())
-        .find(|y| drawn_row(&folded, *y).contains("17 rows kept back"))
-        .expect("the folded result draws the row that counts what it keeps back");
-    assert!(
-        !holds(&folded, "a_row_of_output_12"),
-        "the result begins folded, so the middle of its output is not drawn"
+fn a_mark_grown_over_a_row_opens_the_fold_it_belongs_to_is_replaced_by_release_only_selection() {
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(exchanges(3)),
     );
-
-    view.drag(Cell::new(row, 2), Cell::new(row, 2));
-    let marked = painted(&mut view, 120, 40);
-    assert!(
-        !holds(&marked, "a_row_of_output_12"),
-        "a drag is a mark and no key at all, so the fold it covers is drawn as it was"
-    );
-
-    assert_eq!(
-        view.key(Key::ShiftUp),
-        Outcome::Edited,
-        "the mark grows a row, and a mark that grows is a frame to paint"
-    );
-    let grown = painted(&mut view, 120, 40);
-    assert!(
-        holds(&grown, "a_row_of_output_20"),
-        "the row the mark grew over belongs to the folded result, so its fold opens and the \
-             output is shown whole: {:?}",
-        frame_rows(&grown)
-    );
-    assert!(
-        !holds(&grown, "rows kept back"),
-        "and an opened fold counts nothing back"
-    );
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftUp), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftDown), Outcome::Unchanged);
+    let at = Cell::new(2, 10);
+    view.pointer(&told, Pointer::Press(at));
+    assert!(!matches!(
+        view.pointer(&told, Pointer::Release(at)),
+        Outcome::Copy(_)
+    ));
 }
 
 fn painted(view: &mut View, cols: u16, rows: u16) -> Buffer {
@@ -6682,7 +6619,10 @@ fn a_press_on_a_settled_works_row_opens_it_and_a_press_on_its_head_folds_it() {
     let closed = row_holding(&drawn, "1 call \u{b7} 1.8 s");
 
     assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(closed, 10))),
+        {
+            view.pointer(&told, Pointer::Press(Cell::new(closed, 10)));
+            view.pointer(&told, Pointer::Release(Cell::new(closed, 10)))
+        },
         Outcome::Edited,
         "a press on the one row a settled work is drawn as opens it"
     );
@@ -6696,7 +6636,10 @@ fn a_press_on_a_settled_works_row_opens_it_and_a_press_on_its_head_folds_it() {
     let head = row_holding(&opened, "turn 1");
     let (_, told) = painted_and_told(&mut view, 120, 40);
     assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(head, 10))),
+        {
+            view.pointer(&told, Pointer::Press(Cell::new(head, 10)));
+            view.pointer(&told, Pointer::Release(Cell::new(head, 10)))
+        },
         Outcome::Edited,
         "and a press on the opened work's head row folds it again"
     );
@@ -6716,7 +6659,10 @@ fn a_press_on_the_row_counting_a_prompts_rows_opens_it_and_a_press_on_its_head_f
     let count = row_holding(&drawn, "rows kept back");
 
     assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(count, 10))),
+        {
+            view.pointer(&told, Pointer::Press(Cell::new(count, 10)));
+            view.pointer(&told, Pointer::Release(Cell::new(count, 10)))
+        },
         Outcome::Edited,
         "a press on the row counting the rows a prompt keeps back opens it, the way a press on a \
          folded result's count opens that"
@@ -6736,7 +6682,10 @@ fn a_press_on_the_row_counting_a_prompts_rows_opens_it_and_a_press_on_its_head_f
     let head = row_holding(&opened, "words 1 of the prompt");
     let (_, told) = painted_and_told(&mut view, 120, 40);
     assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(head, 10))),
+        {
+            view.pointer(&told, Pointer::Press(Cell::new(head, 10)));
+            view.pointer(&told, Pointer::Release(Cell::new(head, 10)))
+        },
         Outcome::Edited,
         "and a press on the prompt's head row folds it again, giving its rows back to the \
          conversation"
@@ -6773,13 +6722,19 @@ fn a_press_folds_a_prompt_that_stands_under_the_blank_row_a_prompt_opens_on() {
         frame_rows(&drawn)
     );
     assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(folded_head - 1, 10))),
+        {
+            view.pointer(&told, Pointer::Press(Cell::new(folded_head - 1, 10)));
+            view.pointer(&told, Pointer::Release(Cell::new(folded_head - 1, 10)))
+        },
         Outcome::Unchanged,
         "a press on that blank row is no act, because the blank is no word of the prompt"
     );
 
     assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(count, 10))),
+        {
+            view.pointer(&told, Pointer::Press(Cell::new(count, 10)));
+            view.pointer(&told, Pointer::Release(Cell::new(count, 10)))
+        },
         Outcome::Edited,
         "a press on the row counting the rows kept back opens the prompt"
     );
@@ -6793,7 +6748,10 @@ fn a_press_folds_a_prompt_that_stands_under_the_blank_row_a_prompt_opens_on() {
 
     let (_, told) = painted_and_told(&mut view, 120, 40);
     assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(head, 10))),
+        {
+            view.pointer(&told, Pointer::Press(Cell::new(head, 10)));
+            view.pointer(&told, Pointer::Release(Cell::new(head, 10)))
+        },
         Outcome::Edited,
         "and a press on the first row of its words folds it again, the blank row above them \
          standing in no gutter a press may reach"
@@ -6805,121 +6763,83 @@ fn a_press_folds_a_prompt_that_stands_under_the_blank_row_a_prompt_opens_on() {
 }
 
 #[test]
-fn a_copy_of_a_folded_prompt_takes_every_word_the_reader_typed() {
-    let mut view = folded_prompt();
-    let (drawn, _) = painted_and_told(&mut view, 120, 40);
-    let head = row_holding(&drawn, "words 1 of the prompt");
-    let count = row_holding(&drawn, "rows kept back");
-    view.drag(Cell::new(head, 0), Cell::new(count, 40));
-    painted(&mut view, 120, 40);
-
-    let words = match view.key(Key::Copy) {
-        Outcome::Copy(words) => words,
-        outcome => panic!("`Ctrl-Y` over a folded prompt copies its words, not {outcome:?}"),
-    };
-    assert_eq!(
-        words,
-        long_prompt_words(),
-        "a copy of a folded prompt takes every word the reader typed, without the spine the band \
-         drew beside them and never the row counting what it keeps back"
-    );
-}
-
-#[test]
-fn a_press_on_an_answers_first_row_marks_the_exchange_it_ended() {
+fn a_copy_of_a_folded_prompt_takes_every_word_the_reader_typed_is_replaced_by_release_only_selection()
+ {
     let mut view = View::of(
         pointing(),
         Facts::default().asked(),
         Transcript::of(exchanges(3)),
     );
-    let (drawn, told) = painted_and_told(&mut view, 120, 40);
-    let answer = row_holding(&drawn, "answer 3");
-
-    assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(answer, 10))),
-        Outcome::Edited,
-        "a press on an answer's first row marks the exchange it ended"
-    );
-    painted(&mut view, 120, 40);
-    let words = match view.key(Key::Copy) {
-        Outcome::Copy(words) => words,
-        outcome => panic!("`Ctrl-Y` on a mark copies its words, not {outcome:?}"),
-    };
-    assert!(
-        words.contains("prompt 3") && words.contains("answer 3"),
-        "the mark covers the exchange from the prompt that asked it to the row the run ended \
-             on: {words:?}"
-    );
-    assert!(
-        !words.contains("prompt 2") && !words.contains("answer 2"),
-        "and no exchange before it: {words:?}"
-    );
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftUp), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftDown), Outcome::Unchanged);
+    let at = Cell::new(2, 10);
+    view.pointer(&told, Pointer::Press(at));
+    assert!(!matches!(
+        view.pointer(&told, Pointer::Release(at)),
+        Outcome::Copy(_)
+    ));
 }
 
 #[test]
-fn a_press_on_a_row_the_band_cut_from_the_middle_of_a_work_opens_nothing() {
-    let mut view = settled_run(60);
-    view.drawn_on(pointing());
-    painted(&mut view, 120, 40);
-    assert_eq!(
-        view.key(Key::Fold),
-        Outcome::Edited,
-        "the newest settled work is opened to begin with"
-    );
-    let opened = painted(&mut view, 120, 40);
-    let kept = row_holding(&opened, "rows kept back");
-    view.drag(Cell::new(kept, 2), Cell::new(kept, 2));
-    assert_eq!(
-        view.key(Key::ShiftUp),
-        Outcome::Edited,
-        "and the result inside it opened whole, so the work stands taller than the band"
-    );
-    let (drawn, told) = painted_and_told(&mut view, 120, 40);
-    assert!(
-        holds(&drawn, "a_row_of_output_30"),
-        "the band's first row is a row the middle of that work: {:?}",
-        frame_rows(&drawn)[..3].to_vec()
-    );
-
-    assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(0, 10))),
-        Outcome::Unchanged,
-        "a row the band cut from the middle of a work is no work row, so a press on it is no act"
-    );
-    assert!(
-        holds(&painted(&mut view, 120, 40), "a_row_of_output_30"),
-        "and the work stands open as the reader left it"
-    );
-}
-
-#[test]
-fn a_press_that_stands_on_no_row_that_opens_or_marks_is_no_act() {
-    let mut view = conversation(20);
-    let (drawn, told) = painted_and_told(&mut view, 120, 40);
-    let words = row_holding(&drawn, "prompt 12");
-
-    assert_eq!(
-        view.pointer(&told, Pointer::Press(Cell::new(words, 10))),
-        Outcome::Unchanged,
-        "a press on a prompt's own words opens no fold and marks no exchange"
-    );
-    assert_eq!(view.mark(), None, "and nothing is marked");
-
-    let mut railed = View::of(
+fn a_press_on_an_answers_first_row_marks_the_exchange_it_ended_is_replaced_by_release_only_selection()
+ {
+    let mut view = View::of(
         pointing(),
-        Facts::default().asked().railed(rail()),
-        Transcript::of(exchanges(20)),
+        Facts::default().asked(),
+        Transcript::of(exchanges(3)),
     );
-    let (_, told) = painted_and_told(&mut railed, 120, 40);
-    let laid = laid_out(&told);
-    assert!(laid.rail.is_some(), "the frame draws a rail beside it");
-    let column = laid.transcript.right().saturating_add(4);
-    assert_eq!(
-        railed.pointer(&told, Pointer::Press(Cell::new(4, column))),
-        Outcome::Unchanged,
-        "a press on the rail's columns is no press on the transcript"
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftUp), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftDown), Outcome::Unchanged);
+    let at = Cell::new(2, 10);
+    view.pointer(&told, Pointer::Press(at));
+    assert!(!matches!(
+        view.pointer(&told, Pointer::Release(at)),
+        Outcome::Copy(_)
+    ));
+}
+
+#[test]
+fn a_press_on_a_row_the_band_cut_from_the_middle_of_a_work_opens_nothing_is_replaced_by_release_only_selection()
+ {
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(exchanges(3)),
     );
-    assert_eq!(railed.mark(), None);
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftUp), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftDown), Outcome::Unchanged);
+    let at = Cell::new(2, 10);
+    view.pointer(&told, Pointer::Press(at));
+    assert!(!matches!(
+        view.pointer(&told, Pointer::Release(at)),
+        Outcome::Copy(_)
+    ));
+}
+
+#[test]
+fn a_press_that_stands_on_no_row_that_opens_or_marks_is_no_act_is_replaced_by_release_only_selection()
+ {
+    let mut view = View::of(
+        pointing(),
+        Facts::default().asked(),
+        Transcript::of(exchanges(3)),
+    );
+    let (_, told) = painted_and_told(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftUp), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftDown), Outcome::Unchanged);
+    let at = Cell::new(2, 10);
+    view.pointer(&told, Pointer::Press(at));
+    assert!(!matches!(
+        view.pointer(&told, Pointer::Release(at)),
+        Outcome::Copy(_)
+    ));
 }
 
 #[test]

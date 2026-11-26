@@ -40,7 +40,7 @@ use crate::pointer::{self, Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{Fence, INDENT, MARGIN, Measure, Row, Rows, Scroll, Sideways, margined};
+use crate::rows::{INDENT, MARGIN, Measure, Row, Rows, Scroll, margined};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
@@ -64,7 +64,6 @@ enum When {
     Card,
     Draft(State),
     Queue,
-    Fence,
 }
 
 impl Hint {
@@ -80,7 +79,7 @@ impl Hint {
     }
 }
 
-const HINTS: [Hint; 11] = [
+const HINTS: [Hint; 9] = [
     Hint {
         key: "Tab",
         meaning: Meaning::Words("complete"),
@@ -95,16 +94,6 @@ const HINTS: [Hint; 11] = [
         key: "Ctrl-C",
         meaning: Meaning::Words("cancel"),
         when: When::Draft(State::Running),
-    },
-    Hint {
-        key: "Shift+→",
-        meaning: Meaning::Words("the fence on"),
-        when: When::Fence,
-    },
-    Hint {
-        key: "Shift+←",
-        meaning: Meaning::Words("the fence back"),
-        when: When::Fence,
     },
     Hint {
         key: "↑",
@@ -181,13 +170,6 @@ impl Drawn {
         self.laid
             .iter()
             .find(|laid| laid.band.contains(&row))
-            .map(|laid| laid.entry)
-    }
-
-    fn first(&self, row: u16) -> Option<usize> {
-        self.laid
-            .iter()
-            .find(|laid| laid.head && laid.band.start == row)
             .map(|laid| laid.entry)
     }
 
@@ -349,7 +331,9 @@ pub struct View {
     facts: Facts,
     read: ReadMark,
     mark: Option<Mark>,
-    fence: Option<MarkedFence>,
+    gesture: Option<(Cell, Rect, bool)>,
+    visible: Vec<Line>,
+    visible_band: Option<Rect>,
     files: Files,
     picker: Picker,
     models: Models,
@@ -363,14 +347,6 @@ struct Laid {
     entry: usize,
     band: Range<u16>,
     head: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct MarkedFence {
-    entry: usize,
-    fence: usize,
-    cut: bool,
-    whole: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -418,7 +394,9 @@ impl View {
             facts: Facts::default(),
             read: ReadMark::default(),
             mark: None,
-            fence: None,
+            gesture: None,
+            visible: Vec::new(),
+            visible_band: None,
             files: Files::default(),
             picker: Picker::default(),
             settings: Settings::default(),
@@ -438,6 +416,9 @@ impl View {
     }
 
     fn scrolled(&mut self, scroll: Scroll) {
+        if self.scroll != scroll {
+            self.cancel_selection();
+        }
         self.scroll = scroll;
         if scroll.is_tail() {
             self.landed = 0;
@@ -467,6 +448,7 @@ impl View {
     }
 
     pub fn settle(&mut self) {
+        self.cancel_selection();
         self.rows.retire();
         self.scrolled(Scroll::Tail);
         self.composer.set_state(State::Idle);
@@ -496,6 +478,7 @@ impl View {
     }
 
     pub fn drawn_on(&mut self, capabilities: Capabilities) {
+        self.cancel_selection();
         self.capabilities = capabilities;
     }
 
@@ -549,6 +532,7 @@ impl View {
     }
 
     pub fn stopped(&mut self, stop: &Stop) {
+        self.cancel_selection();
         self.rows.stopped(stop.clone());
         self.scrolled(Scroll::Tail);
     }
@@ -574,12 +558,7 @@ impl View {
             Act::Draft => self.draft(key),
             Act::Complete => self.complete(),
             Act::Up => self.up(),
-            Act::Copy => self.copy(),
             Act::Fold => self.fold(),
-            Act::ExtendDown => self.extend(true),
-            Act::ExtendUp => self.extend(false),
-            Act::SidewaysBack => self.sideways(Sideways::Back),
-            Act::SidewaysForward => self.sideways(Sideways::Forward),
             Act::Drop => self.drop_newest(),
             Act::Keys => self.keys(key),
             Act::Files => self.at(key),
@@ -603,10 +582,14 @@ impl View {
             Act::After => self.prompt(key, Move::Next),
         };
         self.cards.follow(self.composer.text());
+        if outcome != Outcome::Unchanged {
+            self.cancel_selection();
+        }
         outcome
     }
 
     pub fn drag(&mut self, anchor: Cell, head: Cell) {
+        self.gesture = None;
         self.mark = Some(Mark::drag(anchor, head));
     }
 
@@ -615,29 +598,20 @@ impl View {
     }
 
     fn copy(&self) -> Outcome {
-        if let Some(marked) = self.fence.filter(|marked| marked.whole) {
-            let source = self
-                .rows
-                .source(marked.entry, marked.fence)
-                .unwrap_or_default();
-            return match source.is_empty() {
-                true => Outcome::Unchanged,
-                false => Outcome::Copy(source),
-            };
+        let text = self
+            .mark
+            .map(|mark| Span::of(mark, &self.visible).text())
+            .unwrap_or_default();
+        if text.is_empty() {
+            Outcome::Unchanged
+        } else {
+            Outcome::Copy(text)
         }
-        let span = self.drawn.span();
-        if !span.is_empty() {
-            if let Some(entry) = self.covered(span)
-                && let Some(words) = self.rows.folded_prompt(entry)
-            {
-                return Outcome::Copy(words);
-            }
-            return Outcome::Copy(span.text());
-        }
-        match self.rows.last_answer() {
-            Some(answer) => Outcome::Copy(answer),
-            None => Outcome::Unchanged,
-        }
+    }
+
+    fn cancel_selection(&mut self) {
+        self.gesture = None;
+        self.mark = None;
     }
 
     fn covered(&self, span: &Span) -> Option<usize> {
@@ -662,37 +636,6 @@ impl View {
             true => Outcome::Edited,
             false => Outcome::Unchanged,
         }
-    }
-
-    fn extend(&mut self, down: bool) -> Outcome {
-        let Some(mark) = self.mark else {
-            return Outcome::Unchanged;
-        };
-        let grown = mark.grown(down);
-        let grew = grown != mark;
-        self.mark = Some(grown);
-        let opened = self.unfold(grown.head().row);
-        match grew || opened {
-            true => Outcome::Edited,
-            false => Outcome::Unchanged,
-        }
-    }
-
-    fn sideways(&mut self, way: Sideways) -> Outcome {
-        let Some(marked) = self.fence else {
-            return Outcome::Unchanged;
-        };
-        match self.rows.sideways(marked.entry, marked.fence, way) {
-            true => Outcome::Edited,
-            false => Outcome::Unchanged,
-        }
-    }
-
-    fn unfold(&mut self, row: u16) -> bool {
-        let Some(entry) = self.drawn.entry(row) else {
-            return false;
-        };
-        self.rows.open(entry)
     }
 
     fn complete(&mut self) -> Outcome {
@@ -783,7 +726,6 @@ impl View {
         self.scrolled(Scroll::Tail);
         self.facts = self.facts.clone().pulsed(None);
         self.mark = None;
-        self.fence = None;
         self.drawn = Drawn::none();
         self.facts.loaded().clear();
         self.conversation.clear();
@@ -1070,6 +1012,7 @@ impl View {
         if fresh.is_empty() {
             return;
         }
+        self.cancel_selection();
         self.rows.retire();
         for entry in fresh {
             self.rows.push(entry);
@@ -1085,8 +1028,19 @@ impl View {
         if !self.capabilities.reports_pointer() {
             return Outcome::Unchanged;
         }
+        if self
+            .gesture
+            .is_some_and(|(_, band, _)| self.visible_band != Some(band))
+        {
+            self.cancel_selection();
+        }
         match report {
-            Pointer::Wheel(notch) => self.notch(notch),
+            Pointer::Wheel(notch) => {
+                self.cancel_selection();
+                self.notch(notch)
+            }
+            Pointer::Drag(at) => self.dragged(at, false),
+            Pointer::Release(at) => self.released(painted, at),
             Pointer::Press(at) => self.pressed(painted, at),
         }
     }
@@ -1104,11 +1058,14 @@ impl View {
     }
 
     fn pressed(&mut self, painted: &Painted, at: Cell) -> Outcome {
+        self.cancel_selection();
         let Some(layout) = painted.layout() else {
             return Outcome::Unchanged;
         };
         if layout.card.is_none() && layout.transcript.contains(Position::new(at.column, at.row)) {
-            return self.pressed_row(painted.drawn(), layout.transcript, at);
+            self.mark = None;
+            self.gesture = Some((at, layout.transcript, false));
+            return Outcome::Edited;
         }
         let Some(row) = painted.press(at) else {
             return Outcome::Unchanged;
@@ -1119,23 +1076,42 @@ impl View {
         self.key(Key::Enter)
     }
 
-    fn pressed_row(&mut self, drawn: &Drawn, band: Rect, at: Cell) -> Outcome {
-        let Some(row) = at.row.checked_sub(band.y) else {
+    fn dragged(&mut self, at: Cell, releasing: bool) -> Outcome {
+        let Some((anchor, band, moved)) = self.gesture else {
             return Outcome::Unchanged;
         };
-        let Some(entry) = drawn.entry(row) else {
-            return Outcome::Unchanged;
-        };
-        if self.pressed_fold(drawn, entry, row) {
-            return Outcome::Edited;
+        let moved = moved || at != anchor;
+        self.gesture = Some((anchor, band, moved));
+        if moved {
+            let local = |cell: Cell| {
+                Cell::new(
+                    cell.row.clamp(band.y, band.bottom().saturating_sub(1)) - band.y,
+                    cell.column.clamp(band.x, band.right().saturating_sub(1)) - band.x,
+                )
+            };
+            self.mark = Some(Mark::drag(local(anchor), local(at)));
+            if releasing {
+                return self.copy();
+            }
         }
-        let Some(entry) = drawn.first(row) else {
+        Outcome::Edited
+    }
+
+    fn released(&mut self, painted: &Painted, at: Cell) -> Outcome {
+        let Some((anchor, band, moved)) = self.gesture else {
             return Outcome::Unchanged;
         };
-        match self.marked(drawn, entry, band.width) {
-            true => Outcome::Edited,
-            false => Outcome::Unchanged,
-        }
+        let outcome = if moved || at != anchor {
+            self.dragged(at, true)
+        } else {
+            let row = anchor.row - band.y;
+            match painted.drawn().entry(row) {
+                Some(entry) if self.pressed_fold(painted.drawn(), entry, row) => Outcome::Edited,
+                _ => Outcome::Unchanged,
+            }
+        };
+        self.gesture = None;
+        outcome
     }
 
     fn pressed_fold(&mut self, drawn: &Drawn, at: usize, row: u16) -> bool {
@@ -1146,23 +1122,6 @@ impl View {
             return false;
         };
         self.rows.press(at, row)
-    }
-
-    fn marked(&mut self, drawn: &Drawn, at: usize, width: u16) -> bool {
-        if !self.rows.is_answer(at) {
-            return false;
-        }
-        let Some(exchange) = self.rows.exchange(at) else {
-            return false;
-        };
-        let Some(rows) = drawn.rows_of(exchange) else {
-            return false;
-        };
-        self.mark = Some(Mark::drag(
-            Cell::new(rows.start, 0),
-            Cell::new(rows.end.saturating_sub(1), width.saturating_sub(1)),
-        ));
-        true
     }
 
     fn chosen(&mut self, at: usize) -> bool {
@@ -1378,11 +1337,9 @@ impl View {
         }
         let thumb = self.rows.thumb(self.scroll, area.height);
         let window = self.rows.window(self.scroll, area.height);
-        self.fence = None;
         let mut y = area.y;
         let mut lines = Vec::new();
-        let mut lined = Vec::new();
-        let mut strays = false;
+
         let mut drawn = Vec::new();
         let mut placed = Vec::new();
         for piece in window.pieces() {
@@ -1475,31 +1432,32 @@ impl View {
                 if row.picture().is_some() {
                     placed.push((piece.entry, first + offset, y));
                 }
-                if let Some(mark) = self.mark {
-                    lines.push(Line::of(row.glyph_columns(), row.cut(cols)));
-                    let here = row.fence_id().map(|fence| (piece.entry, fence));
-                    let line = row.fence();
-                    lined.push((
-                        line.map(|line| (piece.entry, line.id())),
-                        line.map_or(0, Fence::gutter),
-                    ));
-                    let band = y.saturating_sub(area.y);
-                    if (mark.first()..=mark.last()).contains(&band) {
-                        self.fence = match self.fence {
-                            None => {
-                                fence_under(piece.entry, rows, row, cols).map(|fence| MarkedFence {
-                                    whole: !strays,
-                                    ..fence
-                                })
-                            }
-                            Some(marked) => Some(MarkedFence {
-                                whole: marked.whole && here == Some((marked.entry, marked.fence)),
-                                ..marked
-                            }),
+                let gutter = row.fence().map_or(MARGIN, |fence| fence.gutter());
+                let indentation = row.source().map_or(0, |source| {
+                    source
+                        .chars()
+                        .take_while(|glyph| glyph.is_whitespace())
+                        .count()
+                });
+                let glyphs = row
+                    .glyph_columns()
+                    .into_iter()
+                    .map(|(column, glyph, width)| {
+                        let glyph = if glyph == '│'
+                            && usize::from(column.saturating_sub(gutter)) < indentation
+                        {
+                            ' '
+                        } else {
+                            glyph
                         };
-                        strays |= here.is_none();
-                    }
-                }
+                        (column, glyph, width)
+                    })
+                    .filter(|(column, _, width)| {
+                        *column >= gutter
+                            && column.saturating_add(*width) <= area.width.saturating_sub(MARGIN)
+                    })
+                    .collect();
+                lines.push(Line::of(glyphs, false));
                 y += 1;
             }
             drawn.push(Laid {
@@ -1518,12 +1476,13 @@ impl View {
             }
         }
         self.capabilities.pictures_mut().retain_shown();
-        let taken = match self.fence {
-            Some(marked) if marked.whole => extent(&lined, (marked.entry, marked.fence)),
-            _ => None,
-        };
+        if reflowed || self.visible_band != Some(area) || self.visible != lines {
+            self.cancel_selection();
+        }
+        self.visible_band = Some(area);
+        self.visible = lines;
         let span = match self.mark {
-            Some(mark) => Span::of(widened(mark, taken), &lines),
+            Some(mark) => Span::of(mark, &self.visible),
             None => Span::default(),
         };
         Drawn {
@@ -1838,7 +1797,6 @@ impl View {
                         || !self.cards.card.as_ref().is_some_and(|card| card.refuses()))
             }
             When::Queue => !self.queue.is_empty(),
-            When::Fence => self.fence.is_some_and(|marked| marked.cut),
         }
     }
 
@@ -1859,10 +1817,12 @@ impl View {
 
 impl Deltas for View {
     fn text(&mut self, fragment: &str) {
+        self.cancel_selection();
         self.rows.text(fragment);
     }
 
     fn reasoning(&mut self, fragment: &str) {
+        self.cancel_selection();
         self.rows.reasoning(fragment);
     }
 }
@@ -2073,45 +2033,6 @@ fn whole_row<S: AsRef<str>, D: Copy + Into<Look>>(
         Clip::Whole,
         palette,
     );
-}
-
-fn extent(
-    lined: &[(Option<(usize, usize)>, u16)],
-    fence: (usize, usize),
-) -> Option<(u16, u16, u16)> {
-    let mut taken: Option<(u16, u16, u16)> = None;
-    for (band, (here, gutter)) in lined.iter().enumerate() {
-        if *here != Some(fence) {
-            continue;
-        }
-        let band = u16::try_from(band).unwrap_or(u16::MAX);
-        taken = Some(match taken {
-            None => (band, band, *gutter),
-            Some((first, _, wide)) => (first, band, wide.max(*gutter)),
-        });
-    }
-    taken
-}
-
-fn widened(mark: Mark, taken: Option<(u16, u16, u16)>) -> Mark {
-    match taken {
-        Some((first, last, gutter)) => {
-            Mark::drag(Cell::new(first, gutter), Cell::new(last, u16::MAX))
-        }
-        None => mark,
-    }
-}
-
-fn fence_under(entry: usize, rows: &[Row], at: &Row, room: u16) -> Option<MarkedFence> {
-    let fence = at.fence_id()?;
-    Some(MarkedFence {
-        entry,
-        fence,
-        cut: rows
-            .iter()
-            .any(|line| line.line_of(fence) && line.cut(room)),
-        whole: true,
-    })
 }
 
 fn hints_row(buffer: &mut Buffer, area: Rect, hints: &[Hint], depth: &str, palette: &Palette) {

@@ -40,13 +40,9 @@ const GIVE_BACK_SCREEN: &[u8] = b"\x1b[<u\x1b[?2004l\x1b[?25h\x1b[?1049l";
 /// `CSI ? 1004 l`: the report is given up, or a shell is left sending one.
 const GIVE_UP_FOCUS: &[u8] = b"\x1b[?1004l";
 
-/// `CSI ? 1000 h` and `CSI ? 1006 h`: the terminal reports a press and the wheel in the `SGR`
-/// spelling, which is the one that names the cell a press landed on. Asked of a terminal that
-/// reports a pointer, and of no other.
-const TAKE_POINTER: &[u8] = b"\x1b[?1000h\x1b[?1006h";
+const TAKE_POINTER: &[u8] = b"\x1b[?1002h\x1b[?1006h";
 
-/// `CSI ? 1000 l` and `CSI ? 1006 l`: the report is given up, or a shell is left sending presses.
-const GIVE_UP_POINTER: &[u8] = b"\x1b[?1000l\x1b[?1006l";
+const GIVE_UP_POINTER: &[u8] = b"\x1b[?1002l\x1b[?1006l";
 
 pub(crate) struct Terminal {
     pub(crate) keys: File,

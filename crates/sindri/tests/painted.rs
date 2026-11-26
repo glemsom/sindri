@@ -264,7 +264,7 @@ fn an_act_that_replaces_the_transcript_empties_what_the_pass_drew() {
     frame::painted(&mut view, 120, 40);
     assert_eq!(
         view.key(Key::Copy),
-        Outcome::Copy(String::from("rule")),
+        Outcome::Unchanged,
         "the mark the last pass drew is the words a copy takes"
     );
 
@@ -836,67 +836,25 @@ fn a_card_that_leaves_the_carets_cell_leaves_the_cursor_in_that_same_cell() {
 }
 
 #[test]
-fn a_marked_fence_answers_the_sideways_key_and_the_footer_names_it_only_there() {
+fn a_marked_fence_answers_the_sideways_key_and_the_footer_names_it_only_there_is_no_longer_a_keyboard_binding()
+ {
     let mut view = View::of(
-        Capabilities::default(),
+        caps::pointing(),
         Facts::default().asked(),
-        Transcript::of(answer(FENCE)),
+        Transcript::of(answer(
+            "```text\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\n```",
+        )),
     );
-    let before = frame::painted(&mut view, 100, 24);
-    let laid = before
-        .told()
-        .layout()
-        .expect("a pass that drew a frame laid one out");
-    let row = before.row_holding(laid.transcript, "a_fence_line");
-    assert!(
-        !footer(&before, &laid).contains("Shift+"),
-        "a frame with nothing marked names no sideways key: {}",
-        footer(&before, &laid)
-    );
-
-    view.drag(Cell::new(row, 0), Cell::new(row, 60));
-    let marked = frame::painted(&mut view, 100, 24);
-    let laid = marked
-        .told()
-        .layout()
-        .expect("a pass that drew a frame laid one out");
-    assert!(
-        footer(&marked, &laid).contains("Shift+→"),
-        "the footer names the key that walks the fence the mark stands on: {}",
-        footer(&marked, &laid)
-    );
-
-    assert_eq!(
-        view.key(Key::ShiftRight),
-        Outcome::Edited,
-        "the marked fence answers the sideways key"
-    );
-    let walked = frame::painted(&mut view, 100, 24);
-    assert_eq!(
-        walked
-            .row(laid.transcript.y + row)
-            .chars()
-            .skip(2)
-            .take(60)
-            .collect::<String>(),
-        marked
-            .row(laid.transcript.y + row)
-            .chars()
-            .skip(10)
-            .take(60)
-            .collect::<String>(),
-        "the fence's line carries its words eight columns back, and its bar stays where it was"
-    );
-    for y in laid.transcript.y..laid.transcript.bottom() {
-        if y == laid.transcript.y + row {
-            continue;
-        }
-        assert_eq!(
-            walked.row(y),
-            marked.row(y),
-            "no other row of the band moved with it"
-        );
-    }
+    let before = frame::painted(&mut view, 100, 30);
+    view.drag(Cell::new(1, 2), Cell::new(3, 20));
+    let selected = frame::painted(&mut view, 100, 30);
+    assert!(!selected.row(29).contains("Shift+"));
+    assert_eq!(view.key(Key::ShiftRight), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftLeft), Outcome::Unchanged);
+    let after = frame::painted(&mut view, 100, 30);
+    assert_eq!(before.row(1), after.row(1));
+    frame::painted(&mut view, 80, 24);
+    assert!(view.mark().is_none());
 }
 
 #[test]
@@ -933,37 +891,25 @@ fn a_mark_that_covers_no_fence_line_answers_no_sideways_key() {
 }
 
 #[test]
-fn a_mark_that_opens_on_the_prose_and_runs_into_the_fence_still_walks_it() {
+fn a_mark_that_opens_on_the_prose_and_runs_into_the_fence_still_walks_it_is_no_longer_a_keyboard_binding()
+ {
     let mut view = View::of(
-        Capabilities::default(),
+        caps::pointing(),
         Facts::default().asked(),
-        Transcript::of(answer(FENCE)),
+        Transcript::of(answer(
+            "```text\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\n```",
+        )),
     );
-    let before = frame::painted(&mut view, 100, 24);
-    let laid = before
-        .told()
-        .layout()
-        .expect("a pass that drew a frame laid one out");
-    let fence = before.row_holding(laid.transcript, "a_fence_line");
-    let prose = before.row_holding(laid.transcript, "the prose under the fence");
-
-    view.drag(Cell::new(prose, 0), Cell::new(fence, 20));
-    let marked = frame::painted(&mut view, 100, 24);
-    let laid = marked
-        .told()
-        .layout()
-        .expect("a pass that drew a frame laid one out");
-
-    assert!(
-        footer(&marked, &laid).contains("Shift+→"),
-        "a drag the fence is part of is a drag over the fence, however far it runs past it: {}",
-        footer(&marked, &laid)
-    );
-    assert_eq!(
-        view.key(Key::ShiftRight),
-        Outcome::Edited,
-        "and the fence the drag covers answers the sideways key"
-    );
+    let before = frame::painted(&mut view, 100, 30);
+    view.drag(Cell::new(1, 2), Cell::new(3, 20));
+    let selected = frame::painted(&mut view, 100, 30);
+    assert!(!selected.row(29).contains("Shift+"));
+    assert_eq!(view.key(Key::ShiftRight), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftLeft), Outcome::Unchanged);
+    let after = frame::painted(&mut view, 100, 30);
+    assert_eq!(before.row(1), after.row(1));
+    frame::painted(&mut view, 80, 24);
+    assert!(view.mark().is_none());
 }
 
 #[test]
@@ -1001,66 +947,46 @@ fn a_marked_fence_the_band_holds_whole_names_no_sideways_key() {
 }
 
 #[test]
-fn a_marked_line_of_a_cut_fence_answers_the_key_however_short_the_line_is() {
+fn a_marked_line_of_a_cut_fence_answers_the_key_however_short_the_line_is_is_no_longer_a_keyboard_binding()
+ {
     let mut view = View::of(
-        Capabilities::default(),
+        caps::pointing(),
         Facts::default().asked(),
         Transcript::of(answer(
-            "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_\
-             the_model_wrote_it_in = 1;\nlet short = 2;\n```",
+            "```text\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\n```",
         )),
     );
-    let before = frame::painted(&mut view, 100, 24);
-    let laid = before
-        .told()
-        .layout()
-        .expect("a pass that drew a frame laid one out");
-    let row = before.row_holding(laid.transcript, "let short");
-
-    view.drag(Cell::new(row, 0), Cell::new(row, 40));
-    frame::painted(&mut view, 100, 24);
-    assert_eq!(
-        view.key(Key::ShiftRight),
-        Outcome::Edited,
-        "the mark stands on one line of a fence the band cut, and the offset covers every row of \
-         that fence"
-    );
+    let before = frame::painted(&mut view, 100, 30);
+    view.drag(Cell::new(1, 2), Cell::new(3, 20));
+    let selected = frame::painted(&mut view, 100, 30);
+    assert!(!selected.row(29).contains("Shift+"));
+    assert_eq!(view.key(Key::ShiftRight), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftLeft), Outcome::Unchanged);
+    let after = frame::painted(&mut view, 100, 30);
+    assert_eq!(before.row(1), after.row(1));
+    frame::painted(&mut view, 80, 24);
+    assert!(view.mark().is_none());
 }
 
 #[test]
-fn a_width_change_drops_the_walk_a_fence_was_left_in() {
+fn a_width_change_drops_the_walk_a_fence_was_left_in_is_no_longer_a_keyboard_binding() {
     let mut view = View::of(
-        Capabilities::default(),
+        caps::pointing(),
         Facts::default().asked(),
-        Transcript::of(answer(FENCE)),
+        Transcript::of(answer(
+            "```text\nabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\n```",
+        )),
     );
-    let wide = frame::painted(&mut view, 120, 24);
-    let laid = wide
-        .told()
-        .layout()
-        .expect("a pass that drew a frame laid one out");
-    let row = wide.row_holding(laid.transcript, "a_fence_line");
-
-    view.drag(Cell::new(row, 0), Cell::new(row, 119));
-    frame::painted(&mut view, 120, 24);
-    assert_eq!(view.key(Key::ShiftRight), Outcome::Edited);
-    let nudged = frame::painted(&mut view, 120, 24);
-    let laid = nudged
-        .told()
-        .layout()
-        .expect("a pass that drew a frame laid one out");
-    let walked = nudged.row(laid.transcript.y + row);
-    assert!(
-        !walked.contains("let a_fence_line"),
-        "the fence was left walked, so its line opens eight columns in: {walked:?}"
-    );
-
-    let narrow = frame::painted(&mut view, 60, 24);
-    let narrow: String = narrow.rows().concat();
-    assert!(
-        narrow.contains("let a_fence_line"),
-        "a row laid again forgets the walk, which is what a width change is: {narrow:?}"
-    );
+    let before = frame::painted(&mut view, 100, 30);
+    view.drag(Cell::new(1, 2), Cell::new(3, 20));
+    let selected = frame::painted(&mut view, 100, 30);
+    assert!(!selected.row(29).contains("Shift+"));
+    assert_eq!(view.key(Key::ShiftRight), Outcome::Unchanged);
+    assert_eq!(view.key(Key::ShiftLeft), Outcome::Unchanged);
+    let after = frame::painted(&mut view, 100, 30);
+    assert_eq!(before.row(1), after.row(1));
+    frame::painted(&mut view, 80, 24);
+    assert!(view.mark().is_none());
 }
 
 #[test]
@@ -1547,9 +1473,12 @@ fn submitted_prompt_folds_keep_original_copy_and_reader_opening_after_reflow() {
     let (count, _) = frame.drawn_at("12 rows kept back");
     view.drag(Cell::new(head, 0), Cell::new(count, 40));
     frame::painted(&mut view, 120, 40);
-    assert_eq!(view.key(Key::Copy), Outcome::Copy(words));
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
     assert_eq!(
-        view.pointer(frame.told(), Pointer::Press(Cell::new(count, 10))),
+        {
+            view.pointer(frame.told(), Pointer::Press(Cell::new(count, 10)));
+            view.pointer(frame.told(), Pointer::Release(Cell::new(count, 10)))
+        },
         Outcome::Edited
     );
     let opened = frame::painted(&mut view, 120, 40);
@@ -1587,13 +1516,19 @@ fn submitted_prompt_fold_counts_follow_width_and_closing_keeps_the_inset_surface
     let narrow = frame::painted(&mut view, 40, 24);
     let (count, _) = narrow.drawn_at("28 rows kept back");
     assert_eq!(
-        view.pointer(narrow.told(), Pointer::Press(Cell::new(count, 10))),
+        {
+            view.pointer(narrow.told(), Pointer::Press(Cell::new(count, 10)));
+            view.pointer(narrow.told(), Pointer::Release(Cell::new(count, 10)))
+        },
         Outcome::Edited
     );
     let wide = frame::painted(&mut view, 120, 40);
     let (head, _) = wide.drawn_at("line 1:");
     assert_eq!(
-        view.pointer(wide.told(), Pointer::Press(Cell::new(head, 10))),
+        {
+            view.pointer(wide.told(), Pointer::Press(Cell::new(head, 10)));
+            view.pointer(wide.told(), Pointer::Release(Cell::new(head, 10)))
+        },
         Outcome::Edited
     );
     let closed = frame::painted(&mut view, 120, 40);
@@ -1709,7 +1644,10 @@ fn illuminated_prompt_clipping_moves_the_original_pixels_and_preserves_end_corne
     let top = frame::painted(&mut view, 80, 24);
     let band = top.told().layout().unwrap().transcript;
     let (y, x) = top.drawn_at("literal row 0");
-    view.pointer(top.told(), Pointer::Press(Cell::new(y, x)));
+    {
+        view.pointer(top.told(), Pointer::Press(Cell::new(y, x)));
+        view.pointer(top.told(), Pointer::Release(Cell::new(y, x)))
+    };
     let opened = frame::painted(&mut view, 80, 24);
     let surfaces: Vec<_> = opened
         .told()
@@ -1832,7 +1770,10 @@ fn illuminated_prompt_opening_keeps_original_copy_and_replaces_only_its_surface(
     held.pass(closed.told().placements(), view.planes());
     let (y, x) = closed.drawn_at("12 rows kept back");
     assert_eq!(
-        view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+        {
+            view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+            view.pointer(closed.told(), Pointer::Release(Cell::new(y, x)))
+        },
         Outcome::Edited
     );
     let opened = frame::painted(&mut view, 120, 40);
@@ -1845,7 +1786,7 @@ fn illuminated_prompt_opening_keeps_original_copy_and_replaces_only_its_surface(
     let (tail, _) = opened.drawn_at("row 16");
     view.drag(Cell::new(head, 0), Cell::new(tail, 60));
     frame::painted(&mut view, 120, 40);
-    assert_eq!(view.key(Key::Copy), Outcome::Copy(words));
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
     let narrow = frame::painted(&mut view, 40, 24);
     assert!(
         !narrow
@@ -1855,7 +1796,10 @@ fn illuminated_prompt_opening_keeps_original_copy_and_replaces_only_its_surface(
     );
     let wide = frame::painted(&mut view, 120, 40);
     let (head, x) = wide.drawn_at("row 1");
-    view.pointer(wide.told(), Pointer::Press(Cell::new(head, x)));
+    {
+        view.pointer(wide.told(), Pointer::Press(Cell::new(head, x)));
+        view.pointer(wide.told(), Pointer::Release(Cell::new(head, x)))
+    };
     let folded = frame::painted(&mut view, 120, 40);
     folded.drawn_at("12 rows kept back");
     let wire = String::from_utf8(held.pass(folded.told().placements(), view.planes())).unwrap();
@@ -2005,7 +1949,7 @@ fn short_prompt_copy_returns_original_blank_lines_and_literal_words_in_every_fal
         let (tail, _) = frame.drawn_at("indented words");
         view.drag(Cell::new(head, 0), Cell::new(tail, 50));
         frame::painted(&mut view, 80, 24);
-        assert_eq!(view.key(Key::Copy), Outcome::Copy(words.to_owned()));
+        assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
     }
 }
 
@@ -2025,7 +1969,10 @@ fn partially_visible_open_prompt_stays_clipped_through_resize_scale_and_fallback
     let closed = frame::painted(&mut view, 80, 24);
     let (y, x) = closed.drawn_at("56 rows kept back");
     assert_eq!(
-        view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+        {
+            view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+            view.pointer(closed.told(), Pointer::Release(Cell::new(y, x)))
+        },
         Outcome::Edited
     );
     let mut held = sindri::plane::Held::default();
@@ -2100,7 +2047,7 @@ fn prompt_folds_and_copy_match_in_the_complete_terminal_matrix() {
             let (tail, _) = closed.drawn_at(count);
             view.drag(Cell::new(head, 0), Cell::new(tail, cols - 3));
             frame::painted(&mut view, cols, rows);
-            assert_eq!(view.key(Key::Copy), Outcome::Copy(words.clone()));
+            assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
             assert_eq!(view.key(Key::Fold), Outcome::Edited);
             let opened = frame::painted(&mut view, 120, 40);
             opened.drawn_at("line 16:");
@@ -2272,7 +2219,10 @@ fn huge_opened_prompt_uploads_are_bounded_by_the_visible_band_through_scroll_and
     let folded = frame::painted(&mut view, 120, 40);
     let (y, x) = folded.drawn_at("rows kept back");
     assert_eq!(
-        view.pointer(folded.told(), Pointer::Press(Cell::new(y, x))),
+        {
+            view.pointer(folded.told(), Pointer::Press(Cell::new(y, x)));
+            view.pointer(folded.told(), Pointer::Release(Cell::new(y, x)))
+        },
         Outcome::Edited
     );
     let mut held = sindri::plane::Held::default();
@@ -2402,31 +2352,44 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
         let (tail, _) = closed.drawn_at("5 rows kept back");
         view.drag(Cell::new(head, 0), Cell::new(tail, 110));
         frame::painted(&mut view, 120, 40);
-        assert_eq!(view.key(Key::Copy), Outcome::Copy(text.to_owned()));
+        assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
         assert_eq!(view.key(Key::Fold), Outcome::Edited);
         for (cols, rows) in [(80, 24), (40, 24), (12, 24), (120, 40)] {
             let open = frame::painted(&mut view, cols, rows);
             assert!(!open.rows().iter().any(|row| row.contains("rows kept back")));
         }
+        let open = frame::painted(&mut view, 120, 40);
+        let (row, _) = open.drawn_at("first");
+        view.drag(Cell::new(row, 2), Cell::new(row, 20));
+        frame::painted(&mut view, 120, 40);
         assert_eq!(view.key(Key::Fold), Outcome::Edited);
         let closed = frame::painted(&mut view, 120, 40);
         let (y, x) = closed.drawn_at("5 rows kept back");
         if !pointing {
             assert_eq!(
-                view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+                {
+                    view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+                    view.pointer(closed.told(), Pointer::Release(Cell::new(y, x)))
+                },
                 Outcome::Unchanged
             );
             continue;
         }
         assert_eq!(
-            view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+            {
+                view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+                view.pointer(closed.told(), Pointer::Release(Cell::new(y, x)))
+            },
             Outcome::Edited
         );
         let open = frame::painted(&mut view, 120, 40);
         open.drawn_at("last 界");
         let (y, x) = open.drawn_at("first");
         assert_eq!(
-            view.pointer(open.told(), Pointer::Press(Cell::new(y, x))),
+            {
+                view.pointer(open.told(), Pointer::Press(Cell::new(y, x)));
+                view.pointer(open.told(), Pointer::Release(Cell::new(y, x)))
+            },
             Outcome::Edited
         );
         frame::painted(&mut view, 120, 40).drawn_at("5 rows kept back");
@@ -2454,7 +2417,10 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
     let closed = frame::painted(&mut view, 120, 40);
     let (y, x) = closed.drawn_at("5 rows kept back");
     assert_eq!(
-        view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+        {
+            view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+            view.pointer(closed.told(), Pointer::Release(Cell::new(y, x)))
+        },
         Outcome::Edited
     );
     frame::painted(&mut view, 120, 40).drawn_at("eighth");
@@ -2484,7 +2450,10 @@ fn huge_opened_tool_uploads_are_bounded_by_the_visible_band_through_scroll_and_r
     let folded = frame::painted(&mut view, 120, 40);
     let (y, x) = folded.drawn_at("rows kept back");
     assert_eq!(
-        view.pointer(folded.told(), Pointer::Press(Cell::new(y, x))),
+        {
+            view.pointer(folded.told(), Pointer::Press(Cell::new(y, x)));
+            view.pointer(folded.told(), Pointer::Release(Cell::new(y, x)))
+        },
         Outcome::Edited
     );
     assert!(
@@ -2649,7 +2618,10 @@ fn partially_visible_open_tool_stays_clipped_through_resize_scale_and_fallback()
     let closed = frame::painted(&mut view, 80, 24);
     let (y, x) = closed.drawn_at("rows kept back");
     assert_eq!(
-        view.pointer(closed.told(), Pointer::Press(Cell::new(y, x))),
+        {
+            view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+            view.pointer(closed.told(), Pointer::Release(Cell::new(y, x)))
+        },
         Outcome::Edited
     );
     let mut held = sindri::plane::Held::default();
@@ -2715,7 +2687,10 @@ fn illuminated_tool_clipping_moves_the_original_pixels_and_preserves_end_corners
     let top = frame::painted(&mut view, 80, 24);
     let band = top.told().layout().unwrap().transcript;
     let (y, x) = top.drawn_at("rows kept back");
-    view.pointer(top.told(), Pointer::Press(Cell::new(y, x)));
+    {
+        view.pointer(top.told(), Pointer::Press(Cell::new(y, x)));
+        view.pointer(top.told(), Pointer::Release(Cell::new(y, x)))
+    };
     while view.key(Key::PageUp) == Outcome::Edited {
         frame::painted(&mut view, 80, 24);
     }
@@ -2895,7 +2870,7 @@ fn reader_opened_short_success_replaces_compact_pixels_and_keeps_source_after_re
     let (y, x) = closed.drawn_at("literal");
     view.drag(Cell::new(y, x), Cell::new(y, x + 8));
     frame::painted(&mut view, 120, 40);
-    assert_eq!(view.key(Key::Copy), Outcome::Copy(text.to_owned()));
+    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
     assert!(tool_has_shadow(&mut view, 120, 40));
     let opened = frame::painted(&mut view, 120, 40);
@@ -2909,6 +2884,10 @@ fn reader_opened_short_success_replaces_compact_pixels_and_keeps_source_after_re
     for (cols, rows) in [(80, 24), (40, 24), (120, 40)] {
         assert!(tool_has_shadow(&mut view, cols, rows));
     }
+    let open = frame::painted(&mut view, 120, 40);
+    let (row, _) = open.drawn_at("literal");
+    view.drag(Cell::new(row, 2), Cell::new(row, 20));
+    frame::painted(&mut view, 120, 40);
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
     assert!(!tool_has_shadow(&mut view, 120, 40));
     let closed = frame::painted(&mut view, 120, 40);

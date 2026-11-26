@@ -38,17 +38,6 @@ impl Mark {
     pub fn last(self) -> u16 {
         self.anchor.row.max(self.head.row)
     }
-
-    pub fn grown(self, down: bool) -> Mark {
-        let row = match down {
-            true => self.head.row.saturating_add(1),
-            false => self.head.row.saturating_sub(1),
-        };
-        Mark {
-            head: Cell { row, ..self.head },
-            ..self
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -82,7 +71,7 @@ impl Marked {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Line {
     glyphs: Vec<Glyph>,
     cut: bool,
@@ -98,16 +87,20 @@ impl Span {
     pub fn of(mark: Mark, lines: &[Line]) -> Span {
         let first = mark.first();
         let last = mark.last();
-        let from = mark.anchor.column.min(mark.head.column);
-        let to = mark.anchor.column.max(mark.head.column);
+        let (start, end) =
+            if (mark.anchor.row, mark.anchor.column) <= (mark.head.row, mark.head.column) {
+                (mark.anchor, mark.head)
+            } else {
+                (mark.head, mark.anchor)
+            };
         let mut rows = Vec::new();
         for row in first..=last {
             let Some(line) = lines.get(usize::from(row)) else {
                 continue;
             };
-            if let Some(marked) = marked_row(row, &line.glyphs, from, to, line.cut) {
-                rows.push(marked);
-            }
+            let from = if row == first { start.column } else { 0 };
+            let to = if row == last { end.column } else { u16::MAX };
+            rows.push(marked_row(row, &line.glyphs, from, to));
         }
         Span { rows }
     }
@@ -125,36 +118,25 @@ impl Span {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.rows.is_empty()
+        self.text().is_empty()
     }
 }
 
-fn marked_row(row: u16, line: &[Glyph], from: u16, to: u16, cut: bool) -> Option<Marked> {
-    let to = match cut {
-        true => u16::MAX,
-        false => to,
-    };
+fn marked_row(row: u16, line: &[Glyph], from: u16, to: u16) -> Marked {
     let kept: Vec<&Glyph> = line
         .iter()
         .filter(|(column, _, width)| column.saturating_add(*width) > from && *column <= to)
         .collect();
-    let first = kept
-        .iter()
-        .position(|(_, glyph, _)| !glyph.is_whitespace())?;
-    let last = kept
-        .iter()
-        .rposition(|(_, glyph, _)| !glyph.is_whitespace())?;
-    let left = kept[first].0;
-    let (end, _, width) = *kept[last];
-    Some(Marked {
+    let left = kept.first().map_or(from, |glyph| glyph.0);
+    let end = kept
+        .last()
+        .map_or(left, |glyph| glyph.0.saturating_add(glyph.2));
+    Marked {
         row,
         left,
-        width: end.saturating_add(width).saturating_sub(left),
-        glyphs: kept[first..=last]
-            .iter()
-            .map(|(_, glyph, _)| *glyph)
-            .collect(),
-    })
+        width: end.saturating_sub(left),
+        glyphs: kept.iter().map(|(_, glyph, _)| *glyph).collect(),
+    }
 }
 
 #[cfg(test)]
