@@ -34,6 +34,11 @@ use crate::wire::Wire;
 
 pub use crate::turn::{Call, Turn, Usage};
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct Responses(AssistantMessage);
+
+impl Eq for Responses {}
+
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Credential(Option<String>);
 
@@ -176,6 +181,17 @@ impl Ask {
         }
         let mut options = GenerationOptions::default();
         options.reasoning = self.thinking.then_some(Reasoning::Effort(Effort::High));
+        if self.endpoint.route_of(&self.model) == Some(Route::Responses) {
+            use rig_core::completion::ProviderOptions;
+            use rig_core::providers::openai::extension::{OpenAiExt, OpenAiOptions, OpenAiShared};
+            request = request.provider_options(
+                ProviderOptions::new()
+                    .with::<OpenAiExt>(
+                        &OpenAiOptions::default().shared(OpenAiShared::default().store(false)),
+                    )
+                    .expect("typed OpenAI options"),
+            );
+        }
         request.options(options)
     }
 }
@@ -203,10 +219,15 @@ fn turn_messages(turn: &Turn) -> Vec<Message> {
             is_error: false,
         });
     }
-    if content.is_empty() {
+    if content.is_empty() && turn.responses.is_none() {
         return Vec::new();
     }
-    let mut messages = vec![Message::Assistant(AssistantMessage::new(content))];
+    let assistant = turn
+        .responses
+        .as_ref()
+        .map(|message| Message::Assistant(message.0.clone()))
+        .unwrap_or_else(|| Message::Assistant(AssistantMessage::new(content)));
+    let mut messages = vec![assistant];
     if !results.is_empty() {
         messages.push(Message::tool_results(results));
     }
@@ -229,6 +250,7 @@ impl Deltas for () {
 pub struct Answer {
     pub text: String,
     pub reasoning: Option<String>,
+    pub responses: Option<Responses>,
     pub calls: Vec<Call>,
     pub usage: Usage,
 }
@@ -254,6 +276,14 @@ impl From<&CompletionResponse> for Answer {
         Self {
             text,
             reasoning: (!reasoning.is_empty()).then_some(reasoning),
+            responses: if response.origin.api.as_str() == "openai.responses" {
+                response.message().and_then(|message| match message {
+                    Message::Assistant(assistant) => Some(Responses(assistant)),
+                    _ => None,
+                })
+            } else {
+                None
+            },
             calls,
             usage: Usage {
                 input: response.usage.input_tokens,
@@ -558,6 +588,14 @@ impl Client {
                 .finish()
                 .await
                 .map_err(|error| Failure::from_wire(error, streamed, secrets))?;
+            if finished.stop().is_failure() {
+                return Err(Failure {
+                    verdict: Verdict::Broken,
+                    retryable: false,
+                    streamed,
+                    message: secrets.redact("the wire did not complete its response items"),
+                });
+            }
             Ok(Answer::from(&finished))
         })
     }

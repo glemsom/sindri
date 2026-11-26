@@ -418,6 +418,7 @@ fn a_run_keeps_the_reasoning_its_reply_brought_beside_the_turn_it_produced() {
         "why does the retry test fail?",
         Scripted::answering([Reply {
             reasoning: Some(String::from("read the retry helper first")),
+            responses: None,
             ..Reply::answer("it was the retry")
         }]),
         Tools::cheap(),
@@ -542,6 +543,7 @@ fn a_responder_is_handed_the_very_turn_the_run_keeps() {
             exit: Exit::Code(0),
         }],
         reasoning: None,
+        responses: None,
         usage: Usage {
             input: Some(1_200),
             output: Some(20),
@@ -610,6 +612,7 @@ fn a_run_keeps_the_very_turn_it_took() {
             exit: Exit::Code(0),
         }],
         reasoning: None,
+        responses: None,
         usage: Usage {
             input: Some(1_200),
             output: Some(20),

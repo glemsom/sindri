@@ -57,6 +57,7 @@ impl From<Answer> for Reply {
         Reply {
             text: answer.text,
             reasoning: answer.reasoning,
+            responses: answer.responses,
             calls: answer.calls,
             usage: answer.usage,
         }

@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::provider::Responses;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Turn {
     pub turn: u32,
@@ -10,6 +12,7 @@ pub struct Turn {
     pub calls: Vec<Call>,
     pub results: Vec<Acted>,
     pub reasoning: Option<String>,
+    pub responses: Option<Responses>,
     pub usage: Usage,
 }
 
@@ -22,6 +25,7 @@ impl Turn {
             calls: Vec::new(),
             results: Vec::new(),
             reasoning: None,
+            responses: None,
             usage: Usage::default(),
         }
     }

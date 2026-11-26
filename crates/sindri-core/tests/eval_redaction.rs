@@ -144,6 +144,7 @@ fn written(ground: &Ground) -> Vec<String> {
                 exit: Exit::Code(0),
             }],
             reasoning: Some(format!("the key is {SECRET}, so read the file")),
+            responses: None,
             ..Turn::answered(
                 1,
                 format!("the key is {SECRET}, so triage this"),

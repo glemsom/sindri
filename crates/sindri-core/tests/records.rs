@@ -795,6 +795,7 @@ fn a_turn_written_and_read_back_shows_every_entry_kind_a_turn_can_produce() {
                 },
             ],
             reasoning: Some(String::from("list both before answering")),
+            responses: None,
             usage: Usage::default(),
         })
         .expect("a turn is written whole");
@@ -1048,6 +1049,7 @@ fn no_line_of_the_record_carries_a_secret() {
                 exit: Exit::Code(0),
             }],
             reasoning: Some(String::from("the key is hunter2, so read the file")),
+            responses: None,
             ..Turn::answered(
                 1,
                 "the key is hunter2, so triage this",
