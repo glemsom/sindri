@@ -46,7 +46,7 @@ fn main() -> ExitCode {
     }
 
     if asked.is_none() && batch::stdin_is_terminal() {
-        return tui::run(&cli, first_run.config());
+        return tui::run(&cli, &first_run);
     }
 
     if first_run.config().missing().contains(&"api_key") {
@@ -80,12 +80,12 @@ fn main() -> ExitCode {
     }
 
     match asked {
-        Some(job) => batch::run(job, &cli, first_run.config()),
+        Some(job) => batch::run(job, &cli, &first_run),
         None if !batch::stdin_is_terminal() => refuse(
             "a pipe is context for a prompt, and a prompt is what -b is for",
             USAGE,
         ),
-        None => tui::run(&cli, first_run.config()),
+        None => tui::run(&cli, &first_run),
     }
 }
 

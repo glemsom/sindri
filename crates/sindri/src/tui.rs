@@ -38,7 +38,8 @@ const MODEL: &str = "model";
 
 const GRACE: Duration = Duration::from_secs(2);
 
-pub fn run(cli: &Cli, config: &Config) -> ExitCode {
+pub fn run(cli: &Cli, first_run: &sindri_core::first_run::FirstRun) -> ExitCode {
+    let config = first_run.config();
     if let Some(reason) = missing_terminal() {
         return crate::refuse(&reason, USAGE);
     }
@@ -117,6 +118,7 @@ pub fn run(cli: &Cli, config: &Config) -> ExitCode {
             return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
         }
     };
+    live.first_run = Some(first_run);
     if let Err(error) = live.paint() {
         return crate::refuse(&format!("the frame could not be painted: {error}"), SETUP);
     }
@@ -152,6 +154,7 @@ struct Loop<'a> {
     view: View,
     cli: &'a Cli,
     config: Config,
+    first_run: Option<&'a sindri_core::first_run::FirstRun>,
     environment: &'a dyn Environment,
     telling: Window<File>,
     launch: Option<Launch>,
@@ -200,6 +203,7 @@ impl<'a> Loop<'a> {
             view,
             cli,
             config,
+            first_run: None,
             environment,
             telling,
             launch: None,
@@ -430,13 +434,23 @@ impl<'a> Loop<'a> {
                 if let Some(mut ended) = ended {
                     ended.close();
                 }
-                match Launch::open(
-                    &Machine::this(),
-                    &self.config,
-                    self.cli.enforcement(),
-                    FrontEnd::Terminal,
-                    Some(Arc::new(self.opener.clone())),
-                ) {
+                let opened = match self.first_run {
+                    Some(first_run) => first_run.open(
+                        &Machine::this(),
+                        &self.config,
+                        self.cli.enforcement(),
+                        FrontEnd::Terminal,
+                        Some(Arc::new(self.opener.clone())),
+                    ),
+                    None => Launch::open(
+                        &Machine::this(),
+                        &self.config,
+                        self.cli.enforcement(),
+                        FrontEnd::Terminal,
+                        Some(Arc::new(self.opener.clone())),
+                    ),
+                };
+                match opened {
                     Ok(opened) => opened,
                     Err(refusal) => {
                         self.view.run_refused(refusal.message(), prompt);

@@ -2,7 +2,8 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use sindri_core::config::{Config, Process};
+use sindri_core::config::Process;
+use sindri_core::first_run::FirstRun;
 use sindri_core::launch::{Launch, Machine};
 use sindri_core::policy::Enforcement;
 use sindri_core::skills::{Diagnostic, Listing};
@@ -21,13 +22,13 @@ const LABEL: u16 = 14;
 const SCOPE_COLUMN: u16 = 9;
 
 pub fn run(cli: &Cli) -> ExitCode {
-    let config = match Config::resolve(&Process, cli.flags()) {
+    let first_run = match FirstRun::resolve(&Process, cli.flags()) {
         Ok(config) => config,
         Err(error) => return refuse(&error.to_string(), error.exit_code()),
     };
-    let launch = match Launch::open(
+    let launch = match first_run.open(
         &Machine::this(),
-        &config,
+        first_run.config(),
         cli.enforcement(),
         FrontEnd::Batch,
         None,

@@ -1275,7 +1275,10 @@ fn nested_sandbox_child_preserves_the_writable_boundary() {
 
 fn single_child(sandboxed: bool) {
     let ground = Ground::new();
-    let recipe = group_recipe("'child-only-brief'");
+    let recipe = group_recipe("'child-only-brief'").replace(
+        "env -i",
+        "env -i HOME=/nonexistent XDG_STATE_HOME=/nonexistent SINDRI_MODEL=conflicting SINDRI_MAX_TURNS=1",
+    );
     let mut runner = format!(
         "cat > \"$TMPDIR/runner.sh\" <<'RUNNER'\n{recipe}\nRUNNER\nbash \"$TMPDIR/runner.sh\"; cp -R \"$TMPDIR/children/sindri/sessions\" child-sessions"
     );
@@ -1295,6 +1298,14 @@ fn single_child(sandboxed: bool) {
         );
     }
 
+    if !sandboxed {
+        runner = format!("cd {}; {runner}", outside.display());
+        runner = runner.replace(
+            "cp -R",
+            &format!("cd {}; cp -R", ground.workspace.display()),
+        );
+    }
+
     let artifact = ground.workspace.join("shared-deliverable.txt");
     let child_command = if sandboxed {
         format!(
@@ -1303,16 +1314,24 @@ fn single_child(sandboxed: bool) {
             artifact.display()
         )
     } else {
-        "printf authorized > child-edit.txt".to_owned()
+        format!(
+            "printf authorized > {}; printf relative > relative.txt",
+            ground.workspace.join("child-edit.txt").display()
+        )
     };
     let repo_skill = ground.workspace.join(".agents/skills/local-check");
     std::fs::create_dir_all(&repo_skill).unwrap();
     std::fs::write(
         repo_skill.join("SKILL.md"),
-        "---\nname: local-check\ndescription: local check\n---\n# Local check\n",
+        "---\nname: local-check\ndescription: local check\n---\n# Local check\nparent-loaded-marker\n",
     )
     .unwrap();
+    let skill_body = TOOL_USE
+        .replace("\"name\":\"bash\"", "\"name\":\"skill\"")
+        .replace("command", "name")
+        .replace("ls", "local-check");
     let wire = Wire::answering(vec![
+        Reply::stream(Box::leak(skill_body.into_boxed_str())),
         bash_reply(&runner),
         bash_reply(&child_command),
         Reply::stream(ANTHROPIC),
@@ -1346,14 +1365,16 @@ fn single_child(sandboxed: bool) {
     let requests = wire.requests();
     assert_eq!(
         requests.len(),
-        4,
+        5,
         "{}",
         std::fs::read_to_string(ground.session().join("transcript.jsonl")).unwrap()
     );
-    assert!(requests[1].contains("child-only-brief"));
-    assert!(!requests[1].contains("parent-private-history"));
-    assert!(requests[1].contains("cli-child-secret"));
-    assert!(requests[1].contains("local-check"));
+    assert!(requests[2].contains("child-only-brief"));
+    assert!(!requests[2].contains("parent-private-history"));
+    assert!(requests[2].contains("cli-child-secret"));
+    assert!(requests[2].contains("local-check"));
+    assert!(requests[1].contains("parent-loaded-marker"));
+    assert!(!requests[2].contains("parent-loaded-marker"));
     let children = std::fs::read_dir(ground.workspace.join("child-sessions"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
@@ -1364,6 +1385,13 @@ fn single_child(sandboxed: bool) {
     assert!(child_document.contains("claude-sonnet-4-6"));
     assert!(!child_document.contains("cli-child-secret"));
     let document: serde_json::Value = serde_json::from_str(&child_document).unwrap();
+    assert_eq!(document["workspace"], outside.to_str().unwrap());
+    if !sandboxed {
+        assert_eq!(
+            std::fs::read_to_string(outside.join("relative.txt")).unwrap(),
+            "relative"
+        );
+    }
     assert_eq!(document["policy"]["timeout_seconds"], 40);
     assert_eq!(document["policy"]["command_budget_ms"], 60000);
     assert_eq!(document["policy"]["output_budget_bytes"], 99999);

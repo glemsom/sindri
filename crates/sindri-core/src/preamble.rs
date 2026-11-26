@@ -69,7 +69,7 @@ fn environment(workspace: &Path, helpers: Option<&Helpers>) -> String {
         workspace.display()
     );
     if let Some(helpers) = helpers {
-        rendered.push_str("\n");
+        rendered.push('\n');
         rendered.push_str(&helpers.render());
     }
     rendered.push_str("\n- Helper availability is a launch-time snapshot, not an exhaustive inventory; later command results take precedence. Check unlisted commands and required versions before relying on them.\n- Prefer Python’s standard library for ordinary file work; check third-party dependencies in the task’s intended interpreter or project environment.");

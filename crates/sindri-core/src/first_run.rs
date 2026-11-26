@@ -20,6 +20,25 @@ impl FirstRun {
         self.preparation.config()
     }
 
+    pub fn open(
+        &self,
+        machine: &crate::launch::Machine<'_>,
+        config: &Config,
+        enforcement: crate::policy::Enforcement,
+        front_end: crate::tools::FrontEnd,
+        opener: Option<std::sync::Arc<dyn crate::open::Opener>>,
+    ) -> Result<crate::launch::Launch, crate::launch::Refusal> {
+        crate::launch::Launch::prepared_by(
+            machine,
+            &self.preparation,
+            config,
+            enforcement,
+            front_end,
+            opener,
+            crate::asking::Asking::new,
+        )
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
