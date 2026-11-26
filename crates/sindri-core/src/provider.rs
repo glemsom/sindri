@@ -34,6 +34,11 @@ use crate::wire::Wire;
 
 pub use crate::turn::{Call, Turn, Usage};
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Assistant(Option<AssistantMessage>);
+
+impl Eq for Assistant {}
+
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Credential(Option<String>);
 
@@ -203,10 +208,15 @@ fn turn_messages(turn: &Turn) -> Vec<Message> {
             is_error: false,
         });
     }
-    if content.is_empty() {
+    if content.is_empty() && turn.assistant.0.is_none() {
         return Vec::new();
     }
-    let mut messages = vec![Message::Assistant(AssistantMessage::new(content))];
+    let assistant = turn
+        .assistant
+        .0
+        .clone()
+        .unwrap_or_else(|| AssistantMessage::new(content));
+    let mut messages = vec![Message::Assistant(assistant)];
     if !results.is_empty() {
         messages.push(Message::tool_results(results));
     }
@@ -227,6 +237,7 @@ impl Deltas for () {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Answer {
+    pub assistant: Assistant,
     pub text: String,
     pub reasoning: Option<String>,
     pub calls: Vec<Call>,
@@ -252,6 +263,10 @@ impl From<&CompletionResponse> for Answer {
         }
         let reasoning = response.reasoning();
         Self {
+            assistant: Assistant(response.message().and_then(|message| match message {
+                Message::Assistant(assistant) => Some(assistant),
+                _ => None,
+            })),
             text,
             reasoning: (!reasoning.is_empty()).then_some(reasoning),
             calls,
@@ -449,13 +464,17 @@ impl Client {
         let Some(key) = credential else {
             return Err(Failure::unconfigured(ask.endpoint.wire()));
         };
-        self.carry(
+        let mut answer = self.carry(
             ask.endpoint.serving(&key),
             &ask.model,
             request,
             deltas,
             &secrets,
-        )
+        )?;
+        if ask.endpoint.wire() != Wire::Anthropic {
+            answer.assistant.0 = None;
+        }
+        Ok(answer)
     }
 
     fn credential(

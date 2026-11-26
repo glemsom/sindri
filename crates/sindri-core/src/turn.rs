@@ -2,8 +2,11 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::provider::Assistant;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Turn {
+    pub assistant: Assistant,
     pub turn: u32,
     pub prompt: String,
     pub text: String,
@@ -16,6 +19,7 @@ pub struct Turn {
 impl Turn {
     pub fn answered(turn: u32, prompt: impl Into<String>, text: impl Into<String>) -> Turn {
         Turn {
+            assistant: Assistant::default(),
             turn,
             prompt: prompt.into(),
             text: text.into(),

@@ -251,6 +251,7 @@ impl Spent {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Reply {
+    pub assistant: crate::provider::Assistant,
     pub text: String,
     pub reasoning: Option<String>,
     pub calls: Vec<Call>,
@@ -264,6 +265,7 @@ impl Reply {
 
     pub fn asking(text: impl Into<String>, calls: impl IntoIterator<Item = Call>) -> Reply {
         Reply {
+            assistant: crate::provider::Assistant::default(),
             text: text.into(),
             reasoning: None,
             calls: calls.into_iter().collect(),
@@ -566,6 +568,7 @@ impl<R: Responder, A: Executor> Run<R, A> {
         }
 
         self.history.push(Turn {
+            assistant: reply.assistant.clone(),
             turn: self.turns,
             prompt: self.prompt.clone(),
             text: reply.text.clone(),
