@@ -510,14 +510,13 @@ impl Config {
         environment: &impl Environment,
         overrides: Config,
     ) -> Result<Config, ConfigError> {
-        if let Some(inherited) =
-            crate::handoff::Handoff::read(environment).map_err(|reason| ConfigError::BadValue {
-                origin: "inherited launch".to_owned(),
-                reason,
-            })?
-        {
-            return Ok(inherited.config);
-        }
+        Ok(crate::launch::Preparation::resolve(environment, overrides)?.into_config())
+    }
+
+    pub(crate) fn resolve_ambient(
+        environment: &impl Environment,
+        overrides: Config,
+    ) -> Result<Config, ConfigError> {
         let file = Config::load(environment)?;
         let above = overrides.above(Config::from_environment(environment)?);
         let wire_key = above

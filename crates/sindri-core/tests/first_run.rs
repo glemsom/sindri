@@ -186,3 +186,160 @@ fn the_row_the_card_offers_names_the_variable_the_config_was_resolved_with() {
         first_run.api_key_row()
     );
 }
+
+fn sealed_launch(home: &Path) -> std::fs::File {
+    use sindri_core::handoff::Handoff;
+    use sindri_core::policy::{Boundary, Enforcement};
+    use std::io::Write;
+    use std::os::fd::{AsRawFd, FromRawFd};
+
+    let config = Config {
+        model: Some("parent-model".to_owned()),
+        api_key: Some("parent-secret".to_owned()),
+        ..Config::default()
+    };
+    let handoff = Handoff {
+        boundary: Boundary::from_config(&config, home, Enforcement::Unsafe).unwrap(),
+        config,
+        workspace: home.to_owned(),
+        environment: first_run_environment(home, &[]),
+    };
+    let fd = unsafe { libc::memfd_create(c"test-launch".as_ptr(), libc::MFD_ALLOW_SEALING) };
+    assert!(fd >= 0);
+    let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
+    file.write_all(&serde_json::to_vec(&handoff).unwrap())
+        .unwrap();
+    assert_eq!(
+        unsafe {
+            libc::fcntl(
+                file.as_raw_fd(),
+                libc::F_ADD_SEALS,
+                libc::F_SEAL_SEAL | libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_WRITE,
+            )
+        },
+        0
+    );
+    file
+}
+
+#[test]
+fn first_run_keeps_inherited_settings_and_guidance_when_ambient_launch_changes() {
+    use sindri_core::config::Environment;
+    use std::cell::Cell;
+    use std::os::fd::AsRawFd;
+
+    struct ChangingEnvironment {
+        launch: Cell<Option<String>>,
+        ambient: BTreeMap<String, String>,
+    }
+    impl Environment for ChangingEnvironment {
+        fn var(&self, name: &str) -> Option<String> {
+            if name == "SINDRI_LAUNCH" {
+                self.launch.take()
+            } else {
+                self.ambient.var(name)
+            }
+        }
+    }
+    let parent = bare_home();
+    let child = written_home("model = \"child-file\"\n");
+    let handoff = sealed_launch(parent.path());
+    let environment = ChangingEnvironment {
+        launch: Cell::new(Some(format!("/proc/self/fd/{}", handoff.as_raw_fd()))),
+        ambient: first_run_environment(child.path(), &[("SINDRI_MODEL", "child-environment")]),
+    };
+    let first_run = FirstRun::resolve(
+        &environment,
+        Config {
+            model: Some("child-override".to_owned()),
+            ..Config::default()
+        },
+    )
+    .unwrap();
+
+    assert_eq!(first_run.config().model.as_deref(), Some("parent-model"));
+    assert_eq!(first_run.config().api_key.as_deref(), Some("parent-secret"));
+    assert_eq!(first_run.path(), parent.path().join("sindri/config.toml"));
+    assert!(!first_run.api_key_row().contains("parent-secret"));
+}
+
+#[test]
+fn config_and_first_run_refuse_untrusted_handoffs_without_credentials_in_diagnostics() {
+    use std::io::Write;
+    use std::os::fd::{AsRawFd, FromRawFd};
+
+    let home = bare_home();
+    let fd = unsafe { libc::memfd_create(c"invalid-launch".as_ptr(), libc::MFD_ALLOW_SEALING) };
+    assert!(fd >= 0);
+    let mut malformed = unsafe { std::fs::File::from_raw_fd(fd) };
+    malformed
+        .write_all(b"{\"api_key\":\"hidden-secret\"")
+        .unwrap();
+    assert_eq!(
+        unsafe {
+            libc::fcntl(
+                fd,
+                libc::F_ADD_SEALS,
+                libc::F_SEAL_SEAL | libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_WRITE,
+            )
+        },
+        0
+    );
+    let mutable = home.path().join("launch.json");
+    std::fs::write(&mutable, b"{\"api_key\":\"hidden-secret\"").unwrap();
+    for (path, refusal) in [
+        (
+            home.path().join("missing").display().to_string(),
+            "cannot read inherited launch",
+        ),
+        (mutable.display().to_string(), "untrusted inherited launch"),
+        (
+            format!("/proc/self/fd/{}", malformed.as_raw_fd()),
+            "invalid inherited launch",
+        ),
+    ] {
+        let environment = first_run_environment(home.path(), &[("SINDRI_LAUNCH", &path)]);
+        let config_error = Config::resolve(&environment, Config::default()).unwrap_err();
+        let first_run_error = FirstRun::resolve(&environment, Config::default())
+            .err()
+            .unwrap();
+        for error in [config_error, first_run_error] {
+            let message = error.to_string();
+            assert!(message.contains(refusal), "{message}");
+            assert!(!message.contains("hidden-secret"), "{message}");
+            assert!(!message.contains(&path), "{message}");
+        }
+    }
+}
+
+#[test]
+fn config_and_first_run_inherit_parent_settings_over_child_layers() {
+    use std::os::fd::AsRawFd;
+
+    let parent = bare_home();
+    let child = written_home("model = \"child-file\"\napi_key = \"child-file-key\"\n");
+    let handoff = sealed_launch(parent.path());
+    let environment = first_run_environment(
+        child.path(),
+        &[
+            (
+                "SINDRI_LAUNCH",
+                &format!("/proc/self/fd/{}", handoff.as_raw_fd()),
+            ),
+            ("SINDRI_MODEL", "child-environment"),
+            ("SINDRI_API_KEY", "child-environment-key"),
+        ],
+    );
+    let overrides = Config {
+        model: Some("child-override".to_owned()),
+        api_key: Some("child-override-key".to_owned()),
+        ..Config::default()
+    };
+    let config = Config::resolve(&environment, overrides.clone()).unwrap();
+    let first_run = FirstRun::resolve(&environment, overrides).unwrap();
+    for selected in [&config, first_run.config()] {
+        assert_eq!(selected.model.as_deref(), Some("parent-model"));
+        assert_eq!(selected.api_key.as_deref(), Some("parent-secret"));
+    }
+    assert_eq!(first_run.path(), parent.path().join("sindri/config.toml"));
+}

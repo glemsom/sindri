@@ -48,6 +48,45 @@ impl Refusal {
     }
 }
 
+pub(crate) struct Preparation {
+    config: Config,
+    inherited: Option<crate::handoff::Handoff>,
+}
+
+impl Preparation {
+    pub(crate) fn resolve(
+        environment: &impl Environment,
+        overrides: Config,
+    ) -> Result<Self, crate::config::ConfigError> {
+        let inherited = crate::handoff::Handoff::read(environment).map_err(|reason| {
+            crate::config::ConfigError::BadValue {
+                origin: "inherited launch".to_owned(),
+                reason,
+            }
+        })?;
+        let config = match &inherited {
+            Some(handoff) => handoff.config.clone(),
+            None => Config::resolve_ambient(environment, overrides)?,
+        };
+        Ok(Self { config, inherited })
+    }
+
+    pub(crate) fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub(crate) fn into_config(self) -> Config {
+        self.config
+    }
+
+    pub(crate) fn environment<'a>(&'a self, ambient: &'a impl Environment) -> &'a dyn Environment {
+        match &self.inherited {
+            Some(handoff) => &handoff.environment,
+            None => ambient,
+        }
+    }
+}
+
 pub struct Machine<'a> {
     environment: &'a dyn Environment,
     bwrap: PathBuf,
