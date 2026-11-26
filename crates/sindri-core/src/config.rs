@@ -26,6 +26,8 @@ pub struct Config {
     pub extra_writable_paths: Option<Vec<PathBuf>>,
     pub extra_headers: Option<Vec<String>>,
     pub context_window: Option<u64>,
+    pub output_headroom: Option<u64>,
+    pub tool_result_headroom: Option<u64>,
     pub max_turns: Option<u32>,
     pub timeout: Option<u64>,
     pub command_budget_ms: Option<u64>,
@@ -182,7 +184,7 @@ impl Field {
 }
 
 impl Config {
-    pub const SCHEMA: [Field; 16] = [
+    pub const SCHEMA: [Field; 18] = [
         Field::typed(
             "provider",
             "SINDRI_PROVIDER",
@@ -329,6 +331,30 @@ impl Config {
             or_lower!(context_window),
         ),
         Field::typed(
+            "output_headroom",
+            "SINDRI_OUTPUT_HEADROOM",
+            FieldKind::Integer,
+            |config| number_or_empty(config.output_headroom),
+            |key, config, text| {
+                config.output_headroom = Some(nonzero_window(key, parsed(key, text)?)?);
+                Ok(())
+            },
+            |key, config, document| write_window(key, config.output_headroom, document),
+            or_lower!(output_headroom),
+        ),
+        Field::typed(
+            "tool_result_headroom",
+            "SINDRI_TOOL_RESULT_HEADROOM",
+            FieldKind::Integer,
+            |config| number_or_empty(config.tool_result_headroom),
+            |key, config, text| {
+                config.tool_result_headroom = Some(nonzero_window(key, parsed(key, text)?)?);
+                Ok(())
+            },
+            |key, config, document| write_window(key, config.tool_result_headroom, document),
+            or_lower!(tool_result_headroom),
+        ),
+        Field::typed(
             "max_turns",
             "SINDRI_MAX_TURNS",
             FieldKind::Integer,
@@ -466,6 +492,14 @@ impl Config {
                 })?;
         if let Some(window) = config.context_window {
             nonzero_window(&path.display().to_string(), window)?;
+        }
+        for (key, value) in [
+            ("output_headroom", config.output_headroom),
+            ("tool_result_headroom", config.tool_result_headroom),
+        ] {
+            if let Some(value) = value {
+                nonzero_window(key, value)?;
+            }
         }
         Ok(config)
     }

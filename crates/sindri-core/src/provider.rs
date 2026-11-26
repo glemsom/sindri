@@ -82,6 +82,9 @@ pub struct Ask {
     tools: Vec<ToolDefinition>,
     prompt: String,
     thinking: bool,
+    capacity: Option<u64>,
+    output_headroom: u64,
+    tool_result_headroom: u64,
 }
 
 impl Ask {
@@ -100,6 +103,40 @@ impl Ask {
             tools: Vec::new(),
             prompt: String::new(),
             thinking: false,
+            capacity: None,
+            output_headroom: 4096,
+            tool_result_headroom: 4096,
+        }
+    }
+
+    pub fn capacity(mut self, window: Option<u64>, output: u64, tool_results: u64) -> Self {
+        self.capacity = window;
+        self.output_headroom = output;
+        self.tool_result_headroom = tool_results;
+        self
+    }
+
+    pub fn guard_capacity(&self) -> Result<(), Failure> {
+        let Some(window) = self.capacity else {
+            return Ok(());
+        };
+        // Serialized bytes deliberately overcount tokenized text and include protocol overhead.
+        let bytes = serde_json::to_vec(&self.request())
+            .map_err(|_| self.capacity_failure())?
+            .len() as u64;
+        let required = bytes
+            .saturating_add(self.output_headroom)
+            .saturating_add(self.tool_result_headroom);
+        if required > window {
+            return Err(self.capacity_failure());
+        }
+        Ok(())
+    }
+
+    fn capacity_failure(&self) -> Failure {
+        Failure {
+            verdict: Verdict::Refused, retryable: false, streamed: false,
+            message: SecretSet::default().redact("Insufficient configured context capacity: increase context_window, reduce output_headroom/tool_result_headroom, or start a new conversation. Retained material was not truncated."),
         }
     }
 
@@ -187,16 +224,8 @@ impl Ask {
         }
         let mut options = GenerationOptions::default();
         options.reasoning = self.thinking.then_some(Reasoning::Effort(Effort::High));
-        if self.endpoint.route_of(&self.model) == Some(Route::Responses) {
-            use rig_core::completion::ProviderOptions;
-            use rig_core::providers::openai::extension::{OpenAiExt, OpenAiOptions, OpenAiShared};
-            request = request.provider_options(
-                ProviderOptions::new()
-                    .with::<OpenAiExt>(
-                        &OpenAiOptions::default().shared(OpenAiShared::default().store(false)),
-                    )
-                    .expect("typed OpenAI options"),
-            );
+        if self.capacity.is_some() {
+            request = request.max_tokens(self.output_headroom);
         }
         request.options(options)
     }
@@ -494,6 +523,7 @@ impl Client {
     }
 
     pub fn ask(&self, ask: &Ask, deltas: &mut dyn Deltas) -> Result<Answer, Failure> {
+        ask.guard_capacity()?;
         let request = ask.request();
         // A session resolved here joins the set this ask is scrubbed with, so a wire
         // that echoes it back is echoed back masked.

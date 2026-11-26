@@ -5,7 +5,7 @@ pub(super) struct FieldView {
     pub(super) help: &'static str,
 }
 
-pub(super) const FIELDS: [FieldView; 16] = [
+pub(super) const FIELDS: [FieldView; 18] = [
     FieldView {
         key: "provider",
         label: "Wire",
@@ -53,6 +53,18 @@ pub(super) const FIELDS: [FieldView; 16] = [
         label: "Context window",
         group: "RUN & LIMITS",
         help: "Declare the model window in tokens (context_window).",
+    },
+    FieldView {
+        key: "output_headroom",
+        label: "Output headroom",
+        group: "RUN & LIMITS",
+        help: "Reserve tokens for the model output.",
+    },
+    FieldView {
+        key: "tool_result_headroom",
+        label: "Tool result headroom",
+        group: "RUN & LIMITS",
+        help: "Reserve tokens for expected tool results.",
     },
     FieldView {
         key: "max_turns",

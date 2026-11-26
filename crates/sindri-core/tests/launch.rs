@@ -1172,6 +1172,8 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
         config.provider = Some(wire);
         config.model = Some(model.into());
         config.thinking = Some(wire == Wire::Anthropic);
+        config.context_window = Some(1_000_000);
+
         let client = Client::over(replay.clone(), SecretSet::default());
         let mut launch = FirstRun::resolve(&homes.environment, Config::default())
             .unwrap()
@@ -1219,7 +1221,7 @@ fn two_prompts_replay_every_completed_tool_turn_on_each_wire() {
         if route == Route::Responses {
             for (request, expected) in [(&requests[1], 1), (&requests[2], 2), (&requests[3], 2)] {
                 let body: serde_json::Value = serde_json::from_str(&request.body).unwrap();
-                assert_eq!(body["store"], false);
+                assert!(body.get("store").is_none());
                 assert!(body.get("previous_response_id").is_none());
                 let items = body["input"].as_array().unwrap();
                 for suffix in ["01", "02"].into_iter().take(expected) {
@@ -1862,6 +1864,113 @@ fn interrupted_parallel_work_replays_truthful_outcomes_without_reexecution() {
                     "xy"
                 }
             );
+        }
+    }
+
+}
+
+#[test]
+fn known_capacity_refuses_large_retained_material_before_the_wire() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::Replay;
+
+    let homes = Homes::new();
+    let replay = Replay::new([]);
+    let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+    config.context_window = Some(20_000);
+    let client = Client::over(replay.clone(), SecretSet::default());
+    let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+        .unwrap()
+        .answered_by(
+            &homes.machine(),
+            &config,
+            Enforcement::Unsafe,
+            FrontEnd::Terminal,
+            None,
+            |_, ask, tools| Asking::new(client.clone(), ask, tools),
+        )
+        .ok()
+        .unwrap();
+    let earlier = vec![Turn::answered(
+        1,
+        "Remember exact evidence",
+        "x".repeat(30_000),
+    )];
+    let outcome = launch
+        .drive(
+            "Continue",
+            &earlier,
+            &mut Quiet,
+            &mut Kept::default(),
+            Cancel::new(),
+        )
+        .unwrap_or_else(|r| panic!("{}", r.message()));
+    assert!(format!("{:?}", outcome).contains("capacity"));
+    assert!(replay.requests().is_empty());
+    assert_eq!(earlier[0].text.len(), 30_000);
+}
+
+#[test]
+fn capacity_admission_preserves_full_replay_and_unknown_rejections() {
+    use sindri_core::asking::Asking;
+    use sindri_core::provider::Client;
+    use sindri_core::provider::transport::{Canned, Replay};
+
+    for capacity in [None, Some(200_000), Some(1)] {
+        let homes = Homes::new();
+        let replay = Replay::new([Canned::reply(
+            400,
+            r#"{"error":{"type":"invalid_request_error","message":"context window exceeded"}}"#,
+        )]);
+        let mut config = naming_wire(String::from(UNANSWERED_ENDPOINT));
+        config.context_window = capacity;
+        let client = Client::over(replay.clone(), SecretSet::default());
+        let mut launch = FirstRun::resolve(&homes.environment, Config::default())
+            .unwrap()
+            .answered_by(
+                &homes.machine(),
+                &config,
+                Enforcement::Unsafe,
+                FrontEnd::Terminal,
+                None,
+                |_, ask, tools| Asking::new(client.clone(), ask, tools),
+            )
+            .ok()
+            .unwrap();
+        let earlier = vec![Turn::answered(1, "EXACT_PROMPT", "EXACT_EVIDENCE")];
+        let outcome = launch
+            .drive(
+                "Continue",
+                &earlier,
+                &mut Quiet,
+                &mut Kept::default(),
+                Cancel::new(),
+            )
+            .unwrap_or_else(|r| panic!("{}", r.message()));
+        let requests = replay.requests();
+        if capacity == Some(1) {
+            assert!(
+                requests.is_empty(),
+                "instructions and tools alone exceed the known room"
+            );
+            assert!(format!("{outcome:?}").contains("capacity"));
+        } else {
+            assert_eq!(requests.len(), 1);
+            assert!(requests[0].body.contains("EXACT_PROMPT"));
+            assert!(requests[0].body.contains("EXACT_EVIDENCE"));
+            assert!(requests[0].body.contains("bash"));
+            assert!(format!("{outcome:?}").contains("context window exceeded"));
+        }
+        assert_eq!(earlier[0].text, "EXACT_EVIDENCE");
+    }
+}
+
+#[test]
+fn capacity_headroom_settings_reject_zero_negative_and_overflow() {
+    for key in ["output_headroom", "tool_result_headroom"] {
+        for value in ["0", "-1", "18446744073709551616"] {
+            assert!(Config::field(key).unwrap().read(value).is_err());
         }
     }
 

@@ -20,8 +20,7 @@
     "reasoning": {
       "effort": "high"
     },
-    "store": false,
-    "stream": true
+      "stream": true
   },
   "headers": {
     "accept": "text/event-stream",

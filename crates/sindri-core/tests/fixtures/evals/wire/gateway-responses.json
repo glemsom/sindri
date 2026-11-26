@@ -16,8 +16,7 @@
       }
     ],
     "model": "gpt-5",
-    "store": false,
-    "stream": true
+      "stream": true
   },
   "headers": {
     "accept": "text/event-stream",

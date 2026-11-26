@@ -44,6 +44,8 @@ fn the_screen_walks_every_schema_field_in_connection_run_and_access_groups() {
         "extra_headers",
         "thinking",
         "context_window",
+        "output_headroom",
+        "tool_result_headroom",
         "max_turns",
         "timeout",
         "command_budget_ms",
