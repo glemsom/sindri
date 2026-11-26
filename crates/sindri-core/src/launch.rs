@@ -501,6 +501,11 @@ fn ask(config: &Config, endpoint: Endpoint, model: String, preamble: String) -> 
         .preamble(preamble)
         .credential(config.credential())
         .thinking(config.thinking.unwrap_or(false))
+        .continuation(
+            config.responses_continuation.unwrap_or(false),
+            config.responses_store,
+            config.responses_continuation_verified.unwrap_or(false),
+        )
 }
 
 fn headers(config: &Config) -> Vec<(String, String)> {

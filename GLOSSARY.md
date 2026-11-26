@@ -29,6 +29,13 @@ turn’s assistant words, calls and matching results in order, not only its answ
 the conversation, not to the displayed exchanges or the session’s record, and `/new` empties it.
 _Avoid_: History (that one is a run’s own turns), exchange, transcript
 
+**Continuation handle**:
+A stored Responses response's identifier owned by its retained turn, bound to endpoint,
+route, model and explicit storage policy. Opt-in continuation submits only new input;
+local retained material remains available for recovery. Reset and generation ownership
+apply to the handle as to its turn.
+_Avoid_: Session ID, conversation ID, durable memory
+
 **Exchange**:
 The band's unit: the prompt wearing the sigil it was asked with, what the run did under it, and the
 answer. That work is no row of the band while the run fills it — each thought, call, result and

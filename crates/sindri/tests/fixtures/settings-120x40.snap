@@ -5,41 +5,41 @@ expression: self.text(name)
 settings at 120x40
 00 |                                                                                                                        | dim:120
 01 |                                                                                                                        | dim:120
-02 |                                                                                                                        | dim:120
-03 |                                                                                                                        | dim:120
-04 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-05 |                        │ Next run · 0 pending changes                                         │                        | dim:25 plain:1 muted:28 plain:41 dim:25
-06 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-07 |                        │ CONNECTION                                                           │                        | dim:25 plain:1 accent+bold:10 plain:59 dim:25
-08 |                        │ › Wire                   anthropic                                   │                        | dim:25 plain:1 accent+reversed:34 plain:35 dim:25
-09 |                        │   Model                  claude-sonnet-4-5                           │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-10 |                        │   Route                  Not applicable                              │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-11 |                        │   Base URL               Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-12 |                        │   Credential             Configured · hidden                         │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-13 |                        │   Extra headers          Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-14 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-15 |                        │ RUN & LIMITS                                                         │                        | dim:25 plain:1 accent+bold:12 plain:57 dim:25
-16 |                        │   Thinking               [on]                                        │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-17 |                        │   Context window         200,000 tokens                              │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-18 |                        │   Output headroom        Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-19 |                        │   Tool result headroom   Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-20 |                        │   Maximum turns          250                                         │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-21 |                        │   Request timeout        2 min                                       │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-22 |                        │   Command budget         Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-23 |                        │   Output budget          Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-24 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-25 |                        │ ACCESS & APPEARANCE                                                  │                        | dim:25 plain:1 accent+bold:19 plain:50 dim:25
-26 |                        │   Extra writable paths   /srv/data                                   │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-27 |                        │   SSH agent              Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-28 |                        │   Status reporting       Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-29 |                        │   Sindri's face          [on]                                        │                        | dim:25 plain:3 muted:23 plain:44 dim:25
-30 |                        │                                                                      │                        | dim:25 plain:70 dim:25
-31 |                        │ Wire · Select the wire used to ask the endpoint.                     │                        | dim:25 plain:1 muted:48 plain:21 dim:25
-32 |                        │   Apply 0 changes · changes affect the next run                      │                        | dim:25 plain:1 dim:47 plain:22 dim:25
-33 |                        │   Cancel · discard changes                                           │                        | dim:25 plain:1 accent:26 plain:43 dim:25
-34 |                        │ ↑↓ move · Enter edit · Esc cancel · Tab next                         │                        | dim:25 plain:1 muted:44 plain:25 dim:25
-35 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
-36 |                                                                                                                        | dim:120
+02 |                        ╭─ /settings ──────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+03 |                        │ Next run · 0 pending changes                                         │                        | dim:25 plain:1 muted:28 plain:41 dim:25
+04 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+05 |                        │ CONNECTION                                                           │                        | dim:25 plain:1 accent+bold:10 plain:59 dim:25
+06 |                        │ › Wire                   anthropic                                   │                        | dim:25 plain:1 accent+reversed:34 plain:35 dim:25
+07 |                        │   Model                  claude-sonnet-4-5                           │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+08 |                        │   Route                  Not applicable                              │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+09 |                        │   Base URL               Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+10 |                        │   Credential             Configured · hidden                         │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+11 |                        │   Extra headers          Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+12 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+13 |                        │ RUN & LIMITS                                                         │                        | dim:25 plain:1 accent+bold:12 plain:57 dim:25
+14 |                        │   Responses continuation Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+15 |                        │   Responses storage      Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+16 |                        │   Verified continuation  Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+17 |                        │   Thinking               [on]                                        │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+18 |                        │   Context window         200,000 tokens                              │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+19 |                        │   Output headroom        Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+20 |                        │   Tool result headroom   Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+21 |                        │   Maximum turns          250                                         │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+22 |                        │   Request timeout        2 min                                       │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+23 |                        │   Command budget         Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+24 |                        │   Output budget          Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+25 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+26 |                        │ ACCESS & APPEARANCE                                                  │                        | dim:25 plain:1 accent+bold:19 plain:50 dim:25
+27 |                        │   Extra writable paths   /srv/data                                   │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+28 |                        │   SSH agent              Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+29 |                        │   Status reporting       Not set                                     │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+30 |                        │   Sindri's face          [on]                                        │                        | dim:25 plain:3 muted:23 plain:44 dim:25
+31 |                        │                                                                      │                        | dim:25 plain:70 dim:25
+32 |                        │ Wire · Select the wire used to ask the endpoint.                     │                        | dim:25 plain:1 muted:48 plain:21 dim:25
+33 |                        │   Apply 0 changes · changes affect the next run                      │                        | dim:25 plain:1 dim:47 plain:22 dim:25
+34 |                        │   Cancel · discard changes                                           │                        | dim:25 plain:1 accent:26 plain:43 dim:25
+35 |                        │ ↑↓ move · Enter edit · Esc cancel · Tab next                         │                        | dim:25 plain:1 muted:44 plain:25 dim:25
+36 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 37 |                                                                                                                        | dim:120
 38 |┃›what should the run do?                                                                                               | dim:120
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | dim:120

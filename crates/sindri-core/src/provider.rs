@@ -40,7 +40,7 @@ pub struct Assistant(Option<AssistantMessage>, Option<ReplayTarget>);
 impl Eq for Assistant {}
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Responses(AssistantMessage, Option<ReplayTarget>);
+pub struct Responses(AssistantMessage, Option<ReplayTarget>, Option<String>);
 
 impl Eq for Responses {}
 
@@ -55,6 +55,8 @@ pub struct ReplayTarget {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StoragePolicy {
     Inherited,
+    Stored,
+    Ephemeral,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -100,6 +102,9 @@ pub struct Ask {
     tools: Vec<ToolDefinition>,
     prompt: String,
     thinking: bool,
+    continuation: bool,
+    storage: Option<bool>,
+    verified_continuation: bool,
     capacity: Option<u64>,
     output_headroom: u64,
     tool_result_headroom: u64,
@@ -121,10 +126,36 @@ impl Ask {
             tools: Vec::new(),
             prompt: String::new(),
             thinking: false,
+            continuation: false,
+            storage: None,
+            verified_continuation: false,
             capacity: None,
             output_headroom: 4096,
             tool_result_headroom: 4096,
         }
+    }
+
+    pub fn continuation(mut self, enabled: bool, storage: Option<bool>, verified: bool) -> Self {
+        self.continuation = enabled;
+        self.storage = storage;
+        self.verified_continuation = verified;
+        self
+    }
+
+    fn handle(&self) -> Option<&str> {
+        if !self.continuation {
+            return None;
+        }
+        let target = self.replay_target();
+        let mut handle = None;
+        for turn in self.earlier.iter().chain(&self.turns) {
+            let items = turn.responses.as_ref()?;
+            if items.1.as_ref() != Some(&target) {
+                return None;
+            }
+            handle = Some(items.2.as_deref()?);
+        }
+        handle
     }
 
     pub fn capacity(mut self, window: Option<u64>, output: u64, tool_results: u64) -> Self {
@@ -214,13 +245,19 @@ impl Ask {
             endpoint: self.endpoint.clone(),
             route: self.endpoint.route_of(&self.model),
             model: self.model.clone(),
-            storage: StoragePolicy::Inherited,
+            storage: match self.storage {
+                None => StoragePolicy::Inherited,
+                Some(true) => StoragePolicy::Stored,
+                Some(false) => StoragePolicy::Ephemeral,
+            },
         }
     }
 
     pub fn replay_capabilities(&self) -> ReplayCapabilities {
         ReplayCapabilities {
-            continuation: false,
+            continuation: self.endpoint.wire() == Wire::Openai
+                && self.endpoint.route_of(&self.model) == Some(Route::Responses)
+                && (self.endpoint.base_url().is_none() || self.verified_continuation),
             compaction: false,
         }
     }
@@ -276,9 +313,22 @@ impl Ask {
     }
 
     fn request(&self) -> CompletionRequest {
-        let mut conversation = self.replayed();
-        conversation.push(Message::user(self.prompt.clone()));
-        conversation.extend(self.turns.iter().flat_map(turn_messages));
+        let handle = self.handle();
+        let mut conversation = if handle.is_some() {
+            Vec::new()
+        } else {
+            self.replayed()
+        };
+        if handle.is_some() && !self.turns.is_empty() {
+            conversation.extend(
+                turn_messages(self.turns.last().unwrap())
+                    .into_iter()
+                    .filter(|message| matches!(message, Message::User { .. })),
+            );
+        } else {
+            conversation.push(Message::user(self.prompt.clone()));
+            conversation.extend(self.turns.iter().flat_map(turn_messages));
+        }
         let last = conversation.pop().expect("the prompt was pushed");
         let mut request = CompletionRequest::new(last)
             .messages(conversation)
@@ -290,6 +340,18 @@ impl Ask {
         options.reasoning = self.thinking.then_some(Reasoning::Effort(Effort::High));
         if self.capacity.is_some() {
             request = request.max_tokens(self.output_headroom);
+        }
+        if self.endpoint.route_of(&self.model) == Some(Route::Responses) {
+            let mut params = serde_json::Map::new();
+            if let Some(store) = self.storage {
+                params.insert("store".into(), store.into());
+            }
+            if let Some(handle) = handle {
+                params.insert("previous_response_id".into(), handle.into());
+            }
+            if !params.is_empty() {
+                request = request.additional_params(serde_json::Value::Object(params));
+            }
         }
         request.options(options)
     }
@@ -396,7 +458,11 @@ impl From<&CompletionResponse> for Answer {
             reasoning: (!reasoning.is_empty()).then_some(reasoning),
             responses: if response.origin.api.as_str() == "openai.responses" {
                 response.message().and_then(|message| match message {
-                    Message::Assistant(assistant) => Some(Responses(assistant, None)),
+                    Message::Assistant(assistant) => Some(Responses(
+                        assistant,
+                        None,
+                        response.response_id().map(str::to_owned),
+                    )),
                     _ => None,
                 })
             } else {
@@ -589,6 +655,12 @@ impl Client {
     }
 
     pub fn ask(&self, ask: &Ask, deltas: &mut dyn Deltas) -> Result<Answer, Failure> {
+        if ask.continuation
+            && (!ask.replay_capabilities().continuation || ask.storage != Some(true))
+        {
+            return Err(Failure { verdict: Verdict::Refused, retryable: false, streamed: false,
+                message: self.secrets.redact("Responses continuation requires a verified OpenAI Responses endpoint and explicit responses_store=true. Custom endpoints require responses_continuation_verified=true; Copilot is unsupported.") });
+        }
         ask.guard_capacity()?;
         let request = ask.request();
         // A session resolved here joins the set this ask is scrubbed with, so a wire
@@ -598,19 +670,48 @@ impl Client {
         let Some(key) = credential else {
             return Err(Failure::unconfigured(ask.endpoint.wire()));
         };
-        let mut answer = self.carry(
+        let carried = self.carry(
             ask.endpoint.serving(&key),
             &ask.model,
             request,
             deltas,
             &secrets,
-        )?;
+        );
+        let mut recovered = false;
+        let mut answer = match carried {
+            Err(failure)
+                if ask.handle().is_some()
+                    && !failure.streamed
+                    && failure.verdict == Verdict::Client
+                    && (failure.message.to_string().contains("previous_response_id")
+                        || failure
+                            .message
+                            .to_string()
+                            .contains("previous_response_not_found")) =>
+            {
+                let mut replay = ask.clone();
+                replay.continuation = false;
+                replay.guard_capacity()?;
+                recovered = true;
+                self.carry(
+                    ask.endpoint.serving(&key),
+                    &ask.model,
+                    replay.request(),
+                    deltas,
+                    &secrets,
+                )?
+            }
+            other => other?,
+        };
         let target = ask.replay_target();
         if answer.assistant.0.is_some() {
             answer.assistant.1 = Some(target.clone());
         }
         if let Some(items) = &mut answer.responses {
             items.1 = Some(target);
+            if !ask.continuation || recovered {
+                items.2 = None;
+            }
         }
         if ask.endpoint.wire() != Wire::Anthropic {
             answer.assistant = Assistant::default();

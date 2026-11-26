@@ -15,12 +15,12 @@ settings at 80x24
 09 |    │   Extra headers          Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
 10 |    │                                                                      │    | dim:5 plain:70 dim:5
 11 |    │ RUN & LIMITS                                                         │    | dim:5 plain:1 accent+bold:12 plain:57 dim:5
-12 |    │   Thinking               [on]                                        │    | dim:5 plain:3 muted:23 plain:44 dim:5
-13 |    │   Context window         200,000 tokens                              │    | dim:5 plain:3 muted:23 plain:44 dim:5
-14 |    │   Output headroom        Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
-15 |    │   Tool result headroom   Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
-16 |    │   Maximum turns          250                                         │    | dim:5 plain:3 muted:23 plain:44 dim:5
-17 |    │ ⋯ 9 rows kept back · ↑↓ scroll                                       │    | dim:5 plain:1 dim:30 plain:39 dim:5
+12 |    │   Responses continuation Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
+13 |    │   Responses storage      Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
+14 |    │   Verified continuation  Not set                                     │    | dim:5 plain:3 muted:23 plain:44 dim:5
+15 |    │   Thinking               [on]                                        │    | dim:5 plain:3 muted:23 plain:44 dim:5
+16 |    │   Context window         200,000 tokens                              │    | dim:5 plain:3 muted:23 plain:44 dim:5
+17 |    │ ⋯ 12 rows kept back · ↑↓ scroll                                      │    | dim:5 plain:1 dim:31 plain:38 dim:5
 18 |    │                                                                      │    | dim:5 plain:70 dim:5
 19 |    │ Wire · Select the wire used to ask the endpoint.                     │    | dim:5 plain:1 muted:48 plain:21 dim:5
 20 |    │   Apply 0 changes · changes affect the next run                      │    | dim:5 plain:1 dim:47 plain:22 dim:5

@@ -10,7 +10,7 @@ settings-refused at 40x14
 04 |    Not set                             | plain:40
 05 |  › Maximum turns *                     | plain:2 accent+reversed:17 plain:21
 06 |    two hundred                         | plain:2 accent+reversed:13 plain:25
-07 |  ⋯ 37 rows kept back · ↑↓ scroll       | plain:2 dim:31 plain:7
+07 |  ⋯ 43 rows kept back · ↑↓ scroll       | plain:2 dim:31 plain:7
 08 |  bad value in max_turns: `two          | plain:2 err:28 plain:10
 09 |  hundred` will not parse: invalid      | plain:2 err:32 plain:6
 10 |  digit found in string                 | plain:2 err:21 plain:17

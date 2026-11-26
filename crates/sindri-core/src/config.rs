@@ -23,6 +23,9 @@ pub struct Config {
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub thinking: Option<bool>,
+    pub responses_continuation: Option<bool>,
+    pub responses_store: Option<bool>,
+    pub responses_continuation_verified: Option<bool>,
     pub extra_writable_paths: Option<Vec<PathBuf>>,
     pub extra_headers: Option<Vec<String>>,
     pub context_window: Option<u64>,
@@ -184,7 +187,7 @@ impl Field {
 }
 
 impl Config {
-    pub const SCHEMA: [Field; 18] = [
+    pub const SCHEMA: [Field; 21] = [
         Field::typed(
             "provider",
             "SINDRI_PROVIDER",
@@ -250,6 +253,44 @@ impl Config {
             },
             |key, config, document| write_text(key, config.api_key.as_ref(), document),
             or_lower!(api_key),
+        ),
+        Field::typed(
+            "responses_continuation",
+            "SINDRI_RESPONSES_CONTINUATION",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.responses_continuation),
+            |key, config, text| {
+                config.responses_continuation = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| write_value(key, config.responses_continuation, document),
+            or_lower!(responses_continuation),
+        ),
+        Field::typed(
+            "responses_store",
+            "SINDRI_RESPONSES_STORE",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.responses_store),
+            |key, config, text| {
+                config.responses_store = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| write_value(key, config.responses_store, document),
+            or_lower!(responses_store),
+        ),
+        Field::typed(
+            "responses_continuation_verified",
+            "SINDRI_RESPONSES_CONTINUATION_VERIFIED",
+            FieldKind::Boolean,
+            |config| on_or_empty(config.responses_continuation_verified),
+            |key, config, text| {
+                config.responses_continuation_verified = Some(parsed(key, text)?);
+                Ok(())
+            },
+            |key, config, document| {
+                write_value(key, config.responses_continuation_verified, document)
+            },
+            or_lower!(responses_continuation_verified),
         ),
         Field::typed(
             "thinking",
