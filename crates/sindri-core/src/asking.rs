@@ -55,6 +55,9 @@ impl Responder for Asking {
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         )
     }
+    fn observed_usage(&self) -> Usage {
+        self.spent()
+    }
     fn replay_loss(&self, earlier: &[crate::turn::Turn]) -> bool {
         self.ask.transition(earlier).1
     }
@@ -77,21 +80,27 @@ impl Responder for Asking {
         }
         let asked = self.ask(request).earlier(earlier);
         let compacted = asked.compact(&self.client)?;
-        let mut answer = self
-            .client
-            .ask(compacted.as_ref().unwrap_or(&asked), deltas)?;
-        if let Some(compacted) = compacted {
-            answer.usage.charge(&compacted.compaction_usage());
-            *cache = Some((request.earlier().to_vec(), compacted.retained().to_vec()));
+        if let Some(compacted) = &compacted {
+            self.spent
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .charge(&compacted.compaction_usage());
             *self
                 .event
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
         }
+        let mut answer = self
+            .client
+            .ask(compacted.as_ref().unwrap_or(&asked), deltas)?;
         self.spent
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .charge(&answer.usage);
+        if let Some(compacted) = compacted {
+            answer.usage.charge(&compacted.compaction_usage());
+            *cache = Some((request.earlier().to_vec(), compacted.retained().to_vec()));
+        }
         Ok(Reply::from(answer))
     }
 }

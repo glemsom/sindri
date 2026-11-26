@@ -112,6 +112,41 @@ pub struct Usage {
 }
 
 impl Usage {
+    pub fn since(self, earlier: Self) -> Self {
+        Self {
+            input: self
+                .input
+                .map(|value| value.saturating_sub(earlier.input.unwrap_or(0))),
+            output: self
+                .output
+                .map(|value| value.saturating_sub(earlier.output.unwrap_or(0))),
+            total: self
+                .total
+                .map(|value| value.saturating_sub(earlier.total.unwrap_or(0))),
+            cached_input: self
+                .cached_input
+                .map(|value| value.saturating_sub(earlier.cached_input.unwrap_or(0))),
+            reasoning: self
+                .reasoning
+                .map(|value| value.saturating_sub(earlier.reasoning.unwrap_or(0))),
+            cache_read: self
+                .cache_read
+                .map(|value| value.saturating_sub(earlier.cache_read.unwrap_or(0))),
+            cache_write: self
+                .cache_write
+                .map(|value| value.saturating_sub(earlier.cache_write.unwrap_or(0))),
+            request_ms: self
+                .request_ms
+                .map(|value| value.saturating_sub(earlier.request_ms.unwrap_or(0))),
+            client_compactions: self
+                .client_compactions
+                .map(|value| value.saturating_sub(earlier.client_compactions.unwrap_or(0))),
+            native_compactions: self
+                .native_compactions
+                .map(|value| value.saturating_sub(earlier.native_compactions.unwrap_or(0))),
+        }
+    }
+
     pub fn charge(&mut self, spent: &Usage) {
         self.input = added(self.input, spent.input);
         self.output = added(self.output, spent.output);

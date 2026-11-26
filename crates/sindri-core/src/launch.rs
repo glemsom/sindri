@@ -331,6 +331,11 @@ impl<R> Launch<R> {
         &self.shell
     }
 
+    pub fn with_loaded(mut self, loaded: Loaded) -> Self {
+        self.loaded = loaded;
+        self
+    }
+
     pub fn loaded(&self) -> &Loaded {
         &self.loaded
     }
