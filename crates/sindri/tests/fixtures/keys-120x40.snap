@@ -6,24 +6,24 @@ keys at 120x40
 00 |                                                                                                                        | dim:120
 01 |                                                                                                                        | dim:120
 02 |                                                                                                                        | dim:120
-03 |                                                                                                                        | dim:120
-04 |                        ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-05 |                        │ keys                                                                 │                        | dim:25 plain:1 dim:4 plain:65 dim:25
-06 |                        │ Esc                  close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-07 |                        │ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-08 |                        │ composer                                                             │                        | dim:25 plain:1 dim:8 plain:61 dim:25
-09 |                        │ Shift+Tab            the marked commands row back                    │                        | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
-10 |                        │ Tab                  complete the marked commands row into the draft │                        | dim:25 plain:1 plain+bold:21 muted:47 plain:1 dim:25
-11 |                        │ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
-12 |                        │ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
-13 |                        │                      word                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
-14 |                        │ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
-15 |                        │ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
-16 |                        │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
-17 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
-18 |                        │ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+03 |                        ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+04 |                        │ keys                                                                 │                        | dim:25 plain:1 dim:4 plain:65 dim:25
+05 |                        │ Esc                  close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+06 |                        │ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+07 |                        │ composer                                                             │                        | dim:25 plain:1 dim:8 plain:61 dim:25
+08 |                        │ Shift+Tab            the marked commands row back                    │                        | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
+09 |                        │ Tab                  complete the marked commands row into the draft │                        | dim:25 plain:1 plain+bold:21 muted:47 plain:1 dim:25
+10 |                        │ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+11 |                        │ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
+12 |                        │                      word                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+13 |                        │ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
+14 |                        │ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+15 |                        │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
+16 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
+17 |                        │ ↑                    the queued prompt, the prompt before, or the    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+18 |                        │                      line above                                      │                        | dim:25 plain:1 plain+bold:21 muted:10 plain:38 dim:25
 19 |                        │ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
-20 |                        │ ↓                    the line below                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
+20 |                        │ ↓                    the line below, or the prompt after             │                        | dim:25 plain:1 plain+bold:21 muted:35 plain:13 dim:25
 21 |                        │ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 22 |                        │ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 23 |                        │ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25

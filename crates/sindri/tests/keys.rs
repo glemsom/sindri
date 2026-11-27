@@ -491,3 +491,289 @@ fn the_draft_is_the_one_mode_that_wears_no_card() {
          are its screen's name and the key its own table binds to leaving it"
     );
 }
+
+fn recalled(prompts: &[&str]) -> View {
+    let root = tempfile::tempdir().expect("a temp state home");
+    let environment: std::collections::BTreeMap<String, String> = [(
+        String::from("XDG_STATE_HOME"),
+        root.path().to_string_lossy().into_owned(),
+    )]
+    .into_iter()
+    .collect();
+    let mut recall = sindri_core::recall::Recall::load(&environment);
+    for prompt in prompts {
+        recall.send(prompt);
+    }
+    View::of(
+        Capabilities::default(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
+        Transcript::none(),
+    )
+    .recalling(recall)
+}
+
+fn queued(mut view: View, prompt: &str) -> View {
+    view.paste(prompt);
+    match view.key(Key::Enter) {
+        Outcome::Send(prompt) => view.enqueue(prompt),
+        other => panic!("a draft should have been sent, and {other:?} came instead"),
+    }
+    view
+}
+
+#[test]
+fn up_on_an_empty_draft_hands_back_the_prompt_sent_last() {
+    let mut view = recalled(&["the first thing", "the second thing"]);
+
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "a recall is a draft to paint"
+    );
+    assert_eq!(
+        view.composer().text(),
+        "the second thing",
+        "the prompt asked last is the whole draft again"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        "the second thing".len(),
+        "with the caret at its end, ready to be typed on"
+    );
+}
+
+#[test]
+fn up_again_walks_back_one_prompt_at_a_time() {
+    let mut view = recalled(&["the first thing", "the second thing", "the third thing"]);
+    view.key(Key::Up);
+    view.key(Key::Up);
+
+    assert_eq!(
+        view.composer().text(),
+        "the second thing",
+        "the second `↑` is the prompt before the one on screen"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the first thing",
+        "and the third is the oldest there is"
+    );
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Unchanged,
+        "past the oldest the walk stops and the frame stays as it is"
+    );
+    assert_eq!(view.composer().text(), "the first thing");
+}
+
+#[test]
+fn down_walks_forward_and_past_the_newest_gives_the_draft_back() {
+    let mut view = recalled(&["the first thing", "the second thing"]);
+    view.paste("half a thought");
+    view.key(Key::Left);
+    view.key(Key::Left);
+    let (text, cursor) = (view.composer().text().to_owned(), view.composer().cursor());
+
+    view.key(Key::Up);
+    view.key(Key::Up);
+    assert_eq!(view.composer().text(), "the first thing");
+
+    assert_eq!(view.key(Key::Down), Outcome::Edited, "`↓` is the walk on");
+    assert_eq!(view.composer().text(), "the second thing");
+    assert_eq!(
+        view.key(Key::Down),
+        Outcome::Edited,
+        "and past the newest it is the draft the walk interrupted"
+    );
+    assert_eq!(
+        view.composer().text(),
+        text,
+        "the words exactly as they were"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        cursor,
+        "and the caret standing where it stood"
+    );
+    assert_eq!(
+        view.key(Key::Down),
+        Outcome::Unchanged,
+        "past the draft it interrupted there is nothing further to walk"
+    );
+}
+
+#[test]
+fn a_recalled_prompt_is_the_whole_draft_and_never_spliced_into_it() {
+    let mut view = recalled(&["the whole prompt"]);
+    view.paste("typed, with the caret");
+    for _ in 0..4 {
+        view.key(Key::Left);
+    }
+
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the whole prompt",
+        "the text the caret stood in the middle of does not survive the recall"
+    );
+}
+
+#[test]
+fn a_recalled_multi_line_prompt_arrives_whole_with_the_caret_at_its_end() {
+    let mut view = recalled(&["first line\nsecond line\nthird line"]);
+
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "first line\nsecond line\nthird line",
+        "the lines the reader wrote are handed back as lines"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        "first line\nsecond line\nthird line".len(),
+        "and the caret waits at the tail of the last one"
+    );
+}
+
+#[test]
+fn an_edit_to_a_recalled_prompt_keeps_the_walk_where_it_was() {
+    let mut view = recalled(&["the first thing", "the second thing", "the third thing"]);
+    view.key(Key::Up);
+    view.key(Key::Up);
+    view.paste("!");
+
+    assert_eq!(
+        view.composer().text(),
+        "the second thing!",
+        "a recalled prompt is a draft like any other"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the first thing",
+        "and the next `↑` takes the prompt before the one the reader was editing"
+    );
+}
+
+#[test]
+fn down_inside_a_multi_line_draft_moves_the_caret_and_never_the_walk() {
+    let mut view = recalled(&["one\ntwo"]);
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "the recall is the whole draft, two lines of it"
+    );
+    assert_eq!(
+        view.composer().caret(),
+        (1, 3),
+        "the caret waits on row two"
+    );
+
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().caret(),
+        (0, 3),
+        "off the first line `↑` is the draft's, so the caret rose a row"
+    );
+    assert_eq!(
+        view.key(Key::Down),
+        Outcome::Edited,
+        "and off the last line `↓` is the draft's too"
+    );
+    assert_eq!(
+        view.composer().caret(),
+        (1, 3),
+        "so the caret came back down"
+    );
+    assert_eq!(
+        view.composer().text(),
+        "one\ntwo",
+        "neither press moved the walk off the prompt on screen"
+    );
+}
+
+#[test]
+fn the_queue_hands_back_its_prompt_before_the_recall_does() {
+    let mut view = queued(recalled(&["the first thing"]), "the queued prompt");
+
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "the queue's prompt is the first thing `↑` takes back"
+    );
+    assert_eq!(view.composer().text(), "the queued prompt");
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the queued prompt",
+        "and the recall is what answers once the queue holds nothing"
+    );
+}
+
+#[test]
+fn sending_a_prompt_ends_the_walk_and_keeps_it_in_the_recall() {
+    let mut view = recalled(&["the first thing", "the second thing"]);
+    view.key(Key::Up);
+    view.key(Key::Up);
+    assert_eq!(view.composer().text(), "the first thing");
+
+    assert!(
+        matches!(view.key(Key::Enter), Outcome::Send(prompt) if prompt.text() == "the first thing"),
+        "a recalled prompt is a draft Enter sends"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the first thing",
+        "the prompt just sent is the newest of the recall, so the next `↑` starts there"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the second thing",
+        "and walks back from it"
+    );
+}
+
+#[test]
+fn ctrl_c_ends_the_walk_and_leaves_the_recall_alone() {
+    let mut view = recalled(&["the first thing", "the second thing"]);
+    view.key(Key::Up);
+    view.key(Key::Up);
+    assert_eq!(view.composer().text(), "the first thing");
+
+    view.key(Key::Cancel);
+    assert_eq!(
+        view.composer().text(),
+        "",
+        "clearing the draft is not walking"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the second thing",
+        "the next `↑` starts at the newest again, and the recall holds it still"
+    );
+}
+
+#[test]
+fn a_launch_with_no_recall_still_hands_back_what_it_sent() {
+    let mut view = recalled(&[]);
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Unchanged,
+        "a first run has nothing to hand back, so it is not a flicker"
+    );
+
+    view.paste("the only thing I sent");
+    assert!(matches!(view.key(Key::Enter), Outcome::Send(_)));
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "a launch with nowhere to write still recalls what it sent"
+    );
+    assert_eq!(view.composer().text(), "the only thing I sent");
+}

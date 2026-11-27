@@ -5,6 +5,7 @@ use ratatui::layout::{Position, Rect};
 use sindri_core::config::{Config, Touched};
 use sindri_core::conversation::Conversation;
 use sindri_core::provider::Deltas;
+use sindri_core::recall::Recall;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Stop, Turn};
@@ -39,6 +40,7 @@ use crate::pointer::{self, Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
+use crate::recall::{Draft, Walk};
 use crate::rows::{INDENT, MARGIN, Measure, Row, Rows, Scroll, margined};
 use crate::settings::Settings;
 use crate::size::Sizes;
@@ -340,6 +342,7 @@ pub struct View {
     planes: Planes,
     composer: Composer,
     queue: Queue,
+    walk: Walk,
     conversation: Conversation,
     superseded: bool,
     joined_generation: u64,
@@ -404,6 +407,7 @@ impl View {
             planes: Planes::default(),
             composer: Composer::new(),
             queue: Queue::default(),
+            walk: Walk::default(),
             conversation: Conversation::default(),
             superseded: false,
             joined_generation: 0,
@@ -423,6 +427,13 @@ impl View {
         };
         view.handed(facts);
         view
+    }
+
+    /// The prompts this frame walks back through. A frame handed none draws and answers every
+    /// key as one with no recall does.
+    pub fn recalling(mut self, recall: Recall) -> View {
+        self.walk = Walk::of(recall);
+        self
     }
 
     pub fn composer(&self) -> &Composer {
@@ -697,8 +708,16 @@ impl View {
         {
             return self.complete();
         }
-        if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
-            return Outcome::Edited;
+        if key == Key::Down {
+            if self.cards.walk(self.composer.text(), Move::Next) {
+                return Outcome::Edited;
+            }
+            if self.walk.walking() && self.composer.on_last_line() {
+                return self.walk_on();
+            }
+        }
+        if key == Key::Cancel {
+            self.walk.end();
         }
         match self.composer.key(key) {
             Outcome::Send(prompt) => self.sent(prompt),
@@ -719,6 +738,7 @@ impl View {
             return self.answer(command);
         }
         let Some(line) = self.cards.follow(prompt.text()).map(|card| card.spelling()) else {
+            self.walk.sent(prompt.text());
             return Outcome::Send(prompt);
         };
         match self.command(&line) {
@@ -759,6 +779,7 @@ impl View {
     }
 
     fn start_over(&mut self) -> Outcome {
+        self.walk.end();
         self.rows = Rows::new();
         self.read.entries = self.facts.transcript().map_or(0, <[Entry]>::len);
         self.scrolled(Scroll::Tail);
@@ -982,6 +1003,27 @@ impl View {
         match self.queue.recall() {
             Some(prompt) => {
                 self.composer.recall(prompt);
+                Outcome::Edited
+            }
+            None => self.walk_back(),
+        }
+    }
+
+    fn walk_back(&mut self) -> Outcome {
+        let draft = Draft::of(self.composer.text(), self.composer.cursor());
+        match self.walk.back(draft) {
+            Some(draft) => {
+                self.composer.restored(&draft.text, draft.caret);
+                Outcome::Edited
+            }
+            None => Outcome::Unchanged,
+        }
+    }
+
+    fn walk_on(&mut self) -> Outcome {
+        match self.walk.forward() {
+            Some(draft) => {
+                self.composer.restored(&draft.text, draft.caret);
                 Outcome::Edited
             }
             None => Outcome::Unchanged,

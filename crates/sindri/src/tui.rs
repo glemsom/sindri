@@ -16,6 +16,7 @@ use sindri::view::{Painted, Transcript, View};
 use sindri_core::config::{Config, Environment, Process, Touched};
 use sindri_core::launch::{Launch, Machine, Refusal};
 use sindri_core::provider::Deltas;
+use sindri_core::recall::Recall;
 use sindri_core::records::Told;
 use sindri_core::session::Session;
 use sindri_core::tools::FrontEnd;
@@ -94,7 +95,8 @@ pub fn run(cli: &Cli, first_run: sindri_core::first_run::FirstRun) -> ExitCode {
         capabilities,
         Facts::boot(boot, sindri_core::skills::home(&Process)),
         Transcript::none(),
-    );
+    )
+    .recalling(Recall::load(&Process));
     // One telling for the whole launch, so the pace a status is told at is the launch's: the
     // screen it writes on is a second handle on the descriptor a frame is drawn on.
     let telling = match terminal.screen.try_clone() {

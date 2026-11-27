@@ -6,24 +6,24 @@ card at 120x40
 00 |┃›what does the check cost?                                                   wire      anthropic                       | dim:120
 01 |⋯ 1 call · 118 ms                                                             model     claude-sonnet-4-5-20250929      | dim:120
 02 |                                                                              think     high                            | dim:120
-03 |  What that buys is the plain case and what it costs is the scrolled one:                                               | dim:120
-04 |  a window is a row offs╭─ ? keys ─────────────────────────────────────────────────────────────╮ 250                    | dim:24 accent+faint:72 dim:24
-05 |  entries between the ta│ keys                                                                 │8.2k / 200k             | dim:25 plain:1 dim:4 plain:65 dim:25
-06 |  on the way. Each is la│ Esc                  close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-07 |  scrolled through costs│ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-08 |  none.                 │ composer                                                             │/.worktrees/46-rail     | dim:25 plain:1 dim:8 plain:61 dim:25
-09 |                        │ Shift+Tab            the marked commands row back                    │apability               | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
-10 |┃›what is the transcript│ Tab                  complete the marked commands row into the draft │                        | dim:25 plain:1 plain+bold:21 muted:47 plain:1 dim:25
-11 |⋯ 1 call · 9 ms         │ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
-12 |                        │ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
-13 |  The transcript's unit │                      word                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
-14 |  line, so the same run │ Enter                send the prompt                                 │/sessions/9f2c7a41/tmp  | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
-15 |  the transcript and by │ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
-16 |                        │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
-17 |  construct │ where it s│ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
-18 |  ──────────┼───────────│ ↑                    the newest queued prompt, or the line above     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+03 |  What that buys is the ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+04 |  a window is a row offs│ keys                                                                 │ 250                    | dim:25 plain:1 dim:4 plain:65 dim:25
+05 |  entries between the ta│ Esc                  close this screen                               │8.2k / 200k             | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+06 |  on the way. Each is la│ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+07 |  scrolled through costs│ composer                                                             │                        | dim:25 plain:1 dim:8 plain:61 dim:25
+08 |  none.                 │ Shift+Tab            the marked commands row back                    │/.worktrees/46-rail     | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
+09 |                        │ Tab                  complete the marked commands row into the draft │apability               | dim:25 plain:1 plain+bold:21 muted:47 plain:1 dim:25
+10 |┃›what is the transcript│ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+11 |⋯ 1 call · 9 ms         │ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
+12 |                        │                      word                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+13 |  The transcript's unit │ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
+14 |  line, so the same run │ Esc                  close the commands card, and the draft as it    │/sessions/9f2c7a41/tmp  | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+15 |  the transcript and by │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
+16 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
+17 |  construct │ where it s│ ↑                    the queued prompt, the prompt before, or the    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+18 |  ──────────┼───────────│                      line above                                      │                        | dim:25 plain:1 plain+bold:21 muted:10 plain:38 dim:25
 19 |  heading   │ in the ans│ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
-20 |  code      │ behind a b│ ↓                    the line below                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
+20 |  code      │ behind a b│ ↓                    the line below, or the prompt after             │                        | dim:25 plain:1 plain+bold:21 muted:35 plain:13 dim:25
 21 |  table     │ columns jo│ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 22 |                        │ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 23 |┃›what does a row of the│ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25

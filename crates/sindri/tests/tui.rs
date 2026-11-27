@@ -3000,6 +3000,43 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
+#[test]
+fn a_prompt_outlives_the_launch_that_sent_it_and_up_hands_it_back() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask_words(&mut pty, &drawn, &wire, "say it again");
+    wire.release();
+    thread::sleep(Duration::from_millis(300));
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the second launch draws its boot frame: {:?}",
+        drawn.text()
+    );
+    pty.type_bytes(b"\x1b[A");
+    let recalled = pen::cells("say it again") + GUTTER;
+    assert!(
+        drawn.wait_until(|frame| frame.contains("say it again")
+            && placed(frame).is_some_and(|(_, column)| column == recalled)),
+        "`Up` on the empty draft of a launch that has sent nothing hands back the prompt the \
+         launch before it sent, the caret waiting at its end: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
 fn command(pty: &mut Pty, drawn: &Drawn, line: &str) {
     pty.type_bytes(line.as_bytes());
     let column = pen::cells(line) + GUTTER;

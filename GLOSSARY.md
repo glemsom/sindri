@@ -176,6 +176,14 @@ its record grows with every prompt and its temp goes when the launch ends; a bat
 conversation of one prompt, and so one session.
 _Avoid_: Conversation, chat, history
 
+**Recall**:
+The reader's own prompts across launches, oldest first, kept in a file of its own beside the sessions:
+verbatim, because they are what the reader wrote, and bounded by a cap, because a key walks them. A
+prompt reaches it where a draft becomes one, so a slash command never does and a batch launch writes
+none. It is neither a **Session**, whose record is what a run did and is redacted to be read as
+evidence, nor a **Run**'s history, which is that run's own turns.
+_Avoid_: History, prompt history, record, log
+
 **Skill**:
 A directory holding a `SKILL.md` whose instructions can be loaded by name, in one of three scopes;
 a human-invocable skill can also be asked to act through its own slash command.
