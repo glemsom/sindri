@@ -3,23 +3,23 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 tools at 120x40
-00 |  │ ✓ bash success 23 ms                       │                                                                        | dim:4 ok:1 plain:13 dim:6 plain:23 dim:1 plain:72
-01 |  │   rg -n 'the gutter' crates/sindri/src     │                                                                        | dim:4 plain:43 dim:1 plain:72
-02 |  │   src/rows.rs: the glyph a turn opens with │                                                                        | dim:4 muted:42 plain:1 dim:1 plain:72
-03 |  │   exit 0 · 412 bytes                       │                                                                        | dim:24 plain:23 dim:1 plain:72
-04 |  │ ✓ open success 4 ms │                                                                                               | dim:4 ok:1 plain:13 dim:5 plain:1 dim:1 plain:95
-05 |  │   GLOSSARY.md       │                                                                                               | dim:4 plain:2 plain~dim:11 plain:7 dim:1 plain:95
-06 |  │   exit 0 · 0 bytes  │                                                                                               | dim:22 plain:2 dim:1 plain:95
-07 |  │ ✓ skill success 2 ms              │                                                                                 | dim:4 ok:1 plain:14 dim:5 plain:14 dim:1 plain:81
-08 |  │   rust-review                     │                                                                                 | dim:4 plain:34 dim:1 plain:81
-09 |  │   the rust-review skill is loaded │                                                                                 | dim:4 muted:33 plain:1 dim:1 plain:81
-10 |  │   exit 0 · 33 bytes               │                                                                                 | dim:23 plain:15 dim:1 plain:81
-11 |  │ … bash running           │                                                                                          | dim:5 plain:24 dim:1 plain:90
-12 |  │   cargo test --workspace │                                                                                          | dim:4 plain:25 dim:1 plain:90
-13 |  │ … open running          │                                                                                           | dim:5 plain:23 dim:1 plain:91
-14 |  │   docs/agents/domain.md │                                                                                           | dim:4 plain:2 plain~dim:21 plain:1 dim:1 plain:91
-15 |  │ … skill running │                                                                                                   | dim:5 plain:15 dim:1 plain:99
-16 |  │   code-review   │                                                                                                   | dim:4 plain:16 dim:1 plain:99
+00 |  │ ✓ bash rg -n 'the gutter' crates/sindri/src 23 ms ⋯ 3 rows kept back                                                | dim:4 ok:2 dim:5 plain:36 dim:25 plain:48
+01 |  │ ✓ open GLOSSARY.md 4 ms ⋯ 2 rows kept back                                                                          | dim:4 ok:2 dim:5 plain~dim:11 dim:24 plain:74
+02 |  │ ✓ skill rust-review 2 ms ⋯ 3 rows kept back                                                                         | dim:4 ok:2 dim:6 plain:11 dim:24 plain:73
+03 |  │ … bash running cargo test --workspace                                                                               | dim:19 plain:101
+04 |  │ … open running docs/agents/domain.md                                                                                | dim:19 plain~dim:21 plain:80
+05 |  │ … skill running code-review                                                                                         | dim:20 plain:100
+06 |                                                                                                                        | plain:120
+07 |                                                                                                                        | plain:120
+08 |                                                                                                                        | plain:120
+09 |                                                                                                                        | plain:120
+10 |                                                                                                                        | plain:120
+11 |                                                                                                                        | plain:120
+12 |                                                                                                                        | plain:120
+13 |                                                                                                                        | plain:120
+14 |                                                                                                                        | plain:120
+15 |                                                                                                                        | plain:120
+16 |                                                                                                                        | plain:120
 17 |                                                                                                                        | plain:120
 18 |                                                                                                                        | plain:120
 19 |                                                                                                                        | plain:120

@@ -2325,8 +2325,8 @@ fn failed_result_discloses_recorded_diagnostic_before_its_output_fold() {
         );
         let closed = frame::painted(&mut view, 120, 40);
         let (diagnostic, _) = closed.drawn_at("error: permission denied");
-        let (fold, _) = closed.drawn_at("5 rows kept back");
-        assert!(diagnostic < fold);
+        let (fold, _) = closed.drawn_at("9 rows kept back");
+        assert!(diagnostic > fold);
     }
 }
 
@@ -2345,11 +2345,15 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
         let mut view = View::of(
             capabilities.faced(false),
             railed(),
-            Transcript::of(disclosed_result(sindri_core::run::Exit::Code(0), text)),
+            Transcript::of(
+                disclosed_result(sindri_core::run::Exit::Code(0), text)
+                    .into_iter()
+                    .skip(1),
+            ),
         );
         let closed = frame::painted(&mut view, 120, 40);
         let (head, _) = closed.drawn_at("first");
-        let (tail, _) = closed.drawn_at("5 rows kept back");
+        let (tail, _) = closed.drawn_at("6 rows kept back");
         view.drag(Cell::new(head, 0), Cell::new(tail, 110));
         frame::painted(&mut view, 120, 40);
         assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
@@ -2364,7 +2368,7 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
         frame::painted(&mut view, 120, 40);
         assert_eq!(view.key(Key::Fold), Outcome::Edited);
         let closed = frame::painted(&mut view, 120, 40);
-        let (y, x) = closed.drawn_at("5 rows kept back");
+        let (y, x) = closed.drawn_at("6 rows kept back");
         if !pointing {
             assert_eq!(
                 {
@@ -2392,7 +2396,7 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
             },
             Outcome::Edited
         );
-        frame::painted(&mut view, 120, 40).drawn_at("5 rows kept back");
+        frame::painted(&mut view, 120, 40).drawn_at("6 rows kept back");
     }
 }
 
@@ -2402,6 +2406,7 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
     let mut entries = vec![Entry::Prompt {
         text: SecretSet::default().redact("check this"),
     }];
+    entries.push(thought(1));
     entries.extend(disclosed_result(sindri_core::run::Exit::Code(0), text));
     entries.extend(answer("The answer remains here."));
     entries.push(Entry::Stop {
@@ -2415,7 +2420,7 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
     frame::painted(&mut view, 120, 40).drawn_at("1 call");
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
     let closed = frame::painted(&mut view, 120, 40);
-    let (y, x) = closed.drawn_at("5 rows kept back");
+    let (y, x) = closed.drawn_at("make check");
     assert_eq!(
         {
             view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
@@ -2423,22 +2428,87 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
         },
         Outcome::Edited
     );
-    frame::painted(&mut view, 120, 40).drawn_at("eighth");
-    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    frame::painted(&mut view, 120, 40).drawn_at("first");
+    let open = frame::painted(&mut view, 120, 40);
+    let (y, x) = open.drawn_at("turn 1");
+    view.pointer(open.told(), Pointer::Press(Cell::new(y, x)));
+    view.pointer(open.told(), Pointer::Release(Cell::new(y, x)));
     frame::painted(&mut view, 40, 24).drawn_at("1 call");
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
     let reopened = frame::painted(&mut view, 120, 40);
-    reopened.drawn_at("eighth");
-    assert!(
-        !reopened
-            .rows()
-            .iter()
-            .any(|row| row.contains("rows kept back"))
-    );
+    reopened.drawn_at("first");
+    reopened.drawn_at("rows kept back");
 }
 
 #[test]
-fn huge_opened_tool_uploads_are_bounded_by_the_visible_band_through_scroll_and_resize() {
+fn calls_take_no_picture_placements_across_terminal_changes() {
+    use sindri::plane::PlaneId;
+    let mut view = View::of(
+        caps::pictured(),
+        railed(),
+        Transcript::of(disclosed_result(
+            sindri_core::run::Exit::Code(1),
+            "diagnostic",
+        )),
+    );
+    let mut held = sindri::plane::Held::default();
+    for (cols, rows) in [(120, 40), (80, 24), (40, 24), (120, 48)] {
+        let mut words = None;
+        for capabilities in [
+            caps::pictured(),
+            caps::at(sindri::graphics::CellSize::new(8, 16)),
+            caps::greys(),
+            caps::uncoloured(),
+            caps::inked(Palette::ANSI),
+            caps::inked(Palette::TRUECOLOR),
+        ] {
+            view.drawn_on(capabilities);
+            let shown = frame::painted(&mut view, cols, rows);
+            assert!(shown.told().placements().iter().all(|p| matches!(
+                p.shade().id(),
+                PlaneId::Composer
+                    | PlaneId::Rail
+                    | PlaneId::Transcript
+                    | PlaneId::Caret
+                    | PlaneId::Face
+                    | PlaneId::Gauge
+                    | PlaneId::Bar(_)
+                    | PlaneId::Bezel
+                    | PlaneId::Prompt(_)
+            )));
+            let band = shown.told().layout().unwrap().transcript;
+            let text = shown
+                .words()
+                .iter()
+                .take(4)
+                .map(|row| {
+                    row.chars()
+                        .skip(usize::from(band.x))
+                        .take(usize::from(band.width.saturating_sub(2)))
+                        .collect::<String>()
+                        .trim_end()
+                        .to_owned()
+                })
+                .collect::<Vec<_>>();
+            if let Some(expected) = &words {
+                assert_eq!(&text, expected);
+            } else {
+                words = Some(text);
+            }
+            let wire = held.pass(shown.told().placements(), view.planes());
+            assert!(!String::from_utf8(wire).unwrap().contains("i=107374"));
+            assert!(
+                held.pass(shown.told().placements(), view.planes())
+                    .is_empty()
+            );
+        }
+    }
+    held.forget();
+    assert!(held.forget().is_empty());
+}
+
+#[test]
+fn huge_opened_results_stay_bounded_through_scroll_and_resize_without_pictures() {
     let words = (0..100_000)
         .map(|n| format!("row {n}\n"))
         .collect::<String>();
@@ -2449,501 +2519,121 @@ fn huge_opened_tool_uploads_are_bounded_by_the_visible_band_through_scroll_and_r
     );
     let folded = frame::painted(&mut view, 120, 40);
     let (y, x) = folded.drawn_at("rows kept back");
+    view.pointer(folded.told(), Pointer::Press(Cell::new(y, x)));
     assert_eq!(
-        {
-            view.pointer(folded.told(), Pointer::Press(Cell::new(y, x)));
-            view.pointer(folded.told(), Pointer::Release(Cell::new(y, x)))
-        },
+        view.pointer(folded.told(), Pointer::Release(Cell::new(y, x))),
         Outcome::Edited
     );
-    assert!(
-        folded
-            .told()
-            .placements()
-            .iter()
-            .any(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
-    );
-    let mut held = sindri::plane::Held::default();
-    for (cols, rows) in [(120, 40), (120, 40), (80, 24), (40, 24), (120, 48)] {
-        for pass in 0..12 {
-            let frame = frame::painted(&mut view, cols, rows);
-            let band = frame.told().layout().unwrap().transcript;
-            assert!(
-                frame
-                    .told()
-                    .placements()
-                    .iter()
-                    .any(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
-            );
-            for placement in frame
-                .told()
-                .placements()
-                .iter()
-                .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
-            {
-                assert_eq!(placement.cells().intersection(band), placement.cells());
-                let image = view.planes().image(placement.shade()).unwrap().pixels();
-                assert!(image.width() <= u32::from(band.width) * 10);
-                assert!(
-                    image.height() <= u32::from(band.height) * 20 * 3,
-                    "Tool image height {} exceeds visible-band bound",
-                    image.height()
-                );
-            }
-            let wire = held.pass(frame.told().placements(), view.planes());
-            assert!(wire.len() <= usize::from(cols) * usize::from(rows) * 10 * 20 * 16 + 100_000);
-            use base64::Engine;
-            let text = std::str::from_utf8(&wire).unwrap();
-            let mut payload = String::new();
-            let mut uploads = 0;
-            for op in text.split("\x1b_G").skip(1) {
-                let command = op.split("\x1b\\").next().unwrap();
-                let Some((head, chunk)) = command.split_once(';') else {
-                    continue;
-                };
-                payload.push_str(chunk);
-                if head.split(',').any(|field| field == "m=0") {
-                    let png = base64::engine::general_purpose::STANDARD
-                        .decode(&payload)
-                        .unwrap();
-                    let image = image::load_from_memory(&png).unwrap();
-                    assert!(image.width() <= u32::from(cols) * 10);
-                    assert!(image.height() <= u32::from(rows) * 20 * 3);
-                    assert!(png.len() <= usize::from(cols) * usize::from(rows) * 10 * 20 * 13);
-                    payload.clear();
-                    uploads += 1;
-                }
-            }
-            assert!(payload.is_empty());
-            if pass == 0 {
-                assert!(uploads > 0 || !wire.is_empty());
-            }
-            assert!(
-                held.pass(frame.told().placements(), view.planes())
-                    .is_empty()
-            );
-            if pass % 3 == 0 {
-                view.key(Key::PageUp);
-            } else {
-                view.pointer(frame.told(), Pointer::Wheel(sindri::pointer::Notch::Up));
-            }
+    for (cols, rows) in [(120, 40), (80, 24), (40, 24), (120, 48)] {
+        for _ in 0..4 {
+            let shown = frame::painted(&mut view, cols, rows);
+            assert!(shown.rows().len() <= usize::from(rows));
+            assert!(!shown.rows().iter().any(|row| row.contains("row 50000")));
+            view.key(Key::PageUp);
         }
     }
 }
 
 #[test]
-fn every_ink_keeps_its_floor_on_success_failure_and_running_tool_pixels() {
-    use sindri::palette::{LEGIBLE, channels};
-    let luminance = |rgb: [u8; 3]| {
-        let [r, g, b] = rgb.map(|v| {
-            let v = f64::from(v) / 255.0;
-            if v <= 0.04045 {
-                v / 12.92
-            } else {
-                ((v + 0.055) / 1.055).powf(2.4)
-            }
-        });
-        0.2126 * r + 0.7152 * g + 0.0722 * b
-    };
-    for exit in [
-        Some(sindri_core::run::Exit::Code(0)),
-        Some(sindri_core::run::Exit::Code(1)),
-        None,
-    ] {
-        for capabilities in [caps::pictured(), caps::greys()] {
-            let palette = capabilities.palette();
-            let mut view = View::of(
-                capabilities,
-                railed(),
-                Transcript::of({
-                    let mut entries = disclosed_result(
-                        exit.unwrap_or(sindri_core::run::Exit::Code(0)),
-                        "ordinary output 界",
-                    );
-                    if exit.is_none() {
-                        entries.pop();
-                    }
-                    entries
-                }),
-            );
-            let frame = frame::painted(&mut view, 120, 40);
-            for placement in frame.told().placements() {
-                let plane = view.planes().image(placement.shade()).unwrap();
-                let prompt = matches!(placement.shade().id(), sindri::plane::PlaneId::Tool(_));
-                let cell = sindri::graphics::CellSize::NOMINAL;
-                for (x, y, pixel) in plane.pixels().enumerate_pixels() {
-                    if placement.seam().is_some_and(|(axis, _)| match axis {
-                        sindri::plane::Axis::Down => x < cell.width(),
-                        sindri::plane::Axis::Across => y < cell.height(),
-                    }) {
-                        continue;
-                    }
-                    if pixel[3] == 0 {
-                        continue;
-                    }
-                    let bg = luminance([pixel[0], pixel[1], pixel[2]]);
-                    for ink in Ink::ALL {
-                        let Some(rgb) = channels(palette.colour(ink)) else {
-                            continue;
-                        };
-                        let fg = luminance(rgb);
-                        let ratio = (fg.max(bg) + 0.05) / (fg.min(bg) + 0.05);
-                        let floor = if prompt && ink == Ink::Plain {
-                            4.5
-                        } else {
-                            LEGIBLE
-                        };
-                        assert!(
-                            ratio >= floor,
-                            "{ink:?} on {:?}: {ratio}",
-                            placement.shade().id()
-                        );
-                    }
-                }
-            }
-        }
-    }
-}
-#[test]
-fn partially_visible_open_tool_stays_clipped_through_resize_scale_and_fallback() {
-    let words = (1..=60)
-        .map(|n| format!("visible literal row {n}"))
-        .collect::<Vec<_>>()
-        .join("\n");
+fn call_head_press_toggles_without_moving_the_head_and_body_presses_do_nothing() {
     let mut view = View::of(
-        caps::pictured(),
-        railed(),
-        Transcript::of(disclosed_result(sindri_core::run::Exit::Code(1), &words)),
-    );
-    let closed = frame::painted(&mut view, 80, 24);
-    let (y, x) = closed.drawn_at("rows kept back");
-    assert_eq!(
-        {
-            view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
-            view.pointer(closed.told(), Pointer::Release(Cell::new(y, x)))
-        },
-        Outcome::Edited
-    );
-    let mut held = sindri::plane::Held::default();
-    for (cols, rows, cell) in [(80, 24, (10, 20)), (120, 40, (12, 24)), (40, 16, (8, 16))] {
-        view.celled(Some(sindri::graphics::CellSize::new(cell.0, cell.1)));
-        let frame = frame::painted(&mut view, cols, rows);
-        assert!(!frame.words().iter().any(|r| r.contains("rows kept back")));
-        let band = frame.told().layout().unwrap().transcript;
-        let surfaces: Vec<_> = frame
-            .told()
-            .placements()
-            .iter()
-            .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
-            .collect();
-        assert_eq!(surfaces.len(), 1);
-        let p = surfaces[0];
-        assert_eq!(p.cells().intersection(band), p.cells());
-        assert!(p.shows().unwrap().y > 0);
-        assert_eq!(
-            p.shows().unwrap().height,
-            u32::from(p.cells().height) * cell.1
-        );
-        let wire = String::from_utf8(held.pass(frame.told().placements(), view.planes())).unwrap();
-        assert!(wire.contains("a=T"));
-        assert!(
-            held.pass(frame.told().placements(), view.planes())
-                .is_empty()
-        );
-    }
-    view.drawn_on(caps::uncoloured());
-    let fallback = frame::painted(&mut view, 40, 16);
-    let wire = String::from_utf8(held.pass(fallback.told().placements(), view.planes())).unwrap();
-    assert_eq!(wire.matches("a=d,d=I").count(), 1);
-    assert!(!wire.contains("a=T"));
-    assert!(
-        !fallback
-            .words()
-            .iter()
-            .any(|r| r.contains("rows kept back"))
-    );
-    fallback.drawn_at("visible literal row 60");
-}
-
-#[test]
-fn illuminated_tool_clipping_moves_the_original_pixels_and_preserves_end_corners() {
-    let words = (0..8)
-        .map(|n| format!("literal row {n}"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let mut entries = disclosed_result(sindri_core::run::Exit::Code(1), &words);
-    for n in 0..12 {
-        entries.push(Entry::Assistant {
-            turn: 1,
-            text: SecretSet::default().redact(format!("tail {n}")),
-        });
-    }
-    let mut view = View::of(caps::pictured(), railed(), Transcript::of(entries));
-    let mut held = sindri::plane::Held::default();
-    frame::painted(&mut view, 80, 24);
-    while view.key(Key::PageUp) == Outcome::Edited {
-        frame::painted(&mut view, 80, 24);
-    }
-    let top = frame::painted(&mut view, 80, 24);
-    let band = top.told().layout().unwrap().transcript;
-    let (y, x) = top.drawn_at("rows kept back");
-    {
-        view.pointer(top.told(), Pointer::Press(Cell::new(y, x)));
-        view.pointer(top.told(), Pointer::Release(Cell::new(y, x)))
-    };
-    while view.key(Key::PageUp) == Outcome::Edited {
-        frame::painted(&mut view, 80, 24);
-    }
-    let opened = frame::painted(&mut view, 80, 24);
-    let surfaces: Vec<_> = opened
-        .told()
-        .placements()
-        .iter()
-        .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
-        .collect();
-    assert!(!surfaces.is_empty());
-    for p in &surfaces {
-        assert_eq!(p.cells().intersection(band), p.cells());
-    }
-    held.pass(opened.told().placements(), view.planes());
-    view.pointer(opened.told(), Pointer::Wheel(sindri::pointer::Notch::Down));
-    let moved = frame::painted(&mut view, 80, 24);
-    let wire = String::from_utf8(held.pass(moved.told().placements(), view.planes())).unwrap();
-    assert!(
-        wire.contains("a=p"),
-        "scrolling a still-visible surface reuses its pixels"
-    );
-    let prompt = moved
-        .told()
-        .placements()
-        .iter()
-        .find(|p| {
-            matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_))
-                && p.shows().is_some_and(|crop| crop.y > 0)
-        })
-        .unwrap();
-    assert!(prompt.shows().unwrap().y > 0);
-    let plane = view.planes().image(prompt.shade()).unwrap();
-    assert_ne!(
-        plane.pixels().get_pixel(0, 0),
-        plane.pixels().get_pixel(4, 4)
-    );
-    for pixel in plane.pixels().pixels() {
-        let color = ratatui::style::Color::Rgb(pixel[0], pixel[1], pixel[2]);
-        let luminance = |color| {
-            let c = sindri::palette::channels(color).unwrap().map(|v| {
-                let v = f64::from(v) / 255.0;
-                if v <= 0.04045 {
-                    v / 12.92
-                } else {
-                    ((v + 0.055) / 1.055).powf(2.4)
-                }
-            });
-            c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722
-        };
-        let ink = luminance(opened.palette().ink(Ink::Plain).0);
-        let surface = luminance(color);
-        assert!((ink.max(surface) + 0.05) / (ink.min(surface) + 0.05) >= 4.5);
-    }
-}
-
-#[test]
-fn tool_planes_release_on_palette_capability_reset_and_cleanup_without_changing_words() {
-    let mut view = View::of(
-        caps::pictured(),
-        railed(),
+        caps::pointing().faced(false),
+        Facts::default().asked(),
         Transcript::of(disclosed_result(
             sindri_core::run::Exit::Code(0),
-            "literal 界\n\n  aligned output",
+            "first\nsecond\nthird\nfourth\nfifth\nsixth\nseventh\neighth",
         )),
     );
-    let mut held = sindri::plane::Held::default();
-    let first = frame::painted(&mut view, 120, 40);
-    let words = first
-        .words()
-        .iter()
-        .take(6)
-        .map(|r| r.chars().take(26).collect::<String>().trim_end().to_owned())
-        .collect::<Vec<_>>();
-    assert!(
-        String::from_utf8(held.pass(first.told().placements(), view.planes()))
-            .unwrap()
-            .contains("a=T")
+    let closed = frame::painted(&mut view, 80, 12);
+    let (y, x) = closed.drawn_at("make check");
+    view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+    assert_eq!(
+        view.pointer(closed.told(), Pointer::Release(Cell::new(y, x))),
+        Outcome::Edited
     );
-    assert!(
-        held.pass(first.told().placements(), view.planes())
-            .is_empty()
-    );
-    for capabilities in [
-        caps::greys(),
-        caps::uncoloured(),
-        caps::pictured(),
-        caps::inked(Palette::ANSI),
-        caps::pictured(),
-    ] {
-        view.drawn_on(capabilities);
-        let next = frame::painted(&mut view, 120, 40);
+    let open = frame::painted(&mut view, 80, 12);
+    assert_eq!(open.drawn_at("bash").0, y);
+    for words in ["make check", "first", "bytes"] {
+        let (y, x) = open.drawn_at(words);
+        view.pointer(open.told(), Pointer::Press(Cell::new(y, x)));
         assert_eq!(
-            next.words()
-                .iter()
-                .take(6)
-                .map(|r| r.chars().take(26).collect::<String>().trim_end().to_owned())
-                .collect::<Vec<_>>(),
-            words
-        );
-        let wire = String::from_utf8(held.pass(next.told().placements(), view.planes())).unwrap();
-        assert!(wire.contains("a=d,d=I") || wire.contains("a=T"));
-        assert!(
-            held.pass(next.told().placements(), view.planes())
-                .is_empty()
+            view.pointer(open.told(), Pointer::Release(Cell::new(y, x))),
+            Outcome::Unchanged
         );
     }
-    assert!(
-        String::from_utf8(held.forget())
-            .unwrap()
-            .contains("a=d,d=I")
+    let (y, x) = open.drawn_at("bash");
+    view.pointer(open.told(), Pointer::Press(Cell::new(y, x)));
+    assert_eq!(
+        view.pointer(open.told(), Pointer::Release(Cell::new(y, x))),
+        Outcome::Edited
     );
-    assert!(held.forget().is_empty());
-    let visible = frame::painted(&mut view, 120, 40);
-    held.pass(visible.told().placements(), view.planes());
-    view.paste("/new");
-    view.key(Key::Enter);
-    let empty = frame::painted(&mut view, 120, 40);
-    assert!(
-        !empty
-            .told()
-            .placements()
-            .iter()
-            .any(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
-    );
-    assert!(
-        String::from_utf8(held.pass(empty.told().placements(), view.planes()))
-            .unwrap()
-            .contains("a=d,d=I")
-    );
-}
-
-fn tool_has_shadow(view: &mut View, cols: u16, rows: u16) -> bool {
-    let shown = frame::painted(view, cols, rows);
-    let placement = shown
-        .told()
-        .placements()
-        .iter()
-        .find(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Tool(_)))
-        .unwrap();
-    let pixels = view.planes().image(placement.shade()).unwrap().pixels();
-    let tone = sindri::palette::channels(view.capabilities().palette().band(Band::Rail)).unwrap();
-    let pixel = pixels.get_pixel(pixels.width() / 2, pixels.height() - 2);
-    pixel.0[..3].iter().zip(tone).any(|(at, tone)| *at < tone)
+    let closed = frame::painted(&mut view, 80, 12);
+    assert!(!closed.rows().iter().any(|row| row.contains("first")));
 }
 
 #[test]
-fn compact_success_stops_at_the_four_result_row_head_allowance_even_without_a_fold() {
-    for (text, shadow) in [
-        ("", false),
-        ("one", false),
-        ("one\ntwo\nthree\nfour", false),
-        ("one\ntwo\nthree\nfour\nfive", true),
-        ("one\ntwo\nthree\nfour\nfive\nsix", true),
-    ] {
-        let mut view = View::of(
-            caps::pictured(),
-            railed(),
-            Transcript::of(disclosed_result(sindri_core::run::Exit::Code(0), text)),
-        );
-        assert_eq!(tool_has_shadow(&mut view, 120, 40), shadow, "{text:?}");
-    }
-}
-
-#[test]
-fn reader_opened_short_success_replaces_compact_pixels_and_keeps_source_after_resize() {
-    let text = "literal 界\n\n  aligned output";
+fn keyboard_call_fold_survives_resize_without_pointer_reports() {
     let mut view = View::of(
-        caps::pictured(),
-        railed(),
-        Transcript::of(disclosed_result(sindri_core::run::Exit::Code(0), text)),
+        caps::uncoloured(),
+        Facts::default().asked(),
+        Transcript::of(disclosed_result(
+            sindri_core::run::Exit::Code(0),
+            "first\nlast",
+        )),
     );
-    assert!(!tool_has_shadow(&mut view, 120, 40));
-    let closed = frame::painted(&mut view, 120, 40);
-    let mut held = sindri::plane::Held::default();
-    held.pass(closed.told().placements(), view.planes());
-    let (y, x) = closed.drawn_at("literal");
-    view.drag(Cell::new(y, x), Cell::new(y, x + 8));
-    frame::painted(&mut view, 120, 40);
-    assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
+    frame::painted(&mut view, 80, 24);
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
-    assert!(tool_has_shadow(&mut view, 120, 40));
-    let opened = frame::painted(&mut view, 120, 40);
-    let wire = String::from_utf8(held.pass(opened.told().placements(), view.planes())).unwrap();
-    assert!(wire.contains("a=d,d=I"));
-    assert!(wire.contains("a=T"));
-    assert!(
-        held.pass(opened.told().placements(), view.planes())
-            .is_empty()
-    );
-    for (cols, rows) in [(80, 24), (40, 24), (120, 40)] {
-        assert!(tool_has_shadow(&mut view, cols, rows));
+    for cols in [40, 80, 120] {
+        frame::painted(&mut view, cols, 24).drawn_at("last");
     }
-    let open = frame::painted(&mut view, 120, 40);
-    let (row, _) = open.drawn_at("literal");
-    view.drag(Cell::new(row, 2), Cell::new(row, 20));
-    frame::painted(&mut view, 120, 40);
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
-    assert!(!tool_has_shadow(&mut view, 120, 40));
-    let closed = frame::painted(&mut view, 120, 40);
-    let wire = String::from_utf8(held.pass(closed.told().placements(), view.planes())).unwrap();
-    assert!(wire.contains("a=d,d=I"));
-    assert!(wire.contains("a=T"));
     assert!(
-        held.pass(closed.told().placements(), view.planes())
-            .is_empty()
+        !frame::painted(&mut view, 80, 24)
+            .rows()
+            .iter()
+            .any(|row| row.contains("last"))
     );
-    assert!(
-        String::from_utf8(held.forget())
-            .unwrap()
-            .contains("a=d,d=I")
-    );
-    assert!(held.forget().is_empty());
 }
 
 #[test]
-fn short_failures_and_results_without_success_facts_keep_full_shadows() {
-    for exit in [Some(sindri_core::run::Exit::Code(7)), None] {
-        let mut entries = disclosed_result(sindri_core::run::Exit::Code(0), "diagnostic");
-        if let Entry::Result { exit: recorded, .. } = &mut entries[1] {
-            *recorded = exit;
-        }
-        let mut view = View::of(caps::pictured(), railed(), Transcript::of(entries));
-        assert!(tool_has_shadow(&mut view, 120, 40));
-    }
-}
-
-#[test]
-fn live_work_settles_to_compact_in_place_and_releases_replaced_graphics() {
-    let entries = disclosed_result(sindri_core::run::Exit::Code(0), "done");
-    let document = fixture::document();
-    let facts = railed()
-        .recorded(&document)
-        .transcribed(vec![entries[0].clone()]);
-    let mut view = View::of(caps::pictured(), facts.clone(), Transcript::none());
-    view.handed(facts.clone());
-    let live = frame::painted(&mut view, 120, 40);
-    let head = live.drawn_at("bash");
-    let invocation = live.drawn_at("make check");
-    let mut held = sindri::plane::Held::default();
-    held.pass(live.told().placements(), view.planes());
-    view.handed(facts.transcribed(entries));
-    let settled = frame::painted(&mut view, 120, 40);
-    assert_eq!(settled.drawn_at("bash"), head);
-    assert_eq!(settled.drawn_at("make check"), invocation);
-    settled.drawn_at("done");
-    assert!(view.scroll().is_tail());
-    assert!(!tool_has_shadow(&mut view, 120, 40));
-    let wire = String::from_utf8(held.pass(settled.told().placements(), view.planes())).unwrap();
-    assert!(wire.contains("a=d,d=I"));
-    assert!(wire.contains("a=T"));
-    assert!(
-        held.pass(settled.told().placements(), view.planes())
-            .is_empty()
+fn a_laid_call_path_press_leaves_the_fold_to_the_heads_other_columns() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("notes.html"), "notes").unwrap();
+    let secrets = SecretSet::default();
+    let boundary = sindri_core::policy::Boundary::from_config(
+        &sindri_core::config::Config::default(),
+        root.path(),
+        sindri_core::policy::Enforcement::Bubblewrap,
+    )
+    .unwrap();
+    let ground = sindri_core::open::Ground::new(&boundary, root.path(), root.path()).unwrap();
+    let mut entries = disclosed_result(sindri_core::run::Exit::Code(0), "opened");
+    entries[0] = Entry::Call {
+        turn: 1,
+        id: None,
+        name: secrets.redact("open"),
+        arguments: secrets.redact(r#"{"path":"notes.html"}"#),
+    };
+    let mut view = View::of(
+        caps::pointing(),
+        Facts::default().asked().grounded(Some(ground)),
+        Transcript::of(entries),
     );
+    let closed = frame::painted(&mut view, 80, 24);
+    let (y, x) = closed.drawn_at("notes.html");
+    assert!(closed.told().links().at(y, x).is_some());
+    view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+    assert_eq!(
+        view.pointer(closed.told(), Pointer::Release(Cell::new(y, x))),
+        Outcome::Unchanged
+    );
+    let unchanged = frame::painted(&mut view, 80, 24);
+    assert_eq!(unchanged.rows(), closed.rows());
+    let (y, x) = unchanged.drawn_at("open");
+    view.pointer(unchanged.told(), Pointer::Press(Cell::new(y, x)));
+    assert_eq!(
+        view.pointer(unchanged.told(), Pointer::Release(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    frame::painted(&mut view, 80, 24).drawn_at("opened");
 }

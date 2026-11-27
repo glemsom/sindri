@@ -4,16 +4,16 @@ expression: self.text(name)
 ---
 rail at 99x24
 00 |┃›where does rendering live?                                                                       | dim:1 plain:98
-01 |  │ ✓ bash success 23 ms                              │                                            | dim:4 ok:1 plain:13 dim:6 plain:30 dim:1 plain:44
-02 |  │   rg -n 'fence' src                               │                                            | dim:4 plain:50 dim:1 plain:44
-03 |  │   src/rows.rs: the glyph a turn opens with        │                                            | dim:4 muted:42 plain:8 dim:1 plain:44
-04 |  │   src/rows.rs: a word longer than a row is broken │                                            | dim:4 muted:49 plain:1 dim:1 plain:44
-05 |  │   exit 0 · 412 bytes                              │                                            | dim:24 plain:30 dim:1 plain:44
-06 |                                                                                                   | plain:99
-07 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a     | plain:99
-08 |  rendering: the TUI and any reader draw one run from one value, and the core may not name a       | plain:99
-09 |  terminal at all.                                                                                 | plain:99
-10 |⠹ 4.2s                                                                                             | accent:1 plain:1 dim:4 plain:93
+01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯ 4 rows kept back                                              | dim:4 ok:2 dim:5 plain:17 dim:25 plain:46
+02 |                                                                                                   | plain:99
+03 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a     | plain:99
+04 |  rendering: the TUI and any reader draw one run from one value, and the core may not name a       | plain:99
+05 |  terminal at all.                                                                                 | plain:99
+06 |⠹ 4.2s                                                                                             | accent:1 plain:1 dim:4 plain:93
+07 |                                                                                                   | plain:99
+08 |                                                                                                   | plain:99
+09 |                                                                                                   | plain:99
+10 |                                                                                                   | plain:99
 11 |                                                                                                   | plain:99
 12 |                                                                                                   | plain:99
 13 |                                                                                                   | plain:99

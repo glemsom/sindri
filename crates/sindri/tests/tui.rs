@@ -2224,8 +2224,13 @@ fn ask(pty: &mut Pty, drawn: &Drawn, wire: &Wire) {
 
 fn answered(drawn: &Drawn) {
     assert!(
-        drawn.wait_until(|frame| ANSWER_WORDS.iter().all(|word| frame.contains(word))
-            && frame.contains('\u{2713}')),
+        drawn.wait_until(|drawn| {
+            let rows = frame::read(drawn, COLS, ROWS).rows();
+            ANSWER_WORDS
+                .iter()
+                .all(|word| rows.iter().any(|row| row.contains(word)))
+                && rows.iter().any(|row| row.contains('\u{2713}'))
+        }),
         "the run answered and stopped: {:?}",
         drawn.text()
     );
@@ -4218,7 +4223,12 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
     );
 
     assert!(
-        drawn.wait_until(|frame| frame.contains("exit 0") && frame.contains("opened.html")),
+        drawn.wait_until(|drawn| {
+            frame::read(drawn, COLS, ROWS)
+                .rows()
+                .iter()
+                .any(|row| row.contains("✓ open opened.html") && row.contains("rows kept back"))
+        }),
         "the band draws the call settled with the target it opened and its exit: {:?}",
         drawn.text()
     );
@@ -4271,8 +4281,7 @@ fn an_opener_that_fails_is_drawn_under_its_call_with_its_own_exit_and_words() {
     assert!(
         drawn.wait_until(|drawn| {
             let rows = frame::read(drawn, COLS, ROWS).rows();
-            rows.iter()
-                .any(|row| row.contains("\u{2717} open failure exit 3"))
+            rows.iter().any(|row| row.contains("\u{2717} open exit 3"))
                 && rows.iter().any(|row| row.contains("no handler for .html"))
         }),
         "the band draws the call settled under a cross with the opener's own exit and its own words: \
@@ -4315,8 +4324,7 @@ fn a_refused_open_call_is_drawn_under_its_call_and_the_run_answers_on() {
     assert!(
         drawn.wait_until(|drawn| {
             let rows = frame::read(drawn, COLS, ROWS).rows();
-            rows.iter()
-                .any(|row| row.contains("\u{2717} open failure exit 1"))
+            rows.iter().any(|row| row.contains("\u{2717} open exit 1"))
                 && rows
                     .iter()
                     .any(|row| row.contains("refused:") && row.contains("handbook"))
@@ -4331,7 +4339,7 @@ fn a_refused_open_call_is_drawn_under_its_call_and_the_run_answers_on() {
     let at = |needle: &str| rows.iter().position(|row| row.contains(needle));
     let (call, settled, refused) = (
         at("open").expect("the call is drawn"),
-        at("\u{2717} open failure exit 1").expect("its verdict is drawn"),
+        at("\u{2717} open exit 1").expect("its verdict is drawn"),
         at("refused:").expect("the refusal is drawn"),
     );
     assert!(

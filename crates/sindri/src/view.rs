@@ -321,6 +321,7 @@ pub struct View {
     rows: Rows,
     scroll: Scroll,
     landed: u32,
+    fold_top: Option<u32>,
     drawn: Drawn,
     planes: Planes,
     composer: Composer,
@@ -384,6 +385,7 @@ impl View {
             rows,
             scroll,
             landed: 0,
+            fold_top: None,
             drawn: Drawn::none(),
             planes: Planes::default(),
             composer: Composer::new(),
@@ -1107,6 +1109,7 @@ impl View {
         } else {
             let row = anchor.row - band.y;
             match painted.drawn().entry(row) {
+                _ if painted.links().at(anchor.row, anchor.column).is_some() => Outcome::Unchanged,
                 Some(entry) if self.pressed_fold(painted.drawn(), entry, row) => Outcome::Edited,
                 _ => Outcome::Unchanged,
             }
@@ -1122,7 +1125,11 @@ impl View {
         let Some(row) = row.checked_sub(rows.start) else {
             return false;
         };
-        self.rows.press(at, row)
+        let changed = self.rows.press(at, row);
+        if changed && self.rows.is_call(at) {
+            self.fold_top = drawn.top(self.scroll);
+        }
+        changed
     }
 
     fn chosen(&mut self, at: usize) -> bool {
@@ -1324,13 +1331,18 @@ impl View {
             Some(seen) if !reflowed => total.saturating_sub(seen),
             _ => 0,
         };
-        let back = match self.scroll.is_tail() {
-            true => 0,
-            false => self
-                .scroll
-                .back()
-                .saturating_add(grown)
-                .min(self.rows.deepest(area.height)),
+        let back = match self.fold_top.take() {
+            Some(top) => total
+                .saturating_sub(u32::from(area.height))
+                .saturating_sub(top),
+            None => match self.scroll.is_tail() {
+                true => 0,
+                false => self
+                    .scroll
+                    .back()
+                    .saturating_add(grown)
+                    .min(self.rows.deepest(area.height)),
+            },
         };
         self.scrolled(Scroll::of(back));
         if !self.scroll.is_tail() {
@@ -1373,35 +1385,6 @@ impl View {
                     area.height,
                     self.capabilities.pictures().cell(),
                     &palette,
-                )
-            });
-            let decoration = decoration.or_else(|| {
-                let start = rows.iter().position(|row| row.tool_surface().is_some())?;
-                let end = rows.iter().rposition(|row| row.tool_surface().is_some())?;
-                let from = first.max(start);
-                let to = (first + shown.len()).min(end + 1);
-                if from >= to {
-                    return None;
-                }
-                let (width, ink, compact) = rows[start].tool_surface()?;
-                Placement::tool(
-                    u32::try_from(piece.entry).ok()?,
-                    Rect::new(
-                        area.x + MARGIN,
-                        y + u16::try_from(from - first).ok()?,
-                        width
-                            .saturating_sub(MARGIN)
-                            .min(area.width.saturating_sub(MARGIN * 2)),
-                        u16::try_from(to - from).ok()?,
-                    ),
-                    crate::plane::SurfaceWindow {
-                        rows: end + 1 - start,
-                        skip: from - start,
-                        band_rows: area.height,
-                    },
-                    self.capabilities.pictures().cell(),
-                    &palette,
-                    crate::plane::ToolStyle { ink, compact },
                 )
             });
             if let Some(placement) = decoration {

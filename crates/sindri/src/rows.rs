@@ -51,6 +51,8 @@ const KEPT: char = '⋯';
 
 const CUT: char = '…';
 
+const RULE_INSET: &str = "  │ ";
+
 const INVOCATION_SOURCE: usize = usize::MAX;
 const RESULT_SOURCE: usize = usize::MAX - 1;
 
@@ -86,23 +88,6 @@ impl Place {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ToolOutcome {
-    Running,
-    Failed,
-    Settled,
-}
-
-impl ToolOutcome {
-    fn ink(self) -> Ink {
-        match self {
-            Self::Running => Ink::Accent,
-            Self::Failed => Ink::Err,
-            Self::Settled => Ink::Dim,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     spans: Vec<(String, Look)>,
@@ -113,9 +98,6 @@ pub struct Row {
     source: Option<String>,
     names: Option<usize>,
     band: Option<Band>,
-    tool_width: Option<u16>,
-    tool_compact: bool,
-    tool_outcome: ToolOutcome,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -158,9 +140,6 @@ impl Row {
             source: None,
             names: None,
             band: None,
-            tool_width: None,
-            tool_compact: false,
-            tool_outcome: ToolOutcome::Settled,
         }
     }
 
@@ -188,22 +167,12 @@ impl Row {
             source: None,
             names: None,
             band: None,
-            tool_width: None,
-            tool_compact: false,
-            tool_outcome: ToolOutcome::Settled,
         }
     }
 
     pub fn standing(mut self, band: Band) -> Row {
         self.band = Some(band);
         self
-    }
-
-    pub(crate) fn tool_surface(&self) -> Option<(u16, Ink, bool)> {
-        self.tool_width.map(|width| {
-            let ink = self.tool_outcome.ink();
-            (width, ink, self.tool_compact)
-        })
     }
 
     pub fn stands_on(&self) -> Option<Band> {
@@ -289,9 +258,6 @@ impl Row {
             source: self.source,
             names: self.names,
             band: self.band,
-            tool_width: self.tool_width,
-            tool_compact: self.tool_compact,
-            tool_outcome: self.tool_outcome,
         }
     }
 
@@ -356,20 +322,6 @@ impl Row {
         links: &mut Links,
         sizes: &mut Sizes,
     ) {
-        if let Some(width) = self.tool_width {
-            pen::claim(
-                buffer,
-                Rect::new(
-                    area.x + MARGIN,
-                    area.y,
-                    width
-                        .saturating_sub(MARGIN)
-                        .min(area.width.saturating_sub(margins())),
-                    1,
-                ),
-                palette.ground(Some(Band::Rail)),
-            );
-        }
         if let Some(band) = self.band {
             let surface = match band {
                 Band::Prompt => Rect {
@@ -388,16 +340,6 @@ impl Row {
                 pen::write(buffer, area, &spans, Clip::Edge, palette);
             }
             None => pen::write(buffer, area, &self.spans, Clip::Edge, palette),
-        }
-        if let Some(width) = self.tool_width {
-            for x in [
-                area.x.saturating_add(MARGIN),
-                area.x.saturating_add(width - 1),
-            ] {
-                if x < area.right().saturating_sub(MARGIN) {
-                    pen::glyph(buffer, x, area.y, '│', Ink::Dim, palette);
-                }
-            }
         }
         if area.width > 0 && self.cut(area.width) {
             pen::glyph(
@@ -469,12 +411,13 @@ pub fn layout(entry: &Entry, cols: u16) -> Vec<Row> {
 }
 
 pub fn layout_on(entry: &Entry, cols: u16, surface: &Surface, ground: Option<&Ground>) -> Vec<Row> {
-    laid(entry, cols, surface, ground, Fold::Closed, None).0
+    laid(entry, cols, INDENT, surface, ground, Fold::Closed, None).0
 }
 
 fn laid(
     entry: &Entry,
     cols: u16,
+    gutter: &str,
     surface: &Surface,
     ground: Option<&Ground>,
     fold: Fold,
@@ -486,13 +429,15 @@ fn laid(
         Entry::Call {
             name, arguments, ..
         } => (
-            opening(
+            vec![call_row(
                 &name.to_string(),
                 &arguments.to_string(),
+                None,
+                None,
+                None,
                 cols,
                 ground,
-                None,
-            ),
+            )],
             None,
         ),
         Entry::Result {
@@ -510,6 +455,7 @@ fn laid(
                 *bytes,
                 *elapsed_ms,
                 cols,
+                gutter,
             ),
             cols,
             fold,
@@ -588,15 +534,19 @@ fn kept_back(kept: usize, cols: u16) -> Row {
 #[derive(Debug, Default)]
 struct Tally {
     calls: usize,
+    failed: usize,
     files: BTreeSet<String>,
     elapsed_ms: u64,
 }
 
 impl Tally {
-    fn words(&self) -> String {
+    fn words(&self, cols: u16) -> String {
         let mut said: Vec<String> = Vec::new();
         if self.calls > 0 {
             said.push(format!("{} call{}", self.calls, plural(self.calls)));
+        }
+        if self.failed > 0 {
+            said.push(format!("{} failed", self.failed));
         }
         if !self.files.is_empty() {
             said.push(format!(
@@ -607,6 +557,9 @@ impl Tally {
         }
         if self.elapsed_ms > 0 {
             said.push(took(self.elapsed_ms));
+        }
+        while said.len() > 1 && pen::cells(&said.join(" · ")) > cols {
+            said.pop();
         }
         said.join(" · ")
     }
@@ -637,7 +590,7 @@ fn stopped(stop: &Stop, cols: u16) -> Vec<Row> {
     if let Stop::Error(message) = stop {
         let said = message.to_string();
         let line = said.lines().next().unwrap_or_default();
-        rows.extend(body(line, cols, None, Ink::Muted));
+        rows.extend(body(line, cols, INDENT, None, Ink::Muted));
     }
     rows
 }
@@ -757,19 +710,19 @@ fn opening(
     name: &str,
     arguments: &str,
     cols: u16,
+    gutter: &str,
     ground: Option<&Ground>,
     exit: Option<Exit>,
 ) -> Vec<Row> {
     let words = spell::of(name, arguments);
     let mut rows = tool_head(name, exit, None, cols);
-    let gutter = pen::cells(margin(INDENT, cols).0);
     let continuation = if cols > 16 { "  " } else { "" };
     let mut invocation = match way(name, arguments, &words, ground) {
-        Some(way) => body(&words, cols, Some(way), Ink::Plain),
+        Some(way) => body(&words, cols, gutter, Some(way), Ink::Plain),
         None => wrap_under(
             &words,
-            margin(INDENT, cols).1,
-            margin(INDENT, cols)
+            margin(gutter, cols).1,
+            margin(gutter, cols)
                 .1
                 .saturating_sub(pen::cells(continuation)),
         )
@@ -778,7 +731,7 @@ fn opening(
         .map(|(at, line)| {
             let inset = if at == 0 { "" } else { continuation };
             words_past(
-                margin(INDENT, cols).0,
+                margin(gutter, cols).0,
                 Ink::Plain,
                 Ink::Plain,
                 format!("{inset}{line}"),
@@ -788,7 +741,10 @@ fn opening(
         .collect(),
     };
     for row in &mut invocation {
-        *row = row.clone().fenced(INVOCATION_SOURCE, gutter).sourced("");
+        *row = row
+            .clone()
+            .fenced(INVOCATION_SOURCE, pen::cells(margin(gutter, cols).0))
+            .sourced("");
     }
     if let Some(row) = invocation.first_mut() {
         *row = row.clone().sourced(spell::source(name, arguments));
@@ -814,11 +770,12 @@ fn result_rows(
     bytes: u64,
     elapsed_ms: u64,
     cols: u16,
+    gutter: &str,
 ) -> Vec<Row> {
     let mut rows = name.map_or_else(Vec::new, |name| {
         tool_head(name, exit, Some(elapsed_ms), cols)
     });
-    let gutter = margin(INDENT, cols).0;
+    let gutter = margin(gutter, cols).0;
     rows.extend(text.split('\n').filter(|_| !text.is_empty()).map(|line| {
         Row::of([
             (String::from(gutter), Ink::Muted),
@@ -831,17 +788,122 @@ fn result_rows(
         Some(exit) => format!("{} · {bytes} bytes", exit.word()),
         None => format!("{bytes} bytes"),
     };
-    rows.extend(body(&detail, cols, None, Ink::Dim));
+    rows.extend(body(&detail, cols, gutter, None, Ink::Dim));
     rows
 }
 
-fn tool_head(name: &str, exit: Option<Exit>, elapsed_ms: Option<u64>, cols: u16) -> Vec<Row> {
-    let (marker, ink, outcome) = match (exit, elapsed_ms) {
-        (Some(exit), _) if exit.is_ok() => (CHECK, Ink::Ok, String::from("success")),
-        (Some(exit), _) => (CROSS, Ink::Err, format!("failure {}", exit.word())),
-        (None, Some(_)) => (CHECK, Ink::Dim, String::from("completed")),
-        (None, None) => (PENDING, Ink::Dim, String::from("running")),
+fn call_row(
+    name: &str,
+    arguments: &str,
+    exit: Option<Exit>,
+    elapsed_ms: Option<u64>,
+    kept: Option<usize>,
+    cols: u16,
+    ground: Option<&Ground>,
+) -> Row {
+    let (marker, ink, outcome) = tool_outcome(exit, elapsed_ms);
+    let outcome = if outcome.is_empty() {
+        outcome
+    } else {
+        format!("{outcome} ")
     };
+    let command = spell::of(name, arguments)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let count = kept.map_or_else(String::new, |kept| format!(" {KEPT} {kept} rows kept back"));
+    let mut tool = format!("{name} ");
+    let mut duration = elapsed_ms.map_or_else(String::new, |ms| format!(" {}", took(ms)));
+    let room = margin(INDENT, cols).1;
+    let width = |tool: &str, duration: &str| {
+        pen::cells(&format!("{tool}{outcome}{command}{duration}{count}"))
+    };
+    if name == "bash" && width(&tool, &duration) > room {
+        tool.clear();
+    }
+    if width(&tool, &duration) > room {
+        duration.clear();
+    }
+    let fixed = pen::cells(&format!("{tool}{outcome}{duration}{count}"));
+    if fixed > room {
+        let words = kept.map_or_else(
+            || {
+                if room <= 2 {
+                    command.chars().take(usize::from(room)).collect()
+                } else {
+                    clip_head(&format!("{outcome}{command}"), room)
+                }
+            },
+            |kept| {
+                let full = format!("{KEPT} {kept} rows kept back");
+                let compact = format!("{KEPT} {kept}");
+                if pen::cells(&full) <= room {
+                    full
+                } else if pen::cells(&compact) <= room {
+                    compact
+                } else {
+                    kept.to_string()
+                }
+            },
+        );
+        return marked(&marker.to_string(), ink, vec![(words, Ink::Dim)], cols)
+            .fenced(INVOCATION_SOURCE, pen::cells(margin(INDENT, cols).0))
+            .sourced(spell::source(name, arguments));
+    }
+    let allowance = room.saturating_sub(fixed);
+    let command = clip_head(&command, allowance);
+    let path = way(name, arguments, &command, ground);
+    let command_look = match path {
+        Some(_) => Look::plain(Ink::Plain).underlined(Ink::Dim),
+        None => Look::plain(Ink::Plain),
+    };
+    let row = Row::of([
+        (format!("{marker} "), Look::plain(ink)),
+        (format!("{tool}{outcome}"), Look::plain(Ink::Dim)),
+        (command.clone(), command_look),
+        (format!("{duration}{count}"), Look::plain(Ink::Dim)),
+    ])
+    .fenced(INVOCATION_SOURCE, 2)
+    .sourced(spell::source(name, arguments));
+    match path {
+        Some(way) => row.linking(
+            2 + pen::cells(&format!("{tool}{outcome}")),
+            pen::cells(&command),
+            way.destination(),
+        ),
+        None => row,
+    }
+}
+
+fn clip_head(words: &str, room: u16) -> String {
+    if pen::cells(words) <= room {
+        return words.to_owned();
+    }
+    if room == 0 {
+        return String::new();
+    }
+    let mut width = 0;
+    let head: String = words
+        .chars()
+        .take_while(|glyph| {
+            width += pen::cell(*glyph);
+            width < room
+        })
+        .collect();
+    format!("{head}{CUT}")
+}
+
+fn tool_outcome(exit: Option<Exit>, elapsed_ms: Option<u64>) -> (char, Ink, String) {
+    match (exit, elapsed_ms) {
+        (Some(exit), _) if exit.is_ok() => (CHECK, Ink::Ok, String::new()),
+        (Some(exit), _) => (CROSS, Ink::Err, exit.word().to_owned()),
+        (None, Some(_)) => (PENDING, Ink::Dim, String::new()),
+        (None, None) => (PENDING, Ink::Dim, String::from("running")),
+    }
+}
+
+fn tool_head(name: &str, exit: Option<Exit>, elapsed_ms: Option<u64>, cols: u16) -> Vec<Row> {
+    let (marker, ink, outcome) = tool_outcome(exit, elapsed_ms);
     let words = format!("{name} {outcome}");
     let duration = elapsed_ms
         .map(|ms| format!(" {}", took(ms)))
@@ -873,6 +935,7 @@ fn answered(
     call: &Entry,
     result: &Entry,
     cols: u16,
+    gutter: &str,
     surface: &Surface,
     ground: Option<&Ground>,
     fold: Fold,
@@ -891,15 +954,57 @@ fn answered(
         },
     ) = (call, result)
     else {
-        let (mut rows, _) = laid(call, cols, surface, ground, fold, None);
-        let (under, kept) = laid(result, cols, surface, ground, fold, None);
+        let (mut rows, _) = laid(call, cols, gutter, surface, ground, fold, None);
+        let (under, kept) = laid(result, cols, gutter, surface, ground, fold, None);
         rows.extend(under);
         return (rows, kept);
     };
+    if fold == Fold::Closed {
+        let output = result_rows(
+            None,
+            *exit,
+            &text.to_string(),
+            *bytes,
+            *elapsed_ms,
+            cols,
+            gutter,
+        );
+        let diagnostic = exit
+            .is_some_and(|exit| !exit.is_ok())
+            .then(|| {
+                output
+                    .iter()
+                    .rfind(|row| row.source().is_some_and(|text| !text.trim().is_empty()))
+                    .cloned()
+            })
+            .flatten();
+        let invocation = opening(
+            &name.to_string(),
+            &arguments.to_string(),
+            cols,
+            gutter,
+            ground,
+            *exit,
+        );
+        let kept =
+            invocation.len().saturating_sub(1) + output.len() - usize::from(diagnostic.is_some());
+        let mut rows = vec![call_row(
+            &name.to_string(),
+            &arguments.to_string(),
+            *exit,
+            Some(*elapsed_ms),
+            Some(kept),
+            cols,
+            ground,
+        )];
+        rows.extend(diagnostic);
+        return (rows, Some(kept));
+    }
     let invocation = opening(
         &name.to_string(),
         &arguments.to_string(),
         cols,
+        gutter,
         ground,
         *exit,
     );
@@ -907,12 +1012,27 @@ fn answered(
     let live_head = tool_head(&name.to_string(), *exit, None, cols).len();
     rows.extend(invocation.into_iter().skip(live_head));
     let (under, kept) = folded(
-        result_rows(None, *exit, &text.to_string(), *bytes, *elapsed_ms, cols),
+        result_rows(
+            None,
+            *exit,
+            &text.to_string(),
+            *bytes,
+            *elapsed_ms,
+            cols,
+            gutter,
+        ),
         cols,
-        fold,
+        Fold::Closed,
         exit.is_some_and(|exit| !exit.is_ok()),
     );
     rows.extend(under);
+    if kept.is_some() {
+        let detail = match exit {
+            Some(exit) => format!("{} · {bytes} bytes", exit.word()),
+            None => format!("{bytes} bytes"),
+        };
+        rows.extend(body(&detail, cols, gutter, None, Ink::Dim));
+    }
     (rows, kept)
 }
 
@@ -940,11 +1060,11 @@ fn fitted(spans: Vec<(String, Ink)>, cols: u16) -> Row {
     Row::of(kept)
 }
 
-fn body(text: &str, cols: u16, way: Option<Way>, ink: Ink) -> Vec<Row> {
+fn body(text: &str, cols: u16, gutter: &str, way: Option<Way>, ink: Ink) -> Vec<Row> {
     if text.is_empty() {
         return Vec::new();
     }
-    let (gutter, room) = margin(INDENT, cols);
+    let (gutter, room) = margin(gutter, cols);
     let named = way.and_then(|way| markdown::body(text, room, &way));
     match named {
         Some(rows) => rows
@@ -1570,8 +1690,16 @@ impl Rows {
             return &[];
         }
         let tool = self.held[at].what.is_tool() && !one;
-        let edged = tool && self.measure.cols > 16;
-        let cols = self.measure.cols.saturating_sub(if edged { 6 } else { 0 });
+        let ruled = tool && self.measure.cols > 16;
+        let rule = pen::cells(RULE_INSET);
+        let gutter = match ruled {
+            true => "",
+            false => INDENT,
+        };
+        let cols = self.measure.cols.saturating_sub(match ruled {
+            true => rule,
+            false => 0,
+        });
         let surface = &self.measure.surface;
         let ground = self.measure.ground.as_ref();
         let held = &self.held[at];
@@ -1583,47 +1711,23 @@ impl Rows {
                         true => self.head.as_ref(),
                         false => None,
                     };
-                    Some(laid(entry, cols, surface, ground, held.fold, head))
+                    Some(laid(entry, cols, gutter, surface, ground, held.fold, head))
                 }
-                (What::Fact(call), Some(result)) => {
-                    Some(answered(call, result, cols, surface, ground, held.fold))
-                }
+                (What::Fact(call), Some(result)) => Some(answered(
+                    call, result, cols, gutter, surface, ground, held.fold,
+                )),
                 (What::Live { .. }, _) => None,
             };
             if let Some((mut rows, kept)) = laid {
-                if edged {
-                    let result = held.result.as_ref().or(match &held.what {
-                        What::Fact(entry @ Entry::Result { .. }) => Some(entry),
-                        _ => None,
-                    });
-                    let compact = held.fold == Fold::Closed && kept.is_none() && result.is_some_and(|entry| {
-                        matches!(entry, Entry::Result { exit: Some(exit), text, .. }
-                            if exit.is_ok() && (text.to_string().is_empty() || text.to_string().split('\n').count() <= FOLD_HEAD))
-                    });
-                    let width = rows
-                        .iter()
-                        .map(Row::width)
-                        .max()
-                        .unwrap_or(0)
-                        .min(cols)
-                        .saturating_add(6);
+                if ruled {
                     for row in &mut rows {
-                        let mut inset = row.clone().shifted(4);
+                        let mut inset = row.clone().shifted(rule);
                         inset
                             .spans
-                            .insert(0, (String::from("    "), Look::plain(Ink::Dim)));
+                            .insert(0, (String::from(RULE_INSET), Look::plain(Ink::Dim)));
                         if let Some(fence) = &mut inset.fence {
-                            fence.gutter = fence.gutter.saturating_add(4);
+                            fence.gutter = fence.gutter.saturating_add(rule);
                         }
-                        inset.tool_width = Some(width);
-                        inset.tool_compact = compact;
-                        inset.tool_outcome = match result {
-                            Some(Entry::Result {
-                                exit: Some(exit), ..
-                            }) if !exit.is_ok() => ToolOutcome::Failed,
-                            Some(_) => ToolOutcome::Settled,
-                            None => ToolOutcome::Running,
-                        };
                         *row = inset;
                     }
                 }
@@ -1681,8 +1785,16 @@ impl Rows {
                     tally.files.insert(path);
                 }
             }
-            if let Some(Entry::Result { elapsed_ms, .. }) = result_of(held) {
+            if let Some(Entry::Result {
+                elapsed_ms, exit, ..
+            }) = result_of(held)
+            {
                 tally.elapsed_ms = tally.elapsed_ms.saturating_add(*elapsed_ms);
+                if matches!(held.what, What::Fact(Entry::Call { .. }))
+                    && exit.is_some_and(|exit| !exit.is_ok())
+                {
+                    tally.failed += 1;
+                }
             }
         }
         tally
@@ -1707,16 +1819,18 @@ impl Rows {
         marked(
             &KEPT.to_string(),
             Ink::Dim,
-            vec![(self.tally(work).words(), Ink::Dim)],
+            vec![(self.tally(work).words(margin(INDENT, cols).1), Ink::Dim)],
             cols,
         )
     }
 
     fn newest_fold(&mut self) -> Option<usize> {
         for at in (0..self.held.len()).rev() {
-            if is_prompt(&self.held[at]) {
+            if holds_fold(&self.held[at]) && !self.one_row(&self.work(at)) {
                 self.rows(at);
-                if self.held[at].kept.is_some() {
+                if self.held[at].kept.is_some()
+                    || matches!(self.held[at].what, What::Fact(Entry::Call { .. }))
+                {
                     return Some(at);
                 }
             } else if matches!(self.held[at].place, Place::Opens(_))
@@ -1732,7 +1846,7 @@ impl Rows {
         let Some(at) = self.newest_fold() else {
             return false;
         };
-        match is_prompt(&self.held[at]) {
+        match holds_fold(&self.held[at]) && !self.one_row(&self.work(at)) {
             true => self.fold(at, self.held[at].fold.other()),
             false => self.toggle(at),
         }
@@ -1759,11 +1873,23 @@ impl Rows {
         self.opened(work.start, fold.other())
     }
 
+    pub fn is_call(&self, at: usize) -> bool {
+        self.held
+            .get(at)
+            .is_some_and(|held| matches!(held.what, What::Fact(Entry::Call { .. })))
+    }
+
     pub fn press(&mut self, at: usize, row: u16) -> bool {
         let Some(held) = self.held.get(at) else {
             return false;
         };
         if !is_prompt(held) {
+            if matches!(held.what, What::Fact(Entry::Call { .. })) && !self.one_row(&self.work(at))
+            {
+                let fold = held.fold;
+                let head = self.rows(at).iter().position(|row| !row.spans.is_empty());
+                return head == Some(usize::from(row)) && self.fold(at, fold.other());
+            }
             if holds_fold(held) && !self.one_row(&self.work(at)) {
                 let fold = held.fold;
                 let rows = self.rows(at);

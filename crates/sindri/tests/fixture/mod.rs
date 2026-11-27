@@ -1242,6 +1242,8 @@ fn folded_run() -> Vec<Entry> {
             r#"{"command": "cargo test -p sindri --test rows"}"#,
         ),
         result(1, "bash", Exit::Code(0), &output(), 640, 1_800),
+        call(2, "bash", r#"{"command":"cargo test retry"}"#),
+        result(2, "bash", Exit::Code(7), "retry failed", 12, 600),
         answer(
             2,
             "Three rows of the fold are the whole of it: the head, the count and the last.",

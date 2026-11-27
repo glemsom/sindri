@@ -2993,7 +2993,7 @@ fn one_key_opens_the_newest_settled_work_and_the_same_key_closes_it_again() {
         frame_rows(&open)
     );
     assert!(
-        holds(&open, "17 rows kept back"),
+        holds(&open, "22 rows kept back"),
         "and the result inside it keeps the fold, the head and the count it was handed by: {:?}",
         frame_rows(&open)
     );
@@ -3004,11 +3004,11 @@ fn one_key_opens_the_newest_settled_work_and_the_same_key_closes_it_again() {
         "and the same key closes the work again"
     );
     let closed = painted(&mut view, 120, 40);
-    assert_eq!(
-        frame_rows(&closed),
-        frame_rows(&settled),
-        "a work closed by its own key is the frame the reader was handed before"
-    );
+    assert!(holds(&closed, "test rows::a_row_of_output_1 ... ok"));
+    view.key(Key::Fold);
+    let closed = painted(&mut view, 120, 40);
+    assert!(holds(&closed, "22 rows kept back"));
+    assert!(!holds(&closed, "test rows::a_row_of_output_1 ... ok"));
 }
 
 #[test]
@@ -5963,6 +5963,9 @@ fn a_call_the_record_holds_and_the_result_that_settled_it_are_one_entry_of_the_b
         named[0].trim_start().starts_with("│ ✓"),
         "and it wears the verdict the result settled on: {named:?}"
     );
+    assert!(!holds(&drawn, "exit 0"));
+    view.key(Key::Fold);
+    let drawn = painted(&mut view, 100, 30);
     for said in ["exit 0", "a.txt"] {
         assert!(
             holds(&drawn, said),
@@ -6628,7 +6631,7 @@ fn a_press_on_a_settled_works_row_opens_it_and_a_press_on_its_head_folds_it() {
     );
     let opened = painted(&mut view, 120, 40);
     assert!(
-        holds(&opened, "test rows::a_row_of_output_1 ... ok"),
+        holds(&opened, "22 rows kept back"),
         "the work drawn open is the rows it stood for: {:?}",
         frame_rows(&opened)
     );

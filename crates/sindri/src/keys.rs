@@ -225,7 +225,7 @@ const COMPOSER: [Binding; 24] = [
     Binding {
         key: Key::Fold,
         name: "Ctrl-O",
-        does: "open or fold the newest work or prompt",
+        does: "open or fold the newest work, call or prompt",
         act: Act::Fold,
     },
     Binding {

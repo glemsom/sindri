@@ -572,3 +572,11 @@ fn settings_refused_40x14_keeps_the_refused_field_and_recovery_actions_visible()
 fn settings_mono_80x24_keeps_section_names_and_selection_without_colour() {
     fixture::assert_frame("settings-mono", 80, 24);
 }
+
+#[test]
+fn settled_exchange_tally_and_its_counted_calls_at_narrow_and_medium_widths() {
+    for width in [40, 80] {
+        fixture::assert_frame("fold", width, 24);
+        fixture::assert_frame("fold-open", width, 24);
+    }
+}
