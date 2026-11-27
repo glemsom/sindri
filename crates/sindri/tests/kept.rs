@@ -309,11 +309,11 @@ fn an_edit_that_still_reaches_the_mark_leaves_it_where_the_reader_put_it() {
         Some("/model"),
         "the mark of the card stands on the second row a bare slash leaves"
     );
-    card.ask(":");
+    card.ask("/");
     assert_eq!(
         card.rows().len(),
         commands::TABLE.len(),
-        "a colon names a skill's word without narrowing the rows, so every command is left"
+        "a slash keeps every command available"
     );
     assert_eq!(
         card.marked().as_deref(),
@@ -358,13 +358,8 @@ fn an_edit_that_re_ranks_the_rows_leaves_the_mark_at_the_index_it_stood_at() {
 
     assert_eq!(
         card.rows(),
-        [
-            String::from("/settings"),
-            String::from("/skill:"),
-            String::from("/stats")
-        ],
-        "`s` is the letter three names start, and the fourth row they leave is the one the \
-         reader stands on"
+        [String::from("/settings"), String::from("/stats")],
+        "`s` leaves the two matching builtin names"
     );
     assert_eq!(
         card.marked().as_deref(),
@@ -628,12 +623,12 @@ fn a_press_marks_the_row_of_the_card_it_landed_on() {
     let mut card = commands::Card::of("/s").expect("a card holds this word");
 
     assert!(
-        card.pressed(2),
-        "a press on the third row of the card chooses that row"
+        card.pressed(1),
+        "a press on the second row of the card chooses that row"
     );
     assert_eq!(
         card.selected(),
-        2,
+        1,
         "and the mark stands where the press landed"
     );
     assert_eq!(
@@ -646,20 +641,20 @@ fn a_press_marks_the_row_of_the_card_it_landed_on() {
         !card.pressed(3),
         "a press on a row the card does not hold chooses nothing"
     );
-    assert_eq!(card.selected(), 2, "and marks nothing");
+    assert_eq!(card.selected(), 1, "and marks nothing");
 
     let rows = card.body();
     assert_eq!(
-        rows[2].spans[0].0,
+        rows[1].spans[0].0,
         list::MARK,
         "the row the press landed on opens with the mark"
     );
     assert_eq!(
-        rows[2].spans[0].1.ink(),
+        rows[1].spans[0].1.ink(),
         Ink::Accent,
         "and is drawn in the accent, so the reader's eye lands on the row `Enter` takes"
     );
-    for (at, row) in rows.iter().enumerate().filter(|(at, _)| *at != 2) {
+    for (at, row) in rows.iter().enumerate().filter(|(at, _)| *at != 1) {
         assert_ne!(row.spans[0].0, list::MARK, "row {at} wears no mark");
         assert_eq!(
             row.spans[0].1.ink(),

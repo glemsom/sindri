@@ -721,11 +721,10 @@ fn stats(capabilities: Capabilities) -> View {
         Transcript::none(),
     );
     for name in LOADED_SKILLS {
-        view.paste(&format!("/skill:{name}"));
-        assert_eq!(
-            view.key(Key::Enter),
-            Outcome::Edited,
-            "a skill the catalog offers is one the frame loads"
+        view.paste(&format!("/{name}"));
+        assert!(
+            matches!(view.key(Key::Enter), Outcome::Send(_)),
+            "a skill invocation starts work and loads its instructions"
         );
     }
     view.paste("/stats");

@@ -74,17 +74,11 @@ fn every_command_in_the_list_reads_as_the_command_it_names() {
 }
 
 #[test]
-fn the_two_skill_spellings_are_one_line() {
-    assert_eq!(
-        commands::read("/skill:commit-message"),
-        commands::read("/skill commit-message"),
-        "the rule says `/skill:name` and `/skill name` are the same line, so they are one value \
-         here and neither is a second place a load is decided"
-    );
-    assert_eq!(
-        commands::read("/skill:commit-message"),
-        Some(Command::Skill(String::from("commit-message")))
-    );
+fn legacy_skill_spellings_are_unknown_commands() {
+    for draft in ["/skill:commit-message", "/skill commit-message"] {
+        assert_eq!(commands::read(draft), None);
+        assert!(commands::Card::of(draft).is_none());
+    }
 }
 
 #[test]
@@ -253,7 +247,7 @@ fn new_empties_the_loaded_skill_set() {
     let root = workspace_with("commit-message", "");
     let loaded = Loaded::default();
     let mut view = frame_holding(root.path(), &loaded);
-    say(&mut view, "/skill:commit-message");
+    say(&mut view, "/commit-message");
     assert_eq!(
         loaded.names(),
         ["commit-message"],
@@ -268,51 +262,6 @@ fn new_empties_the_loaded_skill_set() {
          the history empties the one set: {:?}",
         loaded.names()
     );
-}
-
-#[test]
-fn a_skill_a_person_may_not_ask_for_is_not_loaded() {
-    let root = workspace_with("model-only", "user-invocable: false\n");
-    let loaded = Loaded::default();
-    let mut view = frame_holding(root.path(), &loaded);
-
-    assert_eq!(
-        say(&mut view, "/skill:model-only"),
-        Outcome::Unchanged,
-        "which names a person may ask for is the catalog's decision, and this one is the \
-         model's door alone"
-    );
-    assert!(loaded.names().is_empty());
-}
-
-#[test]
-fn a_skill_the_catalog_does_not_hold_loads_nothing() {
-    let root = workspace_with("commit-message", "");
-    let loaded = Loaded::default();
-    let mut view = frame_holding(root.path(), &loaded);
-
-    assert_eq!(say(&mut view, "/skill:no-such-skill"), Outcome::Unchanged);
-    assert!(
-        loaded.names().is_empty(),
-        "a name in the set would answer a later model load with `already_loaded` for a body \
-         nothing ever handed over"
-    );
-}
-
-#[test]
-fn loading_one_skill_twice_is_one_load() {
-    let root = workspace_with("commit-message", "");
-    let loaded = Loaded::default();
-    let mut view = frame_holding(root.path(), &loaded);
-
-    assert_eq!(say(&mut view, "/skill commit-message"), Outcome::Edited);
-    assert_eq!(
-        say(&mut view, "/skill:commit-message"),
-        Outcome::Unchanged,
-        "the two spellings are one line, and two loads of one skill in one conversation are \
-         one load — the second carries no body, so it changes nothing"
-    );
-    assert_eq!(loaded.names(), ["commit-message"]);
 }
 
 #[test]
@@ -358,7 +307,7 @@ fn a_frame_with_no_workspace_loads_no_skill() {
         Transcript::none(),
     );
 
-    assert_eq!(say(&mut view, "/skill:commit-message"), Outcome::Unchanged);
+    assert_eq!(say(&mut view, "/commit-message"), Outcome::Unchanged);
     assert!(loaded.names().is_empty());
 }
 
@@ -393,7 +342,7 @@ fn the_commands_card_narrows_as_the_reader_types() {
         .rows()
         .join("\n");
     assert!(
-        drawn.contains("/settings") && drawn.contains("/skill"),
+        drawn.contains("/settings") && drawn.contains("/stats"),
         "`/s` leaves the commands that hold it: {drawn}"
     );
     assert!(
@@ -496,32 +445,6 @@ fn escape_closes_the_commands_card_and_leaves_the_draft_as_it_was() {
 }
 
 #[test]
-fn a_command_that_takes_a_word_is_written_into_the_draft_to_name_it() {
-    let root = workspace_with("commit-message", "");
-    let loaded = Loaded::default();
-    let mut view = frame_holding(root.path(), &loaded);
-    view.paste("/sk");
-
-    assert_eq!(view.key(Key::Enter), Outcome::Edited);
-    assert_eq!(
-        view.composer().text(),
-        "/skill:",
-        "`/skill` is no command without a word after it, so the row writes the name and the \
-         reader says which skill"
-    );
-    let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
-    assert!(
-        card_open(&drawn),
-        "the card stands while the word is named: {}",
-        drawn.rows().join("\n")
-    );
-
-    view.paste("commit-message");
-    assert_eq!(view.key(Key::Enter), Outcome::Edited);
-    assert_eq!(loaded.names(), ["commit-message"]);
-}
-
-#[test]
 fn a_press_on_a_command_row_chooses_it_the_way_a_file_row_is_chosen() {
     let root = workspace_with("deploy", "");
     let mut clicked = View::of(
@@ -563,7 +486,7 @@ fn a_press_on_a_command_row_chooses_it_the_way_a_file_row_is_chosen() {
 }
 
 #[test]
-fn skill_rows_rank_the_tail_and_show_only_human_invocable_descriptions() {
+fn skill_rows_rank_names_and_show_only_human_invocable_descriptions() {
     let root = workspace_with("redeploy", "");
     for (name, flags) in [
         ("deploy", ""),
@@ -579,28 +502,22 @@ fn skill_rows_rank_the_tail_and_show_only_human_invocable_descriptions() {
         .unwrap();
     }
     let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
-    let card = commands::Card::with_catalog("/skill:dep", &catalog).unwrap();
+    let card = commands::Card::with_catalog("/dep", &catalog).unwrap();
     let rows = card.rows();
     assert_eq!(
         rows.iter().map(|row| row.name.as_ref()).collect::<Vec<_>>(),
-        [
-            "/skill:deploy",
-            "/skill:deploy-staging",
-            "/skill:redeploy",
-            "/skill:"
-        ]
+        ["/deploy", "/deploy-staging", "/redeploy"]
     );
     assert_eq!(rows[0].says, "the deploy skill");
-    assert_eq!(card.spelling(), "/skill:deploy");
+    assert_eq!(card.spelling(), "/deploy");
 }
 
 #[test]
 fn skill_rows_keep_catalog_order_and_cap_and_count_only_long_lists() {
-    let root = workspace_with("zulu", "");
-    for name in [
-        "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
-    ] {
-        let directory = root.path().join(".agents/skills").join(name);
+    let root = workspace_with("deploy-9", "");
+    for number in 0..9 {
+        let name = format!("deploy-{number}");
+        let directory = root.path().join(".agents/skills").join(&name);
         std::fs::create_dir_all(&directory).unwrap();
         std::fs::write(
             directory.join("SKILL.md"),
@@ -609,49 +526,40 @@ fn skill_rows_keep_catalog_order_and_cap_and_count_only_long_lists() {
         .unwrap();
     }
     let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
-    for draft in ["/skill", "/skill:"] {
-        let card = commands::Card::with_catalog(draft, &catalog).unwrap();
-        assert_eq!(
-            card.rows()
-                .iter()
-                .map(|row| row.name.as_ref())
-                .collect::<Vec<_>>(),
-            [
-                "/skill:",
-                "/skill:alpha",
-                "/skill:bravo",
-                "/skill:charlie",
-                "/skill:delta",
-                "/skill:echo",
-                "/skill:foxtrot",
-                "/skill:golf"
-            ]
-        );
-        assert_eq!(card.body().len(), 9);
-        assert_eq!(
-            card.body()[8]
-                .spans
-                .iter()
-                .map(|(text, _)| text.as_str())
-                .collect::<String>(),
-            "1–8 of 10"
-        );
-    }
-    let short = commands::Card::with_catalog("/skill:zul", &catalog).unwrap();
-    assert_eq!(short.body().len(), 2);
+    let card = commands::Card::with_catalog("/deploy-", &catalog).unwrap();
+    assert_eq!(
+        card.rows()
+            .iter()
+            .map(|row| row.name.to_string())
+            .collect::<Vec<_>>(),
+        (0..8)
+            .map(|number| format!("/deploy-{number}"))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(card.body().len(), 9);
+    assert_eq!(
+        card.body()[8]
+            .spans
+            .iter()
+            .map(|(text, _)| text.as_str())
+            .collect::<String>(),
+        "1–8 of 10"
+    );
+    let short = commands::Card::with_catalog("/deploy-9", &catalog).unwrap();
+    assert_eq!(short.body().len(), 1);
 }
 
 #[test]
 fn skill_naming_displays_descriptions_and_refreshes_after_leaving() {
     let root = workspace_with("deploy", "");
     let mut view = frame(root.path());
-    view.paste("/skill:dep");
+    view.paste("/dep");
     let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
     assert!(
         drawn
             .rows()
             .iter()
-            .any(|row| row.contains("/skill:deploy") && row.contains("the deploy skill"))
+            .any(|row| row.contains("/deploy") && row.contains("the deploy skill"))
     );
     let directory = root.path().join(".agents/skills/deploy-new");
     std::fs::create_dir_all(&directory).unwrap();
@@ -675,28 +583,20 @@ fn skill_naming_displays_descriptions_and_refreshes_after_leaving() {
     for _ in 0..view.composer().text().len() {
         view.key(Key::Backspace);
     }
-    view.paste("/skill:dep");
+    view.paste("/dep");
     assert!(
         frame::painted(&mut view, SCREEN.0, SCREEN.1)
             .rows()
             .iter()
-            .any(|row| row.contains("/skill:deploy-new") && row.contains("freshly written"))
+            .any(|row| row.contains("/deploy-new") && row.contains("freshly written"))
     );
-}
-
-#[test]
-fn the_skill_command_row_hands_the_reader_its_colon() {
-    let root = workspace_with("deploy", "");
-    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
-    let card = commands::Card::with_catalog("/skill", &catalog).unwrap();
-    assert_eq!(card.spelling(), "/skill:");
 }
 
 #[test]
 fn skill_rows_include_skills_written_before_the_card_is_prepared() {
     let root = workspace_with("deploy", "");
     let mut view = frame(root.path());
-    view.paste("/skill:deploy");
+    view.paste("/deploy");
     let directory = root.path().join(".agents/skills/deploy-new");
     std::fs::create_dir_all(&directory).unwrap();
     std::fs::write(
@@ -706,12 +606,7 @@ fn skill_rows_include_skills_written_before_the_card_is_prepared() {
     .unwrap();
 
     let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
-    assert!(
-        drawn
-            .rows()
-            .iter()
-            .any(|row| row.contains("/skill:deploy-new"))
-    );
+    assert!(drawn.rows().iter().any(|row| row.contains("/deploy-new")));
 }
 
 #[test]
@@ -719,39 +614,9 @@ fn loaded_skill_rows_lead_their_description_with_loaded() {
     let root = workspace_with("deploy", "");
     let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
     let loaded = Loaded::from_iter(["deploy"]);
-    let mut card = commands::Card::with_catalog("/skill:dep", &catalog).unwrap();
+    let mut card = commands::Card::with_catalog("/dep", &catalog).unwrap();
     card.loading(&loaded);
     assert_eq!(card.rows()[0].says, "loaded · the deploy skill");
-}
-
-#[test]
-fn an_unmatched_skill_tail_draws_a_refusal_instead_of_command_rows() {
-    let root = workspace_with("deploy", "");
-    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
-    let card = commands::Card::with_catalog("/skill:zx", &catalog).unwrap();
-    assert!(card.rows().is_empty());
-    let body = card.body();
-    assert_eq!(body.len(), 1);
-    assert_eq!(
-        body[0]
-            .spans
-            .iter()
-            .map(|(text, _)| text.as_str())
-            .collect::<String>(),
-        "no skill matches zx"
-    );
-}
-
-#[test]
-fn a_refusal_row_cannot_be_chosen_or_spell_a_replacement() {
-    use sindri::kept::{Kept, Move};
-    let root = workspace_with("deploy", "");
-    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
-    let mut card = commands::Card::with_catalog("/skill:zx keep this", &catalog).unwrap();
-    assert!(!card.pressed(0));
-    assert!(!card.walked(Move::Next));
-    assert_eq!(card.spelling_of(0), None);
-    assert_eq!(card.spelling(), "/skill:zx keep this");
 }
 
 #[test]
@@ -759,7 +624,7 @@ fn the_view_draws_loaded_ahead_of_the_skill_description() {
     let root = workspace_with("deploy", "");
     let loaded = Loaded::from_iter(["deploy"]);
     let mut view = frame_holding(root.path(), &loaded);
-    view.paste("/skill:dep");
+    view.paste("/dep");
     let drawn = frame::painted(&mut view, 120, 40);
     assert!(
         drawn
@@ -771,50 +636,8 @@ fn the_view_draws_loaded_ahead_of_the_skill_description() {
 }
 
 #[test]
-fn a_refusal_keeps_the_card_open_and_both_keys_leave_the_draft() {
-    let root = workspace_with("deploy", "");
-    let mut view = frame(root.path());
-    view.paste("/skill:zx keep this");
-    let drawn = frame::painted(&mut view, 120, 40);
-    assert!(card_open(&drawn));
-    assert!(
-        drawn
-            .rows()
-            .iter()
-            .any(|row| row.contains("no skill matches zx"))
-    );
-    view.key(Key::Tab);
-    assert_eq!(view.composer().text(), "/skill:zx keep this");
-    assert_eq!(view.key(Key::Enter), Outcome::Unchanged);
-    assert_eq!(view.composer().text(), "/skill:zx keep this");
-    frame::painted(&mut view, 120, 40)
-        .snapshot("commands-skill-refusal", "commands-skill-refusal-120x40");
-    for draft in ["/skillet", "/usr"] {
-        let mut view = frame(root.path());
-        view.paste(draft);
-        assert!(!card_open(&frame::painted(&mut view, 120, 40)));
-        assert_eq!(view.composer().text(), draft);
-    }
-}
-
-#[test]
-fn a_refusal_footer_does_not_offer_sending_until_the_tail_matches() {
-    let root = workspace_with("deploy", "");
-    let mut view = frame(root.path());
-    view.paste("/skill:zx");
-    let drawn = frame::painted(&mut view, 120, 40);
-    assert!(!drawn.rows().iter().any(|row| row.contains("Enter send")));
-    view.key(Key::Backspace);
-    view.key(Key::Backspace);
-    view.paste("dep");
-    let drawn = frame::painted(&mut view, 120, 40);
-    assert!(drawn.rows().iter().any(|row| row.contains("Enter send")));
-}
-
-#[test]
-fn a_row_replaces_only_the_first_word_and_hands_over_the_skill_colon() {
+fn a_row_replaces_only_the_first_word() {
     for (draft, expected) in [
-        ("/ski  words\tkept\nnext  ", "/skill:  words\tkept\nnext  "),
         ("/mod  gpt-5  ", "/model  gpt-5  "),
         ("/model gpt-5", "/model gpt-5"),
     ] {
@@ -893,18 +716,18 @@ fn the_footer_leads_with_completion_only_while_a_card_is_drawn() {
 }
 
 #[test]
-fn tab_and_enter_hand_the_skill_row_over_to_naming() {
+fn unknown_first_class_skill_names_send_without_loading() {
     let root = workspace_with("deploy", "");
-    for key in [Key::Tab, Key::Enter] {
-        let mut view = frame(root.path());
-        view.paste("/ski");
-        frame::painted(&mut view, SCREEN.0, SCREEN.1);
-        assert_eq!(view.key(key), Outcome::Edited);
-        assert_eq!(view.composer().text(), "/skill:");
-        let drawn = frame::painted(&mut view, SCREEN.0, SCREEN.1);
-        assert!(card_open(&drawn));
-        assert!(drawn.rows().iter().any(|row| row.contains("/skill:deploy")));
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    let draft = "/no-such-skill  words";
+    view.paste(draft);
+    assert!(!card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+    match view.key(Key::Enter) {
+        Outcome::Send(prompt) => assert_eq!(prompt.text(), draft),
+        other => panic!("expected ordinary prompt, got {other:?}"),
     }
+    assert!(loaded.names().is_empty());
 }
 
 #[test]
@@ -975,56 +798,9 @@ fn tab_keeps_the_card_when_the_preserved_words_wrap() {
 }
 
 #[test]
-fn an_already_loaded_skill_retains_the_exact_draft_and_sends_nothing() {
-    let root = workspace_with("deploy", "");
-    let loaded = Loaded::default();
-    let mut view = frame_holding(root.path(), &loaded);
-    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Edited);
-    let draft = "/skill:deploy  words\tkept\nnext  ";
-    view.paste(draft);
-    for _ in 0..7 {
-        view.key(Key::Left);
-    }
-    assert_eq!(view.key(Key::Enter), Outcome::Unchanged);
-    assert_eq!(view.composer().text(), draft);
-    assert_eq!(loaded.names(), ["deploy"]);
-    let drawn = frame::painted(&mut view, 120, 40);
-    assert!(card_open(&drawn));
-    assert!(
-        drawn
-            .rows()
-            .iter()
-            .any(|row| row.contains("loaded · the deploy skill"))
-    );
-}
-
-#[test]
-fn an_unknown_skill_retains_the_exact_draft_and_sends_nothing() {
-    let root = workspace_with("deploy", "");
-    let loaded = Loaded::default();
-    let mut view = frame_holding(root.path(), &loaded);
-    let draft = "/skill:zx  words\tkept\nnext  ";
-    view.paste(draft);
-    assert_eq!(view.key(Key::Enter), Outcome::Unchanged);
-    assert_eq!(view.composer().text(), draft);
-    assert!(loaded.names().is_empty());
-    for _ in 0..7 {
-        view.key(Key::Left);
-    }
-    let drawn = frame::painted(&mut view, 120, 40);
-    assert!(card_open(&drawn));
-    assert!(
-        drawn
-            .rows()
-            .iter()
-            .any(|row| row.contains("no skill matches zx"))
-    );
-}
-
-#[test]
 fn no_workspace_retains_every_line_and_sends_nothing() {
     for draft in [
-        "/skill:deploy  kept",
+        "/deploy  kept",
         "/quit",
         "/skillet",
         "ordinary prompt\nkept  ",
@@ -1041,20 +817,6 @@ fn no_workspace_retains_every_line_and_sends_nothing() {
         assert_eq!(view.key(Key::Enter), Outcome::Unchanged, "{draft}");
         assert_eq!(view.composer().text(), draft);
         assert!(loaded.names().is_empty());
-    }
-}
-
-#[test]
-fn a_successful_skill_load_clears_the_draft_without_sending() {
-    let root = workspace_with("deploy", "");
-    for draft in ["/skill:deploy  kept", "/skill deploy"] {
-        let loaded = Loaded::default();
-        let mut view = frame_holding(root.path(), &loaded);
-        view.paste(draft);
-        assert_eq!(view.key(Key::Enter), Outcome::Edited);
-        assert_eq!(view.composer().text(), "");
-        assert_eq!(loaded.names(), ["deploy"]);
-        assert!(!card_open(&frame::painted(&mut view, 120, 40)));
     }
 }
 
@@ -1077,7 +839,7 @@ fn human_only_activation_protects_the_original_body_after_catalog_changes() {
     let root = workspace_with("deploy", "disable-model-invocation: true\n");
     let loaded = Loaded::default();
     let mut view = frame_holding(root.path(), &loaded);
-    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Edited);
+    assert!(matches!(say(&mut view, "/deploy"), Outcome::Send(_)));
     let protected = loaded.protected();
     assert_eq!(protected.len(), 1);
     assert!(protected[0].contains("Body."));
@@ -1090,7 +852,7 @@ fn human_activation_keeps_repo_precedence_and_load_order() {
     let root = workspace_with("deploy", "");
     let loaded = Loaded::default();
     let mut view = frame_holding(root.path(), &loaded);
-    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Edited);
+    assert!(matches!(say(&mut view, "/deploy"), Outcome::Send(_)));
     let catalog = sindri_core::skills::Catalog::discover(root.path(), None);
     assert_eq!(
         loaded.protected(),
@@ -1102,7 +864,7 @@ fn human_activation_keeps_repo_precedence_and_load_order() {
         "---\nname: deploy\ndescription: changed\n---\nCHANGED_BODY",
     )
     .unwrap();
-    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Unchanged);
+    assert!(matches!(say(&mut view, "/deploy"), Outcome::Send(_)));
     assert!(!loaded.protected()[0].contains("CHANGED_BODY"));
     assert_eq!(loaded.names(), ["deploy"]);
 }
@@ -1175,14 +937,14 @@ fn nonhuman_skills_are_neither_commands_nor_completions() {
         Outcome::Send(prompt) => assert_eq!(prompt.text(), "/deploy ship"),
         other => panic!("expected ordinary prompt, got {other:?}"),
     }
-    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Unchanged);
+    assert!(matches!(say(&mut view, "/deploy"), Outcome::Send(_)));
     assert!(loaded.names().is_empty());
 }
 
 #[test]
-fn builtin_collisions_keep_the_builtin_and_the_legacy_skill_escape_hatch() {
+fn builtin_collisions_keep_only_the_builtin_command() {
     let root = workspace_with("help", "");
-    let catalog = sindri_core::skills::Catalog::discover(root.path(), None);
+    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
     let card = commands::Card::with_catalog("/help", &catalog).unwrap();
     assert_eq!(
         card.rows().iter().filter(|row| row.name == "/help").count(),
@@ -1196,8 +958,51 @@ fn builtin_collisions_keep_the_builtin_and_the_legacy_skill_escape_hatch() {
     let mut view = frame_holding(root.path(), &loaded);
     assert_eq!(say(&mut view, "/help"), Outcome::Edited);
     assert!(loaded.names().is_empty());
-    view.key(Key::Escape);
-    assert_eq!(say(&mut view, "/skill:help"), Outcome::Edited);
-    assert_eq!(loaded.names(), ["help"]);
-    assert_eq!(say(&mut view, "/skill help"), Outcome::Unchanged);
+}
+
+#[test]
+fn legacy_skill_invocations_never_complete_load_or_invoke() {
+    let root = workspace_with("deploy", "");
+    let catalog = sindri_core::skills::Catalog::discover_with_builtin(root.path(), None, &[]);
+    for draft in [
+        "/skill:deploy",
+        "/skill deploy",
+        "/skill:deploy  ship\nkept  ",
+        "/skill deploy ship",
+    ] {
+        assert!(commands::read_with_catalog(draft, &catalog).is_none());
+        assert!(commands::Card::with_catalog(draft, &catalog).is_none());
+        let loaded = Loaded::default();
+        let mut view = frame_holding(root.path(), &loaded);
+        view.paste(draft);
+        let drawn = frame::painted(&mut view, 120, 40);
+        assert!(!card_open(&drawn));
+        if draft == "/skill:deploy" {
+            drawn.snapshot("commands-legacy-prompt", "commands-legacy-prompt-120x40");
+        }
+        assert_eq!(view.key(Key::Tab), Outcome::Unchanged);
+        assert_eq!(view.composer().text(), draft);
+        match view.key(Key::Enter) {
+            Outcome::Send(prompt) => assert_eq!(prompt.text(), draft),
+            other => panic!("expected unchanged legacy prompt, got {other:?}"),
+        }
+        assert!(loaded.names().is_empty());
+        assert!(loaded.protected().is_empty());
+    }
+}
+
+#[test]
+fn skill_is_an_available_first_class_skill_name() {
+    let root = workspace_with("skill", "");
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    view.paste("/ski request");
+    frame::painted(&mut view, 120, 40);
+    assert_eq!(view.key(Key::Tab), Outcome::Edited);
+    assert_eq!(view.composer().text(), "/skill request");
+    match view.key(Key::Enter) {
+        Outcome::Send(prompt) => assert_eq!(prompt.text(), "Use the skill skill.\n\nrequest"),
+        other => panic!("expected skill invocation, got {other:?}"),
+    }
+    assert_eq!(loaded.names(), ["skill"]);
 }

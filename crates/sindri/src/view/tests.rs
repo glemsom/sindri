@@ -3,6 +3,7 @@ use sindri_core::provider::Route;
 use sindri_core::records::{Dials, SessionDocument, Usage};
 use sindri_core::run::State as RunState;
 use sindri_core::wire::Wire;
+use std::path::Path;
 
 use sindri_core::redact::SecretSet;
 use sindri_core::run::Exit;
@@ -5038,11 +5039,11 @@ fn a_boxed_card_that_reaches_the_drafts_row_holds_the_cell_the_caret_would_be_pl
     );
     view.paste("/");
 
-    let (buffer, told) = painted_and_told(&mut view, 60, 11);
+    let (buffer, told) = painted_and_told(&mut view, 60, 10);
     let band = laid_out(&told).composer;
     assert!(
         drawn_row(&buffer, band.y + ends(&view).above).contains("Esc"),
-        "a card nine rows tall in an eleven row frame draws its foot on the draft's first row"
+        "a card eight rows tall in a ten row frame draws its foot on the draft's first row"
     );
     assert_eq!(
         caret_of(&told),

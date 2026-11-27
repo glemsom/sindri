@@ -1,5 +1,4 @@
 use std::ops::Range;
-use std::path::Path;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
@@ -8,7 +7,7 @@ use sindri_core::conversation::Conversation;
 use sindri_core::provider::Deltas;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
-use sindri_core::run::{Load, Stop, Turn};
+use sindri_core::run::{Stop, Turn};
 use sindri_core::skills::Catalog;
 
 use crate::band;
@@ -666,30 +665,6 @@ impl View {
         if key == Key::Enter && self.facts.workspace().is_none() {
             return Outcome::Unchanged;
         }
-        if key == Key::Enter
-            && self
-                .cards
-                .prepare(self.composer.text(), &self.facts)
-                .is_some_and(|card| card.refuses())
-        {
-            return Outcome::Unchanged;
-        }
-        if key == Key::Enter {
-            let command = self.command(self.composer.text()).or_else(|| {
-                let line = self
-                    .cards
-                    .follow(self.composer.text())
-                    .map(|card| card.spelling())?;
-                self.command(&line)
-            });
-            if let Some(Command::Skill(name)) = command {
-                let outcome = self.skill(&name);
-                if outcome == Outcome::Edited {
-                    self.composer.key(key);
-                }
-                return outcome;
-            }
-        }
         if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
             return Outcome::Edited;
         }
@@ -726,9 +701,14 @@ impl View {
     fn answer(&mut self, command: Command) -> Outcome {
         match command {
             Command::New => self.start_over(),
-            Command::Skill(name) => self.skill(&name),
             Command::InvokeSkill(name, request) => {
-                self.skill(&name);
+                if let Some(workspace) = self.facts.workspace() {
+                    let catalog = Catalog::discover(workspace, self.facts.home());
+                    if let Some(skill) = catalog.get(&name).filter(|skill| skill.human_invocable())
+                    {
+                        self.facts.loaded().activate(skill);
+                    }
+                }
                 let prompt = if request.is_empty() {
                     format!("Use the {name} skill.")
                 } else {
@@ -756,20 +736,6 @@ impl View {
         self.conversation.reset(self.facts.loaded());
         self.superseded = true;
         Outcome::Edited
-    }
-
-    fn skill(&mut self, name: &str) -> Outcome {
-        let Some(workspace) = self.facts.workspace().map(Path::to_path_buf) else {
-            return Outcome::Unchanged;
-        };
-        let catalog = Catalog::discover(&workspace, self.facts.home());
-        let Some(skill) = catalog.get(name).filter(|skill| skill.human_invocable()) else {
-            return Outcome::Unchanged;
-        };
-        match self.facts.loaded().activate(skill).0 {
-            Load::Loaded => Outcome::Edited,
-            Load::AlreadyLoaded => Outcome::Unchanged,
-        }
     }
 
     fn model(&mut self) -> Outcome {
@@ -1792,11 +1758,7 @@ impl View {
         match when {
             When::Always => true,
             When::Card => self.stack.top() == Mode::Composer && self.cards.card.is_some(),
-            When::Draft(state) => {
-                self.composer.state() == state
-                    && (state != State::Idle
-                        || !self.cards.card.as_ref().is_some_and(|card| card.refuses()))
-            }
+            When::Draft(state) => self.composer.state() == state,
             When::Queue => !self.queue.is_empty(),
         }
     }

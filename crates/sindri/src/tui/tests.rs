@@ -924,11 +924,10 @@ fn new_before_first_facts_clears_the_worker_owner_without_delayed_resurrection()
         .unwrap_or_else(|r| panic!("{}", r.message()));
     let mut live = stage.launch(view, config, &environment);
     live.launch = Some(opened);
-    live.answer(Event::Paste("/skill:human".into())).unwrap();
+    live.answer(Event::Paste("/human".into())).unwrap();
     live.answer(Event::Key(Key::Enter)).unwrap();
     assert!(live.view.facts().loaded().protected()[0].contains("EXACT_SCHEDULING_SNAPSHOT"));
     let stale = live.view.facts().loaded().scoped();
-    live.send(prompt_of("first prompt")).unwrap();
     assert!(live.running.is_some(), "{}", stage.drawn());
     assert!(
         live.running
@@ -951,10 +950,8 @@ fn new_before_first_facts_clears_the_worker_owner_without_delayed_resurrection()
             .protected()
             .is_empty()
     );
-    live.answer(Event::Paste("/skill:human".into())).unwrap();
+    live.answer(Event::Paste("/human".into())).unwrap();
     live.answer(Event::Key(Key::Enter)).unwrap();
-    assert!(
-        live.launch.as_ref().unwrap().loaded().protected()[0].contains("EXACT_SCHEDULING_SNAPSHOT")
-    );
+    assert!(live.view.facts().loaded().protected()[0].contains("EXACT_SCHEDULING_SNAPSHOT"));
     live.ending();
 }

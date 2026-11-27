@@ -771,7 +771,7 @@ fn a_pass_where_a_reader_types_no_draft_hands_back_no_caret() {
         Transcript::none(),
     );
     commands.key(Key::Char('/'));
-    let frame = frame::painted(&mut commands, 60, 11);
+    let frame = frame::painted(&mut commands, 60, 10);
     let laid = frame
         .told()
         .layout()

@@ -2022,7 +2022,7 @@ fn a_name_without_instructions_does_not_suppress_model_delivery() {
     assert_eq!(
         run.load_skill("deploy"),
         Load::Loaded,
-        "the human loads it first, with `/skill:deploy`"
+        "the human invokes `/deploy` before the model asks to load it"
     );
     run.drive(&mut Transcript::default(), &mut ());
 

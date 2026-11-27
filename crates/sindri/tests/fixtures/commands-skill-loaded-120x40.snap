@@ -1,6 +1,5 @@
 ---
 source: crates/sindri/tests/frame/mod.rs
-assertion_line: 210
 expression: self.text(name)
 ---
 commands-skill-loaded at 120x40
@@ -23,9 +22,9 @@ commands-skill-loaded at 120x40
 16 |                                                                                                                        | dim:120
 17 |                                                                                                                        | dim:120
 18 |                        ╭─ / commands ─────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-19 |                        │ › /skill:deploy  loaded · the deploy skill                           │                        | dim:25 plain:1 accent:17 dim:25 plain:27 dim:25
-20 |                        │   /skill:        load a skill by name                                │                        | dim:25 plain:18 dim:20 plain:32 dim:25
-21 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
+19 |                        │ › /deploy  loaded · the deploy skill                                 │                        | dim:25 plain:1 accent:11 dim:25 plain:33 dim:25
+20 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
+21 |                                                                                                                        | dim:120
 22 |                                                                                                                        | dim:120
 23 |                                                                                                                        | dim:120
 24 |                                                                                                                        | dim:120
@@ -41,6 +40,6 @@ commands-skill-loaded at 120x40
 34 |                                                                                                                        | dim:120
 35 |                                                                                                                        | dim:120
 36 |                                                                                                                        | dim:120
-37 |                                                                                                             1 command  | dim:120
-38 |┃›/skill:dep                                                                                                            | dim:120
+37 |                                                                                                                        | dim:120
+38 |┃›/dep                                                                                                                  | dim:120
 39 |  Tab complete · Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                              | dim:120

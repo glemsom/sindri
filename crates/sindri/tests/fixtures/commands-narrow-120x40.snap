@@ -20,9 +20,9 @@ commands-narrow at 120x40
 14 |                                                                                                                        | dim:120
 15 |                                                                                                                        | dim:120
 16 |                                                                                                                        | dim:120
-17 |                        ╭─ / commands ─────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-18 |                        │ › /settings  the keys the config holds, and the value each is set to │                        | dim:25 plain:1 accent:13 dim:55 plain:1 dim:25
-19 |                        │   /skill:    load a skill by name                                    │                        | dim:25 plain:14 dim:20 plain:36 dim:25
+17 |                                                                                                                        | dim:120
+18 |                        ╭─ / commands ─────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+19 |                        │ › /settings  the keys the config holds, and the value each is set to │                        | dim:25 plain:1 accent:13 dim:55 plain:1 dim:25
 20 |                        │   /stats     the facts the rail is too narrow to hold                │                        | dim:25 plain:14 dim:40 plain:16 dim:25
 21 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 22 |                                                                                                                        | dim:120

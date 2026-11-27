@@ -18,13 +18,13 @@ commands at 120x40
 12 |                                                                                                                        | dim:120
 13 |                                                                                                                        | dim:120
 14 |                                                                                                                        | dim:120
-15 |                        ╭─ / commands ─────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-16 |                        │ › /help      the keys in force                                       │                        | dim:25 plain:1 accent:13 dim:17 plain:39 dim:25
-17 |                        │   /model     ask the wire what it serves, and name the one to run    │                        | dim:25 plain:14 dim:52 plain:4 dim:25
-18 |                        │   /new       start the conversation again, and forget the last one   │                        | dim:25 plain:14 dim:53 plain:3 dim:25
-19 |                        │   /quit      end the launch                                          │                        | dim:25 plain:14 dim:14 plain:42 dim:25
-20 |                        │   /settings  the keys the config holds, and the value each is set to │                        | dim:25 plain:14 dim:55 plain:1 dim:25
-21 |                        │   /skill:    load a skill by name                                    │                        | dim:25 plain:14 dim:20 plain:36 dim:25
+15 |                                                                                                                        | dim:120
+16 |                        ╭─ / commands ─────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+17 |                        │ › /help      the keys in force                                       │                        | dim:25 plain:1 accent:13 dim:17 plain:39 dim:25
+18 |                        │   /model     ask the wire what it serves, and name the one to run    │                        | dim:25 plain:14 dim:52 plain:4 dim:25
+19 |                        │   /new       start the conversation again, and forget the last one   │                        | dim:25 plain:14 dim:53 plain:3 dim:25
+20 |                        │   /quit      end the launch                                          │                        | dim:25 plain:14 dim:14 plain:42 dim:25
+21 |                        │   /settings  the keys the config holds, and the value each is set to │                        | dim:25 plain:14 dim:55 plain:1 dim:25
 22 |                        │   /stats     the facts the rail is too narrow to hold                │                        | dim:25 plain:14 dim:40 plain:16 dim:25
 23 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 24 |                                                                                                                        | dim:120

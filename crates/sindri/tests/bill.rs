@@ -104,25 +104,13 @@ fn a_row_a_card_writes_into_the_draft_is_billed_with_it() {
         "the head bills the file the picker's row wrote into the draft: {head:?}"
     );
 
-    let mut view = typing(root.path(), "/sk");
-    assert_eq!(
-        view.key(Key::Enter),
-        Outcome::Edited,
-        "the row the commands card marks is written into the draft"
-    );
-    assert_eq!(
-        draft(&view),
-        "/skill:",
-        "a row whose line names no command yet is a word of the draft"
-    );
-    let frame = frame::painted(&mut view, 120, 40);
-    let head = head_row(&frame);
-
-    assert!(
-        head.chars().all(|glyph| glyph == ' '),
-        "the head bills nothing of the word the commands card wrote into the draft, so the edge \
-         is left whole: {head:?}"
-    );
+    for text in ["/skill:deploy", "/skill deploy"] {
+        let mut view = typing(root.path(), text);
+        let frame = frame::painted(&mut view, 120, 40);
+        assert!(head_row(&frame).trim().is_empty());
+        assert_eq!(draft(&view), text);
+        assert!(matches!(view.key(Key::Enter), Outcome::Send(_)));
+    }
 }
 
 #[test]

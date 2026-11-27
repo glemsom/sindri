@@ -15,7 +15,7 @@ and endpoint compatibility validation would be needed to offer that mode.
 Native replay uses the same truthful tool-result completion as ordinary replay:
 failed results remain failures and unexecuted calls receive explicit error outcomes.
 Activated skill snapshots remain in model-facing requests. [Slash skill invocation](skills.md)
-starts a turn even when the skill is already loaded; legacy `/skill:name` only loads instructions.
+starts a turn even when the skill is already loaded. Only `/name [request]` invokes a skill.
 Configured capacity counts
 the serialized completion request, including native artifacts, instructions, tools,
 and retained results, plus output and expected-tool-result headroom. It never silently

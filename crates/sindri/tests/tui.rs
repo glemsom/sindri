@@ -4082,7 +4082,7 @@ fn rail_holds_one_skill(frame: &str) -> bool {
 }
 
 #[test]
-fn a_skill_loaded_by_hand_before_the_first_prompt_stays_on_the_rail() {
+fn a_first_class_skill_invocation_loads_instructions_and_stays_on_the_rail() {
     let ground = Ground::new();
     offering(&ground.workspace);
 
@@ -4094,14 +4094,14 @@ fn a_skill_loaded_by_hand_before_the_first_prompt_stays_on_the_rail() {
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
-    command(&mut pty, &drawn, "/skill:deploy");
+    command(&mut pty, &drawn, "/deploy");
     assert!(
         drawn.wait_until(rail_holds_one_skill),
         "the line loads the skill on the splash screen's own rail: {:?}",
         drawn.text()
     );
 
-    ask(&mut pty, &drawn, &wire);
+    wire.wait_for_request();
     wire.release();
     answered(&drawn);
 

@@ -74,8 +74,8 @@ fn a_row_that_opens_with_a_command_the_card_holds_draws_that_word_in_the_accent(
     );
     assert_eq!(
         joined("/skill:commit", true, &files),
-        [(String::from("/skill:commit"), Ink::Accent)],
-        "the one command that takes a word after it is a command the card holds"
+        [(String::from("/skill:commit"), Ink::Plain)],
+        "a removed spelling stays ordinary prompt text"
     );
     assert_eq!(
         joined("/mod", true, &files),

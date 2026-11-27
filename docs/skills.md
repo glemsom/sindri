@@ -21,12 +21,10 @@ if a skill is named `help`. This command-name rule is separate from skill scope
 precedence: repository skills override user skills, which override bundled skills
 of the same name.
 
-## Load-only compatibility
-
-The legacy `/skill:name` spelling remains available to load a skill's instructions
-without starting an agent turn. It is not equivalent to `/name`, and does not take
-an optional request. A colliding skill can still be loaded with `/skill:help`.
-Loading an already-loaded skill does not start work or reload its instructions.
+Only `/name [request]` invokes a skill. The former `/skill:name` and `/skill name`
+forms are ordinary unknown slash prompt text: they neither load nor invoke skills
+and have no completion rows. There is no reserved skill name beyond actual
+built-in command collisions.
 
 Skills that disallow human invocation are not available as user slash commands.
 The model's ability to load a skill is controlled separately. `/new` clears the

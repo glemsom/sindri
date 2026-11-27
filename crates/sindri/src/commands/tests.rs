@@ -30,7 +30,16 @@ fn a_bare_slash_holds_every_command() {
 
 #[test]
 fn a_word_no_command_holds_holds_no_card() {
-    for draft in ["/skillet", "/usr", "/etc/hosts", "//", "/src/rows.rs"] {
+    for draft in [
+        "/skill:commit",
+        "/skill commit",
+        "/skill",
+        "/skillet",
+        "/usr",
+        "/etc/hosts",
+        "//",
+        "/src/rows.rs",
+    ] {
         assert!(
             Card::of(draft).is_none(),
             "{draft:?} names no command, so it is a draft the reader meant to send"
@@ -43,7 +52,6 @@ fn the_word_the_draft_names_is_sent_as_the_command_it_stands_for() {
     assert_eq!(spelling("/mod"), "/model");
     assert_eq!(spelling("/model"), "/model");
     assert_eq!(spelling("/model gpt-5"), "/model gpt-5");
-    assert_eq!(spelling("/skill:commit"), "/skill:commit");
     assert_eq!(spelling("/qui"), "/quit");
     assert_eq!(spelling("/quit "), "/quit ");
     assert_eq!(
@@ -85,7 +93,7 @@ fn a_draft_whose_first_glyph_is_not_a_slash_holds_no_card() {
 }
 
 #[test]
-fn the_seven_names_the_table_holds_are_seven_different_names() {
+fn the_builtin_names_are_unique() {
     let names: Vec<String> = TABLE.iter().map(|row| row.name.to_string()).collect();
     let mut unique = names.clone();
     unique.sort_unstable();
@@ -98,37 +106,28 @@ fn the_seven_names_the_table_holds_are_seven_different_names() {
 }
 
 #[test]
-fn every_name_but_the_one_that_takes_a_word_reads_back_as_a_command() {
-    for row in TABLE.iter().filter(|row| row.name != "/skill:") {
+fn every_builtin_name_reads_back_as_a_command() {
+    for row in TABLE.iter() {
         assert!(
             read(&row.name).is_some(),
             "the list names {:?} and a line of it is no command the frame answers",
             row.name
         );
     }
-    assert!(
-        read(SKILL).is_none(),
-        "a skill takes a word after it, so the bare name is not a command of its own"
-    );
 }
 
 #[test]
 fn the_card_recognises_the_word_it_holds_a_row_for() {
-    for word in [
-        "/",
-        "/mod",
-        "/model",
-        "/qui",
-        "/skill:commit",
-        "/settings",
-        "/stats",
-    ] {
+    for word in ["/", "/mod", "/model", "/qui", "/settings", "/stats"] {
         assert!(
             recognised(word),
             "{word:?} is a word a row of the card holds, so the card knows it"
         );
     }
     for word in [
+        "/skill:commit",
+        "/skill commit",
+        "/skill",
         "model",
         "",
         "/skillet",

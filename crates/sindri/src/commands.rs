@@ -11,10 +11,6 @@ use crate::list::{self, Beside, ScreenRow};
 
 const NEW: &str = "/new";
 
-const SKILL: &str = "/skill";
-
-const SKILL_SPELLING: &str = "/skill:";
-
 const MODEL: &str = "/model";
 
 const SETTINGS: &str = "/settings";
@@ -31,7 +27,7 @@ pub struct Row {
     pub says: Cow<'static, str>,
 }
 
-pub const TABLE: [Row; 7] = [
+pub const TABLE: [Row; 6] = [
     Row {
         name: Cow::Borrowed(MODEL),
         says: Cow::Borrowed("ask the wire what it serves, and name the one to run"),
@@ -47,10 +43,6 @@ pub const TABLE: [Row; 7] = [
     Row {
         name: Cow::Borrowed(NEW),
         says: Cow::Borrowed("start the conversation again, and forget the last one"),
-    },
-    Row {
-        name: Cow::Borrowed(SKILL_SPELLING),
-        says: Cow::Borrowed("load a skill by name"),
     },
     Row {
         name: Cow::Borrowed(HELP),
@@ -97,11 +89,11 @@ impl Card {
             .invocable_by_human()
             .into_iter()
             .map(|skill| Row {
-                name: Cow::Owned(format!("/skill:{}", skill.name)),
+                name: Cow::Owned(format!("/{}", skill.name)),
                 says: Cow::Owned(skill.description),
             })
             .collect();
-        if skill_tail(draft).is_none() && card.ranked().is_empty() {
+        if card.ranked().is_empty() {
             return None;
         }
         Some(card)
@@ -118,7 +110,7 @@ impl Card {
             .map(|mut row| {
                 if row
                     .name
-                    .strip_prefix(SKILL_SPELLING)
+                    .strip_prefix('/')
                     .is_some_and(|name| self.loaded.contains(name))
                 {
                     row.says = Cow::Owned(format!("loaded · {}", row.says));
@@ -129,54 +121,18 @@ impl Card {
     }
 
     fn ranked(&self) -> Vec<Row> {
-        let Some(query) = skill_tail(self.words()) else {
-            let mut rows = by_name().to_vec();
-            rows.extend(self.skills.iter().filter_map(|row| {
-                let name = row.name.strip_prefix(SKILL_SPELLING)?;
-                let spelling = format!("/{name}");
-                if name == "skill" || TABLE.iter().any(|row| row.name == spelling) {
-                    return None;
-                }
-                Some(Row {
-                    name: Cow::Owned(spelling),
-                    says: row.says.clone(),
-                })
-            }));
-            rows.sort_unstable_by(|a, b| a.name.cmp(&b.name));
-            return leaves(
-                rows.iter()
-                    .map(|row| (plain(row).trim_end_matches(':'), row.clone())),
-                word(self.words())
-                    .trim_start_matches('/')
-                    .split(':')
-                    .next()
-                    .unwrap_or_default(),
-            );
-        };
-        let mut rows = leaves(
+        let mut rows = by_name().to_vec();
+        rows.extend(
             self.skills
                 .iter()
-                .map(|row| (row.name.strip_prefix(SKILL_SPELLING).unwrap(), row.clone())),
-            query,
+                .filter(|row| !TABLE.iter().any(|builtin| builtin.name == row.name))
+                .cloned(),
         );
-        if !query.is_empty() && rows.is_empty() {
-            return rows;
-        }
-        let command = TABLE
-            .iter()
-            .find(|row| row.name == SKILL_SPELLING)
-            .unwrap()
-            .clone();
-        if query.is_empty() {
-            rows.insert(0, command);
-        } else {
-            rows.push(command);
-        }
-        rows
-    }
-
-    pub fn refuses(&self) -> bool {
-        self.ranked().is_empty()
+        rows.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+        leaves(
+            rows.iter().map(|row| (plain(row), row.clone())),
+            word(self.words()).trim_start_matches('/'),
+        )
     }
 
     pub fn words(&self) -> &str {
@@ -189,14 +145,6 @@ impl Card {
 
     pub fn body(&self) -> Vec<ScreenRow> {
         let held = self.rows();
-        if held.is_empty()
-            && let Some(query) = skill_tail(self.words())
-        {
-            return vec![list::whole(
-                &format!("no skill matches {query}"),
-                Look::plain(Ink::Err),
-            )];
-        }
         let mut rows = list::List {
             query: None,
             said: None,
@@ -269,13 +217,8 @@ fn ranked(asked: &str) -> Vec<Row> {
     let Some(body) = asked.strip_prefix('/') else {
         return Vec::new();
     };
-    let query = body.split(':').next().unwrap_or_default();
-    leaves(
-        by_name()
-            .iter()
-            .map(|row| (plain(row).trim_end_matches(':'), row.clone())),
-        query,
-    )
+    let query = body;
+    leaves(by_name().iter().map(|row| (plain(row), row.clone())), query)
 }
 
 fn plain(row: &Row) -> &str {
@@ -294,7 +237,6 @@ fn by_name() -> &'static [Row] {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     New,
-    Skill(String),
     InvokeSkill(String, String),
     Model,
     ModelNamed(String),
@@ -321,8 +263,7 @@ pub fn read(line: &str) -> Option<Command> {
             true => Command::Model,
             false => Command::ModelNamed(rest.to_owned()),
         }),
-        SKILL => named(rest),
-        other => named(other.strip_prefix(&format!("{SKILL}:"))?),
+        _ => None,
     }
 }
 
@@ -340,21 +281,5 @@ pub fn read_with_catalog(line: &str, catalog: &Catalog) -> Option<Command> {
     ))
 }
 
-fn named(name: &str) -> Option<Command> {
-    match name.is_empty() {
-        true => None,
-        false => Some(Command::Skill(name.to_owned())),
-    }
-}
-
 #[cfg(test)]
 mod tests;
-
-pub fn skill_tail(draft: &str) -> Option<&str> {
-    let first = word(draft);
-    if first == SKILL {
-        Some("")
-    } else {
-        first.strip_prefix(SKILL_SPELLING)
-    }
-}
