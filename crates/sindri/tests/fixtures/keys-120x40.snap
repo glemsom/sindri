@@ -23,7 +23,7 @@ keys at 120x40
 17 |                        │ ↑                    the newest queued prompt, the prompt before, or │                        | dim:25 plain:1 plain+bold:21 muted:47 plain:1 dim:25
 18 |                        │                      the line above                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
 19 |                        │ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
-20 |                        │ ↓                    the line below                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
+20 |                        │ ↓                    the line below, or the prompt after             │                        | dim:25 plain:1 plain+bold:21 muted:35 plain:13 dim:25
 21 |                        │ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 22 |                        │ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
 23 |                        │ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25

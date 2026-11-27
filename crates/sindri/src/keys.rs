@@ -159,7 +159,7 @@ const COMPOSER: [Binding; 24] = [
     Binding {
         key: Key::Down,
         name: "↓",
-        does: "the line below",
+        does: "the line below, or the prompt after",
         act: Act::Draft,
     },
     Binding {
