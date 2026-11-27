@@ -400,6 +400,27 @@ fn a_prompt_is_answered_on_stdout_with_exactly_one_newline() {
 }
 
 #[test]
+fn a_batch_run_writes_no_recall_beside_the_session_it_records() {
+    let ground = Ground::new();
+    let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);
+
+    let output = ground
+        .asking(&wire, "triage this")
+        .output()
+        .expect("the binary should run");
+
+    assert_eq!(output.status.code(), Some(0), "an answer");
+    assert!(
+        ground.session().join("session.json").exists(),
+        "the run records the session it was"
+    );
+    assert!(
+        !ground.state.join("sindri").join("recall.jsonl").exists(),
+        "a launch with no composer has no draft to hand words back to, so it writes no recall"
+    );
+}
+
+#[test]
 fn a_batch_run_asks_one_prompt_and_carries_nothing_from_before_it() {
     let ground = Ground::new();
     let wire = Wire::answering(vec![Reply::stream(ANTHROPIC)]);

@@ -7035,3 +7035,140 @@ fn slash_new_excludes_late_work_and_queued_prompts_join_when_started() {
         [Turn::answered(1, "queued prompt", "new evidence")]
     );
 }
+
+fn remembering(said: &[&str]) -> Recall {
+    let mut recall = Recall::none();
+    for words in said {
+        recall.append(words);
+    }
+    recall
+}
+
+fn recalling(recall: Recall) -> View {
+    View::of(
+        Capabilities::default(),
+        Facts::default()
+            .asked()
+            .working(PathBuf::from("/srv/workspace"), None),
+        Transcript::none(),
+    )
+    .recalling(recall)
+}
+
+#[test]
+fn up_on_the_first_line_takes_the_newest_recalled_prompt_as_the_whole_draft() {
+    let mut view = recalling(remembering(&[
+        "yesterday's question",
+        "the newest question",
+    ]));
+    view.paste("a draft I was still writing");
+    view.key(Key::Left);
+    view.key(Key::Left);
+
+    assert_eq!(view.key(Key::Up), Outcome::Edited);
+
+    assert_eq!(
+        view.composer().text(),
+        "the newest question",
+        "the prompt is the whole draft and never a splice into the one it replaced"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        "the newest question".len(),
+        "and the caret waits at its tail, ready to be typed on"
+    );
+}
+
+#[test]
+fn up_takes_the_newest_queued_prompt_before_anything_recalled() {
+    let mut view = recalling(remembering(&["the recalled question"]));
+    view.enqueue(prompt("the queued question"));
+
+    view.key(Key::Up);
+
+    assert_eq!(
+        view.composer().text(),
+        "the queued question",
+        "work in flight is nearer than yesterday, so the queue is what Up hands back first"
+    );
+}
+
+#[test]
+fn up_inside_a_multi_line_draft_moves_the_caret_and_takes_no_prompt() {
+    let mut view = recalling(remembering(&["the recalled question"]));
+    view.paste("one\ntwo");
+
+    view.key(Key::Up);
+
+    assert_eq!(view.composer().text(), "one\ntwo", "the draft is untouched");
+    assert_eq!(
+        view.composer().caret().0,
+        0,
+        "and the caret has moved to the line above it"
+    );
+}
+
+#[test]
+fn up_on_a_commands_card_below_its_top_walks_the_card_and_takes_no_prompt() {
+    let mut view = recalling(remembering(&["the recalled question"]));
+    view.key(Key::Char('/'));
+    view.key(Key::Down);
+
+    assert_eq!(view.key(Key::Up), Outcome::Edited);
+
+    assert_eq!(
+        view.composer().text(),
+        "/",
+        "the card took the Up, so the draft is still its query rather than a recalled prompt"
+    );
+}
+
+#[test]
+fn a_frame_handed_no_recall_answers_up_exactly_as_it_did_before() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("a draft");
+
+    assert_eq!(view.key(Key::Up), Outcome::Unchanged);
+    assert_eq!(view.composer().text(), "a draft", "the draft is untouched");
+    assert_eq!(
+        view.composer().cursor(),
+        "a draft".len(),
+        "and so is the caret"
+    );
+}
+
+#[test]
+fn a_prompt_sent_is_in_the_recall_the_moment_it_is_sent() {
+    let mut view = recalling(Recall::none());
+    view.paste("what I just asked");
+
+    let Outcome::Send(prompt) = view.key(Key::Enter) else {
+        panic!("the draft is a prompt and not a command");
+    };
+    assert_eq!(prompt.text(), "what I just asked");
+    view.key(Key::Up);
+
+    assert_eq!(
+        view.composer().text(),
+        "what I just asked",
+        "Up right after sending hands back what was just sent"
+    );
+}
+
+#[test]
+fn a_slash_command_is_never_in_the_recall() {
+    let mut view = recalling(Recall::none());
+    view.paste("/new");
+    assert_eq!(view.key(Key::Enter), Outcome::Edited, "`/new` answers");
+
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Unchanged,
+        "a command never reaches the recall, so Up leaves the frame alone"
+    );
+    assert!(view.composer().text().is_empty(), "and the draft is empty");
+}

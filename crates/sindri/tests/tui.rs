@@ -3000,6 +3000,56 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
+const RECALLED: &str = "why does the retry test flake?";
+
+#[test]
+fn up_on_a_new_launch_takes_back_the_prompt_the_launch_before_it_sent() {
+    let ground = Ground::new();
+    let wire = Wire::holding();
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the boot frame is drawn: {:?}",
+        drawn.text()
+    );
+    ask_words(&mut pty, &drawn, &wire, RECALLED);
+    wire.release();
+    answered(&drawn);
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+
+    let (session, mut pty, drawn) = Session::asking(&ground, &wire);
+    assert!(
+        drawn.wait_for(FIRST_KEY),
+        "the launch after it draws its own boot frame: {:?}",
+        drawn.text()
+    );
+    assert!(
+        !showing(&drawn.text(), RECALLED),
+        "a launch that has sent nothing draws no prompt of its own: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(b"\x1b[A");
+
+    assert!(
+        drawn.wait_until(|drawn| showing(drawn, RECALLED)),
+        "Up hands back the prompt the launch before it sent: {:?}",
+        drawn.text()
+    );
+    assert!(
+        drawn.wait_until(|drawn| placed(drawn)
+            .is_some_and(|(_, column)| column == pen::cells(RECALLED) + GUTTER)),
+        "and the caret waits one column past its last glyph, ready to be typed on: {:?}",
+        drawn.text()
+    );
+
+    pty.type_bytes(&[0x11]);
+    assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
+}
+
 fn command(pty: &mut Pty, drawn: &Drawn, line: &str) {
     pty.type_bytes(line.as_bytes());
     let column = pen::cells(line) + GUTTER;

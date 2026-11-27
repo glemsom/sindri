@@ -147,7 +147,7 @@ const COMPOSER: [Binding; 24] = [
     Binding {
         key: Key::Up,
         name: "↑",
-        does: "the newest queued prompt, or the line above",
+        does: "the newest queued prompt, the prompt before, or the line above",
         act: Act::Up,
     },
     Binding {

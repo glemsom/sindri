@@ -10,6 +10,7 @@ pub mod pipe;
 pub mod policy;
 pub mod preamble;
 pub mod provider;
+pub mod recall;
 pub mod records;
 pub mod redact;
 pub mod run;

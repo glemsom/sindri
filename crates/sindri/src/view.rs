@@ -5,6 +5,7 @@ use ratatui::layout::{Position, Rect};
 use sindri_core::config::{Config, Touched};
 use sindri_core::conversation::Conversation;
 use sindri_core::provider::Deltas;
+use sindri_core::recall::Recall;
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Stop, Turn};
@@ -340,6 +341,7 @@ pub struct View {
     planes: Planes,
     composer: Composer,
     queue: Queue,
+    recall: Recall,
     conversation: Conversation,
     superseded: bool,
     joined_generation: u64,
@@ -404,6 +406,7 @@ impl View {
             planes: Planes::default(),
             composer: Composer::new(),
             queue: Queue::default(),
+            recall: Recall::none(),
             conversation: Conversation::default(),
             superseded: false,
             joined_generation: 0,
@@ -423,6 +426,11 @@ impl View {
         };
         view.handed(facts);
         view
+    }
+
+    pub fn recalling(mut self, recall: Recall) -> View {
+        self.recall = recall;
+        self
     }
 
     pub fn composer(&self) -> &Composer {
@@ -719,6 +727,7 @@ impl View {
             return self.answer(command);
         }
         let Some(line) = self.cards.follow(prompt.text()).map(|card| card.spelling()) else {
+            self.recall.append(prompt.text());
             return Outcome::Send(prompt);
         };
         match self.command(&line) {
@@ -984,8 +993,20 @@ impl View {
                 self.composer.recall(prompt);
                 Outcome::Edited
             }
-            None => Outcome::Unchanged,
+            None => self.prompt_before(),
         }
+    }
+
+    fn prompt_before(&mut self) -> Outcome {
+        let Some(entry) = self.recall.entries().last() else {
+            return Outcome::Unchanged;
+        };
+        let prompt = entry.prompt().to_owned();
+        if self.composer.text() == prompt && self.composer.cursor() == prompt.len() {
+            return Outcome::Unchanged;
+        }
+        self.composer.rewrite(&prompt);
+        Outcome::Edited
     }
 
     fn drop_newest(&mut self) -> Outcome {
