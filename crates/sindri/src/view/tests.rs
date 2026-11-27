@@ -2083,20 +2083,19 @@ fn a_frame_handed_a_runs_facts_is_not_the_splash_screen() {
 }
 
 #[test]
-fn the_frame_a_launch_opens_on_is_a_wordmark_a_line_and_three_commands() {
+fn the_frame_a_launch_opens_on_is_a_wordmark_a_gloss_and_three_commands() {
     assert_eq!(
         block(&splash(120, 40)),
         [
             "sindri",
-            "",
-            "An AI agent that is a Unix filter and a terminal UI over one core.",
+            "a GNU/Linux AI agent",
             "",
             "/model     ask the wire what it serves, and name the one to run",
             "/settings  the keys the config holds, and the value each is set to",
             "/stats     the facts the rail is too narrow to hold",
         ],
-        "the splash screen is a wordmark, one line saying what the product is, and three \
-             commands with the one line each that explains them, set as one block"
+        "the splash screen is a wordmark, the gloss it stands under, and three commands with \
+             the one line each that explains them, set as one block"
     );
 }
 
@@ -2144,14 +2143,18 @@ fn the_ink_of_the_splash_screen_is_the_one_of_a_name_and_of_the_commands_under_i
         Some(Look::new(Ink::Accent, Face::Bold)),
         "the wordmark is the one bold row of the frame"
     );
-    assert_eq!(look(left, wordmark + 2), Some(Look::plain(Ink::Plain)));
     assert_eq!(
-        look(left, wordmark + 4),
+        look(left, wordmark + 1),
+        Some(Look::plain(Ink::Plain)),
+        "the gloss under the wordmark is read in the plain ink"
+    );
+    assert_eq!(
+        look(left, wordmark + 3),
         Some(Look::plain(Ink::Accent)),
         "a command is read as the thing to type"
     );
     assert_eq!(
-        look(left + 11, wordmark + 4),
+        look(left + 11, wordmark + 3),
         Some(Look::plain(Ink::Dim)),
         "and the line that explains it hangs from one column in a quieter ink"
     );
@@ -2179,7 +2182,7 @@ fn the_block_stands_on_the_rows_a_terminal_that_places_no_picture_puts_it_on() {
 
 #[test]
 fn a_frame_too_small_for_the_block_holds_its_head_and_cuts_no_row_across_it() {
-    for (cols, rows, whole) in [(80, 9, (80, 24)), (40, 10, (40, 24)), (24, 12, (24, 24))] {
+    for (cols, rows, whole) in [(80, 4, (80, 24)), (40, 5, (40, 24)), (24, 5, (24, 24))] {
         let (buffer, band) = splash_frame(cols, rows, false);
         let drawn = band_of(&buffer, band);
         let (taller, taller_band) = splash_frame(whole.0, whole.1, false);
@@ -2292,7 +2295,7 @@ fn a_splash_screen_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
         let words = wrapped.split_whitespace().collect::<Vec<&str>>().join(" ");
 
         for line in [
-            "An AI agent that is a Unix filter and a terminal UI over one core.",
+            "a GNU/Linux AI agent",
             "ask the wire what it serves, and name the one to run",
             "the keys the config holds, and the value each is set to",
             "the facts the rail is too narrow to hold",

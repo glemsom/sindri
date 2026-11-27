@@ -19,12 +19,12 @@ boot-face at 120x40
 13 |                                                                              model     claude-sonnet-4-5               | plain:78 dim:10 plain:32
 14 |                                                                                                                        | plain:120
 15 |     sindri                                                                   workspace /srv/workspace                  | plain:5 accent+bold:6 plain:67 dim:10 plain:32
-16 |                                                                              branch    main                            | plain:78 dim:10 plain:32
-17 |     An AI agent that is a Unix filter and a terminal UI over one core.                                                 | plain:120
-18 |                                                                              sandbox   bwrap                           | plain:78 dim:10 plain:32
-19 |     /model     ask the wire what it serves, and name the one to run                                                    | plain:5 accent:11 dim:52 plain:52
-20 |     /settings  the keys the config holds, and the value each is set to       session   —                               | plain:5 accent:11 dim:55 plain:7 dim:10 plain:32
-21 |     /stats     the facts the rail is too narrow to hold                      temp      —                               | plain:5 accent:11 dim:40 plain:22 dim:10 plain:32
+16 |     a GNU/Linux AI agent                                                     branch    main                            | plain:78 dim:10 plain:32
+17 |                                                                                                                        | plain:120
+18 |     /model     ask the wire what it serves, and name the one to run          sandbox   bwrap                           | plain:5 accent:11 dim:52 plain:10 dim:10 plain:32
+19 |     /settings  the keys the config holds, and the value each is set to                                                 | plain:5 accent:11 dim:55 plain:49
+20 |     /stats     the facts the rail is too narrow to hold                      session   —                               | plain:5 accent:11 dim:40 plain:22 dim:10 plain:32
+21 |                                                                              temp      —                               | plain:78 dim:10 plain:32
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120
 24 |                                                                                                                        | plain:120

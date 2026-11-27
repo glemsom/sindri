@@ -19,12 +19,12 @@ splash-sized-160x40 at 160x40
 13 |                                                                                                                                                                | plain:160
 14 |                                                                                                                                                                | plain:160
 15 |                         sindri                                                                                                                                 | plain:25 accent+bold:6 plain:129
-16 |                                                                                                                                                                | plain:160
-17 |                         An AI agent that is a Unix filter and a terminal UI over one core.                                                                     | plain:160
-18 |                                                                                                                                                                | plain:160
-19 |                         /model     ask the wire what it serves, and name the one to run                                                                        | plain:25 accent:11 dim:52 plain:72
-20 |                         /settings  the keys the config holds, and the value each is set to                                                                     | plain:25 accent:11 dim:55 plain:69
-21 |                         /stats     the facts the rail is too narrow to hold                                                                                    | plain:25 accent:11 dim:40 plain:84
+16 |                         a GNU/Linux AI agent                                                                                                                   | plain:160
+17 |                                                                                                                                                                | plain:160
+18 |                         /model     ask the wire what it serves, and name the one to run                                                                        | plain:25 accent:11 dim:52 plain:72
+19 |                         /settings  the keys the config holds, and the value each is set to                                                                     | plain:25 accent:11 dim:55 plain:69
+20 |                         /stats     the facts the rail is too narrow to hold                                                                                    | plain:25 accent:11 dim:40 plain:84
+21 |                                                                                                                                                                | plain:160
 22 |                                                                                                                                                                | plain:160
 23 |                                                                                                                                                                | plain:160
 24 |                                                                                                                                                                | plain:160

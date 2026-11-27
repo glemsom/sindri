@@ -11,7 +11,7 @@ use crate::size::Sizes;
 
 const WORDMARK: &str = "sindri";
 
-const WHAT: &str = "An AI agent that is a Unix filter and a terminal UI over one core.";
+const GLOSS: &str = "a GNU/Linux AI agent";
 
 const HANG: u16 = 2;
 
@@ -58,12 +58,12 @@ pub fn paint(
 }
 
 fn block(room: u16) -> Vec<Row> {
-    let mut rows = vec![
-        Row::of([(String::from(WORDMARK), Look::new(Ink::Accent, Face::Bold))]),
-        Row::blank(),
-    ];
+    let mut rows = vec![Row::of([(
+        String::from(WORDMARK),
+        Look::new(Ink::Accent, Face::Bold),
+    )])];
     rows.extend(
-        wrap_under(WHAT, room, room)
+        wrap_under(GLOSS, room, room)
             .into_iter()
             .map(|line| Row::of([(line, Look::plain(Ink::Plain))])),
     );

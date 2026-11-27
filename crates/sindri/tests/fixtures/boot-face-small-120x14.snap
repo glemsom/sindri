@@ -6,12 +6,12 @@ boot-face-small at 120x14
 00 |                                                                                                                        | plain:120
 01 |                                                                                                                        | plain:120
 02 |     sindri                                                                                                             | plain:5 accent+bold:6 plain:109
-03 |                                                                                                                        | plain:120
-04 |     An AI agent that is a Unix filter and a terminal UI over one core.                                                 | plain:120
-05 |                                                                                                                        | plain:120
-06 |     /model     ask the wire what it serves, and name the one to run                                                    | plain:5 accent:11 dim:52 plain:52
-07 |     /settings  the keys the config holds, and the value each is set to                                                 | plain:5 accent:11 dim:55 plain:49
-08 |     /stats     the facts the rail is too narrow to hold                                                                | plain:5 accent:11 dim:40 plain:64
+03 |     a GNU/Linux AI agent                                                                                               | plain:120
+04 |                                                                                                                        | plain:120
+05 |     /model     ask the wire what it serves, and name the one to run                                                    | plain:5 accent:11 dim:52 plain:52
+06 |     /settings  the keys the config holds, and the value each is set to                                                 | plain:5 accent:11 dim:55 plain:49
+07 |     /stats     the facts the rail is too narrow to hold                                                                | plain:5 accent:11 dim:40 plain:64
+08 |                                                                                                                        | plain:120
 09 |                                                                                                                        | plain:120
 10 |                                                                                                                        | plain:120
 11 |                                                                                                                        | plain:120
