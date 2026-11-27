@@ -234,7 +234,7 @@ fn opening_result_work_preserves_source_and_fold_choice_after_resize() {
 }
 
 #[test]
-fn compact_short_success_keeps_all_evidence_and_reader_controls_in_every_capability_and_size() {
+fn opened_short_call_keeps_all_evidence_and_reader_controls_in_every_capability_and_size() {
     use sindri::composer::{Key, Outcome};
     use sindri::mark::Cell;
     for capabilities in [
@@ -277,8 +277,7 @@ fn compact_short_success_keeps_all_evidence_and_reader_controls_in_every_capabil
 }
 
 #[test]
-fn reader_opened_compact_result_keeps_source_through_exchange_scroll_resize_and_capability_changes()
-{
+fn reader_opened_call_keeps_source_through_exchange_scroll_resize_and_capability_changes() {
     use sindri::composer::{Key, Outcome};
     use sindri::mark::Cell;
     let output = "界\n\n  x";
