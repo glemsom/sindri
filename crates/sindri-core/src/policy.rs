@@ -278,10 +278,9 @@ pub struct PolicyRecord {
     pub description: String,
 }
 
-/// The `known_hosts` a forwarded agent appends to, when the launch asked for an agent and the
-/// file is already there: a run may record a host it meets, and create nothing of its own. ssh
-/// expands `~` from the passwd entry, so a `HOME` naming another directory names a file ssh
-/// will not write.
+/// The `known_hosts` a forwarded agent appends to, when the launch asked for one and the file is
+/// already there: a run may record a host it meets, and create nothing of its own. ssh expands `~`
+/// from the passwd entry, so a `HOME` naming another directory names a file ssh will not write.
 pub fn agent_known_hosts(config: &Config, environment: &impl Environment) -> Option<PathBuf> {
     if config.ssh_agent != Some(true) {
         return None;
