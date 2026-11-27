@@ -7172,3 +7172,235 @@ fn a_slash_command_is_never_in_the_recall() {
     );
     assert!(view.composer().text().is_empty(), "and the draft is empty");
 }
+
+#[test]
+fn up_walks_back_one_recalled_prompt_at_a_time() {
+    let mut view = recalling(remembering(&[
+        "the oldest question",
+        "the middle question",
+        "the newest question",
+    ]));
+    view.key(Key::Up);
+
+    assert_eq!(view.key(Key::Up), Outcome::Edited);
+
+    assert_eq!(
+        view.composer().text(),
+        "the middle question",
+        "Up again is the prompt before the one the draft stands on"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        "the middle question".len(),
+        "and its caret waits at its tail"
+    );
+
+    view.key(Key::Up);
+    assert_eq!(view.composer().text(), "the oldest question");
+
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Unchanged,
+        "there is nothing before the oldest, so Up changes nothing"
+    );
+    assert_eq!(
+        view.composer().text(),
+        "the oldest question",
+        "and the draft stands where the walk left it"
+    );
+}
+
+#[test]
+fn down_walks_forward_and_past_the_newest_is_the_draft_the_walk_interrupted() {
+    let mut view = recalling(remembering(&["the older question", "the newest question"]));
+    view.paste("a draft I was still writing");
+    view.key(Key::Left);
+    view.key(Key::Left);
+    view.key(Key::Up);
+    view.key(Key::Up);
+
+    assert_eq!(view.key(Key::Down), Outcome::Edited);
+
+    assert_eq!(
+        view.composer().text(),
+        "the newest question",
+        "Down is the prompt after the one the draft stands on"
+    );
+    assert_eq!(view.key(Key::Down), Outcome::Edited);
+    assert_eq!(
+        view.composer().text(),
+        "a draft I was still writing",
+        "and past the newest is the draft the first Up put aside"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        "a draft I was still writing".len() - 2,
+        "with the caret the reader left in it"
+    );
+    assert_eq!(
+        view.key(Key::Down),
+        Outcome::Unchanged,
+        "nothing stands after the reader's own draft"
+    );
+}
+
+#[test]
+fn down_inside_a_multi_line_recalled_prompt_moves_the_caret() {
+    let mut view = recalling(remembering(&["a draft\nof two lines"]));
+    view.key(Key::Up);
+
+    assert_eq!(
+        view.composer().caret().0,
+        1,
+        "a recalled prompt arrives whole, its caret on the line it ends on"
+    );
+    view.key(Key::Up);
+    assert_eq!(view.composer().caret().0, 0, "Up is the line above");
+
+    assert_eq!(view.key(Key::Down), Outcome::Edited);
+
+    assert_eq!(
+        view.composer().text(),
+        "a draft\nof two lines",
+        "Down inside the draft moves the caret and takes no prompt"
+    );
+    assert_eq!(view.composer().caret().0, 1, "onto the line below");
+    view.key(Key::Down);
+    assert!(
+        view.composer().text().is_empty(),
+        "and only past its last line does Down come back to the draft the walk interrupted"
+    );
+}
+
+#[test]
+fn an_edit_to_a_recalled_prompt_keeps_the_walk_where_it_was() {
+    let mut view = recalling(remembering(&["the older question", "the newest question"]));
+    view.key(Key::Up);
+    view.key(Key::Char('?'));
+    view.key(Key::Left);
+    view.key(Key::Left);
+    assert_eq!(view.composer().text(), "the newest question?");
+
+    assert_eq!(view.key(Key::Up), Outcome::Edited);
+
+    assert_eq!(
+        view.composer().text(),
+        "the older question",
+        "the walk stood where the edit left it, so Up is the prompt before the one the edit was made to"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        "the older question".len(),
+        "and the whole of it is the draft, wherever the caret of the edit stood"
+    );
+}
+
+#[test]
+fn sending_a_prompt_ends_the_walk() {
+    let mut view = recalling(remembering(&["alpha", "beta"]));
+    view.key(Key::Up);
+    view.key(Key::Up);
+    let Outcome::Send(prompt) = view.key(Key::Enter) else {
+        panic!("the draft is a prompt and not a command");
+    };
+    assert_eq!(prompt.text(), "alpha");
+
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "alpha",
+        "Up after sending starts at the newest, and the newest is what was just sent"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "beta",
+        "then the prompt before it, and never a walk resumed where it ended"
+    );
+}
+
+#[test]
+fn ctrl_c_ends_the_walk_and_drops_the_draft_it_held() {
+    let mut view = recalling(remembering(&["the newest question"]));
+    view.paste("a draft I was still writing");
+    view.key(Key::Up);
+
+    assert_eq!(
+        view.key(Key::Cancel),
+        Outcome::Edited,
+        "the draft is cleared"
+    );
+
+    assert_eq!(
+        view.key(Key::Down),
+        Outcome::Unchanged,
+        "there is no walk to come back to, so Down leaves the frame alone"
+    );
+    assert!(
+        view.composer().text().is_empty(),
+        "and the draft the walk held went with it"
+    );
+}
+
+#[test]
+fn new_ends_the_walk() {
+    let mut view = recalling(remembering(&["alpha", "beta"]));
+    view.key(Key::Up);
+    view.key(Key::Up);
+    while !view.composer().text().is_empty() {
+        view.key(Key::Backspace);
+    }
+    view.paste("/new");
+    assert_eq!(view.key(Key::Enter), Outcome::Edited, "`/new` answers");
+
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "beta",
+        "a walk ended by `/new` starts at the newest again"
+    );
+}
+
+#[test]
+fn a_frame_handed_no_recall_answers_down_exactly_as_it_did_before() {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.paste("a draft");
+
+    assert_eq!(view.key(Key::Down), Outcome::Unchanged);
+    assert_eq!(view.composer().text(), "a draft", "the draft is untouched");
+    assert_eq!(
+        view.composer().cursor(),
+        "a draft".len(),
+        "and so is the caret"
+    );
+}
+
+#[test]
+fn up_takes_a_queued_prompt_before_a_recalled_one_and_the_recall_once_the_queue_is_empty() {
+    let mut view = recalling(remembering(&["the recalled question"]));
+    view.enqueue(prompt("the queued question"));
+
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the queued question",
+        "work in flight is nearer than yesterday"
+    );
+
+    assert_eq!(view.key(Key::Up), Outcome::Edited);
+    assert_eq!(
+        view.composer().text(),
+        "the recalled question",
+        "and once the queue is empty the recall is what Up hands back"
+    );
+    view.key(Key::Down);
+    assert_eq!(
+        view.composer().text(),
+        "the queued question",
+        "which is the draft the walk held, never the queue's prompt taken back out of it"
+    );
+}

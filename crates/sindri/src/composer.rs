@@ -355,9 +355,13 @@ impl Composer {
     }
 
     pub fn rewrite(&mut self, text: &str) {
+        self.replace(text, text.len());
+    }
+
+    pub fn replace(&mut self, text: &str, caret: usize) {
         self.text.clear();
         self.text.push_str(text);
-        self.cursor = self.text.len();
+        self.cursor = caret.min(self.text.len());
         self.follow();
     }
 

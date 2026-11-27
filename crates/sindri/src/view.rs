@@ -331,6 +331,49 @@ struct ReadMark {
     entries: usize,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Walk {
+    position: Option<usize>,
+    held: Option<(String, usize)>,
+}
+
+impl Walk {
+    fn before(&mut self, recall: &Recall, composer: &mut Composer) -> Outcome {
+        let at = self.position.map_or(0, |at| at.saturating_add(1));
+        let Some(entry) = recall.entries().iter().rev().nth(at) else {
+            return Outcome::Unchanged;
+        };
+        let prompt = entry.prompt();
+        if self.position.is_none() {
+            self.held = Some((composer.text().to_owned(), composer.cursor()));
+        }
+        self.position = Some(at);
+        composer.replace(prompt, prompt.len());
+        Outcome::Edited
+    }
+
+    fn after(&mut self, recall: &Recall, composer: &mut Composer) -> Outcome {
+        let Some(at) = self.position else {
+            return Outcome::Unchanged;
+        };
+        if at == 0 {
+            let Some((text, caret)) = self.held.take() else {
+                return Outcome::Unchanged;
+            };
+            self.position = None;
+            composer.replace(&text, caret);
+            return Outcome::Edited;
+        }
+        let Some(entry) = recall.entries().iter().rev().nth(at - 1) else {
+            return Outcome::Unchanged;
+        };
+        let prompt = entry.prompt();
+        self.position = Some(at - 1);
+        composer.replace(prompt, prompt.len());
+        Outcome::Edited
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct View {
     rows: Rows,
@@ -342,6 +385,7 @@ pub struct View {
     composer: Composer,
     queue: Queue,
     recall: Recall,
+    walk: Walk,
     conversation: Conversation,
     superseded: bool,
     joined_generation: u64,
@@ -407,6 +451,7 @@ impl View {
             composer: Composer::new(),
             queue: Queue::default(),
             recall: Recall::none(),
+            walk: Walk::default(),
             conversation: Conversation::default(),
             superseded: false,
             joined_generation: 0,
@@ -705,8 +750,17 @@ impl View {
         {
             return self.complete();
         }
+        if key == Key::Cancel {
+            self.walk = Walk::default();
+        }
         if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
             return Outcome::Edited;
+        }
+        if key == Key::Down {
+            return match self.composer.key(key) {
+                Outcome::Unchanged => self.walk.after(&self.recall, &mut self.composer),
+                outcome => outcome,
+            };
         }
         match self.composer.key(key) {
             Outcome::Send(prompt) => self.sent(prompt),
@@ -727,6 +781,7 @@ impl View {
             return self.answer(command);
         }
         let Some(line) = self.cards.follow(prompt.text()).map(|card| card.spelling()) else {
+            self.walk = Walk::default();
             self.recall.append(prompt.text());
             return Outcome::Send(prompt);
         };
@@ -768,6 +823,7 @@ impl View {
     }
 
     fn start_over(&mut self) -> Outcome {
+        self.walk = Walk::default();
         self.rows = Rows::new();
         self.read.entries = self.facts.transcript().map_or(0, <[Entry]>::len);
         self.scrolled(Scroll::Tail);
@@ -993,20 +1049,8 @@ impl View {
                 self.composer.recall(prompt);
                 Outcome::Edited
             }
-            None => self.prompt_before(),
+            None => self.walk.before(&self.recall, &mut self.composer),
         }
-    }
-
-    fn prompt_before(&mut self) -> Outcome {
-        let Some(entry) = self.recall.entries().last() else {
-            return Outcome::Unchanged;
-        };
-        let prompt = entry.prompt().to_owned();
-        if self.composer.text() == prompt && self.composer.cursor() == prompt.len() {
-            return Outcome::Unchanged;
-        }
-        self.composer.rewrite(&prompt);
-        Outcome::Edited
     }
 
     fn drop_newest(&mut self) -> Outcome {

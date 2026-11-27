@@ -26,4 +26,4 @@ card at 40x24
 20 |                       a word           | plain:2 plain+bold:21 muted:6 plain:11
 21 |  Enter                send the prompt  | plain:2 plain+bold:21 muted:15 plain:2
 22 |  Esc                  close the        | plain:2 plain+bold:21 muted:9 plain:8
-23 |  ⋯ 47 rows kept back                   | plain:2 dim:19 plain:19
+23 |  ⋯ 49 rows kept back                   | plain:2 dim:19 plain:19
