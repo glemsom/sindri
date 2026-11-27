@@ -1107,7 +1107,7 @@ fn a_run_that_drew_no_answer_draws_the_row_of_the_stop_it_ended_on() {
 fn words_column(row: &Row) -> Option<u16> {
     row.glyph_columns()
         .into_iter()
-        .find(|(_, glyph, _)| glyph.is_alphanumeric() || *glyph == '•')
+        .find(|(_, glyph, _)| glyph.is_alphanumeric() || matches!(*glyph, '•' | '·'))
         .map(|(column, _, _)| column)
 }
 
@@ -2105,38 +2105,38 @@ fn a_path_a_call_names_is_a_way_to_the_file_the_run_judged_it_openable_as() {
     let rows = layout_on(&entry, 40, &Surface::none(), Some(&ground(tree.path())));
 
     assert_eq!(
-        said(&painted(&rows[1], 40)),
-        "  notes.html",
+        said(&painted(&rows[0], 40)),
+        "… open running notes.html",
         "the call's arguments spell the path, so the row says the path and nothing around it"
     );
     assert!(
-        painted(&rows[1], 40)[2..12]
+        painted(&rows[0], 40)[15..25]
             .iter()
             .all(|(_, look)| *look == way()),
         "the path's own cells wear the line a way wears: {:?}",
-        painted(&rows[1], 40)
+        painted(&rows[0], 40)
     );
 
     let resolved = std::fs::canonicalize(tree.path().join("notes.html")).expect("the file");
     let destination = format!("file://{}", resolved.display());
-    let (_, links) = laid(&rows[1], Rect::new(0, 0, 40, 1));
+    let (_, links) = laid(&rows[0], Rect::new(0, 0, 40, 1));
     assert_eq!(
-        links.at(0, 2),
+        links.at(0, 15),
         Some(destination.as_str()),
         "the path's first cell opens the file the judgement resolved it to"
     );
     assert_eq!(
-        links.at(0, 11),
+        links.at(0, 24),
         Some(destination.as_str()),
         "and so does its last"
     );
     assert_eq!(
-        links.at(0, 12),
+        links.at(0, 25),
         None,
         "and no cell past the path is a way to the file"
     );
     assert_eq!(
-        links.at(0, 1),
+        links.at(0, 14),
         None,
         "nor the blank the gutter sets before it"
     );
@@ -2149,7 +2149,19 @@ fn a_path_wider_than_the_body_is_one_destination_on_each_row() {
     std::fs::write(tree.path().join(long), "body").expect("the file");
     let entry = named(1, "open", &format!(r#"{{"path":"{long}"}}"#));
 
-    let rows = layout_on(&entry, 30, &Surface::none(), Some(&ground(tree.path())));
+    let mut cache = Rows::new();
+    cache.measure(Measure::new(
+        30,
+        Surface::none(),
+        Some(&ground(tree.path())),
+    ));
+    cache.push(entry);
+    cache.push(result(1, Exit::Code(0)));
+    assert!(
+        cache.open(0),
+        "the reader opens the call to read the full path"
+    );
+    let rows: Vec<Row> = cache.rows(0)[..3].to_vec();
 
     assert!(
         rows.len() > 2,
@@ -2199,15 +2211,15 @@ fn every_cell_of_the_path_a_call_names_is_a_way_to_the_file() {
     let rows = layout_on(&entry, 50, &Surface::none(), Some(&ground(tree.path())));
 
     assert_eq!(
-        said(&painted(&rows[1], 50)),
-        "  notes.html",
+        said(&painted(&rows[0], 50)),
+        "… open running notes.html",
         "the arguments spell the path once, so the row says it once"
     );
 
     let resolved = std::fs::canonicalize(tree.path().join("notes.html")).expect("the file");
     let destination = format!("file://{}", resolved.display());
-    let (_, links) = laid(&rows[1], Rect::new(0, 0, 50, 1));
-    for column in 2..12 {
+    let (_, links) = laid(&rows[0], Rect::new(0, 0, 50, 1));
+    for column in 15..25 {
         assert_eq!(
             links.at(0, column),
             Some(destination.as_str()),
@@ -2215,7 +2227,7 @@ fn every_cell_of_the_path_a_call_names_is_a_way_to_the_file() {
         );
     }
     assert_eq!(
-        links.at(0, 12),
+        links.at(0, 25),
         None,
         "and no cell past the path is a way anywhere"
     );
@@ -2230,17 +2242,17 @@ fn a_path_a_call_names_that_the_run_would_have_refused_is_drawn_as_it_is_today()
     let plain = layout(&entry, 40);
 
     assert_eq!(
-        said(&painted(&judged[1], 40)),
-        "  outside.html",
+        said(&painted(&judged[0], 40)),
+        "… open running outside.html",
         "the refused call still says the path it named, and nothing around it"
     );
     assert_eq!(
-        painted(&judged[1], 40),
-        painted(&plain[1], 40),
+        painted(&judged[0], 40),
+        painted(&plain[0], 40),
         "a file the run would have refused is drawn exactly as the frame draws it with no \
          judgement at all: the words and no line under them"
     );
-    let (_, links) = laid(&judged[1], Rect::new(0, 0, 40, 1));
+    let (_, links) = laid(&judged[0], Rect::new(0, 0, 40, 1));
     assert!(
         links.is_empty(),
         "and no cell of the row is a way to anywhere"
@@ -2254,8 +2266,8 @@ fn a_bash_call_is_drawn_as_the_command_line_a_reader_would_type() {
 
     assert_eq!(
         drawn,
-        ["… bash running", "  rg -n 'fence' src"],
-        "the call names the tool in the gutter and the command line a reader would type under it: \
+        ["… bash running rg -n 'fence' src"],
+        "the call names the tool in the gutter and the command line a reader would type beside it: \
          {drawn:?}"
     );
     assert!(
@@ -2271,7 +2283,7 @@ fn a_skill_call_is_drawn_as_the_skills_own_name() {
 
     assert_eq!(
         drawn,
-        ["… skill running", "  rust-review"],
+        ["… skill running rust-review"],
         "the row says the skill a reader would ask for by that name: {drawn:?}"
     );
 }
@@ -2284,14 +2296,14 @@ fn an_argument_no_tool_spells_is_drawn_as_words_and_never_as_punctuation() {
     );
 
     assert_eq!(
-        words(&rows[1]),
-        "  glob *.rs pattern fn main",
+        words(&rows[0]),
+        "… grep running glob *.rs pattern fn main",
         "a call this product has no tool for says each key and the value under it"
     );
     assert!(
-        unpunctuated(&words(&rows[1])),
+        unpunctuated(&words(&rows[0])),
         "and it says them as words: no brace, bracket, quote, comma or colon survives: {:?}",
-        words(&rows[1])
+        words(&rows[0])
     );
 }
 
@@ -2308,7 +2320,7 @@ fn a_call_wears_the_mark_its_verdict_settled_on_and_no_mark_before_one() {
     let opened = painted(&rows.rows(0)[0], 80);
     assert_eq!(
         said(&opened),
-        "  │ … bash running",
+        "  │ … bash running ls",
         "a call still out wears its ellipsis"
     );
     assert_eq!(
@@ -2321,7 +2333,7 @@ fn a_call_wears_the_mark_its_verdict_settled_on_and_no_mark_before_one() {
     let settled = painted(&rows.rows(0)[0], 80);
     assert_eq!(
         said(&settled),
-        "  │ ✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "a call a result settled on wears the cross of its verdict and the name it was called by"
     );
     assert_eq!(cell_inks(&settled)[4], Ink::Err);
@@ -2335,7 +2347,7 @@ fn a_result_the_cache_reads_on_its_own_still_says_the_tool_it_came_from() {
 
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "  │ ✓ bash success 2 ms",
+        "  │ ✓ bash 2 ms",
         "a result with no call above it names the tool, because no call row holds that name for it"
     );
 }
@@ -2346,13 +2358,13 @@ fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_t
     let mut rows = Rows::new();
     rows.measure(Measure::new(80, Surface::none(), None));
     rows.push(call(1));
-    let opened = rows.rows(0).len();
 
     rows.push(result(1, Exit::Code(0)));
+    assert!(rows.open(0), "the reader opens the call to read its result");
     let settled: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
-        settled[..opened],
-        ["  │ ✓ bash success 2 ms", "  │ ls"],
+        settled[..2],
+        ["  │ ✓ bash 2 ms", "  │ ls"],
         "the call keeps the row it opened and the words it was called with: {settled:?}"
     );
     assert_eq!(
@@ -2362,7 +2374,7 @@ fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_t
          wrote: {settled:?}"
     );
     assert!(
-        settled[opened..].iter().all(|row| !row.contains("bash")),
+        settled[2..].iter().all(|row| !row.contains("bash")),
         "repeating no name the call row already held: {settled:?}"
     );
 }
@@ -2383,7 +2395,7 @@ fn a_result_with_no_verdict_says_the_numbers_and_guesses_no_exit() {
 
     assert_eq!(
         said(&painted(&rows[0], 40)),
-        "✓ bash completed 2 ms",
+        "… bash 2 ms",
         "a result with no verdict claims none: the name stands in a body's gutter and the numbers \
          it holds, with no `exit 0` guessed from the text beside them"
     );
@@ -2485,7 +2497,7 @@ fn a_result_longer_than_its_fold_draws_its_head_and_the_count_of_rows_kept_back(
         "a folded result is the four rows of its head and the row counting what is kept back: {drawn:?}"
     );
     assert_eq!(
-        drawn[0], "✓ bash success 1.8 s",
+        drawn[0], "✓ bash 1.8 s",
         "the head opens with the verdict row, which a fold never takes away"
     );
     assert_eq!(
@@ -2854,12 +2866,13 @@ fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
         "the run in flight draws its thought as it lands: {laid:?}"
     );
     assert!(
-        laid.iter().any(|row| row.starts_with("  │ ✓ bash success")),
+        laid.iter().any(|row| row.starts_with("  │ ✓ bash ls")),
         "and the call the result settled: {laid:?}"
     );
     assert!(
-        laid.iter().any(|row| row == "  │ exit 0 · 7 bytes"),
-        "and the result under it: {laid:?}"
+        laid.iter()
+            .any(|row| row == "  │ ✓ bash ls 4.1 s ⋯ 5 rows kept back"),
+        "and the closed call counts its withheld result: {laid:?}"
     );
     assert!(
         !laid
@@ -2936,7 +2949,7 @@ fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
         .collect();
     let said: Vec<&String> = laid.iter().map(|(_, row)| row).collect();
     assert!(
-        said.iter().any(|row| row.starts_with("  │ ✓ bash success")),
+        said.iter().any(|row| row.starts_with("  │ ✓ bash ls")),
         "the run in flight draws the call of the turn that ended: {said:?}"
     );
     assert!(
@@ -3382,12 +3395,12 @@ fn a_transcript_whose_calls_hold_no_identity_pairs_each_result_with_the_call_bef
     assert_eq!(rows.len(), 3, "the turn and the two calls it holds");
     assert_eq!(
         said(&painted(&rows.rows(1)[1], 80)),
-        "  │ ✓ bash success 2 ms",
+        "  │ ✓ bash ls 2 ms ⋯ 5 rows kept back",
         "with no identity to pair by, the first result settles the first call"
     );
     assert_eq!(
         said(&painted(&rows.rows(2)[0], 80)),
-        "  │ ✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the second settles the second, so a session from either side of this change draws"
     );
 }
@@ -3422,12 +3435,12 @@ fn a_transcript_of_two_calls_pairs_them_by_identity_when_it_is_read_back() {
     assert_eq!(rows.len(), 3, "the turn and the two calls it holds");
     assert_eq!(
         said(&painted(&rows.rows(1)[1], 80)),
-        "  │ ✓ bash success 2 ms",
+        "  │ ✓ bash ls 2 ms ⋯ 5 rows kept back",
         "the identity survives the file it is written to, so the call it names settles here"
     );
     assert_eq!(
         said(&painted(&rows.rows(2)[0], 80)),
-        "  │ ✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the call below it takes its own result, read back in the other order"
     );
 }
@@ -3466,14 +3479,18 @@ fn a_call_that_exited_zero_settles_on_a_check_and_its_code() {
     let rows = layout(&result(1, Exit::Code(0)), 40);
     let header = painted(&rows[0], 40);
 
-    assert_eq!(said(&header), "✓ bash success 2 ms");
+    assert_eq!(said(&header), "✓ bash 2 ms");
     assert_eq!(cell_inks(&header)[0], Ink::Ok, "the check is the good ink");
     assert!(
-        cell_inks(&header)[2..14]
+        cell_inks(&header)[2..6]
             .iter()
             .all(|ink| *ink == Ink::Plain),
         "and the facts beside it are faded: {:?}",
         cell_inks(&header)
+    );
+    assert!(
+        cell_inks(&header)[6..].iter().all(|ink| *ink == Ink::Dim),
+        "the duration keeps its quieter ink"
     );
 }
 
@@ -3482,7 +3499,7 @@ fn a_call_that_failed_settles_on_a_cross_and_the_code_it_exited_with() {
     let rows = layout(&result(1, Exit::Code(1)), 40);
     let header = painted(&rows[0], 40);
 
-    assert_eq!(said(&header), "✗ bash failure exit 1 2 ms");
+    assert_eq!(said(&header), "✗ bash exit 1 2 ms");
     assert_eq!(cell_inks(&header)[0], Ink::Err, "the cross is the bad ink");
 }
 
@@ -3518,7 +3535,7 @@ fn a_result_body_is_drawn_in_the_quieter_ink_that_says_it_is_not_the_answer() {
 fn a_call_the_timeout_killed_says_timed_out() {
     let header = painted(&layout(&result(1, Exit::TimedOut), 40)[0], 40);
 
-    assert_eq!(said(&header), "✗ bash failure timed out 2 ms");
+    assert_eq!(said(&header), "✗ bash timed out 2 ms");
     assert_eq!(cell_inks(&header)[0], Ink::Err);
 }
 
@@ -3529,7 +3546,7 @@ fn a_cancelled_call_is_a_row_and_not_a_dangling_spinner() {
     rows.push(call(1));
     let in_flight = said(&painted(&rows.rows(0)[0], 80));
     assert_eq!(
-        in_flight, "  │ … bash running",
+        in_flight, "  │ … bash running ls",
         "a call that has not settled names itself and claims nothing"
     );
 
@@ -3538,7 +3555,7 @@ fn a_cancelled_call_is_a_row_and_not_a_dangling_spinner() {
 
     assert_eq!(
         said(&settled),
-        "  │ ✗ bash failure cancelled 2 ms",
+        "  │ ✗ bash cancelled ls 2 ms ⋯ 4 rows kept back",
         "the row the cancelled call settles on says what stopped it"
     );
     assert_eq!(cell_inks(&settled)[4], Ink::Err);
@@ -3556,12 +3573,12 @@ fn a_wave_of_calls_settles_its_rows_in_the_order_the_run_wrote_them() {
     assert_eq!(rows.len(), 2, "two calls, two rows");
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "  │ ✓ bash success 2 ms",
+        "  │ ✓ bash ls 2 ms ⋯ 5 rows kept back",
         "the first result settles the first call"
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "  │ ✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the second settles the second"
     );
 }
@@ -3578,13 +3595,13 @@ fn a_result_settles_the_call_it_names_when_a_turn_holds_two_calls_to_one_tool() 
     assert_eq!(rows.len(), 2, "two calls, two rows");
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "  │ ✓ bash success 2 ms",
+        "  │ ✓ bash ls 2 ms ⋯ 5 rows kept back",
         "the first call wears the verdict of the result that named it, though that result landed \
          after the one that named the call below it"
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "  │ ✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the second call wears the verdict of its own result, so neither is guessed"
     );
 }
@@ -3604,12 +3621,12 @@ fn a_result_naming_a_call_the_cache_never_held_opens_a_row_of_its_own() {
     );
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "  │ … bash running",
+        "  │ … bash running ls",
         "the call the result never named still waits for its own"
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "  │ ✓ bash success 2 ms",
+        "  │ ✓ bash 2 ms",
         "and the result stands alone, saying its verdict and the name the call row it never \
          settled would have held"
     );
@@ -3627,10 +3644,11 @@ fn a_settled_call_keeps_its_words_above_the_row_that_says_how_it_ended() {
         1,
         "the result settled the call instead of joining it"
     );
+    assert!(rows.open(0), "the reader opens the call to read its result");
     let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         drawn[..2],
-        ["  │ ✓ bash success 2 ms", "  │ ls"],
+        ["  │ ✓ bash 2 ms", "  │ ls"],
         "the entry is the call's rows first, so what was run stands above what came of it: \
          {drawn:?}"
     );
@@ -3678,7 +3696,7 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
     }
     assert_eq!(
         said(&painted(&rows.rows(settled_at)[1], 80)),
-        "  │ ✗ bash failure exit 1 2 ms",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the entry the call opened is the one that was laid again"
     );
     assert_eq!(

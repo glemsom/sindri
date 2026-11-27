@@ -650,3 +650,35 @@ fn settled_exchange_counts_recorded_calls_failures_and_time_without_reflowing_it
         }
     }
 }
+
+#[test]
+fn closed_heads_keep_numeric_disclosure_and_fit_even_when_fixed_facts_do_not() {
+    use sindri::picture::Surface;
+    use sindri::rows::{Measure, Rows};
+    for name in ["bash", "a_tool_name_that_cannot_fit"] {
+        for command in ["abcdef", "界界界界"] {
+            for width in [4, 8, 12, 20, 24, 40] {
+                let mut rows = Rows::new();
+                rows.measure(Measure::new(width, Surface::none(), None));
+                rows.push(Entry::Call {
+                    turn: 1,
+                    id: Some(SecretSet::default().redact("work")),
+                    name: SecretSet::default().redact(name),
+                    arguments: SecretSet::default().redact(format!(r#"{{"command":"{command}"}}"#)),
+                });
+                rows.push(result(Some(Exit::Code(0)), "hello"));
+                let head = &rows.rows(0)[0];
+                assert!(head.width() <= width, "{width}: {head:?}");
+                let closed = head.glyphs();
+                let digits = closed
+                    .split_whitespace()
+                    .filter(|word| word.chars().all(|glyph| glyph.is_ascii_digit()))
+                    .collect::<Vec<_>>();
+                assert!(!digits.is_empty(), "{width}: {closed}");
+                if name == "bash" && width == 40 {
+                    assert!(closed.ends_with("⋯ 3 rows kept back"), "{closed}");
+                }
+            }
+        }
+    }
+}

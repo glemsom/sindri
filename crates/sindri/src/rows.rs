@@ -801,16 +801,11 @@ fn call_row(
     cols: u16,
     ground: Option<&Ground>,
 ) -> Row {
-    let (marker, ink) = match (exit, elapsed_ms) {
-        (Some(exit), _) if exit.is_ok() => (CHECK, Ink::Ok),
-        (Some(_), _) => (CROSS, Ink::Err),
-        (None, Some(_)) => (PENDING, Ink::Dim),
-        (None, None) => (PENDING, Ink::Dim),
-    };
-    let outcome = match (exit, elapsed_ms) {
-        (Some(exit), _) if !exit.is_ok() => format!("{} ", exit.word()),
-        (None, None) => String::from("running "),
-        _ => String::new(),
+    let (marker, ink, outcome) = tool_outcome(exit, elapsed_ms);
+    let outcome = if outcome.is_empty() {
+        outcome
+    } else {
+        format!("{outcome} ")
     };
     let command = spell::of(name, arguments)
         .split_whitespace()
@@ -830,26 +825,47 @@ fn call_row(
         duration.clear();
     }
     let fixed = pen::cells(&format!("{tool}{outcome}{duration}{count}"));
+    if fixed > room {
+        let words = kept.map_or_else(
+            || {
+                if room <= 2 {
+                    command.chars().take(usize::from(room)).collect()
+                } else {
+                    clip_head(&format!("{outcome}{command}"), room)
+                }
+            },
+            |kept| {
+                let full = format!("{KEPT} {kept} rows kept back");
+                let compact = format!("{KEPT} {kept}");
+                if pen::cells(&full) <= room {
+                    full
+                } else if pen::cells(&compact) <= room {
+                    compact
+                } else {
+                    kept.to_string()
+                }
+            },
+        );
+        return marked(&marker.to_string(), ink, vec![(words, Ink::Dim)], cols)
+            .fenced(INVOCATION_SOURCE, pen::cells(margin(INDENT, cols).0))
+            .sourced(spell::source(name, arguments));
+    }
     let allowance = room.saturating_sub(fixed);
-    let command = if pen::cells(&command) > allowance {
-        let (head, _) = split_at(&command, usize::from(allowance.saturating_sub(1)));
-        if allowance == 0 {
-            String::new()
-        } else {
-            format!("{head}{CUT}")
-        }
-    } else {
-        command
+    let command = clip_head(&command, allowance);
+    let path = way(name, arguments, &command, ground);
+    let command_look = match path {
+        Some(_) => Look::plain(Ink::Plain).underlined(Ink::Dim),
+        None => Look::plain(Ink::Plain),
     };
     let row = Row::of([
-        (format!("{marker} "), ink),
-        (format!("{tool}{outcome}"), Ink::Dim),
-        (command.clone(), Ink::Plain),
-        (format!("{duration}{count}"), Ink::Dim),
+        (format!("{marker} "), Look::plain(ink)),
+        (format!("{tool}{outcome}"), Look::plain(Ink::Dim)),
+        (command.clone(), command_look),
+        (format!("{duration}{count}"), Look::plain(Ink::Dim)),
     ])
     .fenced(INVOCATION_SOURCE, 2)
     .sourced(spell::source(name, arguments));
-    match way(name, arguments, &command, ground) {
+    match path {
         Some(way) => row.linking(
             2 + pen::cells(&format!("{tool}{outcome}")),
             pen::cells(&command),
@@ -859,13 +875,35 @@ fn call_row(
     }
 }
 
-fn tool_head(name: &str, exit: Option<Exit>, elapsed_ms: Option<u64>, cols: u16) -> Vec<Row> {
-    let (marker, ink, outcome) = match (exit, elapsed_ms) {
+fn clip_head(words: &str, room: u16) -> String {
+    if pen::cells(words) <= room {
+        return words.to_owned();
+    }
+    if room == 0 {
+        return String::new();
+    }
+    let mut width = 0;
+    let head: String = words
+        .chars()
+        .take_while(|glyph| {
+            width += pen::cell(*glyph);
+            width < room
+        })
+        .collect();
+    format!("{head}{CUT}")
+}
+
+fn tool_outcome(exit: Option<Exit>, elapsed_ms: Option<u64>) -> (char, Ink, String) {
+    match (exit, elapsed_ms) {
         (Some(exit), _) if exit.is_ok() => (CHECK, Ink::Ok, String::new()),
         (Some(exit), _) => (CROSS, Ink::Err, exit.word().to_owned()),
         (None, Some(_)) => (PENDING, Ink::Dim, String::new()),
         (None, None) => (PENDING, Ink::Dim, String::from("running")),
-    };
+    }
+}
+
+fn tool_head(name: &str, exit: Option<Exit>, elapsed_ms: Option<u64>, cols: u16) -> Vec<Row> {
+    let (marker, ink, outcome) = tool_outcome(exit, elapsed_ms);
     let words = format!("{name} {outcome}");
     let duration = elapsed_ms
         .map(|ms| format!(" {}", took(ms)))
