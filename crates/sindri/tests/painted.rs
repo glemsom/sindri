@@ -2325,8 +2325,8 @@ fn failed_result_discloses_recorded_diagnostic_before_its_output_fold() {
         );
         let closed = frame::painted(&mut view, 120, 40);
         let (diagnostic, _) = closed.drawn_at("error: permission denied");
-        let (fold, _) = closed.drawn_at("5 rows kept back");
-        assert!(diagnostic < fold);
+        let (fold, _) = closed.drawn_at("9 rows kept back");
+        assert!(diagnostic > fold);
     }
 }
 
@@ -2345,11 +2345,15 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
         let mut view = View::of(
             capabilities.faced(false),
             railed(),
-            Transcript::of(disclosed_result(sindri_core::run::Exit::Code(0), text)),
+            Transcript::of(
+                disclosed_result(sindri_core::run::Exit::Code(0), text)
+                    .into_iter()
+                    .skip(1),
+            ),
         );
         let closed = frame::painted(&mut view, 120, 40);
         let (head, _) = closed.drawn_at("first");
-        let (tail, _) = closed.drawn_at("5 rows kept back");
+        let (tail, _) = closed.drawn_at("6 rows kept back");
         view.drag(Cell::new(head, 0), Cell::new(tail, 110));
         frame::painted(&mut view, 120, 40);
         assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
@@ -2364,7 +2368,7 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
         frame::painted(&mut view, 120, 40);
         assert_eq!(view.key(Key::Fold), Outcome::Edited);
         let closed = frame::painted(&mut view, 120, 40);
-        let (y, x) = closed.drawn_at("5 rows kept back");
+        let (y, x) = closed.drawn_at("6 rows kept back");
         if !pointing {
             assert_eq!(
                 {
@@ -2392,7 +2396,7 @@ fn result_fold_controls_preserve_reader_choice_and_original_source_across_reflow
             },
             Outcome::Edited
         );
-        frame::painted(&mut view, 120, 40).drawn_at("5 rows kept back");
+        frame::painted(&mut view, 120, 40).drawn_at("6 rows kept back");
     }
 }
 
@@ -2402,6 +2406,7 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
     let mut entries = vec![Entry::Prompt {
         text: SecretSet::default().redact("check this"),
     }];
+    entries.push(thought(1));
     entries.extend(disclosed_result(sindri_core::run::Exit::Code(0), text));
     entries.extend(answer("The answer remains here."));
     entries.push(Entry::Stop {
@@ -2415,7 +2420,7 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
     frame::painted(&mut view, 120, 40).drawn_at("1 call");
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
     let closed = frame::painted(&mut view, 120, 40);
-    let (y, x) = closed.drawn_at("5 rows kept back");
+    let (y, x) = closed.drawn_at("make check");
     assert_eq!(
         {
             view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
@@ -2423,18 +2428,16 @@ fn reopening_settled_exchange_keeps_its_individual_result_disclosure() {
         },
         Outcome::Edited
     );
-    frame::painted(&mut view, 120, 40).drawn_at("eighth");
-    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    frame::painted(&mut view, 120, 40).drawn_at("first");
+    let open = frame::painted(&mut view, 120, 40);
+    let (y, x) = open.drawn_at("turn 1");
+    view.pointer(open.told(), Pointer::Press(Cell::new(y, x)));
+    view.pointer(open.told(), Pointer::Release(Cell::new(y, x)));
     frame::painted(&mut view, 40, 24).drawn_at("1 call");
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
     let reopened = frame::painted(&mut view, 120, 40);
-    reopened.drawn_at("eighth");
-    assert!(
-        !reopened
-            .rows()
-            .iter()
-            .any(|row| row.contains("rows kept back"))
-    );
+    reopened.drawn_at("first");
+    reopened.drawn_at("rows kept back");
 }
 
 #[test]
@@ -2529,4 +2532,108 @@ fn huge_opened_results_stay_bounded_through_scroll_and_resize_without_pictures()
             view.key(Key::PageUp);
         }
     }
+}
+
+#[test]
+fn call_head_press_toggles_without_moving_the_head_and_body_presses_do_nothing() {
+    let mut view = View::of(
+        caps::pointing().faced(false),
+        Facts::default().asked(),
+        Transcript::of(disclosed_result(
+            sindri_core::run::Exit::Code(0),
+            "first\nsecond\nthird\nfourth\nfifth\nsixth\nseventh\neighth",
+        )),
+    );
+    let closed = frame::painted(&mut view, 80, 12);
+    let (y, x) = closed.drawn_at("make check");
+    view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+    assert_eq!(
+        view.pointer(closed.told(), Pointer::Release(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    let open = frame::painted(&mut view, 80, 12);
+    assert_eq!(open.drawn_at("bash").0, y);
+    for words in ["make check", "first", "bytes"] {
+        let (y, x) = open.drawn_at(words);
+        view.pointer(open.told(), Pointer::Press(Cell::new(y, x)));
+        assert_eq!(
+            view.pointer(open.told(), Pointer::Release(Cell::new(y, x))),
+            Outcome::Unchanged
+        );
+    }
+    let (y, x) = open.drawn_at("bash");
+    view.pointer(open.told(), Pointer::Press(Cell::new(y, x)));
+    assert_eq!(
+        view.pointer(open.told(), Pointer::Release(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    let closed = frame::painted(&mut view, 80, 12);
+    assert!(!closed.rows().iter().any(|row| row.contains("first")));
+}
+
+#[test]
+fn keyboard_call_fold_survives_resize_without_pointer_reports() {
+    let mut view = View::of(
+        caps::uncoloured(),
+        Facts::default().asked(),
+        Transcript::of(disclosed_result(
+            sindri_core::run::Exit::Code(0),
+            "first\nlast",
+        )),
+    );
+    frame::painted(&mut view, 80, 24);
+    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    for cols in [40, 80, 120] {
+        frame::painted(&mut view, cols, 24).drawn_at("last");
+    }
+    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    assert!(
+        !frame::painted(&mut view, 80, 24)
+            .rows()
+            .iter()
+            .any(|row| row.contains("last"))
+    );
+}
+
+#[test]
+fn a_laid_call_path_press_leaves_the_fold_to_the_heads_other_columns() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("notes.html"), "notes").unwrap();
+    let secrets = SecretSet::default();
+    let boundary = sindri_core::policy::Boundary::from_config(
+        &sindri_core::config::Config::default(),
+        root.path(),
+        sindri_core::policy::Enforcement::Bubblewrap,
+    )
+    .unwrap();
+    let ground = sindri_core::open::Ground::new(&boundary, root.path(), root.path()).unwrap();
+    let mut entries = disclosed_result(sindri_core::run::Exit::Code(0), "opened");
+    entries[0] = Entry::Call {
+        turn: 1,
+        id: None,
+        name: secrets.redact("open"),
+        arguments: secrets.redact(r#"{"path":"notes.html"}"#),
+    };
+    let mut view = View::of(
+        caps::pointing(),
+        Facts::default().asked().grounded(Some(ground)),
+        Transcript::of(entries),
+    );
+    let closed = frame::painted(&mut view, 80, 24);
+    let (y, x) = closed.drawn_at("notes.html");
+    assert!(closed.told().links().at(y, x).is_some());
+    view.pointer(closed.told(), Pointer::Press(Cell::new(y, x)));
+    assert_eq!(
+        view.pointer(closed.told(), Pointer::Release(Cell::new(y, x))),
+        Outcome::Unchanged
+    );
+    let unchanged = frame::painted(&mut view, 80, 24);
+    assert_eq!(unchanged.rows(), closed.rows());
+    let (y, x) = unchanged.drawn_at("open");
+    view.pointer(unchanged.told(), Pointer::Press(Cell::new(y, x)));
+    assert_eq!(
+        view.pointer(unchanged.told(), Pointer::Release(Cell::new(y, x))),
+        Outcome::Edited
+    );
+    frame::painted(&mut view, 80, 24).drawn_at("opened");
 }

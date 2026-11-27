@@ -3011,7 +3011,7 @@ fn one_key_opens_the_newest_settled_works_row_and_the_same_key_closes_it_again()
 
     let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        opened[0], "  │ ✓ bash success 4.1 s",
+        opened[0], "  │ ✓ bash ls 4.1 s ⋯ 5 rows kept back",
         "the opened work is drawn under the prompt as its entries are: {opened:?}"
     );
     assert_eq!(
@@ -3024,6 +3024,10 @@ fn one_key_opens_the_newest_settled_works_row_and_the_same_key_closes_it_again()
         rows.toggle_newest(),
         "the same key closes it again, because the work it opened is the one it closes"
     );
+    assert!(rows.rows(1).iter().any(|row| words(row).contains("ls")));
+    assert!(rows.toggle_newest());
+    rows.rows(1);
+    assert!(rows.toggle(1));
     let reclosed: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
         reclosed, closed,
@@ -3058,6 +3062,8 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
         rows.toggle_newest(),
         "the settled work is one the key opens"
     );
+    rows.rows(1);
+    assert!(rows.toggle_newest());
     let opened = rows.rows(1).len();
     let laid = rows.lays();
 
@@ -3083,7 +3089,7 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
     );
     let still: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        still[0], "  │ ✓ bash success 1.8 s",
+        still[0], "  │ ✓ bash 1.8 s",
         "the work the reader opened is still open with an entry landing after it: {still:?}"
     );
 
@@ -3092,7 +3098,7 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
     });
     let after: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        after[0], "  │ ✓ bash success 1.8 s",
+        after[0], "  │ ✓ bash 1.8 s",
         "and the prompt after it is a word of the exchange below, so the work stands as open as \
          the reader left it: {after:?}"
     );
@@ -3122,10 +3128,12 @@ fn a_row_the_mark_is_grown_over_opens_the_work_it_stands_on() {
         "a row the mark is grown over opens the work it stands on"
     );
 
+    rows.rows(1);
+    assert!(rows.open(1));
     let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
         opened[..2],
-        ["  │ ✓ bash success 1.8 s", "  │ ls"],
+        ["  │ ✓ bash 1.8 s", "  │ ls"],
         "the opened work keeps the call's head and the words it was called with: {opened:?}"
     );
     assert_eq!(
@@ -3136,7 +3144,7 @@ fn a_row_the_mark_is_grown_over_opens_the_work_it_stands_on() {
     );
     assert_eq!(
         opened.len(),
-        7,
+        8,
         "two rows of the call, four of the head and the count: {opened:?}"
     );
 }
@@ -3153,11 +3161,11 @@ fn a_result_inside_an_opened_work_keeps_its_own_fold() {
     let whole: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
         kept_back_row(rows.rows(1)),
-        None,
-        "so the result is drawn whole and counts nothing back: {whole:?}"
+        Some(String::from("  │ ⋯ 17 rows kept back")),
+        "an opened call still bounds its result: {whole:?}"
     );
     assert!(
-        whole.iter().any(|row| row.contains("a_row_of_output_12")),
+        whole.iter().any(|row| row.contains("a_row_of_output_1")),
         "and every row the fold kept back is drawn: {whole:?}"
     );
 }
