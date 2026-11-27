@@ -672,9 +672,9 @@ fn shift_tab_and_up_walk_the_mark_back_and_stop_at_the_ends() {
     for _ in 0..20 {
         view.key(Key::Down);
     }
-    assert_eq!(view.card().unwrap().selected(), 7);
+    assert_eq!(view.card().unwrap().selected(), 8);
     view.key(Key::Up);
-    assert_eq!(view.card().unwrap().selected(), 6);
+    assert_eq!(view.card().unwrap().selected(), 7);
 }
 
 #[test]
@@ -1074,4 +1074,95 @@ fn enter_completes_the_selected_nonfirst_skill_not_the_typed_exact_name() {
     assert!(!card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
     assert!(matches!(view.key(Key::Enter), Outcome::Send(_)));
     assert_eq!(loaded.names(), ["deploy-other"]);
+}
+
+#[test]
+fn commands_scroll_across_all_ranked_skills_and_complete_the_final_item() {
+    let root = workspace_with("scroll-09", "");
+    for number in 0..9 {
+        let name = format!("scroll-{number:02}");
+        let directory = root.path().join(".agents/skills").join(&name);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: {name}\n---\nBody.\n"),
+        )
+        .unwrap();
+    }
+    let mut view = frame(root.path());
+    view.paste("/scroll-");
+    frame::painted(&mut view, 120, 40);
+    for _ in 0..8 {
+        view.key(Key::Down);
+    }
+    assert_eq!(view.card().unwrap().selected(), 8);
+    let drawn = frame::painted(&mut view, 120, 40);
+    let text = drawn.rows().join("\n");
+    assert!(text.contains("2–9 of 10"), "{text}");
+    assert!(
+        text.lines().any(|row| row.contains("› /scroll-08")),
+        "{text}"
+    );
+    view.key(Key::Down);
+    assert_eq!(view.card().unwrap().selected(), 9);
+    assert_eq!(view.key(Key::Down), Outcome::Unchanged);
+    let text = frame::painted(&mut view, 120, 40).rows().join("\n");
+    assert!(text.contains("3–10 of 10"), "{text}");
+    for key in [Key::Up, Key::BackTab] {
+        for _ in 0..9 {
+            view.key(key);
+        }
+        assert_eq!(view.card().unwrap().selected(), 0);
+        let text = frame::painted(&mut view, 120, 40).rows().join("\n");
+        assert!(text.contains("1–8 of 10"), "{text}");
+        for _ in 0..9 {
+            view.key(Key::Down);
+        }
+    }
+    view.key(Key::Char('0'));
+    view.key(Key::Char('2'));
+    let drawn = frame::painted(&mut view, 120, 40);
+    assert_eq!(view.card().unwrap().selected(), 0);
+    assert!(drawn.rows().join("\n").contains("› /scroll-02"));
+    view.key(Key::Backspace);
+    view.key(Key::Backspace);
+    frame::painted(&mut view, 120, 40);
+    for _ in 0..9 {
+        view.key(Key::Down);
+    }
+    assert_eq!(view.key(Key::Tab), Outcome::Edited);
+    assert_eq!(view.composer().text(), "/scroll-09 ");
+    assert!(!card_open(&frame::painted(&mut view, 120, 40)));
+    assert!(matches!(view.key(Key::Enter), Outcome::Send(_)));
+
+    for pointer in [false, true] {
+        let loaded = Loaded::default();
+        let mut view = View::of(
+            caps::pointing(),
+            Facts::default()
+                .asked()
+                .working(root.path().to_path_buf(), None)
+                .railed(ledger::Facts::default().loading(loaded.clone())),
+            Transcript::none(),
+        );
+        view.paste("/scroll-");
+        frame::painted(&mut view, 120, 40);
+        for _ in 0..9 {
+            view.key(Key::Down);
+        }
+        let drawn = frame::painted(&mut view, 120, 40);
+        let outcome = if pointer {
+            let row = drawn.area().y + drawn.row_holding(drawn.area(), "/scroll-08");
+            view.pointer(drawn.told(), Pointer::Press(Cell::new(row, 40)))
+        } else {
+            view.key(Key::Enter)
+        };
+        assert_eq!(outcome, Outcome::Edited);
+        let name = if pointer { "scroll-08" } else { "scroll-09" };
+        assert_eq!(view.composer().text(), format!("/{name} "));
+        assert!(loaded.names().is_empty());
+        assert!(!card_open(&frame::painted(&mut view, 120, 40)));
+        assert!(matches!(view.key(Key::Enter), Outcome::Send(_)));
+        assert_eq!(loaded.names(), [name]);
+    }
 }

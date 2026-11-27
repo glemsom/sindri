@@ -444,7 +444,9 @@ _Avoid_: File browser, autocomplete, fuzzy finder, file search
 **Commands card**:
 The card a draft beginning with a slash draws: every command with the one line saying what it does,
 ranked by how the word sits in a name — a name it starts, then a name it holds — the row the draft's
-word names marked. `Esc` closes it and keeps the words, a word no command holds is a draft again,
+word names marked. At most eight matches are visible; `Up`, `Down` and `Shift+Tab`
+traverse all matches, keeping the marked row visible and updating the displayed range.
+`Esc` closes it and keeps the words, a word no command holds is a draft again,
 `Tab` completes the selected name without acting. Selecting a skill with `Tab` or
 `Enter` closes the card and leaves its request editable; a later `Enter` invokes it.
 For built-in commands, `Enter` acts and `Tab` leaves the card open.

@@ -60,6 +60,7 @@ pub const SPLASH: usize = 3;
 pub struct Card {
     narrow: Narrow,
     skills: Vec<Row>,
+    top: usize,
     loaded: Loaded,
 }
 
@@ -70,6 +71,7 @@ impl Card {
             true => Some(Card {
                 narrow: Narrow::asked(words),
                 skills: Vec::new(),
+                top: 0,
                 loaded: Loaded::default(),
             }),
             false => None,
@@ -83,6 +85,7 @@ impl Card {
         let mut card = Card {
             narrow: Narrow::asked(draft),
             skills: Vec::new(),
+            top: 0,
             loaded: Loaded::default(),
         };
         card.skills = catalog
@@ -106,6 +109,7 @@ impl Card {
     pub fn rows(&self) -> Vec<Row> {
         self.ranked()
             .into_iter()
+            .skip(self.top)
             .take(CAP)
             .map(|mut row| {
                 if row
@@ -135,6 +139,12 @@ impl Card {
         )
     }
 
+    fn reveal(&mut self) {
+        self.top = self.top.min(self.narrow.mark());
+        self.top = self.top.max((self.narrow.mark() + 1).saturating_sub(CAP));
+        self.top = self.top.min(self.ranked().len().saturating_sub(CAP));
+    }
+
     pub fn words(&self) -> &str {
         self.narrow.query()
     }
@@ -154,15 +164,18 @@ impl Card {
                 Ink::Plain,
                 Beside::Own(Ink::Dim),
             ),
-            selected: self.narrow.mark(),
+            selected: self.narrow.mark().saturating_sub(self.top),
             marker: list::MARK,
             chooses: true,
         }
         .rows();
+        for row in &mut rows {
+            row.choice = row.choice.map(|at| at + self.top);
+        }
         let matches = self.ranked().len();
         if matches > CAP {
             rows.push(list::whole(
-                &format!("1–{} of {matches}", held.len()),
+                &format!("{}–{} of {matches}", self.top + 1, self.top + held.len()),
                 Look::plain(Ink::Dim),
             ));
         }
@@ -175,7 +188,7 @@ impl Card {
     }
 
     pub fn spelling_of(&self, at: usize) -> Option<String> {
-        let rows = self.rows();
+        let rows = self.ranked();
         let chosen = rows.get(at)?;
         let words = self.words();
         Some(format!("{}{}", chosen.name, &words[word(words).len()..]))
@@ -188,24 +201,31 @@ pub fn recognised(word: &str) -> bool {
 
 impl Kept for Card {
     fn walked(&mut self, way: Move) -> bool {
-        self.narrow.walked(way, self.rows().len())
+        let changed = self.narrow.walked(way, self.ranked().len());
+        self.reveal();
+        changed
     }
 
     fn typed(&mut self, key: Key) -> bool {
         let skills = &self.skills;
-        self.narrow.typed(key, |words| {
+        let changed = self.narrow.typed(key, |words| {
             Card {
                 narrow: Narrow::asked(words),
                 skills: skills.clone(),
+                top: 0,
                 loaded: Loaded::default(),
             }
-            .rows()
+            .ranked()
             .len()
-        })
+        });
+        self.reveal();
+        changed
     }
 
     fn pressed(&mut self, at: usize) -> bool {
-        self.narrow.pressed(at, self.rows().len())
+        let changed = self.narrow.pressed(at, self.ranked().len());
+        self.reveal();
+        changed
     }
 }
 
