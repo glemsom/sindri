@@ -177,10 +177,9 @@ conversation of one prompt, and so one session.
 _Avoid_: Conversation, chat, history
 
 **Recall**:
-The prompts a reader has sent, kept verbatim in one file of their own beside the sessions and
-outliving every **Launch**, so `Up` on the first line of an empty **Composer** hands the last one
-back to edit and send again. It is the reader's own words, so it is never redacted and its retention
-is a cap rather than a record's; deleting the file is the whole of forgetting it.
+The prompts a reader has sent, verbatim and in the order they were asked, kept in one file of their
+own beside the sessions. It outlives every **Launch**, and a cap on its entries bounds it, the
+oldest dropped first, so deleting the file is the whole of forgetting it.
 _Avoid_: History (that one is a run's own turns), transcript, log, clipboard
 
 **Skill**:

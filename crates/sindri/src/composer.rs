@@ -280,10 +280,6 @@ impl Composer {
         self.insert(&kept);
     }
 
-    pub fn recall(&mut self, prompt: Prompt) {
-        self.insert(&prompt.text);
-    }
-
     pub fn key(&mut self, key: Key) -> Outcome {
         match key {
             Key::Char(glyph) if glyph.is_control() => Outcome::Unchanged,

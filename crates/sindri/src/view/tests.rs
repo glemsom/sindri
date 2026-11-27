@@ -7245,6 +7245,57 @@ fn down_walks_forward_and_past_the_newest_is_the_draft_the_walk_interrupted() {
 }
 
 #[test]
+fn up_hands_back_a_multi_line_prompt_whole_with_its_caret_at_its_end() {
+    let mut view = recalling(remembering(&["the first line\nand the second"]));
+
+    assert_eq!(view.key(Key::Up), Outcome::Edited);
+
+    assert_eq!(
+        view.composer().text(),
+        "the first line\nand the second",
+        "every line the prompt was asked with comes back"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        "the first line\nand the second".len(),
+        "and the caret waits at the end of the last of them"
+    );
+}
+
+#[test]
+fn a_prompt_a_skill_invocation_synthesises_lands_in_the_recall() {
+    let workspace = tempfile::tempdir().unwrap();
+    let skill = workspace.path().join(".agents/skills/deploy");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(
+        skill.join("SKILL.md"),
+        "---\nname: deploy\ndescription: the deploy skill\n---\n\nBody.\n",
+    )
+    .unwrap();
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default()
+            .asked()
+            .working(workspace.path().to_path_buf(), None),
+        Transcript::none(),
+    )
+    .recalling(Recall::none());
+    view.paste("/deploy ship staging");
+
+    let Outcome::Send(prompt) = view.key(Key::Enter) else {
+        panic!("a skill invoked by name is a prompt");
+    };
+    assert_eq!(prompt.text(), "Use the deploy skill.\n\nship staging");
+    view.key(Key::Up);
+
+    assert_eq!(
+        view.composer().text(),
+        "Use the deploy skill.\n\nship staging",
+        "the prompt a skill invocation synthesised is the reader's to walk back to"
+    );
+}
+
+#[test]
 fn down_inside_a_multi_line_recalled_prompt_moves_the_caret() {
     let mut view = recalling(remembering(&["a draft\nof two lines"]));
     view.key(Key::Up);

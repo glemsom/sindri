@@ -28,7 +28,7 @@ fn written(state: &TempDir) -> String {
 }
 
 fn prompts(recall: &Recall) -> Vec<&str> {
-    recall.entries().iter().map(Entry::prompt).collect()
+    recall.prompts().collect()
 }
 
 fn asked(count: usize) -> String {
@@ -61,8 +61,7 @@ fn the_file_beside_the_sessions_is_what_a_recall_loads() {
         "the entries are the lines the file holds, in the order they were asked"
     );
     assert_eq!(
-        recall.entries()[0].at(),
-        "2026-02-11T09:14:03Z",
+        recall.entries[0].at, "2026-02-11T09:14:03Z",
         "and each keeps the moment the file said it was asked"
     );
 }
@@ -103,7 +102,7 @@ fn a_state_home_with_no_file_loads_empty() {
 }
 
 #[test]
-fn no_state_directory_and_no_home_load_empty_and_write_nothing() {
+fn no_state_directory_and_no_home_load_empty() {
     assert_eq!(prompts(&Recall::load(&environment(&[]))), [""; 0]);
     assert_eq!(
         prompts(&Recall::load(&environment(&[
@@ -112,15 +111,6 @@ fn no_state_directory_and_no_home_load_empty_and_write_nothing() {
         ]))),
         [""; 0]
     );
-}
-
-#[test]
-fn a_recall_with_nowhere_to_write_still_holds_what_the_launch_sent() {
-    let mut recall = Recall::none();
-
-    recall.append("what a launch with no state home asked");
-
-    assert_eq!(prompts(&recall), ["what a launch with no state home asked"]);
 }
 
 #[test]
@@ -292,6 +282,30 @@ fn the_file_is_created_readable_and_writable_by_its_owner_alone() {
 }
 
 #[test]
+fn a_file_wider_than_the_reader_alone_is_tightened_at_load() {
+    let state = state_home();
+    put(
+        &state,
+        "{\"at\":\"2026-02-11T09:14:03Z\",\"prompt\":\"an ask\"}\n",
+    );
+    std::fs::set_permissions(file(&state), std::fs::Permissions::from_mode(0o644))
+        .expect("a file an earlier version left readable");
+
+    let recall = Recall::load(&in_the_state_home(&state));
+
+    assert_eq!(prompts(&recall), ["an ask"], "and the words are still read");
+    let mode = std::fs::metadata(file(&state))
+        .expect("the recall's file")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(
+        mode, 0o600,
+        "a launch that only reads closes a file the reader's words should never have opened"
+    );
+}
+
+#[test]
 fn a_recall_with_nowhere_to_write_still_recalls_everything_the_launch_sent() {
     let state = state_home();
     std::fs::write(state.path().join("sindri"), "not a directory")
@@ -300,11 +314,18 @@ fn a_recall_with_nowhere_to_write_still_recalls_everything_the_launch_sent() {
     let mut recall = Recall::load(&in_the_state_home(&state));
     recall.append("the first ask");
     recall.append("the second ask");
+    let mut nowhere = Recall::none();
+    nowhere.append("what a launch with no state home asked");
 
     assert_eq!(
         prompts(&recall),
         ["the first ask", "the second ask"],
         "a state home that cannot be written is no refusal, and the launch recalls what it sent"
+    );
+    assert_eq!(
+        prompts(&nowhere),
+        ["what a launch with no state home asked"],
+        "and so is a recall handed no path at all"
     );
 }
 
