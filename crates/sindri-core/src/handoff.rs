@@ -13,6 +13,10 @@ use crate::policy::Boundary;
 
 pub const VARIABLE: &str = "SINDRI_LAUNCH";
 
+/// The variable an agent's socket is named by. The socket is already visible through the
+/// read-only bind of `/`, so naming it is all a confined command needs.
+const AGENT: &str = "SSH_AUTH_SOCK";
+
 #[derive(Deserialize, Serialize)]
 pub struct Handoff {
     pub config: Config,
@@ -62,7 +66,11 @@ impl Handoff {
         environment: &impl Environment,
     ) -> Result<Transport, String> {
         let mut inherited = BTreeMap::new();
-        for name in ["HOME", "XDG_CONFIG_HOME", "PATH"] {
+        let mut names = vec!["HOME", "XDG_CONFIG_HOME", "PATH"];
+        if config.ssh_agent == Some(true) {
+            names.push(AGENT);
+        }
+        for name in names {
             if let Some(value) = environment.var(name) {
                 inherited.insert(name.to_owned(), value);
             }
@@ -183,3 +191,6 @@ impl ChildLaunch {
         )
     }
 }
+
+#[cfg(test)]
+mod tests;
