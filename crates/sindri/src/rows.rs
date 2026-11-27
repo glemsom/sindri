@@ -51,9 +51,7 @@ const KEPT: char = '⋯';
 
 const CUT: char = '…';
 
-const RULE: char = '│';
-
-const RULE_INSET: &str = "    ";
+const RULE_INSET: &str = "  │ ";
 
 const INVOCATION_SOURCE: usize = usize::MAX;
 const RESULT_SOURCE: usize = usize::MAX - 1;
@@ -90,23 +88,6 @@ impl Place {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ToolOutcome {
-    Running,
-    Failed,
-    Settled,
-}
-
-impl ToolOutcome {
-    fn ink(self) -> Ink {
-        match self {
-            Self::Running => Ink::Accent,
-            Self::Failed => Ink::Err,
-            Self::Settled => Ink::Dim,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     spans: Vec<(String, Look)>,
@@ -117,9 +98,6 @@ pub struct Row {
     source: Option<String>,
     names: Option<usize>,
     band: Option<Band>,
-    tool_width: Option<u16>,
-    tool_compact: bool,
-    tool_outcome: ToolOutcome,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -162,9 +140,6 @@ impl Row {
             source: None,
             names: None,
             band: None,
-            tool_width: None,
-            tool_compact: false,
-            tool_outcome: ToolOutcome::Settled,
         }
     }
 
@@ -192,22 +167,12 @@ impl Row {
             source: None,
             names: None,
             band: None,
-            tool_width: None,
-            tool_compact: false,
-            tool_outcome: ToolOutcome::Settled,
         }
     }
 
     pub fn standing(mut self, band: Band) -> Row {
         self.band = Some(band);
         self
-    }
-
-    pub(crate) fn tool_surface(&self) -> Option<(u16, Ink, bool)> {
-        self.tool_width.map(|width| {
-            let ink = self.tool_outcome.ink();
-            (width, ink, self.tool_compact)
-        })
     }
 
     pub fn stands_on(&self) -> Option<Band> {
@@ -293,9 +258,6 @@ impl Row {
             source: self.source,
             names: self.names,
             band: self.band,
-            tool_width: self.tool_width,
-            tool_compact: self.tool_compact,
-            tool_outcome: self.tool_outcome,
         }
     }
 
@@ -378,9 +340,6 @@ impl Row {
                 pen::write(buffer, area, &spans, Clip::Edge, palette);
             }
             None => pen::write(buffer, area, &self.spans, Clip::Edge, palette),
-        }
-        if self.tool_width.is_some() && area.x.saturating_add(MARGIN) < area.right() {
-            pen::glyph(buffer, area.x + MARGIN, area.y, RULE, Ink::Dim, palette);
         }
         if area.width > 0 && self.cut(area.width) {
             pen::glyph(
@@ -1600,21 +1559,6 @@ impl Rows {
             };
             if let Some((mut rows, kept)) = laid {
                 if ruled {
-                    let result = held.result.as_ref().or(match &held.what {
-                        What::Fact(entry @ Entry::Result { .. }) => Some(entry),
-                        _ => None,
-                    });
-                    let compact = held.fold == Fold::Closed && kept.is_none() && result.is_some_and(|entry| {
-                        matches!(entry, Entry::Result { exit: Some(exit), text, .. }
-                            if exit.is_ok() && (text.to_string().is_empty() || text.to_string().split('\n').count() <= FOLD_HEAD))
-                    });
-                    let width = rows
-                        .iter()
-                        .map(Row::width)
-                        .max()
-                        .unwrap_or(0)
-                        .min(cols)
-                        .saturating_add(rule);
                     for row in &mut rows {
                         let mut inset = row.clone().shifted(rule);
                         inset
@@ -1623,15 +1567,6 @@ impl Rows {
                         if let Some(fence) = &mut inset.fence {
                             fence.gutter = fence.gutter.saturating_add(rule);
                         }
-                        inset.tool_width = Some(width);
-                        inset.tool_compact = compact;
-                        inset.tool_outcome = match result {
-                            Some(Entry::Result {
-                                exit: Some(exit), ..
-                            }) if !exit.is_ok() => ToolOutcome::Failed,
-                            Some(_) => ToolOutcome::Settled,
-                            None => ToolOutcome::Running,
-                        };
                         *row = inset;
                     }
                 }

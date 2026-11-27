@@ -47,7 +47,6 @@ pub enum PlaneId {
     Bar(Bar),
     Bezel,
     Prompt(u32),
-    Tool(u32),
 }
 
 impl PlaneId {
@@ -77,7 +76,6 @@ impl PlaneId {
             PlaneId::Bar(Bar::Output) => 340,
             PlaneId::Bezel => 341,
             PlaneId::Prompt(id) => 0x8000_0000 | id,
-            PlaneId::Tool(id) => 0x4000_0000 | id,
         }
     }
 }
@@ -334,7 +332,6 @@ impl Shade {
         let size = self.size();
         match self.kind {
             Kind::Bounded {
-                owner,
                 full_rows,
                 first_row,
                 tone,
@@ -362,13 +359,6 @@ impl Shade {
                     }
                     let edge = dx.min(dy);
                     if edge < 1.0 || corner > radius - 1.0 {
-                        let accent = if matches!(owner, PlaneId::Tool(_))
-                            && x >= cell.width().saturating_mul(2)
-                        {
-                            tone
-                        } else {
-                            accent
-                        };
                         return image::Rgba(lit(tone, accent, peak));
                     }
                     let light =
@@ -705,17 +695,6 @@ pub struct Placement {
     shows: Option<image::math::Rect>,
 }
 
-pub(crate) struct SurfaceWindow {
-    pub rows: usize,
-    pub skip: usize,
-    pub band_rows: u16,
-}
-
-pub(crate) struct ToolStyle {
-    pub ink: Ink,
-    pub compact: bool,
-}
-
 impl Placement {
     pub(crate) fn prompt(
         id: u32,
@@ -780,42 +759,6 @@ impl Placement {
                 },
             },
         ))
-    }
-
-    pub(crate) fn tool(
-        id: u32,
-        cells: Rect,
-        window: SurfaceWindow,
-        cell: Option<CellSize>,
-        palette: &Palette,
-        style: ToolStyle,
-    ) -> Option<Placement> {
-        if id >= 0x4000_0000 {
-            return None;
-        }
-        let SurfaceWindow {
-            rows,
-            skip,
-            band_rows,
-        } = window;
-        let ToolStyle { ink, compact } = style;
-        let mut at = Self::prompt(id, cells, rows, skip, band_rows, cell, palette)?;
-        if let Kind::Bounded {
-            owner,
-            tone,
-            accent,
-            peak,
-            weight,
-            ..
-        } = &mut at.shade.kind
-        {
-            *owner = PlaneId::Tool(id);
-            *tone = palette.band(Band::Rail);
-            *accent = palette.ink(ink).0;
-            *peak = palette.peak(Band::Rail) / 3;
-            *weight = if compact { 0 } else { palette.seam() / 6 };
-        }
-        Some(at)
     }
 
     /// The composer's band: the draft's rows on the prompt's tone, closed on the rail's own.
@@ -1358,7 +1301,7 @@ fn transmit(sent: &mut Vec<u8>, head: &str, encoded: &str) {
 }
 
 fn delete(id: PlaneId) -> Vec<u8> {
-    let mode = if matches!(id, PlaneId::Prompt(_) | PlaneId::Tool(_)) {
+    let mode = if matches!(id, PlaneId::Prompt(_)) {
         'I'
     } else {
         'i'
