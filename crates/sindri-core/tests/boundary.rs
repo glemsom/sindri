@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use sindri_core::config::Config;
 use sindri_core::policy::{
     Boundary, BoundaryError, Enforcement, MAX_TIMEOUT_SECONDS, WritableSet, agent_known_hosts,
+    agent_ssh_config,
 };
 use tempfile::TempDir;
 
@@ -504,5 +506,101 @@ fn a_run_that_asks_for_an_agent_with_no_record_of_hosts_yet_is_granted_none() {
     assert!(
         agent_known_hosts(&config, &environment(&[])).is_none(),
         "a launch without a home has nowhere to look"
+    );
+}
+
+fn drop_ins(names: &[(&str, &str, u32)]) -> TempDir {
+    let directory = tempfile::tempdir().expect("a temp drop-in directory");
+    for (name, text, mode) in names {
+        let path = directory.path().join(name);
+        std::fs::write(&path, text).expect("a drop-in");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(*mode))
+            .expect("the mode the host gave it");
+    }
+    directory
+}
+
+fn staged_mode(path: &Path) -> u32 {
+    std::fs::metadata(path)
+        .expect("the staged copy")
+        .permissions()
+        .mode()
+        & 0o777
+}
+
+#[test]
+fn a_run_that_forwards_an_agent_reads_its_own_copy_of_the_ssh_drop_ins() {
+    let temp = tempfile::tempdir().expect("a temp");
+    let host = drop_ins(&[
+        ("20-systemd-ssh-proxy.conf", "Host .host\n", 0o644),
+        ("30-corp.conf", "Host corp\n", 0o660),
+        ("README", "not a config\n", 0o644),
+    ]);
+    let config = Config {
+        ssh_agent: Some(true),
+        ..Config::default()
+    };
+
+    let staged =
+        agent_ssh_config(&config, host.path(), temp.path()).expect("the drop-ins are staged");
+
+    assert!(
+        staged.starts_with(temp.path()),
+        "the copy lands in the run's own temp"
+    );
+    for (name, text) in [
+        ("20-systemd-ssh-proxy.conf", "Host .host\n"),
+        ("30-corp.conf", "Host corp\n"),
+    ] {
+        let copy = staged.join(name);
+        assert_eq!(
+            std::fs::read_to_string(&copy).expect("the staged copy"),
+            text,
+            "{name} is copied whole, so the drop-in ssh reads is the drop-in the host ships"
+        );
+        assert_eq!(
+            staged_mode(&copy),
+            0o644,
+            "{name} is readable by the user and writable by nobody"
+        );
+    }
+    assert!(
+        !staged.join("README").exists(),
+        "only what ssh's own include glob would read is copied"
+    );
+}
+
+#[test]
+fn a_run_that_names_no_agent_stages_no_ssh_config() {
+    let temp = tempfile::tempdir().expect("a temp");
+    let host = drop_ins(&[("20-systemd-ssh-proxy.conf", "Host .host\n", 0o644)]);
+
+    for config in [
+        Config::default(),
+        Config {
+            ssh_agent: Some(false),
+            ..Config::default()
+        },
+    ] {
+        assert!(
+            agent_ssh_config(&config, host.path(), temp.path()).is_none(),
+            "a run that did not ask for an agent is handed no config for one"
+        );
+    }
+}
+
+#[test]
+fn a_run_whose_host_ships_no_ssh_drop_ins_stages_nothing() {
+    let temp = tempfile::tempdir().expect("a temp");
+    let empty = tempfile::tempdir().expect("an empty drop-in directory");
+    let config = Config {
+        ssh_agent: Some(true),
+        ..Config::default()
+    };
+
+    assert!(agent_ssh_config(&config, empty.path(), temp.path()).is_none());
+    assert!(
+        agent_ssh_config(&config, &empty.path().join("absent"), temp.path()).is_none(),
+        "a host without the directory has nothing to replace"
     );
 }

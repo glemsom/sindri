@@ -163,6 +163,27 @@ fn an_invalid_writable_set_is_a_usage_error_not_a_best_effort() {
 }
 
 #[test]
+fn the_sandbox_mounts_the_staged_ssh_config_over_the_hosts_drop_ins() {
+    let ground = Ground::new();
+    let workspace = ground.directory("workspace");
+    let staged = ground.directory("ssh_config.d");
+    let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Bubblewrap)
+        .expect("the boundary holds")
+        .with_ssh_config(Some(staged.clone()));
+
+    let argv = invocation(&boundary, Path::new(TEMP), "ssh host")
+        .expect("the boundary renders an argv")
+        .argv();
+
+    let staged = staged.display().to_string();
+    assert!(
+        argv.windows(3)
+            .any(|three| three == ["--ro-bind", &staged, SYSTEM_SSH_CONFIG_D]),
+        "the staged drop-ins are read-only and stand where ssh reads them: {argv:?}"
+    );
+}
+
+#[test]
 fn the_sandbox_binds_the_record_of_hosts_an_agent_writes() {
     let ground = Ground::new();
     let workspace = ground.directory("workspace");

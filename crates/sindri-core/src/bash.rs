@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 
 use crate::pipe::Stream;
-use crate::policy::{Boundary, BoundaryError, Enforcement};
+use crate::policy::{Boundary, BoundaryError, Enforcement, SYSTEM_SSH_CONFIG_D};
 use crate::run::Cancel;
 
 pub const SHELL: &str = "/bin/bash";
@@ -138,6 +138,14 @@ pub fn invocation(
     for path in boundary.granted() {
         let path = path.display().to_string();
         args.extend([String::from("--bind"), path.clone(), path]);
+    }
+
+    if let Some(ssh_config) = boundary.ssh_config() {
+        args.extend([
+            String::from("--ro-bind"),
+            ssh_config.display().to_string(),
+            String::from(SYSTEM_SSH_CONFIG_D),
+        ]);
     }
 
     // The session temp is mapped and never created here: `session` makes it, adopts it and

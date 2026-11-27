@@ -130,7 +130,7 @@ pub(super) const FIELDS: [FieldView; 23] = [
         key: "ssh_agent",
         label: "SSH agent",
         group: "ACCESS & APPEARANCE",
-        help: "Allow the SSH agent inside confinement (ssh_agent).",
+        help: "Allow ssh inside confinement: its agent and its config (ssh_agent).",
     },
     FieldView {
         key: "status",

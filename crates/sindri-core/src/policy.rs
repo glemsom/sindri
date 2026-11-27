@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fmt;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -14,6 +15,8 @@ pub const MAX_TIMEOUT_SECONDS: u64 = 3_600;
 pub const DEFAULT_COMMAND_BUDGET_MS: u64 = 3_600_000;
 
 pub const DEFAULT_OUTPUT_BUDGET_BYTES: u64 = 8 * 1024 * 1024;
+
+pub const SYSTEM_SSH_CONFIG_D: &str = "/etc/ssh/ssh_config.d";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -110,6 +113,8 @@ pub struct Boundary {
     writable: WritableSet,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     known_hosts: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ssh_config: Option<PathBuf>,
     timeout_seconds: u64,
     command_budget_ms: u64,
     output_budget_bytes: u64,
@@ -136,6 +141,7 @@ impl Boundary {
         Ok(Boundary {
             writable: WritableSet::new(paths)?,
             known_hosts: None,
+            ssh_config: None,
             timeout_seconds,
             command_budget_ms: config
                 .command_budget_ms
@@ -152,6 +158,17 @@ impl Boundary {
     pub fn with_known_hosts(mut self, known_hosts: Option<PathBuf>) -> Self {
         self.known_hosts = known_hosts;
         self
+    }
+
+    /// The staged drop-ins the sandbox mounts over `SYSTEM_SSH_CONFIG_D`, read-only and read by
+    /// ssh in place of the host's.
+    pub fn with_ssh_config(mut self, ssh_config: Option<PathBuf>) -> Self {
+        self.ssh_config = ssh_config;
+        self
+    }
+
+    pub fn ssh_config(&self) -> Option<&Path> {
+        self.ssh_config.as_deref()
     }
 
     /// Every path a command may write: the declared set, and the agent's record of hosts when
@@ -276,6 +293,29 @@ pub fn agent_known_hosts(config: &Config, environment: &impl Environment) -> Opt
     let known_hosts =
         std::fs::canonicalize(Path::new(&home).join(".ssh").join("known_hosts")).ok()?;
     known_hosts.is_file().then_some(known_hosts)
+}
+
+/// The host's ssh config drop-ins copied where ssh will accept them, when the launch asked for
+/// an agent. ssh refuses a config file reached through `Include` unless root or the invoking
+/// user owns it, and inside the sandbox's single-mapping user namespace root reads as `nobody`.
+pub fn agent_ssh_config(config: &Config, drop_ins: &Path, temp: &Path) -> Option<PathBuf> {
+    if config.ssh_agent != Some(true) {
+        return None;
+    }
+    let staged = temp.join("ssh_config.d");
+    std::fs::create_dir_all(&staged).ok()?;
+    let drop_ins: Vec<PathBuf> = std::fs::read_dir(drop_ins)
+        .ok()?
+        .filter_map(|entry| Some(entry.ok()?.path()))
+        .filter(|path| path.extension().is_some_and(|kind| kind == "conf") && path.is_file())
+        .collect();
+    for path in &drop_ins {
+        let copy = staged.join(path.file_name()?);
+        std::fs::copy(path, &copy).ok()?;
+        // A drop-in the host made group-writable would fail the same check on the far side.
+        std::fs::set_permissions(&copy, std::fs::Permissions::from_mode(0o644)).ok()?;
+    }
+    (!drop_ins.is_empty()).then_some(staged)
 }
 
 #[derive(Debug)]

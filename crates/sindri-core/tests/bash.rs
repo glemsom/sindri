@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use sindri_core::bash::{self, SANDBOX_PATH, TEMP_VARIABLE};
 use sindri_core::config::Config;
-use sindri_core::policy::{Boundary, Enforcement};
+use sindri_core::policy::{Boundary, Enforcement, SYSTEM_SSH_CONFIG_D, agent_ssh_config};
 use sindri_core::run::Cancel;
 use tempfile::TempDir;
 
@@ -548,5 +548,36 @@ fn a_command_may_write_the_record_of_hosts_and_nothing_beside_it() {
     assert!(
         !ssh.join("probe").exists(),
         "and the directory it sits in stays read-only"
+    );
+}
+
+#[test]
+fn a_command_reads_the_ssh_drop_ins_the_launch_staged_for_it() {
+    if sandbox().is_none() || !Path::new(SYSTEM_SSH_CONFIG_D).is_dir() {
+        return;
+    }
+    let ground = Ground::new();
+    let host = ground.directory("host-drop-ins");
+    std::fs::write(host.join("20-staged.conf"), "Host staged-marker\n").expect("a drop-in");
+    let config = Config {
+        ssh_agent: Some(true),
+        ..Config::default()
+    };
+    let staged = agent_ssh_config(&config, &host, &ground.temp()).expect("the drop-ins are staged");
+    let boundary = boundary(&ground, Enforcement::Bubblewrap, 120).with_ssh_config(Some(staged));
+
+    let outcome = bash::run(
+        &boundary,
+        &ground.temp(),
+        &format!("cat {SYSTEM_SSH_CONFIG_D}/20-staged.conf"),
+        &Cancel::new(),
+    )
+    .expect("the command runs");
+
+    assert_eq!(outcome.code, Some(0), "stderr: {}", outcome.stderr);
+    assert!(
+        outcome.stdout.contains("staged-marker"),
+        "the drop-in directory ssh reads is the one the launch staged: {}",
+        outcome.stdout
     );
 }

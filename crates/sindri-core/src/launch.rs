@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -8,7 +8,9 @@ use crate::config::{Config, Environment, Process};
 use crate::helpers::Helpers;
 use crate::open::{Ground, Opener};
 use crate::outcome::{Facts as Reported, Outcome};
-use crate::policy::{Boundary, Enforcement, agent_known_hosts};
+use crate::policy::{
+    Boundary, Enforcement, SYSTEM_SSH_CONFIG_D, agent_known_hosts, agent_ssh_config,
+};
 use crate::preamble::Preamble;
 use crate::provider::copilot::Signing;
 use crate::provider::endpoint::Endpoint;
@@ -212,7 +214,12 @@ impl<R> Launch<R> {
             Some(handoff) => handoff.boundary.clone(),
             None => Boundary::from_config(config, &workspace, enforcement)
                 .map_err(|error| Refusal::new(error.to_string(), SETUP))?
-                .with_known_hosts(agent_known_hosts(config, &environment)),
+                .with_known_hosts(agent_known_hosts(config, &environment))
+                .with_ssh_config(agent_ssh_config(
+                    config,
+                    Path::new(SYSTEM_SSH_CONFIG_D),
+                    session.temp(),
+                )),
         };
         let discovery_workspace = preparation
             .inherited
