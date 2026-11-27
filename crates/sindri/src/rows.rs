@@ -1775,7 +1775,9 @@ impl Rows {
         for at in (0..self.held.len()).rev() {
             if holds_fold(&self.held[at]) && !self.one_row(&self.work(at)) {
                 self.rows(at);
-                if self.held[at].kept.is_some() {
+                if self.held[at].kept.is_some()
+                    || matches!(self.held[at].what, What::Fact(Entry::Call { .. }))
+                {
                     return Some(at);
                 }
             } else if matches!(self.held[at].place, Place::Opens(_))
@@ -1818,11 +1820,23 @@ impl Rows {
         self.opened(work.start, fold.other())
     }
 
+    pub fn is_call(&self, at: usize) -> bool {
+        self.held
+            .get(at)
+            .is_some_and(|held| matches!(held.what, What::Fact(Entry::Call { .. })))
+    }
+
     pub fn press(&mut self, at: usize, row: u16) -> bool {
         let Some(held) = self.held.get(at) else {
             return false;
         };
         if !is_prompt(held) {
+            if matches!(held.what, What::Fact(Entry::Call { .. })) && !self.one_row(&self.work(at))
+            {
+                let fold = held.fold;
+                let head = self.rows(at).iter().position(|row| !row.spans.is_empty());
+                return head == Some(usize::from(row)) && self.fold(at, fold.other());
+            }
             if holds_fold(held) && !self.one_row(&self.work(at)) {
                 let fold = held.fold;
                 let rows = self.rows(at);
