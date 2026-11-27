@@ -511,3 +511,42 @@ fn denied_close_range_refuses_setup_without_waiting_for_runner() {
         "{result:?}"
     );
 }
+
+#[test]
+fn a_command_may_write_the_record_of_hosts_and_nothing_beside_it() {
+    if sandbox().is_none() {
+        return;
+    }
+    let ground = Ground::new();
+    let ssh = ground.directory("ssh");
+    let hosts = ssh.join("known_hosts");
+    std::fs::write(&hosts, "192.168.50.21 ssh-ed25519 AAAA\n").expect("a record of hosts");
+    let hosts = std::fs::canonicalize(&hosts).expect("the record resolves");
+    let boundary =
+        boundary(&ground, Enforcement::Bubblewrap, 120).with_known_hosts(Some(hosts.clone()));
+
+    let outcome = bash::run(
+        &boundary,
+        &ground.temp(),
+        &format!(
+            "printf 'example.test ssh-ed25519 BBBB\n' >> {}; touch {}/probe || true",
+            quoted(&hosts),
+            quoted(&ssh)
+        ),
+        &Cancel::new(),
+    )
+    .expect("the command runs");
+
+    assert_eq!(outcome.code, Some(0), "stderr: {}", outcome.stderr);
+    assert!(
+        std::fs::read_to_string(&hosts)
+            .expect("the record of hosts")
+            .contains("example.test"),
+        "a record of hosts the launch granted takes the host a command met: {}",
+        std::fs::read_to_string(&hosts).expect("the record of hosts")
+    );
+    assert!(
+        !ssh.join("probe").exists(),
+        "and the directory it sits in stays read-only"
+    );
+}

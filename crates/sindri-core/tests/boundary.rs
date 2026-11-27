@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use sindri_core::config::Config;
-use sindri_core::policy::{Boundary, BoundaryError, Enforcement, MAX_TIMEOUT_SECONDS, WritableSet};
+use sindri_core::policy::{
+    Boundary, BoundaryError, Enforcement, MAX_TIMEOUT_SECONDS, WritableSet, agent_known_hosts,
+};
 use tempfile::TempDir;
 
 fn environment(vars: &[(&str, &str)]) -> BTreeMap<String, String> {
@@ -412,5 +414,95 @@ fn a_timeout_above_the_ceiling_is_refused_naming_the_limit() {
     assert!(
         error.to_string().contains("3601") && error.to_string().contains("3600"),
         "it names the timeout and the ceiling: {error}"
+    );
+}
+
+fn known_hosts(home: &Path) -> PathBuf {
+    let directory = home.join(".ssh");
+    std::fs::create_dir_all(&directory).expect("an ssh directory");
+    let path = directory.join("known_hosts");
+    std::fs::write(&path, "192.168.50.21 ssh-ed25519 AAAA\n").expect("a record of hosts");
+    std::fs::canonicalize(&path).expect("the record resolves")
+}
+
+#[test]
+fn a_run_that_forwards_an_agent_may_write_the_record_of_hosts() {
+    let ground = Ground::new();
+    let workspace = ground.workspace();
+    let home = tempfile::tempdir().expect("a temp home");
+    let hosts = known_hosts(home.path());
+    let config = Config {
+        ssh_agent: Some(true),
+        ..Config::default()
+    };
+    let vars = environment(&[("HOME", &home.path().display().to_string())]);
+
+    let granted = agent_known_hosts(&config, &vars).expect("the record of hosts is granted");
+    let boundary =
+        boundary(&config, &workspace, Enforcement::Bubblewrap).with_known_hosts(Some(granted));
+
+    assert_eq!(
+        boundary.granted(),
+        vec![workspace.as_path(), hosts.as_path()],
+        "the declared set stands, and the record of hosts joins it"
+    );
+    assert_eq!(
+        boundary.record_policy().writable,
+        vec![workspace.display().to_string(), hosts.display().to_string()],
+        "and the record of what the run may write says so"
+    );
+    assert!(
+        boundary
+            .description()
+            .contains(&hosts.display().to_string()),
+        "as does what the model is told: {}",
+        boundary.description()
+    );
+}
+
+#[test]
+fn a_run_that_names_no_agent_grants_no_record_of_hosts() {
+    let ground = Ground::new();
+    let workspace = ground.workspace();
+    let home = tempfile::tempdir().expect("a temp home");
+    known_hosts(home.path());
+    let vars = environment(&[("HOME", &home.path().display().to_string())]);
+
+    for config in [
+        Config::default(),
+        Config {
+            ssh_agent: Some(false),
+            ..Config::default()
+        },
+    ] {
+        assert!(
+            agent_known_hosts(&config, &vars).is_none(),
+            "a run that did not ask for an agent is granted nothing for one"
+        );
+        assert_eq!(
+            boundary(&config, &workspace, Enforcement::Bubblewrap).granted(),
+            vec![workspace.as_path()],
+            "and its boundary names only what the reader allowed"
+        );
+    }
+}
+
+#[test]
+fn a_run_that_asks_for_an_agent_with_no_record_of_hosts_yet_is_granted_none() {
+    let home = tempfile::tempdir().expect("a temp home");
+    std::fs::create_dir_all(home.path().join(".ssh")).expect("an ssh directory");
+    let config = Config {
+        ssh_agent: Some(true),
+        ..Config::default()
+    };
+    let vars = environment(&[("HOME", &home.path().display().to_string())]);
+
+    assert!(
+        agent_known_hosts(&config, &vars).is_none(),
+        "there is no file to write yet, and a boundary creates none"
+    );
+    assert!(
+        agent_known_hosts(&config, &environment(&[])).is_none(),
+        "a launch without a home has nowhere to look"
     );
 }

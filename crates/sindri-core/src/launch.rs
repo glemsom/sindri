@@ -8,7 +8,7 @@ use crate::config::{Config, Environment, Process};
 use crate::helpers::Helpers;
 use crate::open::{Ground, Opener};
 use crate::outcome::{Facts as Reported, Outcome};
-use crate::policy::{Boundary, Enforcement};
+use crate::policy::{Boundary, Enforcement, agent_known_hosts};
 use crate::preamble::Preamble;
 use crate::provider::copilot::Signing;
 use crate::provider::endpoint::Endpoint;
@@ -207,17 +207,18 @@ impl<R> Launch<R> {
         let workspace = std::env::current_dir().map_err(|error| {
             Refusal::new(format!("cannot read the working directory: {error}"), SETUP)
         })?;
+        let environment = preparation.environment(&machine.environment);
         let boundary = match &preparation.inherited {
             Some(handoff) => handoff.boundary.clone(),
             None => Boundary::from_config(config, &workspace, enforcement)
-                .map_err(|error| Refusal::new(error.to_string(), SETUP))?,
+                .map_err(|error| Refusal::new(error.to_string(), SETUP))?
+                .with_known_hosts(agent_known_hosts(config, &environment)),
         };
         let discovery_workspace = preparation
             .inherited
             .as_ref()
             .map(|handoff| handoff.workspace.as_path())
             .unwrap_or(&workspace);
-        let environment = preparation.environment(&machine.environment);
         // Proved before a turn is asked or a record written: nothing here proceeds unconfined.
         let proof = sandbox::prove_with(&machine.bwrap, &boundary, session.temp())
             .map_err(|card| Refusal::new(card.to_string(), card.exit_code()))?;

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::config::Config;
+use crate::config::{Config, Environment};
 
 pub const DEFAULT_TIMEOUT_SECONDS: u64 = 120;
 
@@ -108,6 +108,8 @@ impl WritableSet {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Boundary {
     writable: WritableSet,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    known_hosts: Option<PathBuf>,
     timeout_seconds: u64,
     command_budget_ms: u64,
     output_budget_bytes: u64,
@@ -133,6 +135,7 @@ impl Boundary {
 
         Ok(Boundary {
             writable: WritableSet::new(paths)?,
+            known_hosts: None,
             timeout_seconds,
             command_budget_ms: config
                 .command_budget_ms
@@ -142,6 +145,21 @@ impl Boundary {
                 .unwrap_or(DEFAULT_OUTPUT_BUDGET_BYTES),
             enforcement,
         })
+    }
+
+    /// The one file outside the declared set a forwarded agent writes: `known_hosts`, and
+    /// never the directory it sits in.
+    pub fn with_known_hosts(mut self, known_hosts: Option<PathBuf>) -> Self {
+        self.known_hosts = known_hosts;
+        self
+    }
+
+    /// Every path a command may write: the declared set, and the agent's record of hosts when
+    /// the launch forwards one.
+    pub fn granted(&self) -> Vec<&Path> {
+        let mut granted: Vec<&Path> = self.writable.paths().iter().map(PathBuf::as_path).collect();
+        granted.extend(self.known_hosts.as_deref());
+        granted
     }
 
     pub(crate) fn with_temp(&self, temp: &Path) -> Result<Self, BoundaryError> {
@@ -190,7 +208,7 @@ impl Boundary {
                      the writable paths below.",
                 ));
                 lines.push(String::new());
-                for path in self.writable.paths() {
+                for path in self.granted() {
                     lines.push(format!("  {}", path.display()));
                 }
                 lines.push(String::new());
@@ -220,8 +238,7 @@ impl Boundary {
         PolicyRecord {
             enforcement: self.enforcement,
             writable: self
-                .writable
-                .paths()
+                .granted()
                 .iter()
                 .map(|path| path.display().to_string())
                 .collect(),
@@ -242,6 +259,23 @@ pub struct PolicyRecord {
     pub command_budget_ms: u64,
     pub output_budget_bytes: u64,
     pub description: String,
+}
+
+/// The `known_hosts` a forwarded agent appends to, when the launch asked for an agent and the
+/// file is already there: a run may record a host it meets, and create nothing of its own. ssh
+/// expands `~` from the passwd entry, so a `HOME` naming another directory names a file ssh
+/// will not write.
+pub fn agent_known_hosts(config: &Config, environment: &impl Environment) -> Option<PathBuf> {
+    if config.ssh_agent != Some(true) {
+        return None;
+    }
+    let home = crate::config::spoken(environment, "HOME")?;
+    if !Path::new(&home).is_absolute() {
+        return None;
+    }
+    let known_hosts =
+        std::fs::canonicalize(Path::new(&home).join(".ssh").join("known_hosts")).ok()?;
+    known_hosts.is_file().then_some(known_hosts)
 }
 
 #[derive(Debug)]

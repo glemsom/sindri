@@ -135,7 +135,7 @@ pub fn invocation(
 
     args.extend(["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc"].map(String::from));
 
-    for path in boundary.writable().paths() {
+    for path in boundary.granted() {
         let path = path.display().to_string();
         args.extend([String::from("--bind"), path.clone(), path]);
     }

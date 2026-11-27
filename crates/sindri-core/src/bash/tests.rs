@@ -161,3 +161,34 @@ fn an_invalid_writable_set_is_a_usage_error_not_a_best_effort() {
         );
     }
 }
+
+#[test]
+fn the_sandbox_binds_the_record_of_hosts_an_agent_writes() {
+    let ground = Ground::new();
+    let workspace = ground.directory("workspace");
+    let hosts = ground.directory("ssh").join("known_hosts");
+    std::fs::write(&hosts, "192.168.50.21 ssh-ed25519 AAAA\n").expect("a record of hosts");
+    let boundary = Boundary::from_config(&Config::default(), &workspace, Enforcement::Bubblewrap)
+        .expect("the boundary holds")
+        .with_known_hosts(Some(hosts.clone()));
+
+    let argv = invocation(&boundary, Path::new(TEMP), "ssh -F /dev/null host")
+        .expect("the boundary renders an argv")
+        .argv();
+
+    let hosts = hosts.display().to_string();
+    assert!(
+        argv.windows(3)
+            .any(|three| three == ["--bind", &hosts, &hosts]),
+        "the record of hosts is bound where the agent will write it: {argv:?}"
+    );
+    assert!(
+        argv.windows(3).any(|three| three
+            == [
+                "--bind",
+                &workspace.display().to_string(),
+                &workspace.display().to_string()
+            ]),
+        "and the workspace it stands beside is unchanged: {argv:?}"
+    );
+}
