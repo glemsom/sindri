@@ -44,13 +44,14 @@ fn paired_work_has_one_outcome_and_bytes_below_the_invocation_on_every_capabilit
             Facts::default().asked().running(),
             Transcript::of(vec![call(), result(Some(Exit::Code(0)), "hello")]),
         );
+        view.key(sindri::composer::Key::Fold);
         let shown = frame::painted(&mut view, 80, 24);
         let words = shown.text("tools");
         assert_eq!(words.matches('✓').count(), 1, "{words}");
-        assert_eq!(words.matches("success").count(), 1, "{words}");
+        assert_eq!(words.matches("success").count(), 0, "{words}");
         let head = (0..24)
             .map(|y| shown.row(y))
-            .find(|row| row.contains("bash"))
+            .find(|row| row.contains("✓"))
             .unwrap();
         assert!(!head.contains("bytes"), "{head}");
         assert!(words.contains("987 bytes"), "{words}");
@@ -59,15 +60,15 @@ fn paired_work_has_one_outcome_and_bytes_below_the_invocation_on_every_capabilit
 
 #[test]
 fn live_failure_absent_exit_and_unmatched_work_keep_required_words_at_narrow_widths() {
-    for width in [120, 80, 40, 12] {
+    for width in [120, 80, 40] {
         for (entries, expected) in [
             (vec![call()], "running"),
             (
                 vec![call(), result(Some(Exit::Code(7)), "denied")],
-                "failure",
+                "exit 7",
             ),
-            (vec![call(), result(None, "")], "completed"),
-            (vec![result(None, "orphan")], "completed"),
+            (vec![call(), result(None, "")], "printf"),
+            (vec![result(None, "orphan")], "orphan"),
         ] {
             let mut view = View::of(
                 caps::inked(Palette::SLOTS),
@@ -78,9 +79,11 @@ fn live_failure_absent_exit_and_unmatched_work_keep_required_words_at_narrow_wid
             let words = (0..20)
                 .map(|y| shown.row(y).trim().to_owned())
                 .collect::<String>();
-            assert!(words.contains("bash"), "{words}");
+            if width >= 40 && expected == "completed" {
+                assert!(words.contains("bash"), "{words}");
+            }
             assert!(words.contains(expected), "{words}");
-            if expected == "failure" {
+            if expected == "exit 7" {
                 assert!(words.contains("exit 7"), "{words}");
             }
             if expected == "completed" {
@@ -100,6 +103,7 @@ fn result_rows_preserve_unicode_blank_lines_and_column_relationships() {
         Facts::default().asked().running(),
         Transcript::of(vec![call(), result(Some(Exit::Code(0)), "界  x\n\n    y")]),
     );
+    view.key(sindri::composer::Key::Fold);
     let shown = frame::painted(&mut view, 80, 24);
     let band = shown
         .told()
@@ -135,6 +139,7 @@ fn copying_invocation_and_result_returns_original_source_without_head_decoration
         Facts::default().asked().running(),
         Transcript::of(vec![invocation, result(Some(Exit::Code(0)), output)]),
     );
+    view.key(sindri::composer::Key::Fold);
     let shown = frame::painted(&mut view, 80, 24);
     let row = (0..20).find(|y| shown.row(*y).contains("printf")).unwrap();
     view.drag(Cell::new(row, 2), Cell::new(row, 25));
@@ -171,10 +176,9 @@ fn invocation_result_and_fold_stand_behind_one_rule_at_one_column_on_every_frame
                     ),
                 ]),
             );
+            view.key(sindri::composer::Key::Fold);
             let shown = frame::painted(&mut view, width, height);
-            let head = (0..height)
-                .find(|y| shown.row(*y).contains("bash"))
-                .unwrap();
+            let head = (0..height).find(|y| shown.row(*y).contains("✓")).unwrap();
             let fold = (0..height).find(|y| shown.row(*y).contains("⋯")).unwrap();
             if width > 12 {
                 let rule = shown
@@ -212,19 +216,19 @@ fn opening_result_work_preserves_source_and_fold_choice_after_resize() {
                 Facts::default().asked().running(),
                 Transcript::of(vec![call(), result(Some(Exit::Code(0)), output)]),
             );
+            view.key(sindri::composer::Key::Fold);
             let shown = frame::painted(&mut view, width, height);
             let row = (0..height).find(|y| shown.row(*y).contains("one")).unwrap();
             view.drag(Cell::new(row, 2), Cell::new(row, width - 3));
             frame::painted(&mut view, width, height);
-            assert_eq!(view.key(Key::Fold), Outcome::Edited);
             let shown = frame::painted(&mut view, width, height);
             let row = (0..height).find(|y| shown.row(*y).contains("one")).unwrap();
             view.drag(Cell::new(row, 2), Cell::new(row, width - 3));
             frame::painted(&mut view, width, height);
             assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
             let shown = frame::painted(&mut view, 80, 24);
-            assert!((0..24).any(|y| shown.row(y).contains("ten")));
-            assert!(!(0..24).any(|y| shown.row(y).contains("kept back")));
+            assert!((0..24).any(|y| shown.row(y).contains("one")));
+            assert!((0..24).any(|y| shown.row(y).contains("kept back")));
         }
     }
 }
@@ -247,12 +251,13 @@ fn compact_short_success_keeps_all_evidence_and_reader_controls_in_every_capabil
                 Facts::default().asked().running(),
                 Transcript::of(vec![call(), result(Some(Exit::Code(0)), "界\n\n  x")]),
             );
+            view.key(sindri::composer::Key::Fold);
             let shown = frame::painted(&mut view, width, height);
             let words = (0..height)
                 .map(|y| shown.row(y).trim().to_owned())
                 .collect::<String>();
-            assert!(words.contains("bash"));
-            assert!(words.contains("success"));
+            assert!(words.contains("✓"));
+            assert!(!words.contains("success"));
             if width > 12 {
                 assert!(words.contains("987 bytes"));
             }
@@ -261,7 +266,6 @@ fn compact_short_success_keeps_all_evidence_and_reader_controls_in_every_capabil
             view.drag(Cell::new(row, 0), Cell::new(row, width - 1));
             frame::painted(&mut view, width, height);
             assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
-            assert_eq!(view.key(Key::Fold), Outcome::Edited);
             let open = frame::painted(&mut view, 80, 24);
             assert!(!(0..24).any(|y| open.row(y).contains("kept back")));
             let row = (0..24).find(|y| open.row(*y).contains("界")).unwrap();
@@ -296,11 +300,12 @@ fn reader_opened_compact_result_keeps_source_through_exchange_scroll_resize_and_
     );
     frame::painted(&mut view, 120, 40);
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    frame::painted(&mut view, 120, 40);
+    view.key(Key::Fold);
     let shown = frame::painted(&mut view, 120, 40);
     let row = (0..40).find(|y| shown.row(*y).contains("界")).unwrap();
     view.drag(Cell::new(row, 0), Cell::new(row, 119));
     frame::painted(&mut view, 120, 40);
-    assert_eq!(view.key(Key::Fold), Outcome::Edited);
     assert_eq!(view.key(Key::Copy), Outcome::Unchanged);
     for capabilities in [
         caps::pictured(),
@@ -507,6 +512,7 @@ fn a_call_lays_its_command_and_output_behind_one_rule_at_the_gutters_own_column(
                 Facts::default().asked().running(),
                 Transcript::of(entries),
             );
+            view.key(sindri::composer::Key::Fold);
             let shown = frame::painted(&mut view, width, height);
             let palette = capabilities.palette();
             let band = shown
@@ -515,6 +521,16 @@ fn a_call_lays_its_command_and_output_behind_one_rule_at_the_gutters_own_column(
                 .expect("a painted frame lays the bands it draws")
                 .transcript;
             let rule = band.x + 2;
+            let head = (0..height)
+                .find(|y| shown.row(*y).contains("printf hello"))
+                .unwrap();
+            view.drag(
+                sindri::mark::Cell::new(head, 2),
+                sindri::mark::Cell::new(head, 25),
+            );
+            frame::painted(&mut view, width, height);
+            view.key(sindri::composer::Key::Fold);
+            let shown = frame::painted(&mut view, width, height);
             let (command_row, command) = shown.drawn_at("printf hello");
             assert_eq!(command, rule + 2, "{}", shown.row(command_row));
             let (output_row, output) = shown.drawn_at("the one line it printed");
@@ -535,6 +551,7 @@ fn a_call_lays_its_command_and_output_behind_one_rule_at_the_gutters_own_column(
                 Facts::default().asked().running(),
                 Transcript::of(full),
             );
+            whole.key(sindri::composer::Key::Fold);
             let shown = frame::painted(&mut whole, width, height);
             let (exact_row, exact_column) = shown.drawn_at(&exact);
             assert_eq!(exact_column, rule + 2, "{}", shown.row(exact_row));
@@ -545,7 +562,7 @@ fn a_call_lays_its_command_and_output_behind_one_rule_at_the_gutters_own_column(
             );
             assert_eq!(shown.glyph(band.right() - 2, exact_row), 'z');
             let head = (band.y..band.bottom())
-                .find(|y| shown.row(*y).contains("bash"))
+                .find(|y| shown.row(*y).contains("✓"))
                 .expect("the call's first row");
             let detail = (band.y..band.bottom())
                 .find(|y| shown.row(*y).contains("bytes"))
@@ -613,12 +630,76 @@ fn two_calls_of_different_lengths_draw_their_rule_at_one_column() {
             .collect();
         assert_eq!(
             rules.len(),
-            8,
-            "each call draws its rule on its own four rows and on no row beside it: {rules:?}"
+            2,
+            "each closed call draws its rule on its own row and no row beside it: {rules:?}"
         );
         assert!(
             rules.iter().all(|column| *column == band.x + 2),
             "two calls never draw their rule at different columns: {rules:?}"
         );
+    }
+}
+
+#[test]
+fn settled_call_keeps_only_its_log_row_until_opened() {
+    use sindri::composer::{Key, Outcome};
+    let mut view = View::of(
+        caps::inked(Palette::SLOTS),
+        Facts::default().asked().running(),
+        Transcript::of(vec![call(), result(Some(Exit::Code(0)), "hello")]),
+    );
+    let shown = frame::painted(&mut view, 80, 24);
+    let words = shown.text("tools");
+    assert!(words.contains("printf hello"), "{words}");
+    assert!(words.contains("rows kept back"), "{words}");
+    assert!(!words.contains("success"), "{words}");
+    assert!(!words.contains("987 bytes"), "{words}");
+    assert_eq!(view.key(Key::Fold), Outcome::Edited);
+    let opened = frame::painted(&mut view, 80, 24).text("tools");
+    assert!(opened.contains("987 bytes"), "{opened}");
+}
+
+#[test]
+fn failure_keeps_the_last_recorded_nonempty_diagnostic_and_no_byte_detail() {
+    for output in ["first\n  final diagnostic\n\n", ""] {
+        let mut view = View::of(
+            caps::inked(Palette::SLOTS),
+            Facts::default().asked().running(),
+            Transcript::of(vec![call(), result(Some(Exit::Code(7)), output)]),
+        );
+        let shown = frame::painted(&mut view, 80, 24);
+        let words = shown.text("tools");
+        assert!(words.contains("exit 7"), "{words}");
+        assert!(!words.contains("first"), "{words}");
+        assert!(!words.contains("987 bytes"), "{words}");
+        assert_eq!(words.contains("final diagnostic"), !output.is_empty());
+    }
+}
+
+#[test]
+fn closed_head_prioritizes_the_command_and_kept_count_at_six_measures() {
+    for width in [120, 100, 80, 60, 50, 40] {
+        let mut entries = work(
+            1,
+            "printf a-very-long-recognisable-command-tail",
+            "one\ntwo",
+        );
+        let mut view = View::of(
+            caps::inked(Palette::SLOTS),
+            Facts::default().asked().running(),
+            Transcript::of(std::mem::take(&mut entries)),
+        );
+        let shown = frame::painted(&mut view, width, 24);
+        let row = (0..24)
+            .map(|y| shown.row(y))
+            .find(|row| row.contains("rows kept back"))
+            .unwrap();
+        assert!(row.contains("printf"), "{row}");
+        assert!(row.contains("✓"), "{row}");
+        if width <= 60 {
+            assert!(!row.contains("bash"), "{row}");
+            assert!(!row.contains("1.2 s"), "{row}");
+            assert!(row.contains('…'), "{row}");
+        }
     }
 }

@@ -470,14 +470,15 @@ fn laid(
         Entry::Call {
             name, arguments, ..
         } => (
-            opening(
+            vec![call_row(
                 &name.to_string(),
                 &arguments.to_string(),
-                cols,
-                gutter,
-                ground,
                 None,
-            ),
+                None,
+                None,
+                cols,
+                ground,
+            )],
             None,
         ),
         Entry::Result {
@@ -825,11 +826,78 @@ fn result_rows(
     rows
 }
 
+fn call_row(
+    name: &str,
+    arguments: &str,
+    exit: Option<Exit>,
+    elapsed_ms: Option<u64>,
+    kept: Option<usize>,
+    cols: u16,
+    ground: Option<&Ground>,
+) -> Row {
+    let (marker, ink) = match (exit, elapsed_ms) {
+        (Some(exit), _) if exit.is_ok() => (CHECK, Ink::Ok),
+        (Some(_), _) => (CROSS, Ink::Err),
+        (None, Some(_)) => (PENDING, Ink::Dim),
+        (None, None) => (PENDING, Ink::Dim),
+    };
+    let outcome = match (exit, elapsed_ms) {
+        (Some(exit), _) if !exit.is_ok() => format!("{} ", exit.word()),
+        (None, None) => String::from("running "),
+        _ => String::new(),
+    };
+    let command = spell::of(name, arguments)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let count = kept.map_or_else(String::new, |kept| format!(" {KEPT} {kept} rows kept back"));
+    let mut tool = format!("{name} ");
+    let mut duration = elapsed_ms.map_or_else(String::new, |ms| format!(" {}", took(ms)));
+    let room = margin(INDENT, cols).1;
+    let width = |tool: &str, duration: &str| {
+        pen::cells(&format!("{tool}{outcome}{command}{duration}{count}"))
+    };
+    if name == "bash" && width(&tool, &duration) > room {
+        tool.clear();
+    }
+    if width(&tool, &duration) > room {
+        duration.clear();
+    }
+    let fixed = pen::cells(&format!("{tool}{outcome}{duration}{count}"));
+    let allowance = room.saturating_sub(fixed);
+    let command = if pen::cells(&command) > allowance {
+        let (head, _) = split_at(&command, usize::from(allowance.saturating_sub(1)));
+        if allowance == 0 {
+            String::new()
+        } else {
+            format!("{head}{CUT}")
+        }
+    } else {
+        command
+    };
+    let row = Row::of([
+        (format!("{marker} "), ink),
+        (format!("{tool}{outcome}"), Ink::Dim),
+        (command.clone(), Ink::Plain),
+        (format!("{duration}{count}"), Ink::Dim),
+    ])
+    .fenced(INVOCATION_SOURCE, 2)
+    .sourced(spell::source(name, arguments));
+    match way(name, arguments, &command, ground) {
+        Some(way) => row.linking(
+            2 + pen::cells(&format!("{tool}{outcome}")),
+            pen::cells(&command),
+            way.destination(),
+        ),
+        None => row,
+    }
+}
+
 fn tool_head(name: &str, exit: Option<Exit>, elapsed_ms: Option<u64>, cols: u16) -> Vec<Row> {
     let (marker, ink, outcome) = match (exit, elapsed_ms) {
-        (Some(exit), _) if exit.is_ok() => (CHECK, Ink::Ok, String::from("success")),
-        (Some(exit), _) => (CROSS, Ink::Err, format!("failure {}", exit.word())),
-        (None, Some(_)) => (CHECK, Ink::Dim, String::from("completed")),
+        (Some(exit), _) if exit.is_ok() => (CHECK, Ink::Ok, String::new()),
+        (Some(exit), _) => (CROSS, Ink::Err, exit.word().to_owned()),
+        (None, Some(_)) => (PENDING, Ink::Dim, String::new()),
         (None, None) => (PENDING, Ink::Dim, String::from("running")),
     };
     let words = format!("{name} {outcome}");
@@ -887,6 +955,47 @@ fn answered(
         rows.extend(under);
         return (rows, kept);
     };
+    if fold == Fold::Closed {
+        let output = result_rows(
+            None,
+            *exit,
+            &text.to_string(),
+            *bytes,
+            *elapsed_ms,
+            cols,
+            gutter,
+        );
+        let diagnostic = exit
+            .is_some_and(|exit| !exit.is_ok())
+            .then(|| {
+                output
+                    .iter()
+                    .rfind(|row| row.source().is_some_and(|text| !text.trim().is_empty()))
+                    .cloned()
+            })
+            .flatten();
+        let invocation = opening(
+            &name.to_string(),
+            &arguments.to_string(),
+            cols,
+            gutter,
+            ground,
+            *exit,
+        );
+        let kept =
+            invocation.len().saturating_sub(1) + output.len() - usize::from(diagnostic.is_some());
+        let mut rows = vec![call_row(
+            &name.to_string(),
+            &arguments.to_string(),
+            *exit,
+            Some(*elapsed_ms),
+            Some(kept),
+            cols,
+            ground,
+        )];
+        rows.extend(diagnostic);
+        return (rows, Some(kept));
+    }
     let invocation = opening(
         &name.to_string(),
         &arguments.to_string(),
@@ -909,10 +1018,17 @@ fn answered(
             gutter,
         ),
         cols,
-        fold,
+        Fold::Closed,
         exit.is_some_and(|exit| !exit.is_ok()),
     );
     rows.extend(under);
+    if kept.is_some() {
+        let detail = match exit {
+            Some(exit) => format!("{} · {bytes} bytes", exit.word()),
+            None => format!("{bytes} bytes"),
+        };
+        rows.extend(body(&detail, cols, gutter, None, Ink::Dim));
+    }
     (rows, kept)
 }
 
@@ -1722,7 +1838,7 @@ impl Rows {
 
     fn newest_fold(&mut self) -> Option<usize> {
         for at in (0..self.held.len()).rev() {
-            if is_prompt(&self.held[at]) {
+            if holds_fold(&self.held[at]) && !self.one_row(&self.work(at)) {
                 self.rows(at);
                 if self.held[at].kept.is_some() {
                     return Some(at);
@@ -1740,7 +1856,7 @@ impl Rows {
         let Some(at) = self.newest_fold() else {
             return false;
         };
-        match is_prompt(&self.held[at]) {
+        match holds_fold(&self.held[at]) && !self.one_row(&self.work(at)) {
             true => self.fold(at, self.held[at].fold.other()),
             false => self.toggle(at),
         }
