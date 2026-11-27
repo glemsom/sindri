@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
+---
+fold-open at 80x24
+00 |┃›why does the retry test fail?                                                 | dim:1 plain:79
+01 |  Every row of the run passes: the gutter holds one column for every entry,     | plain:80
+02 |  and a row of a command's output is set behind it rather than beside the       | plain:80
+03 |  answer.                                                                       | plain:80
+04 |                                                                                | plain:80
+05 |  │ ✓ bash cargo test -p sindri --test rows 1.8 s ⋯ 22 rows kept back           | dim:4 ok:2 dim:5 plain:32 dim:26 plain:11
+06 |  │ ✗ bash exit 7 cargo test retry 600 ms ⋯ 2 rows kept back                    | dim:4 err:2 dim:12 plain:16 dim:26 plain:20
+07 |  │ retry failed                                                                | dim:4 muted:12 plain:64
+08 |                                                                                | plain:80
+09 |  Three rows of the fold are the whole of it: the head, the count and the       | plain:80
+10 |  last.                                                                         | plain:80
+11 |                                                                                | plain:80
+12 |                                                                                | plain:80
+13 |                                                                                | plain:80
+14 |                                                                                | plain:80
+15 |                                                                                | plain:80
+16 |                                                                                | plain:80
+17 |                                                                                | plain:80
+18 |                                                                                | plain:80
+19 |                                                                                | plain:80
+20 |  ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · +9 more               | plain:2 dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:3 muted:7 plain:15
+21 |                                                                                | plain:80
+22 |┃›what should the run do?                                                       | dim:25 plain:55
+23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:5

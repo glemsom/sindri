@@ -534,15 +534,19 @@ fn kept_back(kept: usize, cols: u16) -> Row {
 #[derive(Debug, Default)]
 struct Tally {
     calls: usize,
+    failed: usize,
     files: BTreeSet<String>,
     elapsed_ms: u64,
 }
 
 impl Tally {
-    fn words(&self) -> String {
+    fn words(&self, cols: u16) -> String {
         let mut said: Vec<String> = Vec::new();
         if self.calls > 0 {
             said.push(format!("{} call{}", self.calls, plural(self.calls)));
+        }
+        if self.failed > 0 {
+            said.push(format!("{} failed", self.failed));
         }
         if !self.files.is_empty() {
             said.push(format!(
@@ -553,6 +557,9 @@ impl Tally {
         }
         if self.elapsed_ms > 0 {
             said.push(took(self.elapsed_ms));
+        }
+        while said.len() > 1 && pen::cells(&said.join(" · ")) > cols {
+            said.pop();
         }
         said.join(" · ")
     }
@@ -1740,8 +1747,16 @@ impl Rows {
                     tally.files.insert(path);
                 }
             }
-            if let Some(Entry::Result { elapsed_ms, .. }) = result_of(held) {
+            if let Some(Entry::Result {
+                elapsed_ms, exit, ..
+            }) = result_of(held)
+            {
                 tally.elapsed_ms = tally.elapsed_ms.saturating_add(*elapsed_ms);
+                if matches!(held.what, What::Fact(Entry::Call { .. }))
+                    && exit.is_some_and(|exit| !exit.is_ok())
+                {
+                    tally.failed += 1;
+                }
             }
         }
         tally
@@ -1766,7 +1781,7 @@ impl Rows {
         marked(
             &KEPT.to_string(),
             Ink::Dim,
-            vec![(self.tally(work).words(), Ink::Dim)],
+            vec![(self.tally(work).words(margin(INDENT, cols).1), Ink::Dim)],
             cols,
         )
     }

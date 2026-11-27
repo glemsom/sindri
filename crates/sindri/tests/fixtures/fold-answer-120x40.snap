@@ -9,23 +9,23 @@ fold-answer at 120x40
 03 |  beside the answer.                                                                                                    | plain:120
 04 |                                                                              turns         6 /  250                    | plain:78 dim:10 plain:32
 05 |  │ ✓ bash cargo test -p sindri --test rows 1.8 s ⋯ 22 rows kept back         ctx       █░░░░░ 48.2k / 200k             | dim:4 ok:2 dim:5 plain:32 dim:26 plain:9 dim:10 plain:1 dim:5 plain:26
-06 |                                                                              cache     88%                             | plain:78 dim:10 plain:32
-07 |  Three rows of the fold are the whole of it: the head, the count and the                                               | plain:120
-08 |  last.                                                                       workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
-09 |  The run proves the fold and nothing else: every row of a command's          branch    spec/1-capability               | plain:78 dim:10 plain:32
-10 |  output is drawn in the quieter ink behind the gutter the call opened,                                                 | plain:120
-11 |  and the rows a reader usually needs are the head of it, the row counting    sandbox   bwrap                           | plain:78 dim:10 plain:32
-12 |  the rows kept back and the last row the command wrote.                                                                | plain:120
-13 |                                                                              session   9f2c7a41                        | plain:78 dim:10 plain:32
-14 |  An answer is the answer, so it is drawn whole in the ink it wears today,    temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
-15 |  and a reader reads it beside a folded result without losing one to the                                                | plain:120
-16 |  other.                                                                      skills    2                               | plain:78 dim:10 plain:32
-17 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
-18 |  The fold opens on one key and on a mark grown over a row of it, and a       ◆ records                                 | plain:78 accent:1 plain:41
-19 |  fold a reader opened stays open through a scroll, a resize and the entry                                              | plain:120
-20 |  that lands beside it.                                                                                                 | plain:120
-21 |                                                                                                                        | plain:120
-22 |                                                                                                                        | plain:120
+06 |  │ ✗ bash exit 7 cargo test retry 600 ms ⋯ 2 rows kept back                  cache     88%                             | dim:4 err:2 dim:12 plain:16 dim:26 plain:18 dim:10 plain:32
+07 |  │ retry failed                                                                                                        | dim:4 muted:12 plain:104
+08 |                                                                              workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
+09 |  Three rows of the fold are the whole of it: the head, the count and the     branch    spec/1-capability               | plain:78 dim:10 plain:32
+10 |  last.                                                                                                                 | plain:120
+11 |  The run proves the fold and nothing else: every row of a command's          sandbox   bwrap                           | plain:78 dim:10 plain:32
+12 |  output is drawn in the quieter ink behind the gutter the call opened,                                                 | plain:120
+13 |  and the rows a reader usually needs are the head of it, the row counting    session   9f2c7a41                        | plain:78 dim:10 plain:32
+14 |  the rows kept back and the last row the command wrote.                      temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
+15 |                                                                                                                        | plain:120
+16 |  An answer is the answer, so it is drawn whole in the ink it wears today,    skills    2                               | plain:78 dim:10 plain:32
+17 |  and a reader reads it beside a folded result without losing one to the      ◆ bash                                    | plain:78 accent:1 plain:41
+18 |  other.                                                                      ◆ records                                 | plain:78 accent:1 plain:41
+19 |                                                                                                                        | plain:120
+20 |  The fold opens on one key and on a mark grown over a row of it, and a                                                 | plain:120
+21 |  fold a reader opened stays open through a scroll, a resize and the entry                                              | plain:120
+22 |  that lands beside it.                                                                                                 | plain:120
 23 |                                                                                                                        | plain:120
 24 |                                                                                                                        | plain:120
 25 |                                                                                                                        | plain:120

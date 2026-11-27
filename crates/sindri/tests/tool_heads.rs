@@ -615,3 +615,39 @@ fn closed_head_prioritizes_the_command_and_kept_count_at_six_measures() {
         }
     }
 }
+
+#[test]
+fn settled_exchange_counts_recorded_calls_failures_and_time_without_reflowing_its_tally() {
+    for width in [24, 28, 40, 80, 120] {
+        for failed in [false, true] {
+            let mut entries = vec![Entry::Prompt {
+                text: SecretSet::default().redact("inspect"),
+            }];
+            entries.extend(work(1, "printf hello", "one\ntwo\nthree"));
+            let mut second = work(2, "printf goodbye", "diagnostic");
+            if failed && let Entry::Result { exit, .. } = &mut second[1] {
+                *exit = Some(Exit::Code(7));
+            }
+            entries.extend(second);
+            entries.push(Entry::Stop {
+                stop: sindri_core::run::Stop::Final,
+            });
+            let mut view = View::of(
+                caps::uncoloured(),
+                Facts::default().asked(),
+                Transcript::of(entries),
+            );
+            let shown = frame::painted(&mut view, width, 24);
+            let rows: Vec<_> = (0..20).map(|y| shown.row(y)).collect();
+            let tally = rows.iter().find(|row| row.contains("2 calls")).unwrap();
+            assert_eq!(rows.iter().filter(|row| row.contains("calls")).count(), 1);
+            assert_eq!(tally.contains("1 failed"), failed, "{tally}");
+            assert!(!tally.contains("0 failed"), "{tally}");
+            if width >= 40 {
+                assert!(tally.contains("2.4 s"), "{tally}");
+            } else if failed {
+                assert!(!tally.contains("2.4 s"), "{tally}");
+            }
+        }
+    }
+}
