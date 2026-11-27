@@ -926,6 +926,7 @@ fn new_before_first_facts_clears_the_worker_owner_without_delayed_resurrection()
     live.launch = Some(opened);
     live.answer(Event::Paste("/human".into())).unwrap();
     live.answer(Event::Key(Key::Enter)).unwrap();
+    live.answer(Event::Key(Key::Enter)).unwrap();
     assert!(live.view.facts().loaded().protected()[0].contains("EXACT_SCHEDULING_SNAPSHOT"));
     let stale = live.view.facts().loaded().scoped();
     assert!(live.running.is_some(), "{}", stage.drawn());
@@ -951,6 +952,7 @@ fn new_before_first_facts_clears_the_worker_owner_without_delayed_resurrection()
             .is_empty()
     );
     live.answer(Event::Paste("/human".into())).unwrap();
+    live.answer(Event::Key(Key::Enter)).unwrap();
     live.answer(Event::Key(Key::Enter)).unwrap();
     assert!(live.view.facts().loaded().protected()[0].contains("EXACT_SCHEDULING_SNAPSHOT"));
     live.ending();

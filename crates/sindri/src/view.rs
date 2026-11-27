@@ -262,6 +262,7 @@ impl Painted {
 #[derive(Clone, Debug, Default)]
 struct Cards {
     dismissed: Option<String>,
+    accepted_skill: Option<String>,
     card: Option<commands::Card>,
     catalog: Option<Catalog>,
 }
@@ -288,6 +289,18 @@ impl Cards {
         };
         if words.is_empty() {
             self.catalog = None;
+        }
+        let token = words.split_whitespace().next().unwrap_or("");
+        if self
+            .accepted_skill
+            .as_deref()
+            .is_some_and(|accepted| accepted != token)
+        {
+            self.accepted_skill = None;
+        }
+        if self.accepted_skill.is_some() {
+            self.card = None;
+            return None;
         }
         if self.card.as_ref().map(commands::Card::words) != Some(words) {
             self.card = match self.dismissed.as_deref() == Some(words) {
@@ -644,15 +657,25 @@ impl View {
     }
 
     fn complete(&mut self) -> Outcome {
-        if !self.composer.on_first_line() {
-            return Outcome::Unchanged;
-        }
         let Some(card) = self.cards.follow(self.composer.text()) else {
             return Outcome::Unchanged;
         };
-        let Some(line) = card.spelling_of(card.selected()) else {
+        let Some(mut line) = card.spelling_of(card.selected()) else {
             return Outcome::Unchanged;
         };
+        if matches!(self.command(&line), Some(Command::InvokeSkill(..))) {
+            let token = line.split_whitespace().next().unwrap().to_owned();
+            if line.len() == token.len() {
+                line.push(' ');
+            }
+            self.composer.rewrite(&line);
+            self.cards.accepted_skill = Some(token);
+            self.cards.card = None;
+            return Outcome::Edited;
+        }
+        if !self.composer.on_first_line() {
+            return Outcome::Unchanged;
+        }
         self.composer.rewrite(&line);
         let end = line.find(char::is_whitespace).unwrap_or(line.len());
         while self.composer.cursor() > end {
@@ -664,6 +687,15 @@ impl View {
     fn draft(&mut self, key: Key) -> Outcome {
         if key == Key::Enter && self.facts.workspace().is_none() {
             return Outcome::Unchanged;
+        }
+        if key == Key::Enter
+            && let Some(card) = self.cards.card.as_ref()
+            && matches!(
+                self.command(&card.spelling()),
+                Some(Command::InvokeSkill(..))
+            )
+        {
+            return self.complete();
         }
         if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
             return Outcome::Edited;

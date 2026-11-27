@@ -8,9 +8,14 @@ using that skill's instructions. You can include a request after the name:
 /web-access Read https://example.com and summarize the page.
 ```
 
-Type `/` or part of a skill name to find it in the commands card. **Tab completes**
-the selected name without starting work; **Enter invokes** it. After completing a
-name, you can add an optional request before pressing Enter.
+Type `/` or part of a skill name to find it in the commands card. With the card
+open, **Enter or Tab selects a skill**: it completes the selected name and closes
+the card without loading instructions or starting work, even for an exact name.
+The draft stays editable, with existing request text preserved and the cursor at
+the end. Add an optional request, then **Enter invokes** the skill. Appending a
+request does not reopen the card. With no card open, Enter invokes directly.
+Built-in commands retain their behavior: Enter acts, and Tab completes without
+acting or closing the card.
 
 Invoking an already-loaded skill is valid: each invocation starts another turn.
 Loading instructions and asking the agent to act are distinct operations; an

@@ -909,7 +909,7 @@ fn tab_completes_a_first_class_skill_then_enter_invokes_it() {
 }
 
 #[test]
-fn enter_invokes_the_highlighted_first_class_skill() {
+fn enter_completes_the_highlighted_skill_without_loading_until_submission() {
     let root = workspace_with("deploy", "");
     let loaded = Loaded::default();
     let mut view = frame_holding(root.path(), &loaded);
@@ -918,6 +918,10 @@ fn enter_invokes_the_highlighted_first_class_skill() {
     assert_eq!(view.card().unwrap().spelling(), "/deploy");
     view.key(Key::Down);
     view.key(Key::Up);
+    assert_eq!(view.key(Key::Enter), Outcome::Edited);
+    assert_eq!(view.composer().text(), "/deploy ");
+    assert!(loaded.names().is_empty());
+    assert!(!card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
     match view.key(Key::Enter) {
         Outcome::Send(prompt) => assert_eq!(prompt.text(), "Use the deploy skill."),
         other => panic!("expected skill invocation, got {other:?}"),
@@ -1005,4 +1009,69 @@ fn skill_is_an_available_first_class_skill_name() {
         other => panic!("expected skill invocation, got {other:?}"),
     }
     assert_eq!(loaded.names(), ["skill"]);
+}
+
+#[test]
+fn skill_selection_closes_the_card_and_keeps_appending_editable_until_submission() {
+    for key in [Key::Enter, Key::Tab] {
+        for draft in ["/dep", "/deploy", "/dep existing  request\nkept  "] {
+            let root = workspace_with("deploy", "disable-model-invocation: true\n");
+            let loaded = Loaded::default();
+            let mut view = frame_holding(root.path(), &loaded);
+            view.paste(draft);
+            for _ in 0..draft.len() {
+                view.key(Key::Left);
+            }
+            assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+            assert_eq!(view.key(key), Outcome::Edited);
+            let completed = if draft.contains("existing") {
+                "/deploy existing  request\nkept  "
+            } else {
+                "/deploy "
+            };
+            assert_eq!(view.composer().text(), completed);
+            assert_eq!(view.composer().cursor(), completed.len());
+            assert!(loaded.names().is_empty());
+            assert!(loaded.protected().is_empty());
+            for _ in 0..2 {
+                assert!(!card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+            }
+            view.paste("more");
+            assert!(!card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+            assert!(loaded.names().is_empty());
+            match view.key(Key::Enter) {
+                Outcome::Send(prompt) => assert_eq!(
+                    prompt.text(),
+                    format!("Use the deploy skill.\n\n{}more", &completed[8..])
+                ),
+                other => panic!("expected one invocation, got {other:?}"),
+            }
+            assert_eq!(loaded.names(), ["deploy"]);
+            assert_eq!(view.key(Key::Enter), Outcome::Unchanged);
+        }
+    }
+}
+
+#[test]
+fn enter_completes_the_selected_nonfirst_skill_not_the_typed_exact_name() {
+    let root = workspace_with("deploy", "");
+    let directory = root.path().join(".agents/skills/deploy-other");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(
+        directory.join("SKILL.md"),
+        "---\nname: deploy-other\ndescription: other\n---\nOther.",
+    )
+    .unwrap();
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    view.paste("/deploy");
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    view.key(Key::Down);
+    assert_eq!(view.card().unwrap().spelling(), "/deploy-other");
+    assert_eq!(view.key(Key::Enter), Outcome::Edited);
+    assert_eq!(view.composer().text(), "/deploy-other ");
+    assert!(loaded.names().is_empty());
+    assert!(!card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
+    assert!(matches!(view.key(Key::Enter), Outcome::Send(_)));
+    assert_eq!(loaded.names(), ["deploy-other"]);
 }

@@ -4095,6 +4095,8 @@ fn a_first_class_skill_invocation_loads_instructions_and_stays_on_the_rail() {
         drawn.text()
     );
     command(&mut pty, &drawn, "/deploy");
+    assert!(drawn.wait_until(|frame| placed(frame).is_some_and(|(_, at)| at == GUTTER + 8)));
+    pty.type_bytes(b"\r");
     assert!(
         drawn.wait_until(rail_holds_one_skill),
         "the line loads the skill on the splash screen's own rail: {:?}",
