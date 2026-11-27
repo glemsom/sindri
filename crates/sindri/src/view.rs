@@ -1375,35 +1375,6 @@ impl View {
                     &palette,
                 )
             });
-            let decoration = decoration.or_else(|| {
-                let start = rows.iter().position(|row| row.tool_surface().is_some())?;
-                let end = rows.iter().rposition(|row| row.tool_surface().is_some())?;
-                let from = first.max(start);
-                let to = (first + shown.len()).min(end + 1);
-                if from >= to {
-                    return None;
-                }
-                let (width, ink, compact) = rows[start].tool_surface()?;
-                Placement::tool(
-                    u32::try_from(piece.entry).ok()?,
-                    Rect::new(
-                        area.x + MARGIN,
-                        y + u16::try_from(from - first).ok()?,
-                        width
-                            .saturating_sub(MARGIN)
-                            .min(area.width.saturating_sub(MARGIN * 2)),
-                        u16::try_from(to - from).ok()?,
-                    ),
-                    crate::plane::SurfaceWindow {
-                        rows: end + 1 - start,
-                        skip: from - start,
-                        band_rows: area.height,
-                    },
-                    self.capabilities.pictures().cell(),
-                    &palette,
-                    crate::plane::ToolStyle { ink, compact },
-                )
-            });
             if let Some(placement) = decoration {
                 painted.shaded(placement);
             }

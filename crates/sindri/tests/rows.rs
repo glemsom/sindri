@@ -2352,12 +2352,12 @@ fn a_result_row_says_the_verdict_the_duration_and_the_size_and_repeats_no_name_t
     let settled: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         settled[..opened],
-        ["    ✓ bash success 2 ms", "    ls"],
+        ["  │ ✓ bash success 2 ms", "  │ ls"],
         "the call keeps the row it opened and the words it was called with: {settled:?}"
     );
     assert_eq!(
         settled.last().unwrap(),
-        "    exit 0 · 7 bytes",
+        "  │ exit 0 · 7 bytes",
         "and under them the result says the verdict, how long the call took and how much it \
          wrote: {settled:?}"
     );
@@ -2633,7 +2633,7 @@ fn a_session_read_back_is_folded_again() {
 
     assert_eq!(
         kept_back_row(rows.rows(1)).as_deref(),
-        Some("    ⋯ 18 rows kept back"),
+        Some("  │ ⋯ 18 rows kept back"),
         "a result read back from a session is a fold again, because a fold is a fact of the \
          layout and never a state the session carries: {drawn:?}"
     );
@@ -2854,11 +2854,11 @@ fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
         "the run in flight draws its thought as it lands: {laid:?}"
     );
     assert!(
-        laid.iter().any(|row| row.starts_with("    ✓ bash success")),
+        laid.iter().any(|row| row.starts_with("  │ ✓ bash success")),
         "and the call the result settled: {laid:?}"
     );
     assert!(
-        laid.iter().any(|row| row == "    exit 0 · 7 bytes"),
+        laid.iter().any(|row| row == "  │ exit 0 · 7 bytes"),
         "and the result under it: {laid:?}"
     );
     assert!(
@@ -2936,7 +2936,7 @@ fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
         .collect();
     let said: Vec<&String> = laid.iter().map(|(_, row)| row).collect();
     assert!(
-        said.iter().any(|row| row.starts_with("    ✓ bash success")),
+        said.iter().any(|row| row.starts_with("  │ ✓ bash success")),
         "the run in flight draws the call of the turn that ended: {said:?}"
     );
     assert!(
@@ -3011,7 +3011,7 @@ fn one_key_opens_the_newest_settled_works_row_and_the_same_key_closes_it_again()
 
     let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        opened[0], "    ✓ bash success 4.1 s",
+        opened[0], "  │ ✓ bash success 4.1 s",
         "the opened work is drawn under the prompt as its entries are: {opened:?}"
     );
     assert_eq!(
@@ -3083,7 +3083,7 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
     );
     let still: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        still[0], "    ✓ bash success 1.8 s",
+        still[0], "  │ ✓ bash success 1.8 s",
         "the work the reader opened is still open with an entry landing after it: {still:?}"
     );
 
@@ -3092,7 +3092,7 @@ fn a_work_a_reader_opened_stays_open_through_a_resize_and_the_entry_after_it() {
     });
     let after: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        after[0], "    ✓ bash success 1.8 s",
+        after[0], "  │ ✓ bash success 1.8 s",
         "and the prompt after it is a word of the exchange below, so the work stands as open as \
          the reader left it: {after:?}"
     );
@@ -3125,12 +3125,12 @@ fn a_row_the_mark_is_grown_over_opens_the_work_it_stands_on() {
     let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
         opened[..2],
-        ["    ✓ bash success 1.8 s", "    ls"],
+        ["  │ ✓ bash success 1.8 s", "  │ ls"],
         "the opened work keeps the call's head and the words it was called with: {opened:?}"
     );
     assert_eq!(
         kept_back_row(rows.rows(1)).as_deref(),
-        Some("    ⋯ 17 rows kept back"),
+        Some("  │ ⋯ 17 rows kept back"),
         "and the result inside it keeps its own fold, its count and the head it is handed by: \
          {opened:?}"
     );
@@ -3622,13 +3622,13 @@ fn a_settled_call_keeps_its_words_above_the_row_that_says_how_it_ended() {
     let drawn: Vec<String> = rows.rows(0).iter().map(words).collect();
     assert_eq!(
         drawn[..2],
-        ["    ✓ bash success 2 ms", "    ls"],
+        ["  │ ✓ bash success 2 ms", "  │ ls"],
         "the entry is the call's rows first, so what was run stands above what came of it: \
          {drawn:?}"
     );
     assert_eq!(
         drawn.last().unwrap(),
-        "    exit 0 · 7 bytes",
+        "  │ exit 0 · 7 bytes",
         "and the result's row under them: {drawn:?}"
     );
 }
