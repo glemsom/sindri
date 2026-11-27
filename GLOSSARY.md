@@ -176,6 +176,13 @@ its record grows with every prompt and its temp goes when the launch ends; a bat
 conversation of one prompt, and so one session.
 _Avoid_: Conversation, chat, history
 
+**Recall**:
+The prompts a reader has sent, kept verbatim in one file of their own beside the sessions and
+outliving every **Launch**, so `Up` on the first line of an empty **Composer** hands the last one
+back to edit and send again. It is the reader's own words, so it is never redacted and its retention
+is a cap rather than a record's; deleting the file is the whole of forgetting it.
+_Avoid_: History (that one is a run's own turns), transcript, log, clipboard
+
 **Skill**:
 A directory holding a `SKILL.md` whose instructions can be loaded by name, in one of three scopes;
 a human-invocable skill can also be asked to act through its own slash command.

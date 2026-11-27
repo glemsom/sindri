@@ -18,8 +18,11 @@ pub fn state_home(environment: &impl Environment) -> Result<PathBuf, SessionErro
         },
     }
 }
+pub fn state_directory(environment: &impl Environment) -> Result<PathBuf, SessionError> {
+    Ok(state_home(environment)?.join(APPLICATION))
+}
 pub fn sessions_root(environment: &impl Environment) -> Result<PathBuf, SessionError> {
-    Ok(state_home(environment)?.join(APPLICATION).join(SESSIONS))
+    Ok(state_directory(environment)?.join(SESSIONS))
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Session {
