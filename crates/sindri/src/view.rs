@@ -340,10 +340,9 @@ struct Walk {
 impl Walk {
     fn before(&mut self, recall: &Recall, composer: &mut Composer) -> Outcome {
         let at = self.position.map_or(0, |at| at.saturating_add(1));
-        let Some(entry) = recall.entries().iter().rev().nth(at) else {
+        let Some(prompt) = recall.prompt(at) else {
             return Outcome::Unchanged;
         };
-        let prompt = entry.prompt();
         if self.position.is_none() {
             self.held = Some((composer.text().to_owned(), composer.cursor()));
         }
@@ -364,10 +363,9 @@ impl Walk {
             composer.replace(&text, caret);
             return Outcome::Edited;
         }
-        let Some(entry) = recall.entries().iter().rev().nth(at - 1) else {
+        let Some(prompt) = recall.prompt(at - 1) else {
             return Outcome::Unchanged;
         };
-        let prompt = entry.prompt();
         self.position = Some(at - 1);
         composer.replace(prompt, prompt.len());
         Outcome::Edited
@@ -612,7 +610,7 @@ impl View {
         self.settle();
         self.stopped(&Stop::Error(SecretSet::default().redact(refusal)));
         match self.composer.text().is_empty() {
-            true => self.composer.recall(prompt),
+            true => self.composer.insert(prompt.text()),
             false => self.enqueue(prompt),
         }
     }
@@ -656,7 +654,14 @@ impl View {
         if outcome != Outcome::Unchanged {
             self.cancel_selection();
         }
-        outcome
+        match outcome {
+            Outcome::Send(prompt) => {
+                self.walk = Walk::default();
+                self.recall.append(prompt.text());
+                Outcome::Send(prompt)
+            }
+            outcome => outcome,
+        }
     }
 
     pub fn drag(&mut self, anchor: Cell, head: Cell) {
@@ -781,8 +786,6 @@ impl View {
             return self.answer(command);
         }
         let Some(line) = self.cards.follow(prompt.text()).map(|card| card.spelling()) else {
-            self.walk = Walk::default();
-            self.recall.append(prompt.text());
             return Outcome::Send(prompt);
         };
         match self.command(&line) {
@@ -1044,9 +1047,9 @@ impl View {
         if !self.composer.on_first_line() {
             return self.composer.key(Key::Up);
         }
-        match self.queue.recall() {
+        match self.queue.take_newest() {
             Some(prompt) => {
-                self.composer.recall(prompt);
+                self.composer.insert(prompt.text());
                 Outcome::Edited
             }
             None => self.walk.before(&self.recall, &mut self.composer),
@@ -1054,7 +1057,7 @@ impl View {
     }
 
     fn drop_newest(&mut self) -> Outcome {
-        if self.queue.recall().is_none() {
+        if self.queue.take_newest().is_none() {
             return Outcome::Unchanged;
         }
         Outcome::Edited

@@ -36,14 +36,14 @@ fn the_prompts_run_in_the_order_they_were_typed() {
 }
 
 #[test]
-fn the_newest_queued_prompt_is_the_one_recalled() {
+fn the_newest_queued_prompt_is_the_one_taken_back() {
     let mut queue = Queue::new();
     for text in ["first", "second", "third"] {
         queue.push(prompt(text));
     }
 
     assert_eq!(
-        queue.recall().as_ref().map(Prompt::text),
+        queue.take_newest().as_ref().map(Prompt::text),
         Some("third"),
         "the prompt typed last is the one `↑` takes back"
     );
@@ -51,11 +51,11 @@ fn the_newest_queued_prompt_is_the_one_recalled() {
 }
 
 #[test]
-fn a_queue_holding_nothing_runs_nothing_and_recalls_nothing() {
+fn a_queue_holding_nothing_runs_nothing_and_takes_nothing_back() {
     let mut queue = Queue::new();
 
     assert_eq!(queue.next_to_run(), None);
-    assert_eq!(queue.recall(), None);
+    assert_eq!(queue.take_newest(), None);
     assert_eq!(queue.label(), None, "and has nothing to say on the frame");
 }
 
@@ -82,7 +82,7 @@ fn a_prompt_waits_whole_however_many_lines_it_carries() {
         "so it takes the one row its own first line is"
     );
     assert_eq!(
-        queue.recall().as_ref().map(Prompt::text),
+        queue.take_newest().as_ref().map(Prompt::text),
         Some("one\ntwo\nthree"),
         "and comes back out with every line break it went in with"
     );

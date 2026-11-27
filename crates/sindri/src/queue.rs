@@ -36,7 +36,7 @@ impl Queue {
         self.waiting.pop_front()
     }
 
-    pub fn recall(&mut self) -> Option<Prompt> {
+    pub fn take_newest(&mut self) -> Option<Prompt> {
         self.waiting.pop_back()
     }
 
