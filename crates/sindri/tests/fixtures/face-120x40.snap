@@ -4,15 +4,15 @@ expression: self.text(name)
 ---
 face at 120x40
 00 |┃›where does rendering live?                                                                                            | dim:1 plain:119
-01 |  │ ✓ bash success 23 ms                                                                                                | dim:4 ok:1 plain:13 dim:6 plain:96
-02 |  │ rg -n 'fence' src                                                                                                   | dim:4 plain:116
-03 |  │ src/rows.rs: the glyph a turn opens with                                                                            | dim:4 muted:40 plain:76
-04 |  │ src/rows.rs: a word longer than a row is broken                                                                     | dim:4 muted:47 plain:69
-05 |  │ exit 0 · 412 bytes                                                                                                  | dim:22 plain:98
+01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯ 4 rows kept back                                                                   | dim:4 ok:2 dim:5 plain:17 dim:25 plain:67
+02 |                                                                                                                        | plain:120
+03 |  Rendering lives in the front end and not in the core, because an entry                                                | plain:120
+04 |  is a fact and never a rendering: the TUI and any reader draw one run                                                  | plain:120
+05 |  from one value, and the core may not name a terminal at all.                                                          | plain:120
 06 |                                                                                                                        | plain:120
-07 |  Rendering lives in the front end and not in the core, because an entry                                                | plain:120
-08 |  is a fact and never a rendering: the TUI and any reader draw one run                                                  | plain:120
-09 |  from one value, and the core may not name a terminal at all.                                                          | plain:120
+07 |                                                                                                                        | plain:120
+08 |                                                                                                                        | plain:120
+09 |                                                                                                                        | plain:120
 10 |                                                                                                                        | plain:120
 11 |                                                                             ───────────────────────────────────────────| plain:77 dim:43
 12 |                                                                              wire      anthropic                       | plain:78 dim:10 plain:32

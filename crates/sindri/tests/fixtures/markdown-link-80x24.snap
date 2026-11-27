@@ -6,10 +6,10 @@ markdown-link at 80x24
 00 |  The command is /export in the spec, and §16 is where the gate is written      | plain:17 accent:7 plain:1 accent~dim:11 plain:6 accent~dim:3 plain:35
 01 |  down.                                                                         | plain:80
 02 |                                                                                | plain:80
-03 |  │ … open running                                                              | dim:5 plain:75
-04 |  │ GLOSSARY.md                                                                 | dim:4 plain~dim:11 plain:65
-05 |  │ … open running                                                              | dim:5 plain:75
-06 |  │ site.html                                                                   | dim:4 plain:76
+03 |  │ … open running GLOSSARY.md                                                  | dim:19 plain:61
+04 |  │ … open running site.html                                                    | dim:19 plain:61
+05 |                                                                                | plain:80
+06 |                                                                                | plain:80
 07 |                                                                                | plain:80
 08 |                                                                                | plain:80
 09 |                                                                                | plain:80
