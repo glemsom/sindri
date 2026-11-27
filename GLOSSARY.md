@@ -177,12 +177,14 @@ conversation of one prompt, and so one session.
 _Avoid_: Conversation, chat, history
 
 **Skill**:
-A directory holding a `SKILL.md` whose body the model can load by name, in one of three scopes.
+A directory holding a `SKILL.md` whose instructions can be loaded by name, in one of three scopes;
+a human-invocable skill can also be asked to act through its own slash command.
 _Avoid_: Prompt, plugin, recipe, tool
 
 **Loaded-skill set**:
-The names loaded so far, in load order, held by the **Launch** and so outliving the **Run** that
-loaded one: `/skill:name` and the `skill` call both write to it, and `/new` empties it.
+The names of **Skills** whose instructions remain in force in the **Conversation**, in load order,
+outliving the **Run** that loaded them; invoking one again is distinct from loading it again, and
+`/new` empties the set.
 _Avoid_: Conversation state, skill cache, loaded prompt
 
 **Skill scope**:
@@ -443,7 +445,7 @@ _Avoid_: File browser, autocomplete, fuzzy finder, file search
 The card a draft beginning with a slash draws: every command with the one line saying what it does,
 ranked by how the word sits in a name — a name it starts, then a name it holds — the row the draft's
 word names marked. `Esc` closes it and keeps the words, a word no command holds is a draft again,
-and the one command that takes a word is written into the draft for the reader to name.
+`Tab` completes the selected name without acting, and `Enter` invokes it.
 _Avoid_: Palette, slash menu, command list, autocomplete
 
 **Splash screen**:

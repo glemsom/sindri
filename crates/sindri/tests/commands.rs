@@ -849,9 +849,9 @@ fn shift_tab_and_up_walk_the_mark_back_and_stop_at_the_ends() {
     for _ in 0..20 {
         view.key(Key::Down);
     }
-    assert_eq!(view.card().unwrap().selected(), 6);
+    assert_eq!(view.card().unwrap().selected(), 7);
     view.key(Key::Up);
-    assert_eq!(view.card().unwrap().selected(), 5);
+    assert_eq!(view.card().unwrap().selected(), 6);
 }
 
 #[test]
@@ -954,7 +954,7 @@ fn tab_completes_the_row_the_reader_marked() {
     frame::painted(&mut view, SCREEN.0, SCREEN.1);
     view.key(Key::Down);
     assert_eq!(view.key(Key::Tab), Outcome::Edited);
-    assert_eq!(view.composer().text(), "/model");
+    assert_eq!(view.composer().text(), "/help");
     assert!(card_open(&frame::painted(&mut view, SCREEN.0, SCREEN.1)));
 }
 
@@ -1105,4 +1105,99 @@ fn human_activation_keeps_repo_precedence_and_load_order() {
     assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Unchanged);
     assert!(!loaded.protected()[0].contains("CHANGED_BODY"));
     assert_eq!(loaded.names(), ["deploy"]);
+}
+
+#[test]
+fn first_class_skill_invocations_send_every_time_with_or_without_a_request() {
+    let root = workspace_with("deploy", "disable-model-invocation: true\n");
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    for (draft, expected) in [
+        ("/deploy", "Use the deploy skill."),
+        (
+            "/deploy ship staging",
+            "Use the deploy skill.\n\nship staging",
+        ),
+        ("/deploy", "Use the deploy skill."),
+    ] {
+        match say(&mut view, draft) {
+            Outcome::Send(prompt) => assert_eq!(prompt.text(), expected),
+            other => panic!("expected skill invocation, got {other:?}"),
+        }
+        assert_eq!(loaded.names(), ["deploy"]);
+        assert_eq!(loaded.protected().len(), 1);
+        assert_eq!(view.composer().text(), "");
+    }
+}
+
+#[test]
+fn tab_completes_a_first_class_skill_then_enter_invokes_it() {
+    let root = workspace_with("deploy", "");
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    view.paste("/dep ship staging");
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    assert_eq!(view.key(Key::Tab), Outcome::Edited);
+    assert_eq!(view.composer().text(), "/deploy ship staging");
+    match view.key(Key::Enter) {
+        Outcome::Send(prompt) => assert_eq!(prompt.text(), "Use the deploy skill.\n\nship staging"),
+        other => panic!("expected skill invocation, got {other:?}"),
+    }
+    assert_eq!(loaded.names(), ["deploy"]);
+}
+
+#[test]
+fn enter_invokes_the_highlighted_first_class_skill() {
+    let root = workspace_with("deploy", "");
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    view.paste("/");
+    frame::painted(&mut view, SCREEN.0, SCREEN.1);
+    assert_eq!(view.card().unwrap().spelling(), "/deploy");
+    view.key(Key::Down);
+    view.key(Key::Up);
+    match view.key(Key::Enter) {
+        Outcome::Send(prompt) => assert_eq!(prompt.text(), "Use the deploy skill."),
+        other => panic!("expected skill invocation, got {other:?}"),
+    }
+    assert_eq!(loaded.names(), ["deploy"]);
+}
+
+#[test]
+fn nonhuman_skills_are_neither_commands_nor_completions() {
+    let root = workspace_with("deploy", "user-invocable: false\n");
+    let catalog = sindri_core::skills::Catalog::discover(root.path(), None);
+    assert!(commands::Card::with_catalog("/dep", &catalog).is_none());
+    assert!(commands::read_with_catalog("/deploy", &catalog).is_none());
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    match say(&mut view, "/deploy ship") {
+        Outcome::Send(prompt) => assert_eq!(prompt.text(), "/deploy ship"),
+        other => panic!("expected ordinary prompt, got {other:?}"),
+    }
+    assert_eq!(say(&mut view, "/skill:deploy"), Outcome::Unchanged);
+    assert!(loaded.names().is_empty());
+}
+
+#[test]
+fn builtin_collisions_keep_the_builtin_and_the_legacy_skill_escape_hatch() {
+    let root = workspace_with("help", "");
+    let catalog = sindri_core::skills::Catalog::discover(root.path(), None);
+    let card = commands::Card::with_catalog("/help", &catalog).unwrap();
+    assert_eq!(
+        card.rows().iter().filter(|row| row.name == "/help").count(),
+        1
+    );
+    assert_eq!(
+        commands::read_with_catalog("/help", &catalog),
+        Some(Command::Help)
+    );
+    let loaded = Loaded::default();
+    let mut view = frame_holding(root.path(), &loaded);
+    assert_eq!(say(&mut view, "/help"), Outcome::Edited);
+    assert!(loaded.names().is_empty());
+    view.key(Key::Escape);
+    assert_eq!(say(&mut view, "/skill:help"), Outcome::Edited);
+    assert_eq!(loaded.names(), ["help"]);
+    assert_eq!(say(&mut view, "/skill help"), Outcome::Unchanged);
 }

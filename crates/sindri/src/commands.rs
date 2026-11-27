@@ -85,7 +85,14 @@ impl Card {
     }
 
     pub fn with_catalog(draft: &str, catalog: &Catalog) -> Option<Card> {
-        let mut card = Self::of(draft)?;
+        if !draft.starts_with('/') {
+            return None;
+        }
+        let mut card = Card {
+            narrow: Narrow::asked(draft),
+            skills: Vec::new(),
+            loaded: Loaded::default(),
+        };
         card.skills = catalog
             .invocable_by_human()
             .into_iter()
@@ -94,6 +101,9 @@ impl Card {
                 says: Cow::Owned(skill.description),
             })
             .collect();
+        if skill_tail(draft).is_none() && card.ranked().is_empty() {
+            return None;
+        }
         Some(card)
     }
 
@@ -120,7 +130,28 @@ impl Card {
 
     fn ranked(&self) -> Vec<Row> {
         let Some(query) = skill_tail(self.words()) else {
-            return ranked(word(self.words()));
+            let mut rows = by_name().to_vec();
+            rows.extend(self.skills.iter().filter_map(|row| {
+                let name = row.name.strip_prefix(SKILL_SPELLING)?;
+                let spelling = format!("/{name}");
+                if name == "skill" || TABLE.iter().any(|row| row.name == spelling) {
+                    return None;
+                }
+                Some(Row {
+                    name: Cow::Owned(spelling),
+                    says: row.says.clone(),
+                })
+            }));
+            rows.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+            return leaves(
+                rows.iter()
+                    .map(|row| (plain(row).trim_end_matches(':'), row.clone())),
+                word(self.words())
+                    .trim_start_matches('/')
+                    .split(':')
+                    .next()
+                    .unwrap_or_default(),
+            );
         };
         let mut rows = leaves(
             self.skills
@@ -264,6 +295,7 @@ fn by_name() -> &'static [Row] {
 pub enum Command {
     New,
     Skill(String),
+    InvokeSkill(String, String),
     Model,
     ModelNamed(String),
     Settings,
@@ -292,6 +324,20 @@ pub fn read(line: &str) -> Option<Command> {
         SKILL => named(rest),
         other => named(other.strip_prefix(&format!("{SKILL}:"))?),
     }
+}
+
+pub fn read_with_catalog(line: &str, catalog: &Catalog) -> Option<Command> {
+    if let Some(command) = read(line) {
+        return Some(command);
+    }
+    let line = line.trim();
+    let first = word(line);
+    let name = first.strip_prefix('/')?;
+    catalog.get(name).filter(|skill| skill.human_invocable())?;
+    Some(Command::InvokeSkill(
+        name.to_owned(),
+        line[first.len()..].trim().to_owned(),
+    ))
 }
 
 fn named(name: &str) -> Option<Command> {

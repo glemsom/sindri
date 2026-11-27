@@ -269,11 +269,13 @@ struct Cards {
 
 impl Cards {
     fn prepare(&mut self, draft: &str, facts: &Facts) -> Option<&mut commands::Card> {
-        if commands::skill_tail(draft).is_some() && self.catalog.is_none() {
+        if draft.starts_with('/') && self.catalog.is_none() {
             self.catalog = facts
                 .workspace()
                 .map(|workspace| Catalog::discover(workspace, facts.home()));
-            self.card = None;
+            if self.catalog.is_some() {
+                self.card = None;
+            }
         }
         let card = self.follow(draft)?;
         card.loading(facts.loaded());
@@ -285,7 +287,7 @@ impl Cards {
             true => draft,
             false => "",
         };
-        if commands::skill_tail(words).is_none() {
+        if words.is_empty() {
             self.catalog = None;
         }
         if self.card.as_ref().map(commands::Card::words) != Some(words) {
@@ -673,10 +675,12 @@ impl View {
             return Outcome::Unchanged;
         }
         if key == Key::Enter {
-            let command = commands::read(self.composer.text()).or_else(|| {
-                self.cards
+            let command = self.command(self.composer.text()).or_else(|| {
+                let line = self
+                    .cards
                     .follow(self.composer.text())
-                    .and_then(|card| commands::read(&card.spelling()))
+                    .map(|card| card.spelling())?;
+                self.command(&line)
             });
             if let Some(Command::Skill(name)) = command {
                 let outcome = self.skill(&name);
@@ -695,14 +699,22 @@ impl View {
         }
     }
 
+    fn command(&self, line: &str) -> Option<Command> {
+        commands::read(line).or_else(|| {
+            let workspace = self.facts.workspace()?;
+            let catalog = Catalog::discover(workspace, self.facts.home());
+            commands::read_with_catalog(line, &catalog)
+        })
+    }
+
     fn sent(&mut self, prompt: Prompt) -> Outcome {
-        if let Some(command) = commands::read(prompt.text()) {
+        if let Some(command) = self.command(prompt.text()) {
             return self.answer(command);
         }
         let Some(line) = self.cards.follow(prompt.text()).map(|card| card.spelling()) else {
             return Outcome::Send(prompt);
         };
-        match commands::read(&line) {
+        match self.command(&line) {
             Some(command) => self.answer(command),
             None => {
                 self.composer.insert(&line);
@@ -715,6 +727,16 @@ impl View {
         match command {
             Command::New => self.start_over(),
             Command::Skill(name) => self.skill(&name),
+            Command::InvokeSkill(name, request) => {
+                self.skill(&name);
+                let prompt = if request.is_empty() {
+                    format!("Use the {name} skill.")
+                } else {
+                    format!("Use the {name} skill.\n\n{request}")
+                };
+                self.composer.rewrite(&prompt);
+                self.composer.key(Key::Enter)
+            }
             Command::Model => self.model(),
             Command::ModelNamed(name) => Outcome::Model(name),
             Command::Settings => Outcome::Settings,
