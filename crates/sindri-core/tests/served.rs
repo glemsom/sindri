@@ -7,7 +7,7 @@ use rig_core::http_client::{
 use sindri_core::config::Config;
 use sindri_core::provider::copilot::{self, Signing};
 use sindri_core::provider::endpoint::Endpoint;
-use sindri_core::provider::served::Listing;
+use sindri_core::provider::served::{Listing, Served};
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Ask, Client, Credential, Route};
 use sindri_core::redact::SecretSet;
@@ -83,6 +83,76 @@ fn a_gateway_base_url_is_where_the_listing_is_read() {
         "the pair names the endpoint, so the endpoint is where it was read"
     );
     assert_eq!(listing.at().base_url(), Some("https://gateway.example/v1"));
+}
+
+fn catalogue(entries: &[(Option<&str>, &str, &str)]) -> Vec<Served> {
+    let data = entries
+        .iter()
+        .map(|(kind, id, label)| match kind {
+            Some(kind) => format!("{{\"type\":\"{kind}\",\"id\":\"{id}\",\"name\":\"{label}\"}}"),
+            None => format!("{{\"id\":\"{id}\",\"name\":\"{label}\"}}"),
+        })
+        .collect::<Vec<String>>()
+        .join(",");
+    let body = format!("{{\"object\":\"list\",\"data\":[{data}]}}");
+    let replay = Replay::new([Canned::reply(200, Box::leak(body.into_boxed_str()))]);
+    let at = Endpoint::own(Wire::Openai);
+    let listing = client_over(&replay).served(&at, &Credential::new("sk-recorded"), &at);
+    listing
+        .names()
+        .expect("the wire answered with a catalogue")
+        .to_vec()
+}
+
+fn ids(names: &[Served]) -> Vec<&str> {
+    names.iter().map(|served| served.id.as_str()).collect()
+}
+
+fn labels(names: &[Served]) -> Vec<&str> {
+    names.iter().map(|served| served.label.as_str()).collect()
+}
+
+#[test]
+fn an_entry_the_wire_marks_as_an_embedding_is_not_offered() {
+    let (chat, embedding, also_chat) = ("a-chat-name-1", "an-embedded-name-2", "a-chat-name-3");
+
+    let names = catalogue(&[
+        (Some("chat"), chat, "A chat name"),
+        (Some("embedding"), embedding, "An embedded name"),
+        (Some("chat"), also_chat, "Another chat name"),
+    ]);
+
+    assert_eq!(
+        ids(&names),
+        [chat, also_chat],
+        "a run cannot ask an embedding for words, so it is not offered"
+    );
+    assert_eq!(
+        labels(&names),
+        ["A chat name", "Another chat name"],
+        "and the rest keep the labels and the order the wire gave them"
+    );
+}
+
+#[test]
+fn a_catalogue_that_says_nothing_about_a_kind_offers_every_entry_it_lists() {
+    let (first, second) = ("a-kindless-name-1", "a-kindless-name-2");
+    let kindless = catalogue(&[
+        (None, first, "A kindless name"),
+        (None, second, "Another kindless name"),
+    ]);
+    let kinded = catalogue(&[
+        (Some("model"), first, "A kinded name"),
+        (Some("model"), second, "Another kinded name"),
+    ]);
+
+    for names in [kindless, kinded] {
+        assert_eq!(
+            ids(&names),
+            [first, second],
+            "a wire that says nothing about a kind is not a wire saying embedding"
+        );
+    }
 }
 
 #[derive(Clone)]

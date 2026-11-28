@@ -159,7 +159,8 @@ with no key of its own is read from, or nothing at all.
 _Avoid_: Token, secret, API key, auth
 
 **Served name**:
-A model identifier read off the wire, never invented, kept beside the endpoint that produced it.
+A model identifier read off the wire, never invented, kept beside the endpoint that produced it; one
+the wire marks as an embedding is not offered, because a run cannot ask it for words.
 _Avoid_: Model list, catalog, available models
 
 **Route**:
