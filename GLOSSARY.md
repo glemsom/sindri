@@ -294,8 +294,9 @@ _Avoid_: Layout, size, metrics, measurement
 
 **Fold**:
 An entry drawn as its head and one row counting the rows kept back, which the reader opens and folds
-again: a call's closed row (and one diagnostic when it failed), a result's body and a **Prompt**'s
-words under their heads, and the one row a settled **Exchange**'s work is drawn as. The head and the count are the same shape and the same words for every kind, and
+again: a call's closed row, which states the rows it keeps back as `⋯3` (and one diagnostic when it
+failed), a result's body and a **Prompt**'s words under their heads, and the one row a settled
+**Exchange**'s work is drawn as. The head and the count are the same shape and the same words for every kind, and
 the count is a fact of the **Measure** the rows were last laid at — so a width change re-lays it and
 never leaves a count that lies. A fold the reader opened is theirs, held on the entry, and no reflow
 closes it.
@@ -416,12 +417,12 @@ _Avoid_: Bar, quote mark, guide
 **Mark**:
 A glyph the **Transcript band** is read by, with the ink it is drawn in and the words that say what
 it means: the **Spine** and the sigil a **Prompt** opens on, the lane bar its work is set in, the bar
-a fence and a quote stand beside, the count a **Fold** keeps back, the glyphs a **Call** settled,
-still running or failed wears, the pulse of a run still writing, and the thumb that says where the
-window stands in the run. The table of them is declared beside the glyphs the drawing uses and drawn
-on the `?` screen under the keys, so a mark cannot be drawn without being named there, and a reader
-learns the band's grammar once and reads any run. A mark is a glyph and its words in a terminal that
-spells no colour, and never the ink alone.
+a fence and a quote stand beside, the count a **Call** keeps back in one glyph and its number, the
+glyphs a **Call** settled, still running or failed wears, the pulse of a run still writing, and the
+thumb that says where the window stands in the run. The table of them is declared beside the
+glyphs the drawing uses and drawn on the `?` screen under the keys, so a mark cannot be drawn
+without being named there, and a reader learns the band's grammar once and reads any run. A mark is a
+glyph and its words in a terminal that spells no colour, and never the ink alone.
 _Avoid_: Glyph, icon, symbol, legend
 
 **Composer**:
