@@ -50,6 +50,8 @@ const CHECK: char = '✓';
 const CROSS: char = '✗';
 const KEPT: char = '⋯';
 
+const FAILED: char = '!';
+
 const CUT: char = '…';
 
 const RULE_INSET: &str = "  │ ";
@@ -90,7 +92,7 @@ impl Mark {
     }
 }
 
-pub fn marks() -> [Mark; 10] {
+pub fn marks() -> [Mark; 11] {
     [
         Mark::new(SPINE, Ink::Dim, "the spine a Prompt's words are quoted by"),
         Mark::new(SIGIL.trim_end(), Ink::Plain, "the sigil a Prompt opens on"),
@@ -118,6 +120,11 @@ pub fn marks() -> [Mark; 10] {
             CROSS.to_string(),
             Ink::Err,
             "a Call that failed, and a run that stopped",
+        ),
+        Mark::new(
+            FAILED.to_string(),
+            Ink::Err,
+            "a failed Call, on every row it holds",
         ),
         Mark::new(
             PENDING.to_string(),
@@ -344,6 +351,33 @@ impl Row {
                 .insert(0, (String::from(gutter), Look::plain(ink)));
         }
         row
+    }
+
+    fn edged(mut self) -> Row {
+        let gutter = pen::cells(INDENT);
+        let mut column = 0u16;
+        for at in 0..self.spans.len() {
+            let (text, look) = self.spans[at].clone();
+            for (index, glyph) in text.char_indices() {
+                if column >= gutter {
+                    return self;
+                }
+                if glyph == ' ' {
+                    let mut pieces = Vec::with_capacity(3);
+                    if index > 0 {
+                        pieces.push((text[..index].to_owned(), look));
+                    }
+                    pieces.push((FAILED.to_string(), Look::plain(Ink::Err)));
+                    if index + 1 < text.len() {
+                        pieces.push((text[index + 1..].to_owned(), look));
+                    }
+                    self.spans.splice(at..=at, pieces);
+                    return self;
+                }
+                column = column.saturating_add(pen::cell(glyph));
+            }
+        }
+        self
     }
 
     pub(crate) fn followed_by(self, other: &Row) -> Row {
@@ -1852,6 +1886,19 @@ impl Rows {
                         *row = inset;
                     }
                 }
+                if !one
+                    && matches!(
+                        result_of(&self.held[at]),
+                        Some(Entry::Result {
+                            exit: Some(exit),
+                            ..
+                        }) if !exit.is_ok()
+                    )
+                {
+                    for row in &mut rows {
+                        *row = row.clone().edged();
+                    }
+                }
                 if at > 0 && !rows.is_empty() {
                     let prior = self.held[at - 1].what.is_tool();
                     let prose = self.held[at].what.is_prose();
@@ -1940,12 +1987,17 @@ impl Rows {
     }
 
     fn work_row(&self, work: &Range<usize>, cols: u16) -> Row {
-        marked(
+        let tally = self.tally(work);
+        let row = marked(
             &KEPT.to_string(),
             Ink::Dim,
-            vec![(self.tally(work).words(margin(INDENT, cols).1), Ink::Dim)],
+            vec![(tally.words(margin(INDENT, cols).1), Ink::Dim)],
             cols,
-        )
+        );
+        match tally.failed > 0 {
+            true => row.edged(),
+            false => row,
+        }
     }
 
     fn newest_fold(&mut self) -> Option<usize> {

@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 fold at 120x40
 00 |┃›why does the retry test fail?                                               wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
-01 |⋯ 2 calls · 1 failed · 2.4 s · 48.2k in · 3.1k out                            model     claude-sonnet-4-5-20250929      | dim:1 plain:1 dim:48 plain:28 dim:10 plain:32
+01 |⋯!2 calls · 1 failed · 2.4 s · 48.2k in · 3.1k out                            model     claude-sonnet-4-5-20250929      | dim:1 err:1 dim:48 plain:28 dim:10 plain:32
 02 |                                                                              think     high                            | plain:78 dim:10 plain:32
 03 |  Three rows of the fold are the whole of it: the head, the count and the                                               | plain:120
 04 |  last.                                                                       turns         6 /  250                    | plain:78 dim:10 plain:32

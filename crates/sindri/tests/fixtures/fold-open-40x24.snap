@@ -11,8 +11,8 @@ fold-open at 40x24
 05 |  beside the answer.                    | plain:40
 06 |                                        | plain:40
 07 |  │ ✓ cargo test -p sindri --test… ⋯22  | dim:4 ok:2 plain:28 dim:4 plain:2
-08 |  │ ✗ exit 7 cargo test retry ⋯2        | dim:4 err:2 dim:7 plain:16 dim:3 plain:8
-09 |  │ retry failed                        | dim:4 muted:12 plain:24
+08 |! │ ✗ exit 7 cargo test retry ⋯2        | err:1 dim:3 err:2 dim:7 plain:16 dim:3 plain:8
+09 |! │ retry failed                        | err:1 dim:3 muted:12 plain:24
 10 |                                        | plain:40
 11 |  Three rows of the fold are the whole  | plain:40
 12 |  of it: the head, the count and the    | plain:40

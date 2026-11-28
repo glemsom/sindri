@@ -78,6 +78,11 @@ fn calls_120x40_is_a_call_settled_four_ways() {
 }
 
 #[test]
+fn calls_80x24_is_a_failed_call_at_the_edge_of_a_narrow_band() {
+    fixture::assert_frame("calls", 80, 24);
+}
+
+#[test]
 fn tools_120x40_is_one_call_of_each_tool_settled_and_in_flight() {
     fixture::assert_frame("tools", 120, 40);
 }
