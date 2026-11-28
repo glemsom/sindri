@@ -2842,7 +2842,7 @@ fn the_footer_draws_each_hint_as_a_key_and_the_words_that_say_what_it_does() {
 }
 
 #[test]
-fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_explains_it() {
+fn the_card_that_lists_the_keys_draws_every_key_and_every_mark_in_the_look_it_is_drawn_in() {
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(
         Capabilities::default(),
@@ -2850,10 +2850,10 @@ fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_ex
         Transcript::none(),
     );
     view.key(Key::Char('?'));
-    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let (buffer, told) = painted_and_told(&mut view, 120, 56);
 
     let body = card_body(&told);
-    let mut listed = 0;
+    let mut listed: Vec<(Look, String)> = Vec::new();
     for y in body.y..body.bottom() {
         let runs: Vec<(Look, String)> = runs_of(&buffer, &palette, y, body.x, body.right())
             .into_iter()
@@ -2861,21 +2861,31 @@ fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_ex
             .collect();
         match runs.as_slice() {
             [] | [_] => {}
-            [(key, _), (meaning, _), ..] => {
-                listed += 1;
-                assert_eq!(*key, keys::KEY, "row {y} draws its key in another look");
+            [(name, said), (meaning, _), ..] => {
                 assert_eq!(
                     *meaning,
                     keys::MEANING,
-                    "row {y} draws the line that explains its key in another look"
+                    "row {y} draws the line that explains its name in another look"
                 );
+                listed.push((*name, said.trim().to_owned()));
             }
         }
     }
+
+    let mut wanted: Vec<(Look, String)> = Vec::new();
+    for mode in [Mode::Keys, Mode::Composer] {
+        for binding in mode.table() {
+            wanted.push((keys::KEY, binding.name.to_owned()));
+        }
+    }
+    for mark in crate::rows::marks() {
+        wanted.push((Look::plain(mark.ink()), mark.glyph().to_owned()));
+    }
+
     assert_eq!(
-        listed,
-        Mode::Composer.table().len() + Mode::Keys.table().len(),
-        "every key of the stack the card sits on is one row of its list"
+        listed, wanted,
+        "every key of the stack the card sits on is one row of its list, and every mark under \
+         them is a row of its own, drawn in the ink the band draws it in"
     );
 }
 
