@@ -460,6 +460,13 @@ traverse all matches, keeping the marked row visible and updating the displayed 
 For built-in commands, `Enter` acts and `Tab` leaves the card open.
 _Avoid_: Palette, slash menu, command list, autocomplete
 
+**Model card**:
+The card `/model` opens: every name the wire served, ranked by how the query sits in one, with the
+one line each name says beside it and the row on the mark the name `Enter` takes. At most eight
+served names are visible; `Up` and `Down` traverse all of them, keeping the marked row visible and
+updating the displayed range. `Esc` closes it and keeps the screen's name unchosen.
+_Avoid_: Model picker, model list, model menu, model switcher
+
 **Splash screen**:
 The frame a launch opens on: the wordmark, one line saying what the product is, and three commands
 with the line that explains each, set as one block and centred in the **Transcript band**, with the

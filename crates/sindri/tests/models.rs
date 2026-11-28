@@ -47,6 +47,34 @@ fn offered(models: &Models) -> Vec<String> {
         .collect()
 }
 
+fn served_name(at: usize) -> String {
+    format!("a-served-name-{at}")
+}
+
+fn serving(count: usize) -> Listing {
+    catalogue((0..count).map(served_name).collect())
+}
+
+fn catalogue(names: Vec<String>) -> Listing {
+    let catalogue = format!(
+        "{{\"data\":[{}],\"has_more\":false}}",
+        names
+            .iter()
+            .map(|name| format!(
+                "{{\"type\":\"model\",\"id\":\"{name}\",\"display_name\":\"{name}\"}}"
+            ))
+            .collect::<Vec<String>>()
+            .join(",")
+    );
+    // Leaked so it is the `'static` text a canned answer needs: this catalogue is one a test wrote, and
+    // nothing reads it afterwards.
+    let replay = Replay::new([Canned::reply(200, Box::leak(catalogue.into_boxed_str()))]);
+    let at = Endpoint::own(sindri_core::wire::Wire::Anthropic);
+    Client::over(replay, SecretSet::default())
+        .waits(|_| {})
+        .served(&at, &Credential::new("sk-ant-recorded"), &at)
+}
+
 fn narrowed(query: &str) -> Models {
     let mut models = Models::new().served_by(Some(listed()));
     for glyph in query.chars() {
@@ -113,25 +141,7 @@ fn a_query_that_matches_no_served_name_takes_no_name() {
 
 #[test]
 fn the_screen_offers_eight_rows_and_no_more() {
-    let names: Vec<String> = (0..20).map(|at| format!("a-served-name-{at}")).collect();
-    let catalogue = format!(
-        "{{\"data\":[{}],\"has_more\":false}}",
-        names
-            .iter()
-            .map(|name| format!(
-                "{{\"type\":\"model\",\"id\":\"{name}\",\"display_name\":\"{name}\"}}"
-            ))
-            .collect::<Vec<String>>()
-            .join(",")
-    );
-    // Leaked so it is the `'static` text a canned answer needs: this catalogue is one a test wrote, and
-    // nothing reads it afterwards.
-    let replay = Replay::new([Canned::reply(200, Box::leak(catalogue.into_boxed_str()))]);
-    let at = Endpoint::own(sindri_core::wire::Wire::Anthropic);
-    let listing = Client::over(replay, SecretSet::default())
-        .waits(|_| {})
-        .served(&at, &Credential::new("sk-ant-recorded"), &at);
-    let models = Models::new().served_by(Some(listing));
+    let models = Models::new().served_by(Some(serving(20)));
 
     assert_eq!(models.rows().len(), CAP);
 }
@@ -173,6 +183,10 @@ fn a_listing_the_screen_has_not_held_puts_the_mark_back_on_the_first_row() {
 }
 
 fn screen(capabilities: Capabilities) -> View {
+    screen_over(capabilities, listed())
+}
+
+fn screen_over(capabilities: Capabilities, listing: Listing) -> View {
     let root = tempfile::tempdir().expect("a temp workspace");
     let mut view = View::of(
         capabilities,
@@ -183,7 +197,7 @@ fn screen(capabilities: Capabilities) -> View {
     );
     view.paste("/model");
     view.key(Key::Enter);
-    view.handed(view.facts().clone().served_by(listed()));
+    view.handed(view.facts().clone().served_by(listing));
     assert_eq!(view.mode(), Mode::Models);
     view
 }
@@ -370,5 +384,113 @@ fn a_band_too_short_for_the_served_names_draws_the_head_of_the_list_and_counts_t
             .iter()
             .any(|row| row.contains(FIRST)),
         "and no name is drawn past the band the card gave the list: {drawn:?}"
+    );
+}
+
+#[test]
+fn walking_down_past_the_eighth_name_reveals_the_next_one_and_keeps_the_mark_on_screen() {
+    let mut models = Models::new().served_by(Some(serving(CAP + 4)));
+    for _ in 0..CAP {
+        assert!(
+            models.walked(Move::Next),
+            "the list of names outruns the eight rows a card draws"
+        );
+    }
+
+    let drawn = offered(&models);
+    assert_eq!(
+        drawn.len(),
+        CAP,
+        "the card draws eight names however far down the list the reader has walked"
+    );
+    assert_eq!(
+        drawn.first(),
+        Some(&served_name(1)),
+        "the ninth name is on screen, so the window has moved one name down: {drawn:?}"
+    );
+    assert_eq!(
+        models.selected(),
+        CAP - 1,
+        "and the marked name is the last row drawn, not a row past the card: {drawn:?}"
+    );
+    assert_eq!(
+        models.chosen().map(str::to_owned),
+        Some(served_name(CAP)),
+        "`Enter` takes the ninth name the wire served: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_card_of_more_names_than_it_draws_counts_the_shown_range_against_every_match() {
+    let mut view = screen_over(Capabilities::default(), serving(CAP + 4));
+    let drawn = body(&frame::painted(&mut view, 120, 40).rows());
+
+    assert_eq!(
+        drawn.last().map(String::as_str),
+        Some(format!("1–{CAP} of {}", CAP + 4).as_str()),
+        "a card that keeps names back says which of them it shows and how many the wire served: \
+         {drawn:?}"
+    );
+    assert_eq!(
+        drawn.len(),
+        CAP + 2,
+        "the query, the eight names the card holds and the row counting the rest: {drawn:?}"
+    );
+}
+
+#[test]
+fn a_press_on_a_drawn_row_names_the_served_name_that_row_shows_after_the_list_scrolled() {
+    let mut view = screen_over(caps::pointing(), serving(CAP + 4));
+    for _ in 0..CAP {
+        view.key(Key::Down);
+    }
+    let frame = frame::painted(&mut view, 120, 40);
+    let shown = served_name(CAP);
+    let row = frame.row_holding(frame.area(), &shown);
+
+    assert_eq!(
+        view.pointer(frame.told(), Pointer::Press(Cell::new(row, 40))),
+        Outcome::Model(shown),
+        "the last row drawn is the ninth name, and a press on it names the name that row shows \
+         rather than the place the row holds in the list"
+    );
+    assert_eq!(
+        view.mode(),
+        Mode::Composer,
+        "and the card it was chosen from is closed"
+    );
+}
+
+#[test]
+fn a_query_returns_the_window_to_the_head_of_the_matches() {
+    let mut names: Vec<String> = (0..CAP * 2).map(served_name).collect();
+    names.extend((0..3).map(|at| format!("a-quiet-name-{at}")));
+    let mut models = Models::new().served_by(Some(catalogue(names)));
+    for _ in 0..CAP + 2 {
+        assert!(models.walked(Move::Next));
+    }
+    assert_eq!(
+        offered(&models).first(),
+        Some(&served_name(3)),
+        "the reader has walked ten names down, so the window stands three names in"
+    );
+
+    for glyph in "quiet".chars() {
+        assert!(models.key(Key::Char(glyph)));
+    }
+
+    let drawn = offered(&models);
+    assert_eq!(
+        drawn,
+        (0..3)
+            .map(|at| format!("a-quiet-name-{at}"))
+            .collect::<Vec<String>>(),
+        "a query ranks the names again and the window it leaves is the head of the matches: \
+         {drawn:?}"
+    );
+    assert_eq!(
+        models.selected(),
+        2,
+        "and the mark is on the last of the three rows the card draws: {drawn:?}"
     );
 }
