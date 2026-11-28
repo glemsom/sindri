@@ -12,7 +12,7 @@ transcript-scrolled at 80x24
 06 |  code      │ behind a bar, highlighted                                         | plain:11 dim:3 plain:66
 07 |  table     │ columns joined by a bar                                           | plain:11 dim:3 plain:66
 08 |                                                                                | plain:80
-09 |┃›what does a row of the band say?                                              | dim:1 plain:79
+09 |┃›what does a row of the band say?                                              | accent:1 plain:79
 10 |⋯ 1 call · 31 ms                                                                | dim:1 plain:1 dim:14 plain:64
 11 |                                                                                | plain:80
 12 |  A row is one line                                                           █ | plain:2 plain+bold:17 plain:59 dim:1 plain:1
@@ -25,5 +25,5 @@ transcript-scrolled at 80x24
 19 |  ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · +9 more               | plain:2 dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:3 muted:7 plain:15
 20 |  prompt 5 / 6 · 4 rows back · End follows the run                              | plain:2 muted:12 dim:3 muted:11 dim:3 plain+bold:3 muted:16 plain:30
 21 |                                                                                | plain:80
-22 |┃›what should the run do?                                                       | dim:25 plain:55
+22 |┃›what should the run do?                                                       | accent:1 dim:24 plain:55
 23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:5

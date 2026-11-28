@@ -48,8 +48,8 @@ keys at 60x64
 42 |│ Ctrl-C               cancel the run, or clear the draft  │| dim:1 plain:1 plain+bold:21 muted:34 plain:2 dim:1
 43 |│ Ctrl-Q               quit                                │| dim:1 plain:1 plain+bold:21 muted:4 plain:32 dim:1
 44 |│ marks                                                    │| dim:1 plain:1 dim:5 plain:52 dim:1
-45 |│ ┃  the spine a Prompt hangs  ›  the sigil a Prompt opens │| dim:1 plain:1 dim:3 muted:26 plain:3 muted:24 plain:1 dim:1
-46 |│    on                           on                       │| dim:1 plain:1 dim:3 muted:26 plain:3 muted:2 plain:23 dim:1
+45 |│ ┃  the spine a Prompt hangs  ›  the sigil a Prompt opens │| dim:1 plain:1 accent:3 muted:26 plain:3 muted:24 plain:1 dim:1
+46 |│    on                           on                       │| dim:1 plain:1 accent:3 muted:26 plain:3 muted:2 plain:23 dim:1
 47 |│ │  the lane a thought is     ▏  the bar a fence or quote │| dim:1 plain:1 dim:3 muted:26 dim:3 muted:24 plain:1 dim:1
 48 |│    set in                       sets                     │| dim:1 plain:1 dim:3 muted:26 dim:3 muted:4 plain:21 dim:1
 49 |│ ⋯  rows a Fold keeps back,   ✓  a Call that settled well │| dim:1 plain:1 dim:3 muted:26 ok:3 muted:24 plain:1 dim:1

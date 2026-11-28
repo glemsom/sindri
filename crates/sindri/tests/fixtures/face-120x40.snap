@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 face at 120x40
-00 |┃›where does rendering live?                                                                                            | dim:1 plain:119
+00 |┃›where does rendering live?                                                                                            | accent:1 plain:119
 01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯4                                                                                   | dim:4 ok:2 dim:5 plain:17 dim:9 plain:83
 02 |                                                                                                                        | plain:120
 03 |  Rendering lives in the front end and not in the core, because an entry                                                | plain:120
@@ -41,5 +41,5 @@ face at 120x40
 35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
 36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

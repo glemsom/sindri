@@ -22,8 +22,8 @@ wrapped at 80x24
 16 |                                                                                | plain:80
 17 |                                                                                | plain:80
 18 |                                                                                | plain:80
-19 |┃›the draft is set inside the band's box, and a line of it wider than the       | dim:2 plain:78
-20 |┃ band wraps under the gutter — 日 本 語  keeps both its columns — while a line    | dim:2 plain:78
-21 |┃ the reader broke is one row of its own.                                       | dim:2 plain:78
+19 |┃›the draft is set inside the band's box, and a line of it wider than the       | accent:1 dim:1 plain:78
+20 |┃ band wraps under the gutter — 日 本 語  keeps both its columns — while a line    | accent:1 dim:1 plain:78
+21 |┃ the reader broke is one row of its own.                                       | accent:1 dim:1 plain:78
 22 |                                                                                | plain:80
 23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:5

@@ -20,10 +20,10 @@ draft-long at 120x24
 14 |                                                                                                                        | plain:120
 15 |                                                                                                                        | plain:120
 16 |                                                                                                                        | plain:120
-17 |┃ six: the stop reason                                                                                                  | dim:2 plain:118
-18 |┃ seven: the session it left                                                                                            | dim:2 plain:118
-19 |┃ eight: the question to ask                                                                                            | dim:2 plain:118
-20 |┃ nine: the row it keeps back                                                                                           | dim:2 plain:118
-21 |┃ 5 rows kept back                                                                                                      | dim:18 plain:102
+17 |┃ six: the stop reason                                                                                                  | accent:1 dim:1 plain:118
+18 |┃ seven: the session it left                                                                                            | accent:1 dim:1 plain:118
+19 |┃ eight: the question to ask                                                                                            | accent:1 dim:1 plain:118
+20 |┃ nine: the row it keeps back                                                                                           | accent:1 dim:1 plain:118
+21 |┃ 5 rows kept back                                                                                                      | accent:1 dim:17 plain:102
 22 |                                                                                                                        | plain:120
 23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

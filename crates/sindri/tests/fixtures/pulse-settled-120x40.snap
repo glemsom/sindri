@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 pulse-settled at 120x40
-00 |┃›where does rendering live?                                                  state     ✓ final                         | dim:1 plain:77 dim:10 ok:7 plain:25
+00 |┃›where does rendering live?                                                  state     ✓ final                         | accent:1 plain:77 dim:10 ok:7 plain:25
 01 |⋯ 1 call · 23 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 02 |│ The marker is a clock, so the row it heads is laid out again whenever       wire      anthropic                       | dim:2 muted:69 plain:7 dim:10 plain:32
 03 |│ the mark it wears moves, and a step that changes nothing costs nothing.     model     claude-sonnet-4-5-20250929      | dim:2 muted:71 plain:5 dim:10 plain:32
@@ -41,5 +41,5 @@ pulse-settled at 120x40
 35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
 36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

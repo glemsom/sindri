@@ -36,10 +36,10 @@ scrolled at 120x40
 30 |                                                                                                                        | plain:120
 31 |                                                                                                                        | plain:120
 32 |                                                                                                                        | plain:120
-33 |┃ five: the budget it spent                                                                                             | dim:2 plain:118
-34 |┃ six: the stop reason                                                                                                  | dim:2 plain:118
-35 |┃ seven: the session it left                                                                                            | dim:2 plain:118
-36 |┃ eight: the question to ask                                                                                            | dim:2 plain:118
-37 |┃ 4 rows kept back                                                                                                      | dim:18 plain:102
+33 |┃ five: the budget it spent                                                                                             | accent:1 dim:1 plain:118
+34 |┃ six: the stop reason                                                                                                  | accent:1 dim:1 plain:118
+35 |┃ seven: the session it left                                                                                            | accent:1 dim:1 plain:118
+36 |┃ eight: the question to ask                                                                                            | accent:1 dim:1 plain:118
+37 |┃ 4 rows kept back                                                                                                      | accent:1 dim:17 plain:102
 38 |                                                                                                                        | plain:120
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

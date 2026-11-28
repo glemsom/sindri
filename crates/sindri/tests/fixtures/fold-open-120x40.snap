@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 fold-open at 120x40
-00 |┃›why does the retry test fail?                                               wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
+00 |┃›why does the retry test fail?                                               wire      anthropic                       | accent:1 plain:77 dim:10 plain:32
 01 |  Every row of the run passes: the gutter holds one column for every          model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
 02 |  entry, and a row of a command's output is set behind it rather than         think     high                            | plain:78 dim:10 plain:32
 03 |  beside the answer.                                                                                                    | plain:120
@@ -41,5 +41,5 @@ fold-open at 120x40
 35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
 36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

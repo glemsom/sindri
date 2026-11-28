@@ -216,14 +216,13 @@ fn the_band_draws_a_row_of_the_draft_in_the_inks_the_word_the_file_and_the_span_
     assert_eq!(
         inks(&buffer, 0, &PALETTE),
         [
-            (Ink::Dim, 1),
-            (Ink::Accent, 7),
+            (Ink::Accent, 8),
             (Ink::Plain, 1),
             (Ink::Ok, 11),
             (Ink::Plain, 1),
             (Ink::Muted, 5)
         ],
-        "every run of the row is drawn in the ink it carries, and the lit sigil with the word it \
-         opens reads back as one stretch of the accent past the dim blank of the gutter"
+        "every run of the row is drawn in the ink it carries, and the accent spine with the lit \
+         sigil and the word it opens read back as one stretch of the accent"
     );
 }

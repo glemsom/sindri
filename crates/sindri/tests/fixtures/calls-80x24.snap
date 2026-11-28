@@ -21,9 +21,9 @@ calls at 80x24
 15 |  the row says ✗ cancelled rather than leaving a spinner turning for a result   | plain:15 accent:11 plain:54
 16 |  that will never come.                                                         | plain:80
 17 |                                                                                | plain:80
-18 |┃›and the one that is still out?                                                | dim:1 plain:79
+18 |┃›and the one that is still out?                                                | accent:1 plain:79
 19 |  │ … bash running make check STAGES=test                                       | dim:19 plain:61
 20 |  ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · +9 more               | plain:2 dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:3 muted:7 plain:15
 21 |                                                                                | plain:80
-22 |┃›what should the run do?                                                       | dim:25 plain:55
+22 |┃›what should the run do?                                                       | accent:1 dim:24 plain:55
 23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:5

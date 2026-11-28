@@ -41,5 +41,5 @@ commands-none at 120x40
 35 |                                                                                                                        | plain:120
 36 |                                                                                                                        | plain:120
 37 |                                                                                                                        | plain:120
-38 |┃›/usr/local/bin is not on the path the run is handed                                                                   | dim:1 accent:1 plain:118
+38 |┃›/usr/local/bin is not on the path the run is handed                                                                   | accent:2 plain:118
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

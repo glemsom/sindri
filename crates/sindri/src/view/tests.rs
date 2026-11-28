@@ -1009,8 +1009,8 @@ fn every_row_of_the_band_under_its_head_opens_with_the_prompts_spine_and_sigil()
         );
         assert_eq!(
             look_at(&buffer, &palette, band.x, y),
-            Look::plain(Ink::Dim),
-            "the spine of row {y} is not the dim ink the gutter is drawn in"
+            Look::plain(Ink::Accent),
+            "the spine of row {y} is not the accent every row of the band is quoted by"
         );
     }
 }
@@ -5503,7 +5503,7 @@ fn a_placeholder_and_a_waiting_prompt_light_no_sigil_and_keep_the_dim_ink() {
     let (buffer, laid, ends) = waiting_behind(palette, "a draft", 1, 120, 24);
     let prompts = laid.queue;
     assert_eq!(
-        gutter_ink(&buffer, &palette, prompts.x, prompts.y),
+        gutter_ink(&buffer, &palette, prompts.x + 1, prompts.y),
         Ink::Dim,
         "a waiting prompt is no row the caret waits in, so its sigil keeps the dim ink"
     );

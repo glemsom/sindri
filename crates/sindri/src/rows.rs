@@ -50,6 +50,8 @@ pub(crate) const SIGIL: &str = "› ";
 
 pub(crate) const SPINE: &str = "┃";
 
+pub(crate) const SPINE_INK: Ink = Ink::Accent;
+
 const THOUGHT: &str = "│ ";
 
 const PENDING: char = '…';
@@ -97,7 +99,7 @@ impl Mark {
 
 pub fn marks() -> [Mark; 11] {
     [
-        Mark::new(glyph_of(SPINE), Ink::Dim, "the spine a Prompt hangs on"),
+        Mark::new(glyph_of(SPINE), SPINE_INK, "the spine a Prompt hangs on"),
         Mark::new(glyph_of(SIGIL), Ink::Plain, "the sigil a Prompt opens on"),
         Mark::new(glyph_of(THOUGHT), Ink::Dim, "the lane a thought is set in"),
         Mark::new(
@@ -749,7 +751,7 @@ fn quoted(opens: bool, line: String, cols: u16) -> Row {
     let row = match gutter.saturating_add(pen::cells(&line)) > cols {
         true => Row::of([(line, Ink::Plain)]),
         false => Row::of([
-            (String::from(SPINE), Ink::Dim),
+            (String::from(SPINE), SPINE_INK),
             (String::from(marker), Ink::Plain),
             (line, Ink::Plain),
         ]),
