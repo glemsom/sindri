@@ -41,7 +41,7 @@ use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
 use crate::recall::{Draft, Walk};
-use crate::rows::{INDENT, MARGIN, Measure, Row, Rows, Scroll, margined};
+use crate::rows::{INDENT, MARGIN, Measure, Row, Rows, Scroll, margined, plate};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
@@ -1436,12 +1436,11 @@ impl View {
                 }
                 Placement::prompt(
                     u32::try_from(piece.entry).ok()?,
-                    Rect::new(
-                        area.x,
-                        y + u16::try_from(from - first).ok()?,
-                        area.width.saturating_sub(MARGIN),
-                        u16::try_from(to - from).ok()?,
-                    ),
+                    Rect {
+                        y: y + u16::try_from(from - first).ok()?,
+                        height: u16::try_from(to - from).ok()?,
+                        ..plate(area)
+                    },
                     end + 1 - start,
                     from - start,
                     area.height,
