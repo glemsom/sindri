@@ -96,38 +96,38 @@ pub fn marks() -> [Mark; 10] {
         Mark::new(
             THOUGHT.trim_end(),
             Ink::Dim,
-            "the lane a thought, a Call and a Result are indented by",
+            "the lane a thought and its work are set in",
         ),
         Mark::new(
             markdown::FENCE.trim_end(),
             Ink::Dim,
             "the bar a fence and a quote stand beside",
         ),
-        Mark::new(KEPT.to_string(), Ink::Dim, "how many rows a Fold keeps back: ⋯3"),
+        Mark::new(
+            KEPT.to_string(),
+            Ink::Dim,
+            "how many rows a Fold keeps back: ⋯3",
+        ),
         Mark::new(
             CHECK.to_string(),
             Ink::Ok,
-            "a Call that settled well, and a run that ended on its answer",
+            "a Call that settled well, and a run that ended",
         ),
         Mark::new(
             CROSS.to_string(),
             Ink::Err,
-            "a Call that failed, and a run that stopped on one",
+            "a Call that failed, and a run that stopped",
         ),
         Mark::new(
             PENDING.to_string(),
             Ink::Dim,
-            "a Call still running, and the tail of a word its row cut short",
+            "a Call still running, or a word cut short",
         ),
-        Mark::new(
-            pulse::FRAME.to_string(),
-            Ink::Accent,
-            "a run still writing, its pulse turning as the rows land",
-        ),
+        Mark::new(pulse::FRAME.to_string(), Ink::Accent, "a run still writing"),
         Mark::new(
             THUMB.to_string(),
             Ink::Dim,
-            "where the window stands in a run the reader scrolled back through",
+            "where the window stands in the run",
         ),
     ]
 }

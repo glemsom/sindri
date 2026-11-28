@@ -392,10 +392,15 @@ fn a_pass_under_a_card_hands_back_the_body_the_screens_rows_were_drawn_in() {
         top + 1,
         "the screen's own rows begin on the row under the card's top border: {card:?}"
     );
+    let counted = frame.row(bottom - 1).contains("rows kept back");
     assert_eq!(
         card.bottom(),
-        bottom,
-        "and end on the row the key that leaves is drawn in: {card:?}"
+        match counted {
+            true => bottom - 1,
+            false => bottom,
+        },
+        "and end on the row the key that leaves is drawn in, or on the row above it where that one \
+         counts the rows the card keeps back: {card:?}"
     );
     let under: Vec<char> = frame
         .row(top + 1)

@@ -393,6 +393,17 @@ prompt's words occupy carries it, the draft being typed as the prompt it was ask
 an answer, a call, a result or a stop does.
 _Avoid_: Bar, quote mark, guide
 
+**Mark**:
+A glyph the **Transcript band** is read by, with the ink it is drawn in and the words that say what
+it means: the **Spine** and the sigil a **Prompt** opens on, the lane bar its work is set in, the bar
+a fence and a quote stand beside, the count a **Fold** keeps back, the glyphs a **Call** settled,
+still running or failed wears, the pulse of a run still writing, and the thumb that says where the
+window stands in the run. The table of them is declared beside the glyphs the drawing uses and drawn
+on the `?` screen under the keys, so a mark cannot be drawn without being named there, and a reader
+learns the band's grammar once and reads any run. A mark is a glyph and its words in a terminal that
+spells no colour, and never the ink alone.
+_Avoid_: Glyph, icon, symbol, legend
+
 **Composer**:
 The draft a reader types: its words, the place the next glyph lands among them, the scroll they are
 read through, and the columns a frame has measured for them. The columns are measured before the

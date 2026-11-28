@@ -1,0 +1,69 @@
+---
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
+---
+keys at 120x64
+00 |                                                                                                                        | dim:120
+01 |                                                                                                                        | dim:120
+02 |                                                                                                                        | dim:120
+03 |                                                                                                                        | dim:120
+04 |                                                                                                                        | dim:120
+05 |                                                                                                                        | dim:120
+06 |                                                                                                                        | dim:120
+07 |                                                                                                                        | dim:120
+08 |                                                                                                                        | dim:120
+09 |                                                                                                                        | dim:120
+10 |                        ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+11 |                        │ keys                                                                 │                        | dim:25 plain:1 dim:4 plain:65 dim:25
+12 |                        │ Esc                  close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+13 |                        │ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+14 |                        │ composer                                                             │                        | dim:25 plain:1 dim:8 plain:61 dim:25
+15 |                        │ Shift+Tab            the marked commands row back                    │                        | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
+16 |                        │ Tab                  complete the marked commands row into the draft │                        | dim:25 plain:1 plain+bold:21 muted:47 plain:1 dim:25
+17 |                        │ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+18 |                        │ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
+19 |                        │                      word                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+20 |                        │ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
+21 |                        │ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+22 |                        │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
+23 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
+24 |                        │ ↑                    the queued prompt, the prompt before, or the    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+25 |                        │                      line above                                      │                        | dim:25 plain:1 plain+bold:21 muted:10 plain:38 dim:25
+26 |                        │ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
+27 |                        │ ↓                    the line below, or the prompt after             │                        | dim:25 plain:1 plain+bold:21 muted:35 plain:13 dim:25
+28 |                        │ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
+29 |                        │ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
+30 |                        │ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
+31 |                        │ Ctrl-D               the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
+32 |                        │ [                    the prompt before, while the draft is empty     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+33 |                        │ ]                    the prompt after, while the draft is empty      │                        | dim:25 plain:1 plain+bold:21 muted:42 plain:6 dim:25
+34 |                        │ ←                    a glyph left                                    │                        | dim:25 plain:1 plain+bold:21 muted:12 plain:36 dim:25
+35 |                        │ →                    a glyph right                                   │                        | dim:25 plain:1 plain+bold:21 muted:13 plain:35 dim:25
+36 |                        │ Home                 the start of the line                           │                        | dim:25 plain:1 plain+bold:21 muted:21 plain:27 dim:25
+37 |                        │ End                  the tail of the run, or the end of the line     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+38 |                        │ Ctrl-O               open or fold the newest work, call or prompt    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+39 |                        │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
+40 |                        │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+41 |                        │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+42 |                        │ marks                                                                │                        | dim:25 plain:1 dim:5 plain:64 dim:25
+43 |                        │ ┃                    the spine a Prompt's words are quoted by        │                        | dim:25 plain:1 dim:21 muted:40 plain:8 dim:25
+44 |                        │ ›                    the sigil a Prompt opens on                     │                        | dim:25 plain:22 muted:27 plain:21 dim:25
+45 |                        │ │                    the lane a thought and its work are set in      │                        | dim:25 plain:1 dim:21 muted:42 plain:6 dim:25
+46 |                        │ ▏                    the bar a fence and a quote stand beside        │                        | dim:25 plain:1 dim:21 muted:40 plain:8 dim:25
+47 |                        │ ⋯                    how many rows a Fold keeps back: ⋯3             │                        | dim:25 plain:1 dim:21 muted:35 plain:13 dim:25
+48 |                        │ ✓                    a Call that settled well, and a run that ended  │                        | dim:25 plain:1 ok:21 muted:46 plain:2 dim:25
+49 |                        │ ✗                    a Call that failed, and a run that stopped      │                        | dim:25 plain:1 err:21 muted:42 plain:6 dim:25
+50 |                        │ …                    a Call still running, or a word cut short       │                        | dim:25 plain:1 dim:21 muted:41 plain:7 dim:25
+51 |                        │ ⠋                    a run still writing                             │                        | dim:25 plain:1 accent:21 muted:19 plain:29 dim:25
+52 |                        │ █                    where the window stands in the run              │                        | dim:25 plain:1 dim:21 muted:34 plain:14 dim:25
+53 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
+54 |                                                                                                                        | dim:120
+55 |                                                                                                                        | dim:120
+56 |                                                                                                                        | dim:120
+57 |                                                                                                                        | dim:120
+58 |                                                                                                                        | dim:120
+59 |                                                                                                                        | dim:120
+60 |                                                                                                                        | dim:120
+61 |                                                                                                                        | dim:120
+62 |┃›what should the run do?                                                                                               | dim:120
+63 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | dim:120

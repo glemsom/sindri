@@ -1020,7 +1020,7 @@ fn the_model_list_is_a_card_as_tall_as_the_names_it_holds() {
 
 #[test]
 fn a_card_the_frame_cannot_hold_keeps_back_the_rows_it_does_not_draw() {
-    let whole = frame::painted(&mut on_screen(Mode::Keys), 120, 40);
+    let whole = frame::painted(&mut on_screen(Mode::Keys), 120, 64);
     let capped = frame::painted(&mut on_screen(Mode::Keys), 80, 24);
 
     let held = body_rows(&whole);
@@ -1029,7 +1029,7 @@ fn a_card_the_frame_cannot_hold_keeps_back_the_rows_it_does_not_draw() {
     let count = said(&capped, bottom - 1);
     assert!(
         drawn.len() < held.len(),
-        "a frame of twenty-four rows cannot hold the keys list a frame of forty draws: {} rows \\
+        "a frame of twenty-four rows cannot hold the keys list a frame of sixty-four draws: {} \\
          against {}",
         drawn.len(),
         held.len()
