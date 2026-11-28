@@ -3007,8 +3007,9 @@ fn one_key_opens_the_newest_settled_work_and_the_same_key_closes_it_again() {
         frame_rows(&open)
     );
     assert!(
-        holds(&open, "22 rows kept back"),
-        "and the result inside it keeps the fold, the head and the count it was handed by: {:?}",
+        holds(&open, "\u{22ef}22"),
+        "and the result inside it keeps the fold, the head and the count it was handed by, in the \
+         one glyph and number a closed call states it in: {:?}",
         frame_rows(&open)
     );
 
@@ -3021,7 +3022,7 @@ fn one_key_opens_the_newest_settled_work_and_the_same_key_closes_it_again() {
     assert!(holds(&closed, "test rows::a_row_of_output_1 ... ok"));
     view.key(Key::Fold);
     let closed = painted(&mut view, 120, 40);
-    assert!(holds(&closed, "22 rows kept back"));
+    assert!(holds(&closed, "\u{22ef}22"));
     assert!(!holds(&closed, "test rows::a_row_of_output_1 ... ok"));
 }
 
@@ -6774,7 +6775,7 @@ fn a_press_on_a_settled_works_row_opens_it_and_a_press_on_its_head_folds_it() {
     );
     let opened = painted(&mut view, 120, 40);
     assert!(
-        holds(&opened, "22 rows kept back"),
+        holds(&opened, "\u{22ef}22"),
         "the work drawn open is the rows it stood for: {:?}",
         frame_rows(&opened)
     );

@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 face-off at 120x40
 00 |┃›where does rendering live?                                                  wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
-01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯ 4 rows kept back                         model     claude-sonnet-4-5-20250929      | dim:4 ok:2 dim:5 plain:17 dim:25 plain:25 dim:10 plain:32
+01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯4                                         model     claude-sonnet-4-5-20250929      | dim:4 ok:2 dim:5 plain:17 dim:9 plain:41 dim:10 plain:32
 02 |                                                                              think     high                            | plain:78 dim:10 plain:32
 03 |  Rendering lives in the front end and not in the core, because an entry                                                | plain:120
 04 |  is a fact and never a rendering: the TUI and any reader draw one run        turns         6 /  250                    | plain:78 dim:10 plain:32

@@ -4266,7 +4266,7 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
             frame::read(drawn, COLS, ROWS)
                 .rows()
                 .iter()
-                .any(|row| row.contains("✓ open opened.html") && row.contains("rows kept back"))
+                .any(|row| row.contains("✓ open opened.html") && row.contains("\u{22ef}"))
         }),
         "the band draws the call settled with the target it opened and its exit: {:?}",
         drawn.text()

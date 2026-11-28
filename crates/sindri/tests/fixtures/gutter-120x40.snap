@@ -5,7 +5,7 @@ expression: self.text(name)
 gutter at 120x40
 00 |                                                                                                                        | plain:120
 01 |┃›triage the retry test                                                                                                 | dim:1 plain:119
-02 |  │ ✓ bash rg -n 'gutter' src 23 ms ⋯ 3 rows kept back                                                                  | dim:4 ok:2 dim:5 plain:18 dim:25 plain:66
+02 |  │ ✓ bash rg -n 'gutter' src 23 ms ⋯3                                                                                  | dim:4 ok:2 dim:5 plain:18 dim:9 plain:82
 03 |                                                                                                                        | plain:120
 04 |│ the marker of a row stands in the gutter ahead of its words                                                           | dim:2 muted:59 plain:59
 05 |  Every row begins at one column:                                                                                       | plain:120
