@@ -60,6 +60,78 @@ const FOLD_HEAD: usize = 4;
 
 const FOLD_KEPT: usize = 3;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Mark {
+    glyph: String,
+    ink: Ink,
+    says: &'static str,
+}
+
+impl Mark {
+    fn new(glyph: impl Into<String>, ink: Ink, says: &'static str) -> Mark {
+        Mark {
+            glyph: glyph.into(),
+            ink,
+            says,
+        }
+    }
+
+    pub fn glyph(&self) -> &str {
+        &self.glyph
+    }
+
+    pub fn ink(&self) -> Ink {
+        self.ink
+    }
+
+    pub fn says(&self) -> &'static str {
+        self.says
+    }
+}
+
+pub fn marks() -> [Mark; 10] {
+    [
+        Mark::new(SPINE, Ink::Dim, "the spine a Prompt's words are quoted by"),
+        Mark::new(SIGIL.trim_end(), Ink::Plain, "the sigil a Prompt opens on"),
+        Mark::new(
+            THOUGHT.trim_end(),
+            Ink::Dim,
+            "the lane a thought, a Call and a Result are indented by",
+        ),
+        Mark::new(
+            markdown::FENCE.trim_end(),
+            Ink::Dim,
+            "the bar a fence and a quote stand beside",
+        ),
+        Mark::new(KEPT.to_string(), Ink::Dim, "how many rows a Fold keeps back: ⋯3"),
+        Mark::new(
+            CHECK.to_string(),
+            Ink::Ok,
+            "a Call that settled well, and a run that ended on its answer",
+        ),
+        Mark::new(
+            CROSS.to_string(),
+            Ink::Err,
+            "a Call that failed, and a run that stopped on one",
+        ),
+        Mark::new(
+            PENDING.to_string(),
+            Ink::Dim,
+            "a Call still running, and the tail of a word its row cut short",
+        ),
+        Mark::new(
+            pulse::FRAME.to_string(),
+            Ink::Accent,
+            "a run still writing, its pulse turning as the rows land",
+        ),
+        Mark::new(
+            THUMB.to_string(),
+            Ink::Dim,
+            "where the window stands in a run the reader scrolled back through",
+        ),
+    ]
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fold {
     Closed,
@@ -1169,7 +1241,7 @@ impl Scroll {
     }
 }
 
-pub(crate) const THUMB: char = '█';
+pub const THUMB: char = '█';
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Thumb {

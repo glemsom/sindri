@@ -44,6 +44,8 @@ const BULLET: &str = "• ";
 const TICK: char = '✓';
 const BOX: char = '☐';
 
+pub(crate) const FENCE: &str = "▏ ";
+
 pub fn rows(text: &str, cols: u16) -> Vec<Row> {
     rows_under(text, cols, 0)
 }
@@ -683,7 +685,7 @@ impl Room {
 
     fn open_code(&mut self, kind: CodeBlockKind, span: &str) {
         self.open_block();
-        self.lead.push((String::from("▏ "), Look::plain(Ink::Dim)));
+        self.lead.push((String::from(FENCE), Look::plain(Ink::Dim)));
         let tag = match kind {
             CodeBlockKind::Fenced(tag) => tag.trim().to_owned(),
             CodeBlockKind::Indented => String::new(),
@@ -770,7 +772,7 @@ impl Room {
             self.flush_if_written();
         }
         self.open_block();
-        self.lead.push((String::from("▏ "), Look::plain(Ink::Dim)));
+        self.lead.push((String::from(FENCE), Look::plain(Ink::Dim)));
         if let Some(kind) = kind {
             self.draw_label(kind);
         }
