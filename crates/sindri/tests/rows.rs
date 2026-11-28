@@ -2341,7 +2341,7 @@ fn a_call_wears_the_mark_its_verdict_settled_on_and_no_mark_before_one() {
     let settled = painted(&rows.rows(0)[0], 80);
     assert_eq!(
         said(&settled),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "! │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "a call a result settled on wears the cross of its verdict and the name it was called by"
     );
     assert_eq!(cell_inks(&settled)[4], Ink::Err);
@@ -2844,7 +2844,7 @@ fn a_narrow_band_keeps_a_failure_it_gives_up_the_time_and_the_bill_for() {
 
     assert_eq!(
         words(&one_row_of_at(work, 20)),
-        "⋯ 1 call · 1 failed",
+        "⋯!1 call · 1 failed",
         "a band too narrow for the time and the bill states the failure it holds, because a \
          failure count is never the fact a row gives up"
     );
@@ -3559,7 +3559,7 @@ fn a_transcript_whose_calls_hold_no_identity_pairs_each_result_with_the_call_bef
     );
     assert_eq!(
         said(&painted(&rows.rows(2)[0], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "! │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the second settles the second, so a session from either side of this change draws"
     );
 }
@@ -3599,7 +3599,7 @@ fn a_transcript_of_two_calls_pairs_them_by_identity_when_it_is_read_back() {
     );
     assert_eq!(
         said(&painted(&rows.rows(2)[0], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "! │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the call below it takes its own result, read back in the other order"
     );
 }
@@ -3714,7 +3714,7 @@ fn a_cancelled_call_is_a_row_and_not_a_dangling_spinner() {
 
     assert_eq!(
         said(&settled),
-        "  │ ✗ bash cancelled ls 2 ms ⋯ 4 rows kept back",
+        "! │ ✗ bash cancelled ls 2 ms ⋯ 4 rows kept back",
         "the row the cancelled call settles on says what stopped it"
     );
     assert_eq!(cell_inks(&settled)[4], Ink::Err);
@@ -3737,7 +3737,7 @@ fn a_wave_of_calls_settles_its_rows_in_the_order_the_run_wrote_them() {
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "! │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the second settles the second"
     );
 }
@@ -3760,7 +3760,7 @@ fn a_result_settles_the_call_it_names_when_a_turn_holds_two_calls_to_one_tool() 
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "! │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the second call wears the verdict of its own result, so neither is guessed"
     );
 }
@@ -3855,7 +3855,7 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
     }
     assert_eq!(
         said(&painted(&rows.rows(settled_at)[1], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "! │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
         "and the entry the call opened is the one that was laid again"
     );
     assert_eq!(
@@ -4793,6 +4793,20 @@ fn the_marks_the_keys_screen_names_are_the_marks_the_band_draws_and_no_others() 
     ));
     drawn.insert((sindri::rows::THUMB, Ink::Dim.name()));
 
+    let mut failed = Rows::new();
+    failed.measure(Measure::new(120, Surface::none(), None));
+    failed.push(call(1));
+    failed.push(result(1, Exit::Code(1)));
+    for at in 0..failed.len() {
+        for row in failed.rows(at) {
+            for (glyph, look) in painted(row, 120).into_iter().take(6) {
+                if !glyph.is_ascii() || glyph == '!' {
+                    drawn.insert((glyph, look.ink().name()));
+                }
+            }
+        }
+    }
+
     let named: BTreeSet<(char, &str)> = sindri::rows::marks()
         .iter()
         .map(|mark| {
@@ -4811,4 +4825,169 @@ fn the_marks_the_keys_screen_names_are_the_marks_the_band_draws_and_no_others() 
         "the `?` screen names exactly the marks the band draws: a glyph added to the drawing \
          needs its row here, and a row that names a glyph the band draws nowhere is no mark"
     );
+}
+
+fn failed_run(exit: Exit, cols: u16) -> Rows {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(cols, Surface::none(), None));
+    for entry in vec![
+        asked_for(1),
+        call(1),
+        result(1, exit),
+        answer(1),
+        stop_entry(Stop::Final),
+    ] {
+        rows.push(entry);
+    }
+    rows
+}
+
+fn call_rows(rows: &mut Rows) -> Vec<Row> {
+    let at = (0..rows.len())
+        .find(|at| rows.is_call(*at))
+        .expect("the run made a call");
+    rows.rows(at).to_vec()
+}
+
+#[test]
+fn every_row_a_failed_call_holds_opens_with_the_mark_in_the_error_ink() {
+    let mut rows = failed_run(Exit::Code(1), 120);
+    assert!(
+        rows.toggle_newest(),
+        "the newest settled work opens on one key, so the rows the call holds are drawn"
+    );
+    let held = call_rows(&mut rows);
+    assert!(
+        held.len() > 1,
+        "a failed call keeps the line its diagnostic is, and the mark stands on it too: {held:?}"
+    );
+    for row in &held {
+        assert_eq!(
+            row.glyph_columns().first().copied(),
+            Some((0, '!', 1)),
+            "the first cell of every row the call holds states the failure: {:?}",
+            words(row)
+        );
+        assert_eq!(
+            inks(row).first().copied(),
+            Some(Ink::Err),
+            "and it states it in the error ink: {:?}",
+            words(row)
+        );
+        assert!(
+            row.width() <= 120,
+            "the mark takes a cell the row already leaves blank, so no row outgrows the band: {:?}",
+            words(row)
+        );
+    }
+
+    let mut well = failed_run(Exit::Code(0), 120);
+    assert!(well.toggle_newest());
+    let settled = call_rows(&mut well);
+    assert_eq!(
+        settled.first().map(|row| row.glyph_columns()[0]),
+        Some((0, ' ', 1)),
+        "and the cell the mark took is one the same call leaves blank when it settles well: \
+         {settled:?}"
+    );
+
+    for at in 0..rows.len() {
+        if rows.is_call(at) {
+            continue;
+        }
+        let marked: Vec<String> = rows.rows(at).iter().map(words).collect();
+        let plain: Vec<String> = well.rows(at).iter().map(words).collect();
+        assert_eq!(
+            marked, plain,
+            "the mark is no word of the band, so no row beside the call moved for it"
+        );
+    }
+}
+
+#[test]
+fn a_call_that_settled_well_and_a_call_still_running_carry_no_mark() {
+    for exit in [Some(Exit::Code(0)), None] {
+        let mut rows = Rows::new();
+        rows.measure(Measure::new(120, Surface::none(), None));
+        rows.push(asked_for(1));
+        rows.push(call(1));
+        if let Some(exit) = exit {
+            rows.push(result(1, exit));
+            rows.push(answer(1));
+            rows.push(stop_entry(Stop::Final));
+        }
+        let held = call_rows(&mut rows);
+        assert!(!held.is_empty(), "the call is drawn: {held:?}");
+        for row in &held {
+            assert!(
+                !words(row).contains('!'),
+                "the mark means failure and nothing else, so a call that settled well or is \
+                 still in flight carries none: {:?}",
+                words(row)
+            );
+        }
+    }
+}
+
+#[test]
+fn a_settled_exchange_wears_the_mark_when_its_work_holds_a_failure() {
+    let exchange_row = |exit: Exit| {
+        let mut rows = failed_run(exit, 120);
+        let at = (0..rows.len())
+            .find(|at| rows.is_call(*at))
+            .expect("the run made a call");
+        let band = rows.rows(at).to_vec();
+        let row = band
+            .first()
+            .cloned()
+            .expect("a settled exchange is one row");
+        (row, band)
+    };
+
+    let (failed, marked) = exchange_row(Exit::Code(1));
+    assert_eq!(
+        marked.len(),
+        1,
+        "a settled exchange is drawn as one row while nothing opens it: {marked:?}"
+    );
+    assert_eq!(
+        failed.glyph_columns().get(1).copied(),
+        Some((1, '!', 1)),
+        "the row states the failure its tally counts, in the cell beside the fold's glyph: {:?}",
+        words(&failed)
+    );
+    assert_eq!(
+        inks(&failed).get(1).copied(),
+        Some(Ink::Err),
+        "in the error ink: {:?}",
+        words(&failed)
+    );
+
+    let (settled, _) = exchange_row(Exit::Code(0));
+    assert_eq!(
+        settled.glyph_columns().get(1).copied(),
+        Some((1, ' ', 1)),
+        "and an exchange whose work held no failure leaves that cell blank: {:?}",
+        words(&settled)
+    );
+}
+
+#[test]
+fn a_failed_call_drawn_as_one_row_with_no_room_for_its_content_still_carries_the_mark() {
+    let mut rows = failed_run(Exit::Code(1), 30);
+    assert!(rows.toggle_newest());
+    let held = call_rows(&mut rows);
+    let head = held.first().expect("the call is drawn as one row at least");
+    assert!(
+        words(head).contains("⋯ 4"),
+        "at thirty columns the row has no room for its content and hides it in a count: {:?}",
+        words(head)
+    );
+    assert_eq!(
+        head.glyph_columns().first().copied(),
+        Some((0, '!', 1)),
+        "and what a row hides does not unmark it: {:?}",
+        words(head)
+    );
+    assert_eq!(inks(head).first().copied(), Some(Ink::Err));
 }
