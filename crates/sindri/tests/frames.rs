@@ -78,6 +78,11 @@ fn calls_120x40_is_a_call_settled_four_ways() {
 }
 
 #[test]
+fn calls_80x24_is_a_failed_call_at_the_edge_of_a_narrow_band() {
+    fixture::assert_frame("calls", 80, 24);
+}
+
+#[test]
 fn tools_120x40_is_one_call_of_each_tool_settled_and_in_flight() {
     fixture::assert_frame("tools", 120, 40);
 }
@@ -158,8 +163,13 @@ fn draft_long_120x24_is_a_draft_past_the_band_counting_the_rows_it_keeps_back() 
 }
 
 #[test]
-fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
+fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on_and_names_every_mark_beside_them() {
     fixture::assert_frame("keys", 120, 40);
+}
+
+#[test]
+fn keys_60x64_wraps_the_meaning_of_every_mark_at_a_card_too_narrow_to_pair_them() {
+    fixture::assert_frame("keys", 60, 64);
 }
 
 #[test]

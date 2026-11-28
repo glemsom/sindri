@@ -1,10 +1,18 @@
 use crate::composer::Key;
 use crate::ink::{Faces, Ink, Look};
 use crate::list::{self, Column, ScreenRow};
+use crate::pen;
+use crate::rows::{self, Mark};
 
 pub const KEY: Look = Look::plain(Ink::Plain).wearing(Faces::BOLD);
 
 pub const MEANING: Look = Look::plain(Ink::Muted);
+
+pub const MARKS_HEADING: &str = "marks";
+
+const MARK_GAP: u16 = 2;
+
+const MARK_ROOM: u16 = 20;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -507,6 +515,7 @@ impl Stack {
 
     pub fn body(&self, width: u16) -> Vec<ScreenRow> {
         let modes: Vec<Mode> = self.modes().collect();
+        let marks = rows::marks();
         let column = Column::of(
             modes
                 .iter()
@@ -523,6 +532,8 @@ impl Stack {
                 rows.extend(column.hung(binding.name, binding.does));
             }
         }
+        rows.push(list::whole(MARKS_HEADING, Look::plain(Ink::Dim)));
+        rows.extend(paired(&marks, width));
         rows
     }
 
@@ -534,6 +545,45 @@ impl Stack {
             .map(|binding| binding.act)
             .or_else(|| mode.fallback())
     }
+}
+
+fn paired(marks: &[Mark], width: u16) -> Vec<ScreenRow> {
+    let across = match width >= 2 * (1 + MARK_GAP + MARK_ROOM) + MARK_GAP {
+        true => 2,
+        false => 1,
+    };
+    let gutter = MARK_GAP * (across - 1);
+    let column = width.saturating_sub(gutter) / across;
+    let room = column.saturating_sub(1 + MARK_GAP);
+    let mut rows = Vec::new();
+    for group in marks.chunks(usize::from(across)) {
+        let said: Vec<Vec<String>> = group
+            .iter()
+            .map(|mark| match rows::wrap(mark.says(), room) {
+                lines if lines.is_empty() => vec![String::new()],
+                lines => lines,
+            })
+            .collect();
+        let tallest = said.iter().map(Vec::len).max().unwrap_or(0);
+        for at in 0..tallest {
+            let mut spans: Vec<(String, Look)> = Vec::new();
+            for (in_row, mark) in group.iter().enumerate() {
+                let glyph = match at {
+                    0 => format!("{}{}", mark.glyph(), pen::blank(MARK_GAP)),
+                    _ => pen::blank(1 + MARK_GAP),
+                };
+                spans.push((glyph, Look::plain(mark.ink())));
+                let line = said[in_row].get(at).cloned().unwrap_or_default();
+                let line = match in_row + 1 == group.len() {
+                    true => line,
+                    false => pen::pad(&line, room + gutter),
+                };
+                spans.push((line, MEANING));
+            }
+            rows.push(ScreenRow::whole(spans));
+        }
+    }
+    rows
 }
 
 impl Default for Stack {

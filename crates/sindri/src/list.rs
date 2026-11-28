@@ -125,6 +125,10 @@ impl Column {
     }
 
     pub fn hung(&self, name: &str, said: &str) -> Vec<ScreenRow> {
+        self.hung_in(name, self.name, said)
+    }
+
+    pub fn hung_in(&self, name: &str, name_look: Look, said: &str) -> Vec<ScreenRow> {
         let hang = pen::blank(self.columns);
         let mut lines = wrap(said, self.width.saturating_sub(self.columns));
         if lines.is_empty() {
@@ -138,7 +142,7 @@ impl Column {
                     0 => pen::pad(name, self.columns),
                     _ => hang.clone(),
                 };
-                ScreenRow::whole(vec![(lead, self.name), (line, self.said)])
+                ScreenRow::whole(vec![(lead, name_look), (line, self.said)])
             })
             .collect()
     }

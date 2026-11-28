@@ -3,9 +3,9 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 tools at 120x40
-00 |  │ ✓ bash rg -n 'the gutter' crates/sindri/src 23 ms ⋯ 3 rows kept back                                                | dim:4 ok:2 dim:5 plain:36 dim:25 plain:48
-01 |  │ ✓ open GLOSSARY.md 4 ms ⋯ 2 rows kept back                                                                          | dim:4 ok:2 dim:5 plain~dim:11 dim:24 plain:74
-02 |  │ ✓ skill rust-review 2 ms ⋯ 3 rows kept back                                                                         | dim:4 ok:2 dim:6 plain:11 dim:24 plain:73
+00 |  │ ✓ bash rg -n 'the gutter' crates/sindri/src 23 ms ⋯3                                                                | dim:4 ok:2 dim:5 plain:36 dim:9 plain:64
+01 |  │ ✓ open GLOSSARY.md 4 ms ⋯2                                                                                          | dim:4 ok:2 dim:5 plain~dim:11 dim:8 plain:90
+02 |  │ ✓ skill rust-review 2 ms ⋯3                                                                                         | dim:4 ok:2 dim:6 plain:11 dim:8 plain:89
 03 |  │ … bash running cargo test --workspace                                                                               | dim:19 plain:101
 04 |  │ … open running docs/agents/domain.md                                                                                | dim:19 plain~dim:21 plain:80
 05 |  │ … skill running code-review                                                                                         | dim:20 plain:100

@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 face at 120x40
 00 |┃›where does rendering live?                                                                                            | dim:1 plain:119
-01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯ 4 rows kept back                                                                   | dim:4 ok:2 dim:5 plain:17 dim:25 plain:67
+01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯4                                                                                   | dim:4 ok:2 dim:5 plain:17 dim:9 plain:83
 02 |                                                                                                                        | plain:120
 03 |  Rendering lives in the front end and not in the core, because an entry                                                | plain:120
 04 |  is a fact and never a rendering: the TUI and any reader draw one run                                                  | plain:120

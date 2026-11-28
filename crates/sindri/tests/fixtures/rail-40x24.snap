@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 rail at 40x24
 00 |┃›where does rendering live?            | dim:1 plain:39
-01 |  │ ✓ rg -n 'fence… ⋯ 4 rows kept back  | dim:4 ok:2 plain:13 dim:19 plain:2
+01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯4   | dim:4 ok:2 dim:5 plain:17 dim:9 plain:3
 02 |                                        | plain:40
 03 |  Rendering lives in the front end and  | plain:40
 04 |  not in the core, because an entry is  | plain:40

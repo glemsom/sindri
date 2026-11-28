@@ -112,6 +112,10 @@ pub struct Usage {
 }
 
 impl Usage {
+    pub fn is_empty(&self) -> bool {
+        *self == Usage::default()
+    }
+
     pub fn since(self, earlier: Self) -> Self {
         Self {
             input: self

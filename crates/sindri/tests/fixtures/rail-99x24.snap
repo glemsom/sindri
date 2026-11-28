@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 rail at 99x24
 00 |┃›where does rendering live?                                                                       | dim:1 plain:98
-01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯ 4 rows kept back                                              | dim:4 ok:2 dim:5 plain:17 dim:25 plain:46
+01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯4                                                              | dim:4 ok:2 dim:5 plain:17 dim:9 plain:62
 02 |                                                                                                   | plain:99
 03 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a     | plain:99
 04 |  rendering: the TUI and any reader draw one run from one value, and the core may not name a       | plain:99

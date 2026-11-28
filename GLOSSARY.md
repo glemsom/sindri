@@ -45,8 +45,9 @@ _Avoid_: Session ID, conversation ID, durable memory
 **Exchange**:
 The band's unit: the prompt wearing the sigil it was asked with, what the run did under it, and the
 answer. That work is no row of the band while the run fills it — each thought, call, result and
-answer it went past standing as its own row — and one row once it has ended, counting them. That row
-is the reader's to open, and a result inside an opened work keeps the fold of its own.
+answer it went past standing as its own row — and one row once it has ended, counting them in its
+**Tally**. That row is the reader's to open, and a result inside an opened work keeps the fold of
+its own.
 _Avoid_: Pair, round, item, Activity, Trace, Log
 
 **Prompt**:
@@ -59,6 +60,15 @@ _Avoid_: Query, question, input
 One request to the model and the tool calls it asks for. Not a unit of progress, and no row of the
 band: the record writes one for every turn the run took and the drawing leaves it out.
 _Avoid_: Step, iteration, wave
+
+**Tally**:
+What a settled **Exchange**'s one row states of the work under it: its calls, the ones that
+failed, the files they named, the time they took, and the bill its **Turns** spent — the input and
+the output the record holds for each, in the numbers the **Rail** spells its own spend in. Its
+facts are ranked, so a narrow band gives up the bill, then the time, then the files, and never a
+count of calls or of failures. A record whose turns spent nothing states no bill, and a row relaid
+at another width claims what it claimed.
+_Avoid_: Count (that one is the **Fold**'s), spend (the **Rail**'s), stats, totals
 
 **Witness**:
 What a **Run**'s loop reports to: the phase it is in and the turn it is on as it goes, each finished
@@ -262,8 +272,18 @@ The two columns every **Band** opens its words in and keeps at its right edge, w
 holds: the **Transcript**'s prose past the gutter a row wears, the **Composer**'s head count, its
 hints and the row that says the frame stands off the tail, and the **Rail**'s sections, its fields
 and the values set in them. A gutter's glyph stands in the column before it and is no word of
-the band, and the air a band keeps on its right is what stops a word on the frame's own edge.
+the band, and the air a band keeps on its right is what stops a word on the frame's own edge — it
+is where the **Transcript** band's **Thumb** stands, so the band says where the reader is without
+covering a word it is read for.
 _Avoid_: Seat, padding, indent (that one is the gutter a row opens with)
+
+**Thumb**:
+The mark a **Transcript** band draws while the reader stands off the tail, saying where the window
+stands: the span of the band it fills and the row it opens on, both read from how much of the
+transcript the band holds and how far back the reader is. It stands in the **Margin** at the band's
+right edge, in that margin's first column, because the band's last column carries a cut mark and no
+measured cell of the band may carry it; a frame at the tail draws none.
+_Avoid_: Scrollbar, slider, handle, indicator, position bar
 
 **Measure**:
 The three facts the rows of a band are laid at: its width, the surface a picture in an answer is
@@ -393,6 +413,19 @@ prompt's words occupy carries it, the draft being typed as the prompt it was ask
 an answer, a call, a result or a stop does.
 _Avoid_: Bar, quote mark, guide
 
+**Mark**:
+A glyph the **Transcript band** is read by, with the ink it is drawn in and the words that say what
+it means: the **Spine** and the sigil a **Prompt** opens on, the lane bar its work is set in, the bar
+a fence and a quote stand beside, the count a **Call** keeps back in one glyph and its number, the
+glyphs a **Call** settled, still running or failed wears, the mark a failed **Call** stands in the
+gutter of every row it holds — and a settled **Exchange**'s one row wears where its **Tally** counts
+a failure — so a run's failures are found by scrolling and not by reading, the pulse of a run still
+writing, and the thumb that says where the window stands in the run. The table of them is declared
+beside the glyphs the drawing uses and drawn on the `?` screen under the keys, so a mark cannot be
+drawn without being named there, and a reader learns the band's grammar once and reads any run. A
+mark is a glyph and its words in a terminal that spells no colour, and never the ink alone.
+_Avoid_: Glyph, icon, symbol, legend
+
 **Composer**:
 The draft a reader types: its words, the place the next glyph lands among them, the scroll they are
 read through, and the columns a frame has measured for them. The columns are measured before the
@@ -402,7 +435,7 @@ _Avoid_: Text box, input box, editor, entry field
 **Bill**:
 What one draft would send, counted: the files its words name in the workspace, and the command it
 opens with. A draft that names no file and opens with no command bills nothing.
-_Avoid_: Count, tally, stats
+_Avoid_: Count, tally (that one is a settled **Exchange**'s), stats
 
 **Draft count**:
 The **Bill**, drawn on the far edge of the **Composer**'s head row, hanging in the **Margin** and
