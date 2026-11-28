@@ -50,7 +50,7 @@ const CHECK: char = '✓';
 const CROSS: char = '✗';
 const KEPT: char = '⋯';
 
-const FAILED: char = '!';
+pub const FAILED: char = '!';
 
 const CUT: char = '…';
 
@@ -63,24 +63,20 @@ const FOLD_HEAD: usize = 4;
 
 const FOLD_KEPT: usize = 3;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Mark {
-    glyph: String,
+    glyph: char,
     ink: Ink,
     says: &'static str,
 }
 
 impl Mark {
-    fn new(glyph: impl Into<String>, ink: Ink, says: &'static str) -> Mark {
-        Mark {
-            glyph: glyph.into(),
-            ink,
-            says,
-        }
+    const fn new(glyph: char, ink: Ink, says: &'static str) -> Mark {
+        Mark { glyph, ink, says }
     }
 
-    pub fn glyph(&self) -> &str {
-        &self.glyph
+    pub fn glyph(&self) -> char {
+        self.glyph
     }
 
     pub fn ink(&self) -> Ink {
@@ -94,50 +90,30 @@ impl Mark {
 
 pub fn marks() -> [Mark; 11] {
     [
-        Mark::new(SPINE, Ink::Dim, "the spine a Prompt's words are quoted by"),
-        Mark::new(SIGIL.trim_end(), Ink::Plain, "the sigil a Prompt opens on"),
+        Mark::new(glyph_of(SPINE), Ink::Dim, "the spine a Prompt hangs on"),
+        Mark::new(glyph_of(SIGIL), Ink::Plain, "the sigil a Prompt opens on"),
+        Mark::new(glyph_of(THOUGHT), Ink::Dim, "the lane a thought is set in"),
         Mark::new(
-            THOUGHT.trim_end(),
+            glyph_of(markdown::BAR),
             Ink::Dim,
-            "the lane a thought and its work are set in",
+            "the bar a fence or quote sets",
         ),
-        Mark::new(
-            markdown::BAR.trim_end(),
-            Ink::Dim,
-            "the bar a fence and a quote stand beside",
-        ),
-        Mark::new(
-            KEPT.to_string(),
-            Ink::Dim,
-            "how many rows a Call keeps back: ⋯3",
-        ),
-        Mark::new(
-            CHECK.to_string(),
-            Ink::Ok,
-            "a Call that settled well, and a run that ended",
-        ),
-        Mark::new(
-            CROSS.to_string(),
-            Ink::Err,
-            "a Call that failed, and a run that stopped",
-        ),
-        Mark::new(
-            FAILED.to_string(),
-            Ink::Err,
-            "a failed Call, on every row it holds",
-        ),
-        Mark::new(
-            PENDING.to_string(),
-            Ink::Dim,
-            "a Call still running, or a word cut short",
-        ),
-        Mark::new(pulse::FRAME.to_string(), Ink::Accent, "a run still writing"),
-        Mark::new(
-            THUMB.to_string(),
-            Ink::Dim,
-            "where the window stands in the run",
-        ),
+        Mark::new(KEPT, Ink::Dim, "rows a Fold keeps back, as ⋯3"),
+        Mark::new(CHECK, Ink::Ok, "a Call that settled well"),
+        Mark::new(CROSS, Ink::Err, "a Call or a run that failed"),
+        Mark::new(FAILED, Ink::Err, "every row of a failed Call"),
+        Mark::new(PENDING, Ink::Dim, "a running Call, or a cut word"),
+        Mark::new(pulse::FRAME, Ink::Accent, "a run still writing"),
+        Mark::new(THUMB, Ink::Dim, "where the window stands"),
     ]
+}
+
+fn glyph_of(gutter: &str) -> char {
+    gutter
+        .trim_end()
+        .chars()
+        .next()
+        .expect("a gutter opens on the glyph it shows")
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -707,7 +683,7 @@ impl Tally {
             .collect();
         match said.is_empty() {
             true => None,
-            false => Some(said.join(" · ")),
+            false => Some(said.join(ledger::GAP)),
         }
     }
 }
@@ -716,7 +692,7 @@ fn said_words(said: &[(Rank, String)]) -> String {
     said.iter()
         .map(|(_, words)| words.as_str())
         .collect::<Vec<&str>>()
-        .join(" · ")
+        .join(ledger::GAP)
 }
 
 fn took(ms: u64) -> String {
@@ -955,6 +931,7 @@ fn call_row(
     cols: u16,
     ground: Option<&Ground>,
 ) -> Row {
+    let kept = kept.filter(|kept| *kept > 0);
     let (marker, ink, outcome) = tool_outcome(exit, elapsed_ms);
     let outcome = if outcome.is_empty() {
         outcome
@@ -1340,7 +1317,7 @@ impl Thumb {
         self.top..self.top + self.span
     }
 
-    pub(crate) fn paint(&self, area: Rect, y: u16, buffer: &mut Buffer, palette: &Palette) {
+    pub fn paint(&self, area: Rect, y: u16, buffer: &mut Buffer, palette: &Palette) {
         if let Some(row) = y.checked_sub(area.y)
             && self.rows().contains(&row)
         {
@@ -2314,3 +2291,6 @@ pub struct Piece {
     pub skip: usize,
     pub rows: u16,
 }
+
+#[cfg(test)]
+mod tests;

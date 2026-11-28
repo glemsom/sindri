@@ -163,17 +163,12 @@ fn draft_long_120x24_is_a_draft_past_the_band_counting_the_rows_it_keeps_back() 
 }
 
 #[test]
-fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
+fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on_and_names_every_mark_beside_them() {
     fixture::assert_frame("keys", 120, 40);
 }
 
 #[test]
-fn keys_120x64_is_the_same_card_with_every_mark_the_band_draws_named_under_its_keys() {
-    fixture::assert_frame("keys", 120, 64);
-}
-
-#[test]
-fn keys_60x64_is_those_marks_wrapped_at_a_card_narrow_enough_to_wrap_them() {
+fn keys_60x64_wraps_the_meaning_of_every_mark_at_a_card_too_narrow_to_pair_them() {
     fixture::assert_frame("keys", 60, 64);
 }
 

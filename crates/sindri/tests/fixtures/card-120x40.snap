@@ -36,10 +36,10 @@ card at 120x40
 30 |  fact the record holds │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
 31 |                        │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
 32 |▏ rust                  │ marks                                                                │                        | dim:25 plain:1 dim:5 plain:64 dim:25
-33 |▏ fn main() {           │ ┃                    the spine a Prompt's words are quoted by        │                        | dim:25 plain:1 dim:21 muted:40 plain:8 dim:25
-34 |▏    │let row = Row::of(│ ›                    the sigil a Prompt opens on                     │                        | dim:25 plain:22 muted:27 plain:21 dim:25
-35 |▏    │row.paint(area, bu│ │                    the lane a thought and its work are set in      │                        | dim:25 plain:1 dim:21 muted:42 plain:6 dim:25
-36 |▏ }                     │ ▏                    the bar a fence and a quote stand beside        │                        | dim:25 plain:1 dim:21 muted:40 plain:8 dim:25
-37 |                        │ ⋯                    how many rows a Call keeps back: ⋯3             │                        | dim:25 plain:1 dim:21 muted:35 plain:13 dim:25
-38 |┃›what should the run do│ ⋯ 6 rows kept back                                                   │                        | dim:25 plain:1 dim:18 plain:51 dim:25
+33 |▏ fn main() {           │ ┃  the spine a Prompt hangs on     ›  the sigil a Prompt opens on    │                        | dim:25 plain:1 dim:3 muted:32 plain:3 muted:27 plain:4 dim:25
+34 |▏    │let row = Row::of(│ │  the lane a thought is set in    ▏  the bar a fence or quote sets  │                        | dim:25 plain:1 dim:3 muted:32 dim:3 muted:29 plain:2 dim:25
+35 |▏    │row.paint(area, bu│ ⋯  rows a Fold keeps back, as ⋯3   ✓  a Call that settled well       │                        | dim:25 plain:1 dim:3 muted:32 ok:3 muted:24 plain:7 dim:25
+36 |▏ }                     │ ✗  a Call or a run that failed     !  every row of a failed Call     │                        | dim:25 plain:1 err:3 muted:32 err:3 muted:26 plain:5 dim:25
+37 |                        │ …  a running Call, or a cut word   ⠋  a run still writing            │                        | dim:25 plain:1 dim:3 muted:32 accent:3 muted:19 plain:12 dim:25
+38 |┃›what should the run do│ █  where the window stands                                           │                        | dim:25 plain:1 dim:3 muted:23 plain:43 dim:25
 39 |  Enter send · / command╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27

@@ -954,15 +954,19 @@ fn every_screen_is_drawn_on_a_card_as_tall_as_the_rows_it_holds() {
                 name(mode),
                 frame.rows()
             );
+            let whole = {
+                let mut roomy = on_screen(mode);
+                body_rows(&frame::painted(&mut roomy, cols, tall + 24)).len()
+            };
             assert!(
                 above + below > 0
+                    || whole <= usize::from(held)
                     || body_rows(&frame)
                         .iter()
                         .any(|row| row.contains("kept back")),
-                "{}'s card at {cols}x{tall} is the whole frame, and a card is only as tall as the \
-                 frame when its body is taller than the room it has: the row above its bottom \
-                 border says how many rows it keeps back, where a card that is the frame's height \
-                 and says nothing is the card this screen was drawn on before: {:?}",
+                "{}'s card at {cols}x{tall} is the whole frame only when the {whole} rows of its \
+                 body fill the room it has, or when a body taller than the room says in the row \
+                 above its bottom border how many rows it keeps back: {:?}",
                 name(mode),
                 frame.rows()
             );
@@ -1020,7 +1024,7 @@ fn the_model_list_is_a_card_as_tall_as_the_names_it_holds() {
 
 #[test]
 fn a_card_the_frame_cannot_hold_keeps_back_the_rows_it_does_not_draw() {
-    let whole = frame::painted(&mut on_screen(Mode::Keys), 120, 64);
+    let whole = frame::painted(&mut on_screen(Mode::Keys), 120, 40);
     let capped = frame::painted(&mut on_screen(Mode::Keys), 80, 24);
 
     let held = body_rows(&whole);
@@ -1029,7 +1033,7 @@ fn a_card_the_frame_cannot_hold_keeps_back_the_rows_it_does_not_draw() {
     let count = said(&capped, bottom - 1);
     assert!(
         drawn.len() < held.len(),
-        "a frame of twenty-four rows cannot hold the keys list a frame of sixty-four draws: {} \\
+        "a frame of twenty-four rows cannot hold the keys list a frame of forty draws: {} rows \\
          against {}",
         drawn.len(),
         held.len()

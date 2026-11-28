@@ -2859,16 +2859,16 @@ fn the_card_that_lists_the_keys_draws_every_key_and_every_mark_in_the_look_it_is
             .into_iter()
             .filter(|(_, text)| !text.trim().is_empty())
             .collect();
-        match runs.as_slice() {
-            [] | [_] => {}
-            [(name, said), (meaning, _), ..] => {
-                assert_eq!(
-                    *meaning,
-                    keys::MEANING,
-                    "row {y} draws the line that explains its name in another look"
-                );
-                listed.push((*name, said.trim().to_owned()));
-            }
+        for pair in runs.chunks(2) {
+            let [(name, said), (meaning, _)] = pair else {
+                continue;
+            };
+            assert_eq!(
+                *meaning,
+                keys::MEANING,
+                "row {y} draws the line that explains its name in another look"
+            );
+            listed.push((*name, said.trim().to_owned()));
         }
     }
 
@@ -2879,7 +2879,7 @@ fn the_card_that_lists_the_keys_draws_every_key_and_every_mark_in_the_look_it_is
         }
     }
     for mark in crate::rows::marks() {
-        wanted.push((Look::plain(mark.ink()), mark.glyph().to_owned()));
+        wanted.push((Look::plain(mark.ink()), mark.glyph().to_string()));
     }
 
     assert_eq!(
