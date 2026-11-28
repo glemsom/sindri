@@ -2213,45 +2213,16 @@ fn a_frames_three_bands_are_three_planes_of_their_own() {
     }
 
     let well = channels(palette.band(Band::Well)).expect("a band in pixels");
-    let peak = palette.peak(Band::Well);
-    let lit = well.map(|channel| channel.saturating_add(peak));
     let band = plane_of(&view, PlaneId::Transcript);
     let (width, height) = band.pixels().dimensions();
-    for x in 0..width {
-        let head = band.pixels().get_pixel(x, 0).0;
-        assert_eq!(
-            head[..3],
-            lit,
-            "column {x} of the transcript band's plane is not the well lit to the {peak} channels \
-             the band spends on its first pixel row: the head of the band is where the frame's \
-             light falls, and it falls on every column of it"
-        );
-    }
-    let head = i32::from(lit[0]);
-    for y in 1..2 * cell().height() {
-        let carried = i32::from(band.pixels().get_pixel(0, y).0[0]) - i32::from(well[0]);
-        assert!(
-            carried >= 0 && carried < head,
-            "pixel row {y} of the transcript band's plane is {carried} channels over the well \
-             where the head is {head}: the crown falls continuously over the band's first rows, \
-             and no pixel row of them carries the head's light or steps past it"
-        );
-    }
-    let second = i32::from(band.pixels().get_pixel(0, cell().height()).0[0]) - i32::from(well[0]);
-    assert!(
-        second > 0,
-        "the second cell row of the transcript band's plane is the well, and the head above it \
-         is lit: the light steps by the row instead of falling through the pixels of one"
-    );
-    for y in 2 * cell().height()..height {
+    for y in 0..height {
         for x in 0..width {
             let pixel = band.pixels().get_pixel(x, y).0;
             assert_eq!(
                 pixel[..3],
                 well,
                 "pixel row {y}, column {x} of the transcript band's plane is not the well: the \
-                 prose is read on the well, and the light has fallen back to it by the band's \
-                 third row"
+                 transcript's well is one flat tone at every row, whatever stands on it"
             );
         }
     }
