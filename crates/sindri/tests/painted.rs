@@ -474,6 +474,49 @@ fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
 }
 
 #[test]
+fn every_row_of_a_pictured_rail_carries_the_edge_ink_on_its_first_column() {
+    let palette = Palette::TRUECOLOR;
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
+    let mut pictured = View::of(caps::kitty(), railed(), Transcript::of(turns(3)));
+    let mut cells = View::of(caps::inked(palette), railed(), Transcript::of(turns(3)));
+    let drawn = frame::painted(&mut pictured, 120, 40);
+    let twin = frame::painted(&mut cells, 120, 40);
+    let laid = drawn
+        .told()
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+
+    for y in rail.y..rail.bottom() {
+        assert_eq!(
+            drawn.cell(rail.x, y).bg,
+            palette.edge_ink(),
+            "row {y} of the rail's first column is not the edge ink on a frame the terminal \
+             places a picture on, where the groove in the plane's own pixels is the whole \
+             separation between the two bands"
+        );
+        assert_eq!(
+            drawn.glyph(rail.x, y),
+            ' ',
+            "row {y} of the rail's first column stands a glyph on the column the bands are \
+             parted by, so the seam is read as a word"
+        );
+        assert_eq!(
+            drawn.cell(rail.x + 1, y).bg,
+            own,
+            "row {y} of the column beside the seam is not the terminal's own ground, so the rail's \
+             plane is not read through the cell it was placed on"
+        );
+        assert_eq!(
+            twin.cell(rail.x, y).bg,
+            drawn.cell(rail.x, y).bg,
+            "row {y} of the rail's first column is the edge ink on one of the two frames and \
+             another colour on the other, so the frames are parted differently"
+        );
+    }
+}
+
+#[test]
 fn the_rail_holds_the_frames_right_edge_above_the_band_and_no_fact_draws_none() {
     let mut view = View::of(Capabilities::default(), railed(), Transcript::of(turns(3)));
     let area = Rect::new(0, 0, 120, 40);

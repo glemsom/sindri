@@ -1149,39 +1149,48 @@ fn the_transcript_band_is_claimed_on_the_well_or_on_the_terminals_own_ground_und
 fn every_row_of_the_rail_is_one_tone_so_an_ink_reads_the_same_wherever_it_falls() {
     for (spelling, palette) in SPELLED {
         let tone = palette.band(Band::Rail);
+        let own = palette.ground(None).bg.expect("the terminal's own ground");
         for (shape, heights) in [
             (Rail::Ledger, &[1u16, 2, 8, 24][..]),
             (Rail::Strip, &[1u16][..]),
         ] {
             for height in heights {
-                let area = Rect::new(20, 0, 32, *height);
-                let placement = railed(shape, area, None, &palette).expect("a band to shade");
-                let mut buffer = Buffer::empty(Rect {
-                    x: 0,
-                    width: area.right(),
-                    ..area
-                });
-                placement.claim(&mut buffer, &palette);
+                for cell in [None, Some(CELL)] {
+                    let area = Rect::new(20, 0, 32, *height);
+                    let placement = railed(shape, area, cell, &palette).expect("a band to shade");
+                    let mut buffer = Buffer::empty(Rect {
+                        x: 0,
+                        width: area.right(),
+                        ..area
+                    });
+                    placement.claim(&mut buffer, &palette);
 
-                for row in 0..area.height {
-                    assert_eq!(
-                        placement.shade().row(row),
-                        tone,
-                        "{spelling} draws row {row} of a {shape:?} of {height} rows on another \
-                         colour than the rail's own tone: a row of the rail is no shadow, so an \
-                         ink drawn there reads at one strength"
-                    );
-                    for x in area.x..area.right() {
+                    for row in 0..area.height {
                         assert_eq!(
-                            under(&buffer, x, area.y + row),
-                            match x == area.x && placement.seam().is_some() {
-                                true => palette.edge_ink(),
-                                false => tone,
-                            },
-                            "{spelling} claims row {row}, column {x} of a {shape:?} of {height} \
-                             rows on another colour than the rail's own tone, and the one column \
-                             of it the frame claims is its seam"
+                            placement.shade().row(row),
+                            tone,
+                            "{spelling} draws row {row} of a {shape:?} of {height} rows on \
+                             another colour than the rail's own tone: a row of the rail is no \
+                             shadow, so an ink drawn there reads at one strength"
                         );
+                        for x in area.x..area.right() {
+                            let claimed = match (
+                                x == area.x && placement.seam().is_some(),
+                                placement.places(),
+                            ) {
+                                (true, _) => palette.edge_ink(),
+                                (false, false) => tone,
+                                (false, true) => own,
+                            };
+                            assert_eq!(
+                                under(&buffer, x, area.y + row),
+                                claimed,
+                                "{spelling} claims row {row}, column {x} of a {shape:?} of \
+                                 {height} rows in another colour than the one the frame gives it: \
+                                 the rail's first column is its seam and every other column the \
+                                 tone it is read on"
+                            );
+                        }
                     }
                 }
             }
@@ -1219,10 +1228,13 @@ fn a_rails_plane_covers_the_rails_own_columns_and_no_column_of_the_transcript() 
         for x in band.x..band.right() {
             assert_eq!(
                 under(&buffer, x, y),
-                own,
-                "row {y}, column {x} of the band is not the terminal's own ground, which its \
-                 plane is read through — the column of its seam among them, where the fall into \
-                 the joint is drawn"
+                match x {
+                    x if x == band.x => palette.edge_ink(),
+                    _ => own,
+                },
+                "row {y}, column {x} of the band is not what the frame claims there: every \
+                 column past the first is the terminal's own ground, which the plane is read \
+                 through, and the first is the seam the two bands are parted by"
             );
         }
     }
@@ -1345,12 +1357,10 @@ fn a_seams_column_is_claimed_in_the_ink_it_is_drawn_in_and_the_rail_keeps_its_to
             for y in rail.y..rail.bottom() {
                 assert_eq!(
                     under(&buffer, rail.x, y),
-                    match placement.places() {
-                        true => palette.ground(None).bg.expect("the terminal's own ground"),
-                        false => palette.edge_ink(),
-                    },
+                    palette.edge_ink(),
                     "row {y} of the rail's first column is not the colour its seam is claimed in, \
-                     and that column is the seam the rail is parted from the transcript band by"
+                     and that column parts the rail from the transcript band on every row of it, \
+                     whether a plane stands under the band or not"
                 );
                 for x in rail.x + 1..rail.right() {
                     let wanted = match placement.places() {
@@ -1424,30 +1434,66 @@ fn a_seam_is_claimed_in_the_one_edge_ink_where_no_plane_stands() {
 }
 
 #[test]
-fn a_band_a_plane_is_placed_under_gives_its_seam_cell_to_the_pixels() {
+fn the_rails_first_column_carries_the_edge_ink_under_a_plane() {
     let palette = Palette::TRUECOLOR;
     let own = palette.ground(None).bg.expect("the terminal's own ground");
+    let (_, placement) = parted_bands(&palette, CELL)
+        .into_iter()
+        .find(|(axis, _)| *axis == Axis::Down)
+        .expect("the rail's band, parted down the column between it and the transcript");
 
-    for (axis, placement) in parted_bands(&palette, CELL) {
-        let area = placement.cells();
-        let mut buffer = Buffer::empty(area);
+    assert!(
+        placement.places(),
+        "the terminal places a picture under the rail, so its cells are the pixels it is read \
+         through and the groove the plane draws is no separation on its own"
+    );
+    let mut buffer = Buffer::empty(placement.cells());
+    placement.claim(&mut buffer, &palette);
+    let (_, seam) = placement.seam().expect("the seam the band is parted by");
 
-        assert!(
-            placement.places(),
-            "the terminal places a picture under the band, and a seam's cell is a pixel of it"
+    for y in seam.y..seam.bottom() {
+        assert_eq!(
+            under(&buffer, seam.x, y),
+            palette.edge_ink(),
+            "row {y} of the rail's first column is claimed in something other than the edge ink: \
+             the seam runs down every row of the band it parts, picture or none"
         );
-        placement.claim(&mut buffer, &palette);
-        let (_, seam) = placement.seam().expect("the seam the band is parted by");
+        assert_eq!(
+            under(&buffer, seam.x + 1, y),
+            own,
+            "row {y} of the column beside the seam is not the terminal's own ground, so the rail's \
+             plane is read through no cell there"
+        );
+    }
+}
 
-        for y in seam.y..seam.bottom() {
-            for x in seam.x..seam.right() {
-                assert_eq!(
-                    under(&buffer, x, y),
-                    own,
-                    "the {axis:?} seam's cell at row {y}, column {x} is claimed in a colour of \
-                     its own, so the pixels the seam is drawn in are read through no cell"
-                );
-            }
+#[test]
+fn the_composers_head_row_is_read_through_the_planes_pixels() {
+    let palette = Palette::TRUECOLOR;
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
+    let (axis, placement) = parted_bands(&palette, CELL)
+        .into_iter()
+        .find(|(axis, _)| *axis == Axis::Across)
+        .expect("the composer's band, headed by the row that parts it from the rail");
+
+    assert!(
+        placement.places(),
+        "the terminal places a picture under the composer's band, and its head row carries the \
+         count the draft is read by"
+    );
+    let mut buffer = Buffer::empty(placement.cells());
+    placement.claim(&mut buffer, &palette);
+    let (_, seam) = placement.seam().expect("the seam the band is parted by");
+
+    for y in seam.y..seam.bottom() {
+        for x in seam.x..seam.right() {
+            assert_eq!(
+                under(&buffer, x, y),
+                own,
+                "the {axis:?} seam's cell at row {y}, column {x} is claimed in a colour of its \
+                 own, so the count standing over the plane's own pixels is read over a cell \
+                 instead"
+            );
         }
     }
 }

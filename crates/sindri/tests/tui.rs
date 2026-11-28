@@ -4007,8 +4007,8 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     assert_eq!(
         u32::from(columns),
         u32::from(Rail::columns(COLS)),
-        "and the plane covers the rail's own columns and no column of the transcript's: the \
-         seam beside it is drawn in the plane's own pixels"
+        "and the plane covers the rail's own columns and no column of the transcript's: the seam \
+         stands in the rail's first cell, down every row of its band"
     );
     assert_eq!(
         rows,
