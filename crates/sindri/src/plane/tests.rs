@@ -1038,73 +1038,61 @@ fn the_carets_light_dies_away_either_side_of_the_caret() {
 }
 
 #[test]
-fn a_transcripts_light_crowns_its_head_and_falls_to_the_well_by_its_third_row() {
+fn a_transcripts_well_is_flat_under_a_prompt() {
     for (spelling, palette) in SPELLED {
-        let area = Rect::new(0, 0, 20, 6);
-        let placement = Placement::transcript(area, Some(CELL), &palette)
-            .expect("a band the plane stands under");
-        let plane = drawn(placement);
-        let peak = palette.peak(Band::Well);
-        let (width, height) = plane.pixels().dimensions();
-        let down = CELL.height();
-        let lit = |x: u32, y: u32| light_over(&placement, &plane, x, y);
-
-        assert_eq!(
-            (width, height),
-            (
-                u32::from(area.width) * CELL.width(),
-                u32::from(area.height) * down
-            ),
-            "{spelling} draws the transcript's plane at other than the pixels of the cells the \
-             band stands on, and a plane covers the band whose shade it is drawn from"
-        );
-        for x in 0..width {
-            assert_eq!(
-                lit(x, 0),
-                i32::from(peak),
-                "{spelling} draws column {x} of the plane's first pixel row at {} channels over \
-                 the well where the band's head is lit to the {peak} it spends: the head of the \
-                 band is where a page's light falls, and it falls on every column of it",
-                lit(x, 0)
+        for cell in [CELL, CellSize::new(12, 12)] {
+            let area = Rect::new(0, 0, 20, 6);
+            let prompt = Placement::prompt(
+                1,
+                crate::rows::plate(area),
+                3,
+                0,
+                area.height,
+                Some(cell),
+                &palette,
+            )
+            .expect("a plate the plane stands under");
+            let transcript = drawn(
+                Placement::transcript(area, Some(cell), &palette)
+                    .expect("a band the plane stands under"),
             );
-        }
-        for x in [0, width / 2, width - 1] {
-            for y in 1..height {
-                assert!(
-                    lit(x, y) <= lit(x, y - 1) + DITHER_STEP,
-                    "{spelling} draws pixel row {y} of column {x} at {} channels over the well \
-                     where the row above it carries {}: the crown falls away from the band's head \
-                     by the pixel and never steps back up it",
-                    lit(x, y),
-                    lit(x, y - 1)
-                );
-            }
-        }
-        let second = lit(0, down);
-        assert!(
-            second > 0 && second < i32::from(peak),
-            "{spelling} draws the second cell row at {second} channels over the well where the head \
-             carries {peak}: the light is neither the head's own nor spent at the cell's boundary, \
-             so it falls through the pixels of a row instead of stepping by the row",
-        );
-        assert!(
-            lit(0, 2 * down - 1) < i32::from(peak) / 4,
-            "{spelling} draws the last pixel row of the band's second cell at {} channels over the \
-             well: the crown is all but spent by the foot of that row",
-            lit(0, 2 * down - 1)
-        );
-        for row in 2..area.height {
-            for y in 0..down {
+            let plate = drawn(prompt);
+            let well = spelled(palette.band(Band::Well));
+            let pixel = |plane: &Plane, x: u32, y: u32| {
+                let pixel = plane.pixels().get_pixel(x, y);
+                [pixel[0], pixel[1], pixel[2]]
+            };
+            let (width, height) = transcript.pixels().dimensions();
+
+            assert_eq!(
+                (width, height),
+                (
+                    u32::from(area.width) * cell.width(),
+                    u32::from(area.height) * cell.height()
+                ),
+                "{spelling} draws the transcript's plane at other than the pixels of the cells the \
+                 band stands on, and a plane covers the band whose shade it is drawn from"
+            );
+            for y in 0..height {
                 for x in 0..width {
-                    let carried = lit(x, u32::from(row) * down + y);
+                    let carried = pixel(&transcript, x, y);
                     assert_eq!(
-                        carried, 0,
-                        "{spelling} draws pixel row {y} of cell row {row} of the transcript's \
-                         band at {carried} channels over the well: the prose is read on the well, \
-                         and the light has fallen back to it by the band's third row"
+                        carried, well,
+                        "{spelling} draws pixel row {y}, column {x} of the transcript's plane at \
+                         {carried:?} where the well is {well:?}: the well is one tone at every row \
+                         whatever stands on it, and the columns a prompt's plate leaves empty at \
+                         the band's edge are that tone at the band's first row as at every row \
+                         below it"
                     );
                 }
             }
+            let last = u32::from(prompt.cells().right()) * cell.width() - 1;
+            assert_ne!(
+                pixel(&plate, last, cell.height()),
+                well,
+                "{spelling} draws the last column of the prompt's plate at the well's own tone, so \
+                 the plate has no edge against the columns the well leaves empty beside it"
+            );
         }
     }
 }

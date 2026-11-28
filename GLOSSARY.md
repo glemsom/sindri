@@ -306,18 +306,18 @@ of the cell rather than in whole cells: the image a frame holds against that ban
 makes only when the shade moves. Every pixel of it is the **Rung** the cell row it falls in is drawn
 on with light added or taken away, never a blend of two rungs, and the light it carries is at most
 the most its rung can take while every ink the palette spells keeps its floor on the lit pixel — at
-the share its band names of that most, and a lamp a pixel reads rather than a row: the transcript
-band's crowned at its head and fallen back to the well by its third row, and the **Rail**'s centred
-on **Sindri's face**, brightest at it and gone by the rail's own margin on both axes, with no step
-of it visible between two pixels. A band's joint is a light that goes the other way: a shadow at the
-joint and a hairline on the band's own edge, at one weight on both axes. A
-submitted **Prompt** holds a bounded plane inside its occupied footprint, with corners at its
-actual ends, a warm rim, upper-edge light and shallow shadow. This decoration uses the prompt
-rung's proved lift, adds no rows, and leaves words and Fold counts in native cells. A band plane
-covers the band's own columns and no column of the band beside it, and a frame holds one image
-under each band, one under each **Instrument**, each by its own identity,
-placed at one depth that a cell carrying a background still wins over. A terminal that places no picture, or a band in a palette
-with no colour, is given none, and the band's own rows are claimed from its shade.
+the share its band names of that most, and a lamp a pixel reads rather than a row: none under the
+transcript, whose well is one flat tone at every row whatever stands on it, and the **Rail**'s
+centred on **Sindri's face**, brightest at it and gone by the rail's own margin on both axes, with
+no step of it visible between two pixels. A band's joint is a light that goes the other way: a
+shadow at the joint and a hairline on the band's own edge, at one weight on both axes. A submitted
+**Prompt** holds a bounded plane inside its occupied footprint, with corners at its actual ends, a
+warm rim, upper-edge light and shallow shadow. This decoration uses the prompt rung's proved lift,
+adds no rows, and leaves words and Fold counts in native cells. A band plane covers the band's own
+columns and no column of the band beside it, and a frame holds one image under each band, one under
+each **Instrument**, each by its own identity, placed at one depth that a cell carrying a
+background still wins over. A terminal that places no picture, or a band in a palette with no
+colour, is given none, and the band's own rows are claimed from its shade.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer, blend
 
 **Held**:
