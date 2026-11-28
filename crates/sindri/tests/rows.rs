@@ -2343,6 +2343,22 @@ fn a_closed_calls_row_states_the_count_alone_and_never_the_words_a_fold_says() {
     );
 }
 
+fn closed_and_kept_nothing(cols: u16, exit: Exit) -> Vec<Row> {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(cols, Surface::none(), None));
+    rows.push(call(1));
+    rows.push(Entry::Result {
+        turn: 1,
+        id: None,
+        name: SecretSet::default().redact("bash"),
+        text: SecretSet::default().redact(""),
+        bytes: 0,
+        elapsed_ms: 2,
+        exit: Some(exit),
+    });
+    rows.rows(0).to_vec()
+}
+
 #[test]
 fn a_call_that_keeps_nothing_back_states_no_count_at_all() {
     let mut rows = Rows::new();
@@ -2354,6 +2370,20 @@ fn a_call_that_keeps_nothing_back_states_no_count_at_all() {
         "  │ … bash running ls",
         "a call still out holds nothing back, so it says no count and keeps the words it said"
     );
+
+    for cols in 1..=80 {
+        for exit in [Exit::Code(0), Exit::Code(1), Exit::Signalled] {
+            let drawn: Vec<String> = closed_and_kept_nothing(cols, exit)
+                .iter()
+                .map(|row| said(&painted(row, row.width().max(cols))))
+                .collect();
+            assert!(
+                !drawn.iter().any(|row| row.contains("⋯0")),
+                "a call that closed and kept nothing back states no count at all, where a count \
+                 of none is the row saying it hides nothing: {cols} columns, {exit:?}, {drawn:?}"
+            );
+        }
+    }
 }
 
 #[test]

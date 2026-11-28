@@ -931,6 +931,7 @@ fn call_row(
     cols: u16,
     ground: Option<&Ground>,
 ) -> Row {
+    let kept = kept.filter(|kept| *kept > 0);
     let (marker, ink, outcome) = tool_outcome(exit, elapsed_ms);
     let outcome = if outcome.is_empty() {
         outcome
@@ -2290,3 +2291,6 @@ pub struct Piece {
     pub skip: usize,
     pub rows: u16,
 }
+
+#[cfg(test)]
+mod tests;
