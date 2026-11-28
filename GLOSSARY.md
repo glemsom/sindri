@@ -361,10 +361,10 @@ drawn as a fall into the shadow at the joint that ends in a hairline lifted off 
 on: the **Rail**'s first column down every row it claims, and the row that heads the **Composer**'s
 band, across the frame. The two meet where they meet, and the rail's band runs to the composer's
 head row and dies in it. The fall stands in the band's own **Plane**, and the rail's first column
-is claimed in the edge ink on every row of its band whether a plane stands under it or not, while
-the row that heads the composer's band is read over the plane's pixels, because the count that row
-carries sits there. A palette that spells no colour rules the seam in the dim ink instead, and a
-strip parts nothing and draws none.
+is claimed in the edge ink on every row of its band whether a plane stands under it or not, the fall
+drawn under that ink where one does, while the row that heads the composer's band is read over the
+plane's pixels, because the count that row carries sits there. A palette that spells no colour rules
+the seam in the dim ink instead, and a strip parts nothing and draws none.
 _Avoid_: Border, divider, crease, gutter
 
 **Instrument**:

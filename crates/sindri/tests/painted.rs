@@ -17,7 +17,7 @@ use sindri::mark::Cell;
 use sindri::palette::{Band, Palette};
 use sindri::pen::{self, Clip};
 use sindri::pointer::Pointer;
-use sindri::rows::Scroll;
+use sindri::rows::{MARGIN, Scroll};
 use sindri::view::{Transcript, View};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -486,14 +486,24 @@ fn every_row_of_a_pictured_rail_carries_the_edge_ink_on_its_first_column() {
         .layout()
         .expect("a pass that drew a frame hands back the frame it laid out");
     let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+    let (label, column) = drawn.drawn_at("wire");
 
+    assert!(
+        (rail.y..rail.bottom()).contains(&label),
+        "the rail's wire is not drawn in the rail's own band: {label}"
+    );
+    assert_eq!(
+        column,
+        rail.x + MARGIN,
+        "the rail's first label opens on another column than the margin the seam leaves it: a \
+         fact of the rail moves by a column and the band narrows by one"
+    );
     for y in rail.y..rail.bottom() {
         assert_eq!(
             drawn.cell(rail.x, y).bg,
             palette.edge_ink(),
             "row {y} of the rail's first column is not the edge ink on a frame the terminal \
-             places a picture on, where the groove in the plane's own pixels is the whole \
-             separation between the two bands"
+             places a picture on, where the cell grid is the only thing that parts the two bands"
         );
         assert_eq!(
             drawn.glyph(rail.x, y),

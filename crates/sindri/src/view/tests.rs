@@ -7168,12 +7168,11 @@ fn the_transcript_keeps_every_column_the_rail_leaves_it_and_falls_into_no_crease
 }
 
 #[test]
-fn the_two_frames_part_the_rail_in_one_ink_and_the_composers_head_row_each_in_its_own() {
+fn the_rails_first_column_is_the_edge_ink_whether_a_picture_is_placed_or_not() {
     let (pictured, told) = seamed_frame(true, 120, 40);
     let (placeless, without) = seamed_frame(false, 120, 40);
     let palette = Palette::TRUECOLOR;
     let laid = laid_out(&told);
-    let own = palette.ground(None).bg.expect("the terminal's own ground");
 
     assert_eq!(
         laid_out(&without).transcript,
@@ -7181,22 +7180,32 @@ fn the_two_frames_part_the_rail_in_one_ink_and_the_composers_head_row_each_in_it
         "a terminal that places a picture and one that places none part the same bands"
     );
     let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
-    let band = laid.composer;
     for (frame, spelling) in [
         (&pictured, "a terminal that places a picture"),
         (&placeless, "a terminal that places none"),
     ] {
-        for y in rail.y..band.y {
+        for y in rail.y..laid.composer.y {
             assert_eq!(
                 under(frame, rail.x, y),
                 palette.edge_ink(),
-                "row {y} of the seam in the frame {spelling} is drawn on is claimed in another \
-                 colour: the rail's first column is the edge ink on every row of its band, \
-                 whether a plane stands under it or not"
+                "row {y} of the rail's first column in the frame {spelling} is drawn on is \
+                 claimed in another colour: that column parts the two bands on every row of the \
+                 band it opens"
             );
         }
     }
-    for (frame, spelling, head) in [
+}
+
+#[test]
+fn the_row_that_heads_the_composer_is_read_over_the_planes_pixels_where_one_is_placed() {
+    let (pictured, told) = seamed_frame(true, 120, 40);
+    let (placeless, _) = seamed_frame(false, 120, 40);
+    let palette = Palette::TRUECOLOR;
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
+    let laid = laid_out(&told);
+    let head = laid.composer.y;
+
+    for (frame, spelling, claimed) in [
         (&pictured, "a terminal that places a picture", own),
         (
             &placeless,
@@ -7206,11 +7215,11 @@ fn the_two_frames_part_the_rail_in_one_ink_and_the_composers_head_row_each_in_it
     ] {
         for x in frame.area.x..frame.area.right() {
             assert_eq!(
-                under(frame, x, band.y),
-                head,
-                "column {x} of the seam's row in the frame {spelling} is drawn on is claimed in \
-                 another colour: the row that heads the composer's band is read over the plane's \
-                 pixels, because the count it carries sits there"
+                under(frame, x, head),
+                claimed,
+                "column {x} of the row that heads the composer's band in the frame {spelling} is \
+                 drawn on is claimed in another colour: the count that row carries is read over \
+                 the plane's pixels where one is placed, and over the ink where none is"
             );
         }
     }

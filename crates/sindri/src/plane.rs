@@ -1058,8 +1058,7 @@ impl Placement {
                 },
                 ground,
             );
-            // The row that heads a band placing a picture carries words read over its pixels;
-            // the rail's first column carries no word, so the cell grid parts the bands there.
+            // The count the composer's head row carries is read over the plane's pixels.
             match (axis, places) {
                 (Axis::Across, true) => pen::claim(buffer, taken, ground),
                 _ => seam_cell(buffer, taken, axis, palette),

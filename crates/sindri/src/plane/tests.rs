@@ -1448,6 +1448,11 @@ fn the_rails_first_column_carries_the_edge_ink_under_a_plane() {
          through and the groove the plane draws is no separation on its own"
     );
     let mut buffer = Buffer::empty(placement.cells());
+    pen::claim(
+        &mut buffer,
+        placement.cells(),
+        palette.ground(Some(Band::Rail)),
+    );
     placement.claim(&mut buffer, &palette);
     let (_, seam) = placement.seam().expect("the seam the band is parted by");
 
@@ -1482,19 +1487,21 @@ fn the_composers_head_row_is_read_through_the_planes_pixels() {
          count the draft is read by"
     );
     let mut buffer = Buffer::empty(placement.cells());
+    pen::claim(
+        &mut buffer,
+        placement.cells(),
+        palette.ground(Some(Band::Prompt)),
+    );
     placement.claim(&mut buffer, &palette);
     let (_, seam) = placement.seam().expect("the seam the band is parted by");
 
-    for y in seam.y..seam.bottom() {
-        for x in seam.x..seam.right() {
-            assert_eq!(
-                under(&buffer, x, y),
-                own,
-                "the {axis:?} seam's cell at row {y}, column {x} is claimed in a colour of its \
-                 own, so the count standing over the plane's own pixels is read over a cell \
-                 instead"
-            );
-        }
+    for x in seam.x..seam.right() {
+        assert_eq!(
+            under(&buffer, x, seam.y),
+            own,
+            "column {x} of the {axis:?} seam's row is claimed in a colour of its own, so the \
+             count standing over the plane's own pixels is read over a cell instead"
+        );
     }
 }
 
