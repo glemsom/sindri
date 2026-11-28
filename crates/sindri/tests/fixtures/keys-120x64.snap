@@ -50,7 +50,7 @@ keys at 120x64
 44 |                        │ ›                    the sigil a Prompt opens on                     │                        | dim:25 plain:22 muted:27 plain:21 dim:25
 45 |                        │ │                    the lane a thought and its work are set in      │                        | dim:25 plain:1 dim:21 muted:42 plain:6 dim:25
 46 |                        │ ▏                    the bar a fence and a quote stand beside        │                        | dim:25 plain:1 dim:21 muted:40 plain:8 dim:25
-47 |                        │ ⋯                    how many rows a Fold keeps back: ⋯3             │                        | dim:25 plain:1 dim:21 muted:35 plain:13 dim:25
+47 |                        │ ⋯                    how many rows a Call keeps back: ⋯3             │                        | dim:25 plain:1 dim:21 muted:35 plain:13 dim:25
 48 |                        │ ✓                    a Call that settled well, and a run that ended  │                        | dim:25 plain:1 ok:21 muted:46 plain:2 dim:25
 49 |                        │ ✗                    a Call that failed, and a run that stopped      │                        | dim:25 plain:1 err:21 muted:42 plain:6 dim:25
 50 |                        │ …                    a Call still running, or a word cut short       │                        | dim:25 plain:1 dim:21 muted:41 plain:7 dim:25

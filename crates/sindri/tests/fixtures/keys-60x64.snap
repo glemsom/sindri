@@ -52,7 +52,7 @@ keys at 60x64
 46 |│                      set in                              │| dim:1 plain:1 dim:21 muted:6 plain:30 dim:1
 47 |│ ▏                    the bar a fence and a quote stand   │| dim:1 plain:1 dim:21 muted:33 plain:3 dim:1
 48 |│                      beside                              │| dim:1 plain:1 dim:21 muted:6 plain:30 dim:1
-49 |│ ⋯                    how many rows a Fold keeps back: ⋯3 │| dim:1 plain:1 dim:21 muted:35 plain:1 dim:1
+49 |│ ⋯                    how many rows a Call keeps back: ⋯3 │| dim:1 plain:1 dim:21 muted:35 plain:1 dim:1
 50 |│ ✓                    a Call that settled well, and a run │| dim:1 plain:1 ok:21 muted:35 plain:1 dim:1
 51 |│                      that ended                          │| dim:1 plain:1 ok:21 muted:10 plain:26 dim:1
 52 |│ ✗                    a Call that failed, and a run that  │| dim:1 plain:1 err:21 muted:34 plain:2 dim:1

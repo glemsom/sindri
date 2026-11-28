@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 pulse-live at 120x40
 00 |┃›where does rendering live?                                                  state     ⠹ running                       | dim:1 plain:77 dim:10 accent:9 plain:23
-01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯ 4 rows kept back                                                                   | dim:4 ok:2 dim:5 plain:17 dim:25 plain:67
+01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯4                                                                                   | dim:4 ok:2 dim:5 plain:17 dim:9 plain:83
 02 |                                                                              wire      anthropic                       | plain:78 dim:10 plain:32
 03 |  Rendering lives in the front end and not in the core, because an entry      model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
 04 |  is a fact and never a rendering: the TUI and any reader draw one run        think     high                            | plain:78 dim:10 plain:32

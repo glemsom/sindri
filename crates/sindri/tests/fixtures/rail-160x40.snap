@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 rail at 160x40
 00 |┃›where does rendering live?                                                                                          state     ⠹ running                       | dim:1 plain:117 dim:10 accent:9 plain:23
-01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯ 4 rows kept back                                                                                                           | dim:4 ok:2 dim:5 plain:17 dim:25 plain:107
+01 |  │ ✓ bash rg -n 'fence' src 23 ms ⋯4                                                                                                                           | dim:4 ok:2 dim:5 plain:17 dim:9 plain:123
 02 |                                                                                                                      wire      anthropic                       | plain:118 dim:10 plain:32
 03 |  Rendering lives in the front end and not in the core, because an entry is a fact and never a rendering: the TUI     model     claude-sonnet-4-5-20250929      | plain:118 dim:10 plain:32
 04 |  and any reader draw one run from one value, and the core may not name a terminal at all.                            think     high                            | plain:118 dim:10 plain:32

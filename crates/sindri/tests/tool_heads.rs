@@ -375,7 +375,7 @@ fn closed_result_fold_hides_byte_detail_until_opened() {
     let shown = frame::painted(&mut view, 80, 24);
     assert!(!(0..24).any(|y| shown.row(y).contains("bytes")));
     let row = (0..24)
-        .find(|y| shown.row(*y).contains("rows kept back"))
+        .find(|y| shown.row(*y).contains('\u{22ef}'))
         .unwrap();
     view.drag(Cell::new(row, 2), Cell::new(row, 60));
     frame::painted(&mut view, 80, 24);
@@ -562,7 +562,8 @@ fn settled_call_keeps_only_its_log_row_until_opened() {
     let shown = frame::painted(&mut view, 80, 24);
     let words = shown.text("tools");
     assert!(words.contains("printf hello"), "{words}");
-    assert!(words.contains("rows kept back"), "{words}");
+    assert!(words.contains("\u{22ef}"), "{words}");
+    assert!(!words.contains("rows kept back"), "{words}");
     assert!(!words.contains("success"), "{words}");
     assert!(!words.contains("987 bytes"), "{words}");
     assert_eq!(view.key(Key::Fold), Outcome::Edited);
@@ -603,13 +604,15 @@ fn closed_head_prioritizes_the_command_and_kept_count_at_six_measures() {
         let shown = frame::painted(&mut view, width, 24);
         let row = (0..24)
             .map(|y| shown.row(y))
-            .find(|row| row.contains("rows kept back"))
+            .find(|row| row.contains('\u{22ef}'))
             .unwrap();
         assert!(row.contains("printf"), "{row}");
         assert!(row.contains("✓"), "{row}");
         if width <= 60 {
             assert!(!row.contains("bash"), "{row}");
             assert!(!row.contains("1.2 s"), "{row}");
+        }
+        if width <= 50 {
             assert!(row.contains('…'), "{row}");
         }
     }
@@ -670,13 +673,14 @@ fn closed_heads_keep_numeric_disclosure_and_fit_even_when_fixed_facts_do_not() {
                 let head = &rows.rows(0)[0];
                 assert!(head.width() <= width, "{width}: {head:?}");
                 let closed = head.glyphs();
-                let digits = closed
-                    .split_whitespace()
-                    .filter(|word| word.chars().all(|glyph| glyph.is_ascii_digit()))
-                    .collect::<Vec<_>>();
-                assert!(!digits.is_empty(), "{width}: {closed}");
+                let count = closed.rsplit(' ').next().unwrap_or_default();
+                let digits: String = count.chars().filter(char::is_ascii_digit).collect();
+                assert!(
+                    !digits.is_empty() && count.ends_with(&digits),
+                    "{width}: {closed}"
+                );
                 if name == "bash" && width == 40 {
-                    assert!(closed.ends_with("⋯ 3 rows kept back"), "{closed}");
+                    assert!(closed.ends_with("⋯3"), "{closed}");
                 }
             }
         }

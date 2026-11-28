@@ -2330,7 +2330,7 @@ fn failed_result_discloses_recorded_diagnostic_before_its_output_fold() {
         );
         let closed = frame::painted(&mut view, 120, 40);
         let (diagnostic, _) = closed.drawn_at("error: permission denied");
-        let (fold, _) = closed.drawn_at("9 rows kept back");
+        let (fold, _) = closed.drawn_at("\u{22ef}9");
         assert!(diagnostic > fold);
     }
 }
@@ -2523,7 +2523,7 @@ fn huge_opened_results_stay_bounded_through_scroll_and_resize_without_pictures()
         Transcript::of(disclosed_result(sindri_core::run::Exit::Code(1), &words)),
     );
     let folded = frame::painted(&mut view, 120, 40);
-    let (y, x) = folded.drawn_at("rows kept back");
+    let (y, x) = folded.drawn_at("\u{22ef}");
     view.pointer(folded.told(), Pointer::Press(Cell::new(y, x)));
     assert_eq!(
         view.pointer(folded.told(), Pointer::Release(Cell::new(y, x))),
