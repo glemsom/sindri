@@ -372,7 +372,14 @@ fn a_scripted_answer_ends_the_run_as_final_and_the_record_holds_it() {
             Entry::Prompt {
                 text: safe.redact("triage this"),
             },
-            Entry::Turn { turn: 1 },
+            Entry::Turn {
+                turn: 1,
+                usage: Usage {
+                    input: Some(11),
+                    output: Some(7),
+                    ..Usage::default()
+                },
+            },
             Entry::Assistant {
                 turn: 1,
                 text: safe.redact("triaged"),
@@ -997,7 +1004,7 @@ fn turns_written(directory: &Path) -> Vec<u32> {
         .entries()
         .iter()
         .filter_map(|entry| match entry {
-            Entry::Turn { turn } => Some(*turn),
+            Entry::Turn { turn, .. } => Some(*turn),
             _ => None,
         })
         .collect()

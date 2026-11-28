@@ -5,12 +5,13 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::open::{Ground, Opening};
 use sindri_core::provider::Deltas;
-use sindri_core::records::Entry;
+use sindri_core::records::{Entry, Usage};
 use sindri_core::redact::Redacted;
 use sindri_core::run::{Exit, Stop};
 use sindri_core::tools::OPEN;
 
 use crate::ink::{Ink, Look};
+use crate::ledger;
 use crate::link::{Link, Links, Way};
 use crate::mark;
 use crate::markdown;
@@ -609,32 +610,79 @@ struct Tally {
     failed: usize,
     files: BTreeSet<String>,
     elapsed_ms: u64,
+    spent: Usage,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Rank {
+    Counted,
+    Files,
+    Time,
+    Bill,
 }
 
 impl Tally {
     fn words(&self, cols: u16) -> String {
-        let mut said: Vec<String> = Vec::new();
+        let mut said = self.facts();
+        while pen::cells(&said_words(&said)) > cols {
+            let Some(weakest) = said
+                .iter()
+                .map(|(rank, _)| *rank)
+                .filter(|rank| *rank > Rank::Counted)
+                .max()
+            else {
+                break;
+            };
+            said.retain(|(rank, _)| *rank != weakest);
+        }
+        said_words(&said)
+    }
+
+    fn facts(&self) -> Vec<(Rank, String)> {
+        let mut said = Vec::new();
         if self.calls > 0 {
-            said.push(format!("{} call{}", self.calls, plural(self.calls)));
+            said.push((
+                Rank::Counted,
+                format!("{} call{}", self.calls, plural(self.calls)),
+            ));
         }
         if self.failed > 0 {
-            said.push(format!("{} failed", self.failed));
+            said.push((Rank::Counted, format!("{} failed", self.failed)));
         }
         if !self.files.is_empty() {
-            said.push(format!(
-                "{} file{}",
-                self.files.len(),
-                plural(self.files.len())
+            said.push((
+                Rank::Files,
+                format!("{} file{}", self.files.len(), plural(self.files.len())),
             ));
         }
         if self.elapsed_ms > 0 {
-            said.push(took(self.elapsed_ms));
+            said.push((Rank::Time, took(self.elapsed_ms)));
         }
-        while said.len() > 1 && pen::cells(&said.join(" · ")) > cols {
-            said.pop();
+        if let Some(bill) = self.bill() {
+            said.push((Rank::Bill, bill));
         }
-        said.join(" · ")
+        said
     }
+
+    fn bill(&self) -> Option<String> {
+        let said: Vec<String> = [(self.spent.input, "in"), (self.spent.output, "out")]
+            .into_iter()
+            .filter_map(|(count, unit)| {
+                count.map(|count| format!("{} {unit}", ledger::tokens(count)))
+            })
+            .collect();
+        match said.is_empty() {
+            true => None,
+            false => Some(said.join(" · ")),
+        }
+    }
+}
+
+fn said_words(said: &[(Rank, String)]) -> String {
+    said.iter()
+        .map(|(_, words)| words.as_str())
+        .collect::<Vec<&str>>()
+        .join(" · ")
 }
 
 fn took(ms: u64) -> String {
@@ -1857,6 +1905,9 @@ impl Rows {
                 if let Some(path) = spell::file(&name.to_string(), &arguments.to_string()) {
                     tally.files.insert(path);
                 }
+            }
+            if let What::Fact(Entry::Turn { usage, .. }) = &held.what {
+                tally.spent.charge(usage);
             }
             if let Some(Entry::Result {
                 elapsed_ms, exit, ..

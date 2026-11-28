@@ -391,12 +391,18 @@ fn every_turn_written_moves_the_turn_count_the_document_keeps() {
     assert_eq!(
         transcript.entries(),
         [
-            Entry::Turn { turn: 1 },
+            Entry::Turn {
+                turn: 1,
+                usage: Usage::default()
+            },
             Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("one file."),
             },
-            Entry::Turn { turn: 2 },
+            Entry::Turn {
+                turn: 2,
+                usage: Usage::default()
+            },
             Entry::Assistant {
                 turn: 2,
                 text: SecretSet::default().redact("two files."),
@@ -404,6 +410,45 @@ fn every_turn_written_moves_the_turn_count_the_document_keeps() {
         ]
     );
     assert_eq!(transcript.skipped(), 0, "nothing was skipped");
+}
+
+#[test]
+fn a_turn_writes_the_usage_it_was_charged_and_reads_back_with_it() {
+    let ground = Ground::new();
+    let session = ground.session();
+    let mut record = ground.record(&session);
+    let spent = Usage {
+        input: Some(48_200),
+        output: Some(3_100),
+        ..Usage::default()
+    };
+    let mut turn = Turn::answered(1, "triage this", "one file.");
+    turn.usage = spent;
+
+    record.wrote(&turn).expect("a turn is written whole");
+
+    let written = lines(&session.directory().join("transcript.jsonl"));
+    assert_eq!(
+        written,
+        vec![
+            json!({
+                "kind": "turn",
+                "turn": 1,
+                "usage": {"input": 48_200, "output": 3_100},
+            }),
+            json!({"kind": "assistant", "turn": 1, "text": "one file."}),
+        ],
+        "a turn's own spend is written on the entry the drawing leaves out: {written:?}"
+    );
+    let transcript = read_transcript(session.directory()).expect("the transcript reads");
+    assert_eq!(
+        transcript.entries()[0],
+        Entry::Turn {
+            turn: 1,
+            usage: spent
+        },
+        "and the spend survives the read"
+    );
 }
 
 #[test]
@@ -608,7 +653,10 @@ fn a_line_written_before_calls_held_an_identity_still_reads_as_an_entry() {
     assert_eq!(
         transcript.entries(),
         [
-            Entry::Turn { turn: 1 },
+            Entry::Turn {
+                turn: 1,
+                usage: Usage::default()
+            },
             Entry::Call {
                 turn: 1,
                 id: None,
@@ -806,7 +854,10 @@ fn a_turn_written_and_read_back_shows_every_entry_kind_a_turn_can_produce() {
     assert_eq!(
         transcript.entries(),
         [
-            Entry::Turn { turn: 1 },
+            Entry::Turn {
+                turn: 1,
+                usage: Usage::default()
+            },
             Entry::Call {
                 turn: 1,
                 id: Some(secrets.redact("toolu_1")),
@@ -871,7 +922,7 @@ fn the_session_numbers_a_turn_after_the_turns_the_prompts_before_it_counted() {
         .entries()
         .iter()
         .filter_map(|entry| match entry {
-            Entry::Turn { turn } | Entry::Assistant { turn, .. } => Some(*turn),
+            Entry::Turn { turn, .. } | Entry::Assistant { turn, .. } => Some(*turn),
             _ => None,
         })
         .collect();
@@ -998,7 +1049,10 @@ fn a_call_the_run_never_answered_is_written_as_the_call_it_was() {
     assert_eq!(
         transcript.entries(),
         [
-            Entry::Turn { turn: 1 },
+            Entry::Turn {
+                turn: 1,
+                usage: Usage::default()
+            },
             Entry::Call {
                 turn: 1,
                 id: Some(secrets.redact("toolu_1")),
@@ -1264,7 +1318,10 @@ fn a_running_state_appends_no_stop_to_the_transcript() {
     assert_eq!(
         transcript.entries(),
         [
-            Entry::Turn { turn: 1 },
+            Entry::Turn {
+                turn: 1,
+                usage: Usage::default()
+            },
             Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("one file."),
@@ -1486,12 +1543,18 @@ fn a_kind_this_build_does_not_know_is_skipped_and_the_rest_loads() {
     assert_eq!(
         transcript.entries(),
         [
-            Entry::Turn { turn: 1 },
+            Entry::Turn {
+                turn: 1,
+                usage: Usage::default()
+            },
             Entry::Assistant {
                 turn: 1,
                 text: SecretSet::default().redact("one file."),
             },
-            Entry::Turn { turn: 2 },
+            Entry::Turn {
+                turn: 2,
+                usage: Usage::default()
+            },
             Entry::Assistant {
                 turn: 2,
                 text: SecretSet::default().redact("two files."),
@@ -1520,7 +1583,10 @@ fn a_known_kind_ignores_fields_this_build_has_never_heard_of() {
     let transcript = read_transcript(session.directory()).expect("the transcript reads");
     assert_eq!(
         transcript.entries(),
-        [Entry::Turn { turn: 7 }],
+        [Entry::Turn {
+            turn: 7,
+            usage: Usage::default()
+        }],
         "a field this build does not know is ignored, not refused"
     );
     assert_eq!(transcript.skipped(), 0);
@@ -1758,7 +1824,10 @@ fn a_killed_run_still_reads() {
     let entries = transcript.entries();
     let expected = |turn: u32| {
         vec![
-            Entry::Turn { turn },
+            Entry::Turn {
+                turn,
+                usage: Usage::default(),
+            },
             Entry::Call {
                 turn,
                 id: Some(SecretSet::default().redact("toolu_1")),

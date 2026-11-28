@@ -45,8 +45,9 @@ _Avoid_: Session ID, conversation ID, durable memory
 **Exchange**:
 The band's unit: the prompt wearing the sigil it was asked with, what the run did under it, and the
 answer. That work is no row of the band while the run fills it — each thought, call, result and
-answer it went past standing as its own row — and one row once it has ended, counting them. That row
-is the reader's to open, and a result inside an opened work keeps the fold of its own.
+answer it went past standing as its own row — and one row once it has ended, counting them in its
+**Tally**. That row is the reader's to open, and a result inside an opened work keeps the fold of
+its own.
 _Avoid_: Pair, round, item, Activity, Trace, Log
 
 **Prompt**:
@@ -59,6 +60,15 @@ _Avoid_: Query, question, input
 One request to the model and the tool calls it asks for. Not a unit of progress, and no row of the
 band: the record writes one for every turn the run took and the drawing leaves it out.
 _Avoid_: Step, iteration, wave
+
+**Tally**:
+What a settled **Exchange**'s one row states of the work under it: its calls, the ones that
+failed, the files they named, the time they took, and the bill its **Turns** spent — the input and
+the output the record holds for each, in the numbers the **Rail** spells its own spend in. Its
+facts are ranked, so a narrow band gives up the bill, then the time, then the files, and never a
+count of calls or of failures. A record whose turns spent nothing states no bill, and a row relaid
+at another width claims what it claimed.
+_Avoid_: Count (that one is the **Fold**'s), spend (the **Rail**'s), stats, totals
 
 **Witness**:
 What a **Run**'s loop reports to: the phase it is in and the turn it is on as it goes, each finished
@@ -423,7 +433,7 @@ _Avoid_: Text box, input box, editor, entry field
 **Bill**:
 What one draft would send, counted: the files its words name in the workspace, and the command it
 opens with. A draft that names no file and opens with no command bills nothing.
-_Avoid_: Count, tally, stats
+_Avoid_: Count, tally (that one is a settled **Exchange**'s), stats
 
 **Draft count**:
 The **Bill**, drawn on the far edge of the **Composer**'s head row, hanging in the **Margin** and

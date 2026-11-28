@@ -71,7 +71,7 @@ impl Ground {
 
 fn walk(entry: &Entry) -> Vec<(&'static str, String)> {
     match entry {
-        Entry::Turn { turn } => vec![("turn", turn.to_string())],
+        Entry::Turn { turn, .. } => vec![("turn", turn.to_string())],
         Entry::Call {
             turn,
             id,

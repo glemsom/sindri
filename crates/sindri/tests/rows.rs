@@ -26,7 +26,7 @@ use sindri_core::config::Config;
 use sindri_core::open::Ground;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
-use sindri_core::records::{Entry, Facts, Record, read_transcript, transcript_path};
+use sindri_core::records::{Entry, Facts, Record, Usage, read_transcript, transcript_path};
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Budget, Exit, Limits, Stop, Turn};
 use sindri_core::session::Session;
@@ -465,7 +465,7 @@ fn the_whole_height_costs_a_layout_only_for_what_it_has_not_seen() {
 fn every_row_but_a_fences_line_fits_the_width_it_was_laid_out_for() {
     let secrets = SecretSet::default();
     let entries = [
-        Entry::Turn { turn: 1000 },
+        turn(1000),
         Entry::Call {
             turn: 1,
             id: None,
@@ -954,7 +954,7 @@ fn a_prompt_opens_under_a_blank_row_unless_it_opens_the_band() {
 #[test]
 fn a_turn_draws_no_row_at_any_width() {
     for cols in [120, 40, 20, 8, 3, 1] {
-        let drawn = layout(&Entry::Turn { turn: 3 }, cols);
+        let drawn = layout(&turn(3), cols);
         assert!(
             drawn.is_empty(),
             "a turn is no row of the exchange at {cols} columns: {drawn:?}"
@@ -978,14 +978,14 @@ fn settled_frame(entries: Vec<Entry>, stop: &Stop, cols: u16, rows: u16) -> Vec<
 fn three_exchanges_are_three_prompts_and_three_answers_and_no_row_saying_a_run_ended() {
     let secrets = SecretSet::default();
     let mut entries = Vec::new();
-    for turn in 1..=3 {
+    for which in 1..=3 {
         entries.push(Entry::Prompt {
-            text: secrets.redact(format!("prompt {turn}")),
+            text: secrets.redact(format!("prompt {which}")),
         });
-        entries.push(Entry::Turn { turn });
+        entries.push(turn(which));
         entries.push(Entry::Assistant {
-            turn,
-            text: secrets.redact(format!("answer {turn}")),
+            turn: which,
+            text: secrets.redact(format!("answer {which}")),
         });
         entries.push(Entry::Stop { stop: Stop::Final });
     }
@@ -2027,6 +2027,13 @@ fn a_live_run_opens_the_answers_row_before_it_has_said_anything() {
     assert_eq!(rows.len(), 0);
 }
 
+fn turn(which: u32) -> Entry {
+    Entry::Turn {
+        turn: which,
+        usage: Usage::default(),
+    }
+}
+
 fn call(which: u32) -> Entry {
     call_of(which, None)
 }
@@ -2678,9 +2685,24 @@ fn asked_for(which: u32) -> Entry {
     }
 }
 
+fn spending(which: u32, input: u64, output: u64) -> Entry {
+    Entry::Turn {
+        turn: which,
+        usage: Usage {
+            input: Some(input),
+            output: Some(output),
+            ..Usage::default()
+        },
+    }
+}
+
 fn one_row_of(work: Vec<Entry>) -> Row {
+    one_row_of_at(work, 80)
+}
+
+fn one_row_of_at(work: Vec<Entry>, cols: u16) -> Row {
     let mut rows = Rows::new();
-    rows.measure(Measure::new(80, Surface::none(), None));
+    rows.measure(Measure::new(cols, Surface::none(), None));
     rows.push(asked_for(1));
     for entry in work {
         rows.push(entry);
@@ -2703,7 +2725,7 @@ fn a_settled_exchanges_work_is_one_row() {
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
-    rows.push(Entry::Turn { turn: 1 });
+    rows.push(turn(1));
     rows.push(thought(1));
     rows.push(call(1));
     rows.push(timed(1, 4_100));
@@ -2751,6 +2773,148 @@ fn a_settled_works_row_counts_its_calls_its_files_and_its_time() {
         "⋯ 12 calls · 3 files · 4.1 s",
         "the work's row says how many calls it made, how many files it read and how long they \
          took, in that order"
+    );
+}
+
+#[test]
+fn a_settled_works_row_states_the_bill_its_turns_spent() {
+    let work = vec![
+        spending(1, 30_000, 2_000),
+        reading(1, "a.rs"),
+        timed(1, 1_000),
+        spending(2, 18_200, 1_100),
+        call(2),
+        timed(2, 1_400),
+    ];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 2 calls · 1 file · 2.4 s · 48.2k in · 3.1k out",
+        "a settled work states what its turns spent, after everything they did, in the figures \
+         the rail spells its own spend in"
+    );
+}
+
+#[test]
+fn a_narrow_band_gives_up_the_bill_then_the_time_then_the_files_and_never_a_count() {
+    let work = || {
+        vec![
+            spending(1, 30_000, 2_000),
+            reading(1, "a.rs"),
+            timed(1, 1_000),
+            spending(2, 18_200, 1_100),
+            call(2),
+            timed(2, 1_400),
+        ]
+    };
+
+    let said: Vec<String> = [48, 36, 20, 10]
+        .into_iter()
+        .map(|cols| words(&one_row_of_at(work(), cols)))
+        .collect();
+
+    assert_eq!(
+        said,
+        [
+            "⋯ 2 calls · 1 file · 2.4 s · 48.2k in · 3.1k out",
+            "⋯ 2 calls · 1 file · 2.4 s",
+            "⋯ 2 calls · 1 file",
+            "⋯ 2 calls",
+        ],
+        "the row gives up its bill before its time and its time before its files, and never a \
+         count of calls or of failures: {said:?}"
+    );
+}
+
+#[test]
+fn a_narrow_band_keeps_a_failure_it_gives_up_the_time_and_the_bill_for() {
+    let work = vec![
+        spending(1, 48_200, 3_100),
+        call(1),
+        Entry::Result {
+            turn: 1,
+            id: None,
+            name: SecretSet::default().redact("bash"),
+            text: SecretSet::default().redact("exit 1\n"),
+            bytes: 7,
+            elapsed_ms: 2_400,
+            exit: Some(Exit::Code(1)),
+        },
+    ];
+
+    assert_eq!(
+        words(&one_row_of_at(work, 20)),
+        "⋯ 1 call · 1 failed",
+        "a band too narrow for the time and the bill states the failure it holds, because a \
+         failure count is never the fact a row gives up"
+    );
+}
+
+#[test]
+fn a_work_whose_turns_record_no_usage_bills_nothing() {
+    let work = vec![
+        turn(1),
+        reading(1, "a.rs"),
+        timed(1, 4_100),
+        turn(2),
+        call(2),
+    ];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 2 calls · 1 file · 4.1 s",
+        "a record written before a turn carried its spend states the counts and the time it \
+         states today, and no bill"
+    );
+}
+
+#[test]
+fn a_bill_of_one_figure_says_the_one_figure_the_record_holds() {
+    let work = vec![
+        Entry::Turn {
+            turn: 1,
+            usage: Usage {
+                input: Some(48_200),
+                ..Usage::default()
+            },
+        },
+        call(1),
+        timed(1, 4_100),
+    ];
+
+    assert_eq!(
+        words(&one_row_of(work)),
+        "⋯ 1 call · 4.1 s · 48.2k in",
+        "a turn the wire reported no output for bills the input alone rather than an output of \
+         nothing"
+    );
+}
+
+#[test]
+fn the_bill_a_row_states_is_the_records_figures_whatever_width_it_is_laid_at() {
+    let work = || {
+        vec![
+            spending(1, 30_000, 2_000),
+            call(1),
+            timed(1, 1_000),
+            spending(2, 18_200, 1_100),
+            call(2),
+            timed(2, 1_400),
+        ]
+    };
+
+    let wide = words(&one_row_of_at(work(), 120));
+    let narrow = words(&one_row_of_at(work(), 48));
+
+    assert_eq!(
+        wide, narrow,
+        "a relaid row claims what it claimed, because its facts are read from the record and \
+         never from the rows the band drew"
+    );
+    assert!(
+        wide.ends_with("· 48.2k in · 3.1k out"),
+        "the bill is the sum of the two turns' spend, spelled the way the rail spells its own: \
+         {wide}"
     );
 }
 
@@ -2847,7 +3011,7 @@ fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
-    rows.push(Entry::Turn { turn: 1 });
+    rows.push(turn(1));
     rows.push(thought(1));
     rows.push(call(1));
     rows.push(timed(1, 4_100));
@@ -2889,11 +3053,11 @@ fn a_run_of_two_turns_leaves_one_row_for_the_work_of_both() {
     rows.measure(Measure::new(80, Surface::none(), None));
     for entry in [
         asked_for(1),
-        Entry::Turn { turn: 1 },
+        turn(1),
         call(1),
         timed(1, 4_000),
         answer(1),
-        Entry::Turn { turn: 2 },
+        turn(2),
         call(2),
         timed(2, 100),
         answer(2),
@@ -2930,11 +3094,11 @@ fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
     rows.measure(Measure::new(80, Surface::none(), None));
     for entry in [
         asked_for(1),
-        Entry::Turn { turn: 1 },
+        turn(1),
         call(1),
         timed(1, 4_000),
         answer(1),
-        Entry::Turn { turn: 2 },
+        turn(2),
         call(2),
         timed(2, 100),
     ] {
@@ -2969,13 +3133,7 @@ fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
 fn a_work_settles_under_the_answer_that_ended_it() {
     let mut rows = Rows::new();
     rows.measure(Measure::new(80, Surface::none(), None));
-    for entry in [
-        asked_for(1),
-        Entry::Turn { turn: 1 },
-        call(1),
-        timed(1, 4_100),
-        answer(1),
-    ] {
+    for entry in [asked_for(1), turn(1), call(1), timed(1, 4_100), answer(1)] {
         rows.push(entry);
     }
     assert!(
@@ -3191,7 +3349,7 @@ fn an_exchange_that_did_no_work_draws_no_work_row() {
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
-    rows.push(Entry::Turn { turn: 1 });
+    rows.push(turn(1));
     rows.push(thought(1));
     rows.push(answer(1));
     rows.push(stop_entry(Stop::Final));
@@ -3333,7 +3491,7 @@ fn the_record_writes_a_turn_for_every_turn_while_the_band_draws_no_row_for_one()
         .entries()
         .iter()
         .filter_map(|entry| match entry {
-            Entry::Turn { turn } => Some(*turn),
+            Entry::Turn { turn, .. } => Some(*turn),
             _ => None,
         })
         .collect();

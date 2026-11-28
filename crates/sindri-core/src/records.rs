@@ -23,6 +23,8 @@ const STATUS: &str = "status.json";
 pub enum Entry {
     Turn {
         turn: u32,
+        #[serde(default, skip_serializing_if = "Usage::is_empty")]
+        usage: Usage,
     },
     Call {
         turn: u32,
@@ -173,7 +175,10 @@ impl Record {
     }
     pub fn wrote(&mut self, turn: &Turn) -> Result<(), RecordError> {
         let number = self.turns_before + turn.turn;
-        let opened = Entry::Turn { turn: number };
+        let opened = Entry::Turn {
+            turn: number,
+            usage: turn.usage,
+        };
         self.append(opened)?;
         for (at, call) in turn.calls.iter().enumerate() {
             let id = self.secrets.redact(call.id.clone());
