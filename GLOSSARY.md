@@ -294,9 +294,8 @@ _Avoid_: Layout, size, metrics, measurement
 
 **Fold**:
 An entry drawn as its head and one row counting the rows kept back, which the reader opens and folds
-again: a call's closed row, which states the rows it keeps back as `⋯3` (and one diagnostic when it
-failed), a result's body and a **Prompt**'s words under their heads, and the one row a settled
-**Exchange**'s work is drawn as. The head and the count are the same shape and the same words for every kind, and
+again: a call's closed row (and one diagnostic when it failed), a result's body and a **Prompt**'s
+words under their heads, and the one row a settled **Exchange**'s work is drawn as. The head and the count are the same shape and the same words for every kind, and
 the count is a fact of the **Measure** the rows were last laid at — so a width change re-lays it and
 never leaves a count that lies. A fold the reader opened is theirs, held on the entry, and no reflow
 closes it.
