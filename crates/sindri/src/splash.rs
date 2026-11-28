@@ -11,7 +11,7 @@ use crate::size::Sizes;
 
 const WORDMARK: &str = "sindri";
 
-const GLOSS: &str = "a GNU/Linux AI agent";
+const GLOSS: &str = "an AI agent for the terminal";
 
 const HANG: u16 = 2;
 

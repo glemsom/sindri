@@ -2088,7 +2088,7 @@ fn the_frame_a_launch_opens_on_is_a_wordmark_a_gloss_and_three_commands() {
         block(&splash(120, 40)),
         [
             "sindri",
-            "a GNU/Linux AI agent",
+            "an AI agent for the terminal",
             "",
             "/model     choose the model",
             "/settings  show every setting with its value",
@@ -2295,7 +2295,7 @@ fn a_splash_screen_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
         let words = wrapped.split_whitespace().collect::<Vec<&str>>().join(" ");
 
         for line in [
-            "a GNU/Linux AI agent",
+            "an AI agent for the terminal",
             "choose the model",
             "show every setting with its value",
             "start a new conversation",

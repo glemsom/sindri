@@ -11,7 +11,7 @@ boot at 80x24
 05 |                                                                                | plain:80
 06 |                                                                                | plain:80
 07 |                  sindri                                                        | plain:18 accent+bold:6 plain:56
-08 |                  a GNU/Linux AI agent                                          | plain:80
+08 |                  an AI agent for the terminal                                  | plain:80
 09 |                                                                                | plain:80
 10 |                  /model     choose the model                                   | plain:18 accent:11 dim:16 plain:35
 11 |                  /settings  show every setting with its value                  | plain:18 accent:11 dim:33 plain:18

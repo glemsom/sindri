@@ -19,7 +19,7 @@ splash-sized-160x40 at 160x40
 13 |                                                                                                                                                                | plain:160
 14 |                                                                                                                                                                | plain:160
 15 |                                    sindri                                                                                                                      | plain:36 accent+bold:6 plain:118
-16 |                                    a GNU/Linux AI agent                                                                                                        | plain:160
+16 |                                    an AI agent for the terminal                                                                                                | plain:160
 17 |                                                                                                                                                                | plain:160
 18 |                                    /model     choose the model                                                                                                 | plain:36 accent:11 dim:16 plain:97
 19 |                                    /settings  show every setting with its value                                                                                | plain:36 accent:11 dim:33 plain:80

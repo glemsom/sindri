@@ -6,7 +6,7 @@ boot-face-small at 120x14
 00 |                                                                                                                        | plain:120
 01 |                                                                                                                        | plain:120
 02 |                sindri                                                                                                  | plain:16 accent+bold:6 plain:98
-03 |                a GNU/Linux AI agent                                                                                    | plain:120
+03 |                an AI agent for the terminal                                                                            | plain:120
 04 |                                                                                                                        | plain:120
 05 |                /model     choose the model                                                                             | plain:16 accent:11 dim:16 plain:77
 06 |                /settings  show every setting with its value                                                            | plain:16 accent:11 dim:33 plain:60

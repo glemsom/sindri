@@ -19,7 +19,7 @@ boot at 120x40
 13 |                                                                                                                        | plain:120
 14 |                                                                                                                        | plain:120
 15 |                sindri                                                                                                  | plain:16 accent+bold:6 plain:98
-16 |                a GNU/Linux AI agent                                                                                    | plain:120
+16 |                an AI agent for the terminal                                                                            | plain:120
 17 |                                                                                                                        | plain:120
 18 |                /model     choose the model                                                                             | plain:16 accent:11 dim:16 plain:77
 19 |                /settings  show every setting with its value                                                            | plain:16 accent:11 dim:33 plain:60
