@@ -3632,7 +3632,12 @@ fn one_row_that_landed_is_said_in_the_singular() {
 }
 
 fn unthumbed(buffer: &Buffer, y: u16) -> String {
-    drawn_row(buffer, y).chars().skip(1).collect()
+    let column = usize::from(buffer.area.right().saturating_sub(MARGIN));
+    drawn_row(buffer, y)
+        .chars()
+        .enumerate()
+        .map(|(at, glyph)| if at == column { ' ' } else { glyph })
+        .collect()
 }
 
 #[test]
@@ -3928,10 +3933,15 @@ fn a_page_up_at_the_first_row_stops_there_rather_than_wrapping_to_the_tail() {
     let head = painted(&mut view, 120, 40);
     let first = drawn_row(&head, 0);
     assert!(
-        first.starts_with(&format!("{THUMB} turn 1 ")),
-        "the transcript's first row stands at the top of the band with the thumb in the cell \
-             the row's gutter gave up and the row's own words past it, so a reader who paged back \
-             sees where they stand over the row they stand on: {first:?}"
+        first.starts_with("\u{2502} turn 1 "),
+        "the transcript's first row stands at the top of the band with the thought's own bar in \
+             its gutter and its own words past it: {first:?}"
+    );
+    assert_eq!(
+        first.chars().nth(usize::from(120 - MARGIN)),
+        Some(THUMB),
+        "and the thumb stands in the margin the band keeps at its right edge, so a reader who \
+             paged back sees where they stand beside the row they stand on: {first:?}"
     );
     for _ in 0..3 {
         assert_eq!(
@@ -4192,7 +4202,7 @@ fn the_draft_is_set_in_the_column_an_answers_prose_opens_in() {
     );
 }
 
-fn field(rows: u16) -> Buffer {
+fn field(rows: u16) -> (Buffer, Painted) {
     let mut text = String::from(
         "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n\
          ![a tall field](tall.svg)\n",
@@ -4215,7 +4225,7 @@ fn field(rows: u16) -> Buffer {
         }])
         .scrolled(Scroll::Back(70)),
     );
-    painted(&mut view, 120, rows)
+    painted_and_told(&mut view, 120, rows)
 }
 
 fn placed_row(buffer: &Buffer, from: u16, to: u16) -> Option<u16> {
@@ -4227,7 +4237,8 @@ fn placed_row(buffer: &Buffer, from: u16, to: u16) -> Option<u16> {
 #[test]
 fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
     let rows = 130;
-    let buffer = field(rows);
+    let (buffer, told) = field(rows);
+    let band = laid_out(&told).transcript;
 
     let over =
         placed_row(&buffer, 0, rows).expect("a band this tall places the tall field over a row");
@@ -4238,31 +4249,31 @@ fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
              cut, and the reader is handed a thumb where the tall field should be"
     );
     assert!(
-        thumb_rows(&buffer).is_empty(),
+        thumb_rows(&buffer, band).is_empty(),
         "a band this tall holds the whole history, so no thumb is drawn over any row of it"
     );
 }
 
 #[test]
-fn the_thumb_keeps_its_cell_on_a_row_whose_picture_was_refused() {
-    let buffer = field(40);
+fn the_thumb_keeps_its_place_on_a_row_whose_picture_was_refused() {
+    let (buffer, told) = field(40);
+    let band = laid_out(&told).transcript;
 
-    let over = (0..40)
+    let over = (band.y..band.bottom())
         .find(|y| drawn_row(&buffer, *y).contains("a diagram outside the workspace"))
         .expect("the refused picture's words stand on a row of the band");
-    let row = drawn_row(&buffer, over);
     assert!(
-        row.starts_with(THUMB),
+        thumb_rows(&buffer, band).contains(&over),
         "row {over} stands on the block the picture outside the workspace was refused over and \
-             carries no byte of it: giving its first cell up leaves the reader a hole in the thumb \
-             for a picture that is not there, where every other row of the thumb says where they \
-             stand"
+             carries no byte of it: a row that places no picture keeps the thumb's column, where \
+             every other row of the thumb says where the reader stands"
     );
 }
 
-fn thumb_rows(buffer: &Buffer) -> Vec<u16> {
-    (buffer.area.y..buffer.area.bottom())
-        .filter(|y| drawn_row(buffer, *y).starts_with(THUMB))
+fn thumb_rows(buffer: &Buffer, band: Rect) -> Vec<u16> {
+    let column = band.right().saturating_sub(MARGIN);
+    (band.y..band.bottom())
+        .filter(|y| glyph_at(buffer, column, *y) == THUMB)
         .collect()
 }
 
@@ -4275,17 +4286,19 @@ fn scrolled(count: u32, scroll: Scroll) -> View {
 }
 
 #[test]
-fn a_frame_off_the_tail_draws_the_thumb_in_the_gutter_for_the_rows_the_geometry_says() {
-    let at_tail = painted(&mut turns(80), 120, 40);
+fn a_frame_off_the_tail_draws_the_thumb_in_the_margin_for_the_rows_the_geometry_says() {
+    let (at_tail, tail_told) = painted_and_told(&mut turns(80), 120, 40);
+    let tail_band = laid_out(&tail_told).transcript;
     assert_eq!(
-        thumb_rows(&at_tail),
+        thumb_rows(&at_tail, tail_band),
         Vec::<u16>::new(),
         "a frame at the tail draws no thumb: the reader follows the newest rows, and a \
              thumb there would sit on them"
     );
 
-    let head = painted(&mut scrolled(80, Scroll::Back(44)), 120, 40);
-    let thumb = thumb_rows(&head);
+    let (head, told) = painted_and_told(&mut scrolled(80, Scroll::Back(44)), 120, 40);
+    let band = laid_out(&told).transcript;
+    let thumb = thumb_rows(&head, band);
     assert_eq!(
         thumb,
         (0..16).collect::<Vec<u16>>(),
@@ -4294,24 +4307,31 @@ fn a_frame_off_the_tail_draws_the_thumb_in_the_gutter_for_the_rows_the_geometry_
              the band at the head"
     );
     assert_eq!(
-        look_at(&head, &Palette::TRUECOLOR, 0, thumb[0]).ink(),
+        look_at(&head, &Palette::TRUECOLOR, band.right() - MARGIN, thumb[0]).ink(),
         Ink::Dim,
-        "the thumb is a dim cell of the gutter, and not a word's ink"
+        "the thumb is a dim cell of the frame's margin, and not a word's ink"
+    );
+    assert_eq!(
+        glyph_at(&head, band.x, thumb[0]),
+        '\u{2502}',
+        "and the column the row's gutter stands in keeps the thought's own bar: the thumb \
+             states where the reader stands without drawing over a row they are reading"
     );
 }
 
 #[test]
 fn the_thumb_follows_the_window_down_the_frame() {
-    let middle = painted(&mut scrolled(80, Scroll::Back(22)), 120, 40);
+    let (middle, told) = painted_and_told(&mut scrolled(80, Scroll::Back(22)), 120, 40);
+    let band = laid_out(&told).transcript;
     assert_eq!(
-        thumb_rows(&middle),
+        thumb_rows(&middle, band),
         (10..26).collect::<Vec<u16>>(),
         "half way from the head to the tail stands the thumb half way down the band"
     );
 
-    let foot = painted(&mut scrolled(80, Scroll::Back(1)), 120, 40);
+    let (foot, told) = painted_and_told(&mut scrolled(80, Scroll::Back(1)), 120, 40);
     assert_eq!(
-        thumb_rows(&foot),
+        thumb_rows(&foot, laid_out(&told).transcript),
         (20..36).collect::<Vec<u16>>(),
         "one row off the tail stands the thumb at the foot of the band, so the reader sees it \
              arrive there"
@@ -4319,32 +4339,141 @@ fn the_thumb_follows_the_window_down_the_frame() {
 }
 
 #[test]
-fn the_thumb_takes_no_column_the_words_were_drawn_in() {
-    let at_tail = painted(&mut turns(80), 120, 40);
-    let off = painted(&mut scrolled(80, Scroll::Back(7)), 120, 40);
-    let words =
-        |buffer: &Buffer, y: u16| -> String { drawn_row(buffer, y).chars().skip(2).collect() };
+fn the_thumb_stands_in_the_margins_first_column_and_touches_no_measured_cell() {
+    for (cols, back) in [(120, 44), (120, 7), (80, 3), (40, 1)] {
+        let (buffer, told) = painted_and_told(&mut scrolled(80, Scroll::Back(back)), cols, 40);
+        let band = laid_out(&told).transcript;
+        let column = band.right() - MARGIN;
+        let mut found = Vec::new();
+        for y in buffer.area.y..buffer.area.bottom() {
+            for x in buffer.area.x..buffer.area.right() {
+                if glyph_at(&buffer, x, y) == THUMB {
+                    found.push((x, y));
+                }
+            }
+        }
 
-    let beside = thumb_rows(&off);
-    assert!(
-        !beside.is_empty(),
-        "the frame off the tail drew no thumb, so nothing is proven about the words it stands \
-             beside"
-    );
-    for y in beside {
         assert!(
-            (0..40).any(|other| words(&at_tail, other) == words(&off, y)),
-            "the row the thumb stands beside, row {y}, reads as no row of this transcript at \
-                 the tail: the cell past the gutter was written over a word"
+            !found.is_empty(),
+            "a frame {back} rows off the tail at {cols} columns drew no thumb, so nothing is \
+                 proven about the columns it takes"
+        );
+        for (x, y) in found {
+            assert_eq!(
+                x, column,
+                "the thumb stands at row {y}, column {x} of a {cols} column frame whose band \
+                     measures its rows short of column {column}: the thumb takes a column the \
+                     band's words are measured in, and draws over them"
+            );
+            assert!(
+                y >= band.y && y < band.bottom(),
+                "the thumb stands at row {y} of a frame whose band runs from row {} to row {}: \
+                     an indicator drawn past the band covers another band's rows",
+                band.y,
+                band.bottom()
+            );
+        }
+    }
+}
+
+#[test]
+fn a_row_that_carries_a_cut_mark_and_the_thumb_never_contend_for_a_cell() {
+    let (buffer, told) = painted_and_told(&mut cut_and_thumb(), 40, 40);
+    let band = laid_out(&told).transcript;
+    let thumb = thumb_rows(&buffer, band);
+    let cut = (band.y..band.bottom())
+        .filter(|y| glyph_at(&buffer, band.right() - 1, *y) == '\u{2026}')
+        .collect::<Vec<u16>>();
+
+    assert!(
+        !cut.is_empty(),
+        "a fence line wider than the band was drawn whole, so no row of it carries the cut mark \
+             this frame is about: {:?}",
+        (band.y..band.bottom())
+            .map(|y| drawn_row(&buffer, y))
+            .collect::<Vec<String>>()
+    );
+    for y in cut {
+        assert!(
+            thumb.contains(&y),
+            "row {y} carries the cut mark and stands in the thumb's own span, so the two are \
+                 read beside each other rather than on one cell"
+        );
+        assert_eq!(
+            glyph_at(&buffer, band.right() - MARGIN, y),
+            THUMB,
+            "row {y} keeps the band's last column for the cut mark and gives the margin's first \
+                 to the thumb"
         );
     }
+}
+
+#[test]
+fn the_thumb_stands_in_the_margin_on_a_band_with_no_colour_and_a_band_with_no_picture() {
+    let column = |band: Rect| band.right() - MARGIN;
+    let (coloured, told) = painted_and_told(&mut scrolled(80, Scroll::Back(44)), 120, 40);
+    let coloured_band = laid_out(&told).transcript;
+
+    let (flat, told) = painted_and_told(&mut slotted(Scroll::Back(44)), 120, 40);
+    let flat_band = laid_out(&told).transcript;
+    assert_eq!(
+        thumb_rows(&flat, flat_band),
+        thumb_rows(&coloured, coloured_band),
+        "a band that spells no colour draws the thumb over the rows a coloured one does"
+    );
+    assert_eq!(
+        look_at(&flat, &Palette::SLOTS, column(flat_band), 0).ink(),
+        Ink::Dim,
+        "and the cell it stands on is the dim ink that palette spells, so the thumb reads without \
+             a colour to read it in"
+    );
+
+    let (pictured, told) = painted_and_told(&mut pictured_band(Scroll::Back(44)), 120, 40);
+    let pictured_band = laid_out(&told).transcript;
+    assert_eq!(
+        thumb_rows(&pictured, pictured_band),
+        thumb_rows(&coloured, coloured_band),
+        "a band a terminal places pictures on draws the thumb over the rows a band it places none \
+             on does"
+    );
+}
+
+fn slotted(scroll: Scroll) -> View {
+    View::of(
+        inked(Palette::SLOTS),
+        Facts::default().asked(),
+        Transcript::of((1..=80).map(thought)).scrolled(scroll),
+    )
+}
+
+fn pictured_band(scroll: Scroll) -> View {
+    View::of(
+        pictured(),
+        Facts::default().asked(),
+        Transcript::of((1..=80).map(thought)).scrolled(scroll),
+    )
+}
+
+fn cut_and_thumb() -> View {
+    let mut entries = vec![Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact(
+            "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_the_model_wrote_it\n```",
+        ),
+    }];
+    entries.extend((1..=40).map(thought));
+    View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(entries).scrolled(Scroll::Back(u32::MAX)),
+    )
 }
 
 #[test]
 fn a_frame_too_narrow_for_a_gutter_draws_no_thumb() {
     let narrow = painted(&mut scrolled(80, Scroll::Back(44)), 2, 40);
     assert_eq!(
-        thumb_rows(&narrow),
+        thumb_rows(&narrow, narrow.area),
         Vec::<u16>::new(),
         "a band too narrow for a gutter keeps its words and gives the thumb up"
     );
@@ -4378,7 +4507,7 @@ fn a_band_that_leaves_a_row_no_gutter_keeps_its_word_and_gives_up_the_thumb() {
     let buffer = wide(5);
 
     assert_eq!(
-        thumb_rows(&buffer),
+        thumb_rows(&buffer, buffer.area),
         Vec::<u16>::new(),
         "five columns leave a wide glyph no room beside the gutter, so the row gives the \
              gutter up and the thumb has no column of its own to stand in"
@@ -4399,7 +4528,7 @@ fn a_band_that_leaves_a_row_no_gutter_keeps_its_word_and_gives_up_the_thumb() {
 
     let roomy = wide(6);
     assert!(
-        !thumb_rows(&roomy).is_empty(),
+        !thumb_rows(&roomy, roomy.area).is_empty(),
         "and six columns hold the gutter beside that glyph, so the thumb is drawn again"
     );
 }
