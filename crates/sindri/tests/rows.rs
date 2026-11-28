@@ -2315,6 +2315,92 @@ fn an_argument_no_tool_spells_is_drawn_as_words_and_never_as_punctuation() {
     );
 }
 
+#[test]
+fn a_closed_calls_row_states_the_count_alone_and_never_the_words_a_fold_says() {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(80, Surface::none(), None));
+    rows.push(call(1));
+    rows.push(result(1, Exit::Code(1)));
+
+    let drawn = painted(&rows.rows(0)[0], 80);
+    assert_eq!(
+        said(&drawn),
+        "  │ ✗ bash exit 1 ls 2 ms ⋯4",
+        "a closed call says how many rows it holds back in one glyph and its number, so the \
+         command is the widest thing on the row"
+    );
+    assert_eq!(
+        cell_inks(&drawn)[drawn.len() - 2..],
+        [Ink::Dim, Ink::Dim],
+        "and the count wears the dim ink of the fold's own note, in the place on the row it wore it"
+    );
+    assert!(
+        !said(&drawn).contains("rows"),
+        "the words a fold's count row says are no part of a call's own row: {:?}",
+        said(&drawn)
+    );
+}
+
+#[test]
+fn a_call_that_keeps_nothing_back_states_no_count_at_all() {
+    let mut rows = Rows::new();
+    rows.measure(Measure::new(80, Surface::none(), None));
+    rows.push(call(1));
+
+    assert_eq!(
+        said(&painted(&rows.rows(0)[0], 80)),
+        "  │ … bash running ls",
+        "a call still out holds nothing back, so it says no count and keeps the words it said"
+    );
+}
+
+#[test]
+fn a_band_too_narrow_for_the_glyph_states_the_number_alone_and_then_nothing() {
+    let drawn_at = |cols: u16| {
+        let mut rows = Rows::new();
+        rows.measure(Measure::new(cols, Surface::none(), None));
+        rows.push(call(1));
+        rows.push(result(1, Exit::Code(1)));
+        painted(&rows.rows(0)[0], cols)
+    };
+
+    assert_eq!(
+        said(&drawn_at(20)),
+        "  │ ✗ exit 1 ls ⋯4",
+        "a band that holds the count after a clipped command states the glyph and its number"
+    );
+    assert_eq!(
+        said(&drawn_at(10)),
+        "✗ ⋯6",
+        "a band with room for the count alone states the glyph and its number"
+    );
+    assert_eq!(
+        said(&drawn_at(4)),
+        "✗ 15",
+        "one with no room for the glyph states the number alone"
+    );
+    assert_eq!(
+        said(&drawn_at(3)),
+        "✗",
+        "and one with room for the number either states no count at all, never the words that \
+         say how much it hides"
+    );
+
+    for cols in 0..=40 {
+        let drawn = drawn_at(cols);
+        let said = said(&drawn);
+        assert!(
+            !said.contains("rows") && !said.contains("kept back"),
+            "no width a call's row is laid at wraps to say how much it hides: {cols} columns, \
+             {said:?}"
+        );
+        assert!(
+            drawn.len() <= usize::from(cols),
+            "and no width is drawn past by the count it states: {cols} columns, {said:?}"
+        );
+    }
+}
+
 fn unpunctuated(row: &str) -> bool {
     !row.chars()
         .any(|glyph| matches!(glyph, '{' | '}' | '[' | ']' | '"' | ':' | ','))
@@ -2341,7 +2427,7 @@ fn a_call_wears_the_mark_its_verdict_settled_on_and_no_mark_before_one() {
     let settled = painted(&rows.rows(0)[0], 80);
     assert_eq!(
         said(&settled),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯4",
         "a call a result settled on wears the cross of its verdict and the name it was called by"
     );
     assert_eq!(cell_inks(&settled)[4], Ink::Err);
@@ -3035,8 +3121,7 @@ fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
         "and the call the result settled: {laid:?}"
     );
     assert!(
-        laid.iter()
-            .any(|row| row == "  │ ✓ bash ls 4.1 s ⋯ 5 rows kept back"),
+        laid.iter().any(|row| row == "  │ ✓ bash ls 4.1 s ⋯5"),
         "and the closed call counts its withheld result: {laid:?}"
     );
     assert!(
@@ -3183,7 +3268,7 @@ fn one_key_opens_the_newest_settled_works_row_and_the_same_key_closes_it_again()
 
     let opened: Vec<String> = rows.rows(1).iter().map(words).collect();
     assert_eq!(
-        opened[0], "  │ ✓ bash ls 4.1 s ⋯ 5 rows kept back",
+        opened[0], "  │ ✓ bash ls 4.1 s ⋯5",
         "the opened work is drawn under the prompt as its entries are: {opened:?}"
     );
     assert_eq!(
@@ -3554,12 +3639,12 @@ fn a_transcript_whose_calls_hold_no_identity_pairs_each_result_with_the_call_bef
     assert_eq!(rows.len(), 3, "the turn and the two calls it holds");
     assert_eq!(
         said(&painted(&rows.rows(1)[1], 80)),
-        "  │ ✓ bash ls 2 ms ⋯ 5 rows kept back",
+        "  │ ✓ bash ls 2 ms ⋯5",
         "with no identity to pair by, the first result settles the first call"
     );
     assert_eq!(
         said(&painted(&rows.rows(2)[0], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯4",
         "and the second settles the second, so a session from either side of this change draws"
     );
 }
@@ -3594,12 +3679,12 @@ fn a_transcript_of_two_calls_pairs_them_by_identity_when_it_is_read_back() {
     assert_eq!(rows.len(), 3, "the turn and the two calls it holds");
     assert_eq!(
         said(&painted(&rows.rows(1)[1], 80)),
-        "  │ ✓ bash ls 2 ms ⋯ 5 rows kept back",
+        "  │ ✓ bash ls 2 ms ⋯5",
         "the identity survives the file it is written to, so the call it names settles here"
     );
     assert_eq!(
         said(&painted(&rows.rows(2)[0], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯4",
         "and the call below it takes its own result, read back in the other order"
     );
 }
@@ -3714,7 +3799,7 @@ fn a_cancelled_call_is_a_row_and_not_a_dangling_spinner() {
 
     assert_eq!(
         said(&settled),
-        "  │ ✗ bash cancelled ls 2 ms ⋯ 4 rows kept back",
+        "  │ ✗ bash cancelled ls 2 ms ⋯4",
         "the row the cancelled call settles on says what stopped it"
     );
     assert_eq!(cell_inks(&settled)[4], Ink::Err);
@@ -3732,12 +3817,12 @@ fn a_wave_of_calls_settles_its_rows_in_the_order_the_run_wrote_them() {
     assert_eq!(rows.len(), 2, "two calls, two rows");
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "  │ ✓ bash ls 2 ms ⋯ 5 rows kept back",
+        "  │ ✓ bash ls 2 ms ⋯5",
         "the first result settles the first call"
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯4",
         "and the second settles the second"
     );
 }
@@ -3754,13 +3839,13 @@ fn a_result_settles_the_call_it_names_when_a_turn_holds_two_calls_to_one_tool() 
     assert_eq!(rows.len(), 2, "two calls, two rows");
     assert_eq!(
         said(&painted(&rows.rows(0)[0], 80)),
-        "  │ ✓ bash ls 2 ms ⋯ 5 rows kept back",
+        "  │ ✓ bash ls 2 ms ⋯5",
         "the first call wears the verdict of the result that named it, though that result landed \
          after the one that named the call below it"
     );
     assert_eq!(
         said(&painted(&rows.rows(1)[0], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯4",
         "and the second call wears the verdict of its own result, so neither is guessed"
     );
 }
@@ -3855,7 +3940,7 @@ fn settling_a_call_lays_that_entry_again_and_leaves_the_history_alone() {
     }
     assert_eq!(
         said(&painted(&rows.rows(settled_at)[1], 80)),
-        "  │ ✗ bash exit 1 ls 2 ms ⋯ 4 rows kept back",
+        "  │ ✗ bash exit 1 ls 2 ms ⋯4",
         "and the entry the call opened is the one that was laid again"
     );
     assert_eq!(

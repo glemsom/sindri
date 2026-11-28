@@ -107,7 +107,7 @@ pub fn marks() -> [Mark; 10] {
         Mark::new(
             KEPT.to_string(),
             Ink::Dim,
-            "how many rows a Fold keeps back: ⋯3",
+            "how many rows a Call keeps back: ⋯3",
         ),
         Mark::new(
             CHECK.to_string(),
@@ -931,7 +931,7 @@ fn call_row(
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
-    let count = kept.map_or_else(String::new, |kept| format!(" {KEPT} {kept} rows kept back"));
+    let count = kept.map_or_else(String::new, |kept| format!(" {KEPT}{kept}"));
     let mut tool = format!("{name} ");
     let mut duration = elapsed_ms.map_or_else(String::new, |ms| format!(" {}", took(ms)));
     let room = margin(INDENT, cols).1;
@@ -946,27 +946,18 @@ fn call_row(
     }
     let fixed = pen::cells(&format!("{tool}{outcome}{duration}{count}"));
     if fixed > room {
-        let words = kept.map_or_else(
-            || {
-                if room <= 2 {
-                    command.chars().take(usize::from(room)).collect()
-                } else {
-                    clip_head(&format!("{outcome}{command}"), room)
-                }
-            },
-            |kept| {
-                let full = format!("{KEPT} {kept} rows kept back");
-                let compact = format!("{KEPT} {kept}");
-                if pen::cells(&full) <= room {
-                    full
-                } else if pen::cells(&compact) <= room {
-                    compact
-                } else {
-                    kept.to_string()
-                }
-            },
-        );
-        return marked(&marker.to_string(), ink, vec![(words, Ink::Dim)], cols)
+        let row = match kept.and_then(|kept| count_alone(kept, room)) {
+            Some(count) => marked(&marker.to_string(), ink, vec![(count, Ink::Dim)], cols),
+            None if kept.is_some() => marked(&marker.to_string(), ink, Vec::new(), cols),
+            None => {
+                let words = match room <= 2 {
+                    true => command.chars().take(usize::from(room)).collect(),
+                    false => clip_head(&format!("{outcome}{command}"), room),
+                };
+                marked(&marker.to_string(), ink, vec![(words, Ink::Dim)], cols)
+            }
+        };
+        return row
             .fenced(INVOCATION_SOURCE, pen::cells(margin(INDENT, cols).0))
             .sourced(spell::source(name, arguments));
     }
@@ -993,6 +984,15 @@ fn call_row(
         ),
         None => row,
     }
+}
+
+fn count_alone(kept: usize, room: u16) -> Option<String> {
+    let compact = format!("{KEPT}{kept}");
+    if pen::cells(&compact) <= room {
+        return Some(compact);
+    }
+    let digits = kept.to_string();
+    (pen::cells(&digits) <= room).then_some(digits)
 }
 
 fn clip_head(words: &str, room: u16) -> String {
