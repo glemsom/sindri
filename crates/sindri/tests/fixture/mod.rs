@@ -1383,17 +1383,6 @@ fn turn(number: u32) -> Entry {
     }
 }
 
-fn spent(number: u32, input: u64, output: u64) -> Entry {
-    Entry::Turn {
-        turn: number,
-        usage: Usage {
-            input: Some(input),
-            output: Some(output),
-            ..Usage::default()
-        },
-    }
-}
-
 fn call(turn: u32, name: &str, arguments: &str) -> Entry {
     Entry::Call {
         turn,
