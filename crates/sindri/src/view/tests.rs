@@ -1550,7 +1550,7 @@ fn the_prompt_in_the_transcript_keeps_the_band_it_is_read_on_beside_the_seam() {
             .find(|y| drawn_row(&buffer, *y).contains("triage the retry test"))
             .expect("the frame draws the prompt the transcript opens on");
 
-        for x in laid.transcript.x..rail.x.saturating_sub(MARGIN) {
+        for x in laid.transcript.x..rail.x {
             assert_eq!(
                 under(&buffer, x, asked),
                 if draws {
@@ -1631,21 +1631,56 @@ fn a_prompts_row_claims_the_cells_the_plane_over_it_stands_on() {
     );
     assert_eq!(
         (start, end.saturating_add(1)),
-        (
-            placeless.transcript.x,
-            placeless.transcript.right().saturating_sub(MARGIN)
-        ),
-        "the prompt's row claims the transcript's columns bar the margin at its right edge: a plate \
-         that stops short of it or runs past it reads as a bright strip of the wrong width beside \
-         the well the words are read on"
+        (placeless.transcript.x, placeless.transcript.right()),
+        "the prompt's row claims the transcript's columns whole, its two last columns padding \
+         where the thumb and the cut mark stand: a plate that stops short of them or runs past \
+         the band reads as a bright strip of the wrong width beside the well the words are read on"
     );
     assert_eq!(
         (start, row, end - start + 1, 1),
         (plane.x, plane.y, plane.width, plane.height),
         "the plane over the prompt is placed on the very cells the row claims: the transcript's \
-         columns bar its right margin and the one row these words are read on, so a plane a column \
-         wider lightens ground that is no plate or leaves a plate lit by no picture, and one a row \
+         columns whole and the one row these words are read on, so a plane a column wider \
+         lightens ground that is no plate or leaves a plate lit by no picture, and one a row \
          taller lights ground that holds no words of this prompt"
+    );
+}
+
+#[test]
+fn a_prompts_plate_runs_the_transcript_band_whole_up_to_the_seam() {
+    let palette = Palette::TRUECOLOR;
+    let (bare, told) = painted_and_told(&mut asked_beside_a_rail(false), 192, 40);
+    let laid = laid_out(&told);
+    let band = laid.transcript;
+    let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+    let row = (band.y..band.bottom())
+        .find(|y| drawn_row(&bare, *y).contains("triage the retry test"))
+        .expect("the frame draws the prompt the transcript opens on");
+
+    for x in band.x..band.right() {
+        assert_eq!(
+            under(&bare, x, row),
+            palette.band(Band::Prompt),
+            "column {x} of the prompt's row is not the band the reader's own words are read on: \
+             the plate runs the band whole, so its two last columns are its own padding, where \
+             the thumb and the cut mark stand"
+        );
+    }
+    let drawn = drawn_row(&bare, row);
+    let at = drawn
+        .find("triage")
+        .expect("the frame draws the prompt's words inside the plate");
+    assert_eq!(
+        pen::cells(&drawn[..at]),
+        MARGIN,
+        "the plate is wider but the prompt's words keep the measure they were laid at: they \
+         still open on the sigil's column, two columns past the band's edge"
+    );
+    assert_eq!(
+        (band.right() - 1, rail.x, rail.x + MARGIN),
+        (147, 148, 150),
+        "in a frame 192 columns wide the plate ends on column 147, the seam stands in the column \
+         after it, and the rail's words open two columns past that"
     );
 }
 
