@@ -99,7 +99,7 @@ pub fn marks() -> [Mark; 10] {
             "the lane a thought and its work are set in",
         ),
         Mark::new(
-            markdown::FENCE.trim_end(),
+            markdown::BAR.trim_end(),
             Ink::Dim,
             "the bar a fence and a quote stand beside",
         ),

@@ -7,7 +7,7 @@ pub const KEY: Look = Look::plain(Ink::Plain).wearing(Faces::BOLD);
 
 pub const MEANING: Look = Look::plain(Ink::Muted);
 
-pub const MARKS: &str = "marks";
+pub const MARKS_HEADING: &str = "marks";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -528,7 +528,7 @@ impl Stack {
                 rows.extend(column.hung(binding.name, binding.does));
             }
         }
-        rows.push(list::whole(MARKS, Look::plain(Ink::Dim)));
+        rows.push(list::whole(MARKS_HEADING, Look::plain(Ink::Dim)));
         for mark in &marks {
             rows.extend(column.hung_in(mark.glyph(), Look::plain(mark.ink()), mark.says()));
         }
