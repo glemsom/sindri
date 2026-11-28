@@ -337,8 +337,9 @@ What a band sits on — and, for an **Instrument**, the rows it is drawn under: 
 its rows is claimed in and the cell of it the frame's
 **Seam** is drawn in — the transcript band on the well, the rail on its own tone on every row of it,
 the composer's band drawn in the band a prompt is read on and closing into the rail's tone on its
-last row; and the rail's first column and the composer's head row are the seam's, drawn in the
-plane's pixels. It holds every fact its **Plane** is drawn from and nothing else: for a bounded Prompt, its complete footprint and owning identity as well as
+last row; and the rail's first column and the composer's head row are the seam's — the column one
+cell of the frame's edge ink on every row, the row read over the plane's pixels. It holds every fact
+its **Plane** is drawn from and nothing else: for a bounded Prompt, its complete footprint and owning identity as well as
 its rung, rim and light, and a bounded portion of that footprint, with the visible crop
 inside that portion belonging only to Placement; the cell the plane
 is drawn at, the light its band carries — the peak it spends of the proved lift and the rect that
@@ -359,10 +360,11 @@ The one cell of the frame's pixels that parts two bands, on the axis that parts 
 drawn as a fall into the shadow at the joint that ends in a hairline lifted off the band it stands
 on: the **Rail**'s first column down every row it claims, and the row that heads the **Composer**'s
 band, across the frame. The two meet where they meet, and the rail's band runs to the composer's
-head row and dies in it. The fall stands in the band's own **Plane**, so a seam is claimed once, in
-the cells of the band it parts, and the cell the frame claims for it is the edge ink only where no
-plane stands — the count the head row carries is read over the pixels there. A palette that spells
-no colour rules the seam in the dim ink instead, and a strip parts nothing and draws none.
+head row and dies in it. The fall stands in the band's own **Plane**, and the rail's first column
+is claimed in the edge ink on every row of its band whether a plane stands under it or not, the fall
+drawn under that ink where one does, while the row that heads the composer's band is read over the
+plane's pixels, because the count that row carries sits there. A palette that spells no colour rules
+the seam in the dim ink instead, and a strip parts nothing and draws none.
 _Avoid_: Border, divider, crease, gutter
 
 **Instrument**:

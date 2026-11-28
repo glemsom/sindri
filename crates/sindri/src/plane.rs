@@ -1012,14 +1012,14 @@ impl Placement {
             return;
         }
         let area = self.cells;
-        if self.places() {
-            pen::claim(buffer, area, palette.ground(None));
-            return;
-        }
+        let places = self.places();
         let seam = self.seam();
         for row in 0..area.height {
             let y = area.y.saturating_add(row);
-            let ground = palette.over(self.shade.row(row));
+            let ground = match places {
+                true => palette.ground(None),
+                false => palette.over(self.shade.row(row)),
+            };
             let line = Rect {
                 y,
                 height: 1,
@@ -1058,7 +1058,11 @@ impl Placement {
                 },
                 ground,
             );
-            seam_cell(buffer, taken, axis, palette);
+            // The count the composer's head row carries is read over the plane's pixels.
+            match (axis, places) {
+                (Axis::Across, true) => pen::claim(buffer, taken, ground),
+                _ => seam_cell(buffer, taken, axis, palette),
+            }
         }
     }
 

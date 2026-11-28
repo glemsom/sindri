@@ -17,7 +17,7 @@ use sindri::mark::Cell;
 use sindri::palette::{Band, Palette};
 use sindri::pen::{self, Clip};
 use sindri::pointer::Pointer;
-use sindri::rows::Scroll;
+use sindri::rows::{MARGIN, Scroll};
 use sindri::view::{Transcript, View};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -471,6 +471,59 @@ fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
         laid.transcript.width < 120,
         "a frame beside a rail hands the transcript less than its own width: {laid:?}"
     );
+}
+
+#[test]
+fn every_row_of_a_pictured_rail_carries_the_edge_ink_on_its_first_column() {
+    let palette = Palette::TRUECOLOR;
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
+    let mut pictured = View::of(caps::kitty(), railed(), Transcript::of(turns(3)));
+    let mut cells = View::of(caps::inked(palette), railed(), Transcript::of(turns(3)));
+    let drawn = frame::painted(&mut pictured, 120, 40);
+    let twin = frame::painted(&mut cells, 120, 40);
+    let laid = drawn
+        .told()
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+    let (label, column) = drawn.drawn_at("wire");
+
+    assert!(
+        (rail.y..rail.bottom()).contains(&label),
+        "the rail's wire is not drawn in the rail's own band: {label}"
+    );
+    assert_eq!(
+        column,
+        rail.x + MARGIN,
+        "the rail's first label opens on another column than the margin the seam leaves it: a \
+         fact of the rail moves by a column and the band narrows by one"
+    );
+    for y in rail.y..rail.bottom() {
+        assert_eq!(
+            drawn.cell(rail.x, y).bg,
+            palette.edge_ink(),
+            "row {y} of the rail's first column is not the edge ink on a frame the terminal \
+             places a picture on, where the cell grid is the only thing that parts the two bands"
+        );
+        assert_eq!(
+            drawn.glyph(rail.x, y),
+            ' ',
+            "row {y} of the rail's first column stands a glyph on the column the bands are \
+             parted by, so the seam is read as a word"
+        );
+        assert_eq!(
+            drawn.cell(rail.x + 1, y).bg,
+            own,
+            "row {y} of the column beside the seam is not the terminal's own ground, so the rail's \
+             plane is not read through the cell it was placed on"
+        );
+        assert_eq!(
+            twin.cell(rail.x, y).bg,
+            drawn.cell(rail.x, y).bg,
+            "row {y} of the rail's first column is the edge ink on one of the two frames and \
+             another colour on the other, so the frames are parted differently"
+        );
+    }
 }
 
 #[test]

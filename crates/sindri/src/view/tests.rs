@@ -1749,14 +1749,19 @@ fn the_seam_runs_unbroken_under_the_face_and_the_rule_that_closes_it_opens_past_
         .picture
         .expect("the cells the rail reserved for the face");
 
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
     for y in face.y..face.y + face.height + 1 {
         for x in band.area.x..band.area.right() {
             assert_eq!(
                 under(&buffer, x, y),
-                palette.ground(None).bg.expect("the terminal's own ground"),
+                match x {
+                    x if x == band.area.x => palette.edge_ink(),
+                    _ => own,
+                },
                 "row {y}, column {x} of the rail is painted by the seam, and the face stands over \
-                 the rail's shade and not over a fall beside it \u{2014} the seam's own column is \
-                 drawn in the plane's pixels, so every cell of the band is their own ground"
+                 the rail's shade and not over a fall beside it \u{2014} the seam's own column \
+                 carries the edge ink and every other cell of the band is the ground its plane is \
+                 read through"
             );
         }
     }
@@ -7163,12 +7168,11 @@ fn the_transcript_keeps_every_column_the_rail_leaves_it_and_falls_into_no_crease
 }
 
 #[test]
-fn the_two_frames_part_the_one_seam_in_the_same_cells_and_the_pictured_one_in_pixels() {
+fn the_rails_first_column_is_the_edge_ink_whether_a_picture_is_placed_or_not() {
     let (pictured, told) = seamed_frame(true, 120, 40);
     let (placeless, without) = seamed_frame(false, 120, 40);
     let palette = Palette::TRUECOLOR;
     let laid = laid_out(&told);
-    let own = palette.ground(None).bg.expect("the terminal's own ground");
 
     assert_eq!(
         laid_out(&without).transcript,
@@ -7176,8 +7180,32 @@ fn the_two_frames_part_the_one_seam_in_the_same_cells_and_the_pictured_one_in_pi
         "a terminal that places a picture and one that places none part the same bands"
     );
     let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
-    let band = laid.composer;
-    for (frame, spelling, parting) in [
+    for (frame, spelling) in [
+        (&pictured, "a terminal that places a picture"),
+        (&placeless, "a terminal that places none"),
+    ] {
+        for y in rail.y..laid.composer.y {
+            assert_eq!(
+                under(frame, rail.x, y),
+                palette.edge_ink(),
+                "row {y} of the rail's first column in the frame {spelling} is drawn on is \
+                 claimed in another colour: that column parts the two bands on every row of the \
+                 band it opens"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_row_that_heads_the_composer_is_read_over_the_planes_pixels_where_one_is_placed() {
+    let (pictured, told) = seamed_frame(true, 120, 40);
+    let (placeless, _) = seamed_frame(false, 120, 40);
+    let palette = Palette::TRUECOLOR;
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
+    let laid = laid_out(&told);
+    let head = laid.composer.y;
+
+    for (frame, spelling, claimed) in [
         (&pictured, "a terminal that places a picture", own),
         (
             &placeless,
@@ -7185,21 +7213,13 @@ fn the_two_frames_part_the_one_seam_in_the_same_cells_and_the_pictured_one_in_pi
             palette.edge_ink(),
         ),
     ] {
-        for y in rail.y..band.y {
-            assert_eq!(
-                under(frame, rail.x, y),
-                parting,
-                "row {y} of the seam in the frame {spelling} is drawn on is claimed in another \
-                 colour: the two frames part the same cell, and the pictured one draws its \
-                 parting in the plane's pixels rather than in a cell's ink"
-            );
-        }
         for x in frame.area.x..frame.area.right() {
             assert_eq!(
-                under(frame, x, band.y),
-                parting,
-                "column {x} of the seam's row in the frame {spelling} is drawn on is claimed in \
-                 another colour than the rail's seam beside it"
+                under(frame, x, head),
+                claimed,
+                "column {x} of the row that heads the composer's band in the frame {spelling} is \
+                 drawn on is claimed in another colour: the count that row carries is read over \
+                 the plane's pixels where one is placed, and over the ink where none is"
             );
         }
     }
