@@ -4,7 +4,7 @@ use ratatui::layout::Rect;
 use crate::ink::Ink;
 use crate::palette::Palette;
 use crate::pen::{self, Clip};
-use crate::rows::{SIGIL, SPINE};
+use crate::rows::{SIGIL, SPINE, SPINE_INK};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Gutter {
@@ -26,7 +26,7 @@ pub fn row(
         Gutter::Blank => (" ", Ink::Dim),
     };
     let mut spans: Vec<(&str, Ink)> = Vec::with_capacity(runs.len().saturating_add(2));
-    spans.push((SPINE, Ink::Accent));
+    spans.push((SPINE, SPINE_INK));
     spans.push((sigil, ink));
     spans.extend_from_slice(runs);
     pen::write(

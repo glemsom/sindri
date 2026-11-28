@@ -1010,7 +1010,7 @@ fn every_row_of_the_band_under_its_head_opens_with_the_prompts_spine_and_sigil()
         assert_eq!(
             look_at(&buffer, &palette, band.x, y),
             Look::plain(Ink::Accent),
-            "the spine of row {y} is not the accent ink the spine is drawn in"
+            "the spine of row {y} is not the accent every row of the band is quoted by"
         );
     }
 }
