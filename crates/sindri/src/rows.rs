@@ -593,15 +593,15 @@ impl Tally {
     }
 
     fn bill(&self) -> Option<String> {
-        let spent: Vec<String> = [(self.spent.input, "in"), (self.spent.output, "out")]
+        let said: Vec<String> = [(self.spent.input, "in"), (self.spent.output, "out")]
             .into_iter()
-            .filter_map(|(spent, unit)| {
-                spent.map(|spent| format!("{} {unit}", ledger::tokens(spent)))
+            .filter_map(|(count, unit)| {
+                count.map(|count| format!("{} {unit}", ledger::tokens(count)))
             })
             .collect();
-        match spent.is_empty() {
+        match said.is_empty() {
             true => None,
-            false => Some(spent.join(" · ")),
+            false => Some(said.join(" · ")),
         }
     }
 }
