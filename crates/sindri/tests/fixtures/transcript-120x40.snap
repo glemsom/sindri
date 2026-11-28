@@ -3,7 +3,7 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 transcript at 120x40
-00 |┃›what does the check cost?                                                   wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
+00 |┃›what does the check cost?                                                   wire      anthropic                       | accent:1 plain:77 dim:10 plain:32
 01 |⋯ 1 call · 118 ms                                                             model     claude-sonnet-4-5-20250929      | dim:1 plain:1 dim:15 plain:61 dim:10 plain:32
 02 |                                                                              think     high                            | plain:78 dim:10 plain:32
 03 |  What that buys is the plain case and what it costs is the scrolled one:                                               | plain:120
@@ -13,7 +13,7 @@ transcript at 120x40
 07 |  scrolled through costs one layout per entry and scrolling it again costs                                              | plain:120
 08 |  none.                                                                       workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
-10 |┃›what is the transcript's unit?                                                                                        | dim:1 plain:119
+10 |┃›what is the transcript's unit?                                                                                        | accent:1 plain:119
 11 |⋯ 1 call · 9 ms                                                               sandbox   bwrap                           | dim:1 plain:1 dim:13 plain:63 dim:10 plain:32
 12 |                                                                                                                        | plain:120
 13 |  The transcript's unit is the entry. An entry never carries a formatted      session   9f2c7a41                        | plain:78 dim:10 plain:32
@@ -26,7 +26,7 @@ transcript at 120x40
 20 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 21 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 22 |                                                                                                                        | plain:120
-23 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+23 |┃›what does a row of the band say?                                                                                      | accent:1 plain:119
 24 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 25 |                                                                                                                        | plain:120
 26 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
@@ -41,5 +41,5 @@ transcript at 120x40
 35 |▏    │row.paint(area, buffer);                                                output    3.1k                            | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:63 dim:10 plain:32
 36 |▏ }                                                                           total     51.3k                           | dim:2 plain:76 dim:10 plain:32
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

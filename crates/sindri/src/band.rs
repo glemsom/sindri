@@ -26,7 +26,7 @@ pub fn row(
         Gutter::Blank => (" ", Ink::Dim),
     };
     let mut spans: Vec<(&str, Ink)> = Vec::with_capacity(runs.len().saturating_add(2));
-    spans.push((SPINE, Ink::Dim));
+    spans.push((SPINE, Ink::Accent));
     spans.push((sigil, ink));
     spans.extend_from_slice(runs);
     pen::write(

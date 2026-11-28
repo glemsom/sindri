@@ -409,10 +409,10 @@ the band made of it. A fence's tag row is no line of its source.
 _Avoid_: Body, content, raw text
 
 **Spine**:
-The one column a **Prompt**'s rows are quoted by: a dim bar down their left edge, with the prompt's
-sigil standing in the column beside it, so its words begin where an answer's prose does. Every row a
-prompt's words occupy carries it, the draft being typed as the prompt it was asked with, and no row of
-an answer, a call, a result or a stop does.
+The one column a **Prompt**'s rows are quoted by: an accent bar down their left edge, with the
+prompt's sigil standing in the column beside it, so its words begin where an answer's prose does. Every
+row a prompt's words occupy carries it, the draft being typed as the prompt it was asked with, and no
+row of an answer, a call, a result or a stop does.
 _Avoid_: Bar, quote mark, guide
 
 **Mark**:

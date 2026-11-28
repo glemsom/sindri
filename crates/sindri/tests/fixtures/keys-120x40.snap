@@ -36,7 +36,7 @@ keys at 120x40
 30 |                        │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
 31 |                        │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
 32 |                        │ marks                                                                │                        | dim:25 plain:1 dim:5 plain:64 dim:25
-33 |                        │ ┃  the spine a Prompt hangs on     ›  the sigil a Prompt opens on    │                        | dim:25 plain:1 dim:3 muted:32 plain:3 muted:27 plain:4 dim:25
+33 |                        │ ┃  the spine a Prompt hangs on     ›  the sigil a Prompt opens on    │                        | dim:25 plain:1 accent:3 muted:32 plain:3 muted:27 plain:4 dim:25
 34 |                        │ │  the lane a thought is set in    ▏  the bar a fence or quote sets  │                        | dim:25 plain:1 dim:3 muted:32 dim:3 muted:29 plain:2 dim:25
 35 |                        │ ⋯  rows a Fold keeps back, as ⋯3   ✓  a Call that settled well       │                        | dim:25 plain:1 dim:3 muted:32 ok:3 muted:24 plain:7 dim:25
 36 |                        │ ✗  a Call or a run that failed     !  every row of a failed Call     │                        | dim:25 plain:1 err:3 muted:32 err:3 muted:26 plain:5 dim:25

@@ -22,8 +22,8 @@ footer-queue at 40x24
 16 |                                        | plain:40
 17 |                                        | plain:40
 18 |━                                       | accent:1 plain:39
-19 |┃›what should the run do?               | dim:25 plain:15
-20 |┃›run the test that failed and read it  | dim:38 plain:2
-21 |┃›then the fmt check                    | dim:20 plain:20
-22 |┃›and say why the retry hid it          | dim:30 plain:10
+19 |┃›what should the run do?               | accent:1 dim:24 plain:15
+20 |┃›run the test that failed and read it  | accent:1 dim:37 plain:2
+21 |┃›then the fmt check                    | accent:1 dim:19 plain:20
+22 |┃›and say why the retry hid it          | accent:1 dim:29 plain:10
 23 |  Ctrl-C cancel · ↑ 3 queued            | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 plain:12

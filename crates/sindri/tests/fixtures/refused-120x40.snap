@@ -11,7 +11,7 @@ refused at 120x40
 05 |  scrolled through costs one layout per entry and scrolling it again costs    ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
 06 |  none.                                                                       cache     88%                             | plain:78 dim:10 plain:32
 07 |                                                                                                                        | plain:120
-08 |┃›what is the transcript's unit?                                              workspace …/sindri/.worktrees/46-rail     | dim:1 plain:77 dim:10 plain:32
+08 |┃›what is the transcript's unit?                                              workspace …/sindri/.worktrees/46-rail     | accent:1 plain:77 dim:10 plain:32
 09 |⋯ 1 call · 9 ms                                                               branch    spec/1-capability               | dim:1 plain:1 dim:13 plain:63 dim:10 plain:32
 10 |                                                                                                                        | plain:120
 11 |  The transcript's unit is the entry. An entry never carries a formatted      sandbox   bwrap                           | plain:78 dim:10 plain:32
@@ -24,7 +24,7 @@ refused at 120x40
 18 |  code      │ behind a bar, highlighted                                       ◆ records                                 | plain:11 dim:3 plain:64 accent:1 plain:41
 19 |  table     │ columns joined by a bar                                                                                   | plain:11 dim:3 plain:106
 20 |                                                                                                                        | plain:120
-21 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+21 |┃›what does a row of the band say?                                                                                      | accent:1 plain:119
 22 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 23 |                                                                                                                        | plain:120
 24 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
@@ -41,5 +41,5 @@ refused at 120x40
 35 |✗ error                                                                       output    3.1k                            | err:1 plain:1 dim:5 plain:71 dim:10 plain:32
 36 |  cannot create the sandbox: bubblewrap is on PATH                            total     51.3k                           | muted:50 plain:28 dim:10 plain:32
 37 |                                                                                                                        | plain:120
-38 |┃›why does the retry test fail                                                                                          | dim:1 accent:1 plain:118
+38 |┃›why does the retry test fail                                                                                          | accent:2 plain:118
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

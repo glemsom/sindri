@@ -47,9 +47,9 @@ fn a_row_of_one_run_draws_the_prompts_gutter_then_the_words_in_the_runs_ink() {
     );
     assert_eq!(
         inks(&opened, 0, &PALETTE),
-        [(Ink::Dim, 2), (Ink::Accent, 9)],
-        "the spine and the sigil of a row that opens no prompt are the dim ink, and the words \
-         are the ink the run carries"
+        [(Ink::Accent, 1), (Ink::Dim, 1), (Ink::Accent, 9)],
+        "the spine is the accent on every row, the sigil of a row that opens no prompt is the dim \
+         ink, and the words are the ink the run carries"
     );
     assert_eq!(
         glyphs(&indented, 0),
@@ -59,8 +59,9 @@ fn a_row_of_one_run_draws_the_prompts_gutter_then_the_words_in_the_runs_ink() {
     );
     assert_eq!(
         inks(&indented, 0, &PALETTE),
-        [(Ink::Dim, 2), (Ink::Accent, 9)],
-        "and a row that opens nothing draws its blank column in the dim ink, as the spine is"
+        [(Ink::Accent, 1), (Ink::Dim, 1), (Ink::Accent, 9)],
+        "and a row that opens nothing draws its blank column in the dim ink beside the accent \
+         spine"
     );
 }
 
@@ -89,7 +90,8 @@ fn a_row_of_several_runs_draws_each_in_the_ink_it_carries_in_order() {
     assert_eq!(
         inks(&buffer, 0, &PALETTE),
         [
-            (Ink::Dim, 2),
+            (Ink::Accent, 1),
+            (Ink::Dim, 1),
             (Ink::Plain, 4),
             (Ink::Accent, 4),
             (Ink::Err, 5)
@@ -119,7 +121,7 @@ fn a_run_the_row_has_no_room_for_is_cut_at_the_edge_and_the_run_after_it_is_drop
     );
     assert_eq!(
         inks(&buffer, 0, &PALETTE),
-        [(Ink::Dim, 2), (Ink::Plain, 8)],
+        [(Ink::Accent, 1), (Ink::Dim, 1), (Ink::Plain, 8)],
         "the columns the cut leaves are the run's own, and the run after them has no column to start in"
     );
     assert_eq!(
@@ -136,17 +138,17 @@ fn a_lit_gutter_draws_the_sigil_in_the_accent_and_the_other_two_in_the_dim_ink()
         (
             Gutter::Lit,
             "\u{2503}\u{203a}a",
-            &[(Ink::Dim, 1), (Ink::Accent, 1), (Ink::Plain, 1)][..],
+            &[(Ink::Accent, 2), (Ink::Plain, 1)][..],
         ),
         (
             Gutter::Open,
             "\u{2503}\u{203a}a",
-            &[(Ink::Dim, 2), (Ink::Plain, 1)][..],
+            &[(Ink::Accent, 1), (Ink::Dim, 1), (Ink::Plain, 1)][..],
         ),
         (
             Gutter::Blank,
             "\u{2503} a",
-            &[(Ink::Dim, 2), (Ink::Plain, 1)][..],
+            &[(Ink::Accent, 1), (Ink::Dim, 1), (Ink::Plain, 1)][..],
         ),
     ] {
         let mut buffer = Buffer::empty(area);
@@ -160,7 +162,8 @@ fn a_lit_gutter_draws_the_sigil_in_the_accent_and_the_other_two_in_the_dim_ink()
         assert_eq!(
             inks(&buffer, 0, &PALETTE),
             inks_drawn,
-            "{gutter:?} is drawn in the one ink it carries, and only a lit one is the accent"
+            "{gutter:?} is drawn in the one ink it carries past the spine, and only a lit one is \
+             the accent"
         );
     }
 }

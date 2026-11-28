@@ -670,7 +670,7 @@ fn the_readers_own_words_open_the_exchange_and_no_row_names_them() {
         "and its own words follow down the spine they are quoted by, with the sigil in the column \
          beside it"
     );
-    assert_eq!(inks(&rows[1]), [Ink::Dim, Ink::Plain, Ink::Plain]);
+    assert_eq!(inks(&rows[1]), [Ink::Accent, Ink::Plain, Ink::Plain]);
     assert_eq!(
         rows.len(),
         2,
@@ -770,8 +770,8 @@ fn a_sent_prompt_draws_its_spine_down_every_row_it_occupies() {
         );
         assert_eq!(
             inks(row),
-            [Ink::Dim, Ink::Plain, Ink::Plain],
-            "the spine is drawn dim and the reader's own words in the plain ink: {row:?}"
+            [Ink::Accent, Ink::Plain, Ink::Plain],
+            "the spine is drawn in the accent and the reader's own words in the plain ink: {row:?}"
         );
     }
     assert_eq!(

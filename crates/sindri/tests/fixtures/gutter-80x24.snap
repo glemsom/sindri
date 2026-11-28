@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 gutter at 80x24
 00 |                                                                                | plain:80
-01 |┃›triage the retry test                                                         | dim:1 plain:79
+01 |┃›triage the retry test                                                         | accent:1 plain:79
 02 |  │ ✓ bash rg -n 'gutter' src 23 ms ⋯3                                          | dim:4 ok:2 dim:5 plain:18 dim:9 plain:42
 03 |                                                                                | plain:80
 04 |│ the marker of a row stands in the gutter ahead of its words                   | dim:2 muted:59 plain:19
@@ -25,5 +25,5 @@ gutter at 80x24
 19 |                                                                                | plain:80
 20 |                                                                                | plain:80
 21 |                                                                                | plain:80
-22 |┃›what should the run do?                                                       | dim:25 plain:55
+22 |┃›what should the run do?                                                       | accent:1 dim:24 plain:55
 23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:5
