@@ -1190,7 +1190,8 @@ impl Thumb {
         if let Some(row) = y.checked_sub(area.y)
             && self.rows().contains(&row)
         {
-            pen::glyph(buffer, area.x, y, THUMB, Ink::Dim, palette);
+            let column = area.right().saturating_sub(MARGIN);
+            pen::glyph(buffer, column, y, THUMB, Ink::Dim, palette);
         }
     }
 }

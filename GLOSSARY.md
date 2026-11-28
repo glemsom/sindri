@@ -262,8 +262,18 @@ The two columns every **Band** opens its words in and keeps at its right edge, w
 holds: the **Transcript**'s prose past the gutter a row wears, the **Composer**'s head count, its
 hints and the row that says the frame stands off the tail, and the **Rail**'s sections, its fields
 and the values set in them. A gutter's glyph stands in the column before it and is no word of
-the band, and the air a band keeps on its right is what stops a word on the frame's own edge.
+the band, and the air a band keeps on its right is what stops a word on the frame's own edge — it
+is where the **Transcript** band's **Thumb** stands, so the band says where the reader is without
+covering a word it is read for.
 _Avoid_: Seat, padding, indent (that one is the gutter a row opens with)
+
+**Thumb**:
+The mark a **Transcript** band draws while the reader stands off the tail, saying where the window
+stands: the span of the band it fills and the row it opens on, both read from how much of the
+transcript the band holds and how far back the reader is. It stands in the **Margin** at the band's
+right edge, in that margin's first column, because the band's last column carries a cut mark and no
+measured cell of the band may carry it; a frame at the tail draws none.
+_Avoid_: Scrollbar, slider, handle, indicator, position bar
 
 **Measure**:
 The three facts the rows of a band are laid at: its width, the surface a picture in an answer is
