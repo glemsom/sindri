@@ -1229,7 +1229,7 @@ fn fold(capabilities: Capabilities, open: bool) -> View {
 fn folded_run() -> Vec<Entry> {
     vec![
         prompt("why does the retry test fail?"),
-        turn(1),
+        spent(1, 30_000, 2_000),
         answer(
             1,
             "Every row of the run passes: the gutter holds one column for every entry, and a row \
@@ -1241,6 +1241,7 @@ fn folded_run() -> Vec<Entry> {
             r#"{"command": "cargo test -p sindri --test rows"}"#,
         ),
         result(1, "bash", Exit::Code(0), &output(), 640, 1_800),
+        spent(2, 18_200, 1_100),
         call(2, "bash", r#"{"command":"cargo test retry"}"#),
         result(2, "bash", Exit::Code(7), "retry failed", 12, 600),
         answer(
@@ -1380,6 +1381,17 @@ fn turn(number: u32) -> Entry {
     Entry::Turn {
         turn: number,
         usage: Usage::default(),
+    }
+}
+
+fn spent(turn: u32, input: u64, output: u64) -> Entry {
+    Entry::Turn {
+        turn,
+        usage: Usage {
+            input: Some(input),
+            output: Some(output),
+            ..Usage::default()
+        },
     }
 }
 

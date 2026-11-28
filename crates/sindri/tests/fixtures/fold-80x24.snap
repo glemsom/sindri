@@ -4,7 +4,7 @@ expression: self.text(name)
 ---
 fold at 80x24
 00 |┃›why does the retry test fail?                                                 | dim:1 plain:79
-01 |⋯ 2 calls · 1 failed · 2.4 s                                                    | dim:1 plain:1 dim:26 plain:52
+01 |⋯ 2 calls · 1 failed · 2.4 s · 48.2k in · 3.1k out                              | dim:1 plain:1 dim:48 plain:30
 02 |                                                                                | plain:80
 03 |  Three rows of the fold are the whole of it: the head, the count and the       | plain:80
 04 |  last.                                                                         | plain:80
