@@ -552,7 +552,7 @@ fn tools(capabilities: Capabilities) -> View {
         capabilities,
         Facts::default().asked().grounded(Some(ground())).running(),
         Transcript::of(vec![
-            Entry::Turn { turn: 1 },
+            turn(1),
             call(
                 1,
                 "bash",
@@ -577,7 +577,7 @@ fn tools(capabilities: Capabilities) -> View {
                 33,
                 2,
             ),
-            Entry::Turn { turn: 2 },
+            turn(2),
             call(2, "bash", r#"{"command": "cargo test --workspace"}"#),
             call(2, "open", r#"{"path": "docs/agents/domain.md"}"#),
             call(2, "skill", r#"{"name": "code-review"}"#),
@@ -835,7 +835,7 @@ fn opening() -> Vec<Entry> {
 fn transcript() -> Vec<Entry> {
     vec![
         prompt("where does rendering live?"),
-        Entry::Turn { turn: 1 },
+        turn(1),
         call(1, "bash", r#"{"command": "rg -n 'fence' src"}"#),
         result(
             1,
@@ -853,7 +853,7 @@ fn transcript() -> Vec<Entry> {
         ),
         end(),
         prompt("how does a width change reflow the cache?"),
-        Entry::Turn { turn: 2 },
+        turn(2),
         call(
             2,
             "bash",
@@ -876,7 +876,7 @@ fn transcript() -> Vec<Entry> {
         ),
         end(),
         prompt("how is a window measured?"),
-        Entry::Turn { turn: 3 },
+        turn(3),
         call(3, "bash", r#"{"command": "make check STAGES=rows"}"#),
         result(3, "bash", Exit::Code(0), "check: test ... ok", 64, 41),
         answer(
@@ -889,7 +889,7 @@ fn transcript() -> Vec<Entry> {
         ),
         end(),
         prompt("what does the check cost?"),
-        Entry::Turn { turn: 4 },
+        turn(4),
         call(4, "bash", r#"{"command": "make check"}"#),
         result(
             4,
@@ -909,7 +909,7 @@ fn transcript() -> Vec<Entry> {
         ),
         end(),
         prompt("what is the transcript's unit?"),
-        Entry::Turn { turn: 5 },
+        turn(5),
         call(5, "bash", r#"{"command": "git diff --stat"}"#),
         result(
             5,
@@ -929,7 +929,7 @@ fn transcript() -> Vec<Entry> {
         ),
         end(),
         prompt("what does a row of the band say?"),
-        Entry::Turn { turn: 6 },
+        turn(6),
         call(6, "bash", r#"{"command": "make check STAGES=frames"}"#),
         result(
             6,
@@ -952,7 +952,7 @@ fn transcript() -> Vec<Entry> {
 
 fn gutter() -> Vec<Entry> {
     vec![
-        Entry::Turn { turn: 1 },
+        turn(1),
         Entry::Prompt {
             text: SecretSet::default().redact("triage the retry test"),
         },
@@ -980,7 +980,7 @@ fn gutter() -> Vec<Entry> {
 
 fn streaming(capabilities: Capabilities) -> View {
     let mut entries = transcript();
-    entries.push(Entry::Turn { turn: 6 });
+    entries.push(turn(6));
     let mut view = View::of(capabilities, run_facts().running(), Transcript::of(entries));
     for fragment in [
         "The ticket asks whether the tail survives. ",
@@ -1018,7 +1018,7 @@ fn with_pulse(capabilities: Capabilities, pulse: Pulse, said: &[&str]) -> View {
         Pulse::Settled { stop, .. } => (RunState::Stopped(stop.clone()), Some(stop.clone())),
     };
     let mut entries = opening();
-    entries.push(Entry::Turn { turn: 2 });
+    entries.push(turn(2));
     let running = state == RunState::Running;
     let rail = ledger::Facts {
         state: Some(state),
@@ -1088,7 +1088,7 @@ fn flat_prompt() -> View {
                  the answer is one sentence, and it quotes the line the test fails on rather than \
                  the line the patch moved, because a reader reads the failure and never the diff.",
             ),
-            Entry::Turn { turn: 1 },
+            turn(1),
             call(1, "bash", r#"{"command": "rg -n 'retry' src"}"#),
             result(
                 1,
@@ -1229,7 +1229,7 @@ fn fold(capabilities: Capabilities, open: bool) -> View {
 fn folded_run() -> Vec<Entry> {
     vec![
         prompt("why does the retry test fail?"),
-        Entry::Turn { turn: 1 },
+        turn(1),
         answer(
             1,
             "Every row of the run passes: the gutter holds one column for every entry, and a row \
@@ -1286,7 +1286,7 @@ const FOLDED_PROMPT: &str = "the retry test fails on the line the patch moved, a
 fn prompt_fold_run() -> Vec<Entry> {
     vec![
         prompt("why does the retry test fail?"),
-        Entry::Turn { turn: 1 },
+        turn(1),
         call(
             1,
             "bash",
@@ -1311,7 +1311,7 @@ fn prompt_fold_run() -> Vec<Entry> {
 
 fn folded_beside_an_answer(capabilities: Capabilities) -> View {
     let mut entries = folded_run();
-    entries.push(Entry::Turn { turn: 3 });
+    entries.push(turn(3));
     entries.push(answer(
         3,
         "The run proves the fold and nothing else: every row of a command's output is drawn in the \
@@ -1335,7 +1335,7 @@ fn folded_beside_an_answer(capabilities: Capabilities) -> View {
 fn calls() -> Vec<Entry> {
     vec![
         prompt("which calls settle well?"),
-        Entry::Turn { turn: 1 },
+        turn(1),
         call(1, "bash", r#"{"command": "rg -n 'verdict' src"}"#),
         result(
             1,
@@ -1346,7 +1346,7 @@ fn calls() -> Vec<Entry> {
             18,
         ),
         answer(1, "The row is drawn from the verdict the record holds."),
-        Entry::Turn { turn: 2 },
+        turn(2),
         call(2, "bash", r#"{"command": "cargo clippy --all-targets"}"#),
         result(
             2,
@@ -1357,11 +1357,11 @@ fn calls() -> Vec<Entry> {
             211,
         ),
         answer(2, "An unused import, and nowhere else to put it."),
-        Entry::Turn { turn: 3 },
+        turn(3),
         call(3, "bash", r#"{"command": "cargo test --workspace"}"#),
         result(3, "bash", Exit::TimedOut, "", 0, 120_000),
         answer(3, "The call ran past its minute and was killed."),
-        Entry::Turn { turn: 4 },
+        turn(4),
         call(4, "bash", r#"{"command": "make check STAGES=frames"}"#),
         result(4, "bash", Exit::Cancelled, "", 0, 3_400),
         answer(
@@ -1371,9 +1371,27 @@ fn calls() -> Vec<Entry> {
              leaving a spinner turning for a result that will never come.",
         ),
         prompt("and the one that is still out?"),
-        Entry::Turn { turn: 5 },
+        turn(5),
         call(5, "bash", r#"{"command": "make check STAGES=test"}"#),
     ]
+}
+
+fn turn(number: u32) -> Entry {
+    Entry::Turn {
+        turn: number,
+        usage: Usage::default(),
+    }
+}
+
+fn spent(number: u32, input: u64, output: u64) -> Entry {
+    Entry::Turn {
+        turn: number,
+        usage: Usage {
+            input: Some(input),
+            output: Some(output),
+            ..Usage::default()
+        },
+    }
 }
 
 fn call(turn: u32, name: &str, arguments: &str) -> Entry {

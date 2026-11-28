@@ -19,7 +19,7 @@ use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::served::Listing;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential};
-use sindri_core::records::Entry;
+use sindri_core::records::{Entry, Usage};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
@@ -104,7 +104,7 @@ fn conversation() -> View {
 
 fn conversation_in(capabilities: Capabilities) -> View {
     let entries = [
-        Entry::Turn { turn: 1 },
+        Entry::Turn { turn: 1, usage: Usage::default() },
         Entry::Assistant {
             turn: 1,
             text: SecretSet::default().redact(

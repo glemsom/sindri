@@ -25,7 +25,7 @@ use sindri_core::config::Config;
 use sindri_core::open::Ground;
 use sindri_core::policy::{Boundary, Enforcement};
 use sindri_core::provider::Deltas;
-use sindri_core::records::{Entry, Facts, Record, read_transcript, transcript_path};
+use sindri_core::records::{Entry, Facts, Record, Usage, read_transcript, transcript_path};
 use sindri_core::redact::SecretSet;
 use sindri_core::run::{Budget, Exit, Limits, Stop, Turn};
 use sindri_core::session::Session;
@@ -464,7 +464,7 @@ fn the_whole_height_costs_a_layout_only_for_what_it_has_not_seen() {
 fn every_row_but_a_fences_line_fits_the_width_it_was_laid_out_for() {
     let secrets = SecretSet::default();
     let entries = [
-        Entry::Turn { turn: 1000 },
+        turn(1000),
         Entry::Call {
             turn: 1,
             id: None,
@@ -953,7 +953,7 @@ fn a_prompt_opens_under_a_blank_row_unless_it_opens_the_band() {
 #[test]
 fn a_turn_draws_no_row_at_any_width() {
     for cols in [120, 40, 20, 8, 3, 1] {
-        let drawn = layout(&Entry::Turn { turn: 3 }, cols);
+        let drawn = layout(&turn(3), cols);
         assert!(
             drawn.is_empty(),
             "a turn is no row of the exchange at {cols} columns: {drawn:?}"
@@ -977,14 +977,14 @@ fn settled_frame(entries: Vec<Entry>, stop: &Stop, cols: u16, rows: u16) -> Vec<
 fn three_exchanges_are_three_prompts_and_three_answers_and_no_row_saying_a_run_ended() {
     let secrets = SecretSet::default();
     let mut entries = Vec::new();
-    for turn in 1..=3 {
+    for which in 1..=3 {
         entries.push(Entry::Prompt {
-            text: secrets.redact(format!("prompt {turn}")),
+            text: secrets.redact(format!("prompt {which}")),
         });
-        entries.push(Entry::Turn { turn });
+        entries.push(turn(which));
         entries.push(Entry::Assistant {
-            turn,
-            text: secrets.redact(format!("answer {turn}")),
+            turn: which,
+            text: secrets.redact(format!("answer {which}")),
         });
         entries.push(Entry::Stop { stop: Stop::Final });
     }
@@ -2026,6 +2026,13 @@ fn a_live_run_opens_the_answers_row_before_it_has_said_anything() {
     assert_eq!(rows.len(), 0);
 }
 
+fn turn(which: u32) -> Entry {
+    Entry::Turn {
+        turn: which,
+        usage: Usage::default(),
+    }
+}
+
 fn call(which: u32) -> Entry {
     call_of(which, None)
 }
@@ -2702,7 +2709,7 @@ fn a_settled_exchanges_work_is_one_row() {
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
-    rows.push(Entry::Turn { turn: 1 });
+    rows.push(turn(1));
     rows.push(thought(1));
     rows.push(call(1));
     rows.push(timed(1, 4_100));
@@ -2846,7 +2853,7 @@ fn the_run_in_flight_draws_its_calls_and_results_and_no_work_row() {
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
-    rows.push(Entry::Turn { turn: 1 });
+    rows.push(turn(1));
     rows.push(thought(1));
     rows.push(call(1));
     rows.push(timed(1, 4_100));
@@ -2888,11 +2895,11 @@ fn a_run_of_two_turns_leaves_one_row_for_the_work_of_both() {
     rows.measure(Measure::new(80, Surface::none(), None));
     for entry in [
         asked_for(1),
-        Entry::Turn { turn: 1 },
+        turn(1),
         call(1),
         timed(1, 4_000),
         answer(1),
-        Entry::Turn { turn: 2 },
+        turn(2),
         call(2),
         timed(2, 100),
         answer(2),
@@ -2929,11 +2936,11 @@ fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
     rows.measure(Measure::new(80, Surface::none(), None));
     for entry in [
         asked_for(1),
-        Entry::Turn { turn: 1 },
+        turn(1),
         call(1),
         timed(1, 4_000),
         answer(1),
-        Entry::Turn { turn: 2 },
+        turn(2),
         call(2),
         timed(2, 100),
     ] {
@@ -2968,13 +2975,7 @@ fn the_run_in_flight_draws_its_work_whole_as_each_turn_ends() {
 fn a_work_settles_under_the_answer_that_ended_it() {
     let mut rows = Rows::new();
     rows.measure(Measure::new(80, Surface::none(), None));
-    for entry in [
-        asked_for(1),
-        Entry::Turn { turn: 1 },
-        call(1),
-        timed(1, 4_100),
-        answer(1),
-    ] {
+    for entry in [asked_for(1), turn(1), call(1), timed(1, 4_100), answer(1)] {
         rows.push(entry);
     }
     assert!(
@@ -3190,7 +3191,7 @@ fn an_exchange_that_did_no_work_draws_no_work_row() {
     rows.push(Entry::Prompt {
         text: SecretSet::default().redact("triage the retry test"),
     });
-    rows.push(Entry::Turn { turn: 1 });
+    rows.push(turn(1));
     rows.push(thought(1));
     rows.push(answer(1));
     rows.push(stop_entry(Stop::Final));
@@ -3332,7 +3333,7 @@ fn the_record_writes_a_turn_for_every_turn_while_the_band_draws_no_row_for_one()
         .entries()
         .iter()
         .filter_map(|entry| match entry {
-            Entry::Turn { turn } => Some(*turn),
+            Entry::Turn { turn, .. } => Some(*turn),
             _ => None,
         })
         .collect();
