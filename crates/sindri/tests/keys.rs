@@ -525,19 +525,29 @@ fn marks_section(width: u16) -> (Look, Vec<(String, Look, String)>) {
     let named = body[heading].spans[0].1;
 
     let mut section: Vec<(String, Look, String)> = Vec::new();
+    let mut open: Vec<Option<usize>> = Vec::new();
     for row in &body[heading + 1..] {
-        let glyph = row.spans[0].0.trim();
-        let words: Vec<&str> = row.spans[1..]
-            .iter()
-            .map(|(said, _)| said.trim())
-            .filter(|said| !said.is_empty())
-            .collect();
-        match section.last_mut() {
-            Some(last) if glyph.is_empty() => {
-                last.2.push(' ');
-                last.2.push_str(&words.join(" "));
+        open.resize(row.spans.len().div_ceil(2), None);
+        for (at, pair) in row.spans.chunks(2).enumerate() {
+            let (glyph, look) = &pair[0];
+            let words = match pair.get(1) {
+                Some((words, _)) => words.split_whitespace().collect::<Vec<_>>().join(" "),
+                None => String::new(),
+            };
+            match glyph.trim().is_empty() {
+                true => {
+                    if let Some(mark) = open[at]
+                        && !words.is_empty()
+                    {
+                        section[mark].2.push(' ');
+                        section[mark].2.push_str(&words);
+                    }
+                }
+                false => {
+                    open[at] = Some(section.len());
+                    section.push((glyph.trim().to_owned(), *look, words));
+                }
             }
-            _ => section.push((glyph.to_owned(), row.spans[0].1, words.join(" "))),
         }
     }
     (named, section)
@@ -557,7 +567,7 @@ fn the_keys_screen_names_every_mark_under_its_key_table_in_the_ink_it_is_drawn_i
         .iter()
         .map(|mark| {
             (
-                mark.glyph().to_owned(),
+                mark.glyph().to_string(),
                 Look::plain(mark.ink()),
                 mark.says().to_owned(),
             )
@@ -571,24 +581,44 @@ fn the_keys_screen_names_every_mark_under_its_key_table_in_the_ink_it_is_drawn_i
 }
 
 #[test]
+fn the_card_a_120x40_frame_opens_names_every_mark_and_keeps_no_row_of_its_body_back() {
+    let body = keys_body(68);
+    let (_, named) = marks_section(68);
+    assert_eq!(
+        named.len(),
+        marks().len(),
+        "every mark the band draws is named on the card `?` opens at 120 columns, and none of the \
+         eleven is kept back: {named:#?}"
+    );
+    assert!(
+        body.len() <= 38,
+        "the body of that card is no taller than the 38 rows a 40-row frame holds for it, so the \
+         card keeps nothing back: {} rows, {:?}",
+        body.len(),
+        said(&body[body.len() - 1])
+    );
+}
+
+#[test]
 fn a_narrow_card_wraps_a_marks_meaning_and_never_cuts_it_in_half() {
     let (_, roomy) = marks_section(68);
-    let (_, narrow) = marks_section(36);
+    let (_, narrow) = marks_section(56);
     assert_eq!(
         narrow, roomy,
         "the same marks, the same inks and the same words at a width that cannot hold them on one \
          row: a meaning wraps and is never cut"
     );
 
-    let body = keys_body(36);
+    let body = keys_body(56);
     let said: Vec<String> = body.iter().map(said).collect();
     let heading = said
         .iter()
         .position(|row| row.trim() == "marks")
         .expect("a marks heading");
     assert!(
-        said.len() - heading - 1 > marks().len(),
-        "at 36 columns a meaning runs over more than one row: {said:#?}"
+        said.len() - heading - 1 > marks().len().div_ceil(2),
+        "at 56 columns the block runs to more rows than one row for every pair of marks, so a \
+         meaning wraps: {said:#?}"
     );
     for (glyph, _, said) in &narrow {
         assert!(

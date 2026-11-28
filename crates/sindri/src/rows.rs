@@ -94,49 +94,25 @@ impl Mark {
 
 pub fn marks() -> [Mark; 11] {
     [
-        Mark::new(SPINE, Ink::Dim, "the spine a Prompt's words are quoted by"),
+        Mark::new(SPINE, Ink::Dim, "the spine a Prompt hangs on"),
         Mark::new(SIGIL.trim_end(), Ink::Plain, "the sigil a Prompt opens on"),
-        Mark::new(
-            THOUGHT.trim_end(),
-            Ink::Dim,
-            "the lane a thought and its work are set in",
-        ),
+        Mark::new(THOUGHT.trim_end(), Ink::Dim, "the lane a thought is set in"),
         Mark::new(
             markdown::BAR.trim_end(),
             Ink::Dim,
-            "the bar a fence and a quote stand beside",
+            "the bar a fence or quote sets",
         ),
-        Mark::new(
-            KEPT.to_string(),
-            Ink::Dim,
-            "how many rows a Call keeps back: ⋯3",
-        ),
-        Mark::new(
-            CHECK.to_string(),
-            Ink::Ok,
-            "a Call that settled well, and a run that ended",
-        ),
-        Mark::new(
-            CROSS.to_string(),
-            Ink::Err,
-            "a Call that failed, and a run that stopped",
-        ),
-        Mark::new(
-            FAILED.to_string(),
-            Ink::Err,
-            "a failed Call, on every row it holds",
-        ),
+        Mark::new(KEPT.to_string(), Ink::Dim, "rows a Fold keeps back, as ⋯3"),
+        Mark::new(CHECK.to_string(), Ink::Ok, "a Call that settled well"),
+        Mark::new(CROSS.to_string(), Ink::Err, "a Call or a run that failed"),
+        Mark::new(FAILED.to_string(), Ink::Err, "every row of a failed Call"),
         Mark::new(
             PENDING.to_string(),
             Ink::Dim,
-            "a Call still running, or a word cut short",
+            "a running Call, or a cut word",
         ),
         Mark::new(pulse::FRAME.to_string(), Ink::Accent, "a run still writing"),
-        Mark::new(
-            THUMB.to_string(),
-            Ink::Dim,
-            "where the window stands in the run",
-        ),
+        Mark::new(THUMB.to_string(), Ink::Dim, "where the window stands"),
     ]
 }
 
