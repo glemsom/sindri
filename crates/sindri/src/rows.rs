@@ -683,7 +683,7 @@ impl Tally {
             .collect();
         match said.is_empty() {
             true => None,
-            false => Some(said.join(" · ")),
+            false => Some(said.join(ledger::GAP)),
         }
     }
 }
@@ -692,7 +692,7 @@ fn said_words(said: &[(Rank, String)]) -> String {
     said.iter()
         .map(|(_, words)| words.as_str())
         .collect::<Vec<&str>>()
-        .join(" · ")
+        .join(ledger::GAP)
 }
 
 fn took(ms: u64) -> String {
