@@ -1584,6 +1584,71 @@ fn the_prompt_in_the_transcript_keeps_the_band_it_is_read_on_beside_the_seam() {
     }
 }
 
+#[test]
+fn a_prompts_row_claims_the_cells_the_plane_over_it_stands_on() {
+    let palette = Palette::TRUECOLOR;
+    let well = palette.band(Band::Well);
+    let (buffer, told) = painted_and_told(&mut asked_beside_a_rail(true), 120, 40);
+    let laid = laid_out(&told);
+    let (bare, without) = painted_and_told(&mut asked_beside_a_rail(false), 120, 40);
+    let placeless = laid_out(&without);
+    assert_eq!(
+        placeless.transcript, laid.transcript,
+        "the two frames lay the transcript out in one band, so a row of one is the same row of the \
+         other"
+    );
+    let words = |buffer: &Buffer, laid: &Layout| {
+        (laid.transcript.y..laid.transcript.bottom())
+            .find(|y| drawn_row(buffer, *y).contains("triage the retry test"))
+            .expect("the frame draws the prompt's words inside the transcript")
+    };
+    let row = words(&buffer, &laid);
+    assert_eq!(
+        row,
+        words(&bare, &placeless),
+        "both frames draw the prompt's words on one row, and a plane placed over the transcript \
+         resets its whole band to the terminal's own ground, so the ground the row claims is read \
+         from the frame that places no picture"
+    );
+    let plane = told
+        .placements()
+        .iter()
+        .find(|placement| matches!(placement.shade().id(), crate::plane::PlaneId::Prompt(_)))
+        .map(Placement::cells)
+        .expect("a frame drawn with a picture cell size stands a plane over the prompt");
+    let run: Vec<u16> = (placeless.transcript.x..placeless.transcript.right())
+        .filter(|x| under(&bare, *x, row) != well)
+        .collect();
+    let claimed = |at: Option<&u16>| *at.expect("the prompt's row claims ground of its own");
+    let start = claimed(run.first());
+    let end = claimed(run.last());
+    assert_eq!(
+        run,
+        (start..=end).collect::<Vec<_>>(),
+        "the prompt's row claims one run of columns: a plate claimed twice reads as a bright strip \
+         and a dark strip of different widths on the same row, not as the one ground its words sit \
+         on"
+    );
+    assert_eq!(
+        (start, end.saturating_add(1)),
+        (
+            placeless.transcript.x,
+            placeless.transcript.right().saturating_sub(MARGIN)
+        ),
+        "the prompt's row claims the transcript's columns bar the margin at its right edge: a plate \
+         that stops short of it or runs past it reads as a bright strip of the wrong width beside \
+         the well the words are read on"
+    );
+    assert_eq!(
+        (start, row, end - start + 1, 1),
+        (plane.x, plane.y, plane.width, plane.height),
+        "the plane over the prompt is placed on the very cells the row claims: the transcript's \
+         columns bar its right margin and the one row these words are read on, so a plane a column \
+         wider lightens ground that is no plate or leaves a plate lit by no picture, and one a row \
+         taller lights ground that holds no words of this prompt"
+    );
+}
+
 fn cut_beside_a_rail() -> View {
     View::of(
         pictured().faced(false),

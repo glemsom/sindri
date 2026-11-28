@@ -39,6 +39,13 @@ pub(crate) const fn margined(band: Rect) -> Rect {
     }
 }
 
+pub(crate) const fn plate(band: Rect) -> Rect {
+    Rect {
+        width: band.width.saturating_sub(MARGIN),
+        ..band
+    }
+}
+
 pub(crate) const SIGIL: &str = "› ";
 
 pub(crate) const SPINE: &str = "┃";
@@ -407,10 +414,7 @@ impl Row {
     ) {
         if let Some(band) = self.band {
             let surface = match band {
-                Band::Prompt => Rect {
-                    width: area.width.saturating_sub(MARGIN),
-                    ..area
-                },
+                Band::Prompt => plate(area),
                 _ => area,
             };
             pen::claim(buffer, surface, palette.ground(Some(band)));
