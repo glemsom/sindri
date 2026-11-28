@@ -1,10 +1,13 @@
 use crate::composer::Key;
 use crate::ink::{Faces, Ink, Look};
 use crate::list::{self, Column, ScreenRow};
+use crate::rows::{self, Mark};
 
 pub const KEY: Look = Look::plain(Ink::Plain).wearing(Faces::BOLD);
 
 pub const MEANING: Look = Look::plain(Ink::Muted);
+
+pub const MARKS_HEADING: &str = "marks";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -507,11 +510,13 @@ impl Stack {
 
     pub fn body(&self, width: u16) -> Vec<ScreenRow> {
         let modes: Vec<Mode> = self.modes().collect();
+        let marks = rows::marks();
         let column = Column::of(
             modes
                 .iter()
                 .flat_map(|mode| mode.table())
-                .map(|binding| binding.name),
+                .map(|binding| binding.name)
+                .chain(marks.iter().map(Mark::glyph)),
             width,
             KEY,
             MEANING,
@@ -522,6 +527,10 @@ impl Stack {
             for binding in mode.table() {
                 rows.extend(column.hung(binding.name, binding.does));
             }
+        }
+        rows.push(list::whole(MARKS_HEADING, Look::plain(Ink::Dim)));
+        for mark in &marks {
+            rows.extend(column.hung_in(mark.glyph(), Look::plain(mark.ink()), mark.says()));
         }
         rows
     }

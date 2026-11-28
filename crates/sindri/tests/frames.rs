@@ -163,6 +163,16 @@ fn keys_120x40_lists_the_keys_of_the_stack_it_sits_on() {
 }
 
 #[test]
+fn keys_120x64_is_the_same_card_with_every_mark_the_band_draws_named_under_its_keys() {
+    fixture::assert_frame("keys", 120, 64);
+}
+
+#[test]
+fn keys_60x64_is_those_marks_wrapped_at_a_card_narrow_enough_to_wrap_them() {
+    fixture::assert_frame("keys", 60, 64);
+}
+
+#[test]
 fn card_120x40_is_a_card_as_tall_as_the_keys_it_lists_over_the_transcript_it_was_opened_from() {
     fixture::assert_frame("card", 120, 40);
 }

@@ -1,5 +1,6 @@
 mod frame;
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use ratatui::buffer::Buffer;
@@ -4589,5 +4590,67 @@ fn a_prompt_a_reader_folded_survives_a_reflow_and_counts_the_rows_the_narrower_b
         6,
         "so the head it draws is four rows of its own words at every width, under the blank row \
          that separates it from the exchange above: {wider:?}"
+    );
+}
+
+fn one_of_every_kind() -> Vec<Entry> {
+    let secrets = SecretSet::default();
+    vec![
+        Entry::Prompt {
+            text: secrets.redact("what is the transcript unit, in one line of words"),
+        },
+        thought(1),
+        call(2),
+        result(2, Exit::Code(0)),
+        result(3, Exit::Code(1)),
+        long_result(4),
+        Entry::Assistant {
+            turn: 5,
+            text: secrets.redact("prose, and a fence under it\n```rust\nfn main() {}\n```\n"),
+        },
+        Entry::Stop {
+            stop: Stop::Error(secrets.redact("the wire refused the request")),
+        },
+    ]
+}
+
+#[test]
+fn the_marks_the_keys_screen_names_are_the_marks_the_band_draws_and_no_others() {
+    let mut drawn: BTreeSet<(char, &str)> = BTreeSet::new();
+    for entry in one_of_every_kind() {
+        for row in layout(&entry, 120) {
+            for (glyph, look) in painted(&row, 120).into_iter().take(6) {
+                if !glyph.is_ascii() {
+                    drawn.insert((glyph, look.ink().name()));
+                }
+            }
+        }
+    }
+
+    let head = Pulse::live(0).head();
+    let (text, ink) = head.spans().first().expect("a head opens on a glyph");
+    drawn.insert((
+        text.chars().next().expect("the head opens on a glyph"),
+        ink.name(),
+    ));
+    drawn.insert((sindri::rows::THUMB, Ink::Dim.name()));
+
+    let named: BTreeSet<(char, &str)> = sindri::rows::marks()
+        .iter()
+        .map(|mark| {
+            (
+                mark.glyph()
+                    .chars()
+                    .next()
+                    .expect("a mark is one glyph at least"),
+                mark.ink().name(),
+            )
+        })
+        .collect();
+
+    assert_eq!(
+        named, drawn,
+        "the `?` screen names exactly the marks the band draws: a glyph added to the drawing \
+         needs its row here, and a row that names a glyph the band draws nowhere is no mark"
     );
 }
