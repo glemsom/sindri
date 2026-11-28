@@ -19,7 +19,9 @@ use sindri::palette::{Band, Palette};
 use sindri::pen;
 use sindri::picture::Surface;
 use sindri::pulse::Pulse;
-use sindri::rows::{Fence, Measure, Row, Rows, Scroll, Sideways, Window, layout, layout_on};
+use sindri::rows::{
+    FAILED, Fence, Measure, Row, Rows, Scroll, Sideways, Window, layout, layout_on,
+};
 use sindri::size::Sizes;
 use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
@@ -4859,26 +4861,56 @@ fn one_of_every_kind() -> Vec<Entry> {
     ]
 }
 
+fn marks_in(row: &Row, cols: u16) -> Vec<(char, Look)> {
+    let drawn = painted(row, cols);
+    let mut marks = Vec::new();
+    let mut column = 0u16;
+    for (text, _) in row.spans() {
+        let mut glyphs = text.trim().chars();
+        if let (Some(glyph), None) = (glyphs.next(), glyphs.next()) {
+            let lead = pen::cells(&text[..text.len() - text.trim_start().len()]);
+            let painted = drawn[usize::from(column.saturating_add(lead))];
+            assert_eq!(
+                painted.0, glyph,
+                "the glyph {glyph:?} a run of one draws is painted in the cell the run opens at"
+            );
+            marks.push(painted);
+        }
+        column = column.saturating_add(pen::cells(text));
+    }
+    marks
+}
+
+fn cells_of(frame: &frame::Frame) -> Vec<(char, Look)> {
+    let area = frame.area();
+    let mut cells = Vec::new();
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            let Some(look) = Look::of(frame.cell(x, y), frame.palette()) else {
+                continue;
+            };
+            cells.push((frame.glyph(x, y), look));
+        }
+    }
+    cells
+}
+
 #[test]
 fn the_marks_the_keys_screen_names_are_the_marks_the_band_draws_and_no_others() {
     let mut drawn: BTreeSet<(char, &str)> = BTreeSet::new();
-    for entry in one_of_every_kind() {
-        for row in layout(&entry, 120) {
-            for (glyph, look) in painted(&row, 120).into_iter().take(6) {
-                if !glyph.is_ascii() {
-                    drawn.insert((glyph, look.ink().name()));
-                }
+    let mut note = |cells: Vec<(char, Look)>| {
+        for (glyph, look) in cells {
+            if !glyph.is_ascii() || glyph == FAILED {
+                drawn.insert((glyph, look.ink().name()));
             }
         }
-    }
+    };
 
-    let head = Pulse::live(0).head();
-    let (text, ink) = head.spans().first().expect("a head opens on a glyph");
-    drawn.insert((
-        text.chars().next().expect("the head opens on a glyph"),
-        ink.name(),
-    ));
-    drawn.insert((sindri::rows::THUMB, Ink::Dim.name()));
+    for entry in one_of_every_kind() {
+        for row in layout(&entry, 120) {
+            note(marks_in(&row, 120));
+        }
+    }
 
     let mut failed = Rows::new();
     failed.measure(Measure::new(120, Surface::none(), None));
@@ -4886,22 +4918,41 @@ fn the_marks_the_keys_screen_names_are_the_marks_the_band_draws_and_no_others() 
     failed.push(result(1, Exit::Code(1)));
     for at in 0..failed.len() {
         for row in failed.rows(at) {
-            for (glyph, look) in painted(row, 120).into_iter().take(6) {
-                if !glyph.is_ascii() || glyph == '!' {
-                    drawn.insert((glyph, look.ink().name()));
-                }
-            }
+            note(marks_in(row, 120));
         }
     }
+
+    let mut running = Rows::new();
+    running.measure(Measure::new(120, Surface::none(), None));
+    running.push(asked_for(1));
+    running.push(answer(1));
+    running.heading(Some(Pulse::live(0).head()));
+    for at in 0..running.len() {
+        for row in running.rows(at) {
+            note(marks_in(row, 120));
+        }
+    }
+
+    let mut scrolled = Rows::new();
+    scrolled.measure(Measure::new(120, Surface::none(), None));
+    for which in 1..=80 {
+        scrolled.push(thought(which));
+    }
+    let thumb = scrolled
+        .thumb(Scroll::Back(1), 40)
+        .expect("a band of forty rows of an eighty-row transcript has a thumb");
+    let mut band = Buffer::empty(Rect::new(0, 0, 120, 40));
+    let palette = Palette::TRUECOLOR;
+    for y in band.area.y..band.area.bottom() {
+        thumb.paint(band.area, y, &mut band, &palette);
+    }
+    note(cells_of(&frame::holding(band, palette)));
 
     let named: BTreeSet<(char, &str)> = sindri::rows::marks()
         .iter()
         .map(|mark| {
             (
-                mark.glyph()
-                    .chars()
-                    .next()
-                    .expect("a mark is one glyph at least"),
+                mark.glyph().chars().next().expect("a mark is one glyph"),
                 mark.ink().name(),
             )
         })

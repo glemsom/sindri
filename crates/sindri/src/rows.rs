@@ -50,7 +50,7 @@ const CHECK: char = '✓';
 const CROSS: char = '✗';
 const KEPT: char = '⋯';
 
-const FAILED: char = '!';
+pub const FAILED: char = '!';
 
 const CUT: char = '…';
 
@@ -1316,7 +1316,7 @@ impl Thumb {
         self.top..self.top + self.span
     }
 
-    pub(crate) fn paint(&self, area: Rect, y: u16, buffer: &mut Buffer, palette: &Palette) {
+    pub fn paint(&self, area: Rect, y: u16, buffer: &mut Buffer, palette: &Palette) {
         if let Some(row) = y.checked_sub(area.y)
             && self.rows().contains(&row)
         {
