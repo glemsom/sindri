@@ -63,24 +63,20 @@ const FOLD_HEAD: usize = 4;
 
 const FOLD_KEPT: usize = 3;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Mark {
-    glyph: String,
+    glyph: char,
     ink: Ink,
     says: &'static str,
 }
 
 impl Mark {
-    fn new(glyph: impl Into<String>, ink: Ink, says: &'static str) -> Mark {
-        Mark {
-            glyph: glyph.into(),
-            ink,
-            says,
-        }
+    const fn new(glyph: char, ink: Ink, says: &'static str) -> Mark {
+        Mark { glyph, ink, says }
     }
 
-    pub fn glyph(&self) -> &str {
-        &self.glyph
+    pub fn glyph(&self) -> char {
+        self.glyph
     }
 
     pub fn ink(&self) -> Ink {
@@ -94,26 +90,30 @@ impl Mark {
 
 pub fn marks() -> [Mark; 11] {
     [
-        Mark::new(SPINE, Ink::Dim, "the spine a Prompt hangs on"),
-        Mark::new(SIGIL.trim_end(), Ink::Plain, "the sigil a Prompt opens on"),
-        Mark::new(THOUGHT.trim_end(), Ink::Dim, "the lane a thought is set in"),
+        Mark::new(glyph_of(SPINE), Ink::Dim, "the spine a Prompt hangs on"),
+        Mark::new(glyph_of(SIGIL), Ink::Plain, "the sigil a Prompt opens on"),
+        Mark::new(glyph_of(THOUGHT), Ink::Dim, "the lane a thought is set in"),
         Mark::new(
-            markdown::BAR.trim_end(),
+            glyph_of(markdown::BAR),
             Ink::Dim,
             "the bar a fence or quote sets",
         ),
-        Mark::new(KEPT.to_string(), Ink::Dim, "rows a Fold keeps back, as ⋯3"),
-        Mark::new(CHECK.to_string(), Ink::Ok, "a Call that settled well"),
-        Mark::new(CROSS.to_string(), Ink::Err, "a Call or a run that failed"),
-        Mark::new(FAILED.to_string(), Ink::Err, "every row of a failed Call"),
-        Mark::new(
-            PENDING.to_string(),
-            Ink::Dim,
-            "a running Call, or a cut word",
-        ),
-        Mark::new(pulse::FRAME.to_string(), Ink::Accent, "a run still writing"),
-        Mark::new(THUMB.to_string(), Ink::Dim, "where the window stands"),
+        Mark::new(KEPT, Ink::Dim, "rows a Fold keeps back, as ⋯3"),
+        Mark::new(CHECK, Ink::Ok, "a Call that settled well"),
+        Mark::new(CROSS, Ink::Err, "a Call or a run that failed"),
+        Mark::new(FAILED, Ink::Err, "every row of a failed Call"),
+        Mark::new(PENDING, Ink::Dim, "a running Call, or a cut word"),
+        Mark::new(pulse::FRAME, Ink::Accent, "a run still writing"),
+        Mark::new(THUMB, Ink::Dim, "where the window stands"),
     ]
+}
+
+fn glyph_of(gutter: &str) -> char {
+    gutter
+        .trim_end()
+        .chars()
+        .next()
+        .expect("a gutter opens on the glyph it shows")
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

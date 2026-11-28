@@ -4980,12 +4980,7 @@ fn the_marks_the_keys_screen_names_are_the_marks_the_band_draws_and_no_others() 
 
     let named: BTreeSet<(char, &str)> = sindri::rows::marks()
         .iter()
-        .map(|mark| {
-            (
-                mark.glyph().chars().next().expect("a mark is one glyph"),
-                mark.ink().name(),
-            )
-        })
+        .map(|mark| (mark.glyph(), mark.ink().name()))
         .collect();
 
     assert_eq!(

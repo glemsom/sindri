@@ -533,7 +533,7 @@ impl Stack {
             }
         }
         rows.push(list::whole(MARKS_HEADING, Look::plain(Ink::Dim)));
-        rows.extend(named(&marks, width));
+        rows.extend(paired(&marks, width));
         rows
     }
 
@@ -547,7 +547,7 @@ impl Stack {
     }
 }
 
-fn named(marks: &[Mark], width: u16) -> Vec<ScreenRow> {
+fn paired(marks: &[Mark], width: u16) -> Vec<ScreenRow> {
     let across = match width >= 2 * (1 + MARK_GAP + MARK_ROOM) + MARK_GAP {
         true => 2,
         false => 1,

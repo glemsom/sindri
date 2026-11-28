@@ -2879,7 +2879,7 @@ fn the_card_that_lists_the_keys_draws_every_key_and_every_mark_in_the_look_it_is
         }
     }
     for mark in crate::rows::marks() {
-        wanted.push((Look::plain(mark.ink()), mark.glyph().to_owned()));
+        wanted.push((Look::plain(mark.ink()), mark.glyph().to_string()));
     }
 
     assert_eq!(
