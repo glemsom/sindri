@@ -2092,7 +2092,7 @@ fn the_frame_a_launch_opens_on_is_a_wordmark_a_gloss_and_three_commands() {
             "",
             "/model     choose the model",
             "/settings  show every setting with its value",
-            "/stats     show all counters for this session",
+            "/new       start a new conversation",
         ],
         "the splash screen is a wordmark, the gloss it stands under, and three commands with \
              the one line each that explains them, set as one block"
@@ -2298,7 +2298,7 @@ fn a_splash_screen_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
             "a GNU/Linux AI agent",
             "choose the model",
             "show every setting with its value",
-            "show all counters for this session",
+            "start a new conversation",
         ] {
             assert!(
                 words.contains(line),

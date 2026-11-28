@@ -18,12 +18,12 @@ boot-face at 120x40
 12 |                                                                              wire      anthropic                       | plain:78 dim:10 plain:32
 13 |                                                                              model     claude-sonnet-4-5               | plain:78 dim:10 plain:32
 14 |                                                                                                                        | plain:120
-15 |               sindri                                                         workspace /srv/workspace                  | plain:15 accent+bold:6 plain:57 dim:10 plain:32
-16 |               a GNU/Linux AI agent                                           branch    main                            | plain:78 dim:10 plain:32
+15 |                sindri                                                        workspace /srv/workspace                  | plain:16 accent+bold:6 plain:56 dim:10 plain:32
+16 |                a GNU/Linux AI agent                                          branch    main                            | plain:78 dim:10 plain:32
 17 |                                                                                                                        | plain:120
-18 |               /model     choose the model                                    sandbox   bwrap                           | plain:15 accent:11 dim:16 plain:36 dim:10 plain:32
-19 |               /settings  show every setting with its value                                                             | plain:15 accent:11 dim:33 plain:61
-20 |               /stats     show all counters for this session                  session   —                               | plain:15 accent:11 dim:34 plain:18 dim:10 plain:32
+18 |                /model     choose the model                                   sandbox   bwrap                           | plain:16 accent:11 dim:16 plain:35 dim:10 plain:32
+19 |                /settings  show every setting with its value                                                            | plain:16 accent:11 dim:33 plain:60
+20 |                /new       start a new conversation                           session   —                               | plain:16 accent:11 dim:24 plain:27 dim:10 plain:32
 21 |                                                                              temp      —                               | plain:78 dim:10 plain:32
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120

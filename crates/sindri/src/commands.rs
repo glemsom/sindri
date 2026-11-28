@@ -54,7 +54,7 @@ pub const TABLE: [Row; 6] = [
     },
 ];
 
-pub const SPLASH: usize = 3;
+pub const SPLASH: [&str; 3] = [MODEL, SETTINGS, NEW];
 
 #[derive(Clone, Debug)]
 pub struct Card {
