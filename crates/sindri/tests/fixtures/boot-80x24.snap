@@ -10,12 +10,12 @@ boot at 80x24
 04 |                                                                                | plain:80
 05 |                                                                                | plain:80
 06 |                                                                                | plain:80
-07 |       sindri                                                                   | plain:7 accent+bold:6 plain:67
-08 |       a GNU/Linux AI agent                                                     | plain:80
+07 |                  sindri                                                        | plain:18 accent+bold:6 plain:56
+08 |                  an AI agent for the terminal                                  | plain:80
 09 |                                                                                | plain:80
-10 |       /model     ask the wire what it serves, and name the one to run          | plain:7 accent:11 dim:52 plain:10
-11 |       /settings  the keys the config holds, and the value each is set to       | plain:7 accent:11 dim:55 plain:7
-12 |       /stats     the facts the rail is too narrow to hold                      | plain:7 accent:11 dim:40 plain:22
+10 |                  /model     choose the model                                   | plain:18 accent:11 dim:16 plain:35
+11 |                  /settings  show every setting with its value                  | plain:18 accent:11 dim:33 plain:18
+12 |                  /new       start a new conversation                           | plain:18 accent:11 dim:24 plain:27
 13 |                                                                                | plain:80
 14 |                                                                                | plain:80
 15 |                                                                                | plain:80
@@ -25,5 +25,5 @@ boot at 80x24
 19 |                                                                                | plain:80
 20 |                                                                                | plain:80
 21 |                                                                                | plain:80
-22 |┃›what should the run do?                                                       | dim:25 plain:55
+22 |┃›what should the run do?                                                       | accent:1 dim:24 plain:55
 23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:5

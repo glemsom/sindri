@@ -19,7 +19,7 @@ use sindri_core::provider::endpoint::Endpoint;
 use sindri_core::provider::served::Listing;
 use sindri_core::provider::transport::{Canned, Replay};
 use sindri_core::provider::{Client, Credential};
-use sindri_core::records::Entry;
+use sindri_core::records::{Entry, Usage};
 use sindri_core::redact::SecretSet;
 use sindri_core::wire::Wire;
 
@@ -104,7 +104,7 @@ fn conversation() -> View {
 
 fn conversation_in(capabilities: Capabilities) -> View {
     let entries = [
-        Entry::Turn { turn: 1 },
+        Entry::Turn { turn: 1, usage: Usage::default() },
         Entry::Assistant {
             turn: 1,
             text: SecretSet::default().redact(
@@ -954,15 +954,19 @@ fn every_screen_is_drawn_on_a_card_as_tall_as_the_rows_it_holds() {
                 name(mode),
                 frame.rows()
             );
+            let whole = {
+                let mut roomy = on_screen(mode);
+                body_rows(&frame::painted(&mut roomy, cols, tall + 24)).len()
+            };
             assert!(
                 above + below > 0
+                    || whole <= usize::from(held)
                     || body_rows(&frame)
                         .iter()
                         .any(|row| row.contains("kept back")),
-                "{}'s card at {cols}x{tall} is the whole frame, and a card is only as tall as the \
-                 frame when its body is taller than the room it has: the row above its bottom \
-                 border says how many rows it keeps back, where a card that is the frame's height \
-                 and says nothing is the card this screen was drawn on before: {:?}",
+                "{}'s card at {cols}x{tall} is the whole frame only when the {whole} rows of its \
+                 body fill the room it has, or when a body taller than the room says in the row \
+                 above its bottom border how many rows it keeps back: {:?}",
                 name(mode),
                 frame.rows()
             );

@@ -341,9 +341,11 @@ fn the_first_line_is_where_the_queue_may_take_the_up_arrow() {
 }
 
 #[test]
-fn a_prompt_inserted_into_an_empty_draft_is_the_draft_line_for_line() {
+fn a_recalled_prompt_is_the_draft_again_line_for_line() {
     let mut composer = Composer::new();
-    composer.insert("the first line\nthe second");
+    composer.recall(Prompt {
+        text: String::from("the first line\nthe second"),
+    });
 
     assert_eq!(
         composer.text(),
@@ -354,14 +356,16 @@ fn a_prompt_inserted_into_an_empty_draft_is_the_draft_line_for_line() {
 }
 
 #[test]
-fn a_prompt_inserted_into_a_draft_leaves_what_was_typed_there() {
+fn a_prompt_recalled_into_a_draft_leaves_what_was_typed_there() {
     let mut composer = holding("fix: ");
-    composer.insert("the retry");
+    composer.recall(Prompt {
+        text: String::from("the retry"),
+    });
 
     assert_eq!(
         composer.text(),
         "fix: the retry",
-        "an insert puts the prompt where the caret was and takes nothing away"
+        "a recall puts the prompt where the caret was and takes nothing away"
     );
 }
 

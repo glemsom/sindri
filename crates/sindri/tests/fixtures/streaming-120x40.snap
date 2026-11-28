@@ -5,7 +5,7 @@ expression: self.text(name)
 streaming at 120x40
 00 |  none.                                                                       wire      anthropic                       | plain:78 dim:10 plain:32
 01 |                                                                              model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
-02 |┃›what is the transcript's unit?                                              think     high                            | dim:1 plain:77 dim:10 plain:32
+02 |┃›what is the transcript's unit?                                              think     high                            | accent:1 plain:77 dim:10 plain:32
 03 |⋯ 1 call · 9 ms                                                                                                         | dim:1 plain:1 dim:13 plain:105
 04 |                                                                              turns         6 /  250                    | plain:78 dim:10 plain:32
 05 |  The transcript's unit is the entry. An entry never carries a formatted      ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
@@ -18,7 +18,7 @@ streaming at 120x40
 12 |  code      │ behind a bar, highlighted                                                                                 | plain:11 dim:3 plain:106
 13 |  table     │ columns joined by a bar                                         session   9f2c7a41                        | plain:11 dim:3 plain:64 dim:10 plain:32
 14 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
-15 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+15 |┃›what does a row of the band say?                                                                                      | accent:1 plain:119
 16 |⋯ 1 call · 31 ms                                                              skills    2                               | dim:1 plain:1 dim:14 plain:62 dim:10 plain:32
 17 |                                                                              ◆ bash                                    | plain:78 accent:1 plain:41
 18 |  A row is one line                                                           ◆ records                                 | plain:2 plain+bold:17 plain:59 accent:1 plain:41
@@ -41,5 +41,5 @@ streaming at 120x40
 35 |▏    │let fence = Fence::open();                                              output    3.1k                            | dim:2 plain:3 dim:1 accent+bold:3 plain:69 dim:10 plain:32
 36 |▏    │let  tail = fence.words();                                              total     51.3k                           | dim:2 plain:3 dim:1 accent+bold:3 plain:15 plain+bold:5 plain:49 dim:10 plain:32
 37 |━                                                                                                                       | accent:1 plain:119
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Ctrl-C cancel · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                          | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:42

@@ -40,7 +40,8 @@ use crate::pointer::{self, Notch, Pointer};
 use crate::pulse::{self, Pulse};
 use crate::queue::Queue;
 use crate::rail;
-use crate::rows::{INDENT, MARGIN, Measure, Row, Rows, Scroll, margined};
+use crate::recall::{Draft, Walk};
+use crate::rows::{INDENT, MARGIN, Measure, Row, Rows, Scroll, margined, plate};
 use crate::settings::Settings;
 use crate::size::Sizes;
 use crate::splash;
@@ -331,47 +332,6 @@ struct ReadMark {
     entries: usize,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct Walk {
-    position: Option<usize>,
-    held: Option<(String, usize)>,
-}
-
-impl Walk {
-    fn before(&mut self, recall: &Recall, composer: &mut Composer) -> Outcome {
-        let at = self.position.map_or(0, |at| at.saturating_add(1));
-        let Some(prompt) = recall.prompt(at) else {
-            return Outcome::Unchanged;
-        };
-        if self.position.is_none() {
-            self.held = Some((composer.text().to_owned(), composer.cursor()));
-        }
-        self.position = Some(at);
-        composer.replace(prompt, prompt.len());
-        Outcome::Edited
-    }
-
-    fn after(&mut self, recall: &Recall, composer: &mut Composer) -> Outcome {
-        let Some(at) = self.position else {
-            return Outcome::Unchanged;
-        };
-        if at == 0 {
-            let Some((text, caret)) = self.held.take() else {
-                return Outcome::Unchanged;
-            };
-            self.position = None;
-            composer.replace(&text, caret);
-            return Outcome::Edited;
-        }
-        let Some(prompt) = recall.prompt(at - 1) else {
-            return Outcome::Unchanged;
-        };
-        self.position = Some(at - 1);
-        composer.replace(prompt, prompt.len());
-        Outcome::Edited
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct View {
     rows: Rows,
@@ -382,7 +342,6 @@ pub struct View {
     planes: Planes,
     composer: Composer,
     queue: Queue,
-    recall: Recall,
     walk: Walk,
     conversation: Conversation,
     superseded: bool,
@@ -448,7 +407,6 @@ impl View {
             planes: Planes::default(),
             composer: Composer::new(),
             queue: Queue::default(),
-            recall: Recall::none(),
             walk: Walk::default(),
             conversation: Conversation::default(),
             superseded: false,
@@ -471,8 +429,10 @@ impl View {
         view
     }
 
+    /// The prompts this frame walks back through. A frame handed none draws and answers every
+    /// key as one with no recall does.
     pub fn recalling(mut self, recall: Recall) -> View {
-        self.recall = recall;
+        self.walk = Walk::of(recall);
         self
     }
 
@@ -610,7 +570,7 @@ impl View {
         self.settle();
         self.stopped(&Stop::Error(SecretSet::default().redact(refusal)));
         match self.composer.text().is_empty() {
-            true => self.composer.insert(prompt.text()),
+            true => self.composer.recall(prompt),
             false => self.enqueue(prompt),
         }
     }
@@ -654,14 +614,7 @@ impl View {
         if outcome != Outcome::Unchanged {
             self.cancel_selection();
         }
-        match outcome {
-            Outcome::Send(prompt) => {
-                self.walk = Walk::default();
-                self.recall.append(prompt.text());
-                Outcome::Send(prompt)
-            }
-            outcome => outcome,
-        }
+        outcome
     }
 
     pub fn drag(&mut self, anchor: Cell, head: Cell) {
@@ -755,17 +708,16 @@ impl View {
         {
             return self.complete();
         }
-        if key == Key::Cancel {
-            self.walk = Walk::default();
-        }
-        if key == Key::Down && self.cards.walk(self.composer.text(), Move::Next) {
-            return Outcome::Edited;
-        }
         if key == Key::Down {
-            return match self.composer.key(key) {
-                Outcome::Unchanged => self.walk.after(&self.recall, &mut self.composer),
-                outcome => outcome,
-            };
+            if self.cards.walk(self.composer.text(), Move::Next) {
+                return Outcome::Edited;
+            }
+            if self.walk.walking() && self.composer.on_last_line() {
+                return self.walk_on();
+            }
+        }
+        if key == Key::Cancel {
+            self.walk.end();
         }
         match self.composer.key(key) {
             Outcome::Send(prompt) => self.sent(prompt),
@@ -786,6 +738,7 @@ impl View {
             return self.answer(command);
         }
         let Some(line) = self.cards.follow(prompt.text()).map(|card| card.spelling()) else {
+            self.walk.sent(prompt.text());
             return Outcome::Send(prompt);
         };
         match self.command(&line) {
@@ -826,7 +779,7 @@ impl View {
     }
 
     fn start_over(&mut self) -> Outcome {
-        self.walk = Walk::default();
+        self.walk.end();
         self.rows = Rows::new();
         self.read.entries = self.facts.transcript().map_or(0, <[Entry]>::len);
         self.scrolled(Scroll::Tail);
@@ -1047,17 +1000,38 @@ impl View {
         if !self.composer.on_first_line() {
             return self.composer.key(Key::Up);
         }
-        match self.queue.take_newest() {
+        match self.queue.recall() {
             Some(prompt) => {
-                self.composer.insert(prompt.text());
+                self.composer.recall(prompt);
                 Outcome::Edited
             }
-            None => self.walk.before(&self.recall, &mut self.composer),
+            None => self.walk_back(),
+        }
+    }
+
+    fn walk_back(&mut self) -> Outcome {
+        let draft = Draft::of(self.composer.text(), self.composer.cursor());
+        match self.walk.back(draft) {
+            Some(draft) => {
+                self.composer.restored(&draft.text, draft.caret);
+                Outcome::Edited
+            }
+            None => Outcome::Unchanged,
+        }
+    }
+
+    fn walk_on(&mut self) -> Outcome {
+        match self.walk.forward() {
+            Some(draft) => {
+                self.composer.restored(&draft.text, draft.caret);
+                Outcome::Edited
+            }
+            None => Outcome::Unchanged,
         }
     }
 
     fn drop_newest(&mut self) -> Outcome {
-        if self.queue.take_newest().is_none() {
+        if self.queue.recall().is_none() {
             return Outcome::Unchanged;
         }
         Outcome::Edited
@@ -1462,12 +1436,11 @@ impl View {
                 }
                 Placement::prompt(
                     u32::try_from(piece.entry).ok()?,
-                    Rect::new(
-                        area.x,
-                        y + u16::try_from(from - first).ok()?,
-                        area.width.saturating_sub(MARGIN),
-                        u16::try_from(to - from).ok()?,
-                    ),
+                    Rect {
+                        y: y + u16::try_from(from - first).ok()?,
+                        height: u16::try_from(to - from).ok()?,
+                        ..plate(area)
+                    },
                     end + 1 - start,
                     from - start,
                     area.height,

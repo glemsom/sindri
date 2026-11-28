@@ -30,31 +30,31 @@ pub struct Row {
 pub const TABLE: [Row; 6] = [
     Row {
         name: Cow::Borrowed(MODEL),
-        says: Cow::Borrowed("ask the wire what it serves, and name the one to run"),
+        says: Cow::Borrowed("choose the model"),
     },
     Row {
         name: Cow::Borrowed(SETTINGS),
-        says: Cow::Borrowed("the keys the config holds, and the value each is set to"),
+        says: Cow::Borrowed("show every setting with its value"),
     },
     Row {
         name: Cow::Borrowed(STATS),
-        says: Cow::Borrowed("the facts the rail is too narrow to hold"),
+        says: Cow::Borrowed("show all counters for this session"),
     },
     Row {
         name: Cow::Borrowed(NEW),
-        says: Cow::Borrowed("start the conversation again, and forget the last one"),
+        says: Cow::Borrowed("start a new conversation"),
     },
     Row {
         name: Cow::Borrowed(HELP),
-        says: Cow::Borrowed("the keys in force"),
+        says: Cow::Borrowed("show the keyboard shortcuts"),
     },
     Row {
         name: Cow::Borrowed(QUIT),
-        says: Cow::Borrowed("end the launch"),
+        says: Cow::Borrowed("quit Sindri"),
     },
 ];
 
-pub const SPLASH: usize = 3;
+pub const SPLASH: [&str; 3] = [MODEL, SETTINGS, NEW];
 
 #[derive(Clone, Debug)]
 pub struct Card {

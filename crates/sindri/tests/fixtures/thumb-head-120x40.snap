@@ -3,22 +3,22 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 thumb-head at 120x40
-00 |█ turn 1                                                                                                                | dim:2 muted:6 plain:112
-01 |█ turn 2                                                                                                                | dim:2 muted:6 plain:112
-02 |█ turn 3                                                                                                                | dim:2 muted:6 plain:112
-03 |█ turn 4                                                                                                                | dim:2 muted:6 plain:112
-04 |█ turn 5                                                                                                                | dim:2 muted:6 plain:112
-05 |█ turn 6                                                                                                                | dim:2 muted:6 plain:112
-06 |█ turn 7                                                                                                                | dim:2 muted:6 plain:112
-07 |█ turn 8                                                                                                                | dim:2 muted:6 plain:112
-08 |█ turn 9                                                                                                                | dim:2 muted:6 plain:112
-09 |█ turn 10                                                                                                               | dim:2 muted:7 plain:111
-10 |█ turn 11                                                                                                               | dim:2 muted:7 plain:111
-11 |█ turn 12                                                                                                               | dim:2 muted:7 plain:111
-12 |█ turn 13                                                                                                               | dim:2 muted:7 plain:111
-13 |█ turn 14                                                                                                               | dim:2 muted:7 plain:111
-14 |█ turn 15                                                                                                               | dim:2 muted:7 plain:111
-15 |█ turn 16                                                                                                               | dim:2 muted:7 plain:111
+00 |│ turn 1                                                                                                              █ | dim:2 muted:6 plain:110 dim:1 plain:1
+01 |│ turn 2                                                                                                              █ | dim:2 muted:6 plain:110 dim:1 plain:1
+02 |│ turn 3                                                                                                              █ | dim:2 muted:6 plain:110 dim:1 plain:1
+03 |│ turn 4                                                                                                              █ | dim:2 muted:6 plain:110 dim:1 plain:1
+04 |│ turn 5                                                                                                              █ | dim:2 muted:6 plain:110 dim:1 plain:1
+05 |│ turn 6                                                                                                              █ | dim:2 muted:6 plain:110 dim:1 plain:1
+06 |│ turn 7                                                                                                              █ | dim:2 muted:6 plain:110 dim:1 plain:1
+07 |│ turn 8                                                                                                              █ | dim:2 muted:6 plain:110 dim:1 plain:1
+08 |│ turn 9                                                                                                              █ | dim:2 muted:6 plain:110 dim:1 plain:1
+09 |│ turn 10                                                                                                             █ | dim:2 muted:7 plain:109 dim:1 plain:1
+10 |│ turn 11                                                                                                             █ | dim:2 muted:7 plain:109 dim:1 plain:1
+11 |│ turn 12                                                                                                             █ | dim:2 muted:7 plain:109 dim:1 plain:1
+12 |│ turn 13                                                                                                             █ | dim:2 muted:7 plain:109 dim:1 plain:1
+13 |│ turn 14                                                                                                             █ | dim:2 muted:7 plain:109 dim:1 plain:1
+14 |│ turn 15                                                                                                             █ | dim:2 muted:7 plain:109 dim:1 plain:1
+15 |│ turn 16                                                                                                             █ | dim:2 muted:7 plain:109 dim:1 plain:1
 16 |│ turn 17                                                                                                               | dim:2 muted:7 plain:111
 17 |│ turn 18                                                                                                               | dim:2 muted:7 plain:111
 18 |│ turn 19                                                                                                               | dim:2 muted:7 plain:111
@@ -41,5 +41,5 @@ thumb-head at 120x40
 35 |│ turn 36                                                                                                               | dim:2 muted:7 plain:111
 36 |  44 rows back · End follows the run                                                                                    | plain:2 muted:12 dim:3 plain+bold:3 muted:16 plain:84
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

@@ -3,14 +3,14 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 fold-open at 120x40
-00 |┃›why does the retry test fail?                                               wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
+00 |┃›why does the retry test fail?                                               wire      anthropic                       | accent:1 plain:77 dim:10 plain:32
 01 |  Every row of the run passes: the gutter holds one column for every          model     claude-sonnet-4-5-20250929      | plain:78 dim:10 plain:32
 02 |  entry, and a row of a command's output is set behind it rather than         think     high                            | plain:78 dim:10 plain:32
 03 |  beside the answer.                                                                                                    | plain:120
 04 |                                                                              turns         6 /  250                    | plain:78 dim:10 plain:32
-05 |  │ ✓ bash cargo test -p sindri --test rows 1.8 s ⋯ 22 rows kept back         ctx       █░░░░░ 48.2k / 200k             | dim:4 ok:2 dim:5 plain:32 dim:26 plain:9 dim:10 plain:1 dim:5 plain:26
-06 |  │ ✗ bash exit 7 cargo test retry 600 ms ⋯ 2 rows kept back                  cache     88%                             | dim:4 err:2 dim:12 plain:16 dim:26 plain:18 dim:10 plain:32
-07 |  │ retry failed                                                                                                        | dim:4 muted:12 plain:104
+05 |  │ ✓ bash cargo test -p sindri --test rows 1.8 s ⋯22                         ctx       █░░░░░ 48.2k / 200k             | dim:4 ok:2 dim:5 plain:32 dim:10 plain:25 dim:10 plain:1 dim:5 plain:26
+06 |! │ ✗ bash exit 7 cargo test retry 600 ms ⋯2                                  cache     88%                             | err:1 dim:3 err:2 dim:12 plain:16 dim:10 plain:34 dim:10 plain:32
+07 |! │ retry failed                                                                                                        | err:1 dim:3 muted:12 plain:104
 08 |                                                                              workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 09 |  Three rows of the fold are the whole of it: the head, the count and the     branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |  last.                                                                                                                 | plain:120
@@ -41,5 +41,5 @@ fold-open at 120x40
 35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
 36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

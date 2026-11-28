@@ -17,7 +17,7 @@ use sindri::mark::Cell;
 use sindri::palette::{Band, Palette};
 use sindri::pen::{self, Clip};
 use sindri::pointer::Pointer;
-use sindri::rows::Scroll;
+use sindri::rows::{MARGIN, Scroll};
 use sindri::view::{Transcript, View};
 use sindri_core::records::Entry;
 use sindri_core::redact::SecretSet;
@@ -392,10 +392,15 @@ fn a_pass_under_a_card_hands_back_the_body_the_screens_rows_were_drawn_in() {
         top + 1,
         "the screen's own rows begin on the row under the card's top border: {card:?}"
     );
+    let counted = frame.row(bottom - 1).contains("rows kept back");
     assert_eq!(
         card.bottom(),
-        bottom,
-        "and end on the row the key that leaves is drawn in: {card:?}"
+        match counted {
+            true => bottom - 1,
+            false => bottom,
+        },
+        "and end on the row the key that leaves is drawn in, or on the row above it where that one \
+         counts the rows the card keeps back: {card:?}"
     );
     let under: Vec<char> = frame
         .row(top + 1)
@@ -466,6 +471,59 @@ fn a_pass_beside_a_rail_hands_back_the_columns_the_transcript_was_given() {
         laid.transcript.width < 120,
         "a frame beside a rail hands the transcript less than its own width: {laid:?}"
     );
+}
+
+#[test]
+fn every_row_of_a_pictured_rail_carries_the_edge_ink_on_its_first_column() {
+    let palette = Palette::TRUECOLOR;
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
+    let mut pictured = View::of(caps::kitty(), railed(), Transcript::of(turns(3)));
+    let mut cells = View::of(caps::inked(palette), railed(), Transcript::of(turns(3)));
+    let drawn = frame::painted(&mut pictured, 120, 40);
+    let twin = frame::painted(&mut cells, 120, 40);
+    let laid = drawn
+        .told()
+        .layout()
+        .expect("a pass that drew a frame hands back the frame it laid out");
+    let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+    let (label, column) = drawn.drawn_at("wire");
+
+    assert!(
+        (rail.y..rail.bottom()).contains(&label),
+        "the rail's wire is not drawn in the rail's own band: {label}"
+    );
+    assert_eq!(
+        column,
+        rail.x + MARGIN,
+        "the rail's first label opens on another column than the margin the seam leaves it: a \
+         fact of the rail moves by a column and the band narrows by one"
+    );
+    for y in rail.y..rail.bottom() {
+        assert_eq!(
+            drawn.cell(rail.x, y).bg,
+            palette.edge_ink(),
+            "row {y} of the rail's first column is not the edge ink on a frame the terminal \
+             places a picture on, where the cell grid is the only thing that parts the two bands"
+        );
+        assert_eq!(
+            drawn.glyph(rail.x, y),
+            ' ',
+            "row {y} of the rail's first column stands a glyph on the column the bands are \
+             parted by, so the seam is read as a word"
+        );
+        assert_eq!(
+            drawn.cell(rail.x + 1, y).bg,
+            own,
+            "row {y} of the column beside the seam is not the terminal's own ground, so the rail's \
+             plane is not read through the cell it was placed on"
+        );
+        assert_eq!(
+            twin.cell(rail.x, y).bg,
+            drawn.cell(rail.x, y).bg,
+            "row {y} of the rail's first column is the edge ink on one of the two frames and \
+             another colour on the other, so the frames are parted differently"
+        );
+    }
 }
 
 #[test]
@@ -1316,7 +1374,7 @@ fn a_width_only_terminal_gets_the_unsized_rails_cells() {
 }
 
 #[test]
-fn submitted_prompt_surfaces_leave_the_transcripts_right_margin_on_the_well() {
+fn submitted_prompt_surfaces_fill_the_transcript_band_and_an_answer_the_well() {
     for palette in [Palette::TRUECOLOR, Palette::ANSI, Palette::SLOTS] {
         for (cols, rows) in [(80, 24), (120, 40), (40, 24)] {
             let mut entries = vec![Entry::Prompt {
@@ -1327,18 +1385,53 @@ fn submitted_prompt_surfaces_leave_the_transcripts_right_margin_on_the_well() {
             let frame = frame::painted(&mut view, cols, rows);
             let band = frame.told().layout().unwrap().transcript;
             let (y, _) = frame.drawn_at("a short prompt");
-            for x in band.x..band.right() - 2 {
-                assert_eq!(frame.cell(x, y).bg, palette.band(Band::Prompt));
-            }
-            for x in band.right() - 2..band.right() {
-                assert_eq!(frame.cell(x, y).bg, palette.band(Band::Well));
+            for x in band.x..band.right() {
+                assert_eq!(
+                    frame.cell(x, y).bg,
+                    palette.band(Band::Prompt),
+                    "column {x} of a prompt's row is not the plate it is read on: the plate runs \
+                     the band whole, so the band's last two columns are its own padding"
+                );
             }
             let (y, _) = frame.drawn_at("an answer");
             for x in band.x..band.right() {
-                assert_eq!(frame.cell(x, y).bg, palette.band(Band::Well));
+                assert_eq!(
+                    frame.cell(x, y).bg,
+                    palette.band(Band::Well),
+                    "column {x} of an answer's row is not the well the plate stops short of"
+                );
             }
         }
     }
+}
+
+#[test]
+fn a_prompt_line_laid_at_the_full_measure_stops_two_columns_short_of_the_plates_edge() {
+    let palette = Palette::TRUECOLOR;
+    let words = "a".repeat(400);
+    let mut view = View::of(
+        caps::inked(palette),
+        railed(),
+        Transcript::of(vec![Entry::Prompt {
+            text: SecretSet::default().redact(&words),
+        }]),
+    );
+    let frame = frame::painted(&mut view, 120, 40);
+    let band = frame.told().layout().unwrap().transcript;
+    let mut filled = 0;
+    for y in band.y..band.bottom() {
+        let text: String = frame.row(y).chars().take(usize::from(band.width)).collect();
+        if !text.starts_with('┃') {
+            continue;
+        }
+        filled = filled.max(text.trim_end().chars().count());
+    }
+    assert_eq!(
+        filled + usize::from(MARGIN),
+        usize::from(band.width),
+        "the deepest line of a prompt whose words fill the measure leaves the plate's two \
+         columns of padding past it: no glyph of the words stands on the plate's own edge"
+    );
 }
 
 #[test]
@@ -1383,24 +1476,17 @@ fn submitted_prompt_surfaces_preserve_literal_rows_and_ownership_across_capabili
             }
             for y in band.y..band.bottom() {
                 if frame.cell(band.x, y).symbol() == "┃" {
-                    for x in band.x..band.right() - 2 {
+                    for x in band.x..band.right() {
                         assert_eq!(
                             frame.cell(x, y).bg,
                             if pictured {
                                 ratatui::style::Color::Reset
                             } else {
                                 palette.band(Band::Prompt)
-                            }
-                        );
-                    }
-                    for x in band.right() - 2..band.right() {
-                        assert_eq!(
-                            frame.cell(x, y).bg,
-                            if pictured {
-                                ratatui::style::Color::Reset
-                            } else {
-                                palette.band(Band::Well)
-                            }
+                            },
+                            "column {x} of row {y} of a prompt's words is not the plate the \
+                             words are read on: the plate fills the transcript band whole, so \
+                             no column of the row is left on the well beside it"
                         );
                     }
                 }
@@ -1493,8 +1579,30 @@ fn submitted_prompt_folds_keep_original_copy_and_reader_opening_after_reflow() {
     let band = reflowed.told().layout().unwrap().transcript;
     assert_eq!(reflowed.cell(0, band.y).symbol(), "┃");
     for y in band.y..band.bottom() {
-        for x in band.right() - 2..band.right() {
-            assert_eq!(reflowed.cell(x, y).bg, Palette::TRUECOLOR.band(Band::Well));
+        let row: Vec<char> = reflowed
+            .row(y)
+            .chars()
+            .take(usize::from(band.width))
+            .collect();
+        assert_eq!(
+            row[usize::from(band.width) - 2..]
+                .iter()
+                .collect::<String>()
+                .trim(),
+            "",
+            "row {y} of the relaid prompt carries a glyph in the plate's two columns of \
+             padding, so the words no longer keep the measure they were laid at"
+        );
+        if reflowed.cell(band.x, y).symbol() == "┃" {
+            for x in band.right() - 2..band.right() {
+                assert_eq!(
+                    reflowed.cell(x, y).bg,
+                    Palette::TRUECOLOR.band(Band::Prompt),
+                    "column {x} of row {y} of the relaid prompt is not the plate its words are \
+                     read on: the plate runs the band whole, and a plate that stops short of it \
+                     leaves the well showing in its padding"
+                );
+            }
         }
     }
 }
@@ -1534,10 +1642,11 @@ fn submitted_prompt_fold_counts_follow_width_and_closing_keeps_the_inset_surface
     let closed = frame::painted(&mut view, 120, 40);
     let (count, _) = closed.drawn_at("12 rows kept back");
     let band = closed.told().layout().unwrap().transcript;
-    for x in band.x..band.right() - 2 {
+    for x in band.x..band.right() {
         assert_eq!(
             closed.cell(x, count).bg,
-            Palette::TRUECOLOR.band(Band::Prompt)
+            Palette::TRUECOLOR.band(Band::Prompt),
+            "column {x} of the row a closed fold keeps back is not the plate its count is read on"
         );
     }
 }
@@ -2094,9 +2203,26 @@ fn long_conversations_release_visible_prompt_resources_on_every_scroll_and_resiz
                 .iter()
                 .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
             {
-                assert!(band.contains(Position::new(p.cells().x, p.cells().y)));
-                assert!(p.cells().right() <= band.right() - 2);
-                assert!(p.cells().bottom() <= band.bottom());
+                assert!(
+                    band.contains(Position::new(p.cells().x, p.cells().y)),
+                    "a prompt's plane is placed at {:?}, outside the band {:?} it is read on",
+                    p.cells(),
+                    band
+                );
+                assert_eq!(
+                    p.cells().right(),
+                    band.right(),
+                    "a prompt's plane is lit on {} where the band it fills ends on {}: the plate \
+                     runs the band whole and no column of the rail beside it",
+                    p.cells().right(),
+                    band.right()
+                );
+                assert!(
+                    p.cells().bottom() <= band.bottom(),
+                    "a prompt's plane reaches row {} of a band that ends on {}",
+                    p.cells().bottom(),
+                    band.bottom()
+                );
             }
             let wire =
                 String::from_utf8(held.pass(frame.told().placements(), view.planes())).unwrap();
@@ -2325,7 +2451,7 @@ fn failed_result_discloses_recorded_diagnostic_before_its_output_fold() {
         );
         let closed = frame::painted(&mut view, 120, 40);
         let (diagnostic, _) = closed.drawn_at("error: permission denied");
-        let (fold, _) = closed.drawn_at("9 rows kept back");
+        let (fold, _) = closed.drawn_at("\u{22ef}9");
         assert!(diagnostic > fold);
     }
 }
@@ -2518,7 +2644,7 @@ fn huge_opened_results_stay_bounded_through_scroll_and_resize_without_pictures()
         Transcript::of(disclosed_result(sindri_core::run::Exit::Code(1), &words)),
     );
     let folded = frame::painted(&mut view, 120, 40);
-    let (y, x) = folded.drawn_at("rows kept back");
+    let (y, x) = folded.drawn_at("\u{22ef}");
     view.pointer(folded.told(), Pointer::Press(Cell::new(y, x)));
     assert_eq!(
         view.pointer(folded.told(), Pointer::Release(Cell::new(y, x))),

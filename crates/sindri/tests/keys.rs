@@ -1,7 +1,11 @@
 use sindri::capability::Capabilities;
 use sindri::composer::{Key, Outcome};
 use sindri::facts::Facts;
+use sindri::ink::{Ink, Look};
 use sindri::keys::{Act, DESCRIPTIONS, Description, Mode};
+use sindri::list::ScreenRow;
+use sindri::rows::marks;
+use sindri::view::ScreenBody;
 use sindri::view::{Transcript, View};
 
 fn typed(lines: &[&str]) -> View {
@@ -490,4 +494,423 @@ fn the_draft_is_the_one_mode_that_wears_no_card() {
         "the five screens wear a card and the draft wears none, and each card's two labels \
          are its screen's name and the key its own table binds to leaving it"
     );
+}
+
+fn keys_body(width: u16) -> Vec<ScreenRow> {
+    let mut view = View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::none(),
+    );
+    view.key(Key::Char('?'));
+    let Some(ScreenBody::Rows(rows)) = view.body(Mode::Keys, width) else {
+        panic!("the keys screen is a card of rows");
+    };
+    rows
+}
+
+fn said(row: &ScreenRow) -> String {
+    row.spans.iter().map(|(said, _)| said.as_str()).collect()
+}
+
+fn marks_section(width: u16) -> (Look, Vec<(String, Look, String)>) {
+    let body = keys_body(width);
+    let heading = body
+        .iter()
+        .position(|row| said(row).trim() == "marks")
+        .unwrap_or_else(|| {
+            let said: Vec<String> = body.iter().map(said).collect();
+            panic!("no marks heading at {width} columns: {said:#?}")
+        });
+    let named = body[heading].spans[0].1;
+
+    let mut section: Vec<(String, Look, String)> = Vec::new();
+    let mut open: Vec<Option<usize>> = Vec::new();
+    for row in &body[heading + 1..] {
+        open.resize(row.spans.len().div_ceil(2), None);
+        for (at, pair) in row.spans.chunks(2).enumerate() {
+            let (glyph, look) = &pair[0];
+            let words = match pair.get(1) {
+                Some((words, _)) => words.split_whitespace().collect::<Vec<_>>().join(" "),
+                None => String::new(),
+            };
+            match glyph.trim().is_empty() {
+                true => {
+                    if let Some(mark) = open[at]
+                        && !words.is_empty()
+                    {
+                        section[mark].2.push(' ');
+                        section[mark].2.push_str(&words);
+                    }
+                }
+                false => {
+                    open[at] = Some(section.len());
+                    section.push((glyph.trim().to_owned(), *look, words));
+                }
+            }
+        }
+    }
+    (named, section)
+}
+
+#[test]
+fn the_keys_screen_names_every_mark_under_its_key_table_in_the_ink_it_is_drawn_in() {
+    let (heading, named) = marks_section(68);
+    assert_eq!(
+        heading,
+        Look::plain(Ink::Dim),
+        "the marks sit under the key table as a section of their own, headed in the dim ink the \
+         `keys` and `composer` sections are headed in"
+    );
+
+    let wanted: Vec<(String, Look, String)> = marks()
+        .iter()
+        .map(|mark| {
+            (
+                mark.glyph().to_string(),
+                Look::plain(mark.ink()),
+                mark.says().to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        named, wanted,
+        "one row per mark the band draws, in the order the drawing declares them: the glyph, the \
+         ink it is drawn in, and the words that say what it means"
+    );
+}
+
+#[test]
+fn the_card_a_120x40_frame_opens_names_every_mark_and_keeps_no_row_of_its_body_back() {
+    let body = keys_body(68);
+    let (_, named) = marks_section(68);
+    assert_eq!(
+        named.len(),
+        marks().len(),
+        "every mark the band draws is named on the card `?` opens at 120 columns, and none of the \
+         eleven is kept back: {named:#?}"
+    );
+    assert!(
+        body.len() <= 38,
+        "the body of that card is no taller than the 38 rows a 40-row frame holds for it, so the \
+         card keeps nothing back: {} rows, {:?}",
+        body.len(),
+        said(&body[body.len() - 1])
+    );
+}
+
+#[test]
+fn a_narrow_card_wraps_a_marks_meaning_and_never_cuts_it_in_half() {
+    let (_, roomy) = marks_section(68);
+    let (_, narrow) = marks_section(56);
+    assert_eq!(
+        narrow, roomy,
+        "the same marks, the same inks and the same words at a width that cannot hold them on one \
+         row: a meaning wraps and is never cut"
+    );
+
+    let body = keys_body(56);
+    let said: Vec<String> = body.iter().map(said).collect();
+    let heading = said
+        .iter()
+        .position(|row| row.trim() == "marks")
+        .expect("a marks heading");
+    assert!(
+        said.len() - heading - 1 > marks().len().div_ceil(2),
+        "at 56 columns the block runs to more rows than one row for every pair of marks, so a \
+         meaning wraps: {said:#?}"
+    );
+    for (glyph, _, said) in &narrow {
+        assert!(
+            !glyph.is_empty() && !said.is_empty(),
+            "a mark a terminal that spells no colour is read by carries its glyph and its words, \
+             and never the ink alone"
+        );
+    }
+}
+
+fn recalled(prompts: &[&str]) -> View {
+    let root = tempfile::tempdir().expect("a temp state home");
+    let environment: std::collections::BTreeMap<String, String> = [(
+        String::from("XDG_STATE_HOME"),
+        root.path().to_string_lossy().into_owned(),
+    )]
+    .into_iter()
+    .collect();
+    let mut recall = sindri_core::recall::Recall::load(&environment);
+    for prompt in prompts {
+        recall.send(prompt);
+    }
+    View::of(
+        Capabilities::default(),
+        Facts::default()
+            .asked()
+            .working(root.path().to_path_buf(), None),
+        Transcript::none(),
+    )
+    .recalling(recall)
+}
+
+fn queued(mut view: View, prompt: &str) -> View {
+    view.paste(prompt);
+    match view.key(Key::Enter) {
+        Outcome::Send(prompt) => view.enqueue(prompt),
+        other => panic!("a draft should have been sent, and {other:?} came instead"),
+    }
+    view
+}
+
+#[test]
+fn up_on_an_empty_draft_hands_back_the_prompt_sent_last() {
+    let mut view = recalled(&["the first thing", "the second thing"]);
+
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "a recall is a draft to paint"
+    );
+    assert_eq!(
+        view.composer().text(),
+        "the second thing",
+        "the prompt asked last is the whole draft again"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        "the second thing".len(),
+        "with the caret at its end, ready to be typed on"
+    );
+}
+
+#[test]
+fn up_again_walks_back_one_prompt_at_a_time() {
+    let mut view = recalled(&["the first thing", "the second thing", "the third thing"]);
+    view.key(Key::Up);
+    view.key(Key::Up);
+
+    assert_eq!(
+        view.composer().text(),
+        "the second thing",
+        "the second `↑` is the prompt before the one on screen"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the first thing",
+        "and the third is the oldest there is"
+    );
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Unchanged,
+        "past the oldest the walk stops and the frame stays as it is"
+    );
+    assert_eq!(view.composer().text(), "the first thing");
+}
+
+#[test]
+fn down_walks_forward_and_past_the_newest_gives_the_draft_back() {
+    let mut view = recalled(&["the first thing", "the second thing"]);
+    view.paste("half a thought");
+    view.key(Key::Left);
+    view.key(Key::Left);
+    let (text, cursor) = (view.composer().text().to_owned(), view.composer().cursor());
+
+    view.key(Key::Up);
+    view.key(Key::Up);
+    assert_eq!(view.composer().text(), "the first thing");
+
+    assert_eq!(view.key(Key::Down), Outcome::Edited, "`↓` is the walk on");
+    assert_eq!(view.composer().text(), "the second thing");
+    assert_eq!(
+        view.key(Key::Down),
+        Outcome::Edited,
+        "and past the newest it is the draft the walk interrupted"
+    );
+    assert_eq!(
+        view.composer().text(),
+        text,
+        "the words exactly as they were"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        cursor,
+        "and the caret standing where it stood"
+    );
+    assert_eq!(
+        view.key(Key::Down),
+        Outcome::Unchanged,
+        "past the draft it interrupted there is nothing further to walk"
+    );
+}
+
+#[test]
+fn a_recalled_prompt_is_the_whole_draft_and_never_spliced_into_it() {
+    let mut view = recalled(&["the whole prompt"]);
+    view.paste("typed, with the caret");
+    for _ in 0..4 {
+        view.key(Key::Left);
+    }
+
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the whole prompt",
+        "the text the caret stood in the middle of does not survive the recall"
+    );
+}
+
+#[test]
+fn a_recalled_multi_line_prompt_arrives_whole_with_the_caret_at_its_end() {
+    let mut view = recalled(&["first line\nsecond line\nthird line"]);
+
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "first line\nsecond line\nthird line",
+        "the lines the reader wrote are handed back as lines"
+    );
+    assert_eq!(
+        view.composer().cursor(),
+        "first line\nsecond line\nthird line".len(),
+        "and the caret waits at the tail of the last one"
+    );
+}
+
+#[test]
+fn an_edit_to_a_recalled_prompt_keeps_the_walk_where_it_was() {
+    let mut view = recalled(&["the first thing", "the second thing", "the third thing"]);
+    view.key(Key::Up);
+    view.key(Key::Up);
+    view.paste("!");
+
+    assert_eq!(
+        view.composer().text(),
+        "the second thing!",
+        "a recalled prompt is a draft like any other"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the first thing",
+        "and the next `↑` takes the prompt before the one the reader was editing"
+    );
+}
+
+#[test]
+fn down_inside_a_multi_line_draft_moves_the_caret_and_never_the_walk() {
+    let mut view = recalled(&["one\ntwo"]);
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "the recall is the whole draft, two lines of it"
+    );
+    assert_eq!(
+        view.composer().caret(),
+        (1, 3),
+        "the caret waits on row two"
+    );
+
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().caret(),
+        (0, 3),
+        "off the first line `↑` is the draft's, so the caret rose a row"
+    );
+    assert_eq!(
+        view.key(Key::Down),
+        Outcome::Edited,
+        "and off the last line `↓` is the draft's too"
+    );
+    assert_eq!(
+        view.composer().caret(),
+        (1, 3),
+        "so the caret came back down"
+    );
+    assert_eq!(
+        view.composer().text(),
+        "one\ntwo",
+        "neither press moved the walk off the prompt on screen"
+    );
+}
+
+#[test]
+fn the_queue_hands_back_its_prompt_before_the_recall_does() {
+    let mut view = queued(recalled(&["the first thing"]), "the queued prompt");
+
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "the queue's prompt is the first thing `↑` takes back"
+    );
+    assert_eq!(view.composer().text(), "the queued prompt");
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the queued prompt",
+        "and the recall is what answers once the queue holds nothing"
+    );
+}
+
+#[test]
+fn sending_a_prompt_ends_the_walk_and_keeps_it_in_the_recall() {
+    let mut view = recalled(&["the first thing", "the second thing"]);
+    view.key(Key::Up);
+    view.key(Key::Up);
+    assert_eq!(view.composer().text(), "the first thing");
+
+    assert!(
+        matches!(view.key(Key::Enter), Outcome::Send(prompt) if prompt.text() == "the first thing"),
+        "a recalled prompt is a draft Enter sends"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the first thing",
+        "the prompt just sent is the newest of the recall, so the next `↑` starts there"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the second thing",
+        "and walks back from it"
+    );
+}
+
+#[test]
+fn ctrl_c_ends_the_walk_and_leaves_the_recall_alone() {
+    let mut view = recalled(&["the first thing", "the second thing"]);
+    view.key(Key::Up);
+    view.key(Key::Up);
+    assert_eq!(view.composer().text(), "the first thing");
+
+    view.key(Key::Cancel);
+    assert_eq!(
+        view.composer().text(),
+        "",
+        "clearing the draft is not walking"
+    );
+    view.key(Key::Up);
+    assert_eq!(
+        view.composer().text(),
+        "the second thing",
+        "the next `↑` starts at the newest again, and the recall holds it still"
+    );
+}
+
+#[test]
+fn a_launch_with_no_recall_still_hands_back_what_it_sent() {
+    let mut view = recalled(&[]);
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Unchanged,
+        "a first run has nothing to hand back, so it is not a flicker"
+    );
+
+    view.paste("the only thing I sent");
+    assert!(matches!(view.key(Key::Enter), Outcome::Send(_)));
+    assert_eq!(
+        view.key(Key::Up),
+        Outcome::Edited,
+        "a launch with nowhere to write still recalls what it sent"
+    );
+    assert_eq!(view.composer().text(), "the only thing I sent");
 }

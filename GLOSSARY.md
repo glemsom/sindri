@@ -45,8 +45,9 @@ _Avoid_: Session ID, conversation ID, durable memory
 **Exchange**:
 The band's unit: the prompt wearing the sigil it was asked with, what the run did under it, and the
 answer. That work is no row of the band while the run fills it — each thought, call, result and
-answer it went past standing as its own row — and one row once it has ended, counting them. That row
-is the reader's to open, and a result inside an opened work keeps the fold of its own.
+answer it went past standing as its own row — and one row once it has ended, counting them in its
+**Tally**. That row is the reader's to open, and a result inside an opened work keeps the fold of
+its own.
 _Avoid_: Pair, round, item, Activity, Trace, Log
 
 **Prompt**:
@@ -59,6 +60,15 @@ _Avoid_: Query, question, input
 One request to the model and the tool calls it asks for. Not a unit of progress, and no row of the
 band: the record writes one for every turn the run took and the drawing leaves it out.
 _Avoid_: Step, iteration, wave
+
+**Tally**:
+What a settled **Exchange**'s one row states of the work under it: its calls, the ones that
+failed, the files they named, the time they took, and the bill its **Turns** spent — the input and
+the output the record holds for each, in the numbers the **Rail** spells its own spend in. Its
+facts are ranked, so a narrow band gives up the bill, then the time, then the files, and never a
+count of calls or of failures. A record whose turns spent nothing states no bill, and a row relaid
+at another width claims what it claimed.
+_Avoid_: Count (that one is the **Fold**'s), spend (the **Rail**'s), stats, totals
 
 **Witness**:
 What a **Run**'s loop reports to: the phase it is in and the turn it is on as it goes, each finished
@@ -159,7 +169,8 @@ with no key of its own is read from, or nothing at all.
 _Avoid_: Token, secret, API key, auth
 
 **Served name**:
-A model identifier read off the wire, never invented, kept beside the endpoint that produced it.
+A model identifier read off the wire, never invented, kept beside the endpoint that produced it; one
+the wire marks as an embedding is not offered, because a run cannot ask it for words.
 _Avoid_: Model list, catalog, available models
 
 **Route**:
@@ -177,10 +188,12 @@ conversation of one prompt, and so one session.
 _Avoid_: Conversation, chat, history
 
 **Recall**:
-The prompts a reader has sent, verbatim and in the order they were asked, kept in one file of their
-own beside the sessions. It outlives every **Launch**, and a cap on its entries bounds it, the
-oldest dropped first, so deleting the file is the whole of forgetting it.
-_Avoid_: History (that one is a run's own turns), transcript, log, clipboard
+The reader's own prompts across launches, oldest first, kept in a file of its own beside the sessions:
+verbatim, because they are what the reader wrote, and bounded by a cap, because a key walks them. A
+prompt reaches it where a draft becomes one, so a slash command never does and a batch launch writes
+none. It is neither a **Session**, whose record is what a run did and is redacted to be read as
+evidence, nor a **Run**'s history, which is that run's own turns.
+_Avoid_: History, prompt history, record, log
 
 **Skill**:
 A directory holding a `SKILL.md` whose instructions can be loaded by name, in one of three scopes;
@@ -259,8 +272,25 @@ The two columns every **Band** opens its words in and keeps at its right edge, w
 holds: the **Transcript**'s prose past the gutter a row wears, the **Composer**'s head count, its
 hints and the row that says the frame stands off the tail, and the **Rail**'s sections, its fields
 and the values set in them. A gutter's glyph stands in the column before it and is no word of
-the band, and the air a band keeps on its right is what stops a word on the frame's own edge.
+the band, and the air a band keeps on its right is what stops a word on the frame's own edge — it
+is where the **Transcript** band's **Thumb** stands, so the band says where the reader is without
+covering a word it is read for.
 _Avoid_: Seat, padding, indent (that one is the gutter a row opens with)
+
+**Thumb**:
+The mark a **Transcript** band draws while the reader stands off the tail, saying where the window
+stands: the span of the band it fills and the row it opens on, both read from how much of the
+transcript the band holds and how far back the reader is. It stands in the **Margin** at the band's
+right edge, in that margin's first column, because the band's last column carries a cut mark and no
+measured cell of the band may carry it; a frame at the tail draws none.
+_Avoid_: Scrollbar, slider, handle, indicator, position bar
+
+**Plate**:
+The ground a **Prompt**'s words are read on: the **Transcript band** whole, from its first column to the
+one before the **Seam**, so the words keep their **Measure** on two columns of padding at each end and
+the **Thumb** and the cut mark stand on the padding at its foot. It is the band's own **Rung**, in the
+cells and in the **Plane** lit over them, so the two cannot part.
+_Avoid_: Card, panel, quote box, background strip
 
 **Measure**:
 The three facts the rows of a band are laid at: its width, the surface a picture in an answer is
@@ -283,18 +313,18 @@ of the cell rather than in whole cells: the image a frame holds against that ban
 makes only when the shade moves. Every pixel of it is the **Rung** the cell row it falls in is drawn
 on with light added or taken away, never a blend of two rungs, and the light it carries is at most
 the most its rung can take while every ink the palette spells keeps its floor on the lit pixel — at
-the share its band names of that most, and a lamp a pixel reads rather than a row: the transcript
-band's crowned at its head and fallen back to the well by its third row, and the **Rail**'s centred
-on **Sindri's face**, brightest at it and gone by the rail's own margin on both axes, with no step
-of it visible between two pixels. A band's joint is a light that goes the other way: a shadow at the
-joint and a hairline on the band's own edge, at one weight on both axes. A
-submitted **Prompt** holds a bounded plane inside its occupied footprint, with corners at its
-actual ends, a warm rim, upper-edge light and shallow shadow. This decoration uses the prompt
-rung's proved lift, adds no rows, and leaves words and Fold counts in native cells. A band plane
-covers the band's own columns and no column of the band beside it, and a frame holds one image
-under each band, one under each **Instrument**, each by its own identity,
-placed at one depth that a cell carrying a background still wins over. A terminal that places no picture, or a band in a palette
-with no colour, is given none, and the band's own rows are claimed from its shade.
+the share its band names of that most, and a lamp a pixel reads rather than a row: none under the
+transcript, whose well is one flat tone at every row whatever stands on it, and the **Rail**'s
+centred on **Sindri's face**, brightest at it and gone by the rail's own margin on both axes, with
+no step of it visible between two pixels. A band's joint is a light that goes the other way: a
+shadow at the joint and a hairline on the band's own edge, at one weight on both axes. A submitted
+**Prompt** holds a bounded plane inside its occupied footprint, with corners at its actual ends, a
+warm rim, upper-edge light and shallow shadow. This decoration uses the prompt rung's proved lift,
+adds no rows, and leaves words and Fold counts in native cells. A band plane covers the band's own
+columns and no column of the band beside it, and a frame holds one image under each band, one under
+each **Instrument**, each by its own identity, placed at one depth that a cell carrying a
+background still wins over. A terminal that places no picture, or a band in a palette with no
+colour, is given none, and the band's own rows are claimed from its shade.
 _Avoid_: Ground (that one is where a run stands), backdrop, background, layer, blend
 
 **Held**:
@@ -314,8 +344,9 @@ What a band sits on — and, for an **Instrument**, the rows it is drawn under: 
 its rows is claimed in and the cell of it the frame's
 **Seam** is drawn in — the transcript band on the well, the rail on its own tone on every row of it,
 the composer's band drawn in the band a prompt is read on and closing into the rail's tone on its
-last row; and the rail's first column and the composer's head row are the seam's, drawn in the
-plane's pixels. It holds every fact its **Plane** is drawn from and nothing else: for a bounded Prompt, its complete footprint and owning identity as well as
+last row; and the rail's first column and the composer's head row are the seam's — the column one
+cell of the frame's edge ink on every row, the row read over the plane's pixels. It holds every fact
+its **Plane** is drawn from and nothing else: for a bounded Prompt, its complete footprint and owning identity as well as
 its rung, rim and light, and a bounded portion of that footprint, with the visible crop
 inside that portion belonging only to Placement; the cell the plane
 is drawn at, the light its band carries — the peak it spends of the proved lift and the rect that
@@ -336,10 +367,11 @@ The one cell of the frame's pixels that parts two bands, on the axis that parts 
 drawn as a fall into the shadow at the joint that ends in a hairline lifted off the band it stands
 on: the **Rail**'s first column down every row it claims, and the row that heads the **Composer**'s
 band, across the frame. The two meet where they meet, and the rail's band runs to the composer's
-head row and dies in it. The fall stands in the band's own **Plane**, so a seam is claimed once, in
-the cells of the band it parts, and the cell the frame claims for it is the edge ink only where no
-plane stands — the count the head row carries is read over the pixels there. A palette that spells
-no colour rules the seam in the dim ink instead, and a strip parts nothing and draws none.
+head row and dies in it. The fall stands in the band's own **Plane**, and the rail's first column
+is claimed in the edge ink on every row of its band whether a plane stands under it or not, the fall
+drawn under that ink where one does, while the row that heads the composer's band is read over the
+plane's pixels, because the count that row carries sits there. A palette that spells no colour rules
+the seam in the dim ink instead, and a strip parts nothing and draws none.
 _Avoid_: Border, divider, crease, gutter
 
 **Instrument**:
@@ -384,11 +416,24 @@ the band made of it. A fence's tag row is no line of its source.
 _Avoid_: Body, content, raw text
 
 **Spine**:
-The one column a **Prompt**'s rows are quoted by: a dim bar down their left edge, with the prompt's
-sigil standing in the column beside it, so its words begin where an answer's prose does. Every row a
-prompt's words occupy carries it, the draft being typed as the prompt it was asked with, and no row of
-an answer, a call, a result or a stop does.
+The one column a **Prompt**'s rows are quoted by: an accent bar down their left edge, with the
+prompt's sigil standing in the column beside it, so its words begin where an answer's prose does. Every
+row a prompt's words occupy carries it, the draft being typed as the prompt it was asked with, and no
+row of an answer, a call, a result or a stop does.
 _Avoid_: Bar, quote mark, guide
+
+**Mark**:
+A glyph the **Transcript band** is read by, with the ink it is drawn in and the words that say what
+it means: the **Spine** and the sigil a **Prompt** opens on, the lane bar its work is set in, the bar
+a fence and a quote stand beside, the count a **Call** keeps back in one glyph and its number, the
+glyphs a **Call** settled, still running or failed wears, the mark a failed **Call** stands in the
+gutter of every row it holds — and a settled **Exchange**'s one row wears where its **Tally** counts
+a failure — so a run's failures are found by scrolling and not by reading, the pulse of a run still
+writing, and the thumb that says where the window stands in the run. The table of them is declared
+beside the glyphs the drawing uses and drawn on the `?` screen under the keys, so a mark cannot be
+drawn without being named there, and a reader learns the band's grammar once and reads any run. A
+mark is a glyph and its words in a terminal that spells no colour, and never the ink alone.
+_Avoid_: Glyph, icon, symbol, legend
 
 **Composer**:
 The draft a reader types: its words, the place the next glyph lands among them, the scroll they are
@@ -399,7 +444,7 @@ _Avoid_: Text box, input box, editor, entry field
 **Bill**:
 What one draft would send, counted: the files its words name in the workspace, and the command it
 opens with. A draft that names no file and opens with no command bills nothing.
-_Avoid_: Count, tally, stats
+_Avoid_: Count, tally (that one is a settled **Exchange**'s), stats
 
 **Draft count**:
 The **Bill**, drawn on the far edge of the **Composer**'s head row, hanging in the **Margin** and
@@ -457,6 +502,13 @@ traverse all matches, keeping the marked row visible and updating the displayed 
 `Enter` closes the card and leaves its request editable; a later `Enter` invokes it.
 For built-in commands, `Enter` acts and `Tab` leaves the card open.
 _Avoid_: Palette, slash menu, command list, autocomplete
+
+**Model card**:
+The card `/model` opens: every name the wire served, ranked by how the query sits in one, with the
+one line each name says beside it and the row on the mark the name `Enter` takes. At most eight
+served names are visible; `Up` and `Down` traverse all of them, keeping the marked row visible and
+updating the displayed range. `Esc` closes it and keeps the screen's name unchosen.
+_Avoid_: Model picker, model list, model menu, model switcher
 
 **Splash screen**:
 The frame a launch opens on: the wordmark, one line saying what the product is, and three commands

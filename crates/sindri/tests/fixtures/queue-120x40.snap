@@ -10,7 +10,7 @@ queue at 120x40
 04 |  scrolled through costs one layout per entry and scrolling it again costs    turns         6 /  250                    | plain:78 dim:10 plain:32
 05 |  none.                                                                       ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
 06 |                                                                              cache     88%                             | plain:78 dim:10 plain:32
-07 |┃›what is the transcript's unit?                                                                                        | dim:1 plain:119
+07 |┃›what is the transcript's unit?                                                                                        | accent:1 plain:119
 08 |⋯ 1 call · 9 ms                                                               workspace …/sindri/.worktrees/46-rail     | dim:1 plain:1 dim:13 plain:63 dim:10 plain:32
 09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |  The transcript's unit is the entry. An entry never carries a formatted                                                | plain:120
@@ -23,7 +23,7 @@ queue at 120x40
 17 |  code      │ behind a bar, highlighted                                       ◆ bash                                    | plain:11 dim:3 plain:64 accent:1 plain:41
 18 |  table     │ columns joined by a bar                                         ◆ records                                 | plain:11 dim:3 plain:64 accent:1 plain:41
 19 |                                                                                                                        | plain:120
-20 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+20 |┃›what does a row of the band say?                                                                                      | accent:1 plain:119
 21 |⋯ 1 call · 31 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 22 |                                                                                                                        | plain:120
 23 |  A row is one line                                                                                                     | plain:2 plain+bold:17 plain:101
@@ -38,8 +38,8 @@ queue at 120x40
 32 |▏    │row.paint(area, buffer);                                                output    3.1k                            | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:63 dim:10 plain:32
 33 |▏ }                                                                           total     51.3k                           | dim:2 plain:76 dim:10 plain:32
 34 |━                                                                                                                       | accent:1 plain:119
-35 |┃›and this one while they wait                                                                                          | dim:1 accent:1 plain:118
-36 |┃›run the test that failed and read it                                                                                  | dim:38 plain:82
-37 |┃›then the fmt check                                                                                                    | dim:20 plain:100
-38 |┃›and say why the retry hid it                                                                                          | dim:30 plain:90
+35 |┃›and this one while they wait                                                                                          | accent:2 plain:118
+36 |┃›run the test that failed and read it                                                                                  | accent:1 dim:37 plain:82
+37 |┃›then the fmt check                                                                                                    | accent:1 dim:19 plain:100
+38 |┃›and say why the retry hid it                                                                                          | accent:1 dim:29 plain:90
 39 |  Ctrl-C cancel · ↑ 3 queued · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                             | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:29

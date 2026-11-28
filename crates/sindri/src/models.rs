@@ -1,7 +1,7 @@
 use sindri_core::provider::served::Listing;
 
 use crate::composer::Key;
-use crate::ink::Ink;
+use crate::ink::{Ink, Look};
 use crate::kept::{CAP, Kept, Move, Narrow, leaves};
 use crate::list::{self, Beside, ScreenRow};
 
@@ -15,6 +15,7 @@ pub type Row<'a> = (&'a str, &'a str);
 pub struct Models {
     listing: Option<Listing>,
     narrow: Narrow,
+    top: usize,
 }
 
 impl Models {
@@ -26,6 +27,7 @@ impl Models {
         if self.listing != listing {
             self.listing = listing;
             self.narrow.restart();
+            self.top = 0;
         }
         self
     }
@@ -43,10 +45,17 @@ impl Models {
     }
 
     pub fn rows(&self) -> Vec<Row<'_>> {
+        self.ranked().into_iter().skip(self.top).take(CAP).collect()
+    }
+
+    fn ranked(&self) -> Vec<Row<'_>> {
         leaves(self.names(), self.narrow.query())
-            .into_iter()
-            .take(CAP)
-            .collect()
+    }
+
+    fn reveal(&mut self) {
+        self.top = self.top.min(self.narrow.mark());
+        self.top = self.top.max((self.narrow.mark() + 1).saturating_sub(CAP));
+        self.top = self.top.min(self.ranked().len().saturating_sub(CAP));
     }
 
     fn names(&self) -> impl Iterator<Item = (&str, Row<'_>)> + '_ {
@@ -64,49 +73,65 @@ impl Models {
     }
 
     pub fn selected(&self) -> usize {
-        self.narrow.mark()
+        self.narrow.mark().saturating_sub(self.top)
     }
 
     pub fn body(&self) -> Vec<ScreenRow> {
-        let names = self.rows();
+        let held = self.rows();
         let said = match self.hint() {
             _ if self.waiting() => Some(ASKING),
             Some(hint) => Some(hint),
-            None if names.is_empty() => Some(NO_NAME),
+            None if held.is_empty() => Some(NO_NAME),
             None => None,
         };
-        list::List {
+        let shown = held.len();
+        let mut rows = list::List {
             query: Some(self.query()),
             said,
-            items: list::columned(names.into_iter(), Ink::Plain, Beside::Own(Ink::Dim)),
+            items: list::columned(held.into_iter(), Ink::Plain, Beside::Own(Ink::Dim)),
             selected: self.selected(),
             marker: list::MARK,
             chooses: true,
         }
-        .rows()
+        .rows();
+        let matches = self.ranked().len();
+        if matches > CAP {
+            rows.push(list::whole(
+                &format!("{}–{} of {matches}", self.top + 1, self.top + shown),
+                Look::plain(Ink::Dim),
+            ));
+        }
+        rows
     }
 
     pub fn key(&mut self, key: Key) -> bool {
-        let Models { listing, narrow } = self;
+        let Models {
+            listing, narrow, ..
+        } = self;
         let names = listing
             .as_ref()
             .and_then(Listing::names)
             .unwrap_or_default();
-        narrow.typed(key, |query| {
-            leaves(names.iter().map(|served| (served.id.as_str(), ())), query)
-                .len()
-                .min(CAP)
-        })
+        let changed = narrow.typed(key, |query| {
+            leaves(names.iter().map(|served| (served.id.as_str(), ())), query).len()
+        });
+        if changed {
+            self.top = 0;
+            self.reveal();
+        }
+        changed
     }
 
     pub fn chosen(&self) -> Option<&str> {
-        self.rows().get(self.narrow.mark()).map(|(id, _)| *id)
+        self.ranked().get(self.narrow.mark()).map(|(id, _)| *id)
     }
 }
 
 impl Kept for Models {
     fn walked(&mut self, way: Move) -> bool {
-        self.narrow.walked(way, self.rows().len())
+        let changed = self.narrow.walked(way, self.ranked().len());
+        self.reveal();
+        changed
     }
 
     fn typed(&mut self, key: Key) -> bool {
@@ -114,6 +139,8 @@ impl Kept for Models {
     }
 
     fn pressed(&mut self, at: usize) -> bool {
-        self.narrow.pressed(at, self.rows().len())
+        let changed = self.narrow.pressed(self.top + at, self.ranked().len());
+        self.reveal();
+        changed
     }
 }

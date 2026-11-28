@@ -5,12 +5,13 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use sindri_core::open::{Ground, Opening};
 use sindri_core::provider::Deltas;
-use sindri_core::records::Entry;
+use sindri_core::records::{Entry, Usage};
 use sindri_core::redact::Redacted;
 use sindri_core::run::{Exit, Stop};
 use sindri_core::tools::OPEN;
 
 use crate::ink::{Ink, Look};
+use crate::ledger;
 use crate::link::{Link, Links, Way};
 use crate::mark;
 use crate::markdown;
@@ -38,9 +39,15 @@ pub(crate) const fn margined(band: Rect) -> Rect {
     }
 }
 
+pub(crate) const fn plate(band: Rect) -> Rect {
+    band
+}
+
 pub(crate) const SIGIL: &str = "› ";
 
 pub(crate) const SPINE: &str = "┃";
+
+pub(crate) const SPINE_INK: Ink = Ink::Accent;
 
 const THOUGHT: &str = "│ ";
 
@@ -48,6 +55,8 @@ const PENDING: char = '…';
 const CHECK: char = '✓';
 const CROSS: char = '✗';
 const KEPT: char = '⋯';
+
+pub const FAILED: char = '!';
 
 const CUT: char = '…';
 
@@ -59,6 +68,59 @@ const RESULT_SOURCE: usize = usize::MAX - 1;
 const FOLD_HEAD: usize = 4;
 
 const FOLD_KEPT: usize = 3;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Mark {
+    glyph: char,
+    ink: Ink,
+    says: &'static str,
+}
+
+impl Mark {
+    const fn new(glyph: char, ink: Ink, says: &'static str) -> Mark {
+        Mark { glyph, ink, says }
+    }
+
+    pub fn glyph(&self) -> char {
+        self.glyph
+    }
+
+    pub fn ink(&self) -> Ink {
+        self.ink
+    }
+
+    pub fn says(&self) -> &'static str {
+        self.says
+    }
+}
+
+pub fn marks() -> [Mark; 11] {
+    [
+        Mark::new(glyph_of(SPINE), SPINE_INK, "the spine a Prompt hangs on"),
+        Mark::new(glyph_of(SIGIL), Ink::Plain, "the sigil a Prompt opens on"),
+        Mark::new(glyph_of(THOUGHT), Ink::Dim, "the lane a thought is set in"),
+        Mark::new(
+            glyph_of(markdown::BAR),
+            Ink::Dim,
+            "the bar a fence or quote sets",
+        ),
+        Mark::new(KEPT, Ink::Dim, "rows a Fold keeps back, as ⋯3"),
+        Mark::new(CHECK, Ink::Ok, "a Call that settled well"),
+        Mark::new(CROSS, Ink::Err, "a Call or a run that failed"),
+        Mark::new(FAILED, Ink::Err, "every row of a failed Call"),
+        Mark::new(PENDING, Ink::Dim, "a running Call, or a cut word"),
+        Mark::new(pulse::FRAME, Ink::Accent, "a run still writing"),
+        Mark::new(THUMB, Ink::Dim, "where the window stands"),
+    ]
+}
+
+fn glyph_of(gutter: &str) -> char {
+    gutter
+        .trim_end()
+        .chars()
+        .next()
+        .expect("a gutter opens on the glyph it shows")
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fold {
@@ -273,6 +335,33 @@ impl Row {
         row
     }
 
+    fn edged(mut self) -> Row {
+        let gutter = pen::cells(INDENT);
+        let mut column = 0u16;
+        for at in 0..self.spans.len() {
+            let (text, look) = self.spans[at].clone();
+            for (index, glyph) in text.char_indices() {
+                if column >= gutter {
+                    return self;
+                }
+                if glyph == ' ' {
+                    let mut pieces = Vec::with_capacity(3);
+                    if index > 0 {
+                        pieces.push((text[..index].to_owned(), look));
+                    }
+                    pieces.push((FAILED.to_string(), Look::plain(Ink::Err)));
+                    if index + 1 < text.len() {
+                        pieces.push((text[index + 1..].to_owned(), look));
+                    }
+                    self.spans.splice(at..=at, pieces);
+                    return self;
+                }
+                column = column.saturating_add(pen::cell(glyph));
+            }
+        }
+        self
+    }
+
     pub(crate) fn followed_by(self, other: &Row) -> Row {
         let shifts = self.width();
         let mut moved = other.clone().shifted(shifts);
@@ -323,14 +412,7 @@ impl Row {
         sizes: &mut Sizes,
     ) {
         if let Some(band) = self.band {
-            let surface = match band {
-                Band::Prompt => Rect {
-                    width: area.width.saturating_sub(MARGIN),
-                    ..area
-                },
-                _ => area,
-            };
-            pen::claim(buffer, surface, palette.ground(Some(band)));
+            pen::claim(buffer, plate(area), palette.ground(Some(band)));
         }
         match self.fence.filter(|fence| fence.walk > 0) {
             Some(fence) => {
@@ -537,32 +619,79 @@ struct Tally {
     failed: usize,
     files: BTreeSet<String>,
     elapsed_ms: u64,
+    spent: Usage,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Rank {
+    Counted,
+    Files,
+    Time,
+    Bill,
 }
 
 impl Tally {
     fn words(&self, cols: u16) -> String {
-        let mut said: Vec<String> = Vec::new();
+        let mut said = self.facts();
+        while pen::cells(&said_words(&said)) > cols {
+            let Some(weakest) = said
+                .iter()
+                .map(|(rank, _)| *rank)
+                .filter(|rank| *rank > Rank::Counted)
+                .max()
+            else {
+                break;
+            };
+            said.retain(|(rank, _)| *rank != weakest);
+        }
+        said_words(&said)
+    }
+
+    fn facts(&self) -> Vec<(Rank, String)> {
+        let mut said = Vec::new();
         if self.calls > 0 {
-            said.push(format!("{} call{}", self.calls, plural(self.calls)));
+            said.push((
+                Rank::Counted,
+                format!("{} call{}", self.calls, plural(self.calls)),
+            ));
         }
         if self.failed > 0 {
-            said.push(format!("{} failed", self.failed));
+            said.push((Rank::Counted, format!("{} failed", self.failed)));
         }
         if !self.files.is_empty() {
-            said.push(format!(
-                "{} file{}",
-                self.files.len(),
-                plural(self.files.len())
+            said.push((
+                Rank::Files,
+                format!("{} file{}", self.files.len(), plural(self.files.len())),
             ));
         }
         if self.elapsed_ms > 0 {
-            said.push(took(self.elapsed_ms));
+            said.push((Rank::Time, took(self.elapsed_ms)));
         }
-        while said.len() > 1 && pen::cells(&said.join(" · ")) > cols {
-            said.pop();
+        if let Some(bill) = self.bill() {
+            said.push((Rank::Bill, bill));
         }
-        said.join(" · ")
+        said
     }
+
+    fn bill(&self) -> Option<String> {
+        let said: Vec<String> = [(self.spent.input, "in"), (self.spent.output, "out")]
+            .into_iter()
+            .filter_map(|(count, unit)| {
+                count.map(|count| format!("{} {unit}", ledger::tokens(count)))
+            })
+            .collect();
+        match said.is_empty() {
+            true => None,
+            false => Some(said.join(ledger::GAP)),
+        }
+    }
+}
+
+fn said_words(said: &[(Rank, String)]) -> String {
+    said.iter()
+        .map(|(_, words)| words.as_str())
+        .collect::<Vec<&str>>()
+        .join(ledger::GAP)
 }
 
 fn took(ms: u64) -> String {
@@ -615,7 +744,7 @@ fn quoted(opens: bool, line: String, cols: u16) -> Row {
     let row = match gutter.saturating_add(pen::cells(&line)) > cols {
         true => Row::of([(line, Ink::Plain)]),
         false => Row::of([
-            (String::from(SPINE), Ink::Dim),
+            (String::from(SPINE), SPINE_INK),
             (String::from(marker), Ink::Plain),
             (line, Ink::Plain),
         ]),
@@ -801,6 +930,7 @@ fn call_row(
     cols: u16,
     ground: Option<&Ground>,
 ) -> Row {
+    let kept = kept.filter(|kept| *kept > 0);
     let (marker, ink, outcome) = tool_outcome(exit, elapsed_ms);
     let outcome = if outcome.is_empty() {
         outcome
@@ -811,7 +941,7 @@ fn call_row(
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
-    let count = kept.map_or_else(String::new, |kept| format!(" {KEPT} {kept} rows kept back"));
+    let count = kept.map_or_else(String::new, |kept| format!(" {KEPT}{kept}"));
     let mut tool = format!("{name} ");
     let mut duration = elapsed_ms.map_or_else(String::new, |ms| format!(" {}", took(ms)));
     let room = margin(INDENT, cols).1;
@@ -826,27 +956,18 @@ fn call_row(
     }
     let fixed = pen::cells(&format!("{tool}{outcome}{duration}{count}"));
     if fixed > room {
-        let words = kept.map_or_else(
-            || {
-                if room <= 2 {
-                    command.chars().take(usize::from(room)).collect()
-                } else {
-                    clip_head(&format!("{outcome}{command}"), room)
-                }
-            },
-            |kept| {
-                let full = format!("{KEPT} {kept} rows kept back");
-                let compact = format!("{KEPT} {kept}");
-                if pen::cells(&full) <= room {
-                    full
-                } else if pen::cells(&compact) <= room {
-                    compact
-                } else {
-                    kept.to_string()
-                }
-            },
-        );
-        return marked(&marker.to_string(), ink, vec![(words, Ink::Dim)], cols)
+        let row = match kept.and_then(|kept| count_alone(kept, room)) {
+            Some(count) => marked(&marker.to_string(), ink, vec![(count, Ink::Dim)], cols),
+            None if kept.is_some() => marked(&marker.to_string(), ink, Vec::new(), cols),
+            None => {
+                let words = match room <= 2 {
+                    true => command.chars().take(usize::from(room)).collect(),
+                    false => clip_head(&format!("{outcome}{command}"), room),
+                };
+                marked(&marker.to_string(), ink, vec![(words, Ink::Dim)], cols)
+            }
+        };
+        return row
             .fenced(INVOCATION_SOURCE, pen::cells(margin(INDENT, cols).0))
             .sourced(spell::source(name, arguments));
     }
@@ -873,6 +994,15 @@ fn call_row(
         ),
         None => row,
     }
+}
+
+fn count_alone(kept: usize, room: u16) -> Option<String> {
+    let compact = format!("{KEPT}{kept}");
+    if pen::cells(&compact) <= room {
+        return Some(compact);
+    }
+    let digits = kept.to_string();
+    (pen::cells(&digits) <= room).then_some(digits)
 }
 
 fn clip_head(words: &str, room: u16) -> String {
@@ -1169,7 +1299,7 @@ impl Scroll {
     }
 }
 
-pub(crate) const THUMB: char = '█';
+pub const THUMB: char = '█';
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Thumb {
@@ -1186,11 +1316,12 @@ impl Thumb {
         self.top..self.top + self.span
     }
 
-    pub(crate) fn paint(&self, area: Rect, y: u16, buffer: &mut Buffer, palette: &Palette) {
+    pub fn paint(&self, area: Rect, y: u16, buffer: &mut Buffer, palette: &Palette) {
         if let Some(row) = y.checked_sub(area.y)
             && self.rows().contains(&row)
         {
-            pen::glyph(buffer, area.x, y, THUMB, Ink::Dim, palette);
+            let column = area.right().saturating_sub(MARGIN);
+            pen::glyph(buffer, column, y, THUMB, Ink::Dim, palette);
         }
     }
 }
@@ -1731,6 +1862,19 @@ impl Rows {
                         *row = inset;
                     }
                 }
+                if !one
+                    && matches!(
+                        result_of(&self.held[at]),
+                        Some(Entry::Result {
+                            exit: Some(exit),
+                            ..
+                        }) if !exit.is_ok()
+                    )
+                {
+                    for row in &mut rows {
+                        *row = row.clone().edged();
+                    }
+                }
                 if at > 0 && !rows.is_empty() {
                     let prior = self.held[at - 1].what.is_tool();
                     let prose = self.held[at].what.is_prose();
@@ -1785,6 +1929,9 @@ impl Rows {
                     tally.files.insert(path);
                 }
             }
+            if let What::Fact(Entry::Turn { usage, .. }) = &held.what {
+                tally.spent.charge(usage);
+            }
             if let Some(Entry::Result {
                 elapsed_ms, exit, ..
             }) = result_of(held)
@@ -1816,12 +1963,17 @@ impl Rows {
     }
 
     fn work_row(&self, work: &Range<usize>, cols: u16) -> Row {
-        marked(
+        let tally = self.tally(work);
+        let row = marked(
             &KEPT.to_string(),
             Ink::Dim,
-            vec![(self.tally(work).words(margin(INDENT, cols).1), Ink::Dim)],
+            vec![(tally.words(margin(INDENT, cols).1), Ink::Dim)],
             cols,
-        )
+        );
+        match tally.failed > 0 {
+            true => row.edged(),
+            false => row,
+        }
     }
 
     fn newest_fold(&mut self) -> Option<usize> {
@@ -2138,3 +2290,6 @@ pub struct Piece {
     pub skip: usize,
     pub rows: u16,
 }
+
+#[cfg(test)]
+mod tests;

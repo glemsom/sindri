@@ -20,12 +20,12 @@ commands at 120x40
 14 |                                                                                                                        | dim:120
 15 |                                                                                                                        | dim:120
 16 |                        ╭─ / commands ─────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-17 |                        │ › /help      the keys in force                                       │                        | dim:25 plain:1 accent:13 dim:17 plain:39 dim:25
-18 |                        │   /model     ask the wire what it serves, and name the one to run    │                        | dim:25 plain:14 dim:52 plain:4 dim:25
-19 |                        │   /new       start the conversation again, and forget the last one   │                        | dim:25 plain:14 dim:53 plain:3 dim:25
-20 |                        │   /quit      end the launch                                          │                        | dim:25 plain:14 dim:14 plain:42 dim:25
-21 |                        │   /settings  the keys the config holds, and the value each is set to │                        | dim:25 plain:14 dim:55 plain:1 dim:25
-22 |                        │   /stats     the facts the rail is too narrow to hold                │                        | dim:25 plain:14 dim:40 plain:16 dim:25
+17 |                        │ › /help      show the keyboard shortcuts                             │                        | dim:25 plain:1 accent:13 dim:27 plain:29 dim:25
+18 |                        │   /model     choose the model                                        │                        | dim:25 plain:14 dim:16 plain:40 dim:25
+19 |                        │   /new       start a new conversation                                │                        | dim:25 plain:14 dim:24 plain:32 dim:25
+20 |                        │   /quit      quit Sindri                                             │                        | dim:25 plain:14 dim:11 plain:45 dim:25
+21 |                        │   /settings  show every setting with its value                       │                        | dim:25 plain:14 dim:33 plain:23 dim:25
+22 |                        │   /stats     show all counters for this session                      │                        | dim:25 plain:14 dim:34 plain:22 dim:25
 23 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
 24 |                                                                                                                        | dim:120
 25 |                                                                                                                        | dim:120

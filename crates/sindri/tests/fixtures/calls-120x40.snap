@@ -3,18 +3,18 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 calls at 120x40
-00 |┃›which calls settle well?                                                    wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
-01 |  │ ✓ bash rg -n 'verdict' src 18 ms ⋯ 3 rows kept back                       model     claude-sonnet-4-5-20250929      | dim:4 ok:2 dim:5 plain:19 dim:25 plain:23 dim:10 plain:32
+00 |┃›which calls settle well?                                                    wire      anthropic                       | accent:1 plain:77 dim:10 plain:32
+01 |  │ ✓ bash rg -n 'verdict' src 18 ms ⋯3                                       model     claude-sonnet-4-5-20250929      | dim:4 ok:2 dim:5 plain:19 dim:9 plain:39 dim:10 plain:32
 02 |                                                                              think     high                            | plain:78 dim:10 plain:32
 03 |  The row is drawn from the verdict the record holds.                                                                   | plain:120
-04 |  │ ✗ bash exit 1 cargo clippy --all-targets 211 ms ⋯ 3 rows kept back        turns         6 /  250                    | dim:4 err:2 dim:12 plain:26 dim:26 plain:8 dim:10 plain:32
-05 |  │   --> src/rows.rs:12:5                                                    ctx       █░░░░░ 48.2k / 200k             | dim:4 muted:22 plain:52 dim:10 plain:1 dim:5 plain:26
+04 |! │ ✗ bash exit 1 cargo clippy --all-targets 211 ms ⋯3                        turns         6 /  250                    | err:1 dim:3 err:2 dim:12 plain:26 dim:10 plain:24 dim:10 plain:32
+05 |! │   --> src/rows.rs:12:5                                                    ctx       █░░░░░ 48.2k / 200k             | err:1 dim:3 muted:22 plain:52 dim:10 plain:1 dim:5 plain:26
 06 |                                                                              cache     88%                             | plain:78 dim:10 plain:32
 07 |  An unused import, and nowhere else to put it.                                                                         | plain:120
-08 |  │ ✗ bash timed out cargo test --workspace 2m 00s ⋯ 2 rows kept back         workspace …/sindri/.worktrees/46-rail     | dim:4 err:2 dim:15 plain:22 dim:26 plain:9 dim:10 plain:32
+08 |! │ ✗ bash timed out cargo test --workspace 2m 00s ⋯2                         workspace …/sindri/.worktrees/46-rail     | err:1 dim:3 err:2 dim:15 plain:22 dim:10 plain:25 dim:10 plain:32
 09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |  The call ran past its minute and was killed.                                                                          | plain:120
-11 |  │ ✗ bash cancelled make check STAGES=frames 3.4 s ⋯ 2 rows kept back        sandbox   bwrap                           | dim:4 err:2 dim:15 plain:24 dim:25 plain:8 dim:10 plain:32
+11 |! │ ✗ bash cancelled make check STAGES=frames 3.4 s ⋯2                        sandbox   bwrap                           | err:1 dim:3 err:2 dim:15 plain:24 dim:9 plain:24 dim:10 plain:32
 12 |                                                                                                                        | plain:120
 13 |  What a verdict says                                                         session   9f2c7a41                        | plain:2 plain+bold:19 plain:57 dim:10 plain:32
 14 |  ───────────────────                                                         temp      …/sindri/sessions/9f2c7a41/tmp  | plain:2 accent+faint:19 plain:57 dim:10 plain:32
@@ -23,7 +23,7 @@ calls at 120x40
 17 |  so the row says ✗ cancelled rather than leaving a spinner turning for a     ◆ bash                                    | plain:18 accent:11 plain:49 accent:1 plain:41
 18 |  result that will never come.                                                ◆ records                                 | plain:78 accent:1 plain:41
 19 |                                                                                                                        | plain:120
-20 |┃›and the one that is still out?                                                                                        | dim:1 plain:119
+20 |┃›and the one that is still out?                                                                                        | accent:1 plain:119
 21 |  │ … bash running make check STAGES=test                                                                               | dim:19 plain:101
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120
@@ -41,5 +41,5 @@ calls at 120x40
 35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
 36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

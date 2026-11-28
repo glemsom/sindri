@@ -3,43 +3,43 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 keys at 120x40
-00 |                                                                                                                        | dim:120
-01 |                                                                                                                        | dim:120
-02 |                                                                                                                        | dim:120
-03 |                        ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
-04 |                        │ keys                                                                 │                        | dim:25 plain:1 dim:4 plain:65 dim:25
-05 |                        │ Esc                  close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-06 |                        │ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
-07 |                        │ composer                                                             │                        | dim:25 plain:1 dim:8 plain:61 dim:25
-08 |                        │ Shift+Tab            the marked commands row back                    │                        | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
-09 |                        │ Tab                  complete the marked commands row into the draft │                        | dim:25 plain:1 plain+bold:21 muted:47 plain:1 dim:25
-10 |                        │ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
-11 |                        │ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
-12 |                        │                      word                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
-13 |                        │ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
-14 |                        │ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
-15 |                        │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
-16 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
-17 |                        │ ↑                    the newest queued prompt, the prompt before, or │                        | dim:25 plain:1 plain+bold:21 muted:47 plain:1 dim:25
-18 |                        │                      the line above                                  │                        | dim:25 plain:1 plain+bold:21 muted:14 plain:34 dim:25
-19 |                        │ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
-20 |                        │ ↓                    the line below, or the prompt after             │                        | dim:25 plain:1 plain+bold:21 muted:35 plain:13 dim:25
-21 |                        │ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
-22 |                        │ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
-23 |                        │ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
-24 |                        │ Ctrl-D               the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
-25 |                        │ [                    the prompt before, while the draft is empty     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
-26 |                        │ ]                    the prompt after, while the draft is empty      │                        | dim:25 plain:1 plain+bold:21 muted:42 plain:6 dim:25
-27 |                        │ ←                    a glyph left                                    │                        | dim:25 plain:1 plain+bold:21 muted:12 plain:36 dim:25
-28 |                        │ →                    a glyph right                                   │                        | dim:25 plain:1 plain+bold:21 muted:13 plain:35 dim:25
-29 |                        │ Home                 the start of the line                           │                        | dim:25 plain:1 plain+bold:21 muted:21 plain:27 dim:25
-30 |                        │ End                  the tail of the run, or the end of the line     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
-31 |                        │ Ctrl-O               open or fold the newest work, call or prompt    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
-32 |                        │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
-33 |                        │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
-34 |                        │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
-35 |                        ╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27
-36 |                                                                                                                        | dim:120
-37 |                                                                                                                        | dim:120
-38 |┃›what should the run do?                                                                                               | dim:120
-39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | dim:120
+00 |                        ╭─ ? keys ─────────────────────────────────────────────────────────────╮                        | dim:24 accent+faint:72 dim:24
+01 |                        │ keys                                                                 │                        | dim:25 plain:1 dim:4 plain:65 dim:25
+02 |                        │ Esc                  close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+03 |                        │ ?                    close this screen                               │                        | dim:25 plain:1 plain+bold:21 muted:17 plain:31 dim:25
+04 |                        │ composer                                                             │                        | dim:25 plain:1 dim:8 plain:61 dim:25
+05 |                        │ Shift+Tab            the marked commands row back                    │                        | dim:25 plain:1 plain+bold:21 muted:28 plain:20 dim:25
+06 |                        │ Tab                  complete the marked commands row into the draft │                        | dim:25 plain:1 plain+bold:21 muted:47 plain:1 dim:25
+07 |                        │ ?                    the keys, while the draft is empty              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+08 |                        │ @                    the files of the workspace, while it starts a   │                        | dim:25 plain:1 plain+bold:21 muted:45 plain:3 dim:25
+09 |                        │                      word                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+10 |                        │ Enter                send the prompt                                 │                        | dim:25 plain:1 plain+bold:21 muted:15 plain:33 dim:25
+11 |                        │ Esc                  close the commands card, and the draft as it    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+12 |                        │                      was                                             │                        | dim:25 plain:1 plain+bold:21 muted:3 plain:45 dim:25
+13 |                        │ Shift+Enter, Ctrl-J  a line break in the draft                       │                        | dim:25 plain:1 plain+bold:21 muted:25 plain:23 dim:25
+14 |                        │ ↑                    the queued prompt, the prompt before, or the    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+15 |                        │                      line above                                      │                        | dim:25 plain:1 plain+bold:21 muted:10 plain:38 dim:25
+16 |                        │ Ctrl-X               drop the newest queued prompt                   │                        | dim:25 plain:1 plain+bold:21 muted:29 plain:19 dim:25
+17 |                        │ ↓                    the line below, or the prompt after             │                        | dim:25 plain:1 plain+bold:21 muted:35 plain:13 dim:25
+18 |                        │ PgUp                 the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
+19 |                        │ Ctrl-U               the transcript a band back                      │                        | dim:25 plain:1 plain+bold:21 muted:26 plain:22 dim:25
+20 |                        │ PgDn                 the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
+21 |                        │ Ctrl-D               the transcript a band on                        │                        | dim:25 plain:1 plain+bold:21 muted:24 plain:24 dim:25
+22 |                        │ [                    the prompt before, while the draft is empty     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+23 |                        │ ]                    the prompt after, while the draft is empty      │                        | dim:25 plain:1 plain+bold:21 muted:42 plain:6 dim:25
+24 |                        │ ←                    a glyph left                                    │                        | dim:25 plain:1 plain+bold:21 muted:12 plain:36 dim:25
+25 |                        │ →                    a glyph right                                   │                        | dim:25 plain:1 plain+bold:21 muted:13 plain:35 dim:25
+26 |                        │ Home                 the start of the line                           │                        | dim:25 plain:1 plain+bold:21 muted:21 plain:27 dim:25
+27 |                        │ End                  the tail of the run, or the end of the line     │                        | dim:25 plain:1 plain+bold:21 muted:43 plain:5 dim:25
+28 |                        │ Ctrl-O               open or fold the newest work, call or prompt    │                        | dim:25 plain:1 plain+bold:21 muted:44 plain:4 dim:25
+29 |                        │ Backspace            erase the glyph before the caret                │                        | dim:25 plain:1 plain+bold:21 muted:32 plain:16 dim:25
+30 |                        │ Ctrl-C               cancel the run, or clear the draft              │                        | dim:25 plain:1 plain+bold:21 muted:34 plain:14 dim:25
+31 |                        │ Ctrl-Q               quit                                            │                        | dim:25 plain:1 plain+bold:21 muted:4 plain:44 dim:25
+32 |                        │ marks                                                                │                        | dim:25 plain:1 dim:5 plain:64 dim:25
+33 |                        │ ┃  the spine a Prompt hangs on     ›  the sigil a Prompt opens on    │                        | dim:25 plain:1 accent:3 muted:32 plain:3 muted:27 plain:4 dim:25
+34 |                        │ │  the lane a thought is set in    ▏  the bar a fence or quote sets  │                        | dim:25 plain:1 dim:3 muted:32 dim:3 muted:29 plain:2 dim:25
+35 |                        │ ⋯  rows a Fold keeps back, as ⋯3   ✓  a Call that settled well       │                        | dim:25 plain:1 dim:3 muted:32 ok:3 muted:24 plain:7 dim:25
+36 |                        │ ✗  a Call or a run that failed     !  every row of a failed Call     │                        | dim:25 plain:1 err:3 muted:32 err:3 muted:26 plain:5 dim:25
+37 |                        │ …  a running Call, or a cut word   ⠋  a run still writing            │                        | dim:25 plain:1 dim:3 muted:32 accent:3 muted:19 plain:12 dim:25
+38 |┃›what should the run do│ █  where the window stands                                           │                        | dim:25 plain:1 dim:3 muted:23 plain:43 dim:25
+39 |  Enter send · / command╰──────────────────────────────────────────────────────────────── Esc ─╯                        | dim:90 plain+bold:3 dim:27

@@ -158,7 +158,7 @@ fn spending(usage: Usage) -> String {
 
 fn entry_lines(entry: &Entry) -> Vec<String> {
     match entry {
-        Entry::Turn { turn } => vec![format!("  turn {turn}")],
+        Entry::Turn { turn, .. } => vec![format!("  turn {turn}")],
         Entry::Call {
             turn,
             id: _,

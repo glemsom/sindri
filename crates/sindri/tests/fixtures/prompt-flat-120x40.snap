@@ -3,9 +3,9 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 prompt-flat at 120x40
-00 |┃›triage the retry test, and say which line of the patch the test disagrees with: the answer is one sentence, and it    | dim:1 plain:119
-01 |┃ quotes the line the test fails on rather than the line the patch moved, because a reader reads the failure and never  | dim:1 plain:119
-02 |┃ the diff.                                                                                                             | dim:1 plain:119
+00 |┃›triage the retry test, and say which line of the patch the test disagrees with: the answer is one sentence, and it    | accent:1 plain:119
+01 |┃ quotes the line the test fails on rather than the line the patch moved, because a reader reads the failure and never  | accent:1 plain:119
+02 |┃ the diff.                                                                                                             | accent:1 plain:119
 03 |⋯ 1 call · 23 ms                                                                                                        | dim:1 plain:1 dim:14 plain:104
 04 |                                                                                                                        | plain:120
 05 |  The third line of the patch: the retry the test waits on never lands, because the budget it counts is the turn's      | plain:120
@@ -41,5 +41,5 @@ prompt-flat at 120x40
 35 |                                                                                                                        | plain:120
 36 |                                                                                                                        | plain:120
 37 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────| dim:120
-38 |┃›why does the retry test fail                                                                                          | dim:1 accent:1 plain:118
+38 |┃›why does the retry test fail                                                                                          | accent:2 plain:118
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

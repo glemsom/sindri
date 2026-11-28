@@ -18,12 +18,12 @@ boot-face at 120x40
 12 |                                                                              wire      anthropic                       | plain:78 dim:10 plain:32
 13 |                                                                              model     claude-sonnet-4-5               | plain:78 dim:10 plain:32
 14 |                                                                                                                        | plain:120
-15 |     sindri                                                                   workspace /srv/workspace                  | plain:5 accent+bold:6 plain:67 dim:10 plain:32
-16 |     a GNU/Linux AI agent                                                     branch    main                            | plain:78 dim:10 plain:32
+15 |                sindri                                                        workspace /srv/workspace                  | plain:16 accent+bold:6 plain:56 dim:10 plain:32
+16 |                an AI agent for the terminal                                  branch    main                            | plain:78 dim:10 plain:32
 17 |                                                                                                                        | plain:120
-18 |     /model     ask the wire what it serves, and name the one to run          sandbox   bwrap                           | plain:5 accent:11 dim:52 plain:10 dim:10 plain:32
-19 |     /settings  the keys the config holds, and the value each is set to                                                 | plain:5 accent:11 dim:55 plain:49
-20 |     /stats     the facts the rail is too narrow to hold                      session   —                               | plain:5 accent:11 dim:40 plain:22 dim:10 plain:32
+18 |                /model     choose the model                                   sandbox   bwrap                           | plain:16 accent:11 dim:16 plain:35 dim:10 plain:32
+19 |                /settings  show every setting with its value                                                            | plain:16 accent:11 dim:33 plain:60
+20 |                /new       start a new conversation                           session   —                               | plain:16 accent:11 dim:24 plain:27 dim:10 plain:32
 21 |                                                                              temp      —                               | plain:78 dim:10 plain:32
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120
@@ -41,5 +41,5 @@ boot-face at 120x40
 35 |                                                                                                                        | plain:120
 36 |                                                                                                                        | plain:120
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

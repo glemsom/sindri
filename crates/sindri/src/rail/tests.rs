@@ -454,15 +454,19 @@ fn a_ledger_handed_a_cell_lights_no_column_and_shadows_no_row_of_its_band() {
     .next()
     .expect("a palette that spells its colours is handed the band's shading");
 
+    let own = PALETTE.ground(None).bg.expect("the terminal's own ground");
     for y in rail.y..rail.bottom() {
         for x in rail.x..rail.right() {
             assert_eq!(
                 under(&buffer, x, y),
-                PALETTE.ground(None).bg.expect("the terminal's own ground"),
-                "row {y}, column {x} of the band is not claimed as the terminal's own ground: a \
-                 lit column down the rail or a shadow across its last is a line drawn where the \
-                 plane falls, and the shade is no line \u{2014} the seam's own cell included, \
-                 which the plane draws its parting in"
+                match x {
+                    x if x == rail.x => PALETTE.edge_ink(),
+                    _ => own,
+                },
+                "row {y}, column {x} of the band is not claimed as the frame claims it: a lit \
+                 column down the rail or a shadow across its last is a line drawn where the \
+                 plane falls, and the shade is no line \u{2014} the seam's own cell excepted, \
+                 which carries the edge ink down every row of the band"
             );
         }
     }

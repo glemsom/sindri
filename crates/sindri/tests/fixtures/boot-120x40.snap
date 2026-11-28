@@ -18,12 +18,12 @@ boot at 120x40
 12 |                                                                                                                        | plain:120
 13 |                                                                                                                        | plain:120
 14 |                                                                                                                        | plain:120
-15 |     sindri                                                                                                             | plain:5 accent+bold:6 plain:109
-16 |     a GNU/Linux AI agent                                                                                               | plain:120
+15 |                sindri                                                                                                  | plain:16 accent+bold:6 plain:98
+16 |                an AI agent for the terminal                                                                            | plain:120
 17 |                                                                                                                        | plain:120
-18 |     /model     ask the wire what it serves, and name the one to run                                                    | plain:5 accent:11 dim:52 plain:52
-19 |     /settings  the keys the config holds, and the value each is set to                                                 | plain:5 accent:11 dim:55 plain:49
-20 |     /stats     the facts the rail is too narrow to hold                                                                | plain:5 accent:11 dim:40 plain:64
+18 |                /model     choose the model                                                                             | plain:16 accent:11 dim:16 plain:77
+19 |                /settings  show every setting with its value                                                            | plain:16 accent:11 dim:33 plain:60
+20 |                /new       start a new conversation                                                                     | plain:16 accent:11 dim:24 plain:69
 21 |                                                                                                                        | plain:120
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120
@@ -41,5 +41,5 @@ boot at 120x40
 35 |                                                                                                                        | plain:120
 36 |                                                                                                                        | plain:120
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

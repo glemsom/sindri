@@ -3,20 +3,20 @@ source: crates/sindri/tests/frame/mod.rs
 expression: self.text(name)
 ---
 prompt-fold-open at 120x40
-00 |┃›why does the retry test fail?                                               wire      anthropic                       | dim:1 plain:77 dim:10 plain:32
+00 |┃›why does the retry test fail?                                               wire      anthropic                       | accent:1 plain:77 dim:10 plain:32
 01 |⋯ 1 call · 97 ms                                                              model     claude-sonnet-4-5-20250929      | dim:1 plain:1 dim:14 plain:62 dim:10 plain:32
 02 |                                                                              think     high                            | plain:78 dim:10 plain:32
 03 |  The retry test fails on the line the patch moved, and the output under                                                | plain:120
 04 |  it says which.                                                              turns         6 /  250                    | plain:78 dim:10 plain:32
 05 |                                                                              ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
-06 |┃›the retry test fails on the line the patch moved, and only there            cache     88%                             | dim:1 plain:77 dim:10 plain:32
-07 |┃ say which line the patch moved, and which row of the output disagrees                                                 | dim:1 plain:119
-08 |┃ the report names the file it read and the line it stopped on                workspace …/sindri/.worktrees/46-rail     | dim:1 plain:77 dim:10 plain:32
-09 |┃ give me the test name and the assertion it failed on                        branch    spec/1-capability               | dim:1 plain:77 dim:10 plain:32
-10 |┃ then say whether the retry that hid it was the one the run recorded                                                   | dim:1 plain:119
-11 |┃ keep every line one sentence long, so the transcript stays readable         sandbox   bwrap                           | dim:1 plain:77 dim:10 plain:32
-12 |┃ no need to paste the whole output, the head of it is enough                                                           | dim:1 plain:119
-13 |┃ and end with the one thing you would change first                           session   9f2c7a41                        | dim:1 plain:77 dim:10 plain:32
+06 |┃›the retry test fails on the line the patch moved, and only there            cache     88%                             | accent:1 plain:77 dim:10 plain:32
+07 |┃ say which line the patch moved, and which row of the output disagrees                                                 | accent:1 plain:119
+08 |┃ the report names the file it read and the line it stopped on                workspace …/sindri/.worktrees/46-rail     | accent:1 plain:77 dim:10 plain:32
+09 |┃ give me the test name and the assertion it failed on                        branch    spec/1-capability               | accent:1 plain:77 dim:10 plain:32
+10 |┃ then say whether the retry that hid it was the one the run recorded                                                   | accent:1 plain:119
+11 |┃ keep every line one sentence long, so the transcript stays readable         sandbox   bwrap                           | accent:1 plain:77 dim:10 plain:32
+12 |┃ no need to paste the whole output, the head of it is enough                                                           | accent:1 plain:119
+13 |┃ and end with the one thing you would change first                           session   9f2c7a41                        | accent:1 plain:77 dim:10 plain:32
 14 |                                                                              temp      …/sindri/sessions/9f2c7a41/tmp  | plain:78 dim:10 plain:32
 15 |                                                                                                                        | plain:120
 16 |                                                                              skills    2                               | plain:78 dim:10 plain:32
@@ -41,5 +41,5 @@ prompt-fold-open at 120x40
 35 |                                                                              output    3.1k                            | plain:78 dim:10 plain:32
 36 |                                                                              total     51.3k                           | plain:78 dim:10 plain:32
 37 |                                                                                                                        | plain:120
-38 |┃›what should the run do?                                                                                               | dim:25 plain:95
+38 |┃›what should the run do?                                                                                               | accent:1 dim:24 plain:95
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                             | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:45

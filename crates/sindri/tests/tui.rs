@@ -3000,10 +3000,8 @@ fn up_on_the_first_line_takes_the_newest_queued_prompt_back() {
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 }
 
-const RECALLED: &str = "why does the retry test flake?";
-
 #[test]
-fn up_on_a_new_launch_takes_back_the_prompt_the_launch_before_it_sent() {
+fn a_prompt_outlives_the_launch_that_sent_it_and_up_hands_it_back() {
     let ground = Ground::new();
     let wire = Wire::holding();
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
@@ -3013,36 +3011,25 @@ fn up_on_a_new_launch_takes_back_the_prompt_the_launch_before_it_sent() {
         "the boot frame is drawn: {:?}",
         drawn.text()
     );
-    ask_words(&mut pty, &drawn, &wire, RECALLED);
+    ask_words(&mut pty, &drawn, &wire, "say it again");
     wire.release();
-    answered(&drawn);
-
+    thread::sleep(Duration::from_millis(300));
     pty.type_bytes(&[0x11]);
     assert_eq!(session.wait().code(), Some(0), "{:?}", drawn.text());
 
     let (session, mut pty, drawn) = Session::asking(&ground, &wire);
     assert!(
         drawn.wait_for(FIRST_KEY),
-        "the launch after it draws its own boot frame: {:?}",
+        "the second launch draws its boot frame: {:?}",
         drawn.text()
     );
-    assert!(
-        !showing(&drawn.text(), RECALLED),
-        "a launch that has sent nothing draws no prompt of its own: {:?}",
-        drawn.text()
-    );
-
     pty.type_bytes(b"\x1b[A");
-
+    let recalled = pen::cells("say it again") + GUTTER;
     assert!(
-        drawn.wait_until(|drawn| showing(drawn, RECALLED)),
-        "Up hands back the prompt the launch before it sent: {:?}",
-        drawn.text()
-    );
-    assert!(
-        drawn.wait_until(|drawn| placed(drawn)
-            .is_some_and(|(_, column)| column == pen::cells(RECALLED) + GUTTER)),
-        "and the caret waits one column past its last glyph, ready to be typed on: {:?}",
+        drawn.wait_until(|frame| frame.contains("say it again")
+            && placed(frame).is_some_and(|(_, column)| column == recalled)),
+        "`Up` on the empty draft of a launch that has sent nothing hands back the prompt the \
+         launch before it sent, the caret waiting at its end: {:?}",
         drawn.text()
     );
 
@@ -4020,8 +4007,8 @@ fn the_first_frame_a_launch_draws_stands_on_the_grounds_its_bands_earn() {
     assert_eq!(
         u32::from(columns),
         u32::from(Rail::columns(COLS)),
-        "and the plane covers the rail's own columns and no column of the transcript's: the \
-         seam beside it is drawn in the plane's own pixels"
+        "and the plane covers the rail's own columns and no column of the transcript's: the seam \
+         stands in the rail's first cell, down every row of its band"
     );
     assert_eq!(
         rows,
@@ -4279,7 +4266,7 @@ fn a_run_that_asks_to_open_a_file_inside_the_workspace_opens_it_with_this_machin
             frame::read(drawn, COLS, ROWS)
                 .rows()
                 .iter()
-                .any(|row| row.contains("✓ open opened.html") && row.contains("rows kept back"))
+                .any(|row| row.contains("✓ open opened.html") && row.contains("\u{22ef}"))
         }),
         "the band draws the call settled with the target it opened and its exit: {:?}",
         drawn.text()

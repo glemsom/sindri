@@ -1009,8 +1009,8 @@ fn every_row_of_the_band_under_its_head_opens_with_the_prompts_spine_and_sigil()
         );
         assert_eq!(
             look_at(&buffer, &palette, band.x, y),
-            Look::plain(Ink::Dim),
-            "the spine of row {y} is not the dim ink the gutter is drawn in"
+            Look::plain(Ink::Accent),
+            "the spine of row {y} is not the accent every row of the band is quoted by"
         );
     }
 }
@@ -1550,7 +1550,7 @@ fn the_prompt_in_the_transcript_keeps_the_band_it_is_read_on_beside_the_seam() {
             .find(|y| drawn_row(&buffer, *y).contains("triage the retry test"))
             .expect("the frame draws the prompt the transcript opens on");
 
-        for x in laid.transcript.x..rail.x.saturating_sub(MARGIN) {
+        for x in laid.transcript.x..rail.x {
             assert_eq!(
                 under(&buffer, x, asked),
                 if draws {
@@ -1582,6 +1582,106 @@ fn the_prompt_in_the_transcript_keeps_the_band_it_is_read_on_beside_the_seam() {
              drawn in the rail's own first column and nowhere near them"
         );
     }
+}
+
+#[test]
+fn a_prompts_row_claims_the_cells_the_plane_over_it_stands_on() {
+    let palette = Palette::TRUECOLOR;
+    let well = palette.band(Band::Well);
+    let (buffer, told) = painted_and_told(&mut asked_beside_a_rail(true), 120, 40);
+    let laid = laid_out(&told);
+    let (bare, without) = painted_and_told(&mut asked_beside_a_rail(false), 120, 40);
+    let placeless = laid_out(&without);
+    assert_eq!(
+        placeless.transcript, laid.transcript,
+        "the two frames lay the transcript out in one band, so a row of one is the same row of the \
+         other"
+    );
+    let words = |buffer: &Buffer, laid: &Layout| {
+        (laid.transcript.y..laid.transcript.bottom())
+            .find(|y| drawn_row(buffer, *y).contains("triage the retry test"))
+            .expect("the frame draws the prompt's words inside the transcript")
+    };
+    let row = words(&buffer, &laid);
+    assert_eq!(
+        row,
+        words(&bare, &placeless),
+        "both frames draw the prompt's words on one row, and a plane placed over the transcript \
+         resets its whole band to the terminal's own ground, so the ground the row claims is read \
+         from the frame that places no picture"
+    );
+    let plane = told
+        .placements()
+        .iter()
+        .find(|placement| matches!(placement.shade().id(), crate::plane::PlaneId::Prompt(_)))
+        .map(Placement::cells)
+        .expect("a frame drawn with a picture cell size stands a plane over the prompt");
+    let run: Vec<u16> = (placeless.transcript.x..placeless.transcript.right())
+        .filter(|x| under(&bare, *x, row) != well)
+        .collect();
+    let claimed = |at: Option<&u16>| *at.expect("the prompt's row claims ground of its own");
+    let start = claimed(run.first());
+    let end = claimed(run.last());
+    assert_eq!(
+        run,
+        (start..=end).collect::<Vec<_>>(),
+        "the prompt's row claims one run of columns: a plate claimed twice reads as a bright strip \
+         and a dark strip of different widths on the same row, not as the one ground its words sit \
+         on"
+    );
+    assert_eq!(
+        (start, end.saturating_add(1)),
+        (placeless.transcript.x, placeless.transcript.right()),
+        "the prompt's row claims the transcript's columns whole, its two last columns padding \
+         where the thumb and the cut mark stand: a plate that stops short of them or runs past \
+         the band reads as a bright strip of the wrong width beside the well the words are read on"
+    );
+    assert_eq!(
+        (start, row, end - start + 1, 1),
+        (plane.x, plane.y, plane.width, plane.height),
+        "the plane over the prompt is placed on the very cells the row claims: the transcript's \
+         columns whole and the one row these words are read on, so a plane a column wider \
+         lightens ground that is no plate or leaves a plate lit by no picture, and one a row \
+         taller lights ground that holds no words of this prompt"
+    );
+}
+
+#[test]
+fn a_prompts_plate_runs_the_transcript_band_whole_up_to_the_seam() {
+    let palette = Palette::TRUECOLOR;
+    let (bare, told) = painted_and_told(&mut asked_beside_a_rail(false), 192, 40);
+    let laid = laid_out(&told);
+    let band = laid.transcript;
+    let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
+    let row = (band.y..band.bottom())
+        .find(|y| drawn_row(&bare, *y).contains("triage the retry test"))
+        .expect("the frame draws the prompt the transcript opens on");
+
+    for x in band.x..band.right() {
+        assert_eq!(
+            under(&bare, x, row),
+            palette.band(Band::Prompt),
+            "column {x} of the prompt's row is not the band the reader's own words are read on: \
+             the plate runs the band whole, so its two last columns are its own padding, where \
+             the thumb and the cut mark stand"
+        );
+    }
+    let drawn = drawn_row(&bare, row);
+    let at = drawn
+        .find("triage")
+        .expect("the frame draws the prompt's words inside the plate");
+    assert_eq!(
+        pen::cells(&drawn[..at]),
+        MARGIN,
+        "the plate is wider but the prompt's words keep the measure they were laid at: they \
+         still open on the sigil's column, two columns past the band's edge"
+    );
+    assert_eq!(
+        (band.right() - 1, rail.x, rail.x + MARGIN),
+        (147, 148, 150),
+        "in a frame 192 columns wide the plate ends on column 147, the seam stands in the column \
+         after it, and the rail's words open two columns past that"
+    );
 }
 
 fn cut_beside_a_rail() -> View {
@@ -1684,14 +1784,19 @@ fn the_seam_runs_unbroken_under_the_face_and_the_rule_that_closes_it_opens_past_
         .picture
         .expect("the cells the rail reserved for the face");
 
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
     for y in face.y..face.y + face.height + 1 {
         for x in band.area.x..band.area.right() {
             assert_eq!(
                 under(&buffer, x, y),
-                palette.ground(None).bg.expect("the terminal's own ground"),
+                match x {
+                    x if x == band.area.x => palette.edge_ink(),
+                    _ => own,
+                },
                 "row {y}, column {x} of the rail is painted by the seam, and the face stands over \
-                 the rail's shade and not over a fall beside it \u{2014} the seam's own column is \
-                 drawn in the plane's pixels, so every cell of the band is their own ground"
+                 the rail's shade and not over a fall beside it \u{2014} the seam's own column \
+                 carries the edge ink and every other cell of the band is the ground its plane is \
+                 read through"
             );
         }
     }
@@ -2088,11 +2193,11 @@ fn the_frame_a_launch_opens_on_is_a_wordmark_a_gloss_and_three_commands() {
         block(&splash(120, 40)),
         [
             "sindri",
-            "a GNU/Linux AI agent",
+            "an AI agent for the terminal",
             "",
-            "/model     ask the wire what it serves, and name the one to run",
-            "/settings  the keys the config holds, and the value each is set to",
-            "/stats     the facts the rail is too narrow to hold",
+            "/model     choose the model",
+            "/settings  show every setting with its value",
+            "/new       start a new conversation",
         ],
         "the splash screen is a wordmark, the gloss it stands under, and three commands with \
              the one line each that explains them, set as one block"
@@ -2295,10 +2400,10 @@ fn a_splash_screen_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
         let words = wrapped.split_whitespace().collect::<Vec<&str>>().join(" ");
 
         for line in [
-            "a GNU/Linux AI agent",
-            "ask the wire what it serves, and name the one to run",
-            "the keys the config holds, and the value each is set to",
-            "the facts the rail is too narrow to hold",
+            "an AI agent for the terminal",
+            "choose the model",
+            "show every setting with its value",
+            "start a new conversation",
         ] {
             assert!(
                 words.contains(line),
@@ -2842,7 +2947,7 @@ fn the_footer_draws_each_hint_as_a_key_and_the_words_that_say_what_it_does() {
 }
 
 #[test]
-fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_explains_it() {
+fn the_card_that_lists_the_keys_draws_every_key_and_every_mark_in_the_look_it_is_drawn_in() {
     let palette = Palette::TRUECOLOR;
     let mut view = View::of(
         Capabilities::default(),
@@ -2850,32 +2955,42 @@ fn the_card_that_lists_the_keys_draws_every_key_no_quieter_than_the_line_that_ex
         Transcript::none(),
     );
     view.key(Key::Char('?'));
-    let (buffer, told) = painted_and_told(&mut view, 120, 40);
+    let (buffer, told) = painted_and_told(&mut view, 120, 56);
 
     let body = card_body(&told);
-    let mut listed = 0;
+    let mut listed: Vec<(Look, String)> = Vec::new();
     for y in body.y..body.bottom() {
         let runs: Vec<(Look, String)> = runs_of(&buffer, &palette, y, body.x, body.right())
             .into_iter()
             .filter(|(_, text)| !text.trim().is_empty())
             .collect();
-        match runs.as_slice() {
-            [] | [_] => {}
-            [(key, _), (meaning, _), ..] => {
-                listed += 1;
-                assert_eq!(*key, keys::KEY, "row {y} draws its key in another look");
-                assert_eq!(
-                    *meaning,
-                    keys::MEANING,
-                    "row {y} draws the line that explains its key in another look"
-                );
-            }
+        for pair in runs.chunks(2) {
+            let [(name, said), (meaning, _)] = pair else {
+                continue;
+            };
+            assert_eq!(
+                *meaning,
+                keys::MEANING,
+                "row {y} draws the line that explains its name in another look"
+            );
+            listed.push((*name, said.trim().to_owned()));
         }
     }
+
+    let mut wanted: Vec<(Look, String)> = Vec::new();
+    for mode in [Mode::Keys, Mode::Composer] {
+        for binding in mode.table() {
+            wanted.push((keys::KEY, binding.name.to_owned()));
+        }
+    }
+    for mark in crate::rows::marks() {
+        wanted.push((Look::plain(mark.ink()), mark.glyph().to_string()));
+    }
+
     assert_eq!(
-        listed,
-        Mode::Composer.table().len() + Mode::Keys.table().len(),
-        "every key of the stack the card sits on is one row of its list"
+        listed, wanted,
+        "every key of the stack the card sits on is one row of its list, and every mark under \
+         them is a row of its own, drawn in the ink the band draws it in"
     );
 }
 
@@ -2997,8 +3112,9 @@ fn one_key_opens_the_newest_settled_work_and_the_same_key_closes_it_again() {
         frame_rows(&open)
     );
     assert!(
-        holds(&open, "22 rows kept back"),
-        "and the result inside it keeps the fold, the head and the count it was handed by: {:?}",
+        holds(&open, "\u{22ef}22"),
+        "and the result inside it keeps the fold, the head and the count it was handed by, in the \
+         one glyph and number a closed call states it in: {:?}",
         frame_rows(&open)
     );
 
@@ -3011,7 +3127,7 @@ fn one_key_opens_the_newest_settled_work_and_the_same_key_closes_it_again() {
     assert!(holds(&closed, "test rows::a_row_of_output_1 ... ok"));
     view.key(Key::Fold);
     let closed = painted(&mut view, 120, 40);
-    assert!(holds(&closed, "22 rows kept back"));
+    assert!(holds(&closed, "\u{22ef}22"));
     assert!(!holds(&closed, "test rows::a_row_of_output_1 ... ok"));
 }
 
@@ -3622,7 +3738,12 @@ fn one_row_that_landed_is_said_in_the_singular() {
 }
 
 fn unthumbed(buffer: &Buffer, y: u16) -> String {
-    drawn_row(buffer, y).chars().skip(1).collect()
+    let column = usize::from(buffer.area.right().saturating_sub(MARGIN));
+    drawn_row(buffer, y)
+        .chars()
+        .enumerate()
+        .map(|(at, glyph)| if at == column { ' ' } else { glyph })
+        .collect()
 }
 
 #[test]
@@ -3918,10 +4039,15 @@ fn a_page_up_at_the_first_row_stops_there_rather_than_wrapping_to_the_tail() {
     let head = painted(&mut view, 120, 40);
     let first = drawn_row(&head, 0);
     assert!(
-        first.starts_with(&format!("{THUMB} turn 1 ")),
-        "the transcript's first row stands at the top of the band with the thumb in the cell \
-             the row's gutter gave up and the row's own words past it, so a reader who paged back \
-             sees where they stand over the row they stand on: {first:?}"
+        first.starts_with("\u{2502} turn 1 "),
+        "the transcript's first row stands at the top of the band with the thought's own bar in \
+             its gutter and its own words past it: {first:?}"
+    );
+    assert_eq!(
+        first.chars().nth(usize::from(120 - MARGIN)),
+        Some(THUMB),
+        "and the thumb stands in the margin the band keeps at its right edge, so a reader who \
+             paged back sees where they stand beside the row they stand on: {first:?}"
     );
     for _ in 0..3 {
         assert_eq!(
@@ -4182,7 +4308,7 @@ fn the_draft_is_set_in_the_column_an_answers_prose_opens_in() {
     );
 }
 
-fn field(rows: u16) -> Buffer {
+fn field(rows: u16) -> (Buffer, Painted) {
     let mut text = String::from(
         "![a diagram outside the workspace](../outside-the-workspace.svg)\n\n\
          ![a tall field](tall.svg)\n",
@@ -4205,7 +4331,7 @@ fn field(rows: u16) -> Buffer {
         }])
         .scrolled(Scroll::Back(70)),
     );
-    painted(&mut view, 120, rows)
+    painted_and_told(&mut view, 120, rows)
 }
 
 fn placed_row(buffer: &Buffer, from: u16, to: u16) -> Option<u16> {
@@ -4217,7 +4343,8 @@ fn placed_row(buffer: &Buffer, from: u16, to: u16) -> Option<u16> {
 #[test]
 fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
     let rows = 130;
-    let buffer = field(rows);
+    let (buffer, told) = field(rows);
+    let band = laid_out(&told).transcript;
 
     let over =
         placed_row(&buffer, 0, rows).expect("a band this tall places the tall field over a row");
@@ -4228,31 +4355,31 @@ fn a_row_a_picture_is_placed_over_keeps_the_cell_that_places_it() {
              cut, and the reader is handed a thumb where the tall field should be"
     );
     assert!(
-        thumb_rows(&buffer).is_empty(),
+        thumb_rows(&buffer, band).is_empty(),
         "a band this tall holds the whole history, so no thumb is drawn over any row of it"
     );
 }
 
 #[test]
-fn the_thumb_keeps_its_cell_on_a_row_whose_picture_was_refused() {
-    let buffer = field(40);
+fn the_thumb_keeps_its_place_on_a_row_whose_picture_was_refused() {
+    let (buffer, told) = field(40);
+    let band = laid_out(&told).transcript;
 
-    let over = (0..40)
+    let over = (band.y..band.bottom())
         .find(|y| drawn_row(&buffer, *y).contains("a diagram outside the workspace"))
         .expect("the refused picture's words stand on a row of the band");
-    let row = drawn_row(&buffer, over);
     assert!(
-        row.starts_with(THUMB),
+        thumb_rows(&buffer, band).contains(&over),
         "row {over} stands on the block the picture outside the workspace was refused over and \
-             carries no byte of it: giving its first cell up leaves the reader a hole in the thumb \
-             for a picture that is not there, where every other row of the thumb says where they \
-             stand"
+             carries no byte of it: a row that places no picture keeps the thumb's column, where \
+             every other row of the thumb says where the reader stands"
     );
 }
 
-fn thumb_rows(buffer: &Buffer) -> Vec<u16> {
-    (buffer.area.y..buffer.area.bottom())
-        .filter(|y| drawn_row(buffer, *y).starts_with(THUMB))
+fn thumb_rows(buffer: &Buffer, band: Rect) -> Vec<u16> {
+    let column = band.right().saturating_sub(MARGIN);
+    (band.y..band.bottom())
+        .filter(|y| glyph_at(buffer, column, *y) == THUMB)
         .collect()
 }
 
@@ -4265,17 +4392,19 @@ fn scrolled(count: u32, scroll: Scroll) -> View {
 }
 
 #[test]
-fn a_frame_off_the_tail_draws_the_thumb_in_the_gutter_for_the_rows_the_geometry_says() {
-    let at_tail = painted(&mut turns(80), 120, 40);
+fn a_frame_off_the_tail_draws_the_thumb_in_the_margin_for_the_rows_the_geometry_says() {
+    let (at_tail, tail_told) = painted_and_told(&mut turns(80), 120, 40);
+    let tail_band = laid_out(&tail_told).transcript;
     assert_eq!(
-        thumb_rows(&at_tail),
+        thumb_rows(&at_tail, tail_band),
         Vec::<u16>::new(),
         "a frame at the tail draws no thumb: the reader follows the newest rows, and a \
              thumb there would sit on them"
     );
 
-    let head = painted(&mut scrolled(80, Scroll::Back(44)), 120, 40);
-    let thumb = thumb_rows(&head);
+    let (head, told) = painted_and_told(&mut scrolled(80, Scroll::Back(44)), 120, 40);
+    let band = laid_out(&told).transcript;
+    let thumb = thumb_rows(&head, band);
     assert_eq!(
         thumb,
         (0..16).collect::<Vec<u16>>(),
@@ -4284,24 +4413,31 @@ fn a_frame_off_the_tail_draws_the_thumb_in_the_gutter_for_the_rows_the_geometry_
              the band at the head"
     );
     assert_eq!(
-        look_at(&head, &Palette::TRUECOLOR, 0, thumb[0]).ink(),
+        look_at(&head, &Palette::TRUECOLOR, band.right() - MARGIN, thumb[0]).ink(),
         Ink::Dim,
-        "the thumb is a dim cell of the gutter, and not a word's ink"
+        "the thumb is a dim cell of the frame's margin, and not a word's ink"
+    );
+    assert_eq!(
+        glyph_at(&head, band.x, thumb[0]),
+        '\u{2502}',
+        "and the column the row's gutter stands in keeps the thought's own bar: the thumb \
+             states where the reader stands without drawing over a row they are reading"
     );
 }
 
 #[test]
 fn the_thumb_follows_the_window_down_the_frame() {
-    let middle = painted(&mut scrolled(80, Scroll::Back(22)), 120, 40);
+    let (middle, told) = painted_and_told(&mut scrolled(80, Scroll::Back(22)), 120, 40);
+    let band = laid_out(&told).transcript;
     assert_eq!(
-        thumb_rows(&middle),
+        thumb_rows(&middle, band),
         (10..26).collect::<Vec<u16>>(),
         "half way from the head to the tail stands the thumb half way down the band"
     );
 
-    let foot = painted(&mut scrolled(80, Scroll::Back(1)), 120, 40);
+    let (foot, told) = painted_and_told(&mut scrolled(80, Scroll::Back(1)), 120, 40);
     assert_eq!(
-        thumb_rows(&foot),
+        thumb_rows(&foot, laid_out(&told).transcript),
         (20..36).collect::<Vec<u16>>(),
         "one row off the tail stands the thumb at the foot of the band, so the reader sees it \
              arrive there"
@@ -4309,32 +4445,141 @@ fn the_thumb_follows_the_window_down_the_frame() {
 }
 
 #[test]
-fn the_thumb_takes_no_column_the_words_were_drawn_in() {
-    let at_tail = painted(&mut turns(80), 120, 40);
-    let off = painted(&mut scrolled(80, Scroll::Back(7)), 120, 40);
-    let words =
-        |buffer: &Buffer, y: u16| -> String { drawn_row(buffer, y).chars().skip(2).collect() };
+fn the_thumb_stands_in_the_margins_first_column_and_touches_no_measured_cell() {
+    for (cols, back) in [(120, 44), (120, 7), (80, 3), (40, 1)] {
+        let (buffer, told) = painted_and_told(&mut scrolled(80, Scroll::Back(back)), cols, 40);
+        let band = laid_out(&told).transcript;
+        let column = band.right() - MARGIN;
+        let mut found = Vec::new();
+        for y in buffer.area.y..buffer.area.bottom() {
+            for x in buffer.area.x..buffer.area.right() {
+                if glyph_at(&buffer, x, y) == THUMB {
+                    found.push((x, y));
+                }
+            }
+        }
 
-    let beside = thumb_rows(&off);
-    assert!(
-        !beside.is_empty(),
-        "the frame off the tail drew no thumb, so nothing is proven about the words it stands \
-             beside"
-    );
-    for y in beside {
         assert!(
-            (0..40).any(|other| words(&at_tail, other) == words(&off, y)),
-            "the row the thumb stands beside, row {y}, reads as no row of this transcript at \
-                 the tail: the cell past the gutter was written over a word"
+            !found.is_empty(),
+            "a frame {back} rows off the tail at {cols} columns drew no thumb, so nothing is \
+                 proven about the columns it takes"
+        );
+        for (x, y) in found {
+            assert_eq!(
+                x, column,
+                "the thumb stands at row {y}, column {x} of a {cols} column frame whose band \
+                     measures its rows short of column {column}: the thumb takes a column the \
+                     band's words are measured in, and draws over them"
+            );
+            assert!(
+                y >= band.y && y < band.bottom(),
+                "the thumb stands at row {y} of a frame whose band runs from row {} to row {}: \
+                     an indicator drawn past the band covers another band's rows",
+                band.y,
+                band.bottom()
+            );
+        }
+    }
+}
+
+#[test]
+fn a_row_that_carries_a_cut_mark_and_the_thumb_never_contend_for_a_cell() {
+    let (buffer, told) = painted_and_told(&mut cut_and_thumb(), 40, 40);
+    let band = laid_out(&told).transcript;
+    let thumb = thumb_rows(&buffer, band);
+    let cut = (band.y..band.bottom())
+        .filter(|y| glyph_at(&buffer, band.right() - 1, *y) == '\u{2026}')
+        .collect::<Vec<u16>>();
+
+    assert!(
+        !cut.is_empty(),
+        "a fence line wider than the band was drawn whole, so no row of it carries the cut mark \
+             this frame is about: {:?}",
+        (band.y..band.bottom())
+            .map(|y| drawn_row(&buffer, y))
+            .collect::<Vec<String>>()
+    );
+    for y in cut {
+        assert!(
+            thumb.contains(&y),
+            "row {y} carries the cut mark and stands in the thumb's own span, so the two are \
+                 read beside each other rather than on one cell"
+        );
+        assert_eq!(
+            glyph_at(&buffer, band.right() - MARGIN, y),
+            THUMB,
+            "row {y} keeps the band's last column for the cut mark and gives the margin's first \
+                 to the thumb"
         );
     }
+}
+
+#[test]
+fn the_thumb_stands_in_the_margin_on_a_band_with_no_colour_and_a_band_with_no_picture() {
+    let column = |band: Rect| band.right() - MARGIN;
+    let (coloured, told) = painted_and_told(&mut scrolled(80, Scroll::Back(44)), 120, 40);
+    let coloured_band = laid_out(&told).transcript;
+
+    let (flat, told) = painted_and_told(&mut slotted(Scroll::Back(44)), 120, 40);
+    let flat_band = laid_out(&told).transcript;
+    assert_eq!(
+        thumb_rows(&flat, flat_band),
+        thumb_rows(&coloured, coloured_band),
+        "a band that spells no colour draws the thumb over the rows a coloured one does"
+    );
+    assert_eq!(
+        look_at(&flat, &Palette::SLOTS, column(flat_band), 0).ink(),
+        Ink::Dim,
+        "and the cell it stands on is the dim ink that palette spells, so the thumb reads without \
+             a colour to read it in"
+    );
+
+    let (pictured, told) = painted_and_told(&mut pictured_band(Scroll::Back(44)), 120, 40);
+    let pictured_band = laid_out(&told).transcript;
+    assert_eq!(
+        thumb_rows(&pictured, pictured_band),
+        thumb_rows(&coloured, coloured_band),
+        "a band a terminal places pictures on draws the thumb over the rows a band it places none \
+             on does"
+    );
+}
+
+fn slotted(scroll: Scroll) -> View {
+    View::of(
+        inked(Palette::SLOTS),
+        Facts::default().asked(),
+        Transcript::of((1..=80).map(thought)).scrolled(scroll),
+    )
+}
+
+fn pictured_band(scroll: Scroll) -> View {
+    View::of(
+        pictured(),
+        Facts::default().asked(),
+        Transcript::of((1..=80).map(thought)).scrolled(scroll),
+    )
+}
+
+fn cut_and_thumb() -> View {
+    let mut entries = vec![Entry::Assistant {
+        turn: 1,
+        text: SecretSet::default().redact(
+            "```rust\nlet a_fence_line_wider_than_the_band_it_is_drawn_in_is_kept_in_the_shape_the_model_wrote_it\n```",
+        ),
+    }];
+    entries.extend((1..=40).map(thought));
+    View::of(
+        Capabilities::default(),
+        Facts::default().asked(),
+        Transcript::of(entries).scrolled(Scroll::Back(u32::MAX)),
+    )
 }
 
 #[test]
 fn a_frame_too_narrow_for_a_gutter_draws_no_thumb() {
     let narrow = painted(&mut scrolled(80, Scroll::Back(44)), 2, 40);
     assert_eq!(
-        thumb_rows(&narrow),
+        thumb_rows(&narrow, narrow.area),
         Vec::<u16>::new(),
         "a band too narrow for a gutter keeps its words and gives the thumb up"
     );
@@ -4368,7 +4613,7 @@ fn a_band_that_leaves_a_row_no_gutter_keeps_its_word_and_gives_up_the_thumb() {
     let buffer = wide(5);
 
     assert_eq!(
-        thumb_rows(&buffer),
+        thumb_rows(&buffer, buffer.area),
         Vec::<u16>::new(),
         "five columns leave a wide glyph no room beside the gutter, so the row gives the \
              gutter up and the thumb has no column of its own to stand in"
@@ -4389,7 +4634,7 @@ fn a_band_that_leaves_a_row_no_gutter_keeps_its_word_and_gives_up_the_thumb() {
 
     let roomy = wide(6);
     assert!(
-        !thumb_rows(&roomy).is_empty(),
+        !thumb_rows(&roomy, roomy.area).is_empty(),
         "and six columns hold the gutter beside that glyph, so the thumb is drawn again"
     );
 }
@@ -5293,7 +5538,7 @@ fn a_placeholder_and_a_waiting_prompt_light_no_sigil_and_keep_the_dim_ink() {
     let (buffer, laid, ends) = waiting_behind(palette, "a draft", 1, 120, 24);
     let prompts = laid.queue;
     assert_eq!(
-        gutter_ink(&buffer, &palette, prompts.x, prompts.y),
+        gutter_ink(&buffer, &palette, prompts.x + 1, prompts.y),
         Ink::Dim,
         "a waiting prompt is no row the caret waits in, so its sigil keeps the dim ink"
     );
@@ -6635,7 +6880,7 @@ fn a_press_on_a_settled_works_row_opens_it_and_a_press_on_its_head_folds_it() {
     );
     let opened = painted(&mut view, 120, 40);
     assert!(
-        holds(&opened, "22 rows kept back"),
+        holds(&opened, "\u{22ef}22"),
         "the work drawn open is the rows it stood for: {:?}",
         frame_rows(&opened)
     );
@@ -6958,12 +7203,11 @@ fn the_transcript_keeps_every_column_the_rail_leaves_it_and_falls_into_no_crease
 }
 
 #[test]
-fn the_two_frames_part_the_one_seam_in_the_same_cells_and_the_pictured_one_in_pixels() {
+fn the_rails_first_column_is_the_edge_ink_whether_a_picture_is_placed_or_not() {
     let (pictured, told) = seamed_frame(true, 120, 40);
     let (placeless, without) = seamed_frame(false, 120, 40);
     let palette = Palette::TRUECOLOR;
     let laid = laid_out(&told);
-    let own = palette.ground(None).bg.expect("the terminal's own ground");
 
     assert_eq!(
         laid_out(&without).transcript,
@@ -6971,8 +7215,32 @@ fn the_two_frames_part_the_one_seam_in_the_same_cells_and_the_pictured_one_in_pi
         "a terminal that places a picture and one that places none part the same bands"
     );
     let rail = laid.rail.expect("a frame this wide holds a ledger").1.area;
-    let band = laid.composer;
-    for (frame, spelling, parting) in [
+    for (frame, spelling) in [
+        (&pictured, "a terminal that places a picture"),
+        (&placeless, "a terminal that places none"),
+    ] {
+        for y in rail.y..laid.composer.y {
+            assert_eq!(
+                under(frame, rail.x, y),
+                palette.edge_ink(),
+                "row {y} of the rail's first column in the frame {spelling} is drawn on is \
+                 claimed in another colour: that column parts the two bands on every row of the \
+                 band it opens"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_row_that_heads_the_composer_is_read_over_the_planes_pixels_where_one_is_placed() {
+    let (pictured, told) = seamed_frame(true, 120, 40);
+    let (placeless, _) = seamed_frame(false, 120, 40);
+    let palette = Palette::TRUECOLOR;
+    let own = palette.ground(None).bg.expect("the terminal's own ground");
+    let laid = laid_out(&told);
+    let head = laid.composer.y;
+
+    for (frame, spelling, claimed) in [
         (&pictured, "a terminal that places a picture", own),
         (
             &placeless,
@@ -6980,21 +7248,13 @@ fn the_two_frames_part_the_one_seam_in_the_same_cells_and_the_pictured_one_in_pi
             palette.edge_ink(),
         ),
     ] {
-        for y in rail.y..band.y {
-            assert_eq!(
-                under(frame, rail.x, y),
-                parting,
-                "row {y} of the seam in the frame {spelling} is drawn on is claimed in another \
-                 colour: the two frames part the same cell, and the pictured one draws its \
-                 parting in the plane's pixels rather than in a cell's ink"
-            );
-        }
         for x in frame.area.x..frame.area.right() {
             assert_eq!(
-                under(frame, x, band.y),
-                parting,
-                "column {x} of the seam's row in the frame {spelling} is drawn on is claimed in \
-                 another colour than the rail's seam beside it"
+                under(frame, x, head),
+                claimed,
+                "column {x} of the row that heads the composer's band in the frame {spelling} is \
+                 drawn on is claimed in another colour: the count that row carries is read over \
+                 the plane's pixels where one is placed, and over the ink where none is"
             );
         }
     }
@@ -7033,425 +7293,5 @@ fn slash_new_excludes_late_work_and_queued_prompts_join_when_started() {
     assert_eq!(
         view.earlier(),
         [Turn::answered(1, "queued prompt", "new evidence")]
-    );
-}
-
-fn remembering(said: &[&str]) -> Recall {
-    let mut recall = Recall::none();
-    for words in said {
-        recall.append(words);
-    }
-    recall
-}
-
-fn recalling(recall: Recall) -> View {
-    View::of(
-        Capabilities::default(),
-        Facts::default()
-            .asked()
-            .working(PathBuf::from("/srv/workspace"), None),
-        Transcript::none(),
-    )
-    .recalling(recall)
-}
-
-#[test]
-fn up_on_the_first_line_takes_the_newest_recalled_prompt_as_the_whole_draft() {
-    let mut view = recalling(remembering(&[
-        "yesterday's question",
-        "the newest question",
-    ]));
-    view.paste("a draft I was still writing");
-    view.key(Key::Left);
-    view.key(Key::Left);
-
-    assert_eq!(view.key(Key::Up), Outcome::Edited);
-
-    assert_eq!(
-        view.composer().text(),
-        "the newest question",
-        "the prompt is the whole draft and never a splice into the one it replaced"
-    );
-    assert_eq!(
-        view.composer().cursor(),
-        "the newest question".len(),
-        "and the caret waits at its tail, ready to be typed on"
-    );
-}
-
-#[test]
-fn up_takes_the_newest_queued_prompt_before_anything_recalled() {
-    let mut view = recalling(remembering(&["the recalled question"]));
-    view.enqueue(prompt("the queued question"));
-
-    view.key(Key::Up);
-
-    assert_eq!(
-        view.composer().text(),
-        "the queued question",
-        "work in flight is nearer than yesterday, so the queue is what Up hands back first"
-    );
-}
-
-#[test]
-fn up_inside_a_multi_line_draft_moves_the_caret_and_takes_no_prompt() {
-    let mut view = recalling(remembering(&["the recalled question"]));
-    view.paste("one\ntwo");
-
-    view.key(Key::Up);
-
-    assert_eq!(view.composer().text(), "one\ntwo", "the draft is untouched");
-    assert_eq!(
-        view.composer().caret().0,
-        0,
-        "and the caret has moved to the line above it"
-    );
-}
-
-#[test]
-fn up_on_a_commands_card_below_its_top_walks_the_card_and_takes_no_prompt() {
-    let mut view = recalling(remembering(&["the recalled question"]));
-    view.key(Key::Char('/'));
-    view.key(Key::Down);
-
-    assert_eq!(view.key(Key::Up), Outcome::Edited);
-
-    assert_eq!(
-        view.composer().text(),
-        "/",
-        "the card took the Up, so the draft is still its query rather than a recalled prompt"
-    );
-}
-
-#[test]
-fn a_frame_handed_no_recall_answers_up_exactly_as_it_did_before() {
-    let mut view = View::of(
-        Capabilities::default(),
-        Facts::default().asked(),
-        Transcript::none(),
-    );
-    view.paste("a draft");
-
-    assert_eq!(view.key(Key::Up), Outcome::Unchanged);
-    assert_eq!(view.composer().text(), "a draft", "the draft is untouched");
-    assert_eq!(
-        view.composer().cursor(),
-        "a draft".len(),
-        "and so is the caret"
-    );
-}
-
-#[test]
-fn a_prompt_sent_is_in_the_recall_the_moment_it_is_sent() {
-    let mut view = recalling(Recall::none());
-    view.paste("what I just asked");
-
-    let Outcome::Send(prompt) = view.key(Key::Enter) else {
-        panic!("the draft is a prompt and not a command");
-    };
-    assert_eq!(prompt.text(), "what I just asked");
-    view.key(Key::Up);
-
-    assert_eq!(
-        view.composer().text(),
-        "what I just asked",
-        "Up right after sending hands back what was just sent"
-    );
-}
-
-#[test]
-fn a_slash_command_is_never_in_the_recall() {
-    let mut view = recalling(Recall::none());
-    view.paste("/new");
-    assert_eq!(view.key(Key::Enter), Outcome::Edited, "`/new` answers");
-
-    assert_eq!(
-        view.key(Key::Up),
-        Outcome::Unchanged,
-        "a command never reaches the recall, so Up leaves the frame alone"
-    );
-    assert!(view.composer().text().is_empty(), "and the draft is empty");
-}
-
-#[test]
-fn up_walks_back_one_recalled_prompt_at_a_time() {
-    let mut view = recalling(remembering(&[
-        "the oldest question",
-        "the middle question",
-        "the newest question",
-    ]));
-    view.key(Key::Up);
-
-    assert_eq!(view.key(Key::Up), Outcome::Edited);
-
-    assert_eq!(
-        view.composer().text(),
-        "the middle question",
-        "Up again is the prompt before the one the draft stands on"
-    );
-    assert_eq!(
-        view.composer().cursor(),
-        "the middle question".len(),
-        "and its caret waits at its tail"
-    );
-
-    view.key(Key::Up);
-    assert_eq!(view.composer().text(), "the oldest question");
-
-    assert_eq!(
-        view.key(Key::Up),
-        Outcome::Unchanged,
-        "there is nothing before the oldest, so Up changes nothing"
-    );
-    assert_eq!(
-        view.composer().text(),
-        "the oldest question",
-        "and the draft stands where the walk left it"
-    );
-}
-
-#[test]
-fn down_walks_forward_and_past_the_newest_is_the_draft_the_walk_interrupted() {
-    let mut view = recalling(remembering(&["the older question", "the newest question"]));
-    view.paste("a draft I was still writing");
-    view.key(Key::Left);
-    view.key(Key::Left);
-    view.key(Key::Up);
-    view.key(Key::Up);
-
-    assert_eq!(view.key(Key::Down), Outcome::Edited);
-
-    assert_eq!(
-        view.composer().text(),
-        "the newest question",
-        "Down is the prompt after the one the draft stands on"
-    );
-    assert_eq!(view.key(Key::Down), Outcome::Edited);
-    assert_eq!(
-        view.composer().text(),
-        "a draft I was still writing",
-        "and past the newest is the draft the first Up put aside"
-    );
-    assert_eq!(
-        view.composer().cursor(),
-        "a draft I was still writing".len() - 2,
-        "with the caret the reader left in it"
-    );
-    assert_eq!(
-        view.key(Key::Down),
-        Outcome::Unchanged,
-        "nothing stands after the reader's own draft"
-    );
-}
-
-#[test]
-fn up_hands_back_a_multi_line_prompt_whole_with_its_caret_at_its_end() {
-    let mut view = recalling(remembering(&["the first line\nand the second"]));
-
-    assert_eq!(view.key(Key::Up), Outcome::Edited);
-
-    assert_eq!(
-        view.composer().text(),
-        "the first line\nand the second",
-        "every line the prompt was asked with comes back"
-    );
-    assert_eq!(
-        view.composer().cursor(),
-        "the first line\nand the second".len(),
-        "and the caret waits at the end of the last of them"
-    );
-}
-
-#[test]
-fn a_prompt_a_skill_invocation_synthesises_lands_in_the_recall() {
-    let workspace = tempfile::tempdir().unwrap();
-    let skill = workspace.path().join(".agents/skills/deploy");
-    std::fs::create_dir_all(&skill).unwrap();
-    std::fs::write(
-        skill.join("SKILL.md"),
-        "---\nname: deploy\ndescription: the deploy skill\n---\n\nBody.\n",
-    )
-    .unwrap();
-    let mut view = View::of(
-        Capabilities::default(),
-        Facts::default()
-            .asked()
-            .working(workspace.path().to_path_buf(), None),
-        Transcript::none(),
-    )
-    .recalling(Recall::none());
-    view.paste("/deploy ship staging");
-
-    let Outcome::Send(prompt) = view.key(Key::Enter) else {
-        panic!("a skill invoked by name is a prompt");
-    };
-    assert_eq!(prompt.text(), "Use the deploy skill.\n\nship staging");
-    view.key(Key::Up);
-
-    assert_eq!(
-        view.composer().text(),
-        "Use the deploy skill.\n\nship staging",
-        "the prompt a skill invocation synthesised is the reader's to walk back to"
-    );
-}
-
-#[test]
-fn down_inside_a_multi_line_recalled_prompt_moves_the_caret() {
-    let mut view = recalling(remembering(&["a draft\nof two lines"]));
-    view.key(Key::Up);
-
-    assert_eq!(
-        view.composer().caret().0,
-        1,
-        "a recalled prompt arrives whole, its caret on the line it ends on"
-    );
-    view.key(Key::Up);
-    assert_eq!(view.composer().caret().0, 0, "Up is the line above");
-
-    assert_eq!(view.key(Key::Down), Outcome::Edited);
-
-    assert_eq!(
-        view.composer().text(),
-        "a draft\nof two lines",
-        "Down inside the draft moves the caret and takes no prompt"
-    );
-    assert_eq!(view.composer().caret().0, 1, "onto the line below");
-    view.key(Key::Down);
-    assert!(
-        view.composer().text().is_empty(),
-        "and only past its last line does Down come back to the draft the walk interrupted"
-    );
-}
-
-#[test]
-fn an_edit_to_a_recalled_prompt_keeps_the_walk_where_it_was() {
-    let mut view = recalling(remembering(&["the older question", "the newest question"]));
-    view.key(Key::Up);
-    view.key(Key::Char('?'));
-    view.key(Key::Left);
-    view.key(Key::Left);
-    assert_eq!(view.composer().text(), "the newest question?");
-
-    assert_eq!(view.key(Key::Up), Outcome::Edited);
-
-    assert_eq!(
-        view.composer().text(),
-        "the older question",
-        "the walk stood where the edit left it, so Up is the prompt before the one the edit was made to"
-    );
-    assert_eq!(
-        view.composer().cursor(),
-        "the older question".len(),
-        "and the whole of it is the draft, wherever the caret of the edit stood"
-    );
-}
-
-#[test]
-fn sending_a_prompt_ends_the_walk() {
-    let mut view = recalling(remembering(&["alpha", "beta"]));
-    view.key(Key::Up);
-    view.key(Key::Up);
-    let Outcome::Send(prompt) = view.key(Key::Enter) else {
-        panic!("the draft is a prompt and not a command");
-    };
-    assert_eq!(prompt.text(), "alpha");
-
-    view.key(Key::Up);
-    assert_eq!(
-        view.composer().text(),
-        "alpha",
-        "Up after sending starts at the newest, and the newest is what was just sent"
-    );
-    view.key(Key::Up);
-    assert_eq!(
-        view.composer().text(),
-        "beta",
-        "then the prompt before it, and never a walk resumed where it ended"
-    );
-}
-
-#[test]
-fn ctrl_c_ends_the_walk_and_drops_the_draft_it_held() {
-    let mut view = recalling(remembering(&["the newest question"]));
-    view.paste("a draft I was still writing");
-    view.key(Key::Up);
-
-    assert_eq!(
-        view.key(Key::Cancel),
-        Outcome::Edited,
-        "the draft is cleared"
-    );
-
-    assert_eq!(
-        view.key(Key::Down),
-        Outcome::Unchanged,
-        "there is no walk to come back to, so Down leaves the frame alone"
-    );
-    assert!(
-        view.composer().text().is_empty(),
-        "and the draft the walk held went with it"
-    );
-}
-
-#[test]
-fn new_ends_the_walk() {
-    let mut view = recalling(remembering(&["alpha", "beta"]));
-    view.key(Key::Up);
-    view.key(Key::Up);
-    while !view.composer().text().is_empty() {
-        view.key(Key::Backspace);
-    }
-    view.paste("/new");
-    assert_eq!(view.key(Key::Enter), Outcome::Edited, "`/new` answers");
-
-    view.key(Key::Up);
-    assert_eq!(
-        view.composer().text(),
-        "beta",
-        "a walk ended by `/new` starts at the newest again"
-    );
-}
-
-#[test]
-fn a_frame_handed_no_recall_answers_down_exactly_as_it_did_before() {
-    let mut view = View::of(
-        Capabilities::default(),
-        Facts::default().asked(),
-        Transcript::none(),
-    );
-    view.paste("a draft");
-
-    assert_eq!(view.key(Key::Down), Outcome::Unchanged);
-    assert_eq!(view.composer().text(), "a draft", "the draft is untouched");
-    assert_eq!(
-        view.composer().cursor(),
-        "a draft".len(),
-        "and so is the caret"
-    );
-}
-
-#[test]
-fn up_takes_a_queued_prompt_before_a_recalled_one_and_the_recall_once_the_queue_is_empty() {
-    let mut view = recalling(remembering(&["the recalled question"]));
-    view.enqueue(prompt("the queued question"));
-
-    view.key(Key::Up);
-    assert_eq!(
-        view.composer().text(),
-        "the queued question",
-        "work in flight is nearer than yesterday"
-    );
-
-    assert_eq!(view.key(Key::Up), Outcome::Edited);
-    assert_eq!(
-        view.composer().text(),
-        "the recalled question",
-        "and once the queue is empty the recall is what Up hands back"
-    );
-    view.key(Key::Down);
-    assert_eq!(
-        view.composer().text(),
-        "the queued question",
-        "which is the draft the walk held, never the queue's prompt taken back out of it"
     );
 }

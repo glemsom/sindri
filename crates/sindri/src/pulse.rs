@@ -8,6 +8,8 @@ pub const STEP_MS: u64 = 80;
 
 const GLYPHS: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+pub(crate) const FRAME: char = GLYPHS[0];
+
 /// The loop the face is left turning: the gap between two of its frames, and how many times the
 /// terminal turns it before the face holds still.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

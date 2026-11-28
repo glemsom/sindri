@@ -128,7 +128,6 @@ enum Kind {
         size: Size,
         cell: Option<CellSize>,
         well: Color,
-        peak: u8,
     },
     Rail {
         size: Size,
@@ -279,14 +278,6 @@ impl Shade {
         };
         let (across, down) = (f64::from(cell.width()), f64::from(cell.height()));
         let light = match self.kind {
-            Kind::Transcript { peak, .. } => Light::lamp(
-                peak,
-                At { x: 0.0, y: 0.0 },
-                At {
-                    x: f64::INFINITY,
-                    y: CROWN_ROWS * down,
-                },
-            ),
             Kind::Rail {
                 size,
                 face: Some(face),
@@ -306,7 +297,10 @@ impl Shade {
                 };
                 Light::lamp(peak, centre, reach)
             }
-            Kind::Bounded { .. } | Kind::Rail { .. } | Kind::Composer { .. } => Light::NONE,
+            Kind::Bounded { .. }
+            | Kind::Transcript { .. }
+            | Kind::Rail { .. }
+            | Kind::Composer { .. } => Light::NONE,
             Kind::Gauge { .. } | Kind::Bar { .. } | Kind::Bezel { .. } => Light::NONE,
             Kind::Caret { size, peak, .. } => Light::lamp(
                 peak,
@@ -562,10 +556,6 @@ fn darkened(ink: [u8; 3], weight: u8) -> [u8; 4] {
     opaque(ink.map(|channel| channel.saturating_sub(weight)))
 }
 
-/// The rows the transcript band's light falls over: a crown spent by the band's third row, where
-/// the prose under it is read on the well.
-const CROWN_ROWS: f64 = 2.0;
-
 /// How far into its reach a lamp has fallen when it is spent: under half a channel of any peak
 /// the palette hands a band, so what the dither rounds up at the rim is a pixel and no step.
 const SPENT: f64 = 4.0;
@@ -742,7 +732,7 @@ impl Placement {
         })
     }
 
-    /// The transcript band: the well its prose is read on, lit at its head.
+    /// The transcript band: the well its prose is read on, at every row and every pixel.
     pub fn transcript(area: Rect, cell: Option<CellSize>, palette: &Palette) -> Option<Placement> {
         if !covers(area) {
             return None;
@@ -755,7 +745,6 @@ impl Placement {
                     size: Size::of(area),
                     cell: cell.filter(|_| channels(well).is_some()),
                     well,
-                    peak: palette.peak(Band::Well),
                 },
             },
         ))
@@ -1023,14 +1012,14 @@ impl Placement {
             return;
         }
         let area = self.cells;
-        if self.places() {
-            pen::claim(buffer, area, palette.ground(None));
-            return;
-        }
+        let places = self.places();
         let seam = self.seam();
         for row in 0..area.height {
             let y = area.y.saturating_add(row);
-            let ground = palette.over(self.shade.row(row));
+            let ground = match places {
+                true => palette.ground(None),
+                false => palette.over(self.shade.row(row)),
+            };
             let line = Rect {
                 y,
                 height: 1,
@@ -1069,7 +1058,11 @@ impl Placement {
                 },
                 ground,
             );
-            seam_cell(buffer, taken, axis, palette);
+            // The count the composer's head row carries is read over the plane's pixels.
+            match (axis, places) {
+                (Axis::Across, true) => pen::claim(buffer, taken, ground),
+                _ => seam_cell(buffer, taken, axis, palette),
+            }
         }
     }
 

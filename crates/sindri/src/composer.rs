@@ -187,6 +187,11 @@ impl Composer {
         self.row_at(&self.drawn(), self.cursor) == 0
     }
 
+    pub fn on_last_line(&self) -> bool {
+        let drawn = self.drawn();
+        self.row_at(&drawn, self.cursor) + 1 == drawn.len()
+    }
+
     fn laid(&self) -> (Vec<Row>, u16, usize) {
         let drawn = self.drawn();
         let ends = Composer::ends_at(drawn.len());
@@ -280,6 +285,10 @@ impl Composer {
         self.insert(&kept);
     }
 
+    pub fn recall(&mut self, prompt: Prompt) {
+        self.insert(&prompt.text);
+    }
+
     pub fn key(&mut self, key: Key) -> Outcome {
         match key {
             Key::Char(glyph) if glyph.is_control() => Outcome::Unchanged,
@@ -351,12 +360,15 @@ impl Composer {
     }
 
     pub fn rewrite(&mut self, text: &str) {
-        self.replace(text, text.len());
-    }
-
-    pub fn replace(&mut self, text: &str, caret: usize) {
         self.text.clear();
         self.text.push_str(text);
+        self.cursor = self.text.len();
+        self.follow();
+    }
+
+    /// A draft recalled where its caret stood last: the whole text in, the caret set among it.
+    pub fn restored(&mut self, text: &str, caret: usize) {
+        self.rewrite(text);
         self.cursor = caret.min(self.text.len());
         self.follow();
     }

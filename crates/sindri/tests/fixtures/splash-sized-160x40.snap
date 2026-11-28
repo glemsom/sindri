@@ -18,12 +18,12 @@ splash-sized-160x40 at 160x40
 12 |                                                                                                                                                                | plain:160
 13 |                                                                                                                                                                | plain:160
 14 |                                                                                                                                                                | plain:160
-15 |                         sindri                                                                                                                                 | plain:25 accent+bold:6 plain:129
-16 |                         a GNU/Linux AI agent                                                                                                                   | plain:160
+15 |                                    sindri                                                                                                                      | plain:36 accent+bold:6 plain:118
+16 |                                    an AI agent for the terminal                                                                                                | plain:160
 17 |                                                                                                                                                                | plain:160
-18 |                         /model     ask the wire what it serves, and name the one to run                                                                        | plain:25 accent:11 dim:52 plain:72
-19 |                         /settings  the keys the config holds, and the value each is set to                                                                     | plain:25 accent:11 dim:55 plain:69
-20 |                         /stats     the facts the rail is too narrow to hold                                                                                    | plain:25 accent:11 dim:40 plain:84
+18 |                                    /model     choose the model                                                                                                 | plain:36 accent:11 dim:16 plain:97
+19 |                                    /settings  show every setting with its value                                                                                | plain:36 accent:11 dim:33 plain:80
+20 |                                    /new       start a new conversation                                                                                         | plain:36 accent:11 dim:24 plain:89
 21 |                                                                                                                                                                | plain:160
 22 |                                                                                                                                                                | plain:160
 23 |                                                                                                                                                                | plain:160
@@ -41,5 +41,5 @@ splash-sized-160x40 at 160x40
 35 |                                                                                                                                                                | plain:160
 36 |                                                                                                                                                                | plain:160
 37 |                                                                                                                                                                | plain:160
-38 |┃›what should the run do?                                                                                                                                       | dim:25 plain:135
+38 |┃›what should the run do?                                                                                                                                       | accent:1 dim:24 plain:135
 39 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                                                                                     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:85

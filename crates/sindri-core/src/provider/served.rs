@@ -1,4 +1,4 @@
-use rig_core::model::ModelList;
+use rig_core::model::{ModelInfo, ModelList};
 
 use super::endpoint::Endpoint;
 use super::{Client, Credential, Failure, Verdict, credential_source};
@@ -113,6 +113,7 @@ fn reason(at: &Endpoint, failure: &Failure) -> String {
 fn names_of(catalogue: ModelList) -> Vec<Served> {
     catalogue
         .into_iter()
+        .filter(can_be_asked)
         .map(|model| {
             let label = model.display_name().to_owned();
             Served {
@@ -121,4 +122,11 @@ fn names_of(catalogue: ModelList) -> Vec<Served> {
             }
         })
         .collect()
+}
+
+fn can_be_asked(model: &ModelInfo) -> bool {
+    !model
+        .r#type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("embedding"))
 }

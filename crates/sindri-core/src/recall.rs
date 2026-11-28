@@ -1,56 +1,78 @@
-use crate::config::Environment;
-use crate::records::timestamp;
-use crate::session::state_directory;
-use serde::{Deserialize, Serialize};
-use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
-const RECALL: &str = "recall.jsonl";
-const PROMPT_BYTES: usize = 4096;
-const ENTRIES_KEPT: usize = 500;
-const MODE: u32 = 0o600;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-struct Entry {
+use crate::config::Environment;
+use crate::records::{read_lines, timestamp};
+use crate::session;
+
+const APPLICATION: &str = "sindri";
+
+const FILE: &str = "recall.jsonl";
+
+/// How many prompts a recall carries: past this the oldest goes, and a launch that finds more
+/// rewrites the file.
+pub const KEPT: usize = 200;
+
+/// The longest prompt a recall keeps, in bytes. A pasted log is not a stroke an arrow key should
+/// have to walk past, so one is never stored at all.
+pub const LONGEST: usize = 4_000;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Entry {
     at: String,
     prompt: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+impl Entry {
+    pub fn at(&self) -> &str {
+        &self.at
+    }
+
+    pub fn prompt(&self) -> &str {
+        &self.prompt
+    }
+}
+
+/// The reader's own prompts across launches, in the order they were sent. Not a `Run`'s history
+/// and not a session's record: those are what a run did, and this is what the reader wrote.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Recall {
-    path: Option<PathBuf>,
+    file: Option<PathBuf>,
     entries: Vec<Entry>,
 }
 
 impl Recall {
+    /// A recall of the file the state directory holds, empty and never a refusal when there is
+    /// no state home, no file, or a line the reader broke by hand.
     pub fn load(environment: &impl Environment) -> Recall {
-        let path = state_directory(environment).ok().map(|at| at.join(RECALL));
-        let mut entries = match path.as_deref() {
-            Some(path) => {
-                let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(MODE));
-                read(path)
-            }
-            None => Vec::new(),
+        let Some(file) = file_of(environment) else {
+            return Recall::default();
         };
-        if trimmed_to_capacity(&mut entries)
-            && let Some(path) = path.as_deref()
-        {
-            let _ = rewritten(path, &entries);
+        let mut entries: Vec<Entry> = read_lines(&file)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|line| serde_json::from_str(line).ok())
+            .collect();
+        if entries.len() > KEPT {
+            let over = entries.len() - KEPT;
+            entries.drain(..over);
+            rewrite(&file, &entries);
         }
-        Recall { path, entries }
-    }
-
-    pub fn none() -> Recall {
         Recall {
-            path: None,
-            entries: Vec::new(),
+            file: Some(file),
+            entries,
         }
     }
 
-    pub fn prompt(&self, back: usize) -> Option<&str> {
+    pub fn entries(&self) -> &[Entry] {
+        &self.entries
+    }
+
+    /// The prompt `back` prompts before the newest, `0` being the newest itself.
+    pub fn older(&self, back: usize) -> Option<&str> {
         self.entries
             .iter()
             .rev()
@@ -58,12 +80,14 @@ impl Recall {
             .map(|entry| entry.prompt.as_str())
     }
 
-    pub fn prompts(&self) -> impl Iterator<Item = &str> {
-        self.entries.iter().map(|entry| entry.prompt.as_str())
+    pub fn path(&self) -> Option<&Path> {
+        self.file.as_deref()
     }
 
-    pub fn append(&mut self, prompt: &str) {
-        if prompt.len() > PROMPT_BYTES {
+    /// Keeps one prompt, appended to the file as it is sent. Nothing about a store that cannot
+    /// write is a refusal: the prompt is still the launch's to hand back.
+    pub fn send(&mut self, prompt: &str) {
+        if prompt.is_empty() || prompt.len() > LONGEST {
             return;
         }
         if self
@@ -74,63 +98,64 @@ impl Recall {
             return;
         }
         let entry = Entry {
-            at: timestamp(SystemTime::now()),
+            at: timestamp(std::time::SystemTime::now()),
             prompt: prompt.to_owned(),
         };
-        if let Some(path) = self.path.as_deref() {
-            let _ = written(path, &entry);
+        if let Some(file) = self.file.as_deref() {
+            append(file, &entry);
         }
         self.entries.push(entry);
-        trimmed_to_capacity(&mut self.entries);
     }
 }
 
-fn trimmed_to_capacity(entries: &mut Vec<Entry>) -> bool {
-    if entries.len() <= ENTRIES_KEPT {
-        return false;
-    }
-    entries.drain(..entries.len() - ENTRIES_KEPT);
-    true
+fn file_of(environment: &impl Environment) -> Option<PathBuf> {
+    session::state_home(environment)
+        .ok()
+        .map(|home| home.join(APPLICATION).join(FILE))
 }
 
-fn read(path: &Path) -> Vec<Entry> {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
+fn append(path: &Path, entry: &Entry) {
+    let Some(directory) = path.parent() else {
+        return;
     };
-    text.lines()
-        .filter_map(|line| serde_json::from_str(line).ok())
-        .collect()
-}
-
-fn opened(path: &Path, truncate: bool) -> Option<File> {
-    if let Some(directory) = path.parent() {
-        std::fs::create_dir_all(directory).ok()?;
+    if std::fs::create_dir_all(directory).is_err() {
+        return;
     }
-    OpenOptions::new()
-        .write(true)
-        .append(!truncate)
-        .truncate(truncate)
+    let written = std::fs::OpenOptions::new()
         .create(true)
-        .mode(MODE)
+        .append(true)
+        .mode(0o600)
         .open(path)
-        .ok()
+        .and_then(|mut file| {
+            let mut line = serde_json::to_vec(entry).unwrap_or_default();
+            line.push(b'\n');
+            file.write_all(&line)
+        });
+    let _ = written;
 }
 
-fn written(path: &Path, entry: &Entry) -> Option<()> {
-    let said = serde_json::to_string(entry).ok()?;
-    opened(path, false)?
-        .write_all(format!("{said}\n").as_bytes())
-        .ok()
-}
-
-fn rewritten(path: &Path, entries: &[Entry]) -> Option<()> {
-    let mut said = String::new();
-    for entry in entries {
-        said.push_str(&serde_json::to_string(entry).ok()?);
-        said.push('\n');
+fn rewrite(path: &Path, entries: &[Entry]) {
+    let Some(directory) = path.parent() else {
+        return;
+    };
+    if std::fs::create_dir_all(directory).is_err() {
+        return;
     }
-    opened(path, true)?.write_all(said.as_bytes()).ok()
+    let text: String = entries
+        .iter()
+        .filter_map(|entry| serde_json::to_string(entry).ok())
+        .map(|line| line + "\n")
+        .collect();
+    let staged = tempfile::Builder::new()
+        .prefix(".recall.")
+        .suffix(".staged")
+        .tempfile_in(directory);
+    let Ok(staged) = staged else {
+        return;
+    };
+    let _ = staged
+        .as_file()
+        .set_permissions(std::fs::Permissions::from_mode(0o600));
+    let _ = staged.as_file().write_all(text.as_bytes());
+    let _ = staged.persist(path);
 }
-
-#[cfg(test)]
-mod tests;

@@ -11,7 +11,7 @@ use crate::size::Sizes;
 
 const WORDMARK: &str = "sindri";
 
-const GLOSS: &str = "a GNU/Linux AI agent";
+const GLOSS: &str = "an AI agent for the terminal";
 
 const HANG: u16 = 2;
 
@@ -73,7 +73,11 @@ fn block(room: u16) -> Vec<Row> {
 }
 
 fn commands(room: u16) -> Vec<Row> {
-    let named = || commands::TABLE.iter().take(commands::SPLASH);
+    let named = || {
+        commands::SPLASH
+            .iter()
+            .filter_map(|name| commands::TABLE.iter().find(|row| row.name == *name))
+    };
     let column = named().map(|row| pen::cells(&row.name)).max().unwrap_or(0) + HANG;
     let hang = pen::blank(column);
     let mut rows = Vec::new();

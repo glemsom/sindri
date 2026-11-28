@@ -14,7 +14,7 @@ use sindri::mark::Cell;
 use sindri::pointer::Pointer;
 use sindri::view::{Transcript, View};
 use sindri_core::config::Config;
-use sindri_core::records::Entry;
+use sindri_core::records::{Entry, Usage};
 use sindri_core::redact::SecretSet;
 use sindri_core::run::Loaded;
 
@@ -209,7 +209,10 @@ fn model_named_by_hand_sets_a_name_without_opening_a_screen() {
 fn new_clears_the_transcript_the_frame_held() {
     let root = workspace_with("commit-message", "");
     let entries = vec![
-        Entry::Turn { turn: 1 },
+        Entry::Turn {
+            turn: 1,
+            usage: Usage::default(),
+        },
         Entry::Assistant {
             turn: 1,
             text: SecretSet::default().redact("the answer the conversation was about"),
@@ -323,7 +326,7 @@ fn a_draft_whose_first_glyph_is_a_slash_draws_the_commands_card() {
         card_open(&frame),
         "a draft that begins with a slash opens the commands card: {drawn}"
     );
-    for said in ["/model", "/quit", "end the launch"] {
+    for said in ["/model", "/quit", "quit Sindri"] {
         assert!(
             drawn.contains(said),
             "the card names the command and the one line that says what it does, and the frame \

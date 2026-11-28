@@ -1,0 +1,29 @@
+---
+source: crates/sindri/tests/frame/mod.rs
+expression: self.text(name)
+---
+calls at 80x24
+00 |                                                                                | plain:80
+01 |  The row is drawn from the verdict the record holds.                           | plain:80
+02 |! │ ✗ bash exit 1 cargo clippy --all-targets 211 ms ⋯3                          | err:1 dim:3 err:2 dim:12 plain:26 dim:10 plain:26
+03 |! │   --> src/rows.rs:12:5                                                      | err:1 dim:3 muted:22 plain:54
+04 |                                                                                | plain:80
+05 |  An unused import, and nowhere else to put it.                                 | plain:80
+06 |! │ ✗ bash timed out cargo test --workspace 2m 00s ⋯2                           | err:1 dim:3 err:2 dim:15 plain:22 dim:10 plain:27
+07 |                                                                                | plain:80
+08 |  The call ran past its minute and was killed.                                  | plain:80
+09 |! │ ✗ bash cancelled make check STAGES=frames 3.4 s ⋯2                          | err:1 dim:3 err:2 dim:15 plain:24 dim:9 plain:26
+10 |                                                                                | plain:80
+11 |  What a verdict says                                                           | plain:2 plain+bold:19 plain:59
+12 |  ───────────────────                                                           | plain:2 accent+faint:19 plain:59
+13 |                                                                                | plain:80
+14 |  The run stopped on the user's word: Ctrl-C cancels and keeps the draft, so    | plain:38 accent:6 plain:36
+15 |  the row says ✗ cancelled rather than leaving a spinner turning for a result   | plain:15 accent:11 plain:54
+16 |  that will never come.                                                         | plain:80
+17 |                                                                                | plain:80
+18 |┃›and the one that is still out?                                                | accent:1 plain:79
+19 |  │ … bash running make check STAGES=test                                       | dim:19 plain:61
+20 |  ctx █░░░░░ · model claude-sonnet-4-5… · sandbox bwrap · +9 more               | plain:2 dim:4 plain:1 dim:14 plain:18 dim:11 plain:5 dim:3 muted:7 plain:15
+21 |                                                                                | plain:80
+22 |┃›what should the run do?                                                       | accent:1 dim:24 plain:55
+23 |  Enter send · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline     | plain:2 plain+bold:5 muted:5 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:5

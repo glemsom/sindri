@@ -6,7 +6,7 @@ queue-long at 120x24
 00 |  code      │ behind a bar, highlighted                                       wire      anthropic                       | plain:11 dim:3 plain:64 dim:10 plain:32
 01 |  table     │ columns joined by a bar                                         model     claude-sonnet-4-5-20250929      | plain:11 dim:3 plain:64 dim:10 plain:32
 02 |                                                                              think     high                            | plain:78 dim:10 plain:32
-03 |┃›what does a row of the band say?                                                                                      | dim:1 plain:119
+03 |┃›what does a row of the band say?                                                                                      | accent:1 plain:119
 04 |⋯ 1 call · 31 ms                                                              turns         6 /  250                    | dim:1 plain:1 dim:14 plain:62 dim:10 plain:32
 05 |                                                                              ctx       █░░░░░ 48.2k / 200k             | plain:78 dim:10 plain:1 dim:5 plain:26
 06 |  A row is one line                                                           cache     88%                             | plain:2 plain+bold:17 plain:59 dim:10 plain:32
@@ -21,9 +21,9 @@ queue-long at 120x24
 15 |▏    │row.paint(area, buffer);                                                skills    2                               | dim:2 plain:3 dim:1 plain:4 plain+bold:5 plain:63 dim:10 plain:32
 16 |▏ }                                                                           +4 more                                   | dim:2 plain:76 muted:7 plain:35
 17 |━                                                                                                                       | accent:1 plain:119
-18 |┃›and this one while they wait                                                                                          | dim:1 accent:1 plain:118
-19 |┃ 4 more queued                                                                                                         | dim:15 plain:105
-20 |┃›then the row that counts it                                                                                           | dim:29 plain:91
-21 |┃›then the caret that stays inside it                                                                                   | dim:37 plain:83
-22 |┃›and then the report                                                                                                   | dim:21 plain:99
+18 |┃›and this one while they wait                                                                                          | accent:2 plain:118
+19 |┃ 4 more queued                                                                                                         | accent:1 dim:14 plain:105
+20 |┃›then the row that counts it                                                                                           | accent:1 dim:28 plain:91
+21 |┃›then the caret that stays inside it                                                                                   | accent:1 dim:36 plain:83
+22 |┃›and then the report                                                                                                   | accent:1 dim:20 plain:99
 23 |  Ctrl-C cancel · ↑ 7 queued · / commands · @ files · ? keys · Ctrl-Q quit · Ctrl-J newline                             | plain:2 plain+bold:6 muted:7 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:9 dim:3 plain+bold:1 muted:6 dim:3 plain+bold:1 muted:5 dim:3 plain+bold:6 muted:5 dim:3 plain+bold:6 muted:8 plain:29

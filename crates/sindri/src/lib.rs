@@ -33,6 +33,7 @@ pub mod queue;
 pub mod rail;
 #[cfg(test)]
 mod readback;
+pub mod recall;
 pub mod rows;
 pub mod settings;
 pub mod size;
