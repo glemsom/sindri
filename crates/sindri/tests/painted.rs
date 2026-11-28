@@ -1374,7 +1374,7 @@ fn a_width_only_terminal_gets_the_unsized_rails_cells() {
 }
 
 #[test]
-fn submitted_prompt_surfaces_leave_the_transcripts_right_margin_on_the_well() {
+fn submitted_prompt_surfaces_fill_the_transcript_band_and_an_answer_the_well() {
     for palette in [Palette::TRUECOLOR, Palette::ANSI, Palette::SLOTS] {
         for (cols, rows) in [(80, 24), (120, 40), (40, 24)] {
             let mut entries = vec![Entry::Prompt {
@@ -1385,18 +1385,53 @@ fn submitted_prompt_surfaces_leave_the_transcripts_right_margin_on_the_well() {
             let frame = frame::painted(&mut view, cols, rows);
             let band = frame.told().layout().unwrap().transcript;
             let (y, _) = frame.drawn_at("a short prompt");
-            for x in band.x..band.right() - 2 {
-                assert_eq!(frame.cell(x, y).bg, palette.band(Band::Prompt));
-            }
-            for x in band.right() - 2..band.right() {
-                assert_eq!(frame.cell(x, y).bg, palette.band(Band::Well));
+            for x in band.x..band.right() {
+                assert_eq!(
+                    frame.cell(x, y).bg,
+                    palette.band(Band::Prompt),
+                    "column {x} of a prompt's row is not the plate it is read on: the plate runs \
+                     the band whole, so the band's last two columns are its own padding"
+                );
             }
             let (y, _) = frame.drawn_at("an answer");
             for x in band.x..band.right() {
-                assert_eq!(frame.cell(x, y).bg, palette.band(Band::Well));
+                assert_eq!(
+                    frame.cell(x, y).bg,
+                    palette.band(Band::Well),
+                    "column {x} of an answer's row is not the well the plate stops short of"
+                );
             }
         }
     }
+}
+
+#[test]
+fn a_prompt_line_laid_at_the_full_measure_stops_two_columns_short_of_the_plates_edge() {
+    let palette = Palette::TRUECOLOR;
+    let words = "a".repeat(400);
+    let mut view = View::of(
+        caps::inked(palette),
+        railed(),
+        Transcript::of(vec![Entry::Prompt {
+            text: SecretSet::default().redact(&words),
+        }]),
+    );
+    let frame = frame::painted(&mut view, 120, 40);
+    let band = frame.told().layout().unwrap().transcript;
+    let mut filled = 0;
+    for y in band.y..band.bottom() {
+        let text: String = frame.row(y).chars().take(usize::from(band.width)).collect();
+        if !text.starts_with('┃') {
+            continue;
+        }
+        filled = filled.max(text.trim_end().chars().count());
+    }
+    assert_eq!(
+        filled + usize::from(MARGIN),
+        usize::from(band.width),
+        "the deepest line of a prompt whose words fill the measure leaves the plate's two \
+         columns of padding past it: no glyph of the words stands on the plate's own edge"
+    );
 }
 
 #[test]
@@ -1441,24 +1476,17 @@ fn submitted_prompt_surfaces_preserve_literal_rows_and_ownership_across_capabili
             }
             for y in band.y..band.bottom() {
                 if frame.cell(band.x, y).symbol() == "┃" {
-                    for x in band.x..band.right() - 2 {
+                    for x in band.x..band.right() {
                         assert_eq!(
                             frame.cell(x, y).bg,
                             if pictured {
                                 ratatui::style::Color::Reset
                             } else {
                                 palette.band(Band::Prompt)
-                            }
-                        );
-                    }
-                    for x in band.right() - 2..band.right() {
-                        assert_eq!(
-                            frame.cell(x, y).bg,
-                            if pictured {
-                                ratatui::style::Color::Reset
-                            } else {
-                                palette.band(Band::Well)
-                            }
+                            },
+                            "column {x} of row {y} of a prompt's words is not the plate the \
+                             words are read on: the plate fills the transcript band whole, so \
+                             no column of the row is left on the well beside it"
                         );
                     }
                 }
@@ -1551,8 +1579,30 @@ fn submitted_prompt_folds_keep_original_copy_and_reader_opening_after_reflow() {
     let band = reflowed.told().layout().unwrap().transcript;
     assert_eq!(reflowed.cell(0, band.y).symbol(), "┃");
     for y in band.y..band.bottom() {
-        for x in band.right() - 2..band.right() {
-            assert_eq!(reflowed.cell(x, y).bg, Palette::TRUECOLOR.band(Band::Well));
+        let row: Vec<char> = reflowed
+            .row(y)
+            .chars()
+            .take(usize::from(band.width))
+            .collect();
+        assert_eq!(
+            row[usize::from(band.width) - 2..]
+                .iter()
+                .collect::<String>()
+                .trim(),
+            "",
+            "row {y} of the relaid prompt carries a glyph in the plate's two columns of \
+             padding, so the words no longer keep the measure they were laid at"
+        );
+        if reflowed.cell(band.x, y).symbol() == "┃" {
+            for x in band.right() - 2..band.right() {
+                assert_eq!(
+                    reflowed.cell(x, y).bg,
+                    Palette::TRUECOLOR.band(Band::Prompt),
+                    "column {x} of row {y} of the relaid prompt is not the plate its words are \
+                     read on: the plate runs the band whole, and a plate that stops short of it \
+                     leaves the well showing in its padding"
+                );
+            }
         }
     }
 }
@@ -1592,10 +1642,11 @@ fn submitted_prompt_fold_counts_follow_width_and_closing_keeps_the_inset_surface
     let closed = frame::painted(&mut view, 120, 40);
     let (count, _) = closed.drawn_at("12 rows kept back");
     let band = closed.told().layout().unwrap().transcript;
-    for x in band.x..band.right() - 2 {
+    for x in band.x..band.right() {
         assert_eq!(
             closed.cell(x, count).bg,
-            Palette::TRUECOLOR.band(Band::Prompt)
+            Palette::TRUECOLOR.band(Band::Prompt),
+            "column {x} of the row a closed fold keeps back is not the plate its count is read on"
         );
     }
 }
@@ -2152,9 +2203,26 @@ fn long_conversations_release_visible_prompt_resources_on_every_scroll_and_resiz
                 .iter()
                 .filter(|p| matches!(p.shade().id(), sindri::plane::PlaneId::Prompt(_)))
             {
-                assert!(band.contains(Position::new(p.cells().x, p.cells().y)));
-                assert!(p.cells().right() <= band.right() - 2);
-                assert!(p.cells().bottom() <= band.bottom());
+                assert!(
+                    band.contains(Position::new(p.cells().x, p.cells().y)),
+                    "a prompt's plane is placed at {:?}, outside the band {:?} it is read on",
+                    p.cells(),
+                    band
+                );
+                assert_eq!(
+                    p.cells().right(),
+                    band.right(),
+                    "a prompt's plane is lit on {} where the band it fills ends on {}: the plate \
+                     runs the band whole and no column of the rail beside it",
+                    p.cells().right(),
+                    band.right()
+                );
+                assert!(
+                    p.cells().bottom() <= band.bottom(),
+                    "a prompt's plane reaches row {} of a band that ends on {}",
+                    p.cells().bottom(),
+                    band.bottom()
+                );
             }
             let wire =
                 String::from_utf8(held.pass(frame.told().placements(), view.planes())).unwrap();

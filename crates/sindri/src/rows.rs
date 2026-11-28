@@ -40,10 +40,7 @@ pub(crate) const fn margined(band: Rect) -> Rect {
 }
 
 pub(crate) const fn plate(band: Rect) -> Rect {
-    Rect {
-        width: band.width.saturating_sub(MARGIN),
-        ..band
-    }
+    band
 }
 
 pub(crate) const SIGIL: &str = "› ";
@@ -415,11 +412,7 @@ impl Row {
         sizes: &mut Sizes,
     ) {
         if let Some(band) = self.band {
-            let surface = match band {
-                Band::Prompt => plate(area),
-                _ => area,
-            };
-            pen::claim(buffer, surface, palette.ground(Some(band)));
+            pen::claim(buffer, plate(area), palette.ground(Some(band)));
         }
         match self.fence.filter(|fence| fence.walk > 0) {
             Some(fence) => {

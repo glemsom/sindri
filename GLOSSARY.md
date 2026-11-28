@@ -285,6 +285,13 @@ right edge, in that margin's first column, because the band's last column carrie
 measured cell of the band may carry it; a frame at the tail draws none.
 _Avoid_: Scrollbar, slider, handle, indicator, position bar
 
+**Plate**:
+The ground a **Prompt**'s words are read on: the **Transcript band** whole, from its first column to the
+one before the **Seam**, so the words keep their **Measure** on two columns of padding at each end and
+the **Thumb** and the cut mark stand on the padding at its foot. It is the band's own **Rung**, in the
+cells and in the **Plane** lit over them, so the two cannot part.
+_Avoid_: Card, panel, quote box, background strip
+
 **Measure**:
 The three facts the rows of a band are laid at: its width, the surface a picture in an answer is
 measured against, and the **Ground** a call's path is judged against. Any one of the three moving drops

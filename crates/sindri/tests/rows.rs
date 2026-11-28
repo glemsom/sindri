@@ -20,7 +20,7 @@ use sindri::pen;
 use sindri::picture::Surface;
 use sindri::pulse::Pulse;
 use sindri::rows::{
-    FAILED, Fence, Measure, Row, Rows, Scroll, Sideways, Window, layout, layout_on,
+    FAILED, Fence, MARGIN, Measure, Row, Rows, Scroll, Sideways, THUMB, Window, layout, layout_on,
 };
 use sindri::size::Sizes;
 use sindri::view::{Transcript, View};
@@ -684,7 +684,7 @@ fn the_readers_own_words_open_the_exchange_and_no_row_names_them() {
 }
 
 #[test]
-fn a_prompt_row_claims_its_inset_ground_and_leaves_the_right_margin_on_the_well() {
+fn a_prompt_row_claims_the_bands_whole_width_as_its_plate() {
     let palette = Palette::TRUECOLOR;
     let area = Rect::new(0, 0, 40, 1);
     let well = Row::of([(String::from("a word of the conversation"), Ink::Muted)]);
@@ -718,19 +718,54 @@ fn a_prompt_row_claims_its_inset_ground_and_leaves_the_right_margin_on_the_well(
         for x in area.x..area.right() {
             let cell = buffer.cell((x, 0)).expect("a cell of the band");
             assert_eq!(
-                cell.bg,
-                if x >= area.right() - sindri::rows::MARGIN {
-                    palette.band(Band::Well)
-                } else {
-                    ground
-                },
-                "column {x} of {row:?} is drawn on {:?}: a row handed a band claims the whole \
-                 width of it before its words, and a row handed none is drawn exactly as it was, \
-                 over the ground it found",
+                cell.bg, ground,
+                "column {x} of {row:?} is drawn on {:?}: a prompt's plate runs the band whole, \
+                 its last two columns its own padding, and a row handed no band is drawn exactly \
+                 as it was, over the ground it found",
                 cell.bg
             );
         }
     }
+}
+
+#[test]
+fn the_thumb_stands_on_the_padding_of_the_plate_a_prompt_is_read_on() {
+    let palette = Palette::TRUECOLOR;
+    let area = Rect::new(0, 0, 40, 4);
+    let thumb = thumb_of(80, area.height, Scroll::Back(1))
+        .expect("a band of four rows of an eighty-row transcript has a thumb");
+    let y = thumb.rows().start;
+    let asked =
+        Row::of([(String::from("the reader's own words"), Ink::Plain)]).standing(Band::Prompt);
+    let mut buffer = Buffer::empty(area);
+    pen::claim(&mut buffer, area, palette.ground(Some(Band::Well)));
+    asked.paint(
+        Rect {
+            height: 1,
+            y,
+            ..area
+        },
+        &mut buffer,
+        &palette,
+        &mut Links::none(),
+        &mut Sizes::none(),
+    );
+    thumb.paint(area, y, &mut buffer, &palette);
+
+    let cell = buffer
+        .cell((area.right() - MARGIN, y))
+        .expect("the thumb's column of the band");
+    assert_eq!(
+        cell.symbol(),
+        THUMB.to_string(),
+        "the band's margin holds the thumb in its first column, however wide the plate under it"
+    );
+    assert_eq!(
+        cell.bg,
+        palette.band(Band::Prompt),
+        "the thumb stands on the well where a row of the conversation is read, and on the \
+         plate's own padding where a prompt's words are: the plate runs the band whole"
+    );
 }
 
 #[test]
