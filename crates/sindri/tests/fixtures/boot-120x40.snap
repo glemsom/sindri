@@ -18,12 +18,12 @@ boot at 120x40
 12 |                                                                                                                        | plain:120
 13 |                                                                                                                        | plain:120
 14 |                                                                                                                        | plain:120
-15 |     sindri                                                                                                             | plain:5 accent+bold:6 plain:109
-16 |     a GNU/Linux AI agent                                                                                               | plain:120
+15 |               sindri                                                                                                   | plain:15 accent+bold:6 plain:99
+16 |               a GNU/Linux AI agent                                                                                     | plain:120
 17 |                                                                                                                        | plain:120
-18 |     /model     ask the wire what it serves, and name the one to run                                                    | plain:5 accent:11 dim:52 plain:52
-19 |     /settings  the keys the config holds, and the value each is set to                                                 | plain:5 accent:11 dim:55 plain:49
-20 |     /stats     the facts the rail is too narrow to hold                                                                | plain:5 accent:11 dim:40 plain:64
+18 |               /model     choose the model                                                                              | plain:15 accent:11 dim:16 plain:78
+19 |               /settings  show every setting with its value                                                             | plain:15 accent:11 dim:33 plain:61
+20 |               /stats     show all counters for this session                                                            | plain:15 accent:11 dim:34 plain:60
 21 |                                                                                                                        | plain:120
 22 |                                                                                                                        | plain:120
 23 |                                                                                                                        | plain:120

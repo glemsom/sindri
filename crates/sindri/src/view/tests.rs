@@ -2090,9 +2090,9 @@ fn the_frame_a_launch_opens_on_is_a_wordmark_a_gloss_and_three_commands() {
             "sindri",
             "a GNU/Linux AI agent",
             "",
-            "/model     ask the wire what it serves, and name the one to run",
-            "/settings  the keys the config holds, and the value each is set to",
-            "/stats     the facts the rail is too narrow to hold",
+            "/model     choose the model",
+            "/settings  show every setting with its value",
+            "/stats     show all counters for this session",
         ],
         "the splash screen is a wordmark, the gloss it stands under, and three commands with \
              the one line each that explains them, set as one block"
@@ -2296,9 +2296,9 @@ fn a_splash_screen_narrower_than_its_lines_wraps_them_whole_and_cuts_no_word() {
 
         for line in [
             "a GNU/Linux AI agent",
-            "ask the wire what it serves, and name the one to run",
-            "the keys the config holds, and the value each is set to",
-            "the facts the rail is too narrow to hold",
+            "choose the model",
+            "show every setting with its value",
+            "show all counters for this session",
         ] {
             assert!(
                 words.contains(line),

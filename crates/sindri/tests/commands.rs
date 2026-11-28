@@ -326,7 +326,7 @@ fn a_draft_whose_first_glyph_is_a_slash_draws_the_commands_card() {
         card_open(&frame),
         "a draft that begins with a slash opens the commands card: {drawn}"
     );
-    for said in ["/model", "/quit", "end the launch"] {
+    for said in ["/model", "/quit", "quit Sindri"] {
         assert!(
             drawn.contains(said),
             "the card names the command and the one line that says what it does, and the frame \
