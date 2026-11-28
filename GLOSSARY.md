@@ -417,8 +417,10 @@ _Avoid_: Bar, quote mark, guide
 A glyph the **Transcript band** is read by, with the ink it is drawn in and the words that say what
 it means: the **Spine** and the sigil a **Prompt** opens on, the lane bar its work is set in, the bar
 a fence and a quote stand beside, the count a **Fold** keeps back, the glyphs a **Call** settled,
-still running or failed wears, the pulse of a run still writing, and the thumb that says where the
-window stands in the run. The table of them is declared beside the glyphs the drawing uses and drawn
+still running or failed wears, the mark a failed **Call** stands in the gutter of every row it holds
+— and a settled **Exchange**'s one row wears where its **Tally** counts a failure — so a run's
+failures are found by scrolling and not by reading, the pulse of a run still writing, and the thumb
+that says where the window stands in the run. The table of them is declared beside the glyphs the drawing uses and drawn
 on the `?` screen under the keys, so a mark cannot be drawn without being named there, and a reader
 learns the band's grammar once and reads any run. A mark is a glyph and its words in a terminal that
 spells no colour, and never the ink alone.

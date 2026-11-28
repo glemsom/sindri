@@ -4830,7 +4830,7 @@ fn the_marks_the_keys_screen_names_are_the_marks_the_band_draws_and_no_others() 
 fn failed_run(exit: Exit, cols: u16) -> Rows {
     let mut rows = Rows::new();
     rows.measure(Measure::new(cols, Surface::none(), None));
-    for entry in vec![
+    for entry in [
         asked_for(1),
         call(1),
         result(1, exit),

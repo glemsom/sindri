@@ -7,14 +7,14 @@ calls at 120x40
 01 |  │ ✓ bash rg -n 'verdict' src 18 ms ⋯ 3 rows kept back                       model     claude-sonnet-4-5-20250929      | dim:4 ok:2 dim:5 plain:19 dim:25 plain:23 dim:10 plain:32
 02 |                                                                              think     high                            | plain:78 dim:10 plain:32
 03 |  The row is drawn from the verdict the record holds.                                                                   | plain:120
-04 |  │ ✗ bash exit 1 cargo clippy --all-targets 211 ms ⋯ 3 rows kept back        turns         6 /  250                    | dim:4 err:2 dim:12 plain:26 dim:26 plain:8 dim:10 plain:32
-05 |  │   --> src/rows.rs:12:5                                                    ctx       █░░░░░ 48.2k / 200k             | dim:4 muted:22 plain:52 dim:10 plain:1 dim:5 plain:26
+04 |! │ ✗ bash exit 1 cargo clippy --all-targets 211 ms ⋯ 3 rows kept back        turns         6 /  250                    | err:1 dim:3 err:2 dim:12 plain:26 dim:26 plain:8 dim:10 plain:32
+05 |! │   --> src/rows.rs:12:5                                                    ctx       █░░░░░ 48.2k / 200k             | err:1 dim:3 muted:22 plain:52 dim:10 plain:1 dim:5 plain:26
 06 |                                                                              cache     88%                             | plain:78 dim:10 plain:32
 07 |  An unused import, and nowhere else to put it.                                                                         | plain:120
-08 |  │ ✗ bash timed out cargo test --workspace 2m 00s ⋯ 2 rows kept back         workspace …/sindri/.worktrees/46-rail     | dim:4 err:2 dim:15 plain:22 dim:26 plain:9 dim:10 plain:32
+08 |! │ ✗ bash timed out cargo test --workspace 2m 00s ⋯ 2 rows kept back         workspace …/sindri/.worktrees/46-rail     | err:1 dim:3 err:2 dim:15 plain:22 dim:26 plain:9 dim:10 plain:32
 09 |                                                                              branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |  The call ran past its minute and was killed.                                                                          | plain:120
-11 |  │ ✗ bash cancelled make check STAGES=frames 3.4 s ⋯ 2 rows kept back        sandbox   bwrap                           | dim:4 err:2 dim:15 plain:24 dim:25 plain:8 dim:10 plain:32
+11 |! │ ✗ bash cancelled make check STAGES=frames 3.4 s ⋯ 2 rows kept back        sandbox   bwrap                           | err:1 dim:3 err:2 dim:15 plain:24 dim:25 plain:8 dim:10 plain:32
 12 |                                                                                                                        | plain:120
 13 |  What a verdict says                                                         session   9f2c7a41                        | plain:2 plain+bold:19 plain:57 dim:10 plain:32
 14 |  ───────────────────                                                         temp      …/sindri/sessions/9f2c7a41/tmp  | plain:2 accent+faint:19 plain:57 dim:10 plain:32

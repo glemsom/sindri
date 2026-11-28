@@ -9,8 +9,8 @@ fold-open at 80x24
 03 |  answer.                                                                       | plain:80
 04 |                                                                                | plain:80
 05 |  │ ✓ bash cargo test -p sindri --test rows 1.8 s ⋯ 22 rows kept back           | dim:4 ok:2 dim:5 plain:32 dim:26 plain:11
-06 |  │ ✗ bash exit 7 cargo test retry 600 ms ⋯ 2 rows kept back                    | dim:4 err:2 dim:12 plain:16 dim:26 plain:20
-07 |  │ retry failed                                                                | dim:4 muted:12 plain:64
+06 |! │ ✗ bash exit 7 cargo test retry 600 ms ⋯ 2 rows kept back                    | err:1 dim:3 err:2 dim:12 plain:16 dim:26 plain:20
+07 |! │ retry failed                                                                | err:1 dim:3 muted:12 plain:64
 08 |                                                                                | plain:80
 09 |  Three rows of the fold are the whole of it: the head, the count and the       | plain:80
 10 |  last.                                                                         | plain:80

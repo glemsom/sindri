@@ -9,8 +9,8 @@ fold-answer at 120x40
 03 |  beside the answer.                                                                                                    | plain:120
 04 |                                                                              turns         6 /  250                    | plain:78 dim:10 plain:32
 05 |  │ ✓ bash cargo test -p sindri --test rows 1.8 s ⋯ 22 rows kept back         ctx       █░░░░░ 48.2k / 200k             | dim:4 ok:2 dim:5 plain:32 dim:26 plain:9 dim:10 plain:1 dim:5 plain:26
-06 |  │ ✗ bash exit 7 cargo test retry 600 ms ⋯ 2 rows kept back                  cache     88%                             | dim:4 err:2 dim:12 plain:16 dim:26 plain:18 dim:10 plain:32
-07 |  │ retry failed                                                                                                        | dim:4 muted:12 plain:104
+06 |! │ ✗ bash exit 7 cargo test retry 600 ms ⋯ 2 rows kept back                  cache     88%                             | err:1 dim:3 err:2 dim:12 plain:16 dim:26 plain:18 dim:10 plain:32
+07 |! │ retry failed                                                                                                        | err:1 dim:3 muted:12 plain:104
 08 |                                                                              workspace …/sindri/.worktrees/46-rail     | plain:78 dim:10 plain:32
 09 |  Three rows of the fold are the whole of it: the head, the count and the     branch    spec/1-capability               | plain:78 dim:10 plain:32
 10 |  last.                                                                                                                 | plain:120
